@@ -1,0 +1,29 @@
+{
+  "id": "industry.appliance-assembly.basic",
+  "name": "Appliance Assembly Basic Equipment Pack",
+  "industry": "appliance-assembly",
+  "version": "0.1.0",
+  "schemaVersion": "1.1",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "description": "Factory-capable home appliance final assembly pack for a strict two-floor workshop building with roof, mezzanine production areas, conveyor lines, kitting, foaming, testing, aging, packaging, palletizing, controls, and utility equipment.",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ]
+}

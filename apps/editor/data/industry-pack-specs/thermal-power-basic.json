@@ -1,0 +1,2215 @@
+{
+  "industry": "thermal-power",
+  "id": "industry.thermal-power.basic",
+  "name": "Thermal Power Plant Basic Equipment Pack",
+  "version": "0.1.0",
+  "description": "Factory-capable coal-fired thermal power plant profile pack based on a campus-style plant layout with cooling towers, boiler and turbine island, coal handling, flue-gas cleanup, chimney, switchyard, and auxiliary buildings.",
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    {
+      "id": "thermal_power.factory.coal_fired_station",
+      "label": "Coal-fired thermal power station architecture",
+      "industry": "thermal-power",
+      "processId": "thermal_power_coal_fired_station",
+      "layoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 72,
+        "width": 72
+      },
+      "scopes": [
+        {
+          "id": "coal_fired_station",
+          "label": "Coal-fired thermal power station",
+          "includeModules": [
+            "cooling_island",
+            "power_block",
+            "flue_gas_cleanup",
+            "fuel_handling",
+            "ash_and_water",
+            "electrical_export",
+            "auxiliary_buildings"
+          ]
+        }
+      ],
+      "modules": [
+        {
+          "id": "cooling_island",
+          "displayLabel": "Cooling island",
+          "order": 10,
+          "stationIds": [
+            "natural_draft_cooling_tower",
+            "circulating_water_pump_house"
+          ]
+        },
+        {
+          "id": "power_block",
+          "displayLabel": "Boiler and turbine island",
+          "order": 20,
+          "stationIds": [
+            "coal_pulverizer_mill",
+            "boiler_island",
+            "steam_turbine_generator",
+            "surface_condenser"
+          ]
+        },
+        {
+          "id": "flue_gas_cleanup",
+          "displayLabel": "Flue-gas cleanup",
+          "order": 30,
+          "stationIds": [
+            "electrostatic_precipitator",
+            "fgd_absorber",
+            "chimney_stack"
+          ]
+        },
+        {
+          "id": "fuel_handling",
+          "displayLabel": "Coal handling",
+          "order": 40,
+          "stationIds": [
+            "coal_yard_stockpile",
+            "coal_handling_conveyor"
+          ]
+        },
+        {
+          "id": "ash_and_water",
+          "displayLabel": "Ash and water treatment",
+          "order": 50,
+          "stationIds": [
+            "fly_ash_silo",
+            "water_treatment_building"
+          ]
+        },
+        {
+          "id": "electrical_export",
+          "displayLabel": "Electrical export",
+          "order": 60,
+          "stationIds": [
+            "generator_step_up_transformer",
+            "switchyard"
+          ]
+        },
+        {
+          "id": "auxiliary_buildings",
+          "displayLabel": "Auxiliary buildings",
+          "order": 70,
+          "stationIds": [
+            "control_room",
+            "warehouse_workshop"
+          ]
+        }
+      ],
+      "layoutHints": {
+        "primaryAxis": "x",
+        "secondaryAxis": "z",
+        "indoorWorkshop": false,
+        "highestStationId": "chimney_stack",
+        "longAxisStationId": "coal_handling_conveyor",
+        "sideBranchStationIds": [
+          "natural_draft_cooling_tower",
+          "coal_yard_stockpile",
+          "switchyard",
+          "water_treatment_building",
+          "control_room",
+          "warehouse_workshop"
+        ],
+        "scale": "conceptual",
+        "notes": [
+          "Open-air square plant yard; omit perimeter walls so the site reads as an outdoor power station campus.",
+          "Reference-image layout: four large natural draft cooling towers in a 2x2 block on the left side, with the pump house immediately below them.",
+          "Do not lay the station out as two empty parallel rows; use stationPositions to form a dense campus block with equipment in the middle.",
+          "Central power block runs from coal mill to boiler, turbine hall, condenser, electrostatic precipitator, FGD absorber, and chimney.",
+          "Transformer and switchyard sit to the right and rear, while low auxiliary buildings occupy the foreground edge of the square yard."
+        ],
+        "omitPerimeterWalls": true,
+        "stationPositions": {
+          "natural_draft_cooling_tower": {
+            "x": -24,
+            "z": -8,
+            "rotationY": 0
+          },
+          "circulating_water_pump_house": {
+            "x": -24,
+            "z": 5,
+            "rotationY": 0
+          },
+          "coal_yard_stockpile": {
+            "x": -22,
+            "z": 20,
+            "rotationY": 0.08
+          },
+          "coal_handling_conveyor": {
+            "x": -12,
+            "z": 12,
+            "rotationY": -0.32
+          },
+          "coal_pulverizer_mill": {
+            "x": -9,
+            "z": 1,
+            "rotationY": 0
+          },
+          "boiler_island": {
+            "x": -2,
+            "z": -2,
+            "rotationY": 0
+          },
+          "steam_turbine_generator": {
+            "x": 8,
+            "z": -2,
+            "rotationY": 0
+          },
+          "surface_condenser": {
+            "x": 8,
+            "z": 6,
+            "rotationY": 0
+          },
+          "electrostatic_precipitator": {
+            "x": 18,
+            "z": -1,
+            "rotationY": 0
+          },
+          "fgd_absorber": {
+            "x": 25,
+            "z": 3,
+            "rotationY": 0
+          },
+          "chimney_stack": {
+            "x": 28,
+            "z": -6,
+            "rotationY": 0
+          },
+          "fly_ash_silo": {
+            "x": 19,
+            "z": 8,
+            "rotationY": 0
+          },
+          "water_treatment_building": {
+            "x": -6,
+            "z": 21,
+            "rotationY": 0
+          },
+          "generator_step_up_transformer": {
+            "x": 18,
+            "z": -11,
+            "rotationY": 0
+          },
+          "switchyard": {
+            "x": 27,
+            "z": -17,
+            "rotationY": 0
+          },
+          "control_room": {
+            "x": 4,
+            "z": 20,
+            "rotationY": 0
+          },
+          "warehouse_workshop": {
+            "x": 16,
+            "z": 20,
+            "rotationY": 0
+          }
+        }
+      }
+    }
+  ],
+  "processTemplates": [
+    {
+      "processId": "thermal_power_coal_fired_station",
+      "processLabel": "Coal-fired thermal power station",
+      "processDisplayLabel": "Coal-fired thermal power station",
+      "domain": "power-generation",
+      "aliases": [
+        "火电站",
+        "火电厂",
+        "火力发电厂",
+        "燃煤电厂",
+        "煤电厂",
+        "发电厂",
+        "生成一个火电站",
+        "生成一个火电厂",
+        "做一个火电站",
+        "做一个火电厂",
+        "thermal power plant",
+        "coal fired power plant",
+        "coal-fired power station",
+        "steam electric power plant"
+      ],
+      "requiredRoles": [
+        "natural_draft_cooling_tower",
+        "circulating_water_pump_house",
+        "coal_yard_stockpile",
+        "coal_handling_conveyor",
+        "coal_pulverizer_mill",
+        "boiler_island",
+        "steam_turbine_generator",
+        "surface_condenser",
+        "electrostatic_precipitator",
+        "fgd_absorber",
+        "chimney_stack",
+        "fly_ash_silo",
+        "water_treatment_building",
+        "generator_step_up_transformer",
+        "switchyard",
+        "control_room",
+        "warehouse_workshop"
+      ],
+      "defaultLayoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 72,
+        "width": 72
+      },
+      "safetyTags": [
+        "high_temperature",
+        "steam",
+        "coal_handling",
+        "flue_gas",
+        "high_voltage",
+        "cooling_water"
+      ],
+      "stations": [
+        {
+          "id": "natural_draft_cooling_tower",
+          "label": "Natural draft cooling tower",
+          "displayLabel": "Natural draft cooling tower",
+          "role": "natural_draft_cooling_tower",
+          "equipmentHint": "thermal_power.natural_draft_cooling_tower hyperboloid natural draft cooling tower cluster with flared shell, top opening, basin, and cooling water pipe",
+          "footprintHint": "large",
+          "safetyTags": [
+            "cooling_water",
+            "tall_structure"
+          ]
+        },
+        {
+          "id": "boiler_island",
+          "label": "Boiler island",
+          "displayLabel": "Boiler island",
+          "role": "boiler_island",
+          "equipmentHint": "thermal_power.boiler_island tall coal-fired boiler island with furnace casing, steam drum, burner openings, forced draft blower, steam header, and flue gas duct",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "high_temperature",
+            "steam",
+            "pressure_equipment"
+          ]
+        },
+        {
+          "id": "steam_turbine_generator",
+          "label": "Steam turbine generator",
+          "displayLabel": "Steam turbine generator",
+          "role": "steam_turbine_generator",
+          "equipmentHint": "thermal_power.steam_turbine_generator turbine hall equipment with long turbine casing, generator body, shaft coupling, steam inlet pipe, and lube oil skid",
+          "footprintHint": "long",
+          "safetyTags": [
+            "steam",
+            "rotating_equipment",
+            "electrical"
+          ]
+        },
+        {
+          "id": "surface_condenser",
+          "label": "Surface condenser",
+          "displayLabel": "Surface condenser",
+          "role": "surface_condenser",
+          "equipmentHint": "thermal_power.surface_condenser horizontal surface condenser shell and tube heat exchanger with cooling water inlet outlet, condensate pump, and vacuum pipe",
+          "footprintHint": "long",
+          "safetyTags": [
+            "cooling_water",
+            "vacuum"
+          ]
+        },
+        {
+          "id": "electrostatic_precipitator",
+          "label": "Electrostatic precipitator",
+          "displayLabel": "Electrostatic precipitator",
+          "role": "electrostatic_precipitator",
+          "equipmentHint": "thermal_power.electrostatic_precipitator rectangular flue gas dust collector with box casing, ash hoppers, inlet outlet ducts, transformer cabinets, and access platforms",
+          "footprintHint": "large",
+          "safetyTags": [
+            "flue_gas",
+            "ash",
+            "electrical"
+          ]
+        },
+        {
+          "id": "fgd_absorber",
+          "label": "FGD absorber",
+          "displayLabel": "FGD absorber",
+          "role": "fgd_absorber",
+          "equipmentHint": "thermal_power.fgd_absorber wet flue gas desulfurization absorber tower with cylindrical vessel, inlet duct, outlet duct, recirculation pipe manifold, and service platform",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "flue_gas",
+            "wet_fgd"
+          ]
+        },
+        {
+          "id": "chimney_stack",
+          "label": "Plant chimney stack",
+          "displayLabel": "Plant chimney stack",
+          "role": "chimney_stack",
+          "equipmentHint": "thermal_power.chimney_stack tall plant chimney stack with concrete shell, warning bands, flue inlet duct, and base plinth",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "flue_gas",
+            "tall_structure"
+          ]
+        },
+        {
+          "id": "generator_step_up_transformer",
+          "label": "Generator step-up transformer",
+          "displayLabel": "Generator step-up transformer",
+          "role": "generator_step_up_transformer",
+          "equipmentHint": "thermal_power.generator_step_up_transformer large power transformer with radiator fins, oil tank body, bushings, cable tray, and containment base",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "high_voltage",
+            "electrical"
+          ]
+        },
+        {
+          "id": "switchyard",
+          "label": "High voltage switchyard",
+          "displayLabel": "High voltage switchyard",
+          "role": "switchyard",
+          "equipmentHint": "thermal_power.switchyard outdoor high voltage switchyard with gantry frames, bus bars, insulators, breaker cabinets, and outgoing transmission lines",
+          "footprintHint": "large",
+          "safetyTags": [
+            "high_voltage",
+            "electrical"
+          ]
+        },
+        {
+          "id": "warehouse_workshop",
+          "label": "Warehouse and maintenance workshop",
+          "displayLabel": "Warehouse and maintenance workshop",
+          "role": "warehouse_workshop",
+          "equipmentHint": "thermal_power.warehouse_workshop maintenance workshop building with long hall body, roof panels, access doors, vent slats, and loading apron",
+          "footprintHint": "large",
+          "safetyTags": [
+            "maintenance",
+            "building",
+            "occupied_building"
+          ]
+        },
+        {
+          "id": "control_room",
+          "label": "Control room and DCS building",
+          "displayLabel": "Control room and DCS building",
+          "role": "control_room",
+          "equipmentHint": "thermal_power.control_room occupied control room and DCS building placed away from boiler and switchyard, with building body, roof, doors, windows, panels, and cable entry",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "control",
+            "occupied_building"
+          ]
+        },
+        {
+          "id": "water_treatment_building",
+          "label": "Water treatment building",
+          "displayLabel": "Water treatment building",
+          "role": "water_treatment_building",
+          "equipmentHint": "thermal_power.water_treatment_building low water treatment building with tanks, pipe manifold, pump skid, control panel, doors, and roof vents",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "water_treatment",
+            "chemical",
+            "occupied_building"
+          ]
+        },
+        {
+          "id": "fly_ash_silo",
+          "label": "Fly ash silo",
+          "displayLabel": "Fly ash silo",
+          "role": "fly_ash_silo",
+          "equipmentHint": "thermal_power.fly_ash_silo fly ash storage silo with cylindrical bin, conical hopper bottom, support frame, discharge spout, and dust vent",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "ash",
+            "bulk_material"
+          ]
+        },
+        {
+          "id": "coal_pulverizer_mill",
+          "label": "Coal pulverizer mill",
+          "displayLabel": "Coal pulverizer mill",
+          "role": "coal_pulverizer_mill",
+          "equipmentHint": "thermal_power.coal_pulverizer_mill coal pulverizer mill with grinding body, feeder inlet, pulverized fuel outlet pipe, classifier, and drive motor",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "coal_handling",
+            "rotating_equipment"
+          ]
+        },
+        {
+          "id": "coal_handling_conveyor",
+          "label": "Coal handling conveyor",
+          "displayLabel": "Coal handling conveyor",
+          "role": "coal_handling_conveyor",
+          "equipmentHint": "thermal_power.coal_handling_conveyor long elevated belt conveyor gallery with rollers, transfer chute, drive motor, and enclosed support frame",
+          "footprintHint": "long",
+          "safetyTags": [
+            "coal_handling",
+            "conveyor"
+          ]
+        },
+        {
+          "id": "coal_yard_stockpile",
+          "label": "Coal yard stockpile",
+          "displayLabel": "Coal yard stockpile",
+          "role": "coal_yard_stockpile",
+          "equipmentHint": "thermal_power.coal_yard_stockpile coal storage yard stockpile with long dark coal pile, stacker conveyor, reclaim hopper, and runoff trench",
+          "footprintHint": "large",
+          "safetyTags": [
+            "coal_handling",
+            "dust"
+          ]
+        },
+        {
+          "id": "circulating_water_pump_house",
+          "label": "Circulating water pump house",
+          "displayLabel": "Circulating water pump house",
+          "role": "circulating_water_pump_house",
+          "equipmentHint": "thermal_power.circulating_water_pump_house low pump house with pump casings, intake pipe manifold, discharge pipe, and electrical control cabinet",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "cooling_water",
+            "pump",
+            "occupied_building"
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "fromStationId": "coal_yard_stockpile",
+          "toStationId": "coal_handling_conveyor",
+          "medium": "solid_fuel",
+          "visualKind": "material_conveyor"
+        },
+        {
+          "fromStationId": "coal_handling_conveyor",
+          "toStationId": "coal_pulverizer_mill",
+          "medium": "solid_fuel",
+          "visualKind": "material_conveyor"
+        },
+        {
+          "fromStationId": "coal_pulverizer_mill",
+          "toStationId": "boiler_island",
+          "medium": "pulverized_fuel",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "boiler_island",
+          "toStationId": "steam_turbine_generator",
+          "medium": "steam",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "steam_turbine_generator",
+          "toStationId": "surface_condenser",
+          "medium": "exhaust_steam",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "surface_condenser",
+          "toStationId": "boiler_island",
+          "medium": "feedwater",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "natural_draft_cooling_tower",
+          "toStationId": "circulating_water_pump_house",
+          "medium": "cooling_water",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "circulating_water_pump_house",
+          "toStationId": "surface_condenser",
+          "medium": "cooling_water",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "boiler_island",
+          "toStationId": "electrostatic_precipitator",
+          "medium": "flue_gas",
+          "visualKind": "air_duct"
+        },
+        {
+          "fromStationId": "electrostatic_precipitator",
+          "toStationId": "fgd_absorber",
+          "medium": "flue_gas",
+          "visualKind": "air_duct"
+        },
+        {
+          "fromStationId": "fgd_absorber",
+          "toStationId": "chimney_stack",
+          "medium": "flue_gas",
+          "visualKind": "air_duct"
+        },
+        {
+          "fromStationId": "electrostatic_precipitator",
+          "toStationId": "fly_ash_silo",
+          "medium": "fly_ash",
+          "visualKind": "material_conveyor"
+        },
+        {
+          "fromStationId": "water_treatment_building",
+          "toStationId": "boiler_island",
+          "medium": "demineralized_water",
+          "visualKind": "pipe"
+        },
+        {
+          "fromStationId": "steam_turbine_generator",
+          "toStationId": "generator_step_up_transformer",
+          "medium": "power",
+          "visualKind": "cable_tray"
+        },
+        {
+          "fromStationId": "generator_step_up_transformer",
+          "toStationId": "switchyard",
+          "medium": "power",
+          "visualKind": "cable_tray"
+        },
+        {
+          "fromStationId": "control_room",
+          "toStationId": "boiler_island",
+          "medium": "control",
+          "visualKind": "cable_tray"
+        },
+        {
+          "fromStationId": "control_room",
+          "toStationId": "switchyard",
+          "medium": "control",
+          "visualKind": "cable_tray"
+        }
+      ],
+      "layoutHints": {
+        "preferredArchitectureId": "thermal_power.factory.coal_fired_station",
+        "cameraFocusStationIds": [
+          "natural_draft_cooling_tower",
+          "boiler_island",
+          "steam_turbine_generator",
+          "chimney_stack",
+          "switchyard"
+        ],
+        "mainProcessStationIds": [
+          "coal_handling_conveyor",
+          "coal_pulverizer_mill",
+          "boiler_island",
+          "steam_turbine_generator",
+          "surface_condenser",
+          "electrostatic_precipitator",
+          "fgd_absorber",
+          "chimney_stack"
+        ],
+        "offsiteStationIds": [
+          "natural_draft_cooling_tower",
+          "coal_yard_stockpile",
+          "switchyard",
+          "control_room",
+          "warehouse_workshop"
+        ]
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "natural_draft_cooling_tower",
+      "name": "Natural draft cooling tower",
+      "aliases": [
+        "冷却塔",
+        "自然通风冷却塔",
+        "双曲线冷却塔",
+        "cooling tower",
+        "natural draft cooling tower",
+        "hyperboloid cooling tower"
+      ],
+      "description": "Four squat, wide hyperboloid natural-draft cooling towers arranged as a 2x2 block on the left side of the thermal power plant, matching the provided reference image more closely than the earlier 3x3 cluster.",
+      "family": "tank",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 11.6,
+        "width": 11.6,
+        "height": 7.6
+      },
+      "primarySemanticRole": "cooling_tower_shell",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "cold_water_basin",
+          "required": true,
+          "length": 11.2,
+          "width": 11.2,
+          "height": 0.3,
+          "position": [
+            0,
+            0.15,
+            0
+          ],
+          "primaryColor": "#dbeafe"
+        },
+        {
+          "kind": "cooling_tower_shell",
+          "id": "cooling_tower_shell_1",
+          "semanticRole": "cooling_tower_shell",
+          "required": true,
+          "height": 7.2,
+          "baseRadius": 1.58,
+          "waistRadius": 1.02,
+          "topRadius": 1.42,
+          "position": [
+            -2.85,
+            3.75,
+            -2.85
+          ],
+          "primaryColor": "#f8fafc"
+        },
+        {
+          "kind": "cooling_tower_shell",
+          "id": "cooling_tower_shell_2",
+          "semanticRole": "cooling_tower_shell",
+          "required": true,
+          "height": 7.2,
+          "baseRadius": 1.58,
+          "waistRadius": 1.02,
+          "topRadius": 1.42,
+          "position": [
+            2.85,
+            3.75,
+            -2.85
+          ],
+          "primaryColor": "#f8fafc"
+        },
+        {
+          "kind": "cooling_tower_shell",
+          "id": "cooling_tower_shell_3",
+          "semanticRole": "cooling_tower_shell",
+          "required": true,
+          "height": 7.2,
+          "baseRadius": 1.58,
+          "waistRadius": 1.02,
+          "topRadius": 1.42,
+          "position": [
+            -2.85,
+            3.75,
+            2.85
+          ],
+          "primaryColor": "#f8fafc"
+        },
+        {
+          "kind": "cooling_tower_shell",
+          "id": "cooling_tower_shell_4",
+          "semanticRole": "cooling_tower_shell",
+          "required": true,
+          "height": 7.2,
+          "baseRadius": 1.58,
+          "waistRadius": 1.02,
+          "topRadius": 1.42,
+          "position": [
+            2.85,
+            3.75,
+            2.85
+          ],
+          "primaryColor": "#f8fafc"
+        },
+        {
+          "kind": "cooling_tower_rim",
+          "id": "cooling_tower_rim_1",
+          "semanticRole": "top_steam_opening",
+          "required": true,
+          "majorRadius": 1.42,
+          "tubeRadius": 0.07,
+          "position": [
+            -2.85,
+            7.36,
+            -2.85
+          ],
+          "primaryColor": "#e2e8f0"
+        },
+        {
+          "kind": "cooling_tower_rim",
+          "id": "cooling_tower_rim_2",
+          "semanticRole": "top_steam_opening",
+          "required": true,
+          "majorRadius": 1.42,
+          "tubeRadius": 0.07,
+          "position": [
+            2.85,
+            7.36,
+            -2.85
+          ],
+          "primaryColor": "#e2e8f0"
+        },
+        {
+          "kind": "cooling_tower_rim",
+          "id": "cooling_tower_rim_3",
+          "semanticRole": "top_steam_opening",
+          "required": true,
+          "majorRadius": 1.42,
+          "tubeRadius": 0.07,
+          "position": [
+            -2.85,
+            7.36,
+            2.85
+          ],
+          "primaryColor": "#e2e8f0"
+        },
+        {
+          "kind": "cooling_tower_rim",
+          "id": "cooling_tower_rim_4",
+          "semanticRole": "top_steam_opening",
+          "required": true,
+          "majorRadius": 1.42,
+          "tubeRadius": 0.07,
+          "position": [
+            2.85,
+            7.36,
+            2.85
+          ],
+          "primaryColor": "#e2e8f0"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "cooling_water_header",
+          "required": true,
+          "length": 10.6,
+          "radius": 0.12,
+          "position": [
+            0,
+            0.55,
+            0
+          ],
+          "primaryColor": "#93c5fd"
+        },
+        {
+          "kind": "platform_ladder",
+          "semanticRole": "access_ladder",
+          "required": false,
+          "position": [
+            -4.7,
+            2.2,
+            0
+          ],
+          "height": 4.4
+        }
+      ],
+      "qualityRequiredRoles": [
+        "cooling_tower_shell",
+        "top_steam_opening",
+        "cold_water_basin",
+        "cooling_water_header"
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "office_desk"
+      ],
+      "shapeCount": {
+        "min": 9,
+        "max": 45
+      },
+      "visualCues": [
+        "four cooling towers only",
+        "2x2 block cluster",
+        "fat flared hyperboloid shells",
+        "wide top openings",
+        "shared square basin and water header"
+      ]
+    },
+    {
+      "id": "circulating_water_pump_house",
+      "name": "Circulating water pump house",
+      "aliases": [
+        "循环水泵房",
+        "循环水泵站",
+        "冷却水泵房",
+        "circulating water pump house",
+        "cooling water pump house"
+      ],
+      "description": "Low utility building and pump skid that sends cooling water between condenser and cooling towers.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 4.4,
+        "width": 2.2,
+        "height": 1.8
+      },
+      "primarySemanticRole": "pump_house_body",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "pump_house_body",
+          "required": true,
+          "length": 4.2,
+          "width": 2.1,
+          "height": 1.35,
+          "primaryColor": "#dbeafe"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "pump_house_roof",
+          "required": true,
+          "attachToRole": "pump_house_body",
+          "anchor": "top",
+          "length": 4.4,
+          "width": 2.3,
+          "height": 0.14
+        },
+        {
+          "kind": "volute_casing",
+          "semanticRole": "circulating_water_pump",
+          "required": true,
+          "attachToRole": "pump_house_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "cooling_water_pipe_manifold",
+          "required": true,
+          "attachToRole": "circulating_water_pump",
+          "anchor": "front"
+        },
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "pump_mcc_panel",
+          "attachToRole": "pump_house_body",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "pump_house_body",
+        "circulating_water_pump",
+        "cooling_water_pipe_manifold"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 60
+      },
+      "visualCues": [
+        "low pump building",
+        "pump casing",
+        "cooling water manifold",
+        "MCC panel"
+      ]
+    },
+    {
+      "id": "coal_yard_stockpile",
+      "name": "Coal yard stockpile",
+      "aliases": [
+        "煤场",
+        "煤堆",
+        "储煤场",
+        "coal yard",
+        "coal stockpile",
+        "coal storage yard"
+      ],
+      "description": "Coal storage yard with dark stockpile mass and reclaim/stacking equipment.",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 10,
+        "width": 4.2,
+        "height": 1.8
+      },
+      "primarySemanticRole": "coal_stockpile",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "coal_stockpile",
+          "required": true,
+          "length": 9.5,
+          "width": 3.8,
+          "height": 1.3,
+          "primaryColor": "#1f2933"
+        },
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "stacker_conveyor",
+          "required": true,
+          "attachToRole": "coal_stockpile",
+          "anchor": "top",
+          "length": 6.8,
+          "width": 0.55,
+          "height": 0.45
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "reclaim_hopper",
+          "required": true,
+          "attachToRole": "coal_stockpile",
+          "anchor": "front"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "runoff_drain",
+          "attachToRole": "coal_stockpile",
+          "anchor": "bottom",
+          "length": 8.5,
+          "radius": 0.035,
+          "axis": "x"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "coal_stockpile",
+        "stacker_conveyor",
+        "reclaim_hopper"
+      ],
+      "forbiddenRoles": [
+        "water_tank",
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 45
+      },
+      "visualCues": [
+        "long dark coal pile",
+        "stacker conveyor on top",
+        "reclaim hopper",
+        "yard runoff drain"
+      ]
+    },
+    {
+      "id": "coal_handling_conveyor",
+      "name": "Coal handling conveyor",
+      "aliases": [
+        "输煤栈桥",
+        "输煤皮带",
+        "煤输送廊",
+        "coal conveyor",
+        "coal handling conveyor",
+        "belt conveyor gallery"
+      ],
+      "description": "Long elevated belt conveyor gallery feeding coal from yard to the central fuel preparation area.",
+      "family": "conveyor",
+      "layoutFamily": "linear_transport_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 12,
+        "width": 1.2,
+        "height": 1.4
+      },
+      "primarySemanticRole": "coal_conveyor_gallery",
+      "parts": [
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "coal_conveyor_gallery",
+          "required": true,
+          "length": 11.5,
+          "width": 1,
+          "height": 0.7
+        },
+        {
+          "kind": "belt_surface",
+          "semanticRole": "coal_belt_surface",
+          "required": true,
+          "attachToRole": "coal_conveyor_gallery",
+          "anchor": "top"
+        },
+        {
+          "kind": "roller_array",
+          "semanticRole": "idler_rollers",
+          "required": true,
+          "attachToRole": "coal_conveyor_gallery",
+          "anchor": "top",
+          "count": 10
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "transfer_chute",
+          "required": true,
+          "attachToRole": "coal_conveyor_gallery",
+          "anchor": "front"
+        },
+        {
+          "kind": "motor_gearbox_unit",
+          "semanticRole": "conveyor_drive",
+          "required": true,
+          "attachToRole": "coal_conveyor_gallery",
+          "anchor": "drive_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "coal_conveyor_gallery",
+        "coal_belt_surface",
+        "idler_rollers",
+        "transfer_chute"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 70
+      },
+      "visualCues": [
+        "long elevated gallery",
+        "dark belt surface",
+        "roller array",
+        "transfer chute"
+      ]
+    },
+    {
+      "id": "coal_pulverizer_mill",
+      "name": "Coal pulverizer mill",
+      "aliases": [
+        "磨煤机",
+        "煤粉磨",
+        "煤粉制备磨",
+        "coal pulverizer",
+        "coal mill",
+        "pulverizer mill"
+      ],
+      "description": "Mill that grinds coal to fine powder before it is sent to the furnace burners.",
+      "family": "generic",
+      "layoutFamily": "rotating_machine_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 3.4,
+        "width": 1.8,
+        "height": 2.2
+      },
+      "primarySemanticRole": "pulverizer_mill_body",
+      "parts": [
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "pulverizer_mill_body",
+          "required": true,
+          "length": 2.4,
+          "width": 1.25,
+          "height": 1.35,
+          "primaryColor": "#9ca3af"
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "raw_coal_feeder",
+          "required": true,
+          "attachToRole": "pulverizer_mill_body",
+          "anchor": "top"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "pulverized_fuel_pipe",
+          "required": true,
+          "attachToRole": "pulverizer_mill_body",
+          "anchor": "top",
+          "length": 2.8,
+          "radius": 0.08,
+          "axis": "x"
+        },
+        {
+          "kind": "ribbed_motor_body",
+          "semanticRole": "mill_drive_motor",
+          "required": true,
+          "attachToRole": "pulverizer_mill_body",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "mill_local_control_box",
+          "attachToRole": "pulverizer_mill_body",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "pulverizer_mill_body",
+        "raw_coal_feeder",
+        "pulverized_fuel_pipe",
+        "mill_drive_motor"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 60
+      },
+      "visualCues": [
+        "compact heavy mill",
+        "top raw coal feeder",
+        "pulverized fuel outlet pipe",
+        "drive motor"
+      ]
+    },
+    {
+      "id": "boiler_island",
+      "name": "Coal-fired boiler island",
+      "aliases": [
+        "锅炉岛",
+        "燃煤锅炉",
+        "锅炉本体",
+        "boiler island",
+        "coal-fired boiler",
+        "steam generator"
+      ],
+      "description": "Tall central boiler block with furnace casing, steam drum/header, burners, draft blower, and flue gas outlet.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.8,
+        "width": 4.2,
+        "height": 9.2
+      },
+      "primarySemanticRole": "boiler_furnace_casing",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "boiler_furnace_casing",
+          "required": true,
+          "length": 4.6,
+          "width": 3.4,
+          "height": 8.2,
+          "primaryColor": "#cbd5e1"
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "steam_drum",
+          "required": true,
+          "attachToRole": "boiler_furnace_casing",
+          "anchor": "top",
+          "length": 3.6,
+          "radius": 0.28,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "main_steam_header",
+          "required": true,
+          "attachToRole": "steam_drum",
+          "anchor": "front"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "burner_opening",
+          "required": true,
+          "attachToRole": "boiler_furnace_casing",
+          "anchor": "front"
+        },
+        {
+          "kind": "volute_casing",
+          "semanticRole": "forced_draft_blower",
+          "required": true,
+          "attachToRole": "boiler_furnace_casing",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "flue_gas_duct",
+          "required": true,
+          "attachToRole": "boiler_furnace_casing",
+          "anchor": "back",
+          "length": 4.2,
+          "radius": 0.16,
+          "axis": "x"
+        },
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "boiler_flue_stack_stub",
+          "required": false,
+          "attachToRole": "flue_gas_duct",
+          "anchor": "top",
+          "height": 2.2,
+          "radius": 0.18
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "boiler_service_platform",
+          "required": false,
+          "attachToRole": "boiler_furnace_casing",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "boiler_furnace_casing",
+        "steam_drum",
+        "main_steam_header",
+        "burner_opening",
+        "flue_gas_duct"
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "desk_leg"
+      ],
+      "shapeCount": {
+        "min": 8,
+        "max": 95
+      },
+      "visualCues": [
+        "tall rectangular boiler casing",
+        "steam drum on top",
+        "burner openings",
+        "flue gas duct to cleanup train"
+      ]
+    },
+    {
+      "id": "steam_turbine_generator",
+      "name": "Steam turbine generator",
+      "aliases": [
+        "汽轮发电机",
+        "汽轮机发电机组",
+        "汽机房设备",
+        "steam turbine generator",
+        "turbine generator",
+        "turbo generator"
+      ],
+      "description": "Long turbine-generator train inside a turbine hall, forming the main generation block beside the boiler island.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 9.2,
+        "width": 3.8,
+        "height": 3.2
+      },
+      "primarySemanticRole": "turbine_hall_body",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "turbine_hall_body",
+          "required": true,
+          "length": 9,
+          "width": 3.6,
+          "height": 2.1,
+          "position": [
+            0,
+            1.05,
+            0
+          ],
+          "primaryColor": "#dbeafe"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "turbine_hall_roof",
+          "required": true,
+          "attachToRole": "turbine_hall_body",
+          "anchor": "top",
+          "length": 9.2,
+          "width": 3.8,
+          "height": 0.16,
+          "primaryColor": "#7aa7c7"
+        },
+        {
+          "kind": "vent_slats",
+          "semanticRole": "turbine_hall_roof_vents",
+          "required": true,
+          "attachToRole": "turbine_hall_roof",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 6
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "steam_turbine_casing",
+          "required": true,
+          "attachToRole": "turbine_hall_body",
+          "anchor": "front",
+          "length": 3.9,
+          "radius": 0.38,
+          "axis": "x",
+          "primaryColor": "#94a3b8"
+        },
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "generator_body",
+          "required": true,
+          "attachToRole": "steam_turbine_casing",
+          "anchor": "right",
+          "length": 2.8,
+          "width": 1.2,
+          "height": 1.2
+        },
+        {
+          "kind": "coupling_guard",
+          "semanticRole": "shaft_coupling_guard",
+          "required": true,
+          "attachToRole": "steam_turbine_casing",
+          "anchor": "right"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "main_steam_inlet",
+          "required": true,
+          "attachToRole": "steam_turbine_casing",
+          "anchor": "top",
+          "length": 2.6,
+          "radius": 0.12,
+          "axis": "x"
+        },
+        {
+          "kind": "skid_base",
+          "semanticRole": "turbine_pedestal",
+          "required": true,
+          "attachToRole": "steam_turbine_casing",
+          "anchor": "bottom",
+          "length": 6.8,
+          "width": 1.4,
+          "height": 0.35
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "turbine_hall_door",
+          "required": true,
+          "attachToRole": "turbine_hall_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "lube_oil_control_skid",
+          "attachToRole": "turbine_pedestal",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "turbine_hall_body",
+        "turbine_hall_roof",
+        "steam_turbine_casing",
+        "generator_body",
+        "shaft_coupling_guard",
+        "main_steam_inlet"
+      ],
+      "shapeCount": {
+        "min": 10,
+        "max": 90
+      },
+      "visualCues": [
+        "blue-gray turbine hall building",
+        "long turbine and generator train visible at the hall face",
+        "steam inlet pipe",
+        "roof vents and generator pedestal",
+        "simple walls and roof massing like the reference image low industrial buildings"
+      ]
+    },
+    {
+      "id": "surface_condenser",
+      "name": "Surface condenser",
+      "aliases": [
+        "凝汽器",
+        "表面式凝汽器",
+        "冷凝器",
+        "surface condenser",
+        "steam condenser"
+      ],
+      "description": "Horizontal condenser vessel below the turbine that condenses exhaust steam using circulating cooling water.",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.6,
+        "width": 1.8,
+        "height": 1.7
+      },
+      "primarySemanticRole": "condenser_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "condenser_shell",
+          "required": true,
+          "length": 5.2,
+          "radius": 0.62,
+          "axis": "x"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "cooling_water_inlet",
+          "required": true,
+          "attachToRole": "condenser_shell",
+          "anchor": "front"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "cooling_water_outlet",
+          "required": true,
+          "attachToRole": "condenser_shell",
+          "anchor": "back"
+        },
+        {
+          "kind": "volute_casing",
+          "semanticRole": "condensate_pump",
+          "required": true,
+          "attachToRole": "condenser_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "vacuum_exhaust_line",
+          "attachToRole": "condenser_shell",
+          "anchor": "top",
+          "length": 1.8,
+          "radius": 0.07,
+          "axis": "x"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "condenser_shell",
+        "cooling_water_inlet",
+        "cooling_water_outlet",
+        "condensate_pump"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 65
+      },
+      "visualCues": [
+        "horizontal condenser shell",
+        "cooling water inlet and outlet",
+        "condensate pump",
+        "vacuum line",
+        "simple walls and roof massing like the reference image low industrial buildings"
+      ]
+    },
+    {
+      "id": "electrostatic_precipitator",
+      "name": "Electrostatic precipitator",
+      "aliases": [
+        "静电除尘器",
+        "电除尘",
+        "除尘器",
+        "electrostatic precipitator",
+        "ESP",
+        "flue gas dust collector"
+      ],
+      "description": "Rectangular flue-gas dust collector placed between the furnace flue outlet and desulfurization system.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.6,
+        "width": 2.4,
+        "height": 3.2
+      },
+      "primarySemanticRole": "esp_casing",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "esp_casing",
+          "required": true,
+          "length": 5.2,
+          "width": 2.2,
+          "height": 2.6,
+          "primaryColor": "#d1d5db"
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "ash_hopper",
+          "required": true,
+          "attachToRole": "esp_casing",
+          "anchor": "bottom",
+          "arrayAlong": "length",
+          "count": 3
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "flue_gas_inlet_duct",
+          "required": true,
+          "attachToRole": "esp_casing",
+          "anchor": "front",
+          "length": 2.4,
+          "radius": 0.22,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "clean_gas_outlet_duct",
+          "required": true,
+          "attachToRole": "esp_casing",
+          "anchor": "back",
+          "length": 2.4,
+          "radius": 0.22,
+          "axis": "x"
+        },
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "esp_transformer_rectifier_cabinet",
+          "required": true,
+          "attachToRole": "esp_casing",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "esp_access_platform",
+          "attachToRole": "esp_casing",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "esp_casing",
+        "ash_hopper",
+        "flue_gas_inlet_duct",
+        "clean_gas_outlet_duct",
+        "esp_transformer_rectifier_cabinet"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 85
+      },
+      "visualCues": [
+        "large rectangular casing",
+        "multiple ash hoppers underneath",
+        "inlet and outlet flue gas ducts",
+        "transformer rectifier cabinets"
+      ]
+    },
+    {
+      "id": "fgd_absorber",
+      "name": "Wet FGD absorber tower",
+      "aliases": [
+        "脱硫塔",
+        "湿法脱硫吸收塔",
+        "FGD吸收塔",
+        "FGD absorber",
+        "wet scrubber",
+        "flue gas desulfurization absorber"
+      ],
+      "description": "Wet flue-gas desulfurization absorber tower between precipitator and chimney.",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 3.2,
+        "width": 3.2,
+        "height": 7.4
+      },
+      "primarySemanticRole": "fgd_absorber_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "fgd_absorber_shell",
+          "required": true,
+          "radius": 1.35,
+          "height": 6.5,
+          "axis": "y",
+          "primaryColor": "#dbeafe"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "flue_gas_inlet_duct",
+          "required": true,
+          "attachToRole": "fgd_absorber_shell",
+          "anchor": "front",
+          "length": 2.2,
+          "radius": 0.18,
+          "axis": "x"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "clean_gas_outlet",
+          "required": true,
+          "attachToRole": "fgd_absorber_shell",
+          "anchor": "top"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "slurry_recirculation_header",
+          "required": true,
+          "attachToRole": "fgd_absorber_shell",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "absorber_service_platform",
+          "attachToRole": "fgd_absorber_shell",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "fgd_absorber_shell",
+        "flue_gas_inlet_duct",
+        "clean_gas_outlet",
+        "slurry_recirculation_header"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 75
+      },
+      "visualCues": [
+        "tall absorber vessel",
+        "flue gas inlet duct",
+        "top clean gas outlet",
+        "recirculation pipe manifold"
+      ]
+    },
+    {
+      "id": "chimney_stack",
+      "name": "Plant chimney stack",
+      "aliases": [
+        "烟囱",
+        "主烟囱",
+        "排烟筒",
+        "chimney stack",
+        "plant stack",
+        "flue gas stack"
+      ],
+      "description": "Tall flue gas stack visible near the central power block in the reference image.",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 1.8,
+        "width": 1.8,
+        "height": 13.5
+      },
+      "primarySemanticRole": "chimney_stack",
+      "parts": [
+        {
+          "kind": "chimney_stack",
+          "semanticRole": "chimney_stack",
+          "required": true,
+          "height": 13,
+          "radius": 0.48,
+          "warningStripes": true
+        },
+        {
+          "kind": "generic_base",
+          "semanticRole": "stack_base_plinth",
+          "required": true,
+          "attachToRole": "chimney_stack",
+          "anchor": "bottom",
+          "length": 1.8,
+          "width": 1.8,
+          "height": 0.35
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "flue_inlet_duct",
+          "required": true,
+          "attachToRole": "chimney_stack",
+          "anchor": "front",
+          "length": 2.4,
+          "radius": 0.18,
+          "axis": "x"
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "aviation_warning_band",
+          "attachToRole": "chimney_stack",
+          "anchor": "top"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "chimney_stack",
+        "stack_base_plinth",
+        "flue_inlet_duct"
+      ],
+      "forbiddenRoles": [
+        "water_tank",
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 45
+      },
+      "visualCues": [
+        "very tall cylindrical stack",
+        "base plinth",
+        "flue inlet duct",
+        "warning bands"
+      ]
+    },
+    {
+      "id": "fly_ash_silo",
+      "name": "Fly ash silo",
+      "aliases": [
+        "粉煤灰仓",
+        "灰库",
+        "飞灰仓",
+        "fly ash silo",
+        "ash silo",
+        "fly ash storage silo"
+      ],
+      "description": "Bulk fly ash storage silo downstream of electrostatic precipitator.",
+      "family": "tank",
+      "layoutFamily": "vessel_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 2.6,
+        "width": 2.6,
+        "height": 5.8
+      },
+      "primarySemanticRole": "fly_ash_silo_shell",
+      "parts": [
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "fly_ash_silo_shell",
+          "required": true,
+          "radius": 1.05,
+          "height": 3.6,
+          "axis": "y",
+          "primaryColor": "#cbd5e1"
+        },
+        {
+          "kind": "hopper_body",
+          "semanticRole": "conical_discharge_hopper",
+          "required": true,
+          "attachToRole": "fly_ash_silo_shell",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "silo_support_frame",
+          "required": true,
+          "attachToRole": "fly_ash_silo_shell",
+          "anchor": "bottom",
+          "height": 1.4,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_spout",
+          "semanticRole": "ash_unloading_spout",
+          "required": true,
+          "attachToRole": "conical_discharge_hopper",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "vent_grill",
+          "semanticRole": "silo_dust_vent",
+          "attachToRole": "fly_ash_silo_shell",
+          "anchor": "top"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "fly_ash_silo_shell",
+        "conical_discharge_hopper",
+        "ash_unloading_spout",
+        "silo_dust_vent"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 70
+      },
+      "visualCues": [
+        "tall fly ash silo",
+        "conical discharge hopper",
+        "support frame",
+        "dust vent"
+      ]
+    },
+    {
+      "id": "water_treatment_building",
+      "name": "Water treatment building",
+      "aliases": [
+        "水处理车间",
+        "化学水处理站",
+        "除盐水站",
+        "water treatment building",
+        "demineralized water plant",
+        "water treatment station"
+      ],
+      "description": "Auxiliary water treatment building for demineralized makeup water and plant wastewater streams.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.2,
+        "width": 2.8,
+        "height": 2.4
+      },
+      "primarySemanticRole": "water_treatment_building_body",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "water_treatment_building_body",
+          "required": true,
+          "length": 5,
+          "width": 2.6,
+          "height": 1.8,
+          "primaryColor": "#e5e7eb"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "roof_cap",
+          "required": true,
+          "attachToRole": "water_treatment_building_body",
+          "anchor": "top",
+          "length": 5.2,
+          "width": 2.8,
+          "height": 0.18
+        },
+        {
+          "kind": "cylindrical_tank",
+          "semanticRole": "demineralized_water_tank",
+          "required": true,
+          "attachToRole": "water_treatment_building_body",
+          "anchor": "service_side",
+          "height": 1.5,
+          "radius": 0.42,
+          "axis": "y"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "water_pipe_manifold",
+          "required": true,
+          "attachToRole": "water_treatment_building_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "service_door",
+          "required": true,
+          "attachToRole": "water_treatment_building_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "local_control_panel",
+          "attachToRole": "water_treatment_building_body",
+          "anchor": "service_side"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "water_treatment_building_body",
+        "demineralized_water_tank",
+        "water_pipe_manifold",
+        "service_door"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 75
+      },
+      "visualCues": [
+        "low auxiliary building",
+        "small process tanks",
+        "pipe manifold",
+        "service door",
+        "simple walls and roof massing like the reference image low industrial buildings"
+      ]
+    },
+    {
+      "id": "generator_step_up_transformer",
+      "name": "Generator step-up transformer",
+      "aliases": [
+        "主变压器",
+        "升压变压器",
+        "发电机升压变",
+        "generator step-up transformer",
+        "GSU transformer",
+        "power transformer"
+      ],
+      "description": "Large transformer between generator output and the outdoor switchyard.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 3.2,
+        "width": 2.1,
+        "height": 2.8
+      },
+      "primarySemanticRole": "transformer_tank",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "transformer_tank",
+          "required": true,
+          "length": 2.7,
+          "width": 1.5,
+          "height": 1.8,
+          "primaryColor": "#93a4b8"
+        },
+        {
+          "kind": "vent_slats",
+          "semanticRole": "radiator_fins",
+          "required": true,
+          "attachToRole": "transformer_tank",
+          "anchor": "service_side",
+          "count": 8
+        },
+        {
+          "kind": "vertical_pole",
+          "semanticRole": "high_voltage_bushing",
+          "required": true,
+          "attachToRole": "transformer_tank",
+          "anchor": "top",
+          "arrayAlong": "width",
+          "count": 3
+        },
+        {
+          "kind": "generic_base",
+          "semanticRole": "oil_containment_base",
+          "required": true,
+          "attachToRole": "transformer_tank",
+          "anchor": "bottom",
+          "length": 3.1,
+          "width": 2,
+          "height": 0.25
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "generator_bus_duct",
+          "required": true,
+          "attachToRole": "transformer_tank",
+          "anchor": "front"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "transformer_tank",
+        "radiator_fins",
+        "high_voltage_bushing",
+        "generator_bus_duct"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 65
+      },
+      "visualCues": [
+        "large transformer tank",
+        "radiator fins",
+        "three bushings",
+        "bus duct to switchyard"
+      ]
+    },
+    {
+      "id": "switchyard",
+      "name": "High voltage switchyard",
+      "aliases": [
+        "升压站",
+        "开关站",
+        "高压开关场",
+        "switchyard",
+        "high voltage switchyard",
+        "substation yard"
+      ],
+      "description": "Outdoor switchyard and transmission export area visible around the plant site.",
+      "family": "generic",
+      "layoutFamily": "generic_industrial_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 8.5,
+        "width": 4.6,
+        "height": 3.6
+      },
+      "primarySemanticRole": "switchyard_gantry_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "switchyard_gantry_frame",
+          "required": true,
+          "height": 3.2,
+          "levelCount": 2,
+          "arrayAlong": "length",
+          "count": 3
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "bus_bar",
+          "required": true,
+          "attachToRole": "switchyard_gantry_frame",
+          "anchor": "top",
+          "length": 7.8,
+          "radius": 0.035,
+          "axis": "x"
+        },
+        {
+          "kind": "vertical_pole",
+          "semanticRole": "porcelain_insulator",
+          "required": true,
+          "attachToRole": "bus_bar",
+          "anchor": "bottom",
+          "arrayAlong": "length",
+          "count": 6
+        },
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "breaker_cabinet",
+          "required": true,
+          "attachToRole": "switchyard_gantry_frame",
+          "anchor": "front"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "outgoing_transmission_line",
+          "required": true,
+          "attachToRole": "bus_bar",
+          "anchor": "right",
+          "length": 7.5
+        }
+      ],
+      "qualityRequiredRoles": [
+        "switchyard_gantry_frame",
+        "bus_bar",
+        "porcelain_insulator",
+        "outgoing_transmission_line"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 85
+      },
+      "visualCues": [
+        "outdoor gantry frames",
+        "bus bars",
+        "insulators",
+        "outgoing transmission lines"
+      ]
+    },
+    {
+      "id": "control_room",
+      "name": "Control room and DCS building",
+      "aliases": [
+        "中控室",
+        "集控楼",
+        "DCS控制楼",
+        "control room",
+        "DCS building",
+        "central control building"
+      ],
+      "description": "Occupied control building for plant operations and distributed control systems.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 5.8,
+        "width": 2.8,
+        "height": 2.8
+      },
+      "primarySemanticRole": "control_building_body",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "control_building_body",
+          "required": true,
+          "length": 5.5,
+          "width": 2.6,
+          "height": 2.2,
+          "primaryColor": "#e5edf7"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "roof_cap",
+          "required": true,
+          "attachToRole": "control_building_body",
+          "anchor": "top",
+          "length": 5.8,
+          "width": 2.8,
+          "height": 0.18
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "main_door",
+          "required": true,
+          "attachToRole": "control_building_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "control_room_windows",
+          "required": true,
+          "attachToRole": "control_building_body",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 4
+        },
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "dcs_panel_row",
+          "required": true,
+          "attachToRole": "control_building_body",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "control_cable_entry",
+          "attachToRole": "control_building_body",
+          "anchor": "back"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "control_building_body",
+        "roof_cap",
+        "main_door",
+        "control_room_windows",
+        "dcs_panel_row"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 75
+      },
+      "visualCues": [
+        "occupied control building",
+        "roof cap",
+        "door and window band",
+        "DCS panels",
+        "simple walls and roof massing like the reference image low industrial buildings"
+      ]
+    },
+    {
+      "id": "warehouse_workshop",
+      "name": "Warehouse and maintenance workshop",
+      "aliases": [
+        "检修车间",
+        "仓库",
+        "维修车间",
+        "warehouse workshop",
+        "maintenance workshop",
+        "plant warehouse"
+      ],
+      "description": "Auxiliary workshop and warehouse building in the foreground of the reference layout.",
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 7,
+        "width": 3.6,
+        "height": 2.6
+      },
+      "primarySemanticRole": "workshop_hall_body",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "workshop_hall_body",
+          "required": true,
+          "length": 6.6,
+          "width": 3.4,
+          "height": 2,
+          "primaryColor": "#dbeafe"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "roof_panels",
+          "required": true,
+          "attachToRole": "workshop_hall_body",
+          "anchor": "top",
+          "length": 6.8,
+          "width": 3.6,
+          "height": 0.16
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "rollup_door",
+          "required": true,
+          "attachToRole": "workshop_hall_body",
+          "anchor": "front"
+        },
+        {
+          "kind": "vent_slats",
+          "semanticRole": "roof_vent_slats",
+          "required": true,
+          "attachToRole": "roof_panels",
+          "anchor": "top",
+          "count": 5
+        },
+        {
+          "kind": "generic_base",
+          "semanticRole": "loading_apron",
+          "attachToRole": "workshop_hall_body",
+          "anchor": "front",
+          "length": 6.2,
+          "width": 1.2,
+          "height": 0.12
+        }
+      ],
+      "qualityRequiredRoles": [
+        "workshop_hall_body",
+        "roof_panels",
+        "rollup_door",
+        "roof_vent_slats"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 65
+      },
+      "visualCues": [
+        "long low workshop hall",
+        "roof panels",
+        "rollup door",
+        "vent slats",
+        "simple walls and roof massing like the reference image low industrial buildings"
+      ]
+    }
+  ]
+}

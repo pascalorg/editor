@@ -1,0 +1,369 @@
+[
+  {
+    "id": "quality.appliance_assembly.two_floor_workshop_shell",
+    "requiredRoles": [
+      "two_floor_workshop_shell",
+      "main_roof",
+      "second_floor_slab",
+      "loading_door",
+      "level_2_window_band"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 82
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.parts_kitting_station",
+    "requiredRoles": [
+      "kitting_workbench",
+      "parts_bins",
+      "pick_light_bar",
+      "kit_display",
+      "operator_hmi"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.mezzanine_storage_rack",
+    "requiredRoles": [
+      "mezzanine_rack_frame",
+      "parts_totes",
+      "rack_load_label"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 52
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.door_liner_assembly_station",
+    "requiredRoles": [
+      "liner_fixture_table",
+      "liner_fixture_plate",
+      "clamp_blocks",
+      "suspended_tool_rail",
+      "operator_hmi"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 58
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.vertical_lift_conveyor",
+    "requiredRoles": [
+      "lift_tower_frame",
+      "lift_carriage",
+      "lift_transfer_belt",
+      "lift_safety_guard",
+      "lift_drive_motor"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.sheet_metal_buffer",
+    "requiredRoles": [
+      "sheet_buffer_frame",
+      "vertical_sheet_panels",
+      "sharp_edge_warning"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.cabinet_foaming_press",
+    "requiredRoles": [
+      "foaming_press_body",
+      "press_line_frame",
+      "mold_clamp_panels",
+      "service_door_window",
+      "top_maintenance_platform",
+      "foam_injection_manifold",
+      "hydraulic_clamp_heads",
+      "hydraulic_control_box",
+      "press_stack_light"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 9,
+      "max": 88
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.curing_buffer_conveyor",
+    "requiredRoles": [
+      "curing_conveyor_frame",
+      "curing_transfer_surface",
+      "buffer_rollers",
+      "pallet_stops",
+      "side_guard"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 80
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.final_assembly_conveyor",
+    "requiredRoles": [
+      "assembly_conveyor_frame",
+      "assembly_roller_bed",
+      "assembly_transfer_surface",
+      "appliance_pallet_fixtures",
+      "conveyor_drive_motor",
+      "line_side_guard"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.screw_fastening_station",
+    "requiredRoles": [
+      "fastening_workbench",
+      "torque_tool_rail",
+      "torque_display",
+      "operator_hmi",
+      "andon_light"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.leak_test_station",
+    "requiredRoles": [
+      "leak_test_frame",
+      "clamp_plate",
+      "pressure_gauge_display",
+      "pneumatic_manifold",
+      "reject_chute"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.functional_test_bench",
+    "requiredRoles": [
+      "functional_test_bench",
+      "instrument_display",
+      "test_control_panel",
+      "test_cable_tray",
+      "test_status_light"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 58
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.aging_burn_in_rack",
+    "requiredRoles": [
+      "aging_rack_frame",
+      "aging_power_cabinet",
+      "burn_in_cable_bus",
+      "appliance_load_slots",
+      "electrical_warning_label"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 9,
+      "max": 96
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.vision_inspection_gate",
+    "requiredRoles": [
+      "inspection_gantry_frame",
+      "camera_light_panel",
+      "inspection_display",
+      "reject_chute",
+      "inspection_status_light"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.carton_packaging_station",
+    "requiredRoles": [
+      "packaging_machine_body",
+      "packaging_conveyor",
+      "tape_head",
+      "strapping_arch",
+      "packaging_control_box"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 72
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.palletizing_robot_cell",
+    "requiredRoles": [
+      "robot_base",
+      "shoulder_joint",
+      "upper_arm",
+      "forearm",
+      "pallet_stack_zone",
+      "infeed_conveyor",
+      "safety_barrier"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 85
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.material_cart",
+    "requiredRoles": [
+      "cart_platform",
+      "cart_wheels",
+      "push_handle",
+      "material_bins"
+    ],
+    "forbiddenRoles": [
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 55
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.mezzanine_control_room",
+    "requiredRoles": [
+      "control_room_shell",
+      "roof_parapet",
+      "access_door",
+      "control_room_windows",
+      "line_overview_hmi",
+      "service_cable_entry"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "chimney_stack"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 64
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.line_control_cabinet",
+    "requiredRoles": [
+      "control_cabinet",
+      "hmi_panel",
+      "cabinet_cable_tray",
+      "electrical_warning_label",
+      "cabinet_status_light"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 58
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.utility_air_skid",
+    "requiredRoles": [
+      "air_compressor_body",
+      "utility_skid_base",
+      "drive_motor",
+      "air_inlet",
+      "compressed_air_outlet",
+      "compressed_air_manifold",
+      "compressor_control_box"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 7,
+      "max": 78
+    }
+  },
+  {
+    "id": "quality.appliance_assembly.overhead_utility_rack",
+    "requiredRoles": [
+      "compressed_air_header",
+      "vacuum_utility_pipe",
+      "overhead_cable_tray",
+      "air_isolation_valve",
+      "utility_rack_support"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 76
+    }
+  }
+]

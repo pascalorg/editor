@@ -1,0 +1,2315 @@
+{
+  "industry": "appliance-assembly",
+  "id": "industry.appliance-assembly.basic",
+  "name": "Appliance Assembly Basic Equipment Pack",
+  "version": "0.1.0",
+  "description": "Factory-capable home appliance final assembly pack for a strict two-floor workshop building with roof, mezzanine production areas, conveyor lines, kitting, foaming, testing, aging, packaging, palletizing, controls, and utility equipment.",
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    {
+      "id": "appliance_assembly.factory.two_floor_final_assembly",
+      "label": "Appliance assembly two-floor final assembly architecture",
+      "industry": "appliance-assembly",
+      "processId": "appliance_assembly_final_assembly_factory",
+      "layoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 72,
+        "width": 34
+      },
+      "scopes": [
+        {
+          "id": "main_final_assembly_line",
+          "label": "Main final assembly line",
+          "includeModules": [
+            "building_shell",
+            "level_2_material_kitting",
+            "level_1_cabinet_preparation",
+            "level_1_final_assembly",
+            "level_1_quality_test",
+            "level_1_packaging",
+            "line_control"
+          ]
+        },
+        {
+          "id": "full_two_floor_factory",
+          "label": "Full two-floor appliance assembly factory",
+          "includeModules": [
+            "building_shell",
+            "level_2_material_kitting",
+            "level_2_subassembly",
+            "level_1_cabinet_preparation",
+            "level_1_final_assembly",
+            "level_1_quality_test",
+            "level_2_aging_storage",
+            "level_1_packaging",
+            "intralogistics",
+            "line_control",
+            "utilities"
+          ]
+        }
+      ],
+      "modules": [
+        {
+          "id": "building_shell",
+          "displayLabel": "Two-floor workshop shell and roof",
+          "order": 5,
+          "stationIds": [
+            "two_floor_workshop_shell"
+          ]
+        },
+        {
+          "id": "level_2_material_kitting",
+          "displayLabel": "Level 2 material kitting",
+          "order": 10,
+          "stationIds": [
+            "parts_kitting_station",
+            "mezzanine_storage_rack"
+          ]
+        },
+        {
+          "id": "level_2_subassembly",
+          "displayLabel": "Level 2 door and liner subassembly",
+          "order": 20,
+          "stationIds": [
+            "door_liner_assembly_station",
+            "vertical_lift_conveyor"
+          ]
+        },
+        {
+          "id": "level_1_cabinet_preparation",
+          "displayLabel": "Level 1 cabinet preparation",
+          "order": 30,
+          "stationIds": [
+            "sheet_metal_buffer",
+            "cabinet_foaming_press",
+            "curing_buffer_conveyor"
+          ]
+        },
+        {
+          "id": "level_1_final_assembly",
+          "displayLabel": "Level 1 final assembly",
+          "order": 40,
+          "stationIds": [
+            "final_assembly_conveyor",
+            "screw_fastening_station"
+          ]
+        },
+        {
+          "id": "level_1_quality_test",
+          "displayLabel": "Level 1 quality and functional test",
+          "order": 50,
+          "stationIds": [
+            "leak_test_station",
+            "functional_test_bench",
+            "vision_inspection_gate"
+          ]
+        },
+        {
+          "id": "level_2_aging_storage",
+          "displayLabel": "Level 2 aging and buffer storage",
+          "order": 60,
+          "stationIds": [
+            "aging_burn_in_rack"
+          ]
+        },
+        {
+          "id": "level_1_packaging",
+          "displayLabel": "Level 1 packaging and dispatch",
+          "order": 70,
+          "stationIds": [
+            "carton_packaging_station",
+            "palletizing_robot_cell"
+          ]
+        },
+        {
+          "id": "intralogistics",
+          "displayLabel": "Intralogistics",
+          "order": 80,
+          "stationIds": [
+            "vertical_lift_conveyor",
+            "material_cart"
+          ]
+        },
+        {
+          "id": "line_control",
+          "displayLabel": "Line control and mezzanine MCC",
+          "order": 90,
+          "stationIds": [
+            "mezzanine_control_room",
+            "line_control_cabinet"
+          ]
+        },
+        {
+          "id": "utilities",
+          "displayLabel": "Compressed air and utility spine",
+          "order": 100,
+          "stationIds": [
+            "utility_air_skid",
+            "overhead_utility_rack"
+          ]
+        }
+      ],
+      "layoutHints": {
+        "primaryAxis": "x",
+        "secondaryAxis": "z",
+        "indoorWorkshop": true,
+        "floorCount": 2,
+        "mainProductionFloor": 1,
+        "secondFloorStationIds": [
+          "parts_kitting_station",
+          "door_liner_assembly_station",
+          "mezzanine_storage_rack",
+          "mezzanine_control_room",
+          "aging_burn_in_rack"
+        ],
+        "buildingShellStationId": "two_floor_workshop_shell",
+        "longAxisStationId": "final_assembly_conveyor",
+        "highestStationId": "two_floor_workshop_shell",
+        "sideBranchStationIds": [
+          "line_control_cabinet",
+          "utility_air_skid",
+          "overhead_utility_rack",
+          "material_cart"
+        ],
+        "scale": "conceptual",
+        "notes": [
+          "Generate a visible two-floor workshop shell first, including walls, second-floor slab intent, roof, doors, and window bands.",
+          "Keep the final assembly conveyor on level 1 as the main long axis.",
+          "Place kitting, door liner subassembly, light storage, and aging racks on level 2, feeding the line through the vertical lift conveyor.",
+          "Keep controls and utilities along the side wall or mezzanine edge."
+        ]
+      }
+    }
+  ],
+  "processTemplates": [
+    {
+      "processId": "appliance_assembly_final_assembly_factory",
+      "processLabel": "Appliance assembly final assembly factory",
+      "processDisplayLabel": "家电总装工厂",
+      "domain": "manufacturing",
+      "aliases": [
+        "家电总装厂",
+        "家电装配厂",
+        "冰箱装配厂",
+        "洗衣机装配厂",
+        "两层家电工厂",
+        "两层楼家电厂房",
+        "appliance assembly factory",
+        "two-floor appliance factory",
+        "home appliance final assembly",
+        "refrigerator assembly line",
+        "washing machine assembly line"
+      ],
+      "requiredRoles": [
+        "two_floor_workshop_shell",
+        "parts_kitting_station",
+        "sheet_metal_buffer",
+        "cabinet_foaming_press",
+        "final_assembly_conveyor",
+        "screw_fastening_station",
+        "functional_test_bench",
+        "aging_burn_in_rack",
+        "carton_packaging_station",
+        "palletizing_robot_cell",
+        "mezzanine_control_room"
+      ],
+      "defaultLayoutStyle": "parallel_bays",
+      "defaultDimensions": {
+        "length": 72,
+        "width": 34
+      },
+      "safetyTags": [
+        "indoor_workshop",
+        "conveyor_line",
+        "two_floor_workshop",
+        "manual_assembly",
+        "electrical_test"
+      ],
+      "stations": [
+        {
+          "id": "two_floor_workshop_shell",
+          "label": "Two-floor workshop shell",
+          "displayLabel": "两层厂房主体",
+          "role": "two_floor_workshop_shell",
+          "equipmentHint": "appliance_assembly.two_floor_workshop_shell two-floor appliance assembly workshop building with main walls, second-floor slab, roof, loading doors, window bands, roof vents, and parapet",
+          "footprintHint": "building",
+          "safetyTags": [
+            "building_shell",
+            "roof",
+            "two_floor_workshop"
+          ]
+        },
+        {
+          "id": "parts_kitting_station",
+          "label": "Parts kitting station",
+          "displayLabel": "零部件齐套工位",
+          "role": "parts_kitting_station",
+          "equipmentHint": "appliance_assembly.parts_kitting_station mezzanine parts kitting station with workbench, bins, tool rail, and pick light display",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "material",
+            "manual_work",
+            "mezzanine"
+          ]
+        },
+        {
+          "id": "mezzanine_storage_rack",
+          "label": "Mezzanine storage rack",
+          "displayLabel": "夹层轻型料架",
+          "role": "mezzanine_storage_rack",
+          "equipmentHint": "appliance_assembly.mezzanine_storage_rack tall light storage rack on upper floor with multiple shelf levels, bins, and aisle label",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "storage",
+            "mezzanine"
+          ]
+        },
+        {
+          "id": "door_liner_assembly_station",
+          "label": "Door liner assembly station",
+          "displayLabel": "门体内胆预装工位",
+          "role": "door_liner_assembly_station",
+          "equipmentHint": "appliance_assembly.door_liner_assembly_station appliance door and liner subassembly bench with fixture plate, clamp blocks, tool rail, and operator panel",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "subassembly",
+            "manual_work",
+            "mezzanine"
+          ]
+        },
+        {
+          "id": "vertical_lift_conveyor",
+          "label": "Vertical lift conveyor",
+          "displayLabel": "垂直提升输送机",
+          "role": "vertical_lift_conveyor",
+          "equipmentHint": "appliance_assembly.vertical_lift_conveyor vertical lift conveyor connecting mezzanine and level 1 with tower frame, belt platform, guard fence, and drive motor",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "lift",
+            "conveyor",
+            "two_floor"
+          ]
+        },
+        {
+          "id": "sheet_metal_buffer",
+          "label": "Sheet metal buffer",
+          "displayLabel": "箱体钣金缓存架",
+          "role": "sheet_metal_buffer",
+          "equipmentHint": "appliance_assembly.sheet_metal_buffer cabinet sheet metal buffer rack with tower frame, vertical panel slots, and warning label",
+          "footprintHint": "large",
+          "safetyTags": [
+            "material",
+            "sharp_edges"
+          ]
+        },
+        {
+          "id": "cabinet_foaming_press",
+          "label": "Cabinet foaming press",
+          "displayLabel": "箱体发泡压机",
+          "role": "cabinet_foaming_press",
+          "equipmentHint": "appliance_assembly.cabinet_foaming_press refrigerator cabinet foaming press with large press body, platens, service door, hydraulic panel, and stack light",
+          "footprintHint": "large",
+          "safetyTags": [
+            "press",
+            "guarding"
+          ]
+        },
+        {
+          "id": "curing_buffer_conveyor",
+          "label": "Curing buffer conveyor",
+          "displayLabel": "固化缓存输送线",
+          "role": "curing_buffer_conveyor",
+          "equipmentHint": "appliance_assembly.curing_buffer_conveyor long curing buffer conveyor with frame, belt surface, side guards, and repeated pallet stops",
+          "footprintHint": "long",
+          "safetyTags": [
+            "conveyor",
+            "buffer"
+          ]
+        },
+        {
+          "id": "final_assembly_conveyor",
+          "label": "Final assembly conveyor",
+          "displayLabel": "总装流水线",
+          "role": "final_assembly_conveyor",
+          "equipmentHint": "appliance_assembly.final_assembly_conveyor long appliance final assembly conveyor with frame, roller bed, belt surface, side guards, drive motor, and pallet fixtures",
+          "footprintHint": "long",
+          "safetyTags": [
+            "conveyor",
+            "assembly"
+          ]
+        },
+        {
+          "id": "screw_fastening_station",
+          "label": "Screw fastening station",
+          "displayLabel": "自动拧紧工位",
+          "role": "screw_fastening_station",
+          "equipmentHint": "appliance_assembly.screw_fastening_station screw fastening workstation with bench, suspended tool rail, operator HMI, torque display, and andon light",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "manual_work",
+            "assembly"
+          ]
+        },
+        {
+          "id": "leak_test_station",
+          "label": "Leak test station",
+          "displayLabel": "气密检测站",
+          "role": "leak_test_station",
+          "equipmentHint": "appliance_assembly.leak_test_station appliance leak test station with enclosed frame, clamp plate, gauge display, pneumatic manifold, and reject chute",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "test",
+            "pneumatic"
+          ]
+        },
+        {
+          "id": "functional_test_bench",
+          "label": "Functional test bench",
+          "displayLabel": "功能测试台",
+          "role": "functional_test_bench",
+          "equipmentHint": "appliance_assembly.functional_test_bench functional test bench with instrument display, cable tray, power sockets, control panel, and status tower",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "electrical_test",
+            "quality"
+          ]
+        },
+        {
+          "id": "aging_burn_in_rack",
+          "label": "Aging burn-in rack",
+          "displayLabel": "老化测试架",
+          "role": "aging_burn_in_rack",
+          "equipmentHint": "appliance_assembly.aging_burn_in_rack high-bay aging and burn-in rack with multi-level frame, electrical cabinet, cable tray, warning labels, and pallet loads",
+          "footprintHint": "tall",
+          "safetyTags": [
+            "aging",
+            "electrical_test",
+            "upper_floor"
+          ]
+        },
+        {
+          "id": "vision_inspection_gate",
+          "label": "Vision inspection gate",
+          "displayLabel": "外观视觉检测门架",
+          "role": "vision_inspection_gate",
+          "equipmentHint": "appliance_assembly.vision_inspection_gate gantry vision inspection gate with tower frame, camera light panels, display, and side reject chute",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "inspection",
+            "quality"
+          ]
+        },
+        {
+          "id": "carton_packaging_station",
+          "label": "Carton packaging station",
+          "displayLabel": "纸箱包装工位",
+          "role": "carton_packaging_station",
+          "equipmentHint": "appliance_assembly.carton_packaging_station appliance carton packaging station with conveyor, carton sealer body, tape head, strapping arch, and control box",
+          "footprintHint": "large",
+          "safetyTags": [
+            "packaging",
+            "conveyor"
+          ]
+        },
+        {
+          "id": "palletizing_robot_cell",
+          "label": "Palletizing robot cell",
+          "displayLabel": "机器人码垛单元",
+          "role": "palletizing_robot_cell",
+          "equipmentHint": "appliance_assembly.palletizing_robot_cell robot palletizing cell with orange robot arm, pallet table, infeed conveyor, guard fence, and warning label",
+          "footprintHint": "large",
+          "safetyTags": [
+            "robot",
+            "guarding",
+            "dispatch"
+          ]
+        },
+        {
+          "id": "material_cart",
+          "label": "Material cart",
+          "displayLabel": "物料周转车",
+          "role": "material_cart",
+          "equipmentHint": "appliance_assembly.material_cart wheeled material cart with low platform, bins, push handle, four wheels, and status label",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "logistics",
+            "material"
+          ]
+        },
+        {
+          "id": "mezzanine_control_room",
+          "label": "Mezzanine control room",
+          "displayLabel": "夹层控制室",
+          "role": "mezzanine_control_room",
+          "equipmentHint": "appliance_assembly.mezzanine_control_room small occupied mezzanine control room with building shell, roof parapet, door, windows, HMI panel, and cable entry",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "control_room",
+            "occupied_building",
+            "mezzanine"
+          ]
+        },
+        {
+          "id": "line_control_cabinet",
+          "label": "Line control cabinet",
+          "displayLabel": "产线控制柜",
+          "role": "line_control_cabinet",
+          "equipmentHint": "appliance_assembly.line_control_cabinet line PLC and drive cabinet row with electrical cabinet body, HMI display, cable tray, warning labels, and status light",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "electrical",
+            "control"
+          ]
+        },
+        {
+          "id": "utility_air_skid",
+          "label": "Utility air skid",
+          "displayLabel": "压缩空气撬装",
+          "role": "utility_air_skid",
+          "equipmentHint": "appliance_assembly.utility_air_skid compressed air utility skid with compressor body, motor, inlet outlet ports, manifold, and control box",
+          "footprintHint": "medium",
+          "safetyTags": [
+            "utility",
+            "compressed_air"
+          ]
+        },
+        {
+          "id": "overhead_utility_rack",
+          "label": "Overhead utility rack",
+          "displayLabel": "架空公用工程管廊",
+          "role": "overhead_utility_rack",
+          "equipmentHint": "appliance_assembly.overhead_utility_rack overhead utility rack with parallel compressed air pipe, cable tray, valve body, and support frame",
+          "footprintHint": "long",
+          "safetyTags": [
+            "utility",
+            "overhead",
+            "pipe"
+          ]
+        }
+      ],
+      "connections": [
+        {
+          "fromStationId": "mezzanine_storage_rack",
+          "toStationId": "parts_kitting_station",
+          "medium": "material",
+          "visualKind": "material_transfer",
+          "fromPortId": "rack_out",
+          "toPortId": "kit_in"
+        },
+        {
+          "fromStationId": "parts_kitting_station",
+          "toStationId": "vertical_lift_conveyor",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "kit_out",
+          "toPortId": "lift_in"
+        },
+        {
+          "fromStationId": "door_liner_assembly_station",
+          "toStationId": "vertical_lift_conveyor",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "subassembly_out",
+          "toPortId": "lift_in"
+        },
+        {
+          "fromStationId": "vertical_lift_conveyor",
+          "toStationId": "final_assembly_conveyor",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "lift_out",
+          "toPortId": "line_in"
+        },
+        {
+          "fromStationId": "sheet_metal_buffer",
+          "toStationId": "cabinet_foaming_press",
+          "medium": "material",
+          "visualKind": "material_transfer",
+          "fromPortId": "cabinet_blank_out",
+          "toPortId": "press_in"
+        },
+        {
+          "fromStationId": "cabinet_foaming_press",
+          "toStationId": "curing_buffer_conveyor",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "foamed_cabinet_out",
+          "toPortId": "curing_in"
+        },
+        {
+          "fromStationId": "curing_buffer_conveyor",
+          "toStationId": "final_assembly_conveyor",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "cured_cabinet_out",
+          "toPortId": "line_in"
+        },
+        {
+          "fromStationId": "final_assembly_conveyor",
+          "toStationId": "screw_fastening_station",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "line_station",
+          "toPortId": "tool_station"
+        },
+        {
+          "fromStationId": "screw_fastening_station",
+          "toStationId": "leak_test_station",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "assembled_out",
+          "toPortId": "leak_test_in"
+        },
+        {
+          "fromStationId": "leak_test_station",
+          "toStationId": "functional_test_bench",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "leak_ok_out",
+          "toPortId": "functional_test_in"
+        },
+        {
+          "fromStationId": "functional_test_bench",
+          "toStationId": "aging_burn_in_rack",
+          "medium": "material",
+          "visualKind": "agv_route",
+          "fromPortId": "tested_out",
+          "toPortId": "aging_in"
+        },
+        {
+          "fromStationId": "aging_burn_in_rack",
+          "toStationId": "vision_inspection_gate",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "aging_out",
+          "toPortId": "inspection_in"
+        },
+        {
+          "fromStationId": "vision_inspection_gate",
+          "toStationId": "carton_packaging_station",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "inspection_ok_out",
+          "toPortId": "packaging_in"
+        },
+        {
+          "fromStationId": "carton_packaging_station",
+          "toStationId": "palletizing_robot_cell",
+          "medium": "material",
+          "visualKind": "material_conveyor",
+          "fromPortId": "carton_out",
+          "toPortId": "palletizing_in"
+        },
+        {
+          "fromStationId": "palletizing_robot_cell",
+          "toStationId": "material_cart",
+          "medium": "material",
+          "visualKind": "agv_route",
+          "fromPortId": "pallet_out",
+          "toPortId": "cart_deck"
+        },
+        {
+          "fromStationId": "mezzanine_control_room",
+          "toStationId": "line_control_cabinet",
+          "medium": "signal",
+          "visualKind": "cable_tray",
+          "fromPortId": "control_panel",
+          "toPortId": "plc_in"
+        },
+        {
+          "fromStationId": "line_control_cabinet",
+          "toStationId": "final_assembly_conveyor",
+          "medium": "signal",
+          "visualKind": "cable_tray",
+          "fromPortId": "drive_control",
+          "toPortId": "conveyor_drive"
+        },
+        {
+          "fromStationId": "utility_air_skid",
+          "toStationId": "overhead_utility_rack",
+          "medium": "air",
+          "visualKind": "pipe",
+          "fromPortId": "compressed_air_out",
+          "toPortId": "air_header"
+        },
+        {
+          "fromStationId": "overhead_utility_rack",
+          "toStationId": "leak_test_station",
+          "medium": "air",
+          "visualKind": "pipe",
+          "fromPortId": "air_header",
+          "toPortId": "test_air_in"
+        }
+      ]
+    }
+  ],
+  "devices": [
+    {
+      "id": "two_floor_workshop_shell",
+      "name": "Two-floor workshop shell",
+      "aliases": [
+        "两层厂房主体",
+        "两层家电厂房",
+        "家电装配厂房",
+        "带屋顶厂房",
+        "two-floor workshop shell",
+        "two-story appliance workshop",
+        "roofed assembly hall"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 8,
+        "width": 4.8,
+        "height": 5
+      },
+      "primarySemanticRole": "two_floor_workshop_shell",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "two_floor_workshop_shell",
+          "required": true,
+          "length": 8,
+          "width": 4.8,
+          "height": 4.6,
+          "primaryColor": "#e5e7eb"
+        },
+        {
+          "kind": "generic_base",
+          "semanticRole": "main_roof",
+          "required": true,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "top",
+          "length": 8,
+          "width": 5,
+          "thickness": 0.18,
+          "darkColor": "#64748b"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "second_floor_slab",
+          "required": true,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "shell_center",
+          "arrayAlong": "length",
+          "count": 2,
+          "length": 3.8,
+          "height": 0.12,
+          "color": "#94a3b8"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "loading_door",
+          "required": true,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "front",
+          "length": 1.2,
+          "height": 1.8
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "level_2_window_band",
+          "required": true,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 4,
+          "length": 0.7,
+          "height": 0.42,
+          "color": "#93c5fd"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "roof_ventilators",
+          "required": false,
+          "attachToRole": "main_roof",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 3,
+          "accentColor": "#38bdf8"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "roof_parapet",
+          "required": false,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 2,
+          "accentColor": "#334155"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "floor_level_marker",
+          "required": false,
+          "attachToRole": "two_floor_workshop_shell",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 2,
+          "accentColor": "#f59e0b"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "main_roof",
+        "second_floor_slab",
+        "loading_door",
+        "level_2_window_band"
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 82
+      },
+      "visualCues": [
+        "two-floor workshop building shell",
+        "visible main roof",
+        "second-floor slab or mezzanine line",
+        "large loading door",
+        "level 2 window band",
+        "roof vents or parapet"
+      ]
+    },
+    {
+      "id": "parts_kitting_station",
+      "name": "Parts kitting station",
+      "aliases": [
+        "零部件齐套工位",
+        "拣配工位",
+        "备料工位",
+        "parts kitting station",
+        "pick-to-light kitting bench"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.6,
+        "width": 1.2,
+        "height": 2.1
+      },
+      "primarySemanticRole": "kitting_workbench",
+      "parts": [
+        {
+          "kind": "pallet_table",
+          "semanticRole": "kitting_workbench",
+          "required": true,
+          "length": 2.4,
+          "width": 1,
+          "height": 0.85
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "parts_bins",
+          "required": true,
+          "attachToRole": "kitting_workbench",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 5,
+          "accentColor": "#f59e0b"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "pick_light_bar",
+          "required": true,
+          "attachToRole": "kitting_workbench",
+          "anchor": "back"
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "kit_display",
+          "attachToRole": "pick_light_bar",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "operator_hmi",
+          "attachToRole": "kitting_workbench",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "workbench",
+        "parts bins",
+        "pick light bar",
+        "operator display"
+      ]
+    },
+    {
+      "id": "mezzanine_storage_rack",
+      "name": "Mezzanine storage rack",
+      "aliases": [
+        "夹层轻型料架",
+        "二层物料架",
+        "家电零件料架",
+        "mezzanine storage rack",
+        "light parts rack"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 4.2,
+        "width": 1.2,
+        "height": 3.2
+      },
+      "primarySemanticRole": "mezzanine_rack_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "mezzanine_rack_frame",
+          "required": true,
+          "length": 4.1,
+          "width": 1.1,
+          "height": 3,
+          "levelCount": 4
+        },
+        {
+          "kind": "pallet_table",
+          "semanticRole": "parts_totes",
+          "required": true,
+          "attachToRole": "mezzanine_rack_frame",
+          "anchor": "front",
+          "arrayAlong": "height",
+          "count": 3
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "rack_load_label",
+          "attachToRole": "mezzanine_rack_frame",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 52
+      },
+      "visualCues": [
+        "tall rack",
+        "multiple shelf levels",
+        "parts totes"
+      ]
+    },
+    {
+      "id": "door_liner_assembly_station",
+      "name": "Door liner assembly station",
+      "aliases": [
+        "门体内胆预装工位",
+        "门胆装配工位",
+        "内胆预装台",
+        "door liner assembly station",
+        "liner subassembly bench"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 1.3,
+        "height": 2
+      },
+      "primarySemanticRole": "liner_fixture_table",
+      "parts": [
+        {
+          "kind": "pallet_table",
+          "semanticRole": "liner_fixture_table",
+          "required": true,
+          "length": 2.6,
+          "width": 1.1,
+          "height": 0.85
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "liner_fixture_plate",
+          "required": true,
+          "attachToRole": "liner_fixture_table",
+          "anchor": "top",
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "clamp_blocks",
+          "required": true,
+          "attachToRole": "liner_fixture_plate",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 4
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "suspended_tool_rail",
+          "attachToRole": "liner_fixture_table",
+          "anchor": "back"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "operator_hmi",
+          "attachToRole": "liner_fixture_table",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 58
+      },
+      "visualCues": [
+        "fixture table",
+        "liner plate",
+        "clamp blocks",
+        "tool rail"
+      ]
+    },
+    {
+      "id": "vertical_lift_conveyor",
+      "name": "Vertical lift conveyor",
+      "aliases": [
+        "垂直提升输送机",
+        "升降输送机",
+        "夹层提升机",
+        "vertical lift conveyor",
+        "mezzanine lift conveyor"
+      ],
+      "family": "conveyor",
+      "layoutFamily": "linear_transport_layout",
+      "defaultDimensions": {
+        "length": 2.4,
+        "width": 1.8,
+        "height": 5.6
+      },
+      "primarySemanticRole": "lift_tower_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "lift_tower_frame",
+          "required": true,
+          "length": 2.2,
+          "width": 1.6,
+          "height": 5.4,
+          "levelCount": 3
+        },
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "lift_carriage",
+          "required": true,
+          "attachToRole": "lift_tower_frame",
+          "anchor": "front",
+          "length": 1.8,
+          "width": 1.2,
+          "height": 0.35
+        },
+        {
+          "kind": "belt_surface",
+          "semanticRole": "lift_transfer_belt",
+          "required": true,
+          "attachToRole": "lift_carriage",
+          "anchor": "top"
+        },
+        {
+          "kind": "guard_fence",
+          "semanticRole": "lift_safety_guard",
+          "required": true,
+          "attachToRole": "lift_tower_frame",
+          "anchor": "front"
+        },
+        {
+          "kind": "ribbed_motor_body",
+          "semanticRole": "lift_drive_motor",
+          "attachToRole": "lift_tower_frame",
+          "anchor": "drive_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 70
+      },
+      "visualCues": [
+        "tall tower frame",
+        "lift carriage",
+        "upper and lower mezzanine landing intent",
+        "belt transfer",
+        "safety guarding",
+        "drive motor"
+      ]
+    },
+    {
+      "id": "sheet_metal_buffer",
+      "name": "Sheet metal buffer rack",
+      "aliases": [
+        "箱体钣金缓存架",
+        "钣金缓存架",
+        "箱壳缓存架",
+        "sheet metal buffer rack",
+        "cabinet body buffer rack"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 5.2,
+        "width": 1.6,
+        "height": 2.6
+      },
+      "primarySemanticRole": "sheet_buffer_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "sheet_buffer_frame",
+          "required": true,
+          "length": 5,
+          "width": 1.4,
+          "height": 2.4,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "vertical_sheet_panels",
+          "required": true,
+          "attachToRole": "sheet_buffer_frame",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 6,
+          "color": "#e5e7eb"
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "sharp_edge_warning",
+          "attachToRole": "sheet_buffer_frame",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 4,
+        "max": 60
+      },
+      "visualCues": [
+        "long rack",
+        "vertical sheet panels",
+        "warning label"
+      ]
+    },
+    {
+      "id": "cabinet_foaming_press",
+      "name": "Cabinet foaming press",
+      "aliases": [
+        "箱体发泡压机",
+        "冰箱发泡压机",
+        "发泡模架",
+        "cabinet foaming press",
+        "refrigerator foaming press"
+      ],
+      "family": "machine_tool",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 7.2,
+        "width": 3.2,
+        "height": 3.6
+      },
+      "primarySemanticRole": "foaming_press_body",
+      "parts": [
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "foaming_press_body",
+          "required": true,
+          "length": 5.8,
+          "width": 2.5,
+          "height": 2.2,
+          "color": "#d8dde5"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "press_line_frame",
+          "required": true,
+          "length": 6.8,
+          "width": 3,
+          "height": 3.2,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "mold_clamp_panels",
+          "required": true,
+          "attachToRole": "foaming_press_body",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 4,
+          "color": "#facc15"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "service_door_window",
+          "required": true,
+          "attachToRole": "foaming_press_body",
+          "anchor": "front",
+          "color": "#7dd3fc"
+        },
+        {
+          "kind": "service_platform",
+          "semanticRole": "top_maintenance_platform",
+          "required": true,
+          "attachToRole": "press_line_frame",
+          "anchor": "top"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "foam_injection_manifold",
+          "required": true,
+          "attachToRole": "press_line_frame",
+          "anchor": "top"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "hydraulic_clamp_heads",
+          "required": true,
+          "attachToRole": "foaming_press_body",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 4,
+          "accentColor": "#111827"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "hydraulic_control_box",
+          "required": true,
+          "attachToRole": "foaming_press_body",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "press_stack_light",
+          "attachToRole": "foaming_press_body",
+          "anchor": "top"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 9,
+        "max": 88
+      },
+      "visualCues": [
+        "long multi-station foaming line",
+        "white structural frame",
+        "yellow mold clamp panels",
+        "top maintenance platform",
+        "foam injection manifold",
+        "service window",
+        "hydraulic control box"
+      ]
+    },
+    {
+      "id": "curing_buffer_conveyor",
+      "name": "Curing buffer conveyor",
+      "aliases": [
+        "固化缓存输送线",
+        "发泡固化线",
+        "缓存输送线",
+        "curing buffer conveyor",
+        "cabinet curing conveyor"
+      ],
+      "family": "conveyor",
+      "layoutFamily": "linear_transport_layout",
+      "defaultDimensions": {
+        "length": 10,
+        "width": 1.4,
+        "height": 1
+      },
+      "primarySemanticRole": "curing_conveyor_frame",
+      "parts": [
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "curing_conveyor_frame",
+          "required": true,
+          "length": 10,
+          "width": 1.2,
+          "height": 0.5
+        },
+        {
+          "kind": "belt_surface",
+          "semanticRole": "curing_transfer_surface",
+          "required": true,
+          "attachToRole": "curing_conveyor_frame",
+          "anchor": "top",
+          "length": 9.6
+        },
+        {
+          "kind": "roller_array",
+          "semanticRole": "buffer_rollers",
+          "required": true,
+          "attachToRole": "curing_conveyor_frame",
+          "anchor": "top",
+          "count": 14
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "pallet_stops",
+          "attachToRole": "curing_conveyor_frame",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 6
+        },
+        {
+          "kind": "guard_fence",
+          "semanticRole": "side_guard",
+          "attachToRole": "curing_conveyor_frame",
+          "anchor": "left"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 8,
+        "max": 80
+      },
+      "visualCues": [
+        "long conveyor",
+        "roller bed",
+        "pallet stops",
+        "side guards"
+      ]
+    },
+    {
+      "id": "final_assembly_conveyor",
+      "name": "Final assembly conveyor",
+      "aliases": [
+        "总装流水线",
+        "家电总装线",
+        "装配输送线",
+        "final assembly conveyor",
+        "appliance assembly line"
+      ],
+      "family": "conveyor",
+      "layoutFamily": "linear_transport_layout",
+      "defaultDimensions": {
+        "length": 16,
+        "width": 1.6,
+        "height": 1
+      },
+      "primarySemanticRole": "assembly_conveyor_frame",
+      "parts": [
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "assembly_conveyor_frame",
+          "required": true,
+          "length": 16,
+          "width": 1.35,
+          "height": 0.55
+        },
+        {
+          "kind": "roller_array",
+          "semanticRole": "assembly_roller_bed",
+          "required": true,
+          "attachToRole": "assembly_conveyor_frame",
+          "anchor": "top",
+          "count": 18
+        },
+        {
+          "kind": "belt_surface",
+          "semanticRole": "assembly_transfer_surface",
+          "required": true,
+          "attachToRole": "assembly_conveyor_frame",
+          "anchor": "top",
+          "length": 15.4
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "appliance_pallet_fixtures",
+          "required": true,
+          "attachToRole": "assembly_conveyor_frame",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 5
+        },
+        {
+          "kind": "ribbed_motor_body",
+          "semanticRole": "conveyor_drive_motor",
+          "attachToRole": "assembly_conveyor_frame",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "guard_fence",
+          "semanticRole": "line_side_guard",
+          "attachToRole": "assembly_conveyor_frame",
+          "anchor": "left"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 10,
+        "max": 90
+      },
+      "visualCues": [
+        "long assembly conveyor",
+        "roller bed",
+        "appliance pallet fixtures",
+        "drive motor"
+      ]
+    },
+    {
+      "id": "screw_fastening_station",
+      "name": "Screw fastening station",
+      "aliases": [
+        "自动拧紧工位",
+        "螺钉拧紧工位",
+        "扭矩工位",
+        "screw fastening station",
+        "torque tool station"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.4,
+        "width": 1.2,
+        "height": 2.2
+      },
+      "primarySemanticRole": "fastening_workbench",
+      "parts": [
+        {
+          "kind": "pallet_table",
+          "semanticRole": "fastening_workbench",
+          "required": true,
+          "length": 2.2,
+          "width": 1,
+          "height": 0.85
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "torque_tool_rail",
+          "required": true,
+          "attachToRole": "fastening_workbench",
+          "anchor": "back"
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "torque_display",
+          "required": true,
+          "attachToRole": "torque_tool_rail",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "operator_panel",
+          "semanticRole": "operator_hmi",
+          "attachToRole": "fastening_workbench",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "andon_light",
+          "attachToRole": "torque_tool_rail",
+          "anchor": "top"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "operator bench",
+        "suspended tool rail",
+        "torque display",
+        "andon light"
+      ]
+    },
+    {
+      "id": "leak_test_station",
+      "name": "Leak test station",
+      "aliases": [
+        "气密检测站",
+        "密封性检测台",
+        "泄漏测试站",
+        "leak test station",
+        "airtightness test station"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 1.5,
+        "height": 2.2
+      },
+      "primarySemanticRole": "leak_test_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "leak_test_frame",
+          "required": true,
+          "length": 2.5,
+          "width": 1.3,
+          "height": 2,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "clamp_plate",
+          "required": true,
+          "attachToRole": "leak_test_frame",
+          "anchor": "front",
+          "color": "#cbd5e1"
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "pressure_gauge_display",
+          "required": true,
+          "attachToRole": "leak_test_frame",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "pneumatic_manifold",
+          "required": true,
+          "attachToRole": "leak_test_frame",
+          "anchor": "right"
+        },
+        {
+          "kind": "generic_spout",
+          "semanticRole": "reject_chute",
+          "attachToRole": "leak_test_frame",
+          "anchor": "back"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 65
+      },
+      "visualCues": [
+        "test frame",
+        "clamp plate",
+        "pressure display",
+        "pneumatic manifold"
+      ]
+    },
+    {
+      "id": "functional_test_bench",
+      "name": "Functional test bench",
+      "aliases": [
+        "功能测试台",
+        "电性能测试台",
+        "家电测试台",
+        "functional test bench",
+        "electrical function test bench"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 1.3,
+        "height": 1.9
+      },
+      "primarySemanticRole": "functional_test_bench",
+      "parts": [
+        {
+          "kind": "pallet_table",
+          "semanticRole": "functional_test_bench",
+          "required": true,
+          "length": 2.6,
+          "width": 1.1,
+          "height": 0.85
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "instrument_display",
+          "required": true,
+          "attachToRole": "functional_test_bench",
+          "anchor": "back"
+        },
+        {
+          "kind": "generic_control_panel",
+          "semanticRole": "test_control_panel",
+          "required": true,
+          "attachToRole": "functional_test_bench",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "test_cable_tray",
+          "attachToRole": "functional_test_bench",
+          "anchor": "top"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "test_status_light",
+          "attachToRole": "instrument_display",
+          "anchor": "top"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 58
+      },
+      "visualCues": [
+        "test bench",
+        "instrument display",
+        "control panel",
+        "cable tray"
+      ]
+    },
+    {
+      "id": "aging_burn_in_rack",
+      "name": "Aging burn-in rack",
+      "aliases": [
+        "老化测试架",
+        "通电老化架",
+        "高架老化库",
+        "aging burn-in rack",
+        "appliance aging rack"
+      ],
+      "family": "electrical",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 6.2,
+        "width": 1.6,
+        "height": 3.2
+      },
+      "primarySemanticRole": "aging_rack_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "aging_rack_frame",
+          "required": true,
+          "length": 6,
+          "width": 1.35,
+          "height": 3,
+          "levelCount": 4
+        },
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "aging_power_cabinet",
+          "required": true,
+          "attachToRole": "aging_rack_frame",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "burn_in_cable_bus",
+          "required": true,
+          "attachToRole": "aging_rack_frame",
+          "anchor": "top"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "test_socket_grid",
+          "required": false,
+          "attachToRole": "aging_rack_frame",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 10,
+          "accentColor": "#ef4444"
+        },
+        {
+          "kind": "pallet_table",
+          "semanticRole": "appliance_load_slots",
+          "required": true,
+          "attachToRole": "aging_rack_frame",
+          "anchor": "front",
+          "arrayAlong": "height",
+          "count": 3
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "cooling_vent_panel",
+          "required": false,
+          "attachToRole": "aging_power_cabinet",
+          "anchor": "front",
+          "arrayAlong": "height",
+          "count": 4,
+          "accentColor": "#475569"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "rack_status_lights",
+          "required": false,
+          "attachToRole": "aging_rack_frame",
+          "anchor": "top"
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "electrical_warning_label",
+          "attachToRole": "aging_power_cabinet",
+          "anchor": "front"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 9,
+        "max": 96
+      },
+      "visualCues": [
+        "long burn-in rack row",
+        "power cabinet",
+        "dense test socket grid",
+        "overhead cable bus",
+        "cooling vent panel",
+        "multi-level appliance slots",
+        "rack status lights"
+      ]
+    },
+    {
+      "id": "vision_inspection_gate",
+      "name": "Vision inspection gate",
+      "aliases": [
+        "外观视觉检测门架",
+        "视觉检测门架",
+        "外观检测站",
+        "vision inspection gate",
+        "appearance inspection gantry"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.6,
+        "width": 1.8,
+        "height": 2.6
+      },
+      "primarySemanticRole": "inspection_gantry_frame",
+      "parts": [
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "inspection_gantry_frame",
+          "required": true,
+          "length": 2.4,
+          "width": 1.5,
+          "height": 2.4,
+          "levelCount": 2
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "camera_light_panel",
+          "required": true,
+          "attachToRole": "inspection_gantry_frame",
+          "anchor": "top",
+          "color": "#e0f2fe"
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "inspection_display",
+          "required": true,
+          "attachToRole": "inspection_gantry_frame",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "generic_spout",
+          "semanticRole": "reject_chute",
+          "attachToRole": "inspection_gantry_frame",
+          "anchor": "right"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "inspection_status_light",
+          "attachToRole": "inspection_gantry_frame",
+          "anchor": "top"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 65
+      },
+      "visualCues": [
+        "gantry frame",
+        "camera light panel",
+        "inspection display",
+        "reject chute"
+      ]
+    },
+    {
+      "id": "carton_packaging_station",
+      "name": "Carton packaging station",
+      "aliases": [
+        "纸箱包装工位",
+        "家电装箱机",
+        "封箱打包工位",
+        "carton packaging station",
+        "appliance carton sealer"
+      ],
+      "family": "generic",
+      "layoutFamily": "linear_transport_layout",
+      "defaultDimensions": {
+        "length": 4.6,
+        "width": 1.5,
+        "height": 2
+      },
+      "primarySemanticRole": "packaging_machine_body",
+      "parts": [
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "packaging_conveyor",
+          "required": true,
+          "length": 4.4,
+          "width": 1.1,
+          "height": 0.55
+        },
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "packaging_machine_body",
+          "required": true,
+          "attachToRole": "packaging_conveyor",
+          "anchor": "top",
+          "length": 1.4,
+          "width": 1.15,
+          "height": 1.1,
+          "color": "#e5e7eb"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "tape_head",
+          "required": true,
+          "attachToRole": "packaging_machine_body",
+          "anchor": "front",
+          "color": "#facc15"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "strapping_arch",
+          "required": true,
+          "attachToRole": "packaging_conveyor",
+          "anchor": "top",
+          "height": 1.4
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "packaging_control_box",
+          "attachToRole": "packaging_machine_body",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 72
+      },
+      "visualCues": [
+        "carton sealer body",
+        "conveyor bed",
+        "tape head",
+        "strapping arch"
+      ]
+    },
+    {
+      "id": "palletizing_robot_cell",
+      "name": "Palletizing robot cell",
+      "aliases": [
+        "机器人码垛单元",
+        "码垛工作站",
+        "家电码垛机器人",
+        "palletizing robot cell",
+        "robot palletizing cell"
+      ],
+      "family": "robot_arm",
+      "layoutFamily": "robot_workcell_layout",
+      "defaultDimensions": {
+        "length": 5.2,
+        "width": 4,
+        "height": 2.8
+      },
+      "primarySemanticRole": "robot_base",
+      "parts": [
+        {
+          "kind": "circular_base",
+          "semanticRole": "robot_base",
+          "required": true,
+          "radius": 0.45,
+          "height": 0.18,
+          "color": "#f59e0b"
+        },
+        {
+          "kind": "vertical_pole",
+          "semanticRole": "shoulder_joint",
+          "required": true,
+          "attachToRole": "robot_base",
+          "anchor": "top",
+          "height": 0.95,
+          "radius": 0.16,
+          "color": "#f59e0b"
+        },
+        {
+          "kind": "support_bracket",
+          "semanticRole": "upper_arm",
+          "required": true,
+          "attachToRole": "shoulder_joint",
+          "anchor": "top",
+          "length": 1.05,
+          "color": "#f59e0b"
+        },
+        {
+          "kind": "support_bracket",
+          "semanticRole": "forearm",
+          "required": true,
+          "attachToRole": "upper_arm",
+          "anchor": "front",
+          "length": 0.95,
+          "color": "#f59e0b"
+        },
+        {
+          "kind": "pallet_table",
+          "semanticRole": "pallet_stack_zone",
+          "required": true,
+          "position": [
+            1.2,
+            0.35,
+            0.8
+          ]
+        },
+        {
+          "kind": "conveyor_frame",
+          "semanticRole": "infeed_conveyor",
+          "position": [
+            -1.1,
+            0.35,
+            0
+          ],
+          "length": 2.8,
+          "width": 0.9,
+          "height": 0.5
+        },
+        {
+          "kind": "guard_fence",
+          "semanticRole": "safety_barrier",
+          "required": true,
+          "position": [
+            0,
+            0.65,
+            0
+          ],
+          "length": 4.8,
+          "width": 3.7
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 8,
+        "max": 85
+      },
+      "visualCues": [
+        "orange robot arm",
+        "pallet stack zone",
+        "infeed conveyor",
+        "safety fence"
+      ]
+    },
+    {
+      "id": "material_cart",
+      "name": "Material cart",
+      "aliases": [
+        "物料周转车",
+        "线边物料车",
+        "转运车",
+        "material cart",
+        "line-side material trolley"
+      ],
+      "family": "vehicle",
+      "layoutFamily": "vehicle_layout",
+      "defaultDimensions": {
+        "length": 1.8,
+        "width": 0.9,
+        "height": 1
+      },
+      "primarySemanticRole": "cart_platform",
+      "parts": [
+        {
+          "kind": "mobile_platform_chassis",
+          "semanticRole": "cart_platform",
+          "required": true,
+          "length": 1.7,
+          "width": 0.85,
+          "height": 0.22,
+          "color": "#64748b"
+        },
+        {
+          "kind": "wheel_set",
+          "semanticRole": "cart_wheels",
+          "required": true,
+          "attachToRole": "cart_platform",
+          "anchor": "bottom"
+        },
+        {
+          "kind": "generic_handle",
+          "semanticRole": "push_handle",
+          "required": true,
+          "attachToRole": "cart_platform",
+          "anchor": "back"
+        },
+        {
+          "kind": "generic_detail_accent",
+          "semanticRole": "material_bins",
+          "required": true,
+          "attachToRole": "cart_platform",
+          "anchor": "top",
+          "arrayAlong": "length",
+          "count": 3
+        }
+      ],
+      "forbiddenRoles": [
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 55
+      },
+      "visualCues": [
+        "wheeled platform cart",
+        "push handle",
+        "material bins"
+      ]
+    },
+    {
+      "id": "mezzanine_control_room",
+      "name": "Mezzanine control room",
+      "aliases": [
+        "夹层控制室",
+        "产线控制室",
+        "MCC控制室",
+        "mezzanine control room",
+        "line control room"
+      ],
+      "family": "generic",
+      "layoutFamily": "box_enclosure_layout",
+      "preferredResolver": "profile-parts",
+      "defaultDimensions": {
+        "length": 4.6,
+        "width": 3.2,
+        "height": 2.8
+      },
+      "primarySemanticRole": "control_room_shell",
+      "parts": [
+        {
+          "kind": "generic_body",
+          "semanticRole": "control_room_shell",
+          "required": true,
+          "length": 4.4,
+          "width": 3,
+          "height": 2.5,
+          "primaryColor": "#e5e7eb"
+        },
+        {
+          "kind": "generic_panel",
+          "semanticRole": "roof_parapet",
+          "required": true,
+          "attachToRole": "control_room_shell",
+          "anchor": "top",
+          "color": "#64748b"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "access_door",
+          "required": true,
+          "attachToRole": "control_room_shell",
+          "anchor": "front"
+        },
+        {
+          "kind": "generic_opening",
+          "semanticRole": "control_room_windows",
+          "required": true,
+          "attachToRole": "control_room_shell",
+          "anchor": "front",
+          "arrayAlong": "length",
+          "count": 3,
+          "color": "#93c5fd"
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "line_overview_hmi",
+          "attachToRole": "control_room_shell",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "service_cable_entry",
+          "attachToRole": "control_room_shell",
+          "anchor": "back"
+        }
+      ],
+      "qualityRequiredRoles": [
+        "access_door",
+        "control_room_windows",
+        "service_cable_entry"
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin",
+        "chimney_stack"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 64
+      },
+      "visualCues": [
+        "small occupied control room",
+        "roof parapet",
+        "door",
+        "windows",
+        "cable entry"
+      ]
+    },
+    {
+      "id": "line_control_cabinet",
+      "name": "Line control cabinet",
+      "aliases": [
+        "产线控制柜",
+        "PLC控制柜",
+        "驱动柜",
+        "line control cabinet",
+        "PLC cabinet row"
+      ],
+      "family": "electrical",
+      "layoutFamily": "box_enclosure_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 0.6,
+        "height": 2.1
+      },
+      "primarySemanticRole": "control_cabinet",
+      "parts": [
+        {
+          "kind": "electrical_cabinet",
+          "semanticRole": "control_cabinet",
+          "required": true,
+          "length": 2.6,
+          "width": 0.55,
+          "height": 2
+        },
+        {
+          "kind": "generic_display",
+          "semanticRole": "hmi_panel",
+          "required": true,
+          "attachToRole": "control_cabinet",
+          "anchor": "front"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "cabinet_cable_tray",
+          "attachToRole": "control_cabinet",
+          "anchor": "top"
+        },
+        {
+          "kind": "warning_label",
+          "semanticRole": "electrical_warning_label",
+          "attachToRole": "control_cabinet",
+          "anchor": "front"
+        },
+        {
+          "kind": "status_light_strip",
+          "semanticRole": "cabinet_status_light",
+          "attachToRole": "control_cabinet",
+          "anchor": "top"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 5,
+        "max": 58
+      },
+      "visualCues": [
+        "cabinet row",
+        "HMI panel",
+        "cable tray",
+        "warning labels"
+      ]
+    },
+    {
+      "id": "utility_air_skid",
+      "name": "Utility air skid",
+      "aliases": [
+        "压缩空气撬装",
+        "空压机撬",
+        "公用工程空压机",
+        "utility air skid",
+        "compressed air skid"
+      ],
+      "family": "compressor",
+      "layoutFamily": "rotating_machine_layout",
+      "defaultDimensions": {
+        "length": 2.8,
+        "width": 1.1,
+        "height": 1.3
+      },
+      "primarySemanticRole": "air_compressor_body",
+      "parts": [
+        {
+          "kind": "skid_base",
+          "semanticRole": "utility_skid_base",
+          "required": true,
+          "length": 2.7,
+          "width": 1,
+          "height": 0.18
+        },
+        {
+          "kind": "rounded_machine_body",
+          "semanticRole": "air_compressor_body",
+          "required": true,
+          "attachToRole": "utility_skid_base",
+          "anchor": "top",
+          "length": 1.2,
+          "width": 0.6,
+          "height": 0.7
+        },
+        {
+          "kind": "ribbed_motor_body",
+          "semanticRole": "drive_motor",
+          "required": true,
+          "attachToRole": "air_compressor_body",
+          "anchor": "drive_side"
+        },
+        {
+          "kind": "inlet_port",
+          "semanticRole": "air_inlet",
+          "attachToRole": "air_compressor_body",
+          "anchor": "left"
+        },
+        {
+          "kind": "outlet_port",
+          "semanticRole": "compressed_air_outlet",
+          "attachToRole": "air_compressor_body",
+          "anchor": "right"
+        },
+        {
+          "kind": "pipe_manifold",
+          "semanticRole": "compressed_air_manifold",
+          "attachToRole": "utility_skid_base",
+          "anchor": "back"
+        },
+        {
+          "kind": "control_box",
+          "semanticRole": "compressor_control_box",
+          "attachToRole": "utility_skid_base",
+          "anchor": "service_side"
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 7,
+        "max": 78
+      },
+      "visualCues": [
+        "skid base",
+        "compressor body",
+        "drive motor",
+        "air manifold"
+      ]
+    },
+    {
+      "id": "overhead_utility_rack",
+      "name": "Overhead utility rack",
+      "aliases": [
+        "架空公用工程管廊",
+        "车间管线桥架",
+        "压缩空气管廊",
+        "overhead utility rack",
+        "utility pipe and cable rack"
+      ],
+      "family": "pipe_system",
+      "layoutFamily": "pipe_valve_layout",
+      "defaultDimensions": {
+        "length": 12,
+        "width": 1.2,
+        "height": 2.8
+      },
+      "primarySemanticRole": "compressed_air_header",
+      "parts": [
+        {
+          "kind": "pipe_run",
+          "semanticRole": "compressed_air_header",
+          "required": true,
+          "length": 12,
+          "radius": 0.06,
+          "axis": "x"
+        },
+        {
+          "kind": "pipe_run",
+          "semanticRole": "vacuum_utility_pipe",
+          "required": true,
+          "position": [
+            0,
+            0.18,
+            0.16
+          ],
+          "length": 11.6,
+          "radius": 0.045,
+          "axis": "x"
+        },
+        {
+          "kind": "cable_tray",
+          "semanticRole": "overhead_cable_tray",
+          "required": true,
+          "position": [
+            0,
+            0.35,
+            -0.18
+          ],
+          "length": 11.8
+        },
+        {
+          "kind": "valve_body",
+          "semanticRole": "air_isolation_valve",
+          "attachToRole": "compressed_air_header",
+          "anchor": "service_side"
+        },
+        {
+          "kind": "structural_tower_frame",
+          "semanticRole": "utility_rack_support",
+          "attachToRole": "compressed_air_header",
+          "anchor": "bottom",
+          "levelCount": 2
+        }
+      ],
+      "forbiddenRoles": [
+        "vehicle_cabin"
+      ],
+      "shapeCount": {
+        "min": 6,
+        "max": 76
+      },
+      "visualCues": [
+        "overhead parallel pipes",
+        "cable tray",
+        "isolation valve",
+        "rack supports"
+      ]
+    }
+  ]
+}

@@ -291,6 +291,29 @@ function buildParallelBayPlacements(input: {
     .filter((placement): placement is StationPlacement => Boolean(placement))
 }
 
+function buildArchitectureHintPlacements(input: {
+  plan: ProcessLinePlan
+  boundary: LayoutBoundary
+}): StationPlacement[] | undefined {
+  const hints = input.plan.architecture?.stationPositionHints
+  if (!hints) return undefined
+  const centerX = input.boundary.centerX ?? 0
+  const centerZ = input.boundary.centerZ ?? 0
+  const placements = input.plan.stations.map((station) => {
+    const hint = hints[station.id]
+    if (!hint) return undefined
+    return buildStationPlacement({
+      station,
+      plan: input.plan,
+      position: [centerX + hint.x, 0, centerZ + hint.z],
+      rotation: [0, hint.rotationY ?? 0, 0],
+    })
+  })
+  return placements.every(Boolean)
+    ? placements.filter((placement): placement is StationPlacement => Boolean(placement))
+    : undefined
+}
+
 function validateCandidate(input: {
   candidate: LayoutCandidate
   plan: ProcessLinePlan
@@ -317,7 +340,20 @@ export function resolveProcessLineLayout(input: {
   boundary: LayoutBoundary
 } {
   const preferredStyle = preferredLayoutStyle(input.plan.layoutStyle)
-  const candidates: LayoutCandidate[] =
+  const architectureHintPlacements = buildArchitectureHintPlacements(input)
+  const architectureHintCandidates: LayoutCandidate[] = architectureHintPlacements
+    ? [
+        {
+          stationPlacements: architectureHintPlacements,
+          strategy: {
+            style: preferredStyle,
+            repaired: false,
+            reason: 'Used factory architecture station position hints.',
+          },
+        },
+      ]
+    : []
+  const fallbackCandidates: LayoutCandidate[] =
     preferredStyle === 'parallel_bays'
       ? [
           {
@@ -366,6 +402,7 @@ export function resolveProcessLineLayout(input: {
             },
           },
         ]
+  const candidates = [...architectureHintCandidates, ...fallbackCandidates]
 
   const firstCandidate = candidates[0]
   if (!firstCandidate) {

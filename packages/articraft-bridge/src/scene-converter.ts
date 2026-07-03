@@ -21,12 +21,80 @@ type BridgeNodeMetadata = Record<string, unknown> & {
   articraftBridge?: BridgeNodeInfo
 }
 
+const MIN_PASCAL_PRIMITIVE_SIZE = 0.01
+
+function pascalPrimitiveSize(value: number | undefined, fallback: number): number {
+  return Math.max(MIN_PASCAL_PRIMITIVE_SIZE, value ?? fallback)
+}
+
 function urdfPosToEditor(pos: Vec3): Vec3 {
   return [pos[0], pos[2], -pos[1]]
 }
 
+type Mat3 = [Vec3, Vec3, Vec3]
+
+const URDF_TO_EDITOR_BASIS: Mat3 = [
+  [1, 0, 0],
+  [0, 0, 1],
+  [0, -1, 0],
+]
+
+const EDITOR_TO_URDF_BASIS: Mat3 = [
+  [1, 0, 0],
+  [0, 0, -1],
+  [0, 1, 0],
+]
+
+function multiplyMat3(a: Mat3, b: Mat3): Mat3 {
+  return a.map((row) =>
+    b[0]!.map((_, col) =>
+      row.reduce((sum, value, index) => sum + value * b[index]![col]!, 0),
+    ),
+  ) as Mat3
+}
+
+function rpyToMatrix([roll, pitch, yaw]: Vec3): Mat3 {
+  const cr = Math.cos(roll)
+  const sr = Math.sin(roll)
+  const cp = Math.cos(pitch)
+  const sp = Math.sin(pitch)
+  const cy = Math.cos(yaw)
+  const sy = Math.sin(yaw)
+
+  return [
+    [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+    [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+    [-sp, cp * sr, cp * cr],
+  ]
+}
+
+function clampUnit(value: number) {
+  return Math.max(-1, Math.min(1, value))
+}
+
+function matrixToXyzEuler(matrix: Mat3): Vec3 {
+  const m11 = matrix[0]![0]!
+  const m12 = matrix[0]![1]!
+  const m13 = matrix[0]![2]!
+  const m22 = matrix[1]![1]!
+  const m23 = matrix[1]![2]!
+  const m32 = matrix[2]![1]!
+  const m33 = matrix[2]![2]!
+
+  const y = Math.asin(clampUnit(m13))
+  if (Math.abs(m13) < 0.9999999) {
+    return [Math.atan2(-m23, m33), y, Math.atan2(-m12, m11)]
+  }
+  return [Math.atan2(m32, m22), y, 0]
+}
+
 function urdfRpyToEditorRotation(rpy: Vec3): Vec3 {
-  return [rpy[0], rpy[2], -rpy[1]]
+  return matrixToXyzEuler(
+    multiplyMat3(
+      URDF_TO_EDITOR_BASIS,
+      multiplyMat3(rpyToMatrix(rpy), EDITOR_TO_URDF_BASIS),
+    ),
+  )
 }
 
 function urdfAxisToEditor(axis: Vec3): Vec3 {
@@ -68,6 +136,7 @@ function bridgeMetadata(
   parentLink?: string | null,
 ): BridgeNodeMetadata {
   return {
+    disablePrimitiveBatch: role === 'visual',
     articraftBridge: {
       role,
       linkName,
@@ -94,9 +163,9 @@ function visualToBoxNode(
     name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
-    length: size.length ?? size.sx ?? 1.0,
-    width: size.width ?? size.sy ?? 1.0,
-    height: size.height ?? size.sz ?? 1.0,
+    length: pascalPrimitiveSize(size.length ?? size.sx, 1.0),
+    width: pascalPrimitiveSize(size.width ?? size.sy, 1.0),
+    height: pascalPrimitiveSize(size.height ?? size.sz, 1.0),
     material: materialFromVisual(visual),
     materialPreset,
     metadata,
@@ -114,8 +183,8 @@ function visualToCylinderNode(
     name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
-    radius: size.radius ?? 0.5,
-    height: size.length ?? size.height ?? 1.0,
+    radius: pascalPrimitiveSize(size.radius, 0.5),
+    height: pascalPrimitiveSize(size.length ?? size.height, 1.0),
     material: materialFromVisual(visual),
     materialPreset,
     metadata,
@@ -133,7 +202,7 @@ function visualToSphereNode(
     name: nodeName,
     position: urdfPosToEditor(visual.origin.xyz),
     rotation: urdfRpyToEditorRotation(visual.origin.rpy),
-    radius: size.radius ?? 0.5,
+    radius: pascalPrimitiveSize(size.radius, 0.5),
     material: materialFromVisual(visual),
     materialPreset,
     metadata,

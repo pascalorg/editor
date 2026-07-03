@@ -96,6 +96,14 @@ export type ProcessLinePlan = {
     keyFocusStationIds?: string[]
     zoneDisplay?: 'subtle' | 'debug'
     omitPerimeterWalls?: boolean
+    stationPositionHints?: Record<
+      string,
+      {
+        x: number
+        z: number
+        rotationY?: number
+      }
+    >
   }
   sourcePack?: {
     id: string

@@ -1,0 +1,399 @@
+[
+  {
+    "processId": "thermal_power_coal_fired_station",
+    "processLabel": "Coal-fired thermal power station",
+    "processDisplayLabel": "Coal-fired thermal power station",
+    "domain": "power-generation",
+    "aliases": [
+      "火电站",
+      "火电厂",
+      "火力发电厂",
+      "燃煤电厂",
+      "煤电厂",
+      "发电厂",
+      "生成一个火电站",
+      "生成一个火电厂",
+      "做一个火电站",
+      "做一个火电厂",
+      "thermal power plant",
+      "coal fired power plant",
+      "coal-fired power station",
+      "steam electric power plant"
+    ],
+    "requiredRoles": [
+      "natural_draft_cooling_tower",
+      "circulating_water_pump_house",
+      "coal_yard_stockpile",
+      "coal_handling_conveyor",
+      "coal_pulverizer_mill",
+      "boiler_island",
+      "steam_turbine_generator",
+      "surface_condenser",
+      "electrostatic_precipitator",
+      "fgd_absorber",
+      "chimney_stack",
+      "fly_ash_silo",
+      "water_treatment_building",
+      "generator_step_up_transformer",
+      "switchyard",
+      "control_room",
+      "warehouse_workshop"
+    ],
+    "defaultLayoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 72,
+      "width": 72
+    },
+    "safetyTags": [
+      "high_temperature",
+      "steam",
+      "coal_handling",
+      "flue_gas",
+      "high_voltage",
+      "cooling_water"
+    ],
+    "stations": [
+      {
+        "id": "natural_draft_cooling_tower",
+        "label": "Natural draft cooling tower",
+        "displayLabel": "Natural draft cooling tower",
+        "role": "natural_draft_cooling_tower",
+        "equipmentHint": "thermal_power.natural_draft_cooling_tower hyperboloid natural draft cooling tower cluster with flared shell, top opening, basin, and cooling water pipe",
+        "footprintHint": "large",
+        "safetyTags": [
+          "cooling_water",
+          "tall_structure"
+        ]
+      },
+      {
+        "id": "boiler_island",
+        "label": "Boiler island",
+        "displayLabel": "Boiler island",
+        "role": "boiler_island",
+        "equipmentHint": "thermal_power.boiler_island tall coal-fired boiler island with furnace casing, steam drum, burner openings, forced draft blower, steam header, and flue gas duct",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "high_temperature",
+          "steam",
+          "pressure_equipment"
+        ]
+      },
+      {
+        "id": "steam_turbine_generator",
+        "label": "Steam turbine generator",
+        "displayLabel": "Steam turbine generator",
+        "role": "steam_turbine_generator",
+        "equipmentHint": "thermal_power.steam_turbine_generator turbine hall equipment with long turbine casing, generator body, shaft coupling, steam inlet pipe, and lube oil skid",
+        "footprintHint": "long",
+        "safetyTags": [
+          "steam",
+          "rotating_equipment",
+          "electrical"
+        ]
+      },
+      {
+        "id": "surface_condenser",
+        "label": "Surface condenser",
+        "displayLabel": "Surface condenser",
+        "role": "surface_condenser",
+        "equipmentHint": "thermal_power.surface_condenser horizontal surface condenser shell and tube heat exchanger with cooling water inlet outlet, condensate pump, and vacuum pipe",
+        "footprintHint": "long",
+        "safetyTags": [
+          "cooling_water",
+          "vacuum"
+        ]
+      },
+      {
+        "id": "electrostatic_precipitator",
+        "label": "Electrostatic precipitator",
+        "displayLabel": "Electrostatic precipitator",
+        "role": "electrostatic_precipitator",
+        "equipmentHint": "thermal_power.electrostatic_precipitator rectangular flue gas dust collector with box casing, ash hoppers, inlet outlet ducts, transformer cabinets, and access platforms",
+        "footprintHint": "large",
+        "safetyTags": [
+          "flue_gas",
+          "ash",
+          "electrical"
+        ]
+      },
+      {
+        "id": "fgd_absorber",
+        "label": "FGD absorber",
+        "displayLabel": "FGD absorber",
+        "role": "fgd_absorber",
+        "equipmentHint": "thermal_power.fgd_absorber wet flue gas desulfurization absorber tower with cylindrical vessel, inlet duct, outlet duct, recirculation pipe manifold, and service platform",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "flue_gas",
+          "wet_fgd"
+        ]
+      },
+      {
+        "id": "chimney_stack",
+        "label": "Plant chimney stack",
+        "displayLabel": "Plant chimney stack",
+        "role": "chimney_stack",
+        "equipmentHint": "thermal_power.chimney_stack tall plant chimney stack with concrete shell, warning bands, flue inlet duct, and base plinth",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "flue_gas",
+          "tall_structure"
+        ]
+      },
+      {
+        "id": "generator_step_up_transformer",
+        "label": "Generator step-up transformer",
+        "displayLabel": "Generator step-up transformer",
+        "role": "generator_step_up_transformer",
+        "equipmentHint": "thermal_power.generator_step_up_transformer large power transformer with radiator fins, oil tank body, bushings, cable tray, and containment base",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "high_voltage",
+          "electrical"
+        ]
+      },
+      {
+        "id": "switchyard",
+        "label": "High voltage switchyard",
+        "displayLabel": "High voltage switchyard",
+        "role": "switchyard",
+        "equipmentHint": "thermal_power.switchyard outdoor high voltage switchyard with gantry frames, bus bars, insulators, breaker cabinets, and outgoing transmission lines",
+        "footprintHint": "large",
+        "safetyTags": [
+          "high_voltage",
+          "electrical"
+        ]
+      },
+      {
+        "id": "warehouse_workshop",
+        "label": "Warehouse and maintenance workshop",
+        "displayLabel": "Warehouse and maintenance workshop",
+        "role": "warehouse_workshop",
+        "equipmentHint": "thermal_power.warehouse_workshop maintenance workshop building with long hall body, roof panels, access doors, vent slats, and loading apron",
+        "footprintHint": "large",
+        "safetyTags": [
+          "maintenance",
+          "building",
+          "occupied_building"
+        ]
+      },
+      {
+        "id": "control_room",
+        "label": "Control room and DCS building",
+        "displayLabel": "Control room and DCS building",
+        "role": "control_room",
+        "equipmentHint": "thermal_power.control_room occupied control room and DCS building placed away from boiler and switchyard, with building body, roof, doors, windows, panels, and cable entry",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "control",
+          "occupied_building"
+        ]
+      },
+      {
+        "id": "water_treatment_building",
+        "label": "Water treatment building",
+        "displayLabel": "Water treatment building",
+        "role": "water_treatment_building",
+        "equipmentHint": "thermal_power.water_treatment_building low water treatment building with tanks, pipe manifold, pump skid, control panel, doors, and roof vents",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "water_treatment",
+          "chemical",
+          "occupied_building"
+        ]
+      },
+      {
+        "id": "fly_ash_silo",
+        "label": "Fly ash silo",
+        "displayLabel": "Fly ash silo",
+        "role": "fly_ash_silo",
+        "equipmentHint": "thermal_power.fly_ash_silo fly ash storage silo with cylindrical bin, conical hopper bottom, support frame, discharge spout, and dust vent",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "ash",
+          "bulk_material"
+        ]
+      },
+      {
+        "id": "coal_pulverizer_mill",
+        "label": "Coal pulverizer mill",
+        "displayLabel": "Coal pulverizer mill",
+        "role": "coal_pulverizer_mill",
+        "equipmentHint": "thermal_power.coal_pulverizer_mill coal pulverizer mill with grinding body, feeder inlet, pulverized fuel outlet pipe, classifier, and drive motor",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "coal_handling",
+          "rotating_equipment"
+        ]
+      },
+      {
+        "id": "coal_handling_conveyor",
+        "label": "Coal handling conveyor",
+        "displayLabel": "Coal handling conveyor",
+        "role": "coal_handling_conveyor",
+        "equipmentHint": "thermal_power.coal_handling_conveyor long elevated belt conveyor gallery with rollers, transfer chute, drive motor, and enclosed support frame",
+        "footprintHint": "long",
+        "safetyTags": [
+          "coal_handling",
+          "conveyor"
+        ]
+      },
+      {
+        "id": "coal_yard_stockpile",
+        "label": "Coal yard stockpile",
+        "displayLabel": "Coal yard stockpile",
+        "role": "coal_yard_stockpile",
+        "equipmentHint": "thermal_power.coal_yard_stockpile coal storage yard stockpile with long dark coal pile, stacker conveyor, reclaim hopper, and runoff trench",
+        "footprintHint": "large",
+        "safetyTags": [
+          "coal_handling",
+          "dust"
+        ]
+      },
+      {
+        "id": "circulating_water_pump_house",
+        "label": "Circulating water pump house",
+        "displayLabel": "Circulating water pump house",
+        "role": "circulating_water_pump_house",
+        "equipmentHint": "thermal_power.circulating_water_pump_house low pump house with pump casings, intake pipe manifold, discharge pipe, and electrical control cabinet",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "cooling_water",
+          "pump",
+          "occupied_building"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "coal_yard_stockpile",
+        "toStationId": "coal_handling_conveyor",
+        "medium": "solid_fuel",
+        "visualKind": "material_conveyor"
+      },
+      {
+        "fromStationId": "coal_handling_conveyor",
+        "toStationId": "coal_pulverizer_mill",
+        "medium": "solid_fuel",
+        "visualKind": "material_conveyor"
+      },
+      {
+        "fromStationId": "coal_pulverizer_mill",
+        "toStationId": "boiler_island",
+        "medium": "pulverized_fuel",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "boiler_island",
+        "toStationId": "steam_turbine_generator",
+        "medium": "steam",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "steam_turbine_generator",
+        "toStationId": "surface_condenser",
+        "medium": "exhaust_steam",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "surface_condenser",
+        "toStationId": "boiler_island",
+        "medium": "feedwater",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "natural_draft_cooling_tower",
+        "toStationId": "circulating_water_pump_house",
+        "medium": "cooling_water",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "circulating_water_pump_house",
+        "toStationId": "surface_condenser",
+        "medium": "cooling_water",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "boiler_island",
+        "toStationId": "electrostatic_precipitator",
+        "medium": "flue_gas",
+        "visualKind": "air_duct"
+      },
+      {
+        "fromStationId": "electrostatic_precipitator",
+        "toStationId": "fgd_absorber",
+        "medium": "flue_gas",
+        "visualKind": "air_duct"
+      },
+      {
+        "fromStationId": "fgd_absorber",
+        "toStationId": "chimney_stack",
+        "medium": "flue_gas",
+        "visualKind": "air_duct"
+      },
+      {
+        "fromStationId": "electrostatic_precipitator",
+        "toStationId": "fly_ash_silo",
+        "medium": "fly_ash",
+        "visualKind": "material_conveyor"
+      },
+      {
+        "fromStationId": "water_treatment_building",
+        "toStationId": "boiler_island",
+        "medium": "demineralized_water",
+        "visualKind": "pipe"
+      },
+      {
+        "fromStationId": "steam_turbine_generator",
+        "toStationId": "generator_step_up_transformer",
+        "medium": "power",
+        "visualKind": "cable_tray"
+      },
+      {
+        "fromStationId": "generator_step_up_transformer",
+        "toStationId": "switchyard",
+        "medium": "power",
+        "visualKind": "cable_tray"
+      },
+      {
+        "fromStationId": "control_room",
+        "toStationId": "boiler_island",
+        "medium": "control",
+        "visualKind": "cable_tray"
+      },
+      {
+        "fromStationId": "control_room",
+        "toStationId": "switchyard",
+        "medium": "control",
+        "visualKind": "cable_tray"
+      }
+    ],
+    "layoutHints": {
+      "preferredArchitectureId": "thermal_power.factory.coal_fired_station",
+      "cameraFocusStationIds": [
+        "natural_draft_cooling_tower",
+        "boiler_island",
+        "steam_turbine_generator",
+        "chimney_stack",
+        "switchyard"
+      ],
+      "mainProcessStationIds": [
+        "coal_handling_conveyor",
+        "coal_pulverizer_mill",
+        "boiler_island",
+        "steam_turbine_generator",
+        "surface_condenser",
+        "electrostatic_precipitator",
+        "fgd_absorber",
+        "chimney_stack"
+      ],
+      "offsiteStationIds": [
+        "natural_draft_cooling_tower",
+        "coal_yard_stockpile",
+        "switchyard",
+        "control_room",
+        "warehouse_workshop"
+      ]
+    }
+  }
+]

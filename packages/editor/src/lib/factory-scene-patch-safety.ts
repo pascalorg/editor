@@ -33,10 +33,29 @@ function nodeMetadata(node: PatchRecord) {
   return isRecord(node.metadata) ? node.metadata : {}
 }
 
-function resolvedParentId(patch: PatchRecord, node: PatchRecord, fallbackParentId?: string | null) {
+function explicitParentId(patch: PatchRecord, node: PatchRecord) {
   if (typeof patch.parentId === 'string' && patch.parentId) return patch.parentId
   if (typeof node.parentId === 'string' && node.parentId) return node.parentId
-  return fallbackParentId || undefined
+  return undefined
+}
+
+function parentExists(parentId: string | undefined, knownIds: Set<string>, createdIds: Set<string>) {
+  return Boolean(parentId && (knownIds.has(parentId) || createdIds.has(parentId)))
+}
+
+function resolvedParentId(input: {
+  patch: PatchRecord
+  node: PatchRecord
+  fallbackParentId?: string | null
+  knownIds: Set<string>
+  createdIds: Set<string>
+}) {
+  const explicit = explicitParentId(input.patch, input.node)
+  if (!explicit) return input.fallbackParentId || undefined
+  if (parentExists(explicit, input.knownIds, input.createdIds)) return explicit
+  return parentExists(input.fallbackParentId ?? undefined, input.knownIds, input.createdIds)
+    ? input.fallbackParentId ?? undefined
+    : explicit
 }
 
 function issue(
@@ -117,7 +136,13 @@ export function validateFactoryScenePatches(
         )
       }
 
-      const parentId = resolvedParentId(patch, node, context.fallbackParentId)
+      const parentId = resolvedParentId({
+        patch,
+        node,
+        fallbackParentId: context.fallbackParentId,
+        knownIds,
+        createdIds,
+      })
       if (parentId && !knownIds.has(parentId) && !createdIds.has(parentId)) {
         issue(
           issues,

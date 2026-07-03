@@ -130,6 +130,51 @@ describe('factory planner', () => {
     }
   })
 
+  test('routes thermal power factory requests through the industry pack process template', () => {
+    const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u706b\u7535\u5382')
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'thermal_power_coal_fired_station',
+        processLabel: 'Coal-fired thermal power station',
+        processDisplayLabel: 'Coal-fired thermal power station',
+        layoutStyle: 'parallel_bays',
+        dimensions: { length: 72, width: 72 },
+        sourcePack: {
+          id: 'industry.thermal-power.basic',
+          version: '0.1.0',
+          industry: 'thermal-power',
+        },
+      },
+    })
+    if (plan.kind === 'process_line') {
+      expect(plan.process.stations.map((station) => station.id)).toEqual(
+        expect.arrayContaining([
+          'natural_draft_cooling_tower',
+          'boiler_island',
+          'steam_turbine_generator',
+          'generator_step_up_transformer',
+          'switchyard',
+        ]),
+      )
+      expect(plan.process.connections).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            fromStationId: 'steam_turbine_generator',
+            toStationId: 'generator_step_up_transformer',
+            visualKind: 'cable_tray',
+          }),
+          expect.objectContaining({
+            fromStationId: 'generator_step_up_transformer',
+            toStationId: 'switchyard',
+            visualKind: 'cable_tray',
+          }),
+        ]),
+      )
+    }
+  })
+
   test('routes standalone clinker process wording through one clinker process template', () => {
     const plan = fallbackFactoryPlan('\u751f\u6210\u719f\u6599\u5de5\u5e8f')
 
@@ -186,7 +231,7 @@ describe('factory planner', () => {
           'cement_packer',
           'sp_boiler',
           'aqc_boiler',
-          'mcc_control',
+          'control_room',
         ]),
       )
       expect(plan.process.connections).toEqual(
@@ -204,7 +249,7 @@ describe('factory planner', () => {
             visualKind: 'material_conveyor',
           }),
           expect.objectContaining({
-            fromStationId: 'mcc_control',
+            fromStationId: 'control_room',
             toStationId: 'rotary_kiln',
             visualKind: 'cable_tray',
           }),
@@ -622,7 +667,7 @@ describe('factory planner', () => {
           'raw_meal_feed',
           'kiln_hood',
           'cement_packer',
-          'mcc_control',
+          'control_room',
         ]),
       )
       expect(plan.process.stations.map((station) => station.id)).not.toContain('S1')

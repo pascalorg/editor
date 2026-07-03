@@ -1,0 +1,207 @@
+[
+  {
+    "id": "thermal_power.factory.coal_fired_station",
+    "label": "Coal-fired thermal power station architecture",
+    "industry": "thermal-power",
+    "processId": "thermal_power_coal_fired_station",
+    "layoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 72,
+      "width": 72
+    },
+    "scopes": [
+      {
+        "id": "coal_fired_station",
+        "label": "Coal-fired thermal power station",
+        "includeModules": [
+          "cooling_island",
+          "power_block",
+          "flue_gas_cleanup",
+          "fuel_handling",
+          "ash_and_water",
+          "electrical_export",
+          "auxiliary_buildings"
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "id": "cooling_island",
+        "displayLabel": "Cooling island",
+        "order": 10,
+        "stationIds": [
+          "natural_draft_cooling_tower",
+          "circulating_water_pump_house"
+        ]
+      },
+      {
+        "id": "power_block",
+        "displayLabel": "Boiler and turbine island",
+        "order": 20,
+        "stationIds": [
+          "coal_pulverizer_mill",
+          "boiler_island",
+          "steam_turbine_generator",
+          "surface_condenser"
+        ]
+      },
+      {
+        "id": "flue_gas_cleanup",
+        "displayLabel": "Flue-gas cleanup",
+        "order": 30,
+        "stationIds": [
+          "electrostatic_precipitator",
+          "fgd_absorber",
+          "chimney_stack"
+        ]
+      },
+      {
+        "id": "fuel_handling",
+        "displayLabel": "Coal handling",
+        "order": 40,
+        "stationIds": [
+          "coal_yard_stockpile",
+          "coal_handling_conveyor"
+        ]
+      },
+      {
+        "id": "ash_and_water",
+        "displayLabel": "Ash and water treatment",
+        "order": 50,
+        "stationIds": [
+          "fly_ash_silo",
+          "water_treatment_building"
+        ]
+      },
+      {
+        "id": "electrical_export",
+        "displayLabel": "Electrical export",
+        "order": 60,
+        "stationIds": [
+          "generator_step_up_transformer",
+          "switchyard"
+        ]
+      },
+      {
+        "id": "auxiliary_buildings",
+        "displayLabel": "Auxiliary buildings",
+        "order": 70,
+        "stationIds": [
+          "control_room",
+          "warehouse_workshop"
+        ]
+      }
+    ],
+    "layoutHints": {
+      "primaryAxis": "x",
+      "secondaryAxis": "z",
+      "indoorWorkshop": false,
+      "highestStationId": "chimney_stack",
+      "longAxisStationId": "coal_handling_conveyor",
+      "sideBranchStationIds": [
+        "natural_draft_cooling_tower",
+        "coal_yard_stockpile",
+        "switchyard",
+        "water_treatment_building",
+        "control_room",
+        "warehouse_workshop"
+      ],
+      "scale": "conceptual",
+      "notes": [
+        "Open-air square plant yard; omit perimeter walls so the site reads as an outdoor power station campus.",
+        "Reference-image layout: four large natural draft cooling towers in a 2x2 block on the left side, with the pump house immediately below them.",
+        "Do not lay the station out as two empty parallel rows; use stationPositions to form a dense campus block with equipment in the middle.",
+        "Central power block runs from coal mill to boiler, turbine hall, condenser, electrostatic precipitator, FGD absorber, and chimney.",
+        "Transformer and switchyard sit to the right and rear, while low auxiliary buildings occupy the foreground edge of the square yard."
+      ],
+      "omitPerimeterWalls": true,
+      "stationPositions": {
+        "natural_draft_cooling_tower": {
+          "x": -24,
+          "z": -8,
+          "rotationY": 0
+        },
+        "circulating_water_pump_house": {
+          "x": -24,
+          "z": 5,
+          "rotationY": 0
+        },
+        "coal_yard_stockpile": {
+          "x": -22,
+          "z": 20,
+          "rotationY": 0.08
+        },
+        "coal_handling_conveyor": {
+          "x": -12,
+          "z": 12,
+          "rotationY": -0.32
+        },
+        "coal_pulverizer_mill": {
+          "x": -9,
+          "z": 1,
+          "rotationY": 0
+        },
+        "boiler_island": {
+          "x": -2,
+          "z": -2,
+          "rotationY": 0
+        },
+        "steam_turbine_generator": {
+          "x": 8,
+          "z": -2,
+          "rotationY": 0
+        },
+        "surface_condenser": {
+          "x": 8,
+          "z": 6,
+          "rotationY": 0
+        },
+        "electrostatic_precipitator": {
+          "x": 18,
+          "z": -1,
+          "rotationY": 0
+        },
+        "fgd_absorber": {
+          "x": 25,
+          "z": 3,
+          "rotationY": 0
+        },
+        "chimney_stack": {
+          "x": 28,
+          "z": -6,
+          "rotationY": 0
+        },
+        "fly_ash_silo": {
+          "x": 19,
+          "z": 8,
+          "rotationY": 0
+        },
+        "water_treatment_building": {
+          "x": -6,
+          "z": 21,
+          "rotationY": 0
+        },
+        "generator_step_up_transformer": {
+          "x": 18,
+          "z": -11,
+          "rotationY": 0
+        },
+        "switchyard": {
+          "x": 27,
+          "z": -17,
+          "rotationY": 0
+        },
+        "control_room": {
+          "x": 4,
+          "z": 20,
+          "rotationY": 0
+        },
+        "warehouse_workshop": {
+          "x": 16,
+          "z": 20,
+          "rotationY": 0
+        }
+      }
+    }
+  }
+]

@@ -66,6 +66,21 @@ describe('factory scene patch safety', () => {
     expect(result.issues.map((item) => item.code)).toContain('create_missing_parent')
   })
 
+  test('allows missing generated parents when a known fallback parent is available', () => {
+    const box = BoxNode.parse({ id: 'box_1', name: 'Cabinet' })
+
+    const result = validateFactoryScenePatches(
+      [{ op: 'create', parentId: 'level_factory', node: box }],
+      {
+        existingNodeIds: ['level_selected'],
+        fallbackParentId: 'level_selected',
+      },
+    )
+
+    expect(result.safe).toBe(true)
+    expect(result.issues).toEqual([])
+  })
+
   test('rejects catalog item nodes inside automatic process-line patches', () => {
     const item = ItemNode.parse({
       id: 'item_1',

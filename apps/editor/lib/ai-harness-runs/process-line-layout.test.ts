@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { fallbackFactoryPlan } from './factory-planner'
 import { composeProcessLine } from './process-line-composer'
-import { buildStationPlacement, validateProcessLineLayout } from './process-line-layout'
+import {
+  buildStationPlacement,
+  resolveProcessLineLayout,
+  validateProcessLineLayout,
+} from './process-line-layout'
 import type { ProcessLinePlan } from './process-line-types'
 
 function waterElectrolysisPlan() {
@@ -87,6 +91,75 @@ describe('process line layout diagnostics', () => {
       fits: true,
       boundary: { length: 72, width: 32 },
     })
+  })
+
+  test('uses architecture station position hints before parallel bay placement', () => {
+    const plan: ProcessLinePlan = {
+      processId: 'reference_layout',
+      processLabel: 'Reference layout',
+      domain: 'generic',
+      layoutStyle: 'parallel_bays',
+      dimensions: { length: 36, width: 36 },
+      architecture: {
+        id: 'reference.factory',
+        stationPositionHints: {
+          cooling: { x: -12, z: -7 },
+          boiler: { x: -2, z: -3 },
+          turbine: { x: 5, z: 1 },
+          switchyard: { x: 12, z: -8 },
+          auxiliary: { x: 4, z: 10 },
+        },
+      },
+      stations: [
+        {
+          id: 'cooling',
+          label: 'Cooling towers',
+          role: 'cooling',
+          equipmentHint: 'cooling towers',
+          footprintHint: 'large',
+        },
+        {
+          id: 'boiler',
+          label: 'Boiler',
+          role: 'boiler',
+          equipmentHint: 'boiler',
+          footprintHint: 'large',
+        },
+        {
+          id: 'turbine',
+          label: 'Turbine hall',
+          role: 'turbine',
+          equipmentHint: 'turbine hall',
+          footprintHint: 'long',
+        },
+        {
+          id: 'switchyard',
+          label: 'Switchyard',
+          role: 'switchyard',
+          equipmentHint: 'switchyard',
+          footprintHint: 'large',
+        },
+        {
+          id: 'auxiliary',
+          label: 'Auxiliary building',
+          role: 'auxiliary',
+          equipmentHint: 'auxiliary building',
+          footprintHint: 'medium',
+        },
+      ],
+      connections: [],
+    }
+
+    const result = resolveProcessLineLayout({
+      plan,
+      boundary: { length: 36, width: 36 },
+    })
+
+    expect(result.layoutDiagnostics.fits).toBe(true)
+    expect(result.layoutStrategy.reason).toBe('Used factory architecture station position hints.')
+    expect(new Set(result.stationPlacements.map((placement) => placement.position[2])).size).toBe(5)
+    expect(result.stationPlacements.find((placement) => placement.stationId === 'boiler')?.position)
+      .toEqual([-2, 0, -3])
   })
 
   test('reports invalid connection endpoints', () => {

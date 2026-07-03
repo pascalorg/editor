@@ -1,0 +1,176 @@
+[
+  {
+    "id": "appliance_assembly.factory.two_floor_final_assembly",
+    "label": "Appliance assembly two-floor final assembly architecture",
+    "industry": "appliance-assembly",
+    "processId": "appliance_assembly_final_assembly_factory",
+    "layoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 72,
+      "width": 34
+    },
+    "scopes": [
+      {
+        "id": "main_final_assembly_line",
+        "label": "Main final assembly line",
+        "includeModules": [
+          "building_shell",
+          "level_2_material_kitting",
+          "level_1_cabinet_preparation",
+          "level_1_final_assembly",
+          "level_1_quality_test",
+          "level_1_packaging",
+          "line_control"
+        ]
+      },
+      {
+        "id": "full_two_floor_factory",
+        "label": "Full two-floor appliance assembly factory",
+        "includeModules": [
+          "building_shell",
+          "level_2_material_kitting",
+          "level_2_subassembly",
+          "level_1_cabinet_preparation",
+          "level_1_final_assembly",
+          "level_1_quality_test",
+          "level_2_aging_storage",
+          "level_1_packaging",
+          "intralogistics",
+          "line_control",
+          "utilities"
+        ]
+      }
+    ],
+    "modules": [
+      {
+        "id": "building_shell",
+        "displayLabel": "Two-floor workshop shell and roof",
+        "order": 5,
+        "stationIds": [
+          "two_floor_workshop_shell"
+        ]
+      },
+      {
+        "id": "level_2_material_kitting",
+        "displayLabel": "Level 2 material kitting",
+        "order": 10,
+        "stationIds": [
+          "parts_kitting_station",
+          "mezzanine_storage_rack"
+        ]
+      },
+      {
+        "id": "level_2_subassembly",
+        "displayLabel": "Level 2 door and liner subassembly",
+        "order": 20,
+        "stationIds": [
+          "door_liner_assembly_station",
+          "vertical_lift_conveyor"
+        ]
+      },
+      {
+        "id": "level_1_cabinet_preparation",
+        "displayLabel": "Level 1 cabinet preparation",
+        "order": 30,
+        "stationIds": [
+          "sheet_metal_buffer",
+          "cabinet_foaming_press",
+          "curing_buffer_conveyor"
+        ]
+      },
+      {
+        "id": "level_1_final_assembly",
+        "displayLabel": "Level 1 final assembly",
+        "order": 40,
+        "stationIds": [
+          "final_assembly_conveyor",
+          "screw_fastening_station"
+        ]
+      },
+      {
+        "id": "level_1_quality_test",
+        "displayLabel": "Level 1 quality and functional test",
+        "order": 50,
+        "stationIds": [
+          "leak_test_station",
+          "functional_test_bench",
+          "vision_inspection_gate"
+        ]
+      },
+      {
+        "id": "level_2_aging_storage",
+        "displayLabel": "Level 2 aging and buffer storage",
+        "order": 60,
+        "stationIds": [
+          "aging_burn_in_rack"
+        ]
+      },
+      {
+        "id": "level_1_packaging",
+        "displayLabel": "Level 1 packaging and dispatch",
+        "order": 70,
+        "stationIds": [
+          "carton_packaging_station",
+          "palletizing_robot_cell"
+        ]
+      },
+      {
+        "id": "intralogistics",
+        "displayLabel": "Intralogistics",
+        "order": 80,
+        "stationIds": [
+          "vertical_lift_conveyor",
+          "material_cart"
+        ]
+      },
+      {
+        "id": "line_control",
+        "displayLabel": "Line control and mezzanine MCC",
+        "order": 90,
+        "stationIds": [
+          "mezzanine_control_room",
+          "line_control_cabinet"
+        ]
+      },
+      {
+        "id": "utilities",
+        "displayLabel": "Compressed air and utility spine",
+        "order": 100,
+        "stationIds": [
+          "utility_air_skid",
+          "overhead_utility_rack"
+        ]
+      }
+    ],
+    "layoutHints": {
+      "primaryAxis": "x",
+      "secondaryAxis": "z",
+      "indoorWorkshop": true,
+      "floorCount": 2,
+      "mainProductionFloor": 1,
+      "secondFloorStationIds": [
+        "parts_kitting_station",
+        "door_liner_assembly_station",
+        "mezzanine_storage_rack",
+        "mezzanine_control_room",
+        "aging_burn_in_rack"
+      ],
+      "buildingShellStationId": "two_floor_workshop_shell",
+      "longAxisStationId": "final_assembly_conveyor",
+      "highestStationId": "two_floor_workshop_shell",
+      "sideBranchStationIds": [
+        "line_control_cabinet",
+        "utility_air_skid",
+        "overhead_utility_rack",
+        "material_cart"
+      ],
+      "scale": "conceptual",
+      "notes": [
+        "Generate a visible two-floor workshop shell first, including walls, second-floor slab intent, roof, doors, and window bands.",
+        "Keep the final assembly conveyor on level 1 as the main long axis.",
+        "Place kitting, door liner subassembly, light storage, and aging racks on level 2, feeding the line through the vertical lift conveyor.",
+        "Keep controls and utilities along the side wall or mezzanine edge."
+      ]
+    }
+  }
+]

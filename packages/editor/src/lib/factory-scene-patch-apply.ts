@@ -44,10 +44,19 @@ function resolvedParentId(
   patch: PatchRecord,
   node: PatchRecord,
   fallbackParentId?: AnyNodeId | null,
+  knownIds?: Set<string>,
+  createdIds?: Set<string>,
 ) {
-  if (typeof patch.parentId === 'string' && patch.parentId) return patch.parentId as AnyNodeId
-  if (typeof node.parentId === 'string' && node.parentId) return node.parentId as AnyNodeId
-  return fallbackParentId || undefined
+  const explicit =
+    typeof patch.parentId === 'string' && patch.parentId
+      ? (patch.parentId as AnyNodeId)
+      : typeof node.parentId === 'string' && node.parentId
+        ? (node.parentId as AnyNodeId)
+        : undefined
+  if (!explicit) return fallbackParentId || undefined
+  if (!knownIds) return explicit
+  if (knownIds.has(explicit) || createdIds?.has(explicit)) return explicit
+  return fallbackParentId && knownIds.has(fallbackParentId) ? fallbackParentId : explicit
 }
 
 export function buildFactoryScenePatchOperations(
@@ -70,7 +79,13 @@ export function buildFactoryScenePatchOperations(
     if (patch.op === 'create' && isRecord(patch.node)) {
       const node = patch.node as unknown as AnyNode
       if (typeof node.id !== 'string' || typeof node.type !== 'string') continue
-      const parentId = resolvedParentId(patch, patch.node, input.fallbackParentId)
+      const parentId = resolvedParentId(
+        patch,
+        patch.node,
+        input.fallbackParentId,
+        shouldFilterKnownIds ? knownIds : undefined,
+        new Set(createdIds),
+      )
       createOps.push(parentId ? { node, parentId } : { node })
       createdIds.push(node.id)
       knownIds.add(node.id)

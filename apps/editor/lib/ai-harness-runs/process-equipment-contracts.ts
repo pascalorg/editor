@@ -41,6 +41,66 @@ function stationIdentityText(station: ProcessStationPlan) {
   return [station.id, station.role, station.label].join(' ').toLowerCase()
 }
 
+function processPlanText(plan: ProcessLinePlan | undefined) {
+  if (!plan) return ''
+  return [
+    plan.processId,
+    plan.processLabel,
+    plan.processDisplayLabel,
+    plan.domain,
+    plan.sourcePack?.id,
+    plan.sourcePack?.industry,
+    plan.architecture?.id,
+    plan.architecture?.label,
+    plan.architecture?.scopeLabel,
+    ...(plan.safetyTags ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+}
+
+function hasThermalPowerIntent(text: string) {
+  return /thermal[_\s-]?power|coal[_\s-]?fired|coal[_\s-]?power|power[_\s-]?plant|\u706b\u7535|\u706b\u529b\u53d1\u7535|\u71c3\u7164.*\u53d1\u7535|\u7164\u7535|\u53d1\u7535\u5382|\u7535\u5382/i.test(
+    text,
+  )
+}
+
+function profilePackMatchesPlanIntent(profile: ProfilePackContract, plan: ProcessLinePlan | undefined) {
+  const text = processPlanText(plan)
+  if (!text) return false
+  const industry = profile.sourcePack.industry.toLowerCase()
+  const packId = profile.sourcePack.id.toLowerCase()
+  if (text.includes(industry) || text.includes(packId)) return true
+  return industry === 'thermal-power' && hasThermalPowerIntent(text)
+}
+
+function preferredProfilePackContract(
+  profiles: ProfilePackContract[],
+  identity: string,
+): ProfilePackContract | undefined {
+  const thermalProfiles = profiles.filter((profile) => profile.sourcePack.industry === 'thermal-power')
+  if (!thermalProfiles.length) return undefined
+  const findThermal = (localId: string) =>
+    thermalProfiles.find((profile) => profile.id === `thermal_power.${localId}`)
+  if (/\u5f00\u5173\u7ad9|\u5347\u538b\u7ad9|\u9ad8\u538b\u5f00\u5173|\u51fa\u7ebf|switchyard|substation/i.test(identity)) {
+    return findThermal('switchyard')
+  }
+  if (/\u6c7d\u8f6e\u673a\u623f|\u6c7d\u673a\u623f|\u6c7d\u8f6e\u53d1\u7535\u673a|\u6c7d\u8f6e\u673a|\u53d1\u7535\u673a\u623f|\u53d1\u7535\u673a\u7ec4|turbine|turbo[_\s-]?generator/i.test(identity)) {
+    return findThermal('steam_turbine_generator')
+  }
+  if (/\u53d8\u538b\u5668|\u4e3b\u53d8|\u5347\u538b\u53d8|transformer/i.test(identity)) {
+    return findThermal('generator_step_up_transformer')
+  }
+  return undefined
+}
+
+function profilePackAliasCandidates(profiles: ProfilePackContract[], identity: string) {
+  if (!/mcc|motor[_\s-]?control|control[_\s-]?cabinet|\u7535\u63a7\u67dc|\u63a7\u5236\u67dc/i.test(identity)) {
+    return profiles
+  }
+  return profiles.filter((profile) => !profile.id.endsWith('.control_room'))
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -1143,7 +1203,15 @@ function resolveProfilePackContract(
           profile.sourcePack.version === plan.sourcePack.version &&
           profile.sourcePack.industry === plan.sourcePack.industry,
       )
-    : allProfiles.filter((profile) => text.includes(profile.id.toLowerCase()))
+    : (() => {
+        const explicitProfiles = allProfiles.filter((profile) =>
+          text.includes(profile.id.toLowerCase()),
+        )
+        if (explicitProfiles.length) return explicitProfiles
+        return allProfiles.filter((profile) => profilePackMatchesPlanIntent(profile, plan))
+      })()
+  const preferred = preferredProfilePackContract(profiles, identity)
+  if (preferred) return preferred
   const exact = profiles.find((profile) => {
     const localId = profile.id.split('.').pop() ?? profile.id
     return (
@@ -1153,11 +1221,12 @@ function resolveProfilePackContract(
     )
   })
   if (exact) return exact
-  const identityAlias = profiles.find((profile) =>
+  const aliasProfiles = profilePackAliasCandidates(profiles, identity)
+  const identityAlias = aliasProfiles.find((profile) =>
     profile.aliases.some((pattern) => pattern.test(identity)),
   )
   if (identityAlias) return identityAlias
-  return profiles.find((profile) => profile.aliases.some((pattern) => pattern.test(text)))
+  return aliasProfiles.find((profile) => profile.aliases.some((pattern) => pattern.test(text)))
 }
 
 export function resolveProcessEquipmentContract(input: {

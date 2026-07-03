@@ -11,7 +11,10 @@ import {
   buildFactoryRunResultFromSelectionEdit,
   failedFactoryRunStatus,
 } from './factory-runner'
-import type { PrimitiveGeometryGenerationRequest } from './primitive-generation-service'
+import {
+  generatePrimitiveGeometryDraft,
+  type PrimitiveGeometryGenerationRequest,
+} from './primitive-generation-service'
 import { composeProcessLine } from './process-line-composer'
 
 const artifact: GeneratedGeometryArtifact = {
@@ -245,20 +248,33 @@ describe('factory runner helpers', () => {
 
     expect(result.applied).toBe(false)
     expect(result.artifact?.id).toBe('ai_geometry_factory_test')
-    expect(result.patches).toHaveLength(1)
-    expect(result.patches[0]).toMatchObject({
-      op: 'create',
-      parentId: 'level_factory',
-      node: {
-        type: 'box',
-        position: [4, 0.5, 5],
-        metadata: {
-          generatedBy: 'factory-agent',
-          artifactId: 'ai_geometry_factory_test',
-          lineId: 'line_a',
-        },
-      },
-    })
+    expect(result.patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          op: 'create',
+          parentId: 'level_factory',
+          node: expect.objectContaining({
+            type: 'assembly',
+            position: [4, 0.5, 5],
+            metadata: expect.objectContaining({
+              generatedBy: 'factory-agent',
+              artifactId: 'ai_geometry_factory_test',
+              lineId: 'line_a',
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          op: 'create',
+          node: expect.objectContaining({
+            type: 'box',
+            metadata: expect.objectContaining({
+              generatedBy: 'ai-geometry',
+              artifactId: 'ai_geometry_factory_test',
+            }),
+          }),
+        }),
+      ]),
+    )
     expect(result.missingAssets).toEqual([])
   })
 
@@ -509,6 +525,42 @@ describe('factory runner helpers', () => {
       ),
     ).toBe(true)
     expect(result.missingAssets).toEqual([])
+  })
+
+  test('passes the quality gate for thermal power stations so patches can be applied', async () => {
+    const prompt = '\u751f\u6210\u4e00\u4e2a\u706b\u7535\u5382'
+    const plan = fallbackFactoryPlan(prompt)
+    if (plan.kind !== 'process_line') throw new Error('expected process line plan')
+
+    const result = await buildFactoryRunResultFromProcessLine({
+      prompt,
+      plan,
+      plannerSource: 'fallback',
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      params: { e2eSmoke: true },
+      generatePrimitiveGeometryDraft,
+    })
+
+    expect(result.missingAssets).toEqual([])
+    expect(result.layoutDiagnostics).toMatchObject({
+      fits: true,
+      boundary: { length: 72, width: 72 },
+      diagnostics: [],
+    })
+    expect(result.layoutStrategy).toMatchObject({
+      reason: 'Used factory architecture station position hints.',
+    })
+    expect(result.qualityReport).toMatchObject({
+      passed: true,
+      checks: {
+        missingAssetCount: 0,
+        routeCollisionCount: 0,
+      },
+    })
+    expect(result.patches.length).toBeGreaterThan(0)
+    expect(
+      failedFactoryRunStatus(result, false, 'Factory process line failed quality checks.'),
+    ).toEqual({ failed: false, error: undefined })
   })
 
   test('retries process-line primitive generation when the first attempt has no artifact', async () => {

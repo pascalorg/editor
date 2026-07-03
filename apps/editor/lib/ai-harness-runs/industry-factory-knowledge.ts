@@ -62,6 +62,7 @@ type FactoryArchitectureLayoutHints = {
   longAxisStationId?: string
   sideBranchStationIds?: string[]
   omitPerimeterWalls?: boolean
+  stationPositionHints?: NonNullable<ProcessLinePlan['architecture']>['stationPositionHints']
 }
 
 export type IndustryFactoryArchitecture = {
@@ -97,6 +98,10 @@ function stringArray(value: unknown): string[] {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function finiteNumberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function booleanValue(value: unknown) {
@@ -291,6 +296,32 @@ function normalizeManifest(raw: unknown): IndustryFactoryManifest | null {
   }
 }
 
+function stationPositionHints(
+  value: unknown,
+): NonNullable<ProcessLinePlan['architecture']>['stationPositionHints'] | undefined {
+  if (!isRecord(value)) return undefined
+  const entries = Object.entries(value)
+    .map(([stationId, rawHint]) => {
+      if (!stationId.trim() || !isRecord(rawHint)) return undefined
+      const x = finiteNumberValue(rawHint.x)
+      const z = finiteNumberValue(rawHint.z)
+      if (x == null || z == null) return undefined
+      const rotationY = finiteNumberValue(rawHint.rotationY)
+      return [
+        stationId.trim(),
+        {
+          x,
+          z,
+          ...(rotationY != null ? { rotationY } : {}),
+        },
+      ] as const
+    })
+    .filter((entry): entry is readonly [string, { x: number; z: number; rotationY?: number }] =>
+      Boolean(entry),
+    )
+  return entries.length ? Object.fromEntries(entries) : undefined
+}
+
 function normalizeArchitecture(raw: unknown, manifest: IndustryFactoryManifest) {
   if (!isRecord(raw)) return null
   const id = stringValue(raw.id)
@@ -331,6 +362,7 @@ function normalizeArchitecture(raw: unknown, manifest: IndustryFactoryManifest) 
         .filter((module): module is FactoryArchitectureModule => Boolean(module))
     : []
   const layoutHints = isRecord(raw.layoutHints) ? raw.layoutHints : {}
+  const positionHints = stationPositionHints(layoutHints.stationPositions)
   return {
     id,
     label,
@@ -356,6 +388,7 @@ function normalizeArchitecture(raw: unknown, manifest: IndustryFactoryManifest) 
       ...(booleanValue(layoutHints.omitPerimeterWalls) != null
         ? { omitPerimeterWalls: booleanValue(layoutHints.omitPerimeterWalls) }
         : {}),
+      ...(positionHints ? { stationPositionHints: positionHints } : {}),
     },
     sourcePack: {
       id: manifest.id,
@@ -572,6 +605,15 @@ function keyFocusStationIds(architecture: IndustryFactoryArchitecture, stationId
   ].filter((id): id is string => Boolean(id && stationIds.has(id)))
 }
 
+function stationPositionHintsForIds(
+  hints: FactoryArchitectureLayoutHints['stationPositionHints'],
+  stationIds: Set<string>,
+) {
+  if (!hints) return undefined
+  const filtered = Object.entries(hints).filter(([stationId]) => stationIds.has(stationId))
+  return filtered.length ? Object.fromEntries(filtered) : undefined
+}
+
 function planSubsetDimensions(input: {
   plan: ProcessTemplate['stations']
   selectedCount: number
@@ -618,6 +660,10 @@ export function applyFactoryArchitectureToPlan(input: {
       : undefined
   if (!selectedStationIds?.size) {
     const allStationIds = new Set(input.plan.stations.map((station) => station.id))
+    const positionHints = stationPositionHintsForIds(
+      architecture.layoutHints.stationPositionHints,
+      allStationIds,
+    )
     return {
       ...input.plan,
       architecture: {
@@ -628,6 +674,7 @@ export function applyFactoryArchitectureToPlan(input: {
         ...(architecture.layoutHints.omitPerimeterWalls != null
           ? { omitPerimeterWalls: architecture.layoutHints.omitPerimeterWalls }
           : {}),
+        ...(positionHints ? { stationPositionHints: positionHints } : {}),
       },
     }
   }
@@ -635,6 +682,10 @@ export function applyFactoryArchitectureToPlan(input: {
   const stations = input.plan.stations.filter((station) => selectedStationIds.has(station.id))
   if (!stations.length) return input.plan
   const stationIds = new Set(stations.map((station) => station.id))
+  const positionHints = stationPositionHintsForIds(
+    architecture.layoutHints.stationPositionHints,
+    stationIds,
+  )
   return {
     ...input.plan,
     layoutStyle: stations.length <= 1 ? 'cell' : input.plan.layoutStyle,
@@ -661,6 +712,7 @@ export function applyFactoryArchitectureToPlan(input: {
       ...(architecture.layoutHints.omitPerimeterWalls != null
         ? { omitPerimeterWalls: architecture.layoutHints.omitPerimeterWalls }
         : {}),
+      ...(positionHints ? { stationPositionHints: positionHints } : {}),
     },
   }
 }

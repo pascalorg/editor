@@ -67,6 +67,15 @@ function createdByName(created: Map<AnyNodeId, { node: AnyNode; parentId?: AnyNo
   return [...created.values()].find(({ node }) => node.name === name)
 }
 
+function expectVecClose(actual: unknown, expected: [number, number, number]) {
+  expect(Array.isArray(actual)).toBe(true)
+  const values = actual as number[]
+  expect(values.length).toBe(3)
+  for (let i = 0; i < expected.length; i += 1) {
+    expect(values[i]).toBeCloseTo(expected[i]!, 5)
+  }
+}
+
 describe('Articraft scene converter', () => {
   test('keeps joint metadata on link frames when child links appear before parents', () => {
     const converted = convertToSceneNodes(model, { articulationMode: true })
@@ -139,11 +148,67 @@ describe('Articraft scene converter', () => {
       width?: number
       height?: number
       material?: { properties?: { color?: string } }
+      metadata?: Record<string, unknown>
     }
 
     expect(armVisual.length).toBe(0.2)
     expect(armVisual.width).toBe(0.3)
     expect(armVisual.height).toBe(1)
     expect(armVisual.material?.properties?.color).toBe('#cc1a0d')
+    expect(armVisual.metadata?.disablePrimitiveBatch).toBe(true)
+  })
+
+  test('maps compound URDF RPY rotations through the editor coordinate basis', () => {
+    const compoundRpyModel: ArticraftModelData = {
+      ...model,
+      links: [
+        {
+          name: 'root',
+          visuals: [
+            {
+              geometry: { type: 'cylinder', params: { radius: 0.02, length: 0.4 } },
+              origin: { xyz: [0, 0, 0], rpy: [0, Math.PI / 2, Math.PI / 2] },
+            },
+          ],
+        },
+      ],
+      joints: [],
+    }
+
+    const converted = convertToSceneNodes(compoundRpyModel, { articulationMode: true })
+    const visual = converted.nodes.find((node) => node.name === 'root_visual') as AnyNode & {
+      rotation?: [number, number, number]
+    }
+
+    expectVecClose(visual.rotation, [-Math.PI / 2, Math.PI / 2, 0])
+  })
+
+  test('keeps sub-centimeter Articraft rods by clamping them to Pascal primitive limits', () => {
+    const fineRodModel: ArticraftModelData = {
+      ...model,
+      links: [
+        {
+          name: 'root',
+          visuals: [
+            {
+              geometry: { type: 'cylinder', params: { radius: 0.0055, length: 0.18 } },
+              origin: { xyz: [0, 0, 0], rpy: [0, 0, 0] },
+            },
+          ],
+        },
+      ],
+      joints: [],
+    }
+
+    const converted = convertToSceneNodes(fineRodModel, { articulationMode: true })
+    const visual = converted.nodes.find((node) => node.name === 'root_visual') as AnyNode & {
+      radius?: number
+      height?: number
+    }
+
+    expect(visual).toBeDefined()
+    expect(visual.type).toBe('cylinder')
+    expect(visual.radius).toBe(0.01)
+    expect(visual.height).toBe(0.18)
   })
 })

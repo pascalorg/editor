@@ -63,6 +63,8 @@ export type PartComposeKind =
   | 'roller_array'
   | 'belt_surface'
   | 'cylindrical_tank'
+  | 'cooling_tower_shell'
+  | 'cooling_tower_rim'
   | 'chimney_stack'
   | 'valve_body'
   | 'handwheel'
@@ -204,6 +206,10 @@ export interface PartComposePartInput {
   offset?: Vec3 | number
   outletAngle?: number
   radius?: number
+  baseRadius?: number
+  waistRadius?: number
+  majorRadius?: number
+  tubeRadius?: number
   diameter?: number
   scale?: Vec3
   radiusTop?: number
@@ -1339,6 +1345,14 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'cylindrical_tank':
     case 'pressure_vessel':
       return 'cylindrical_tank'
+    case 'cooling_tower_shell':
+    case 'natural_draft_cooling_tower':
+    case 'hyperboloid_cooling_tower':
+      return 'cooling_tower_shell'
+    case 'cooling_tower_rim':
+    case 'cooling_tower_opening':
+    case 'cooling_tower_top_rim':
+      return 'cooling_tower_rim'
     case 'chimney':
     case 'chimney_stack':
     case 'smokestack':
@@ -5545,6 +5559,73 @@ function composeCylindricalTank(
     }
   }
   return applyPartRotation(shapes, center, part.rotation)
+}
+
+function composeCoolingTowerShell(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const height = clamp(part.height, 7.2, 1.8, 24)
+  const baseRadius = clamp(part.radius ?? part.baseRadius, 1.15, 0.25, 6)
+  const waistRadius = clamp(part.waistRadius, baseRadius * 0.62, 0.16, baseRadius * 0.96)
+  const topRadius = clamp(part.topRadius, baseRadius * 0.94, waistRadius * 1.05, baseRadius * 1.35)
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#f8fafc', 0.54, 0.12))
+  const profile: Array<[number, number]> = [
+    [baseRadius, -height / 2],
+    [baseRadius * 0.9, -height * 0.4],
+    [waistRadius, -height * 0.07],
+    [waistRadius * 1.08, height * 0.22],
+    [topRadius * 0.92, height * 0.42],
+    [topRadius, height / 2],
+  ]
+  return applyPartRotation(
+    [
+      {
+        kind: 'lathe',
+        name: `${part.name ?? input.name ?? 'cooling tower'} hyperboloid shell`,
+        semanticRole: part.semanticRole ?? 'cooling_tower_shell',
+        sourcePartKind: part.sourcePartKind ?? 'cooling_tower_shell',
+        position: center,
+        profile,
+        segments: ringSegments(input.detail),
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
+function composeCoolingTowerRim(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const radius = clamp(part.radius ?? part.majorRadius, 1.1, 0.16, 7)
+  const tubeRadius = clamp(part.tubeRadius, Math.max(radius * 0.045, 0.025), 0.006, 0.28)
+  const center = add(origin, part.position ?? [0, 7.2, 0])
+  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#ffffff', 0.5, 0.14))
+  return applyPartRotation(
+    [
+      {
+        kind: 'torus',
+        name: `${part.name ?? input.name ?? 'cooling tower'} open top rim`,
+        semanticRole: part.semanticRole ?? 'top_steam_opening',
+        sourcePartKind: part.sourcePartKind ?? 'cooling_tower_rim',
+        position: center,
+        axis: 'y',
+        majorRadius: radius,
+        tubeRadius,
+        radialSegments: ringSegments(input.detail),
+        tubularSegments: 12,
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
 }
 
 function composeChimneyStack(
@@ -13247,6 +13328,12 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'cylindrical_tank':
         shapes.push(...composeCylindricalTank(input, part, origin))
+        break
+      case 'cooling_tower_shell':
+        shapes.push(...composeCoolingTowerShell(input, part, origin))
+        break
+      case 'cooling_tower_rim':
+        shapes.push(...composeCoolingTowerRim(input, part, origin))
         break
       case 'chimney_stack':
         shapes.push(...composeChimneyStack(input, part, origin))

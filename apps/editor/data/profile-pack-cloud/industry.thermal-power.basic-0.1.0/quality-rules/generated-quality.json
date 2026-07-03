@@ -1,0 +1,262 @@
+[
+  {
+    "id": "quality.thermal_power.natural_draft_cooling_tower",
+    "requiredRoles": [
+      "cooling_tower_shell",
+      "cold_water_basin",
+      "top_steam_opening",
+      "cooling_water_header"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "office_desk"
+    ],
+    "shapeCount": {
+      "min": 9,
+      "max": 45
+    }
+  },
+  {
+    "id": "quality.thermal_power.circulating_water_pump_house",
+    "requiredRoles": [
+      "pump_house_body",
+      "pump_house_roof",
+      "circulating_water_pump",
+      "cooling_water_pipe_manifold",
+      "pump_mcc_panel"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.thermal_power.coal_yard_stockpile",
+    "requiredRoles": [
+      "coal_stockpile",
+      "stacker_conveyor",
+      "reclaim_hopper",
+      "runoff_drain"
+    ],
+    "forbiddenRoles": [
+      "water_tank",
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 45
+    }
+  },
+  {
+    "id": "quality.thermal_power.coal_handling_conveyor",
+    "requiredRoles": [
+      "coal_conveyor_gallery",
+      "coal_belt_surface",
+      "idler_rollers",
+      "transfer_chute",
+      "conveyor_drive"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.thermal_power.coal_pulverizer_mill",
+    "requiredRoles": [
+      "pulverizer_mill_body",
+      "raw_coal_feeder",
+      "pulverized_fuel_pipe",
+      "mill_drive_motor",
+      "mill_local_control_box"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 60
+    }
+  },
+  {
+    "id": "quality.thermal_power.boiler_island",
+    "requiredRoles": [
+      "boiler_furnace_casing",
+      "steam_drum",
+      "main_steam_header",
+      "burner_opening",
+      "forced_draft_blower",
+      "flue_gas_duct"
+    ],
+    "forbiddenRoles": [
+      "vehicle_cabin",
+      "desk_leg"
+    ],
+    "shapeCount": {
+      "min": 8,
+      "max": 95
+    }
+  },
+  {
+    "id": "quality.thermal_power.steam_turbine_generator",
+    "requiredRoles": [
+      "turbine_hall_body",
+      "turbine_hall_roof",
+      "turbine_hall_roof_vents",
+      "steam_turbine_casing",
+      "generator_body",
+      "shaft_coupling_guard",
+      "main_steam_inlet",
+      "turbine_pedestal",
+      "turbine_hall_door",
+      "lube_oil_control_skid"
+    ],
+    "shapeCount": {
+      "min": 10,
+      "max": 90
+    }
+  },
+  {
+    "id": "quality.thermal_power.surface_condenser",
+    "requiredRoles": [
+      "condenser_shell",
+      "cooling_water_inlet",
+      "cooling_water_outlet",
+      "condensate_pump",
+      "vacuum_exhaust_line"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.thermal_power.electrostatic_precipitator",
+    "requiredRoles": [
+      "esp_casing",
+      "ash_hopper",
+      "flue_gas_inlet_duct",
+      "clean_gas_outlet_duct",
+      "esp_transformer_rectifier_cabinet",
+      "esp_access_platform"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 85
+    }
+  },
+  {
+    "id": "quality.thermal_power.fgd_absorber",
+    "requiredRoles": [
+      "fgd_absorber_shell",
+      "flue_gas_inlet_duct",
+      "clean_gas_outlet",
+      "slurry_recirculation_header",
+      "absorber_service_platform"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 75
+    }
+  },
+  {
+    "id": "quality.thermal_power.chimney_stack",
+    "requiredRoles": [
+      "chimney_stack",
+      "stack_base_plinth",
+      "flue_inlet_duct",
+      "aviation_warning_band"
+    ],
+    "forbiddenRoles": [
+      "water_tank",
+      "vehicle_cabin"
+    ],
+    "shapeCount": {
+      "min": 4,
+      "max": 45
+    }
+  },
+  {
+    "id": "quality.thermal_power.fly_ash_silo",
+    "requiredRoles": [
+      "fly_ash_silo_shell",
+      "conical_discharge_hopper",
+      "silo_support_frame",
+      "ash_unloading_spout",
+      "silo_dust_vent"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 70
+    }
+  },
+  {
+    "id": "quality.thermal_power.water_treatment_building",
+    "requiredRoles": [
+      "water_treatment_building_body",
+      "roof_cap",
+      "demineralized_water_tank",
+      "water_pipe_manifold",
+      "service_door",
+      "local_control_panel"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 75
+    }
+  },
+  {
+    "id": "quality.thermal_power.generator_step_up_transformer",
+    "requiredRoles": [
+      "transformer_tank",
+      "radiator_fins",
+      "high_voltage_bushing",
+      "oil_containment_base",
+      "generator_bus_duct"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 65
+    }
+  },
+  {
+    "id": "quality.thermal_power.switchyard",
+    "requiredRoles": [
+      "switchyard_gantry_frame",
+      "bus_bar",
+      "porcelain_insulator",
+      "breaker_cabinet",
+      "outgoing_transmission_line"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 85
+    }
+  },
+  {
+    "id": "quality.thermal_power.control_room",
+    "requiredRoles": [
+      "control_building_body",
+      "roof_cap",
+      "main_door",
+      "control_room_windows",
+      "dcs_panel_row",
+      "control_cable_entry"
+    ],
+    "shapeCount": {
+      "min": 6,
+      "max": 75
+    }
+  },
+  {
+    "id": "quality.thermal_power.warehouse_workshop",
+    "requiredRoles": [
+      "workshop_hall_body",
+      "roof_panels",
+      "rollup_door",
+      "roof_vent_slats",
+      "loading_apron"
+    ],
+    "shapeCount": {
+      "min": 5,
+      "max": 65
+    }
+  }
+]

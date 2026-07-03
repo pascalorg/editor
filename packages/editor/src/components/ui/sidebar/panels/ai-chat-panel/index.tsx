@@ -41,7 +41,7 @@ import {
 import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
 import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
 import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../../../../lib/scene-bounds'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Icon } from '@iconify/react'
 import { Box, Factory } from 'lucide-react'
 import { OrbitControls, useGLTF } from '@react-three/drei'
@@ -4294,13 +4294,42 @@ export function AiChatPanel() {
     return `${base}/viewer?record=${encodeURIComponent(recordId)}&tab=${encodeURIComponent(tab)}`
   }, [articraftViewerUrl])
 
-  const openArticraftViewer = useCallback((recordId: string, tab?: string) => {
+  const canReachArticraftViewer = useCallback(async (url: string) => {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 1500)
+    try {
+      await fetch(url, {
+        cache: 'no-store',
+        mode: 'no-cors',
+        signal: controller.signal,
+      })
+      return true
+    } catch {
+      return false
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }, [])
+
+  const openArticraftViewer = useCallback(async (recordId: string, tab?: string) => {
     const resolvedTab = tab ?? 'inspect'
+    const url = getArticraftViewerUrl(recordId, resolvedTab)
+    if (!(await canReachArticraftViewer(url))) {
+      const base = articraftViewerUrl.replace(/\/$/, '')
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Articraft Viewer 服务没有响应：${base}/viewer。请在仓库根目录启动 \`bun dev:articraft\`，或单独启动 Articraft viewer 后再打开。`,
+        },
+      ])
+      return
+    }
     setArticraftViewerModal({
-      url: getArticraftViewerUrl(recordId, resolvedTab),
+      url,
       title: resolvedTab === 'code' ? 'Articraft Code' : 'Articraft Viewer',
     })
-  }, [getArticraftViewerUrl])
+  }, [articraftViewerUrl, canReachArticraftViewer, getArticraftViewerUrl])
 
   const closeArticraftViewerModal = useCallback(() => {
     setArticraftViewerModal(null)
@@ -6597,7 +6626,7 @@ export function AiChatPanel() {
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!msg.articraftResult.recordId}
-                    onClick={() => openArticraftViewer(msg.articraftResult!.recordId)}
+                    onClick={() => void openArticraftViewer(msg.articraftResult!.recordId)}
                     type="button"
                   >
                     <Icon className="size-3.5" icon="mdi:open-in-new" />
@@ -6606,7 +6635,7 @@ export function AiChatPanel() {
                   <button
                     className="inline-flex items-center gap-1 rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff] disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!msg.articraftResult.recordId}
-                    onClick={() => openArticraftViewer(msg.articraftResult!.recordId, 'code')}
+                    onClick={() => void openArticraftViewer(msg.articraftResult!.recordId, 'code')}
                     title={msg.articraftResult.recordPath || undefined}
                     type="button"
                   >

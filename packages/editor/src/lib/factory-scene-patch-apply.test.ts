@@ -32,6 +32,26 @@ describe('factory scene patch apply', () => {
     })
   })
 
+  test('uses fallback parent when generated parent ids are not in the current scene', () => {
+    const child = BoxNode.parse({
+      id: 'box_factory_part',
+      name: 'Factory part',
+      parentId: 'level_factory',
+    })
+
+    const operations = buildFactoryScenePatchOperations(
+      [{ op: 'create', parentId: 'level_factory', node: child }],
+      { existingNodeIds: ['level_selected'], fallbackParentId: 'level_selected' },
+    )
+
+    expect(operations.createOps).toEqual([
+      {
+        parentId: 'level_selected',
+        node: child,
+      },
+    ])
+  })
+
   test('applies full-run parent relationships to persisted scene graphs', () => {
     const level = LevelNode.parse({ id: 'level_factory' })
     const assembly = AssemblyNode.parse({

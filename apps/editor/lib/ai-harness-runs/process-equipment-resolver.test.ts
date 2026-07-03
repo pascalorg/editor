@@ -87,6 +87,14 @@ const refineryPlan: ProcessLinePlan = {
   },
 }
 
+const thermalPowerFreePlan: ProcessLinePlan = {
+  ...plan,
+  processId: 'llm_generated_factory',
+  processLabel: '\u706b\u7535\u5382',
+  processDisplayLabel: '\u751f\u6210\u4e00\u4e2a\u706b\u7535\u5382',
+  domain: 'energy',
+}
+
 const placement: StationPlacement = {
   stationId: 'station',
   role: 'station',
@@ -539,5 +547,75 @@ describe('process equipment resolver', () => {
         (port: { id: string }) => port.id,
       ),
     ).toContain('tap_spout')
+  })
+
+  test('maps free thermal power station wording to resource-pack profile parts', () => {
+    const station: ProcessStationPlan = {
+      id: 'steam_turbine_room',
+      label: '\u6c7d\u8f6e\u673a\u623f',
+      role: '\u6c7d\u8f6e\u673a\u623f',
+      equipmentHint: '\u6c7d\u8f6e\u53d1\u7535\u673a\u7ec4',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: thermalPowerFreePlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 9.2, width: 3.8 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: thermalPowerFreePlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
+      profileId: 'thermal_power.steam_turbine_generator',
+      preferredResolver: 'profile-parts',
+    })
+  })
+
+  test('prefers switchyard assets for combined transformer and switchyard wording', () => {
+    const station: ProcessStationPlan = {
+      id: 'transformer_switchyard',
+      label: '\u53d8\u538b\u5668/\u5f00\u5173\u7ad9',
+      role: '\u53d8\u538b\u5668/\u5f00\u5173\u7ad9',
+      equipmentHint: '\u4e3b\u53d8\u548c\u9ad8\u538b\u5f00\u5173\u7ad9',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: thermalPowerFreePlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 8.5, width: 4.6 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: thermalPowerFreePlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
+      profileId: 'thermal_power.switchyard',
+      preferredResolver: 'profile-parts',
+    })
   })
 })
