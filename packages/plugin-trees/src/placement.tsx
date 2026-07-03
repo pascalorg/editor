@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type GridEvent, sceneRegistry, snapPointToGrid } from '@pascal-app/core'
-import { isGridSnapActive, useEditor } from '@pascal-app/editor'
+import { useEditor } from '@pascal-app/editor'
 import { useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 
@@ -11,7 +11,7 @@ const worldVec = new Vector3()
  * reading the same `isGridSnapActive()` toggle + `gridSnapStep` the built-in
  * item/shelf tools use, so plants honour the snap mode like every other item. */
 export function snapXZ(x: number, z: number): readonly [number, number] {
-  if (!isGridSnapActive()) return [x, z]
+  if (!useEditor.getState().magneticSnap) return [x, z]
   return snapPointToGrid([x, z], useEditor.getState().gridSnapStep)
 }
 

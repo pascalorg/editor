@@ -16,7 +16,7 @@
     "README.md"
   ],
   "scripts": {
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@dgreenheck/ez-tree": "^1.1.0"

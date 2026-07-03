@@ -146,6 +146,8 @@ export type FloorplanStyle = {
   strokeLinejoin?: 'miter' | 'round' | 'bevel'
   strokeOpacity?: number
   fillOpacity?: number
+  pointerEvents?: 'none' | 'auto' | 'all' | 'stroke' | 'fill' | 'visible' | 'visiblePainted'
+  cursor?: string
 }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
@@ -638,6 +640,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   schema: S
   category: NodeCategory
   surfaceRole?: SurfaceRole
+  snapProfile?: string
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
   migrate?: Record<number, (old: unknown) => unknown>
@@ -909,6 +912,7 @@ export type Capabilities = {
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   alignmentFootprint?: AlignmentFootprintConfig
+  dragBounds?: (node: AnyNode) => { size: [number, number, number] } | null
 }
 
 export type CapabilityCtx = { node: AnyNode }
@@ -1016,6 +1020,7 @@ export type FloorPlacedConfig = {
   footprint?: FloorPlacedFootprintResolver
   footprints?: FloorPlacedFootprintsResolver
   applies?: (node: AnyNode) => boolean
+  collides?: boolean
 }
 
 export type AlignmentFootprint =
@@ -1047,6 +1052,14 @@ export type ParametricDescriptor<N> = {
   invariants?: ReadonlyArray<(n: N) => Issue[]>
   derive?: (n: N) => Partial<N>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
+  actions?: ParamAction<N>[]
+}
+
+export type ParamAction<N> = {
+  label: string
+  iconSrc?: string
+  enabledIf?: (n: N) => boolean
+  onClick: (n: N) => void
 }
 
 export type ParamGroup<N> = {

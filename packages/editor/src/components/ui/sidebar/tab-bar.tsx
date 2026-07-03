@@ -6,6 +6,7 @@ import { cn } from './../../../lib/utils'
 export type SidebarTab = {
   id: string
   label: string
+  icon?: ReactNode
   mobileDefaultSnap?: number
   mobileIcon?: ReactNode
 }
