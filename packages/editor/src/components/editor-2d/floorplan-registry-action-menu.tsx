@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  type CeilingNode,
-  nodeRegistry,
-  type SlabNode,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -31,9 +24,7 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  *    `capabilities.movable`, `def.floorplanMoveTarget`, OR
  *    `def.affordanceTools.move` (slab / ceiling). The
  *    `<FloorplanRegistryMoveOverlay>` / dispatcher picks the right path.
- *  - Add hole (slab + ceiling only): inserts a small default-square
- *    hole at the polygon centroid via `updateNode`. Mirrors the legacy
- *    `handleAddHole` in `floating-action-menu.tsx`.
+ *  - Add hole: offered when the selected kind exposes `def.editActions.addHole`.
  *  - Duplicate: deep-clones the node, marks it new, sets it as the
  *    movingNode (placement cursor) — same UX pattern as 3D duplicate.
  *  - Delete: calls `deleteNode(id)`. Cascade is handled by the registry's
@@ -94,7 +85,7 @@ export function FloorplanRegistryActionMenu() {
   const isDirectPlanDraggable = isPlanDragMovableNode(node)
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
-  const canAddHole = node.type === 'slab' || node.type === 'ceiling'
+  const addHoleAction = def.editActions?.addHole
 
   const handleMove = () => {
     sfxEmitter.emit('sfx:item-pick')
@@ -111,39 +102,10 @@ export function FloorplanRegistryActionMenu() {
   }
 
   const handleAddHole = () => {
-    if (!canAddHole) return
-    const surfaceNode = node as SlabNode | CeilingNode
-    const polygon = surfaceNode.polygon
-    if (!polygon || polygon.length < 3) return
-
-    let cx = 0
-    let cz = 0
-    for (const [x, z] of polygon) {
-      cx += x
-      cz += z
-    }
-    cx /= polygon.length
-    cz /= polygon.length
-
-    const holeSize = 0.5
-    const newHole: Array<[number, number]> = [
-      [cx - holeSize, cz - holeSize],
-      [cx + holeSize, cz - holeSize],
-      [cx + holeSize, cz + holeSize],
-      [cx - holeSize, cz + holeSize],
-    ]
-    const currentHoles = surfaceNode.holes ?? []
-    const currentMetadata = currentHoles.map(
-      (_, index) => surfaceNode.holeMetadata?.[index] ?? { source: 'manual' as const },
-    )
+    const patch = addHoleAction?.(node as never)
+    if (!patch) return
     sfxEmitter.emit('sfx:structure-build')
-    useScene.getState().updateNode(
-      selectedId as AnyNodeId,
-      {
-        holes: [...currentHoles, newHole],
-        holeMetadata: [...currentMetadata, { source: 'manual' as const }],
-      } as Partial<AnyNode>,
-    )
+    useScene.getState().updateNode(selectedId as AnyNodeId, patch as Partial<AnyNode>)
   }
 
   const handleDuplicate = () => {
@@ -189,7 +151,7 @@ export function FloorplanRegistryActionMenu() {
       }}
     >
       <NodeActionMenu
-        onAddHole={canAddHole ? handleAddHole : undefined}
+        onAddHole={addHoleAction ? handleAddHole : undefined}
         onDelete={canDelete ? handleDelete : undefined}
         onDuplicate={canDuplicate ? handleDuplicate : undefined}
         onMove={canMove && !isDirectPlanDraggable ? handleMove : undefined}

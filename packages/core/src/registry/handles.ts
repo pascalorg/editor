@@ -55,6 +55,11 @@ export type EditorApi = {
    * fences). No-ops for kinds without endpoints.
    */
   engageEndpointMove: (node: AnyNode, endpoint: 'start' | 'end') => void
+  /**
+   * Engage a kind-owned curve affordance. No-ops for kinds without curve
+   * editing.
+   */
+  engageCurve: (node: AnyNode) => void
 }
 
 export type HandlePortal = 'self' | 'parent' | 'grandparent'

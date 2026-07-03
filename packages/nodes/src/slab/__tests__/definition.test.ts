@@ -41,3 +41,28 @@ describe('slabDefinition handles', () => {
     expect(pointInPolygon2D([x, z], slab.holes[0]!, { includeBoundary: true })).toBe(false)
   })
 })
+
+describe('slabDefinition floorplan actions', () => {
+  test('creates default manual hole patches without editor kind branching', () => {
+    const slab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+    })
+
+    const patch = slabDefinition.editActions?.addHole?.(slab)
+
+    expect(patch?.holes).toEqual([
+      [
+        [1.5, 1.5],
+        [2.5, 1.5],
+        [2.5, 2.5],
+        [1.5, 2.5],
+      ],
+    ])
+    expect(patch?.holeMetadata).toEqual([{ source: 'manual' }])
+  })
+})

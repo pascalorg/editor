@@ -39,6 +39,8 @@ export { createSceneApi, type SceneStoreLike } from './scene-api'
 export type {
   Affordance,
   AnyNodeDefinition,
+  ActionMenuLabel,
+  ActionMenuPlacementRule,
   AssetRef,
   Capabilities,
   CapabilityCtx,
@@ -66,7 +68,9 @@ export type {
   Modifiers,
   MovableConfig,
   NodeCategory,
+  NodeActionMenu,
   NodeDefinition,
+  NudgeDelta,
   NodeRegistry,
   ParametricDescriptor,
   ParamField,

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { overallMaterialTarget } from '../shared/material-targets'
+import { buildDefaultSurfaceHolePatch } from '../shared/surface-hole-action'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -102,6 +103,9 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     'move-vertex': ceilingMoveVertexAffordance,
     'add-vertex': ceilingAddVertexAffordance,
     'move-edge': ceilingMoveEdgeAffordance,
+  },
+  editActions: {
+    addHole: buildDefaultSurfaceHolePatch,
   },
 
   toolHints: [

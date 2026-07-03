@@ -1,8 +1,19 @@
-import type { AnyNode, ConveyorBeltNode, EditorApi, FenceNode, WallNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  CableTrayNode,
+  ConveyorBeltNode,
+  EditorApi,
+  FenceNode,
+  PipeNode,
+  RoadNode,
+  SteelBeamNode,
+  WallNode,
+} from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 
 type EditorState = ReturnType<typeof useEditor.getState>
 type EndpointEngager = (node: AnyNode, endpoint: 'start' | 'end', editor: EditorState) => void
+type CurveEngager = (node: AnyNode, editor: EditorState) => void
 
 /**
  * Per-kind endpoint-move engagement. Kinds whose 2D endpoint drag
@@ -18,8 +29,50 @@ const endpointEngagers: Record<string, EndpointEngager> = {
     editor.setMovingWallEndpoint({ wall: node as WallNode, endpoint }),
   fence: (node, endpoint, editor) =>
     editor.setMovingFenceEndpoint({ fence: node as FenceNode, endpoint }),
+  pipe: (node, endpoint, editor) =>
+    editor.setMovingPipeEndpoint({ pipe: node as PipeNode, endpoint }),
+  'cable-tray': (node, endpoint, editor) =>
+    editor.setMovingCableTrayEndpoint({
+      cableTray: node as CableTrayNode,
+      endpoint,
+    }),
   'conveyor-belt': (node, endpoint, editor) =>
-    editor.setMovingConveyorBeltEndpoint({ conveyorBelt: node as ConveyorBeltNode, endpoint }),
+    editor.setMovingConveyorBeltEndpoint({
+      conveyorBelt: node as ConveyorBeltNode,
+      endpoint,
+    }),
+  road: (node, endpoint, editor) =>
+    editor.setMovingRoadEndpoint({ road: node as RoadNode, endpoint }),
+  'steel-beam': (node, endpoint, editor) =>
+    editor.setMovingSteelBeamEndpoint({
+      steelBeam: node as SteelBeamNode,
+      endpoint,
+    }),
+}
+
+const curveEngagers: Record<string, CurveEngager> = {
+  wall: (node, editor) => editor.setCurvingWall(node as WallNode),
+  fence: (node, editor) => editor.setCurvingFence(node as FenceNode),
+  pipe: (node, editor) => editor.setCurvingPipe(node as PipeNode),
+  'cable-tray': (node, editor) => editor.setCurvingCableTray(node as CableTrayNode),
+  road: (node, editor) => editor.setCurvingRoad(node as RoadNode),
+  'steel-beam': (node, editor) => editor.setCurvingSteelBeam(node as SteelBeamNode),
+}
+
+function clearEndpointAndCurveState(editor: EditorState) {
+  editor.setMovingWallEndpoint(null)
+  editor.setMovingFenceEndpoint(null)
+  editor.setMovingPipeEndpoint(null)
+  editor.setMovingCableTrayEndpoint(null)
+  editor.setMovingConveyorBeltEndpoint(null)
+  editor.setMovingRoadEndpoint(null)
+  editor.setMovingSteelBeamEndpoint(null)
+  editor.setCurvingWall(null)
+  editor.setCurvingFence(null)
+  editor.setCurvingPipe(null)
+  editor.setCurvingCableTray(null)
+  editor.setCurvingRoad(null)
+  editor.setCurvingSteelBeam(null)
 }
 
 /**
@@ -41,11 +94,7 @@ export function createEditorApi(): EditorApi {
       // cast lets registry-driven move kinds through without forcing a
       // schema-level type widening.
       editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
-      editor.setMovingWallEndpoint(null)
-      editor.setMovingFenceEndpoint(null)
-      editor.setMovingConveyorBeltEndpoint(null)
-      editor.setCurvingWall(null)
-      editor.setCurvingFence(null)
+      clearEndpointAndCurveState(editor)
     },
     engageMoveDrag(node: AnyNode) {
       const editor = useEditor.getState()
@@ -53,14 +102,19 @@ export function createEditorApi(): EditorApi {
       // it at setup and wires its commit-on-release listener.
       editor.setPlacementDragMode(true)
       editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
-      editor.setMovingWallEndpoint(null)
-      editor.setMovingFenceEndpoint(null)
-      editor.setMovingConveyorBeltEndpoint(null)
-      editor.setCurvingWall(null)
-      editor.setCurvingFence(null)
+      clearEndpointAndCurveState(editor)
     },
     engageEndpointMove(node: AnyNode, endpoint: 'start' | 'end') {
-      endpointEngagers[node.type]?.(node, endpoint, useEditor.getState())
+      const editor = useEditor.getState()
+      editor.setMovingNode(null)
+      clearEndpointAndCurveState(editor)
+      endpointEngagers[node.type]?.(node, endpoint, editor)
+    },
+    engageCurve(node: AnyNode) {
+      const editor = useEditor.getState()
+      editor.setMovingNode(null)
+      clearEndpointAndCurveState(editor)
+      curveEngagers[node.type]?.(node, editor)
     },
   }
 }

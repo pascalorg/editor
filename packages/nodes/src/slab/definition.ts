@@ -5,6 +5,7 @@ import {
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
 import { overallMaterialTarget } from '../shared/material-targets'
+import { buildDefaultSurfaceHolePatch } from '../shared/surface-hole-action'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -178,6 +179,9 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     'move-vertex': slabMoveVertexAffordance,
     'add-vertex': slabAddVertexAffordance,
     'move-edge': slabMoveEdgeAffordance,
+  },
+  editActions: {
+    addHole: buildDefaultSurfaceHolePatch,
   },
 
   toolHints: [

@@ -1,16 +1,9 @@
 'use client'
 
+import { nodeRegistry, type ActionMenuPlacementRule } from '@pascal-app/core'
 import * as THREE from 'three'
 
 export const ACTION_MENU_DISTANCE_FACTOR = 6
-
-type ActionMenuPlacementRule =
-  | 'bbox'
-  | 'bbox-tall'
-  | 'flat-structure'
-  | 'html-compact'
-  | 'html-panel'
-  | 'linear'
 
 type ActionMenuPlacementNode = { type: string; widgetType?: string }
 
@@ -22,13 +15,6 @@ const RULE_BY_NODE_TYPE = new Map<string, ActionMenuPlacementRule>([
   ['data-table', 'html-panel'],
   ['slab', 'flat-structure'],
   ['ceiling', 'flat-structure'],
-  ['wall', 'linear'],
-  ['fence', 'linear'],
-  ['pipe', 'linear'],
-  ['conveyor-belt', 'linear'],
-  ['cable-tray', 'linear'],
-  ['road', 'linear'],
-  ['steel-beam', 'linear'],
 ])
 
 function getPlacementRule(
@@ -39,7 +25,8 @@ function getPlacementRule(
     return 'html-panel'
   }
 
-  const explicitRule = RULE_BY_NODE_TYPE.get(node.type)
+  const explicitRule =
+    nodeRegistry.get(node.type)?.actionMenu?.placement ?? RULE_BY_NODE_TYPE.get(node.type)
   if (explicitRule) return explicitRule
   return size.y > 4 ? 'bbox-tall' : 'bbox'
 }

@@ -1,9 +1,15 @@
 import {
   buildDynamicCapabilityMetadata,
   type ConveyorBeltNode as ConveyorBeltNodeType,
+  getConveyorPortPoint,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import {
+  nudgePolylinePlan,
+  routeEndpointLabel,
+  ROUTE_ENDPOINT_Y_OFFSET,
+} from '../shared/route-edit-actions'
 import { buildConveyorBeltFloorplan } from './floorplan'
 import { conveyorBeltMoveEndpointAffordance } from './floorplan-affordances'
 import { buildConveyorBeltGeometry } from './geometry'
@@ -78,6 +84,23 @@ export const conveyorBeltDefinition: NodeDefinition<typeof ConveyorBeltNode> = {
   affordanceTools: {
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+  },
+
+  editActions: {
+    nudgePlan: nudgePolylinePlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    endpointMove: {
+      label: (endpoint, ctx) => routeEndpointLabel('ConveyorBelt', 'conveyor belt', endpoint, ctx),
+      localPosition: (node, endpoint) => {
+        const port = endpoint === 'start' ? 'in' : 'out'
+        const fallbackIndex = endpoint === 'start' ? 0 : node.points.length - 1
+        const point = getConveyorPortPoint(node, port) ?? node.points[fallbackIndex] ?? [0, 0, 0]
+        return [point[0], (node.elevation ?? 0) + ROUTE_ENDPOINT_Y_OFFSET, point[2]]
+      },
+    },
   },
 
   toolHints: [

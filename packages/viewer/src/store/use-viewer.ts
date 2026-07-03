@@ -9,7 +9,7 @@ import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
 import { getSceneTheme, SCENE_THEME_IDS } from '../lib/scene-themes'
 
-export type RenderContext = 'editor' | 'viewer'
+export type RenderContext = 'authoring' | 'presentation'
 export type HoverHighlightIntent = 'default' | 'danger' | 'accent' | 'blocked'
 
 type SelectionPath = {
@@ -91,7 +91,12 @@ type ViewerState = {
   setProjectId: (id: string | null) => void
   projectPreferences: Record<
     string,
-    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean; showZoneLabels?: boolean }
+    {
+      showScans?: boolean
+      showGuides?: boolean
+      showGrid?: boolean
+      showZoneLabels?: boolean
+    }
   >
 
   // Smart selection update
@@ -116,14 +121,9 @@ type ViewerState = {
   setSpacePanning: (panning: boolean) => void
 
   /**
-   * True while a host-driven drag is in progress (editor handles —
-   * height arrow, width arrow, etc.). Suppresses node pointer event
-   * routing so the synthetic click on pointerup doesn't reroute
-   * selection to whatever mesh the cursor lands on at release.
-   * Conceptually a sibling of `cameraDragging` — both mean "user is
-   * dragging; don't treat the next pointerup as a click on the
-   * scene." Set by the host (e.g. `NodeArrowHandles` in the editor);
-   * the viewer only reads it.
+   * True while a host-driven drag is in progress. Suppresses node pointer event
+   * routing so the synthetic click on pointerup doesn't reroute selection to
+   * whatever mesh the cursor lands on at release.
    */
   inputDragging: boolean
   setInputDragging: (dragging: boolean) => void
@@ -162,8 +162,16 @@ function normalizeShadingByContext(value: unknown): ViewerState['shadingByContex
 
   const next: ViewerState['shadingByContext'] = {}
   for (const [context, shading] of Object.entries(value)) {
-    if (context !== 'editor' && context !== 'viewer') continue
-    next[context] = pickString<RenderShading>(shading, RENDER_SHADINGS, 'rendered')
+    const normalizedContext =
+      context === 'editor'
+        ? 'authoring'
+        : context === 'viewer'
+          ? 'presentation'
+          : context === 'authoring' || context === 'presentation'
+            ? context
+            : null
+    if (!normalizedContext) continue
+    next[normalizedContext] = pickString<RenderShading>(shading, RENDER_SHADINGS, 'rendered')
   }
   return next
 }
@@ -219,7 +227,12 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
-      selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
+      selection: {
+        buildingId: null,
+        levelId: null,
+        zoneId: null,
+        selectedIds: [],
+      },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
       hoverHighlightIntent: 'default',
@@ -235,11 +248,14 @@ const useViewer = create<ViewerState>()(
 
       sceneTheme: 'studio',
       setSceneTheme: (id) =>
-        set({ sceneTheme: id, theme: getSceneTheme(id).appearance === 'dark' ? 'dark' : 'light' }),
+        set({
+          sceneTheme: id,
+          theme: getSceneTheme(id).appearance === 'dark' ? 'dark' : 'light',
+        }),
       theme: 'light',
       setTheme: (theme) => set({ theme, sceneTheme: theme === 'dark' ? 'night' : 'studio' }),
 
-      renderContext: 'editor',
+      renderContext: 'authoring',
       setRenderContext: (context) => set({ renderContext: context }),
 
       shading: 'rendered',
@@ -247,7 +263,10 @@ const useViewer = create<ViewerState>()(
       setShading: (shading) =>
         set((state) => ({
           shading,
-          shadingByContext: { ...state.shadingByContext, [state.renderContext]: shading },
+          shadingByContext: {
+            ...state.shadingByContext,
+            [state.renderContext]: shading,
+          },
         })),
 
       textures: true,

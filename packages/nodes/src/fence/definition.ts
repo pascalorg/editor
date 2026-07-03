@@ -1,5 +1,10 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { overallMaterialTarget } from '../shared/material-targets'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  segmentEndpointLocalPosition,
+} from '../shared/route-edit-actions'
 import { buildFenceFloorplan } from './floorplan'
 import { fenceMoveEndpointAffordance } from './floorplan-affordances'
 import { buildFenceGeometry } from './geometry'
@@ -95,6 +100,20 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+  },
+
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {},
+    endpointMove: {
+      canDetach: true,
+      label: (endpoint, ctx) => routeEndpointLabel('Fence', 'fence', endpoint, ctx),
+      localPosition: segmentEndpointLocalPosition,
+    },
   },
 
   toolHints: [

@@ -1,4 +1,4 @@
-import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { useEffect } from 'react'
 import { closeDoorOpenState, toggleDoorOpenState } from '../lib/door-interaction'
@@ -56,35 +56,18 @@ function getPlanNudgeDelta(key: string, step: number): [number, number, number] 
 }
 
 function getPositionPatchForPlanNudge(node: AnyNode, delta: [number, number, number]) {
+  const registryNudge = nodeRegistry.get(node.type)?.editActions?.nudgePlan
+  if (registryNudge) return registryNudge(node as never, delta) as Partial<AnyNode> | null
+
   if (!isPlanDragMovableNode(node)) return null
-
-  if (
-    node.type === 'cable-tray' ||
-    node.type === 'pipe' ||
-    node.type === 'road' ||
-    node.type === 'steel-beam' ||
-    node.type === 'wall' ||
-    node.type === 'fence'
-  ) {
-    return {
-      start: [node.start[0] + delta[0], node.start[1] + delta[2]] as [number, number],
-      end: [node.end[0] + delta[0], node.end[1] + delta[2]] as [number, number],
-    }
-  }
-
-  if (node.type === 'conveyor-belt') {
-    return {
-      points: node.points.map(
-        ([x, y, z]) => [x + delta[0], y, z + delta[2]] as [number, number, number],
-      ),
-    }
-  }
 
   const position = (node as { position?: unknown }).position
   if (!Array.isArray(position) || position.length < 3) return null
   const [x, y, z] = position
   if (typeof x !== 'number' || typeof y !== 'number' || typeof z !== 'number') return null
-  return { position: [x + delta[0], y, z + delta[2]] as [number, number, number] }
+  return {
+    position: [x + delta[0], y, z + delta[2]] as [number, number, number],
+  }
 }
 
 function nudgeSelectedNodesOnPlan(key: string, step: number): boolean {
@@ -372,7 +355,9 @@ export const useKeyboard = ({
 
             // Handle different rotation types (number for roof, array for items/windows/doors)
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation + ROTATION_STEP })
+              useScene.getState().updateNode(node.id, {
+                rotation: node.rotation + ROTATION_STEP,
+              })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
                 rotation: [node.rotation[0], node.rotation[1] + ROTATION_STEP, node.rotation[2]],
@@ -411,7 +396,9 @@ export const useKeyboard = ({
             const ROTATION_STEP = Math.PI / 4
 
             if (typeof node.rotation === 'number') {
-              useScene.getState().updateNode(node.id, { rotation: node.rotation - ROTATION_STEP })
+              useScene.getState().updateNode(node.id, {
+                rotation: node.rotation - ROTATION_STEP,
+              })
             } else if (Array.isArray(node.rotation)) {
               useScene.getState().updateNode(node.id, {
                 rotation: [node.rotation[0], node.rotation[1] - ROTATION_STEP, node.rotation[2]],

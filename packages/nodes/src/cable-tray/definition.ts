@@ -1,4 +1,9 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  segmentEndpointLocalPosition,
+} from '../shared/route-edit-actions'
 import { buildCableTrayFloorplan } from './floorplan'
 import { buildCableTrayGeometry } from './geometry'
 import { cableTrayParametrics } from './parametrics'
@@ -47,6 +52,19 @@ export const cableTrayDefinition: NodeDefinition<typeof CableTrayNode> = {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+  },
+
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {},
+    endpointMove: {
+      label: (endpoint, ctx) => routeEndpointLabel('CableTray', 'cable tray', endpoint, ctx),
+      localPosition: segmentEndpointLocalPosition,
+    },
   },
 
   toolHints: [

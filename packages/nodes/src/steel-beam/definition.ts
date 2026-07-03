@@ -1,4 +1,9 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  segmentEndpointLocalPosition,
+} from '../shared/route-edit-actions'
 import { buildSteelBeamFloorplan } from './floorplan'
 import { buildSteelBeamGeometry } from './geometry'
 import { steelBeamParametrics } from './parametrics'
@@ -50,6 +55,19 @@ export const steelBeamDefinition: NodeDefinition<typeof SteelBeamNode> = {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+  },
+
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {},
+    endpointMove: {
+      label: (endpoint, ctx) => routeEndpointLabel('SteelBeam', 'steel beam', endpoint, ctx),
+      localPosition: segmentEndpointLocalPosition,
+    },
   },
 
   toolHints: [

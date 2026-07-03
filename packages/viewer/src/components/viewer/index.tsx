@@ -231,7 +231,9 @@ function SceneReadyTracker({
 
 function SceneGeometryWarmup({ sceneReadyKey }: { sceneReadyKey?: string | number | null }) {
   const scene = useThree((state) => state.scene)
-  const warmedKeyRef = useRef<{ done: boolean; key?: string | number | null }>({ done: false })
+  const warmedKeyRef = useRef<{ done: boolean; key?: string | number | null }>({
+    done: false,
+  })
 
   useEffect(() => {
     warmedKeyRef.current = { done: false, key: sceneReadyKey }
@@ -299,7 +301,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     activeFrameLoop = false,
     perf = false,
     useBvh = true,
-    renderContext = 'editor',
+    renderContext = 'authoring',
     transparent,
     defaultRender,
     isolate,

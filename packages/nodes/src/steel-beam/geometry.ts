@@ -213,7 +213,5 @@ export function buildSteelBeamGeometry(node: SteelBeamNode): Group {
   }
 
   addProfileSegment(group, node, mat, -node.length / 2, 0, node.length / 2, 0)
-  group.position.set(node.position[0], node.position[1], node.position[2])
-  group.rotation.set(node.rotation[0] ?? 0, node.rotation[1] ?? 0, node.rotation[2] ?? 0)
   return group
 }

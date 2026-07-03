@@ -256,7 +256,12 @@ export type FloorplanGeometry =
    * effect from the legacy floor-plan panel. The 2D layer mounts a
    * shared `<pattern>` in `<defs>` and references it via `fill=url(...)`.
    */
-  | { kind: 'hatch'; points: readonly FloorplanPoint[]; color: string; opacity?: number }
+  | {
+      kind: 'hatch'
+      points: readonly FloorplanPoint[]
+      color: string
+      opacity?: number
+    }
   /**
    * Transparent click-detection segment. Sits on top of the kind's main
    * geometry with a wide stroke so the user doesn't need to pixel-hunt
@@ -522,6 +527,40 @@ export type FloorplanMoveTarget<N> = (args: {
   nodes: Record<AnyNodeId, AnyNode>
 }) => FloorplanMoveTargetSession
 
+export type NudgeDelta = readonly [number, number, number]
+
+export type ActionMenuPlacementRule =
+  | 'bbox'
+  | 'bbox-tall'
+  | 'flat-structure'
+  | 'html-compact'
+  | 'html-panel'
+  | 'linear'
+
+export type ActionMenuLabel = {
+  key?: string
+  fallback: string
+}
+
+export type NodeEditActions<N> = {
+  addHole?: (node: N) => Partial<N> | null
+  nudgePlan?: (node: N, delta: NudgeDelta) => Partial<N> | null
+}
+
+export type NodeActionMenu<N> = {
+  placement?: ActionMenuPlacementRule
+  curve?: {
+    affordance?: string
+    isAvailable?: (node: N, ctx: { nodes: Record<AnyNodeId, AnyNode> }) => boolean
+  }
+  endpointMove?: {
+    affordance?: string
+    canDetach?: boolean
+    label: (endpoint: 'start' | 'end', ctx: { detachHint: boolean }) => ActionMenuLabel
+    localPosition: (node: N, endpoint: 'start' | 'end') => readonly [number, number, number]
+  }
+}
+
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
 export type Plugin = {
@@ -648,6 +687,18 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * both 3D and 2D affordances expose both fields — they're independent.
    */
   floorplanAffordances?: Record<string, FloorplanAffordance<z.infer<S>>>
+  /**
+   * Optional editor actions exposed by a kind without hardcoding kind names
+   * in editor shells. Actions return a scene patch; the editor owns sounds,
+   * selection, and the actual store mutation.
+   */
+  editActions?: NodeEditActions<z.infer<S>>
+  /**
+   * Contextual 3D floating-menu metadata supplied by the kind. The editor
+   * renders the chrome and owns store mutations; the definition contributes
+   * pure labels, placement hints, and local anchor math.
+   */
+  actionMenu?: NodeActionMenu<z.infer<S>>
   /**
    * Kind-specific 2D move handler for `useEditor.movingNode`-driven
    * placement in the floor plan. When set, `FloorplanRegistryMove
@@ -906,7 +957,11 @@ export type FloorPlacedConfig = {
 }
 
 export type AlignmentFootprint =
-  | { shape: 'box'; dimensions: [number, number, number]; rotation: [number, number, number] }
+  | {
+      shape: 'box'
+      dimensions: [number, number, number]
+      rotation: [number, number, number]
+    }
   | { shape: 'aabb'; minX: number; minZ: number; maxX: number; maxZ: number }
 
 export type AlignmentFootprintConfig = (
@@ -961,7 +1016,12 @@ export type ParamField<N> =
   | { key: keyof N; kind: 'vec3'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'color'; visibleIf?: (n: N) => boolean }
   | { key: keyof N; kind: 'material'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  | {
+      key: keyof N
+      kind: 'ref'
+      refKind: string
+      visibleIf?: (n: N) => boolean
+    }
   /** Escape hatch for fields that don't map to a single node key —
    *  derived values (`length` from `start`/`end`), sliders with
    *  dynamic min/max (curve sagitta bounded by chord length),
@@ -970,11 +1030,18 @@ export type ParamField<N> =
   | {
       key: string
       kind: 'custom'
-      component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
+      component: ComponentType<{
+        node: N
+        onUpdate: (patch: Partial<N>) => void
+      }>
       visibleIf?: (n: N) => boolean
     }
 
-export type Issue = { field?: string; msg: string; severity?: 'error' | 'warning' }
+export type Issue = {
+  field?: string
+  msg: string
+  severity?: 'error' | 'warning'
+}
 
 // ─── Affordance ──────────────────────────────────────────────────────
 
@@ -992,7 +1059,12 @@ export type EditorCtx = {
 // ─── DragAction primitive ────────────────────────────────────────────
 
 export type Vec2 = readonly [number, number]
-export type Modifiers = { shift: boolean; alt: boolean; ctrl: boolean; meta: boolean }
+export type Modifiers = {
+  shift: boolean
+  alt: boolean
+  ctrl: boolean
+  meta: boolean
+}
 
 export type DragAction<Ctx, Draft> = {
   begin: (input: { node?: AnyNode; point: Vec2; handleId?: string; modifiers?: Modifiers }) => Ctx

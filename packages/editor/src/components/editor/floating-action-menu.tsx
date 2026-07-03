@@ -3,28 +3,19 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type CableTrayNode,
-  type CeilingNode,
   ColumnNode,
-  type ConveyorBeltNode,
   DoorNode,
   ElevatorNode,
   FenceNode,
   generateId,
-  getConveyorPortPoint,
-  getPipeEndpoint3D,
   ItemNode,
-  isPipeNearlyVertical,
   isRegistrySelectable,
   nodeRegistry,
   PipeNode,
-  type RoadNode,
   RoofSegmentNode,
-  type SlabNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
-  type SteelBeamNode,
   sceneRegistry,
   useScene,
   WallNode,
@@ -37,6 +28,7 @@ import { Move } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { t } from '../../i18n'
+import { createEditorApi } from '../../lib/editor-api'
 import { isPlanDragMovableNode } from '../../lib/plan-drag'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -58,17 +50,12 @@ const ALLOWED_TYPES = [
   'wall',
   'fence',
   'pipe',
-  'conveyor-belt',
-  'cable-tray',
-  'road',
-  'steel-beam',
   'column',
   'slab',
   'ceiling',
   'spawn',
 ]
 const DELETE_ONLY_TYPES: string[] = []
-const HOLE_TYPES = ['slab', 'ceiling']
 const ENDPOINT_BUTTON_BASE_CLASS =
   'pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border bg-background/95 shadow-lg backdrop-blur-md transition-colors'
 const ENDPOINT_BUTTON_WALL_CLASS =
@@ -77,60 +64,13 @@ const ENDPOINT_BUTTON_DETACH_CLASS =
   'border-amber-500/80 bg-amber-500/15 text-amber-100 hover:bg-amber-500/20 hover:text-white'
 
 function getEndpointMoveLabel(
-  nodeType: string,
+  actionMenu: NonNullable<NonNullable<ReturnType<typeof nodeRegistry.get>>['actionMenu']>,
   endpoint: 'start' | 'end',
   detachHint: boolean,
 ): string {
-  const isStart = endpoint === 'start'
-  switch (nodeType) {
-    case 'wall':
-      return detachHint
-        ? t(
-            isStart ? 'actionMenu.moveWallStartDetach' : 'actionMenu.moveWallEndDetach',
-            isStart ? 'Move wall start (Alt to detach)' : 'Move wall end (Alt to detach)',
-          )
-        : t(
-            isStart ? 'actionMenu.moveWallStart' : 'actionMenu.moveWallEnd',
-            isStart ? 'Move wall start' : 'Move wall end',
-          )
-    case 'fence':
-      return detachHint
-        ? t(
-            isStart ? 'actionMenu.moveFenceStartDetach' : 'actionMenu.moveFenceEndDetach',
-            isStart ? 'Move fence start (Alt to detach)' : 'Move fence end (Alt to detach)',
-          )
-        : t(
-            isStart ? 'actionMenu.moveFenceStart' : 'actionMenu.moveFenceEnd',
-            isStart ? 'Move fence start' : 'Move fence end',
-          )
-    case 'pipe':
-      return detachHint
-        ? t(
-            isStart ? 'actionMenu.movePipeStartDetach' : 'actionMenu.movePipeEndDetach',
-            isStart ? 'Move pipe start (Alt to detach)' : 'Move pipe end (Alt to detach)',
-          )
-        : t(
-            isStart ? 'actionMenu.movePipeStart' : 'actionMenu.movePipeEnd',
-            isStart ? 'Move pipe start' : 'Move pipe end',
-          )
-    case 'road':
-      return t(
-        isStart ? 'actionMenu.moveRoadStart' : 'actionMenu.moveRoadEnd',
-        isStart ? 'Move road start' : 'Move road end',
-      )
-    case 'cable-tray':
-      return t(
-        isStart ? 'actionMenu.moveCableTrayStart' : 'actionMenu.moveCableTrayEnd',
-        isStart ? 'Move cable tray start' : 'Move cable tray end',
-      )
-    case 'steel-beam':
-      return t(
-        isStart ? 'actionMenu.moveSteelBeamStart' : 'actionMenu.moveSteelBeamEnd',
-        isStart ? 'Move steel beam start' : 'Move steel beam end',
-      )
-    default:
-      return isStart ? 'Move start' : 'Move end'
-  }
+  const label = actionMenu.endpointMove?.label(endpoint, { detachHint })
+  if (!label) return endpoint === 'start' ? 'Move start' : 'Move end'
+  return label.key ? t(label.key, label.fallback) : label.fallback
 }
 
 export function FloatingActionMenu() {
@@ -153,19 +93,6 @@ export function FloatingActionMenu() {
   const curvingRoad = useEditor((s) => s.curvingRoad)
   const curvingSteelBeam = useEditor((s) => s.curvingSteelBeam)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setMovingWallEndpoint = useEditor((s) => s.setMovingWallEndpoint)
-  const setMovingFenceEndpoint = useEditor((s) => s.setMovingFenceEndpoint)
-  const setMovingPipeEndpoint = useEditor((s) => s.setMovingPipeEndpoint)
-  const setMovingCableTrayEndpoint = useEditor((s) => s.setMovingCableTrayEndpoint)
-  const setMovingConveyorBeltEndpoint = useEditor((s) => s.setMovingConveyorBeltEndpoint)
-  const setMovingRoadEndpoint = useEditor((s) => s.setMovingRoadEndpoint)
-  const setMovingSteelBeamEndpoint = useEditor((s) => s.setMovingSteelBeamEndpoint)
-  const setCurvingWall = useEditor((s) => s.setCurvingWall)
-  const setCurvingFence = useEditor((s) => s.setCurvingFence)
-  const setCurvingPipe = useEditor((s) => s.setCurvingPipe)
-  const setCurvingCableTray = useEditor((s) => s.setCurvingCableTray)
-  const setCurvingRoad = useEditor((s) => s.setCurvingRoad)
-  const setCurvingSteelBeam = useEditor((s) => s.setCurvingSteelBeam)
   const setSelection = useViewer((s) => s.setSelection)
   const setEditingHole = useEditor((s) => s.setEditingHole)
 
@@ -185,6 +112,7 @@ export function FloatingActionMenu() {
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
+  const actionMenu = node ? nodeRegistry.get(node.type)?.actionMenu : undefined
   // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
   // NodeDefinition with `capabilities.selectable`) get the floating menu
   // by default too. Phase 4 collapses these into a single registry check.
@@ -192,26 +120,15 @@ export function FloatingActionMenu() {
     ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
     : false
   const isDirectPlanDraggable = node ? isPlanDragMovableNode(node) : false
-  const canDetachEndpoint = node?.type === 'wall' || node?.type === 'fence' || node?.type === 'pipe'
+  const addHoleAction = node ? nodeRegistry.get(node.type)?.editActions?.addHole : undefined
+  const canDetachEndpoint = actionMenu?.endpointMove?.canDetach === true
   const endpointButtonClass = `${ENDPOINT_BUTTON_BASE_CLASS} ${
     altPressed && canDetachEndpoint ? ENDPOINT_BUTTON_DETACH_CLASS : ENDPOINT_BUTTON_WALL_CLASS
   }`
 
-  // Boolean selector, only re-renders when curving availability actually flips.
-  const canCurveSelectedWall = useScene((s) => {
-    if (!selectedId) return false
-    const selectedNode = s.nodes[selectedId as AnyNodeId]
-    if (selectedNode?.type !== 'wall') return false
-    return !(selectedNode.children ?? []).some((childId) => {
-      const child = s.nodes[childId as AnyNodeId]
-      if (!child) return false
-      if (child.type === 'door' || child.type === 'window') return true
-      if (child.type === 'item') {
-        const attachTo = child.asset?.attachTo
-        return attachTo === 'wall' || attachTo === 'wall-side'
-      }
-      return false
-    })
+  const canCurveSelectedNode = useScene((s) => {
+    if (!(node && actionMenu?.curve)) return false
+    return actionMenu.curve.isAvailable?.(node as never, { nodes: s.nodes }) ?? true
   })
 
   useEffect(() => {
@@ -263,82 +180,17 @@ export function FloatingActionMenu() {
         setMenuVisible(false)
       }
 
-      if (
-        node?.type === 'wall' ||
-        node?.type === 'fence' ||
-        node?.type === 'pipe' ||
-        node?.type === 'conveyor-belt' ||
-        node?.type === 'cable-tray' ||
-        node?.type === 'road' ||
-        node?.type === 'steel-beam'
-      ) {
-        const segment = node as
-          | WallNode
-          | FenceNode
-          | PipeNode
-          | CableTrayNode
-          | RoadNode
-          | SteelBeamNode
-        const endpointYOffset = 0.35
-        const startWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(new THREE.Vector3(0, 0, 0))
-            : node.type === 'pipe'
-              ? (() => {
-                  const point = getPipeEndpoint3D(node as PipeNode, 'start')
-                  return obj.localToWorld(new THREE.Vector3(point.x, 0, point.z))
-                })()
-              : node.type === 'conveyor-belt'
-                ? (() => {
-                    const point = getConveyorPortPoint(node as ConveyorBeltNode, 'in') ??
-                      (node as ConveyorBeltNode).points[0] ?? [0, 0, 0]
-                    return obj.localToWorld(new THREE.Vector3(point[0], 0, point[2]))
-                  })()
-                : obj.localToWorld(new THREE.Vector3(segment.start[0], 0, segment.start[1]))
-        const endWorld =
-          node.type === 'wall'
-            ? obj.localToWorld(
-                new THREE.Vector3(
-                  Math.hypot(segment.end[0] - segment.start[0], segment.end[1] - segment.start[1]),
-                  0,
-                  0,
-                ),
-              )
-            : node.type === 'pipe'
-              ? (() => {
-                  const point = getPipeEndpoint3D(node as PipeNode, 'end')
-                  return obj.localToWorld(new THREE.Vector3(point.x, 0, point.z))
-                })()
-              : node.type === 'conveyor-belt'
-                ? (() => {
-                    const conveyor = node as ConveyorBeltNode
-                    const point = getConveyorPortPoint(conveyor, 'out') ??
-                      conveyor.points[conveyor.points.length - 1] ?? [0, 0, 0]
-                    return obj.localToWorld(new THREE.Vector3(point[0], 0, point[2]))
-                  })()
-                : obj.localToWorld(new THREE.Vector3(segment.end[0], 0, segment.end[1]))
-        const startY =
-          node.type === 'pipe'
-            ? getPipeEndpoint3D(node as PipeNode, 'start').y + endpointYOffset
-            : node.type === 'conveyor-belt'
-              ? ((node as ConveyorBeltNode).elevation ?? 0) + endpointYOffset
-              : node.type === 'cable-tray' || node.type === 'steel-beam'
-                ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
-                : startWorld.y + endpointYOffset
-        const endY =
-          node.type === 'pipe'
-            ? getPipeEndpoint3D(node as PipeNode, 'end').y + endpointYOffset
-            : node.type === 'conveyor-belt'
-              ? ((node as ConveyorBeltNode).elevation ?? 0) + endpointYOffset
-              : node.type === 'cable-tray' || node.type === 'steel-beam'
-                ? ((node as CableTrayNode | SteelBeamNode).elevation ?? 0) + endpointYOffset
-                : endWorld.y + endpointYOffset
+      if (node && actionMenu?.endpointMove) {
+        const startLocal = actionMenu.endpointMove.localPosition(node as never, 'start')
+        const endLocal = actionMenu.endpointMove.localPosition(node as never, 'end')
+        const startWorld = obj.localToWorld(new THREE.Vector3(...startLocal))
+        const endWorld = obj.localToWorld(new THREE.Vector3(...endLocal))
 
         if (startEndpointGroupRef.current) {
-          startEndpointGroupRef.current.position.set(startWorld.x, startY, startWorld.z)
+          startEndpointGroupRef.current.position.copy(startWorld)
         }
         if (endEndpointGroupRef.current) {
-          endEndpointGroupRef.current.position.set(endWorld.x, endY, endWorld.z)
+          endEndpointGroupRef.current.position.copy(endWorld)
         }
       }
     } else if (menuVisible) {
@@ -383,72 +235,22 @@ export function FloatingActionMenu() {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      if (node.type === 'wall') {
-        if (!canCurveSelectedWall) return
-        setCurvingWall(node)
-      } else if (node.type === 'fence') {
-        setCurvingFence(node)
-      } else if (node.type === 'pipe' && !isPipeNearlyVertical(node)) {
-        setCurvingPipe(node)
-      } else if (node.type === 'cable-tray') {
-        setCurvingCableTray(node)
-      } else if (node.type === 'road') {
-        setCurvingRoad(node)
-      } else if (node.type === 'steel-beam') {
-        setCurvingSteelBeam(node)
-      } else {
-        return
-      }
+      if (!canCurveSelectedNode) return
+      createEditorApi().engageCurve(node)
       setSelection({ selectedIds: [] })
     },
-    [
-      canCurveSelectedWall,
-      node,
-      setCurvingCableTray,
-      setCurvingFence,
-      setCurvingPipe,
-      setCurvingRoad,
-      setCurvingSteelBeam,
-      setCurvingWall,
-      setSelection,
-    ],
+    [canCurveSelectedNode, node, setSelection],
   )
   const handleEndpointMove = useCallback(
     (endpoint: 'start' | 'end', e: React.MouseEvent | React.PointerEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      if (!node) return
+      if (!(node && actionMenu?.endpointMove)) return
       sfxEmitter.emit('sfx:item-pick')
-      if (node.type === 'wall') {
-        setMovingWallEndpoint({ wall: node, endpoint })
-      } else if (node.type === 'fence') {
-        setMovingFenceEndpoint({ fence: node, endpoint })
-      } else if (node.type === 'pipe') {
-        setMovingPipeEndpoint({ pipe: node, endpoint })
-      } else if (node.type === 'cable-tray') {
-        setMovingCableTrayEndpoint({ cableTray: node, endpoint })
-      } else if (node.type === 'conveyor-belt') {
-        setMovingConveyorBeltEndpoint({ conveyorBelt: node, endpoint })
-      } else if (node.type === 'road') {
-        setMovingRoadEndpoint({ road: node, endpoint })
-      } else if (node.type === 'steel-beam') {
-        setMovingSteelBeamEndpoint({ steelBeam: node, endpoint })
-      } else {
-        return
-      }
+      createEditorApi().engageEndpointMove(node, endpoint)
       setSelection({ selectedIds: [] })
     },
-    [
-      node,
-      setMovingCableTrayEndpoint,
-      setMovingConveyorBeltEndpoint,
-      setMovingFenceEndpoint,
-      setMovingPipeEndpoint,
-      setMovingRoadEndpoint,
-      setMovingSteelBeamEndpoint,
-      setMovingWallEndpoint,
-      setSelection,
-    ],
+    [actionMenu?.endpointMove, node, setSelection],
   )
 
   const handleEndpointPointerDown = useCallback(
@@ -487,7 +289,9 @@ export function FloatingActionMenu() {
       ) {
         useScene.temporal.getState().pause()
         try {
-          const { root } = duplicateNodeSubtree(node.id as AnyNodeId, { markRootNew: true })
+          const { root } = duplicateNodeSubtree(node.id as AnyNodeId, {
+            markRootNew: true,
+          })
           setMovingNode(root as any)
           setSelection({ selectedIds: [] })
         } catch (error) {
@@ -637,39 +441,18 @@ export function FloatingActionMenu() {
   const handleAddHole = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!(node && selectedId && (node.type === 'slab' || node.type === 'ceiling'))) return
-
-      const polygon = (node as SlabNode | CeilingNode).polygon
-      let cx = 0
-      let cz = 0
-      for (const [x, z] of polygon) {
-        cx += x
-        cz += z
-      }
-      cx /= polygon.length
-      cz /= polygon.length
-
-      const holeSize = 0.5
-      const newHole: Array<[number, number]> = [
-        [cx - holeSize, cz - holeSize],
-        [cx + holeSize, cz - holeSize],
-        [cx + holeSize, cz + holeSize],
-        [cx - holeSize, cz + holeSize],
-      ]
-      const surfaceNode = node as SlabNode | CeilingNode
-      const currentHoles = surfaceNode.holes || []
-      const currentMetadata = currentHoles.map(
-        (_, index) => surfaceNode.holeMetadata?.[index] ?? { source: 'manual' as const },
-      )
-      updateNode(selectedId as AnyNodeId, {
-        holes: [...currentHoles, newHole],
-        holeMetadata: [...currentMetadata, { source: 'manual' }],
-      })
-      setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
+      if (!(node && selectedId && addHoleAction)) return
+      const patch = addHoleAction(node as never)
+      if (!patch) return
+      const holeIndex = Array.isArray((node as { holes?: unknown }).holes)
+        ? (node as { holes: unknown[] }).holes.length
+        : 0
+      updateNode(selectedId as AnyNodeId, patch as Partial<AnyNode>)
+      setEditingHole({ nodeId: selectedId, holeIndex })
       // Re-assert selection so the node stays selected
       setSelection({ selectedIds: [selectedId] })
     },
-    [node, selectedId, updateNode, setEditingHole, setSelection],
+    [node, selectedId, addHoleAction, updateNode, setEditingHole, setSelection],
   )
 
   const handleDelete = useCallback(
@@ -715,23 +498,14 @@ export function FloatingActionMenu() {
           zIndexRange={[100, 0]}
         >
           <NodeActionMenu
-            onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
-            onCurve={
-              node?.type === 'fence' ||
-              node?.type === 'cable-tray' ||
-              node?.type === 'road' ||
-              node?.type === 'steel-beam' ||
-              (node?.type === 'pipe' && !isPipeNearlyVertical(node)) ||
-              (node?.type === 'wall' && canCurveSelectedWall)
-                ? handleCurve
-                : undefined
-            }
+            onAddHole={addHoleAction ? handleAddHole : undefined}
+            onCurve={actionMenu?.curve && canCurveSelectedNode ? handleCurve : undefined}
             onDelete={handleDelete}
             onDuplicate={
               node &&
               node.type !== 'spawn' &&
               !DELETE_ONLY_TYPES.includes(node.type) &&
-              !HOLE_TYPES.includes(node.type)
+              !addHoleAction
                 ? handleDuplicate
                 : undefined
             }
@@ -750,13 +524,7 @@ export function FloatingActionMenu() {
           />
         </Html>
       </group>
-      {(node?.type === 'wall' ||
-        node?.type === 'fence' ||
-        node?.type === 'pipe' ||
-        node?.type === 'conveyor-belt' ||
-        node?.type === 'cable-tray' ||
-        node?.type === 'road' ||
-        node?.type === 'steel-beam') && (
+      {actionMenu?.endpointMove && (
         <>
           <group ref={startEndpointGroupRef}>
             <Html
@@ -766,11 +534,11 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={getEndpointMoveLabel(node.type, 'start', false)}
+                aria-label={getEndpointMoveLabel(actionMenu, 'start', false)}
                 className={endpointButtonClass}
                 onClick={handleEndpointClick}
                 onPointerDown={(e) => handleEndpointPointerDown('start', e)}
-                title={getEndpointMoveLabel(node.type, 'start', true)}
+                title={getEndpointMoveLabel(actionMenu, 'start', true)}
                 type="button"
               >
                 <Move className="h-3 w-3" />
@@ -785,11 +553,11 @@ export function FloatingActionMenu() {
               zIndexRange={[100, 0]}
             >
               <button
-                aria-label={getEndpointMoveLabel(node.type, 'end', false)}
+                aria-label={getEndpointMoveLabel(actionMenu, 'end', false)}
                 className={endpointButtonClass}
                 onClick={handleEndpointClick}
                 onPointerDown={(e) => handleEndpointPointerDown('end', e)}
-                title={getEndpointMoveLabel(node.type, 'end', true)}
+                title={getEndpointMoveLabel(actionMenu, 'end', true)}
                 type="button"
               >
                 <Move className="h-3 w-3" />

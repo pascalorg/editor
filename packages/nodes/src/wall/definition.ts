@@ -1,4 +1,9 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  ROUTE_ENDPOINT_Y_OFFSET,
+} from '../shared/route-edit-actions'
 import { wallSurfaceMaterialTargets } from '../shared/material-targets'
 import { buildWallFloorplan } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
@@ -93,6 +98,39 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   floorplanAffordances: {
     'move-endpoint': wallMoveEndpointAffordance,
     curve: wallCurveAffordance,
+  },
+
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {
+      isAvailable: (node, { nodes }) =>
+        !(node.children ?? []).some((childId) => {
+          const child = nodes[childId]
+          if (!child) return false
+          if (child.type === 'door' || child.type === 'window') return true
+          if (child.type === 'item') {
+            const attachTo = child.asset?.attachTo
+            return attachTo === 'wall' || attachTo === 'wall-side'
+          }
+          return false
+        }),
+    },
+    endpointMove: {
+      canDetach: true,
+      label: (endpoint, ctx) => routeEndpointLabel('Wall', 'wall', endpoint, ctx),
+      localPosition: (node, endpoint) => {
+        if (endpoint === 'start') return [0, ROUTE_ENDPOINT_Y_OFFSET, 0]
+        return [
+          Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1]),
+          ROUTE_ENDPOINT_Y_OFFSET,
+          0,
+        ]
+      },
+    },
   },
 
   toolHints: [

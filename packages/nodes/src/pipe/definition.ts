@@ -1,4 +1,9 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import { getPipeEndpoint3D, isPipeNearlyVertical, type NodeDefinition } from '@pascal-app/core'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  ROUTE_ENDPOINT_Y_OFFSET,
+} from '../shared/route-edit-actions'
 import { buildPipeFloorplan } from './floorplan'
 import { buildPipeGeometry } from './geometry'
 import { pipeParametrics } from './parametrics'
@@ -53,6 +58,25 @@ export const pipeDefinition: NodeDefinition<typeof PipeNode> = {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+  },
+
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {
+      isAvailable: (node) => !isPipeNearlyVertical(node),
+    },
+    endpointMove: {
+      canDetach: true,
+      label: (endpoint, ctx) => routeEndpointLabel('Pipe', 'pipe', endpoint, ctx),
+      localPosition: (node, endpoint) => {
+        const point = getPipeEndpoint3D(node, endpoint)
+        return [point.x, point.y + ROUTE_ENDPOINT_Y_OFFSET, point.z]
+      },
+    },
   },
 
   toolHints: [

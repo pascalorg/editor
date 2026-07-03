@@ -1,5 +1,10 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { overallMaterialTarget } from '../shared/material-targets'
+import {
+  nudgeSegmentPlan,
+  routeEndpointLabel,
+  segmentEndpointLocalPosition,
+} from '../shared/route-edit-actions'
 import { buildRoadFloorplan } from './floorplan'
 import { buildRoadGeometry } from './geometry'
 import { roadParametrics } from './parametrics'
@@ -66,8 +71,24 @@ export const roadDefinition: NodeDefinition<typeof RoadNode> = {
     move: () => import('./move-tool'),
   },
 
+  editActions: {
+    nudgePlan: nudgeSegmentPlan,
+  },
+
+  actionMenu: {
+    placement: 'linear',
+    curve: {},
+    endpointMove: {
+      label: (endpoint, ctx) => routeEndpointLabel('Road', 'road', endpoint, ctx),
+      localPosition: segmentEndpointLocalPosition,
+    },
+  },
+
   toolHints: [
-    { key: 'Left click', label: '\u8bbe\u7f6e\u5730\u9762\u5e26\u8d77\u70b9 / \u7ec8\u70b9' },
+    {
+      key: 'Left click',
+      label: '\u8bbe\u7f6e\u5730\u9762\u5e26\u8d77\u70b9 / \u7ec8\u70b9',
+    },
     { key: 'Shift', label: '按住关闭角度吸附' },
     { key: 'Esc', label: '取消' },
   ],
