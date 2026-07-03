@@ -1,5 +1,5 @@
 import { type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import useEditor, { type StructureTool } from '../store/use-editor'

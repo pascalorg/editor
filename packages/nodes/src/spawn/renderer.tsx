@@ -1,7 +1,8 @@
 'use client'
 
 import { type SpawnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
-import { useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import useViewer from '@pascal-app/viewer/store'
 import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 

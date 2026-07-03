@@ -8,7 +8,7 @@ import {
   type MaterialTargetDescriptor,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useMemo } from 'react'
 import {
   getMaterialTargetKindForNode,

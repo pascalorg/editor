@@ -1,5 +1,5 @@
 import { emitter, useScene, type ZoneNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Camera, Hexagon, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../../../../../i18n'

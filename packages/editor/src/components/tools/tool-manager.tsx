@@ -6,7 +6,7 @@ import {
   type SlabNode,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { type ComponentType, lazy, Suspense } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'

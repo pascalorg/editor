@@ -23,7 +23,7 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useNodeEvents } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {

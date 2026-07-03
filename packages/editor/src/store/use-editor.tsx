@@ -45,7 +45,7 @@ import {
   type WallSurfaceSide,
   type WindowNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {

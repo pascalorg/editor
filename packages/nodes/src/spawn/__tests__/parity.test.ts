@@ -34,9 +34,9 @@ describe('spawn definition', () => {
     expect(parsed.success).toBe(true)
   })
 
-  test('presentation declares an iconify icon for the palette', () => {
+  test('presentation declares the site icon for the palette', () => {
     expect(spawnDefinition.presentation?.label).toBe('Spawn Point')
-    expect(spawnDefinition.presentation?.icon.kind).toBe('iconify')
+    expect(spawnDefinition.presentation?.icon).toEqual({ kind: 'url', src: '/icons/site.webp' })
     expect(spawnDefinition.presentation?.paletteSection).toBe('structure')
   })
 

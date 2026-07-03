@@ -5,7 +5,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
 import { stripTransient } from './placement-math'

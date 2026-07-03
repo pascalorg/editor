@@ -1,13 +1,11 @@
 'use client'
 
 import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
-import {
-  createSafeEmptyGeometry,
-  getVisibleWallMaterials,
-  NodeRenderer,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+import { NodeRenderer } from '@pascal-app/viewer/node-renderer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { createSafeEmptyGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer from '@pascal-app/viewer/store'
+import { getVisibleWallMaterials } from '@pascal-app/viewer/wall-materials'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { BufferGeometry, Mesh } from 'three'
 

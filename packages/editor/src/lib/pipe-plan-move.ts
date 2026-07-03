@@ -1,4 +1,4 @@
-import { type PipeNode } from '@pascal-app/core'
+import type { PipeNode } from '@pascal-app/core'
 import {
   applySegmentEndpointPreview,
   computeSegmentDragEndpoints,

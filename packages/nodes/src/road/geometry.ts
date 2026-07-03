@@ -5,31 +5,17 @@ import {
   resolveMaterial,
   sampleWallCenterline,
 } from '@pascal-app/core'
-import { applyMaterialPresetToMaterials, type RenderShading } from '@pascal-app/viewer'
+import { applyMaterialPresetToMaterials, type RenderShading } from '@pascal-app/viewer/materials'
 import { BoxGeometry, FrontSide, Group, type Material, Mesh, MeshStandardMaterial } from 'three'
 import type { RoadNode } from './schema'
 
-function getMaterialDebugColor(material: Material): string | null {
-  const color = (material as { color?: { getHexString?: () => string } }).color
-  return color?.getHexString ? `#${color.getHexString()}` : null
-}
-
 function createRoadMaterial(node: RoadNode, shading: RenderShading): Material {
+  void shading
   if (node.materialPreset) {
     const preset = getMaterialPresetByRef(node.materialPreset)
     if (preset) {
       const material = new MeshStandardMaterial()
       applyMaterialPresetToMaterials(material, preset)
-      console.log('[pascal:road:material]', {
-        id: node.id,
-        source: 'materialPreset',
-        materialPreset: node.materialPreset,
-        shading,
-        resolvedColor: getMaterialDebugColor(material),
-        maps: Object.keys(preset.maps).filter(
-          (key) => preset.maps[key as keyof typeof preset.maps] !== undefined,
-        ),
-      })
       return material
     }
   }
@@ -44,30 +30,14 @@ function createRoadMaterial(node: RoadNode, shading: RenderShading): Material {
       transparent: properties.transparent,
       side: FrontSide,
     })
-    console.log('[pascal:road:material]', {
-      id: node.id,
-      source: 'material',
-      inputColor: node.material.properties?.color,
-      resolvedProperties: properties,
-      shading,
-      resolvedColor: getMaterialDebugColor(material),
-    })
     return material
   }
 
-  const material = new MeshStandardMaterial({
+  return new MeshStandardMaterial({
     color: node.asphaltColor,
     roughness: 0.88,
     metalness: 0.02,
   })
-  console.log('[pascal:road:material]', {
-    id: node.id,
-    source: 'asphaltColor',
-    asphaltColor: node.asphaltColor,
-    shading,
-    resolvedColor: getMaterialDebugColor(material),
-  })
-  return material
 }
 
 function createMarkingMaterial(color: string, shading: RenderShading): Material {
@@ -160,15 +130,6 @@ export function buildRoadGeometry(
   const group = new Group()
   const length = getWallCurveLength(node)
   if (length < 0.01) return group
-
-  console.log('[pascal:road:build]', {
-    id: node.id,
-    materialColor: node.material?.properties?.color,
-    materialPreset: node.materialPreset,
-    asphaltColor: node.asphaltColor,
-    markingColor: node.markingColor,
-    shading,
-  })
 
   addRoadBody(group, node, shading)
   addLaneMarkings(group, node, length, shading)

@@ -16,7 +16,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect } from 'react'
 import { snapFenceDraftPoint } from '../../components/tools/fence/fence-drafting'
 import { snapPipeDraftPoint } from '../../components/tools/pipe/pipe-drafting'

@@ -11,7 +11,7 @@ import {
   SliderControl,
   triggerSFX,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { formatLiveDataPathOption } from '../shared/live-data-format'

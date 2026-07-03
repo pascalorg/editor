@@ -18,7 +18,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 function getCurrentLevelWalls(parentId: string | null): WallNode[] {

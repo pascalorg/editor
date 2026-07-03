@@ -15,10 +15,10 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { getRegistryHtmlDragOrigin } from '../../../lib/registry-html-drag-origin'
@@ -182,7 +182,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const mesh = sceneRegistry.nodes.get(node.id)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

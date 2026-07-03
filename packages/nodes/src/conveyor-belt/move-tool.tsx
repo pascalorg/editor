@@ -19,9 +19,9 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Group } from 'three'
+import type { Group, Object3D } from 'three'
 
 type RoutePoint = [number, number, number]
 type PlanPoint = [number, number]
@@ -72,7 +72,7 @@ export const MoveConveyorBeltTool: React.FC<{ node: ConveyorBeltNode }> = ({ nod
     const mesh = sceneRegistry.nodes.get(conveyorBeltId)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

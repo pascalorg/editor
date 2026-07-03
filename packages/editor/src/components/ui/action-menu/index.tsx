@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNodeId, type MaterialSchema, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo } from 'react'
 import { MaterialPicker } from './../../../components/ui/controls/material-picker'

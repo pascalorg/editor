@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import {
   type AnyNode,
@@ -11,7 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Group } from 'three'
 import { steelFrameDefinition } from './definition'

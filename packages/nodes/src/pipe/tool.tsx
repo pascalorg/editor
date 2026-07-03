@@ -17,14 +17,14 @@ import {
   snapPipeDraftPoint,
   triggerSFX,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import {
   CatmullRomCurve3,
   DoubleSide,
-  Group,
-  Mesh,
+  type Group,
+  type Mesh,
   TubeGeometry,
   Vector3,
 } from 'three'

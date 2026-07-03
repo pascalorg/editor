@@ -2,19 +2,21 @@
 
 import { type ColumnNode, useLiveTransforms, useRegistry } from '@pascal-app/core'
 import {
-  type ColorPreset,
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
   createColumnSphereGeometry,
   createColumnTorusGeometry,
+} from '@pascal-app/viewer/column-geometry'
+import {
+  type ColorPreset,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
   type RenderShading,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/materials'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import useViewer from '@pascal-app/viewer/store'
 import { createContext, useContext, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
 

@@ -1,6 +1,6 @@
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { buildGroupSelectedNodesChanges, buildUngroupAssemblyChanges } from './manual-assembly'
 
 export function groupSelectedNodes(selectedIds?: AnyNodeId[]) {

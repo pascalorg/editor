@@ -33,9 +33,9 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DoubleSide } from 'three'
+import { DoubleSide, type Object3D } from 'three'
 
 /**
  * Phase 5 Stage D — wall whole-move tool (kind-owned).
@@ -460,7 +460,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const mesh = sceneRegistry.nodes.get(nodeId)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

@@ -5,9 +5,9 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/materials'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import useViewer from '@pascal-app/viewer/store'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { primitiveContractFromMetadata } from '../shared/primitive-contract-rendering'

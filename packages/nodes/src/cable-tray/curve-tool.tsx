@@ -21,7 +21,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CableTrayNode } from './schema'
 

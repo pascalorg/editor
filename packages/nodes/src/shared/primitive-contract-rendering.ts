@@ -31,6 +31,13 @@ export function primitivePatternInstances(metadata: unknown): PrimitivePatternIn
   return Array.isArray(instances) && instances.length > 1 ? instances : []
 }
 
+export function primitiveBatchDisabled(metadata: unknown): boolean {
+  if (!isRecord(metadata)) return false
+  if (metadata.disablePrimitiveBatch === true) return true
+  const bridge = metadata.articraftBridge
+  return isRecord(bridge) && bridge.role === 'visual'
+}
+
 export function applyInstanceMatrices(
   mesh: THREE.InstancedMesh | null,
   instances: readonly PrimitivePatternInstance[],

@@ -2,7 +2,7 @@
 
 import type { AnyNodeId } from '@pascal-app/core'
 import { LevelNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import {
   AppWindow,
   ArrowRight,

@@ -1,5 +1,5 @@
 import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'

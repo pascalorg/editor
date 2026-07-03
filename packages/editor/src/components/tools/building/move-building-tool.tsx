@@ -7,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'

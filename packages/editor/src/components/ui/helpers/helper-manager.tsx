@@ -2,7 +2,7 @@
 
 import { type AnyNode, type AnyNodeId, nodeRegistry, type ToolHint } from '@pascal-app/core'
 import useScene from '@pascal-app/core/store'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { getManualAssemblySelectionState } from '../../../lib/manual-assembly'
 import { isPlanDragMovableNode } from '../../../lib/plan-drag'

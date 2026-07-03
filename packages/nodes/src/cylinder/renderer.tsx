@@ -1,15 +1,15 @@
 'use client'
 
 import { type CylinderNode, useRegistry, useScene } from '@pascal-app/core'
+import { createCylinderGeometry } from '@pascal-app/viewer/create-cylinder-geometry'
 import {
-  createCylinderGeometry,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
-  ensureWebGPUCompatibleGeometry,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/materials'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { ensureWebGPUCompatibleGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer from '@pascal-app/viewer/store'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import {

@@ -8,7 +8,7 @@ import {
   type SlabNode,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isPlanDragMovableNode } from '../../lib/plan-drag'

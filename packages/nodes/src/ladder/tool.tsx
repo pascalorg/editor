@@ -2,7 +2,7 @@
 
 import { LadderNode, emitter, type GridEvent, sceneRegistry, snapPointToGrid, useScene } from '@pascal-app/core'
 import { CursorSphere, triggerSFX } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 import { ladderDefinition } from './definition'

@@ -20,8 +20,9 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef } from 'react'
+import type { Object3D } from 'three'
 
 function getCurrentLevelWalls(parentId: string | null): WallNode[] {
   const { nodes } = useScene.getState()
@@ -58,7 +59,7 @@ export const MoveRoadTool: React.FC<{ node: RoadNode }> = ({ node }) => {
     const mesh = sceneRegistry.nodes.get(roadId)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

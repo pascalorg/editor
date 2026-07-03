@@ -13,12 +13,13 @@ import {
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
-  ensureWebGPUCompatibleGeometry,
+} from '@pascal-app/viewer/materials'
+import { ensureWebGPUCompatibleGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer, {
   isViewerSelectionInputSuppressed,
   isViewerSpatialInputSuppressed,
   shouldLatchViewerPointerSuppression,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/store'
 import { type ThreeEvent, useFrame } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'

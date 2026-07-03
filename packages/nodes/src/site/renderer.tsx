@@ -1,14 +1,12 @@
 'use client'
 
 import { type AnyNodeId, type SiteNode, useRegistry, useScene } from '@pascal-app/core'
-import {
-  createSafeEmptyGeometry,
-  getSceneTheme,
-  NodeRenderer,
-  unionPolygons,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+import { getSceneTheme } from '@pascal-app/viewer/scene-themes'
+import { NodeRenderer } from '@pascal-app/viewer/node-renderer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { unionPolygons } from '@pascal-app/viewer/polygon-union'
+import { createSafeEmptyGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,

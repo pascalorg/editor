@@ -1,7 +1,9 @@
 'use client'
 
 import { useRegistry, type ZoneNode } from '@pascal-app/core'
-import { createSafeEmptyGeometry, useNodeEvents, ZONE_LAYER } from '@pascal-app/viewer'
+import { ZONE_LAYER } from '@pascal-app/viewer/layers'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { createSafeEmptyGeometry } from '@pascal-app/viewer/safe-geometry'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import {

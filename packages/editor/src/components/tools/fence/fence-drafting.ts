@@ -6,7 +6,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   findWallSnapTarget,

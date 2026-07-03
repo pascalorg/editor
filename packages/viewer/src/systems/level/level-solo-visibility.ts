@@ -10,7 +10,7 @@ let soloVisibilityActive = false
 let soloVisibilityKey: string | null = null
 
 function keepObjectSubtree(keep: Set<Object3D>, root: Object3D | undefined) {
-  root?.traverse((child) => {
+  root?.traverse((child: Object3D) => {
     keep.add(child)
   })
 }
@@ -91,7 +91,7 @@ export function clearSoloLevelVisibility() {
   if (!soloVisibilityActive) return
 
   for (const [, obj] of sceneRegistry.nodes) {
-    obj.traverse((child) => {
+    obj.traverse((child: Object3D) => {
       const carrier = child as SoloLayerCarrier
       if (carrier[ORIGINAL_SOLO_LAYERS] === undefined) return
       child.layers.mask = carrier[ORIGINAL_SOLO_LAYERS]

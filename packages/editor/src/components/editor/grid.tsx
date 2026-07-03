@@ -1,7 +1,9 @@
 'use client'
 
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
+import { GRID_LAYER } from '@pascal-app/viewer/layers'
+import { getSceneTheme } from '@pascal-app/viewer/scene-themes'
+import useViewer from '@pascal-app/viewer/store'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MathUtils, type Mesh, PlaneGeometry, Vector2 } from 'three'

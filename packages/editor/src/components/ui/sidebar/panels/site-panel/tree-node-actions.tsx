@@ -1,5 +1,5 @@
 import { type AnyNodeId, emitter, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Camera, Eye, EyeOff, Trash2 } from 'lucide-react'
 import { memo, useState } from 'react'
 import {

@@ -1,7 +1,7 @@
 'use client'
 
 import { type BuildingNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useRef } from 'react'
@@ -36,7 +36,9 @@ export function FloatingBuildingActionMenu() {
       const matrixElements = obj.matrixWorld.elements
       const matrixChanged =
         lastPlacement.matrixWorld.length !== matrixElements.length ||
-        matrixElements.some((value, index) => value !== lastPlacement.matrixWorld[index])
+        matrixElements.some(
+          (value: number, index: number) => value !== lastPlacement.matrixWorld[index],
+        )
       if (buildingId === lastPlacement.id && !matrixChanged) return
 
       const box = boxRef.current.setFromObject(obj)

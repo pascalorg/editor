@@ -17,7 +17,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { LogOut, Move, Pencil, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { TransformPanelSection } from '../shared/transform-panel-section'

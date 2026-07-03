@@ -15,7 +15,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { type StairPlacementType, useAlignmentGuides, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { sfxEmitter } from '../../../lib/sfx-bus'

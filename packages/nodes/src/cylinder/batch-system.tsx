@@ -9,21 +9,25 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { createCylinderGeometry } from '@pascal-app/viewer/create-cylinder-geometry'
 import {
-  createCylinderGeometry,
   createDefaultMaterial,
   createMaterial,
   createMaterialFromPresetRef,
-  ensureWebGPUCompatibleGeometry,
+} from '@pascal-app/viewer/materials'
+import { ensureWebGPUCompatibleGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer, {
   isViewerSelectionInputSuppressed,
   isViewerSpatialInputSuppressed,
   shouldLatchViewerPointerSuppression,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/store'
 import { type ThreeEvent, useFrame } from '@react-three/fiber'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { primitivePatternInstances } from '../shared/primitive-contract-rendering'
+import {
+  primitiveBatchDisabled,
+  primitivePatternInstances,
+} from '../shared/primitive-contract-rendering'
 
 type CylinderBatch = {
   key: string
@@ -61,6 +65,7 @@ function materialKey(node: CylinderNode): string {
 function canBatchCylinder(node: CylinderNode, excludedIds: ReadonlySet<string>): boolean {
   if (node.visible === false) return false
   if (excludedIds.has(node.id)) return false
+  if (primitiveBatchDisabled(node.metadata)) return false
   if (primitivePatternInstances(node.metadata).length > 0) return false
   return true
 }

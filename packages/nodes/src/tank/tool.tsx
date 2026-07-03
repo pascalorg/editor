@@ -11,9 +11,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { triggerSFX } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef } from 'react'
-import { Group } from 'three'
+import type { Group } from 'three'
 import { tankDefinition } from './definition'
 import { TankPreview } from './renderer'
 
@@ -131,4 +131,3 @@ const TankTool = () => {
 }
 
 export default TankTool
-

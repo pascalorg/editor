@@ -14,9 +14,9 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Vector3 } from 'three'
+import { type Object3D, Vector3 } from 'three'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { floorItemDragSuppressClickRef } from '../../../lib/floor-item-drag'
@@ -81,11 +81,7 @@ function applyDragOffset(
   localPosition: [number, number, number],
   offset: [number, number, number],
 ): [number, number, number] {
-  return [
-    localPosition[0] + offset[0],
-    localPosition[1] + offset[1],
-    localPosition[2] + offset[2],
-  ]
+  return [localPosition[0] + offset[0], localPosition[1] + offset[1], localPosition[2] + offset[2]]
 }
 
 function computeWallLocalPosition(
@@ -241,7 +237,7 @@ export function MovePlanItemTool({ node }: { node: ItemNode }) {
     const mesh = sceneRegistry.nodes.get(node.id)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

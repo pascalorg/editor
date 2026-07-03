@@ -13,7 +13,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lastGridMoveRef } from '../../../hooks/use-grid-events'
@@ -125,7 +125,7 @@ export const MoveRoofTool: React.FC<{
         segmentWrapperGroup = segmentMesh.parent
         const mergedName = movingNode.type === 'stair-segment' ? 'merged-stair' : 'merged-roof'
         mergedRoofMesh = segmentMesh.parent.parent?.getObjectByName(mergedName) ?? null
-        segmentWrapperGroup.visible = true
+        segmentMesh.parent.visible = true
         if (mergedRoofMesh) mergedRoofMesh.visible = false
       }
     }

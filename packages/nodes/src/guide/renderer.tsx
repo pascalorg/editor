@@ -1,7 +1,8 @@
 'use client'
 
 import { type GuideNode, useRegistry } from '@pascal-app/core'
-import { useAssetUrl, useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
+import { useAssetUrl } from '@pascal-app/viewer/use-asset-url'
 import { useLoader } from '@react-three/fiber'
 import { Suspense, useMemo, useRef } from 'react'
 import { DoubleSide, type Group, type Texture, TextureLoader } from 'three'

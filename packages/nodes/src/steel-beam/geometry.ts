@@ -2,6 +2,20 @@ import { sampleWallCenterline } from '@pascal-app/core'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import type { SteelBeamNode } from './schema'
 
+function isPoint2D(value: unknown): value is readonly [number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === 'number' &&
+    typeof value[1] === 'number'
+  )
+}
+
+function hasCenterline(node: SteelBeamNode): boolean {
+  const candidate = node as { start?: unknown; end?: unknown }
+  return isPoint2D(candidate.start) && isPoint2D(candidate.end)
+}
+
 function material(color: string) {
   return new MeshStandardMaterial({ color, metalness: 0.45, roughness: 0.48 })
 }
@@ -188,7 +202,7 @@ function addProfileSegment(
 export function buildSteelBeamGeometry(node: SteelBeamNode): Group {
   const group = new Group()
   const mat = material(node.color)
-  const points = sampleWallCenterline(node, 32)
+  const points = hasCenterline(node) ? sampleWallCenterline(node, 32) : []
   if (points.length >= 2) {
     for (let index = 1; index < points.length; index += 1) {
       const prev = points[index - 1]!

@@ -1,7 +1,7 @@
 import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useFrame } from '@react-three/fiber'
-import { type Group, MathUtils, type Mesh } from 'three'
+import { type Group, MathUtils, type Mesh, type Object3D } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import useEditor from '../../../store/use-editor'
 
@@ -77,7 +77,7 @@ export const ZoneSystem = () => {
       // Disable raycasting once per zone object so geometry never intercepts clicks
       if (!obj.userData.__raycastDisabled) {
         obj.raycast = noopRaycast
-        obj.traverse((child) => {
+        obj.traverse((child: Object3D) => {
           child.raycast = noopRaycast
         })
         obj.userData.__raycastDisabled = true

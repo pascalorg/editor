@@ -1,6 +1,6 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { ChevronLeft, Pin, RotateCcw, X } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'

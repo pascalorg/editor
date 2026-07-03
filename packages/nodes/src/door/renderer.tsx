@@ -1,7 +1,7 @@
 'use client'
 
 import { type DoorNode, useRegistry, useScene } from '@pascal-app/core'
-import { useNodeEvents } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
 import { useLayoutEffect, useRef } from 'react'
 import { type Mesh, MeshBasicMaterial } from 'three'
 

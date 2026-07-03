@@ -1,7 +1,9 @@
 'use client'
 
 import { type ScanNode, useRegistry } from '@pascal-app/core'
-import { useAssetUrl, useGLTFKTX2, useViewer } from '@pascal-app/viewer'
+import { useGLTFKTX2 } from '@pascal-app/viewer/gltf-ktx2'
+import useViewer from '@pascal-app/viewer/store'
+import { useAssetUrl } from '@pascal-app/viewer/use-asset-url'
 import { Suspense, useMemo, useRef } from 'react'
 import type { Group, Material, Mesh } from 'three'
 

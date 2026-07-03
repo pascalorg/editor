@@ -30,7 +30,7 @@ export const PresetThumbnailGenerator = () => {
       const relMatrix = new THREE.Matrix4()
 
       const clones: THREE.Object3D[] = []
-      target.traverse((obj) => {
+      target.traverse((obj: THREE.Object3D) => {
         if (
           !(obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points)
         )

@@ -9,7 +9,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'three'

@@ -16,7 +16,7 @@ import {
   triggerSFX,
   type WallPlanPoint,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { useEffect, useRef, useState } from 'react'
 import { BoxGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'

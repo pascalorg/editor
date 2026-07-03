@@ -2,7 +2,7 @@
 
 import { emitter, type GridEvent, PipeFittingNode, snapPointToGrid, useScene } from '@pascal-app/core'
 import { CursorSphere, triggerSFX } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useRef } from 'react'
 import type { Group } from 'three'
 import { pipeFittingDefinition } from './definition'

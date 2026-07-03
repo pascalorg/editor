@@ -1,9 +1,9 @@
 'use client'
 
 import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useFrame } from '@react-three/fiber'
-import type { Mesh } from 'three'
+import type { Mesh, Object3D } from 'three'
 import useEditor from '../store/use-editor'
 
 export const ViewerZoneSystem = () => {
@@ -29,7 +29,7 @@ export const ViewerZoneSystem = () => {
       const shouldShowGeometry =
         (structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected
       if (!obj.visible) obj.visible = true
-      obj.traverse((child) => {
+      obj.traverse((child: Object3D) => {
         if ((child as Mesh).isMesh) {
           child.visible = shouldShowGeometry
         }

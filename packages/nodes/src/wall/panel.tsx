@@ -20,7 +20,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Move, Spline } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { L, N, S } from '../i18n/panel-labels'

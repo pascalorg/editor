@@ -37,7 +37,7 @@ export function collectIsolationSubtree(ids: ReadonlyArray<string>): Set<Object3
   for (const id of ids) {
     const root = sceneRegistry.nodes.get(id)
     if (!root) continue
-    root.traverse((child) => {
+    root.traverse((child: Object3D) => {
       keep.add(child)
     })
   }
@@ -102,7 +102,7 @@ export function clearIsolation(): void {
   // walk every registered root + its descendants and restore any
   // stashed original-mask. `traverse` is cheap and idempotent here.
   for (const [, obj] of sceneRegistry.nodes) {
-    obj.traverse((child) => {
+    obj.traverse((child: Object3D) => {
       const carrier = child as IsolationCarrier
       if (carrier[ORIGINAL_LAYERS] !== undefined) {
         child.layers.mask = carrier[ORIGINAL_LAYERS]

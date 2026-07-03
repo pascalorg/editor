@@ -14,7 +14,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
@@ -193,8 +193,8 @@ export const CeilingTool: React.FC = () => {
     if (points.length === 0) {
       mainLineRef.current.visible = false
       closingLineRef.current.visible = false
-      groundMainLineRef.current && (groundMainLineRef.current.visible = false)
-      groundClosingLineRef.current && (groundClosingLineRef.current.visible = false)
+      if (groundMainLineRef.current) groundMainLineRef.current.visible = false
+      if (groundClosingLineRef.current) groundClosingLineRef.current.visible = false
       return
     }
     const ceilingY = levelY + CEILING_HEIGHT

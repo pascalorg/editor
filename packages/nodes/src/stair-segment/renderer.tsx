@@ -7,7 +7,9 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getStraightStairSegmentBodyMaterials, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { getStraightStairSegmentBodyMaterials } from '@pascal-app/viewer/stair-materials'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'

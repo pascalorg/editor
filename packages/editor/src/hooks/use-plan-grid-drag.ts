@@ -1,13 +1,8 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  emitter,
-  type GridEvent,
-  sceneRegistry,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { useEffect } from 'react'
+import type { Object3D } from 'three'
 import { lastGridMoveRef } from './use-grid-events'
 import { markToolCancelConsumed } from './use-keyboard'
 import { floorItemDragSuppressClickRef } from '../lib/floor-item-drag'
@@ -55,7 +50,7 @@ export function usePlanGridDrag({
     if (suppressMeshRaycast && nodeId) {
       const mesh = sceneRegistry.nodes.get(nodeId)
       if (mesh) {
-        mesh.traverse((child) => {
+        mesh.traverse((child: Object3D) => {
           const original = child.raycast
           child.raycast = () => {}
           restoreRaycasts.push(() => {

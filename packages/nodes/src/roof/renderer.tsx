@@ -1,13 +1,11 @@
 'use client'
 
 import { type RoofNode, useRegistry, useScene } from '@pascal-app/core'
-import {
-  createSafeEmptyGeometry,
-  getRoofMaterialArray,
-  NodeRenderer,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+import { NodeRenderer } from '@pascal-app/viewer/node-renderer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { getRoofMaterialArray } from '@pascal-app/viewer/roof-materials'
+import { createSafeEmptyGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { roofDebugMaterials, roofMaterials } from './roof-materials'

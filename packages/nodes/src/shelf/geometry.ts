@@ -3,7 +3,7 @@ import {
   applyMaterialPresetToMaterials,
   createMaterial,
   DEFAULT_SHELF_MATERIAL,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/materials'
 import { BoxGeometry, FrontSide, Group, type Material, Mesh, MeshStandardMaterial } from 'three'
 import type { ShelfNode } from './schema'
 

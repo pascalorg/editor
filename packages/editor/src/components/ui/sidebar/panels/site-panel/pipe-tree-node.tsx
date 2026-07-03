@@ -1,5 +1,5 @@
 import { type AnyNodeId, type PipeNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import Image from 'next/image'
 import { memo, useState } from 'react'
 import useEditor from '../../../../../store/use-editor'

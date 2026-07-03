@@ -2,7 +2,7 @@
 
 import { type CeilingNode, resolveLevelId, useScene } from '@pascal-app/core'
 import { PolygonEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback } from 'react'
 
 /**

@@ -23,8 +23,9 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Object3D } from 'three'
 
 export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
   const originalStartRef = useRef<[number, number]>([...node.start] as [number, number])
@@ -85,7 +86,7 @@ export const MoveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
     const mesh = sceneRegistry.nodes.get(node.id)
     const restoreRaycasts: Array<() => void> = []
     if (mesh) {
-      mesh.traverse((child) => {
+      mesh.traverse((child: Object3D) => {
         const original = child.raycast
         child.raycast = () => {}
         restoreRaycasts.push(() => {

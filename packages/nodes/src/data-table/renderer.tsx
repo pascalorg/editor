@@ -12,11 +12,13 @@ import {
   setRegistryHtmlDragOrigin,
   useEditor,
 } from '@pascal-app/editor'
-import { useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { useCallback, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { withOpacity } from '../shared/css-color'
+import { handleDataDisplayKeyboardNudge } from '../shared/data-display-keyboard'
 import { formatLiveDataPathValue, liveDataPathLabel } from '../shared/live-data-format'
 
 const DRAG_THRESHOLD_PX = 4
@@ -108,6 +110,7 @@ export default function DataTableRenderer({ node }: { node: DataTableNode }) {
           onMouseDown={handleHtmlSelect}
           onPointerDown={handleHtmlPointerDown}
           onKeyDown={(event) => {
+            if (handleDataDisplayKeyboardNudge(event, node)) return
             if (event.key === 'Enter' || event.key === ' ') handleHtmlSelect(event)
           }}
           role="button"

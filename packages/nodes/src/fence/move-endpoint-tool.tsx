@@ -12,7 +12,7 @@ import {
   useDragAction,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useState } from 'react'
 import { moveFenceEndpointDragAction } from './actions/move-endpoint'

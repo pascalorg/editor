@@ -17,7 +17,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import {
   memo,
   type PointerEvent as ReactPointerEvent,

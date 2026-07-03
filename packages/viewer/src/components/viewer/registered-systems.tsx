@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNodeDefinition, nodeRegistry } from '@pascal-app/core'
-import { type ComponentType, lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { type ComponentType, lazy, Suspense, useEffect, useState } from 'react'
 
 const DEFAULT_PRIORITY = 5
 
@@ -29,7 +29,7 @@ function loadSystem(def: AnyNodeDefinition): ComponentType | null {
  * guard added to each legacy system.
  */
 export function RegisteredSystems() {
-  const [registrySize, setRegistrySize] = useState(() => nodeRegistry.size)
+  const [, setRegistrySize] = useState(() => nodeRegistry.size)
 
   useEffect(() => {
     let previousSize = nodeRegistry.size
@@ -42,15 +42,13 @@ export function RegisteredSystems() {
     return () => window.clearInterval(interval)
   }, [])
 
-  const entries = useMemo(() => {
-    return Array.from(nodeRegistry.entries())
-      .filter(([, def]) => def.system != null)
-      .sort(([, a], [, b]) => {
-        const pa = a.system?.priority ?? DEFAULT_PRIORITY
-        const pb = b.system?.priority ?? DEFAULT_PRIORITY
-        return pa - pb
-      })
-  }, [registrySize])
+  const entries = Array.from(nodeRegistry.entries())
+    .filter(([, def]) => def.system != null)
+    .sort(([, a], [, b]) => {
+      const pa = a.system?.priority ?? DEFAULT_PRIORITY
+      const pb = b.system?.priority ?? DEFAULT_PRIORITY
+      return pa - pb
+    })
 
   if (entries.length === 0) return null
 

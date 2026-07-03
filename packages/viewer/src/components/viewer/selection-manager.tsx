@@ -4,16 +4,15 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
-  type ColumnNode,
   emitter,
-  getSelectableKinds,
-  type ItemNode,
+  getSceneSelectionConfig,
+  getSceneSelectionKinds,
   type LevelNode,
   type NodeEvent,
   pointInPolygon,
   sceneRegistry,
+  type SceneSelectionConfig,
   useScene,
-  type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
 import { useThree } from '@react-three/fiber'
@@ -26,26 +25,7 @@ const tempWorldPos = new Vector3()
 // Tolerance for edge detection (in meters)
 const EDGE_TOLERANCE = 0.5
 
-// Hardcoded kinds the viewer's selection manager knows about. Registry kinds
-// (any NodeDefinition with `capabilities.selectable`) are merged in at
 // runtime via getSelectableKinds() — Phase 6 collapses this into a single
-// registry-driven list.
-type SelectableNodeType =
-  | 'building'
-  | 'level'
-  | 'zone'
-  | 'wall'
-  | 'fence'
-  | 'window'
-  | 'door'
-  | 'column'
-  | 'item'
-  | 'slab'
-  | 'ceiling'
-  | 'roof'
-  | 'roof-segment'
-  | (string & {})
-
 // Expand polygon outward by a small amount to include items on edges
 const expandPolygon = (polygon: [number, number][], tolerance: number): [number, number][] => {
   if (polygon.length < 3) return polygon
@@ -85,27 +65,47 @@ const pointInPolygonWithTolerance = (
 }
 
 interface SelectionStrategy {
-  types: SelectableNodeType[]
   handleClick: (node: AnyNode, nativeEvent?: MouseEvent) => void
   handleDeselect: () => void
   isValid: (node: AnyNode) => boolean
 }
 
-function useNodeRegistryVersion() {
-  const [registryVersion, setRegistryVersion] = useState(() => getSelectableKinds().length)
+function useSceneSelectionKinds() {
+  const [selectionKinds, setSelectionKinds] = useState(() => getSceneSelectionKinds())
 
   useEffect(() => {
-    let previousCount = getSelectableKinds().length
+    let previousKey = getSceneSelectionKinds().join('\0')
     const interval = window.setInterval(() => {
-      const nextCount = getSelectableKinds().length
-      if (nextCount === previousCount) return
-      previousCount = nextCount
-      setRegistryVersion(nextCount)
+      const nextKinds = getSceneSelectionKinds()
+      const nextKey = nextKinds.join('\0')
+      if (nextKey === previousKey) return
+      previousKey = nextKey
+      setSelectionKinds(nextKinds)
     }, 250)
     return () => window.clearInterval(interval)
   }, [])
 
-  return registryVersion
+  return selectionKinds
+}
+
+function getSceneSelection(node: AnyNode): SceneSelectionConfig | undefined {
+  return getSceneSelectionConfig(node.type)
+}
+
+function hasSelectionRole(node: AnyNode, role: NonNullable<SceneSelectionConfig['role']>): boolean {
+  return getSceneSelection(node)?.role === role
+}
+
+function canRouteHover(node: AnyNode): boolean {
+  return getSceneSelection(node)?.hover !== false
+}
+
+function canRouteClick(node: AnyNode): boolean {
+  return getSceneSelection(node)?.click !== false
+}
+
+function canOutline(node: AnyNode | undefined): boolean {
+  return node ? getSceneSelection(node)?.outline !== false : false
 }
 
 // Check if a node belongs to the selected level (directly or via wall parent)
@@ -115,17 +115,12 @@ const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
   // Direct child of level
   if (node.parentId === levelId) return true
 
-  // Wall-attached nodes (window/door/item): check if parent wall is on the level
-  if ((node.type === 'item' || node.type === 'window' || node.type === 'door') && node.parentId) {
+  const levelParentKinds = getSceneSelection(node)?.levelParentKinds
+  if (levelParentKinds?.length && node.parentId) {
     const parentNode = nodes[node.parentId as keyof typeof nodes]
-    if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
-      return true
-    }
-    // Ceiling/slab/roof-attached items: check if parent structure is on the level
     if (
-      (parentNode?.type === 'ceiling' ||
-        parentNode?.type === 'slab' ||
-        parentNode?.type === 'roof') &&
+      parentNode &&
+      levelParentKinds.includes(parentNode.type) &&
       parentNode.parentId === levelId
     ) {
       return true
@@ -151,49 +146,34 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
     return pointInPolygonWithTolerance(tempWorldPos.x, tempWorldPos.z, zone.polygon)
   }
 
-  // Fallback to node data if 3D object not available
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    return pointInPolygonWithTolerance(item.position[0], item.position[2], zone.polygon)
+  const zoneFootprint = getSceneSelection(node)?.zoneFootprint
+
+  if (zoneFootprint === 'position') {
+    const position = (node as { position?: [number, number, number] }).position
+    return position ? pointInPolygonWithTolerance(position[0], position[2], zone.polygon) : false
   }
 
-  if (node.type === 'column') {
-    const column = node as ColumnNode
-    return pointInPolygonWithTolerance(column.position[0], column.position[2], zone.polygon)
-  }
-
-  if (node.type === 'wall') {
-    const wall = node as WallNode
-    const startIn = pointInPolygonWithTolerance(wall.start[0], wall.start[1], zone.polygon)
-    const endIn = pointInPolygonWithTolerance(wall.end[0], wall.end[1], zone.polygon)
+  if (zoneFootprint === 'segment') {
+    const segment = node as { start?: [number, number]; end?: [number, number] }
+    if (!(segment.start && segment.end)) return false
+    const startIn = pointInPolygonWithTolerance(segment.start[0], segment.start[1], zone.polygon)
+    const endIn = pointInPolygonWithTolerance(segment.end[0], segment.end[1], zone.polygon)
     return startIn || endIn
   }
 
-  if (node.type === 'fence') {
-    const fence = node as { start: [number, number]; end: [number, number] }
-    const startIn = pointInPolygonWithTolerance(fence.start[0], fence.start[1], zone.polygon)
-    const endIn = pointInPolygonWithTolerance(fence.end[0], fence.end[1], zone.polygon)
-    return startIn || endIn
-  }
-
-  if (node.type === 'slab' || node.type === 'ceiling') {
-    const poly = (node as { polygon: [number, number][] }).polygon
+  if (zoneFootprint === 'polygon') {
+    const poly = (node as { polygon?: [number, number][] }).polygon
     if (!poly?.length) return false
-    // Check if any point of the node's polygon is in the zone (with tolerance)
     for (const [px, pz] of poly) {
       if (pointInPolygonWithTolerance(px, pz, zone.polygon)) return true
     }
-    // Check if any point of the zone is in the node's polygon
     for (const [zx, zz] of zone.polygon) {
       if (pointInPolygon(zx, zz, poly)) return true
     }
     return false
   }
 
-  if (node.type === 'roof' || node.type === 'roof-segment') {
-    // Roofs on the same level are valid when zone is selected
-    return true
-  }
+  if (zoneFootprint === 'always') return true
 
   return false
 }
@@ -218,64 +198,50 @@ const getStrategy = (): SelectionStrategy | null => {
   // No building selected -> can select buildings
   if (!buildingId) {
     return {
-      types: ['building'],
       handleClick: (node) => {
         useViewer.getState().setSelection({ buildingId: (node as BuildingNode).id })
       },
       handleDeselect: () => {
         // Nothing to deselect at root level
       },
-      isValid: (node) => node.type === 'building',
+      isValid: (node) => hasSelectionRole(node, 'building'),
     }
   }
 
   // Building selected, no level -> can select levels
   if (!levelId) {
     return {
-      types: ['level'],
       handleClick: (node) => {
         useViewer.getState().setSelection({ levelId: (node as LevelNode).id })
       },
       handleDeselect: () => {
         useViewer.getState().setSelection({ buildingId: null })
       },
-      isValid: (node) => node.type === 'level',
+      isValid: (node) => hasSelectionRole(node, 'level'),
     }
   }
 
   // Level selected, no zone -> can select zones (only zones on the selected level)
   if (!zoneId) {
     return {
-      types: ['zone'],
       handleClick: (node) => {
         useViewer.getState().setSelection({ zoneId: (node as ZoneNode).id })
       },
       handleDeselect: () => {
         useViewer.getState().setSelection({ levelId: null })
       },
-      isValid: (node) => node.type === 'zone' && node.parentId === levelId,
+      isValid: (node) => hasSelectionRole(node, 'zone') && node.parentId === levelId,
     }
   }
 
   // Zone selected -> can select/hover contents (walls, items, columns, slabs, ceilings, roofs, windows, doors)
   return {
-    types: [
-      'wall',
-      'fence',
-      'item',
-      'column',
-      'slab',
-      'ceiling',
-      'roof',
-      'roof-segment',
-      'window',
-      'door',
-    ],
     handleClick: (node, nativeEvent) => {
       let nodeToSelect = node
-      if (node.type === 'roof-segment' && node.parentId) {
+      const selectParentKind = getSceneSelection(node)?.selectParentKind
+      if (selectParentKind && node.parentId) {
         const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-        if (parentNode && parentNode.type === 'roof') {
+        if (parentNode && parentNode.type === selectParentKind) {
           nodeToSelect = parentNode
         }
       }
@@ -295,19 +261,7 @@ const getStrategy = (): SelectionStrategy | null => {
       }
     },
     isValid: (node) => {
-      const validTypes = [
-        'wall',
-        'fence',
-        'item',
-        'column',
-        'slab',
-        'ceiling',
-        'roof',
-        'roof-segment',
-        'window',
-        'door',
-      ]
-      if (!validTypes.includes(node.type)) return false
+      if (!hasSelectionRole(node, 'zone-content')) return false
       return isNodeInZone(node, levelId, zoneId)
     },
   }
@@ -316,23 +270,15 @@ const getStrategy = (): SelectionStrategy | null => {
 export const SelectionManager = () => {
   const selection = useViewer((s) => s.selection)
   const clickHandledRef = useRef(false)
-  const registryVersion = useNodeRegistryVersion()
+  const sceneSelectionKinds = useSceneSelectionKinds()
 
   useEffect(() => {
     const onEnter = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
-      // Ceilings are selected via their floor-plan helper and the
-      // boundary-editor vertex handles, never via a direct 3D click on
-      // the polygon. Skipping selection routing here means a click on a
-      // ceiling falls through to the item / wall / floor below it.
-      if (event.node.type === 'ceiling') return
+      if (!canRouteHover(event.node)) return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
-        if (event.node.type === 'slab') {
-          useViewer.setState({ hoveredId: null })
-          return
-        }
         useViewer.setState({ hoveredId: event.node.id })
       }
     }
@@ -340,7 +286,7 @@ export const SelectionManager = () => {
     const onLeave = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
-      if (event.node.type === 'ceiling') return
+      if (!canRouteHover(event.node)) return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
         useViewer.setState({ hoveredId: null })
@@ -350,7 +296,7 @@ export const SelectionManager = () => {
     const onClick = (event: NodeEvent) => {
       const strategy = getStrategy()
       if (!strategy) return
-      if (event.node.type === 'ceiling') return
+      if (!canRouteClick(event.node)) return
       if (!strategy.isValid(event.node)) return
 
       event.stopPropagation()
@@ -360,43 +306,20 @@ export const SelectionManager = () => {
       useViewer.setState({ hoveredId: null })
     }
 
-    // Subscribe to all node types. Hardcoded kinds + registry-supplied kinds
-    // (any NodeDefinition declaring `capabilities.selectable`). Phase 6
-    // collapses these into a single registry-driven list.
-    const allTypes: SelectableNodeType[] = [
-      'building',
-      'level',
-      'zone',
-      'wall',
-      'fence',
-      'item',
-      'column',
-      'slab',
-      'ceiling',
-      'roof',
-      'roof-segment',
-      'window',
-      'door',
-    ]
-    const registryKinds = getSelectableKinds().filter(
-      (k) => !(allTypes as readonly string[]).includes(k),
-    ) as SelectableNodeType[]
-    const subscribedKinds = [...allTypes, ...registryKinds]
-
-    for (const type of subscribedKinds) {
+    for (const type of sceneSelectionKinds) {
       emitter.on(`${type}:enter` as any, onEnter as any)
       emitter.on(`${type}:leave` as any, onLeave as any)
       emitter.on(`${type}:click` as any, onClick as any)
     }
 
     return () => {
-      for (const type of subscribedKinds) {
+      for (const type of sceneSelectionKinds) {
         emitter.off(`${type}:enter` as any, onEnter as any)
         emitter.off(`${type}:leave` as any, onLeave as any)
         emitter.off(`${type}:click` as any, onClick as any)
       }
     }
-  }, [registryVersion])
+  }, [sceneSelectionKinds])
 
   return (
     <>
@@ -458,13 +381,7 @@ const OutlinerSync = () => {
     outliner.selectedObjects.length = 0
     for (const id of selection.selectedIds) {
       const node = nodes[id as AnyNodeId]
-      if (node?.type === 'slab') continue
-      if (
-        node?.type === 'data-widget' ||
-        node?.type === 'data-chart' ||
-        node?.type === 'data-table'
-      )
-        continue
+      if (!canOutline(node)) continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj) outliner.selectedObjects.push(obj)
     }
@@ -473,13 +390,7 @@ const OutlinerSync = () => {
     outliner.hoveredObjects.length = 0
     if (hoveredId) {
       const hoveredNode = nodes[hoveredId as AnyNodeId]
-      if (hoveredNode?.type === 'slab') return
-      if (
-        hoveredNode?.type === 'data-widget' ||
-        hoveredNode?.type === 'data-chart' ||
-        hoveredNode?.type === 'data-table'
-      )
-        return
+      if (!canOutline(hoveredNode)) return
       const obj = sceneRegistry.nodes.get(hoveredId)
       if (obj) outliner.hoveredObjects.push(obj)
     }

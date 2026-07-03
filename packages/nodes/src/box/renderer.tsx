@@ -3,18 +3,20 @@
 import { type BoxNode, type PrimitiveCutoutInput, useRegistry, useScene } from '@pascal-app/core'
 import {
   Brush,
-  createDefaultMaterial,
-  createMaterial,
-  createMaterialFromPresetRef,
   csgEvaluator,
   csgGeometry,
-  ensureWebGPUCompatibleGeometry,
   ensureRenderableGeometryAttributes,
   prepareBrushForCSG,
   SUBTRACTION,
-  useNodeEvents,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/csg-utils'
+import {
+  createDefaultMaterial,
+  createMaterial,
+  createMaterialFromPresetRef,
+} from '@pascal-app/viewer/materials'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { ensureWebGPUCompatibleGeometry } from '@pascal-app/viewer/safe-geometry'
+import useViewer from '@pascal-app/viewer/store'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'

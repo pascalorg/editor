@@ -1,7 +1,9 @@
 'use client'
 
 import { useRegistry, useScene, type WindowNode } from '@pascal-app/core'
-import { createDefaultMaterial, createMaterial, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { createDefaultMaterial, createMaterial } from '@pascal-app/viewer/materials'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import useViewer from '@pascal-app/viewer/store'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 

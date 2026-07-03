@@ -9,7 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { CursorSphere, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useRef } from 'react'
 import { type Group, Vector3 } from 'three'
 

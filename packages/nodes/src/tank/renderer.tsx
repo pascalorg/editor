@@ -1,7 +1,7 @@
 'use client'
 
 import { type TankNode, useRegistry, useScene } from '@pascal-app/core'
-import { useNodeEvents } from '@pascal-app/viewer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'

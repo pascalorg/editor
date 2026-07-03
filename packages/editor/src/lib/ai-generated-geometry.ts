@@ -1,10 +1,7 @@
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import useEditor from '../store/use-editor'
-import type {
-  GeneratedGeometryArtifact,
-  GeneratedGeometryShapeSpec,
-} from './ai-generated-geometry-core'
+import type { GeneratedGeometryArtifact } from './ai-generated-geometry-core'
 import {
   buildGeneratedGeometryCreatePatches,
   markGeneratedPlacementDraft,

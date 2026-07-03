@@ -7,7 +7,8 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import { GRID_LAYER, ZONE_LAYER } from '@pascal-app/viewer/layers'
+import useViewer from '@pascal-app/viewer/store'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'

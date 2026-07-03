@@ -18,7 +18,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { getRoofTypeOptions, L, N, S } from '../i18n/panel-labels'

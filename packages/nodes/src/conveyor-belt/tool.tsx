@@ -21,7 +21,7 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group, Mesh, Object3D } from 'three'
 import { buildConveyorBeltGeometry } from './geometry'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import type { Mesh, Object3D } from 'three'

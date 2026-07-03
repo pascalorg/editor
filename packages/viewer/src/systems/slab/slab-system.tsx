@@ -23,27 +23,6 @@ function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
   geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
-const polygonBounds = (polygon: ReadonlyArray<readonly [number, number]>) => {
-  let minX = Number.POSITIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
-  for (const [x, z] of polygon) {
-    minX = Math.min(minX, x)
-    minZ = Math.min(minZ, z)
-    maxX = Math.max(maxX, x)
-    maxZ = Math.max(maxZ, z)
-  }
-  return { minX, minZ, maxX, maxZ, width: maxX - minX, depth: maxZ - minZ }
-}
-
-const signedArea2 = (polygon: ReadonlyArray<readonly [number, number]>) =>
-  polygon.reduce((sum, point, index) => {
-    const next = polygon[(index + 1) % polygon.length]
-    if (!next) return sum
-    return sum + point[0] * next[1] - next[0] * point[1]
-  }, 0)
-
 // ============================================================================
 // SLAB SYSTEM
 // ============================================================================
@@ -101,29 +80,6 @@ function updateSlabGeometry(node: SlabNode, mesh: THREE.Mesh) {
 
   newGeo.computeBoundingBox()
   mesh.updateMatrixWorld(true)
-  const meshWorldBox = new THREE.Box3().setFromObject(mesh)
-  console.log('[pascal:slab:update]', {
-    id: node.id,
-    parentId: node.parentId,
-    elevation,
-    meshY: mesh.position.y,
-    holeCount: node.holes?.length ?? 0,
-    holes: node.holes ?? [],
-    rawPolygonBounds: polygonBounds(node.polygon),
-    rawPolygon: node.polygon,
-    geometryBoundingBox: newGeo.boundingBox
-      ? {
-          min: newGeo.boundingBox.min.toArray(),
-          max: newGeo.boundingBox.max.toArray(),
-        }
-      : null,
-    meshWorldBoundingBox: meshWorldBox.isEmpty()
-      ? null
-      : {
-          min: meshWorldBox.min.toArray(),
-          max: meshWorldBox.max.toArray(),
-        },
-  })
 }
 
 /**
@@ -271,7 +227,6 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
   const indices: number[] = []
-  let floorTriCount = 0
   const bounds = new THREE.Box2()
 
   for (const [x, z] of polygon) {
@@ -309,7 +264,6 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
     }
 
     const floorTris = THREE.ShapeUtils.triangulateShape(pts2d, holesPts2d)
-    floorTriCount += floorTris.length
     for (const tri of floorTris) {
       // Reversed winding ? normals point +Y (upward) in XZ plane
       indices.push(floorBase + tri[0]!, floorBase + tri[2]!, floorBase + tri[1]!)
@@ -340,32 +294,6 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   geo.setIndex(indices)
   geo.computeVertexNormals()
   geo.computeBoundingBox()
-  console.log('[pascal:slab:pool-geometry]', {
-    id: slabNode.id,
-    parentId: slabNode.parentId,
-    elevation: slabNode.elevation ?? 0.05,
-    depth,
-    rawPolygonBounds: polygonBounds(slabNode.polygon),
-    rawPolygonArea2: signedArea2(slabNode.polygon),
-    rawPolygon: slabNode.polygon,
-    renderablePolygonBounds: polygonBounds(rawRenderablePolygon),
-    renderablePolygonArea2: signedArea2(rawRenderablePolygon),
-    renderablePolygon: rawRenderablePolygon,
-    holePolygons,
-    normalizedPolygonBounds: polygonBounds(polygon),
-    normalizedPolygonArea2: signedArea2(polygon),
-    normalizedPolygon: polygon,
-    holeCount: holePolygons.length,
-    floorTriCount,
-    vertexCount: positions.length / 3,
-    indexCount: indices.length,
-    geometryBoundingBox: geo.boundingBox
-      ? {
-          min: geo.boundingBox.min.toArray(),
-          max: geo.boundingBox.max.toArray(),
-        }
-      : null,
-  })
 
   return ensureWebGPUCompatibleGeometry(geo)
 }

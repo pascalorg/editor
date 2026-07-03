@@ -15,7 +15,7 @@ import {
 } from '@pascal-app/core'
 import { createModelNodes } from '@pascal-app/articraft-bridge/scene-converter'
 import type { ArticraftModelData } from '@pascal-app/articraft-bridge/types'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { Icon } from '@iconify/react'
 import { ExternalLink, Move, Pause, Play, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'

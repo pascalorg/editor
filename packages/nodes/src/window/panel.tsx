@@ -22,7 +22,7 @@ import {
   useEditor,
   usePresetsAdapter,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import { BookMarked, Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
 import { L, N, S, windowTypeLabel } from '../i18n/panel-labels'

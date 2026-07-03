@@ -1,9 +1,4 @@
-import {
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  isPipeNearlyVertical,
-  samplePipeCenterline3D,
-} from '@pascal-app/core'
+import { getWallCurveLength, isPipeNearlyVertical, samplePipeCenterline3D } from '@pascal-app/core'
 import {
   CatmullRomCurve3,
   Group,

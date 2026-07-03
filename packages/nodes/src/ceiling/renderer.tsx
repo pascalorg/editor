@@ -7,7 +7,9 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { createSafeEmptyGeometry, NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import { NodeRenderer } from '@pascal-app/viewer/node-renderer'
+import { useNodeEvents } from '@pascal-app/viewer/node-events'
+import { createSafeEmptyGeometry } from '@pascal-app/viewer/safe-geometry'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { float, mix, positionWorld, smoothstep } from 'three/tsl'
 import { BackSide, FrontSide, type Mesh, MeshBasicNodeMaterial } from 'three/webgpu'

@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import useViewer from '@pascal-app/viewer/store'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
 import useEditor from './../../../../../store/use-editor'
