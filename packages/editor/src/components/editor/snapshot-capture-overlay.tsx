@@ -24,12 +24,23 @@ interface Drag {
   end: DragPoint
 }
 
+// Output presets for `standard` captures — long edge stays near 1920.
+const STANDARD_SIZES = {
+  '16:9': { w: 1920, h: 1080 },
+  '9:16': { w: 1080, h: 1920 },
+  '4:3': { w: 1920, h: 1440 },
+  '3:4': { w: 1440, h: 1920 },
+  '1:1': { w: 1440, h: 1440 },
+} as const
+type StandardAspect = keyof typeof STANDARD_SIZES
+
 function getResolution(
   mode: CropMode,
   overlayEl: HTMLDivElement | null,
   drag: Drag | null,
+  standardAspect: StandardAspect,
 ): { w: number; h: number } | null {
-  if (mode === 'standard') return { w: 1920, h: 1080 }
+  if (mode === 'standard') return STANDARD_SIZES[standardAspect]
 
   if (!overlayEl) return null
   const rect = overlayEl.getBoundingClientRect()
@@ -96,6 +107,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
 
   const [mode, setMode] = useState<CropMode>('standard')
+  const [standardAspect, setStandardAspect] = useState<StandardAspect>('16:9')
+  const [aspectMenuOpen, setAspectMenuOpen] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
@@ -132,6 +145,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!isCaptureMode) return
     setMode(isPreset ? 'area' : (requestedCrop ?? 'standard'))
+    setAspectMenuOpen(false)
     setIsDragging(false)
     setCaptureState('idle')
     if (isPreset && overlayRef.current) {
@@ -314,23 +328,26 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       projectId,
       captureMode: mode,
       cropRegion,
+      standardSize: mode === 'standard' ? STANDARD_SIZES[standardAspect] : undefined,
       // In preset mode, the ThumbnailGenerator should keep the alpha
       // channel transparent so the saved preset thumbnail composes
       // cleanly onto any palette background.
       transparent: isPreset,
     })
-  }, [captureState, mode, drag, projectId, isPreset])
+  }, [captureState, mode, drag, projectId, isPreset, standardAspect])
 
   if (!isCaptureMode) return null
 
-  const resolution = getResolution(mode, overlayRef.current, drag)
+  const resolution = getResolution(mode, overlayRef.current, drag, standardAspect)
 
-  // Standard mode framing: the output is a center-crop of the canvas to 16:9
-  // (see ThumbnailGenerator) — show exactly that region as a letterboxed frame.
+  // Standard mode framing: the output is a center-crop of the canvas to the
+  // chosen aspect (see ThumbnailGenerator) — show exactly that region as a
+  // letterboxed frame.
   const standardFrame =
     mode === 'standard' && overlaySize
       ? (() => {
-          const targetRatio = 16 / 9
+          const size = STANDARD_SIZES[standardAspect]
+          const targetRatio = size.w / size.h
           const w = Math.min(overlaySize.w, overlaySize.h * targetRatio)
           const h = w / targetRatio
           return {
@@ -510,20 +527,47 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         </button>
       </div>
 
+      {/* Subtle scrim so the bottom controls stay readable on bright scenes */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
+
       {/* Bottom-center: crop switcher, caption + shutter */}
       <div className="pointer-events-none absolute right-0 bottom-5 left-0 flex flex-col items-center gap-2.5">
         {!isPreset && (
-          <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+            {/* Clicking Standard while it's active opens the aspect picker */}
             <ModeButton
               active={mode === 'standard'}
-              badge="16:9"
+              badge={standardAspect}
               icon={<Monitor className="h-3.5 w-3.5" />}
               label={isMobile ? undefined : 'Standard'}
               onClick={() => {
+                if (mode === 'standard') setAspectMenuOpen((v) => !v)
+                else setAspectMenuOpen(false)
                 setMode('standard')
                 setDrag(null)
               }}
             />
+            {aspectMenuOpen && mode === 'standard' && (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl backdrop-blur-md">
+                {(Object.keys(STANDARD_SIZES) as StandardAspect[]).map((aspect) => (
+                  <button
+                    className={`rounded-full px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                      aspect === standardAspect
+                        ? 'bg-white/15 text-white ring-1 ring-white/20'
+                        : 'text-white/55 hover:text-white/90'
+                    }`}
+                    key={aspect}
+                    onClick={() => {
+                      setStandardAspect(aspect)
+                      setAspectMenuOpen(false)
+                    }}
+                    type="button"
+                  >
+                    {aspect}
+                  </button>
+                ))}
+              </div>
+            )}
             <ModeButton
               active={mode === 'viewport'}
               icon={<Maximize2 className="h-3.5 w-3.5" />}
@@ -531,13 +575,17 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               onClick={() => {
                 setMode('viewport')
                 setDrag(null)
+                setAspectMenuOpen(false)
               }}
             />
             <ModeButton
               active={mode === 'area'}
               icon={<Crop className="h-3.5 w-3.5" />}
               label={isMobile ? undefined : 'Area'}
-              onClick={() => setMode('area')}
+              onClick={() => {
+                setMode('area')
+                setAspectMenuOpen(false)
+              }}
             />
             {isMobile && (
               <span className="px-2 text-white/50 text-xs tabular-nums">
@@ -549,8 +597,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
         {!isMobile && (
           <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
-            A <b className="font-semibold text-white">snapshot</b> freezes this exact camera angle
-            as a reusable reference for renders &amp; videos.
+            A <b className="font-semibold text-white">snapshot</b>
+            {' freezes this exact camera angle as a reusable reference for renders & videos.'}
           </span>
         )}
 
