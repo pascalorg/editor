@@ -48,7 +48,7 @@ import {
 } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import {
   type ActivePaintMaterial,
   type PaintableMaterialTarget,
@@ -657,6 +657,47 @@ export function selectDefaultBuildingAndLevel() {
 
 let viewModeBeforeCapture: ViewMode | null = null
 
+const unavailableEditorStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+}
+
+function getEditorPreferenceStorage(): StateStorage {
+  if (typeof window === 'undefined') return unavailableEditorStorage
+
+  let storage: Storage
+  try {
+    storage = window.localStorage
+  } catch {
+    return unavailableEditorStorage
+  }
+
+  return {
+    getItem: (name) => {
+      try {
+        return storage.getItem(name)
+      } catch {
+        return null
+      }
+    },
+    setItem: (name, value) => {
+      try {
+        storage.setItem(name, value)
+      } catch {
+        return undefined
+      }
+    },
+    removeItem: (name) => {
+      try {
+        storage.removeItem(name)
+      } catch {
+        return undefined
+      }
+    },
+  }
+}
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -1034,6 +1075,7 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
+      storage: createJSONStorage(getEditorPreferenceStorage),
       merge: (persistedState, currentState) => ({
         ...currentState,
         ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),

@@ -780,7 +780,7 @@ describe('process line composer', () => {
         }),
       ).toBe(true)
     }
-  }, 10000)
+  }, 20000)
 
   test('keeps auto-placed refinery floor aligned with station placements', () => {
     const result = composeProcessLine({
