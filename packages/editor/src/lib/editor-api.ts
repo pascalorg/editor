@@ -1,62 +1,22 @@
 import type {
   AnyNode,
-  CableTrayNode,
-  ConveyorBeltNode,
   EditorApi,
-  FenceNode,
-  PipeNode,
-  RoadNode,
-  SteelBeamNode,
-  WallNode,
 } from '@pascal-app/core'
+import { nodeRegistry } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 
 type EditorState = ReturnType<typeof useEditor.getState>
-type EndpointEngager = (node: AnyNode, endpoint: 'start' | 'end', editor: EditorState) => void
-type CurveEngager = (node: AnyNode, editor: EditorState) => void
 
-/**
- * Per-kind endpoint-move engagement. Kinds whose 2D endpoint drag
- * needs its own store field (wall ↔ `movingWallEndpoint`, fence ↔
- * `movingFenceEndpoint`) register their bridge here. The dispatcher
- * is a table lookup rather than an `if (type === 'wall')` chain so
- * adding a new endpoint-draggable kind is a one-line entry instead
- * of a new branch. Each entry casts the generic `AnyNode` to its
- * concrete kind — the lookup key already guarantees the type.
- */
-const endpointEngagers: Record<string, EndpointEngager> = {
-  wall: (node, endpoint, editor) =>
-    editor.setMovingWallEndpoint({ wall: node as WallNode, endpoint }),
-  fence: (node, endpoint, editor) =>
-    editor.setMovingFenceEndpoint({ fence: node as FenceNode, endpoint }),
-  pipe: (node, endpoint, editor) =>
-    editor.setMovingPipeEndpoint({ pipe: node as PipeNode, endpoint }),
-  'cable-tray': (node, endpoint, editor) =>
-    editor.setMovingCableTrayEndpoint({
-      cableTray: node as CableTrayNode,
-      endpoint,
-    }),
-  'conveyor-belt': (node, endpoint, editor) =>
-    editor.setMovingConveyorBeltEndpoint({
-      conveyorBelt: node as ConveyorBeltNode,
-      endpoint,
-    }),
-  road: (node, endpoint, editor) =>
-    editor.setMovingRoadEndpoint({ road: node as RoadNode, endpoint }),
-  'steel-beam': (node, endpoint, editor) =>
-    editor.setMovingSteelBeamEndpoint({
-      steelBeam: node as SteelBeamNode,
-      endpoint,
-    }),
+function endpointTargetKey(kind: string) {
+  return kind.replace(/-([a-z])/g, (_, char: string) => char.toUpperCase())
 }
 
-const curveEngagers: Record<string, CurveEngager> = {
-  wall: (node, editor) => editor.setCurvingWall(node as WallNode),
-  fence: (node, editor) => editor.setCurvingFence(node as FenceNode),
-  pipe: (node, editor) => editor.setCurvingPipe(node as PipeNode),
-  'cable-tray': (node, editor) => editor.setCurvingCableTray(node as CableTrayNode),
-  road: (node, editor) => editor.setCurvingRoad(node as RoadNode),
-  'steel-beam': (node, editor) => editor.setCurvingSteelBeam(node as SteelBeamNode),
+function endpointTarget(node: AnyNode, endpoint: 'start' | 'end') {
+  return {
+    [endpointTargetKey(node.type)]: node,
+    node,
+    endpoint,
+  }
 }
 
 function clearEndpointAndCurveState(editor: EditorState) {
@@ -73,6 +33,7 @@ function clearEndpointAndCurveState(editor: EditorState) {
   editor.setCurvingCableTray(null)
   editor.setCurvingRoad(null)
   editor.setCurvingSteelBeam(null)
+  editor.setActiveAffordance(null)
 }
 
 /**
@@ -108,13 +69,32 @@ export function createEditorApi(): EditorApi {
       const editor = useEditor.getState()
       editor.setMovingNode(null)
       clearEndpointAndCurveState(editor)
-      endpointEngagers[node.type]?.(node, endpoint, editor)
+      const def = nodeRegistry.get(node.type)
+      const affordance = def?.actionMenu?.endpointMove?.affordance ?? 'move-endpoint'
+      if (!def?.affordanceTools?.[affordance]) return
+      const target = endpointTarget(node, endpoint)
+      editor.setActiveAffordance({
+        node,
+        affordance,
+        props: {
+          endpoint,
+          node,
+          target,
+        },
+      })
     },
     engageCurve(node: AnyNode) {
       const editor = useEditor.getState()
       editor.setMovingNode(null)
       clearEndpointAndCurveState(editor)
-      curveEngagers[node.type]?.(node, editor)
+      const def = nodeRegistry.get(node.type)
+      const affordance = def?.actionMenu?.curve?.affordance ?? 'curve'
+      if (!def?.affordanceTools?.[affordance]) return
+      editor.setActiveAffordance({
+        node,
+        affordance,
+        props: { node },
+      })
     },
   }
 }

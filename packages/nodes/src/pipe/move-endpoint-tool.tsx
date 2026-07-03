@@ -28,6 +28,7 @@ export const MovePipeEndpointTool: React.FC<{ target: MovingPipeEndpoint }> = ({
     if (committed) triggerSFX('sfx:item-place')
     useViewer.getState().setSelection({ selectedIds: [pipeId] })
     useEditor.getState().setMovingPipeEndpoint(null)
+    useEditor.getState().setActiveAffordance(null)
   }
 
   useDragAction({

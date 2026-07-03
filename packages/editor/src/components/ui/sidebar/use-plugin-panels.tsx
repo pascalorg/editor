@@ -1,8 +1,9 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef, panelRegistry, type PluginPanel } from '@pascal-app/core'
+import { type IconRef, panelRegistry, type PanelWorkspace, type PluginPanel } from '@pascal-app/core'
 import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
+import useEditor from '../../../store/use-editor'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 
@@ -80,7 +81,9 @@ export function usePluginPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
     panelRegistry.getSnapshot,
     panelRegistry.getSnapshot,
   )
-  const workspaceMode = 'edit'
+  const workspaceMode = useEditor((s): PanelWorkspace =>
+    s.isPreviewMode || s.isFirstPersonMode ? 'studio' : 'edit',
+  )
   const hostIds = new Set(hostPanels?.map((p) => p.id))
   const fromRegistry = registered
     .filter((p) => !hostIds.has(p.id) && (p.workspaces ?? ['edit']).includes(workspaceMode))

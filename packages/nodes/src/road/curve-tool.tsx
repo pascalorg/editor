@@ -41,6 +41,7 @@ export const CurveRoadTool: React.FC<{ node: RoadNode }> = ({ node }) => {
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingRoad(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {

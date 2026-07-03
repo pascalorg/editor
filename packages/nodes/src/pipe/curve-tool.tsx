@@ -42,6 +42,7 @@ export const CurvePipeTool: React.FC<{ node: PipeNode }> = ({ node }) => {
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingPipe(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {

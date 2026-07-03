@@ -52,6 +52,7 @@ export const CurveFenceTool: React.FC<{ node: FenceNode }> = ({ node }) => {
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingFence(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {

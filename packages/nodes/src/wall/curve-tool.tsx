@@ -47,6 +47,7 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingWall(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {

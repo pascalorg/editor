@@ -2,12 +2,13 @@ import {
   type AnyNodeId,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  snapPointToGrid,
   type SlabNode,
   sceneRegistry,
   useLiveTransforms,
   useScene,
+  type WallPlanPoint,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 import type * as THREE from 'three'
 
 /**
@@ -67,7 +68,7 @@ export const slabFloorplanMoveTarget: FloorplanMoveTarget<SlabNode> = ({ node })
     apply({ planPoint, modifiers }) {
       const snapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : ([...snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)] as WallPlanPoint)
       if (!anchor) {
         anchor = [snapped[0], snapped[1]]
         return

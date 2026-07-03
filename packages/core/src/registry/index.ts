@@ -79,7 +79,6 @@ export type {
   NudgeDelta,
   NodeRegistry,
   PanelWorkspace,
-  ParamAction,
   ParametricDescriptor,
   ParamField,
   ParamGroup,

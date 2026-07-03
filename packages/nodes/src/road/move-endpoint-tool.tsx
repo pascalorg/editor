@@ -54,6 +54,7 @@ export const MoveRoadEndpointTool: React.FC<{ target: MovingRoadEndpoint }> = ({
       if (committed) triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [roadId] })
       useEditor.getState().setMovingRoadEndpoint(null)
+      useEditor.getState().setActiveAffordance(null)
     },
     [roadId],
   )

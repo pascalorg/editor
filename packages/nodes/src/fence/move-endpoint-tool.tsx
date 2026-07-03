@@ -95,6 +95,7 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
     if (committed) triggerSFX('sfx:item-place')
     useViewer.getState().setSelection({ selectedIds: [fenceId] })
     useEditor.getState().setMovingFenceEndpoint(null)
+    useEditor.getState().setActiveAffordance(null)
   }
 
   useDragAction({

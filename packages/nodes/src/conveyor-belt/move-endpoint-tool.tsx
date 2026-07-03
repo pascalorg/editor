@@ -110,6 +110,7 @@ export const MoveConveyorBeltEndpointTool: React.FC<{
       if (committed) triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [conveyorBeltId] })
       useEditor.getState().setMovingConveyorBeltEndpoint(null)
+      useEditor.getState().setActiveAffordance(null)
     },
     [conveyorBeltId],
   )

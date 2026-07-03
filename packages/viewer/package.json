@@ -95,6 +95,11 @@
       "types": "./dist/systems/stair/stair-materials.d.ts",
       "import": "./dist/systems/stair/stair-materials.js",
       "default": "./dist/systems/stair/stair-materials.js"
+    },
+    "./slab-system": {
+      "types": "./dist/systems/slab/slab-system.d.ts",
+      "import": "./dist/systems/slab/slab-system.js",
+      "default": "./dist/systems/slab/slab-system.js"
     }
   },
   "files": [

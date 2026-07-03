@@ -41,6 +41,7 @@ export const CurveCableTrayTool: React.FC<{ node: CableTrayNode }> = ({ node }) 
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingCableTray(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {

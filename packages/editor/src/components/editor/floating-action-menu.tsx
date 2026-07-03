@@ -87,6 +87,8 @@ export function FloatingActionMenu() {
   const movingConveyorBeltEndpoint = useEditor((s) => s.movingConveyorBeltEndpoint)
   const movingRoadEndpoint = useEditor((s) => s.movingRoadEndpoint)
   const movingSteelBeamEndpoint = useEditor((s) => s.movingSteelBeamEndpoint)
+  const activeAffordance = useEditor((s) => s.activeAffordance)
+  const curvingWall = useEditor((s) => s.curvingWall)
   const curvingFence = useEditor((s) => s.curvingFence)
   const curvingPipe = useEditor((s) => s.curvingPipe)
   const curvingCableTray = useEditor((s) => s.curvingCableTray)
@@ -480,6 +482,8 @@ export function FloatingActionMenu() {
     movingConveyorBeltEndpoint ||
     movingRoadEndpoint ||
     movingSteelBeamEndpoint ||
+    activeAffordance ||
+    curvingWall ||
     curvingFence ||
     curvingPipe ||
     curvingCableTray ||

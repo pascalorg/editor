@@ -1,5 +1,4 @@
-import { type AnyNodeId, type ParametricDescriptor, useScene } from '@pascal-app/core'
-import { defaultHeightOf, TREE_SEED_POOL } from './presets'
+import type { ParametricDescriptor } from '@pascal-app/core'
 import type { TreeNode } from './schema'
 
 /**
@@ -60,32 +59,6 @@ export const treeParametrics: ParametricDescriptor<TreeNode> = {
     {
       label: 'Position',
       fields: [{ key: 'position', kind: 'vec3' }],
-    },
-  ],
-  actions: [
-    {
-      label: 'Randomize',
-      // The action receives the live node; writing a new seed re-generates the
-      // tree. Pick from the bounded pool so the result stays an instancing
-      // variant shared with other trees, not a one-off mesh.
-      onClick: (n) =>
-        useScene.getState().updateNode(
-          n.id as AnyNodeId,
-          {
-            seed: TREE_SEED_POOL[Math.floor(Math.random() * TREE_SEED_POOL.length)] ?? 1,
-          } as Partial<TreeNode> as never,
-        ),
-    },
-    {
-      label: 'Reset height',
-      // Snap height back to the preset+size default (handy after changing size).
-      onClick: (n) =>
-        useScene
-          .getState()
-          .updateNode(
-            n.id as AnyNodeId,
-            { height: defaultHeightOf(n.preset, n.size) } as Partial<TreeNode> as never,
-          ),
     },
   ],
 }

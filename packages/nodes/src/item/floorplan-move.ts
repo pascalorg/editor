@@ -6,9 +6,10 @@ import {
   type FloorplanMoveTargetSession,
   getScaledDimensions,
   type ItemNode,
+  snapPointToGrid,
   useScene,
+  type WallPlanPoint,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 import { findClosestWallInPlan } from '../shared/wall-attach-target'
 
 /**
@@ -131,7 +132,7 @@ function buildFloorItemSession(
     apply({ planPoint, modifiers }) {
       const snapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : ([...snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)] as WallPlanPoint)
 
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
@@ -175,7 +176,7 @@ function buildSurfaceItemSession(
       const nodes = useScene.getState().nodes
       const snapped: WallPlanPoint = modifiers.shiftKey
         ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+        : ([...snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)] as WallPlanPoint)
 
       const surface = findContainingSurface(snapped, nodes, startLevelId, targetKind)
 

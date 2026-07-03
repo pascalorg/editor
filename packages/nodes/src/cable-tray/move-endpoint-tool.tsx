@@ -56,6 +56,7 @@ export const MoveCableTrayEndpointTool: React.FC<{ target: MovingCableTrayEndpoi
       if (committed) triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [cableTrayId] })
       useEditor.getState().setMovingCableTrayEndpoint(null)
+      useEditor.getState().setActiveAffordance(null)
     },
     [cableTrayId],
   )

@@ -5,9 +5,9 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  generateSlabGeometry,
   type RenderShading,
-} from '@pascal-app/viewer'
+} from '@pascal-app/viewer/materials'
+import { generateSlabGeometry } from '@pascal-app/viewer/slab-system'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 
 /**

@@ -1055,14 +1055,6 @@ export type ParametricDescriptor<N> = {
   invariants?: ReadonlyArray<(n: N) => Issue[]>
   derive?: (n: N) => Partial<N>
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
-  actions?: ParamAction<N>[]
-}
-
-export type ParamAction<N> = {
-  label: string
-  iconSrc?: string
-  enabledIf?: (n: N) => boolean
-  onClick: (n: N) => void
 }
 
 export type ParamGroup<N> = {

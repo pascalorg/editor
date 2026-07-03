@@ -2,6 +2,7 @@
 
 import type { AssetInput } from '@pascal-app/core'
 import {
+  type AnyNode,
   type AnyNodeId,
   type AssemblyNode,
   type BoxNode,
@@ -254,6 +255,12 @@ export type GuideUiState = {
   scaleReferenceVisible?: boolean
 }
 
+export type ActiveAffordance = {
+  node: AnyNode
+  affordance: string
+  props: Record<string, unknown>
+}
+
 type EditorState = {
   phase: Phase
   setPhase: (phase: Phase) => void
@@ -291,6 +298,8 @@ type EditorState = {
   setMovingRoadEndpoint: (value: MovingRoadEndpoint | null) => void
   movingSteelBeamEndpoint: MovingSteelBeamEndpoint | null
   setMovingSteelBeamEndpoint: (value: MovingSteelBeamEndpoint | null) => void
+  activeAffordance: ActiveAffordance | null
+  setActiveAffordance: (value: ActiveAffordance | null) => void
   activeHandleDrag: { nodeId: AnyNodeId; label: string } | null
   setActiveHandleDrag: (drag: { nodeId: AnyNodeId; label: string } | null) => void
   curvingWall: WallNode | null
@@ -788,6 +797,8 @@ const useEditor = create<EditorState>()(
       setMovingRoadEndpoint: (value) => set({ movingRoadEndpoint: value }),
       movingSteelBeamEndpoint: null,
       setMovingSteelBeamEndpoint: (value) => set({ movingSteelBeamEndpoint: value }),
+      activeAffordance: null,
+      setActiveAffordance: (value) => set({ activeAffordance: value }),
       activeHandleDrag: null,
       setActiveHandleDrag: (drag) => set({ activeHandleDrag: drag }),
       curvingWall: null,

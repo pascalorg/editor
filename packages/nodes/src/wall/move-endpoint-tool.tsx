@@ -88,6 +88,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (committed) triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [wallId] })
       useEditor.getState().setMovingWallEndpoint(null)
+      useEditor.getState().setActiveAffordance(null)
       setAngleLabel(null)
     },
     [wallId],

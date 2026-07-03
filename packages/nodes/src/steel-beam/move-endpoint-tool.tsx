@@ -56,6 +56,7 @@ export const MoveSteelBeamEndpointTool: React.FC<{ target: MovingSteelBeamEndpoi
       if (committed) triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [steelBeamId] })
       useEditor.getState().setMovingSteelBeamEndpoint(null)
+      useEditor.getState().setActiveAffordance(null)
     },
     [steelBeamId],
   )

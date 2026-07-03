@@ -35,6 +35,34 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   return Comp
 }
 
+function RegistryAffordanceMount({
+  affordance,
+  kind,
+  props,
+}: {
+  affordance: string
+  kind: string
+  props: Record<string, unknown>
+}) {
+  const RegistryAffordance = getRegistryAffordanceTool(kind, affordance)
+  if (!RegistryAffordance) return null
+  return (
+    <Suspense fallback={null}>
+      <RegistryAffordance {...props} />
+    </Suspense>
+  )
+}
+
+type AffordanceMount = {
+  key: string
+  kind: string
+  props: Record<string, unknown>
+}
+
+function isAffordanceMount(entry: AffordanceMount | null): entry is AffordanceMount {
+  return entry !== null
+}
+
 // Legacy tool fallbacks — kinds whose placement tools haven't migrated
 // to `def.tool` yet. Wall / fence / slab / ceiling / door / window /
 // item / shelf / spawn now go through the registry path above.
@@ -62,6 +90,7 @@ export const ToolManager: React.FC = () => {
   const movingConveyorBeltEndpoint = useEditor((state) => state.movingConveyorBeltEndpoint)
   const movingRoadEndpoint = useEditor((state) => state.movingRoadEndpoint)
   const movingSteelBeamEndpoint = useEditor((state) => state.movingSteelBeamEndpoint)
+  const activeAffordance = useEditor((state) => state.activeAffordance)
   const curvingWall = useEditor((state) => state.curvingWall)
   const curvingFence = useEditor((state) => state.curvingFence)
   const curvingPipe = useEditor((state) => state.curvingPipe)
@@ -139,6 +168,59 @@ export const ToolManager: React.FC = () => {
   const useRegistryTool = RegistryToolComponent != null
 
   const BuildToolComponent = showBuildTool && !useRegistryTool ? tools[phase]?.[tool] : null
+  const endpointAffordanceMounts = ([
+    movingWallEndpoint && {
+      key: 'wall',
+      kind: movingWallEndpoint.wall.type,
+      props: { target: movingWallEndpoint },
+    },
+    movingFenceEndpoint && {
+      key: 'fence',
+      kind: movingFenceEndpoint.fence.type,
+      props: { target: movingFenceEndpoint },
+    },
+    movingPipeEndpoint && {
+      key: 'pipe',
+      kind: movingPipeEndpoint.pipe.type,
+      props: { target: movingPipeEndpoint },
+    },
+    movingCableTrayEndpoint && {
+      key: 'cable-tray',
+      kind: movingCableTrayEndpoint.cableTray.type,
+      props: { target: movingCableTrayEndpoint },
+    },
+    movingConveyorBeltEndpoint && {
+      key: 'conveyor-belt',
+      kind: movingConveyorBeltEndpoint.conveyorBelt.type,
+      props: { target: movingConveyorBeltEndpoint },
+    },
+    movingRoadEndpoint && {
+      key: 'road',
+      kind: movingRoadEndpoint.road.type,
+      props: { target: movingRoadEndpoint },
+    },
+    movingSteelBeamEndpoint && {
+      key: 'steel-beam',
+      kind: movingSteelBeamEndpoint.steelBeam.type,
+      props: { target: movingSteelBeamEndpoint },
+    },
+  ] as Array<AffordanceMount | null>).filter(isAffordanceMount)
+  const curveAffordanceMounts = ([
+    curvingWall && { key: 'wall', kind: curvingWall.type, props: { node: curvingWall } },
+    curvingFence && { key: 'fence', kind: curvingFence.type, props: { node: curvingFence } },
+    curvingPipe && { key: 'pipe', kind: curvingPipe.type, props: { node: curvingPipe } },
+    curvingCableTray && {
+      key: 'cable-tray',
+      kind: curvingCableTray.type,
+      props: { node: curvingCableTray },
+    },
+    curvingRoad && { key: 'road', kind: curvingRoad.type, props: { node: curvingRoad } },
+    curvingSteelBeam && {
+      key: 'steel-beam',
+      kind: curvingSteelBeam.type,
+      props: { node: curvingSteelBeam },
+    },
+  ] as Array<AffordanceMount | null>).filter(isAffordanceMount)
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
     setSelection({ selectedIds: [nodeId] })
   }
@@ -166,185 +248,62 @@ export const ToolManager: React.FC = () => {
       >
         {showZoneBoundaryEditor && selectedZoneId && <ZoneBoundaryEditor zoneId={selectedZoneId} />}
         {showSlabBoundaryEditor &&
-          selectedSlabId &&
-          (() => {
-            const Registry = getRegistryAffordanceTool('slab', 'boundary-edit')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry slabId={selectedSlabId} />
-              </Suspense>
-            ) : null
-          })()}
+          selectedSlabId && (
+            <RegistryAffordanceMount
+              affordance="boundary-edit"
+              kind="slab"
+              props={{ slabId: selectedSlabId }}
+            />
+          )}
         {showSlabHoleEditor &&
           selectedSlabId &&
-          editingHole &&
-          (() => {
-            const Registry = getRegistryAffordanceTool('slab', 'hole-edit')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry holeIndex={editingHole.holeIndex} slabId={selectedSlabId} />
-              </Suspense>
-            ) : null
-          })()}
+          editingHole && (
+            <RegistryAffordanceMount
+              affordance="hole-edit"
+              kind="slab"
+              props={{ holeIndex: editingHole.holeIndex, slabId: selectedSlabId }}
+            />
+          )}
         {showCeilingBoundaryEditor &&
-          selectedCeilingId &&
-          (() => {
-            const Registry = getRegistryAffordanceTool('ceiling', 'boundary-edit')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry ceilingId={selectedCeilingId} />
-              </Suspense>
-            ) : null
-          })()}
+          selectedCeilingId && (
+            <RegistryAffordanceMount
+              affordance="boundary-edit"
+              kind="ceiling"
+              props={{ ceilingId: selectedCeilingId }}
+            />
+          )}
         {showCeilingHoleEditor &&
           selectedCeilingId &&
-          editingHole &&
-          (() => {
-            const Registry = getRegistryAffordanceTool('ceiling', 'hole-edit')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry ceilingId={selectedCeilingId} holeIndex={editingHole.holeIndex} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingWallEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingWallEndpoint.wall.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingWallEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingFenceEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingFenceEndpoint.fence.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingFenceEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingPipeEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingPipeEndpoint.pipe.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingPipeEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingCableTrayEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingCableTrayEndpoint.cableTray.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingCableTrayEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingConveyorBeltEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingConveyorBeltEndpoint.conveyorBelt.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingConveyorBeltEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingRoadEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingRoadEndpoint.road.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingRoadEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {movingSteelBeamEndpoint &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(
-              movingSteelBeamEndpoint.steelBeam.type,
-              'move-endpoint',
-            )
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance target={movingSteelBeamEndpoint} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingWall &&
-          (() => {
-            const Registry = getRegistryAffordanceTool(curvingWall.type, 'curve')
-            return Registry ? (
-              <Suspense fallback={null}>
-                <Registry node={curvingWall} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingFence &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingFence.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingFence} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingPipe &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingPipe.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingPipe} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingCableTray &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingCableTray.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingCableTray} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingRoad &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingRoad.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingRoad} />
-              </Suspense>
-            ) : null
-          })()}
-        {curvingSteelBeam &&
-          (() => {
-            const RegistryAffordance = getRegistryAffordanceTool(curvingSteelBeam.type, 'curve')
-            return RegistryAffordance ? (
-              <Suspense fallback={null}>
-                <RegistryAffordance node={curvingSteelBeam} />
-              </Suspense>
-            ) : null
-          })()}
+          editingHole && (
+            <RegistryAffordanceMount
+              affordance="hole-edit"
+              kind="ceiling"
+              props={{ ceilingId: selectedCeilingId, holeIndex: editingHole.holeIndex }}
+            />
+          )}
+        {activeAffordance && (
+          <RegistryAffordanceMount
+            affordance={activeAffordance.affordance}
+            kind={activeAffordance.node.type}
+            props={activeAffordance.props}
+          />
+        )}
+        {endpointAffordanceMounts.map((mount) => (
+          <RegistryAffordanceMount
+            affordance="move-endpoint"
+            key={mount.key}
+            kind={mount.kind}
+            props={mount.props}
+          />
+        ))}
+        {curveAffordanceMounts.map((mount) => (
+          <RegistryAffordanceMount
+            affordance="curve"
+            key={mount.key}
+            kind={mount.kind}
+            props={mount.props}
+          />
+        ))}
         {movingNode && movingNode.type !== 'building' && (
           <MoveTool
             onNodeMoved={handlePlacedNodeSelected}

@@ -2,9 +2,10 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  snapPointToGrid,
   useScene,
+  type WallPlanPoint,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 
 /**
  * Shared "edit polygon" floor-plan affordances. Used by kinds whose
@@ -98,7 +99,7 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
         apply({ planPoint, modifiers }) {
           const snapped: WallPlanPoint = modifiers.shiftKey
             ? (planPoint as WallPlanPoint)
-            : snapPointToGrid(planPoint as WallPlanPoint)
+            : ([...snapPointToGrid(planPoint as WallPlanPoint)] as WallPlanPoint)
           const nextRing: [number, number][] = originalRing.map((p, i) =>
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
@@ -173,7 +174,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
         apply({ planPoint, modifiers }) {
           const snapped: WallPlanPoint = modifiers.shiftKey
             ? (planPoint as WallPlanPoint)
-            : snapPointToGrid(planPoint as WallPlanPoint)
+            : ([...snapPointToGrid(planPoint as WallPlanPoint)] as WallPlanPoint)
           const nextRing: [number, number][] = initialRing.map((p, i) =>
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )

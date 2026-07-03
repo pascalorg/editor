@@ -41,6 +41,7 @@ export const CurveSteelBeamTool: React.FC<{ node: SteelBeamNode }> = ({ node }) 
 
   const exitCurveMode = useCallback(() => {
     useEditor.getState().setCurvingSteelBeam(null)
+    useEditor.getState().setActiveAffordance(null)
   }, [])
 
   useEffect(() => {
