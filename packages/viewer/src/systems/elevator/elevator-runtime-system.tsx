@@ -1,5 +1,5 @@
+import { stepElevatorRuntimes } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { stepElevatorRuntimes } from './elevator-runtime'
 
 export function ElevatorRuntimeSystem() {
   useFrame(({ clock }, delta) => {

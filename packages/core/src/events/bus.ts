@@ -1,6 +1,4 @@
-import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
-import type { Object3D } from 'three'
 import type {
   AssemblyNode,
   BoxNode,
@@ -54,6 +52,7 @@ import type {
   ZoneNode,
 } from '../schema'
 import type { AnyNode } from '../schema/types'
+import type { SceneObjectRef, ScenePointerEvent } from '../types/scene-object'
 
 // Base event interfaces
 export interface GridEvent {
@@ -73,8 +72,8 @@ export interface GridEvent {
    * `use-grid-events.ts`, where there is no specific mesh to attribute
    * the intersection to.
    */
-  object?: Object3D
-  nativeEvent: ThreeEvent<PointerEvent>
+  object?: SceneObjectRef
+  nativeEvent: ScenePointerEvent
 }
 
 export interface NodeEvent<T extends AnyNode = AnyNode> {
@@ -83,9 +82,9 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
   localPosition: [number, number, number]
   normal?: [number, number, number]
   faceIndex?: number
-  object: Object3D
+  object: SceneObjectRef
   stopPropagation: () => void
-  nativeEvent: ThreeEvent<PointerEvent>
+  nativeEvent: ScenePointerEvent
 }
 
 export type BoxEvent = NodeEvent<BoxNode>

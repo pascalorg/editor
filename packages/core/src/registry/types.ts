@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
-import type { Object3D } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { SceneObjectRef } from '../types/scene-object'
 import type { HandleList } from './handles'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
@@ -600,7 +600,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * rebuilds; combine with `system` if you also need per-frame imperative
    * work (animations, named-mesh material poking).
    */
-  geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
+  geometry?: (node: z.infer<S>, ctx: GeometryContext) => SceneObjectRef
   /**
    * Level-batch precompute hook. Called by `<GeometrySystem>` once per
    * level per frame, **before** the per-node `def.geometry` calls in

@@ -472,7 +472,6 @@ export {
   stepElevatorRuntimeState,
   stepElevatorRuntimes,
 } from './systems/elevator/elevator-runtime'
-export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
   DEFAULT_ELEVATOR_LEVEL_HEIGHT,
   type ElevatorLevelEntry,
@@ -571,3 +570,4 @@ export {
   type ValidationSeverity,
   validateBuildJson,
 } from './validation/validate-build-json'
+export type { SceneObjectRef, ScenePointerEvent } from './types/scene-object'

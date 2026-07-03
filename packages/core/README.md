@@ -11,7 +11,7 @@ npm install @pascal-app/core
 ## Peer Dependencies
 
 ```bash
-npm install react three @react-three/fiber @react-three/drei
+npm install react
 ```
 
 ## What's Included
@@ -19,7 +19,7 @@ npm install react three @react-three/fiber @react-three/drei
 - **Node Schemas** - Zod schemas for all building primitives (walls, slabs, items, etc.)
 - **Scene State** - Zustand store with IndexedDB persistence and undo/redo
 - **Systems** - Geometry generation for walls, floors, ceilings, roofs
-- **Scene Registry** - Fast lookup from node IDs to Three.js objects
+- **Scene Registry** - Fast lookup from node IDs to mounted scene object refs
 - **Spatial Grid** - Collision detection and placement validation
 - **Event Bus** - Typed event emitter for inter-component communication
 - **Asset Storage** - IndexedDB-based file storage for user-uploaded assets

@@ -1,7 +1,7 @@
 'use client'
 
 import { useLayoutEffect } from 'react'
-import type * as THREE from 'three'
+import type { SceneObjectRef } from '../../types/scene-object'
 
 // `byType` is a Proxy-backed Map keyed by kind. Sets are created lazily on
 // first access, so any kind (built-in or plugin-contributed) participates
@@ -41,8 +41,8 @@ const byTypeProxy = new Proxy({} as ByTypeMap, {
 })
 
 export const sceneRegistry = {
-  // Master lookup: ID -> Object3D
-  nodes: new Map<string, THREE.Object3D>(),
+  // Master lookup: ID -> live scene object.
+  nodes: new Map<string, SceneObjectRef>(),
 
   // Categorized lookups: Kind -> Set of IDs. Backed by a Proxy so any kind
   // gets a Set on first touch — no hardcoded list.
@@ -57,7 +57,7 @@ export const sceneRegistry = {
   },
 }
 
-export function useRegistry(id: string, type: string, ref: React.RefObject<THREE.Object3D>) {
+export function useRegistry(id: string, type: string, ref: React.RefObject<SceneObjectRef>) {
   useLayoutEffect(() => {
     const obj = ref.current
     if (!obj) return
