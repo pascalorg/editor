@@ -35,6 +35,7 @@ import {
   getStairBodyMaterials,
   getStairRailingMaterial,
   getVisibleWallMaterials,
+  type HoverHighlightIntent,
   isViewerSelectionInputSuppressed,
   useViewer,
 } from '@pascal-app/viewer'
@@ -128,7 +129,7 @@ type PaintPreviewCleanup = () => void
 type PaintInteraction = {
   key: string
   apply: (() => void) | null
-  hoverMode: HoverHighlightMode
+  hoverIntent: HoverHighlightIntent
   hoveredId: AnyNodeId
   preview: (() => PaintPreviewCleanup | null) | null
 }
@@ -610,7 +611,6 @@ const HIGHLIGHT_PROFILES = {
 } as const
 
 type HighlightKind = keyof typeof HIGHLIGHT_PROFILES
-type HoverHighlightMode = 'default' | 'delete' | 'paint-ready' | 'paint-disabled'
 
 type HighlightableMaterial = Material & {
   color?: Color
@@ -1004,7 +1004,7 @@ export const SelectionManager = () => {
   const { camera, gl } = useThree()
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
-  const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
+  const setHoverHighlightIntent = useViewer((s) => s.setHoverHighlightIntent)
   const registryVersion = useNodeRegistryVersion()
   const raycasterRef = useRef(new Raycaster())
   const pointerNdcRef = useRef(new Vector2())
@@ -1025,13 +1025,13 @@ export const SelectionManager = () => {
   const curvingFence = useEditor((s) => s.curvingFence)
 
   useEffect(() => {
-    const nextHoverMode: HoverHighlightMode = mode === 'delete' ? 'delete' : 'default'
-    setHoverHighlightMode(nextHoverMode)
+    const nextHoverIntent: HoverHighlightIntent = mode === 'delete' ? 'danger' : 'default'
+    setHoverHighlightIntent(nextHoverIntent)
 
     return () => {
-      setHoverHighlightMode('default')
+      setHoverHighlightIntent('default')
     }
-  }, [mode, setHoverHighlightMode])
+  }, [mode, setHoverHighlightIntent])
 
   useEffect(() => {
     if (mode !== 'material-paint') return
@@ -1067,10 +1067,10 @@ export const SelectionManager = () => {
         return {
           key: `wall:${node.id}:${role ?? 'unsupported'}`,
           hoveredId: node.id as AnyNodeId,
-          hoverMode:
+          hoverIntent:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+              ? 'accent'
+              : 'blocked',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -1108,10 +1108,10 @@ export const SelectionManager = () => {
         return {
           key: `roof:${roofNode.id}:${role ?? 'unsupported'}`,
           hoveredId: roofNode.id as AnyNodeId,
-          hoverMode:
+          hoverIntent:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+              ? 'accent'
+              : 'blocked',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -1149,10 +1149,10 @@ export const SelectionManager = () => {
         return {
           key: `stair:${stairNode.id}:${role ?? 'unsupported'}`,
           hoveredId: stairNode.id as AnyNodeId,
-          hoverMode:
+          hoverIntent:
             compatible && hasActivePaintMaterial(activePaintMaterial) && role
-              ? 'paint-ready'
-              : 'paint-disabled',
+              ? 'accent'
+              : 'blocked',
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
@@ -1182,7 +1182,7 @@ export const SelectionManager = () => {
         return {
           key: `${node.type}:${node.id}:surface`,
           hoveredId: node.id as AnyNodeId,
-          hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
+          hoverIntent: compatible ? 'accent' : 'blocked',
           apply: compatible
             ? () => {
                 useScene
@@ -1207,7 +1207,7 @@ export const SelectionManager = () => {
         return {
           key: `${node.type}:${node.id}:unsupported`,
           hoveredId: node.id as AnyNodeId,
-          hoverMode: 'paint-disabled',
+          hoverIntent: 'blocked',
           apply: null,
           preview: () => previewCursor('not-allowed'),
         }
@@ -1230,7 +1230,7 @@ export const SelectionManager = () => {
 
       clearActivePreview()
       useViewer.setState({ hoveredId: interaction.hoveredId })
-      setHoverHighlightMode(interaction.hoverMode)
+      setHoverHighlightIntent(interaction.hoverIntent)
 
       const restore = interaction.preview?.()
       if (restore) {
@@ -1250,7 +1250,7 @@ export const SelectionManager = () => {
       if (useViewer.getState().hoveredId === interaction.hoveredId) {
         useViewer.setState({ hoveredId: null })
       }
-      setHoverHighlightMode('default')
+      setHoverHighlightIntent('default')
     }
 
     const onClick = (event: NodeEvent) => {
@@ -1272,7 +1272,7 @@ export const SelectionManager = () => {
       } else {
         clearActivePreview()
       }
-      setHoverHighlightMode(interaction.hoverMode)
+      setHoverHighlightIntent(interaction.hoverIntent)
     }
 
     const allTypes = [
@@ -1308,9 +1308,9 @@ export const SelectionManager = () => {
       }
       clearActivePreview()
       useViewer.setState({ hoveredId: null })
-      setHoverHighlightMode('default')
+      setHoverHighlightIntent('default')
     }
-  }, [curvingWall, mode, movingNode, registryVersion, setHoverHighlightMode])
+  }, [curvingWall, mode, movingNode, registryVersion, setHoverHighlightIntent])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2076,7 +2076,7 @@ const SelectionMaterialSync = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const hoverHighlightIntent = useViewer((s) => s.hoverHighlightIntent)
   const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
   const highlightedMaterialsRef = useRef(
     new Map<
@@ -2103,7 +2103,7 @@ const SelectionMaterialSync = () => {
         continue
       }
 
-      rootObject.traverse((child) => {
+      rootObject.traverse((child: Object3D) => {
         if (!isHighlightableMesh(child)) {
           return
         }
@@ -2160,13 +2160,13 @@ const SelectionMaterialSync = () => {
       nextHighlightKinds.set(id, 'selection')
     }
 
-    if (hoverHighlightMode === 'delete' && hoveredId) {
+    if (hoverHighlightIntent === 'danger' && hoveredId) {
       nextHighlightKinds.set(hoveredId, 'delete')
     }
 
     activeHighlightKindsRef.current = nextHighlightKinds
     syncSelectionMaterials()
-  }, [hoverHighlightMode, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
+  }, [hoverHighlightIntent, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
 
   useEffect(() => {
     return useScene.subscribe((state, prevState) => {

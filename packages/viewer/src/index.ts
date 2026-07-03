@@ -73,6 +73,7 @@ export {
 export { useItemLightPool } from './store/use-item-light-pool'
 export {
   default as useViewer,
+  type HoverHighlightIntent,
   isViewerSelectionInputSuppressed,
   isViewerSpatialInputSuppressed,
   shouldLatchViewerPointerSuppression,

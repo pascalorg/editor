@@ -792,6 +792,7 @@ export type Capabilities = {
   deletable?: boolean
   groupable?: boolean
   selectable?: SelectableConfig
+  sceneSelection?: SceneSelectionConfig
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   alignmentFootprint?: AlignmentFootprintConfig
@@ -853,6 +854,20 @@ export type SurfacePoint = {
 export type SelectableConfig = {
   hitVolume?: 'bbox' | 'mesh' | 'none'
   override?: (ctx: CapabilityCtx) => SelectableConfig | null
+}
+
+export type SceneSelectionRole = 'building' | 'level' | 'zone' | 'zone-content'
+
+export type SceneSelectionFootprint = 'position' | 'segment' | 'polygon' | 'always'
+
+export type SceneSelectionConfig = {
+  role?: SceneSelectionRole
+  zoneFootprint?: SceneSelectionFootprint
+  levelParentKinds?: readonly string[]
+  selectParentKind?: string
+  outline?: boolean
+  hover?: boolean
+  click?: boolean
 }
 
 /**

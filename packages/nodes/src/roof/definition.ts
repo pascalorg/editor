@@ -26,6 +26,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', zoneFootprint: 'always' },
     duplicable: true,
     deletable: true,
   },

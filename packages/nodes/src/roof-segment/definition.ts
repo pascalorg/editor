@@ -26,6 +26,11 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: {
+      role: 'zone-content',
+      zoneFootprint: 'always',
+      selectParentKind: 'roof',
+    },
     duplicable: false,
     deletable: true,
   },

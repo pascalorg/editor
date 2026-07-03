@@ -29,6 +29,7 @@ mock.module('@pascal-app/editor', () => ({
   snapScalarToGrid: (value: number) => value,
   snapToHalf: (value: number) => Math.round(value * 2) / 2,
   snapWallDraftPoint: (point: unknown) => point,
+  SegmentedControl: () => null,
   SliderControl: () => null,
   t: (_key: string, fallback?: string) => fallback ?? _key,
   triggerSFX: () => {},

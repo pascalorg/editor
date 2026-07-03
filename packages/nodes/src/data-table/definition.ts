@@ -19,6 +19,7 @@ export const dataTableDefinition: NodeDefinition<typeof DataTableNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { outline: false },
     duplicable: true,
     deletable: true,
     movable: { axes: ['x', 'z'] as const },

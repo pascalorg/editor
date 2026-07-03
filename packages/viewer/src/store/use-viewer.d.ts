@@ -1,5 +1,6 @@
 import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
+export type HoverHighlightIntent = 'default' | 'danger' | 'accent' | 'blocked'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -15,8 +16,8 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
-  hoverHighlightMode: string
-  setHoverHighlightMode: (mode: string) => void
+  hoverHighlightIntent: HoverHighlightIntent
+  setHoverHighlightIntent: (intent: HoverHighlightIntent) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'

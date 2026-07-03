@@ -37,6 +37,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', zoneFootprint: 'position' },
     duplicable: true,
     deletable: true,
     // Slab elevation lift via the generic `<FloorElevationSystem>`.

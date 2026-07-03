@@ -16,6 +16,8 @@ export type {
 } from './handles'
 export {
   discoverPlugins,
+  getSceneSelectionConfig,
+  getSceneSelectionKinds,
   getSelectableKinds,
   hasRegistry3DMoveTool,
   isRegistryMovable,
@@ -76,6 +78,9 @@ export type {
   RotatableConfig,
   ScalableConfig,
   SceneApi,
+  SceneSelectionConfig,
+  SceneSelectionFootprint,
+  SceneSelectionRole,
   SelectableConfig,
   SnapPointKind,
   SnappableConfig,

@@ -42,6 +42,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // ALT-detach). Omitting `movable` keeps the legacy MoveWallTool via
     // capability-driven dispatch.
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', zoneFootprint: 'segment' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
       sides: { faces: 'all' },

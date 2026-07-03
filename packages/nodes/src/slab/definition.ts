@@ -1,4 +1,9 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import {
+  type HandleDescriptor,
+  type NodeDefinition,
+  pointInPolygon2D,
+  type SlabNode as SlabNodeType,
+} from '@pascal-app/core'
 import { overallMaterialTarget } from '../shared/material-targets'
 import { buildSlabFloorplan } from './floorplan'
 import {
@@ -10,6 +15,78 @@ import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabParametrics } from './parametrics'
 import { SlabNode } from './schema'
+
+const SLAB_HEIGHT_HANDLE_OFFSET = 0.24
+const SLAB_HANDLE_SAMPLE_COUNT = 9
+
+function isSolidSlabPoint(point: [number, number], slab: SlabNodeType): boolean {
+  return (
+    pointInPolygon2D(point, slab.polygon, { includeBoundary: false }) &&
+    !slab.holes.some((hole) => pointInPolygon2D(point, hole, { includeBoundary: true }))
+  )
+}
+
+function averagePoint(points: readonly (readonly [number, number])[]): [number, number] {
+  let totalX = 0
+  let totalZ = 0
+  for (const point of points) {
+    totalX += point[0]
+    totalZ += point[1]
+  }
+  return [totalX / points.length, totalZ / points.length]
+}
+
+function slabHeightHandlePoint(slab: SlabNodeType): [number, number] {
+  if (slab.polygon.length === 0) return [0, 0]
+
+  const center = averagePoint(slab.polygon)
+  if (isSolidSlabPoint(center, slab)) return center
+
+  const xs = slab.polygon.map((point) => point[0])
+  const zs = slab.polygon.map((point) => point[1])
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  const spanX = maxX - minX
+  const spanZ = maxZ - minZ
+
+  let bestPoint: [number, number] | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (let ix = 1; ix < SLAB_HANDLE_SAMPLE_COUNT; ix += 1) {
+    for (let iz = 1; iz < SLAB_HANDLE_SAMPLE_COUNT; iz += 1) {
+      const candidate: [number, number] = [
+        minX + (spanX * ix) / SLAB_HANDLE_SAMPLE_COUNT,
+        minZ + (spanZ * iz) / SLAB_HANDLE_SAMPLE_COUNT,
+      ]
+      if (!isSolidSlabPoint(candidate, slab)) continue
+      const distance = Math.hypot(candidate[0] - center[0], candidate[1] - center[1])
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestPoint = candidate
+      }
+    }
+  }
+
+  return bestPoint ?? center
+}
+
+const slabHandles: HandleDescriptor<SlabNodeType>[] = [
+  {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: 0,
+    currentValue: (node) => node.elevation,
+    apply: (_node, newValue) => ({ elevation: newValue }),
+    placement: {
+      position: (node) => {
+        const [x, z] = slabHeightHandlePoint(node)
+        return [x, node.elevation + SLAB_HEIGHT_HANDLE_OFFSET, z]
+      },
+    },
+  },
+]
 
 /**
  * Slab — Phase 5 batch kind, polygon-based. Stage B: `def.geometry`
@@ -47,6 +124,12 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: {
+      role: 'zone-content',
+      zoneFootprint: 'polygon',
+      hover: false,
+      outline: false,
+    },
     surfaces: {
       top: { height: (n) => (n as SlabNode).elevation },
     },
@@ -60,6 +143,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   parametrics: slabParametrics,
+  handles: slabHandles,
 
   materialTargets: overallMaterialTarget,
 

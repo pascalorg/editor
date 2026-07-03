@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { loadPlugin, nodeRegistry, registerNode } from './registry'
+import {
+  getSceneSelectionConfig,
+  getSceneSelectionKinds,
+  loadPlugin,
+  nodeRegistry,
+  registerNode,
+} from './registry'
 import type { AnyNodeDefinition, Plugin } from './types'
 
 function makeDefinition(
@@ -67,6 +73,27 @@ describe('nodeRegistry', () => {
     registerNode(a)
     registerNode(b)
     expect(nodeRegistry.schemas()).toEqual([a.schema, b.schema])
+  })
+
+  test('scene selection helpers expose only role-backed selection kinds', () => {
+    registerNode(
+      makeDefinition('wall', {
+        capabilities: { sceneSelection: { role: 'zone-content', zoneFootprint: 'segment' } },
+      }),
+    )
+    registerNode(
+      makeDefinition('data-widget', {
+        capabilities: { sceneSelection: { outline: false } },
+      }),
+    )
+    registerNode(makeDefinition('plain'))
+
+    expect(getSceneSelectionKinds()).toEqual(['wall'])
+    expect(getSceneSelectionConfig('wall')).toEqual({
+      role: 'zone-content',
+      zoneFootprint: 'segment',
+    })
+    expect(getSceneSelectionConfig('missing')).toBeUndefined()
   })
 })
 

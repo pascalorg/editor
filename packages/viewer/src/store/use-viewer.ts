@@ -10,6 +10,7 @@ import type { ColorPreset, RenderShading } from '../lib/materials'
 import { getSceneTheme, SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type HoverHighlightIntent = 'default' | 'danger' | 'accent' | 'blocked'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -27,8 +28,8 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
-  hoverHighlightMode: string
-  setHoverHighlightMode: (mode: string) => void
+  hoverHighlightIntent: HoverHighlightIntent
+  setHoverHighlightIntent: (intent: HoverHighlightIntent) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
 
@@ -221,9 +222,11 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
-      hoverHighlightMode: 'default',
-      setHoverHighlightMode: (mode) =>
-        set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
+      hoverHighlightIntent: 'default',
+      setHoverHighlightIntent: (intent) =>
+        set((state) =>
+          state.hoverHighlightIntent === intent ? state : { hoverHighlightIntent: intent },
+        ),
       hoveredId: null,
       setHoveredId: (id) => set((state) => (state.hoveredId === id ? state : { hoveredId: id })),
 

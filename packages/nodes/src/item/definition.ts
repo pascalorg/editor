@@ -70,6 +70,11 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: {
+      role: 'zone-content',
+      zoneFootprint: 'position',
+      levelParentKinds: ['wall', 'ceiling', 'slab', 'roof'],
+    },
     duplicable: true,
     deletable: true,
     // Floor items get lifted by slabs underneath via the generic

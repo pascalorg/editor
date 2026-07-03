@@ -22,7 +22,7 @@ import {
 const DEFAULT_WALL_COLOR = '#f2f0ed'
 
 const WALL_HIGHLIGHT_PROFILES = {
-  delete: {
+  danger: {
     color: new Color('#dc2626'),
     blend: 0.76,
     emissiveBlend: 0.92,
@@ -43,8 +43,8 @@ export type WallMaterialArray = [Material, Material, Material]
 export interface WallMaterials {
   visible: WallMaterialArray
   invisible: WallMaterialArray
-  deleteVisible: WallMaterialArray
-  deleteInvisible: WallMaterialArray
+  dangerVisible: WallMaterialArray
+  dangerInvisible: WallMaterialArray
   highlightedVisible: WallMaterialArray
   highlightedInvisible: WallMaterialArray
   materialHash: string
@@ -244,8 +244,8 @@ export function getMaterialsForWall(
   if (existing) {
     disposeOwnedMaterials([
       existing.invisible,
-      existing.deleteVisible,
-      existing.deleteInvisible,
+      existing.dangerVisible,
+      existing.dangerInvisible,
       existing.highlightedVisible,
       existing.highlightedInvisible,
     ])
@@ -290,18 +290,18 @@ export function getMaterialsForWall(
   const highlightedInvisible = mapWallMaterialArray(invisible, (material) =>
     createHighlightedWallMaterial(material, 'selection'),
   )
-  const deleteVisible = mapWallMaterialArray(visible, (material) =>
-    createHighlightedWallMaterial(material, 'delete'),
+  const dangerVisible = mapWallMaterialArray(visible, (material) =>
+    createHighlightedWallMaterial(material, 'danger'),
   )
-  const deleteInvisible = mapWallMaterialArray(invisible, (material) =>
-    createHighlightedWallMaterial(material, 'delete'),
+  const dangerInvisible = mapWallMaterialArray(invisible, (material) =>
+    createHighlightedWallMaterial(material, 'danger'),
   )
 
   const result: WallMaterials = {
     visible,
     invisible,
-    deleteVisible,
-    deleteInvisible,
+    dangerVisible,
+    dangerInvisible,
     highlightedVisible,
     highlightedInvisible,
     materialHash,
@@ -326,8 +326,8 @@ export function clearWallMaterialCache(): void {
   for (const materials of wallMaterialCache.values()) {
     disposeOwnedMaterials([
       materials.invisible,
-      materials.deleteVisible,
-      materials.deleteInvisible,
+      materials.dangerVisible,
+      materials.dangerInvisible,
       materials.highlightedVisible,
       materials.highlightedInvisible,
     ])

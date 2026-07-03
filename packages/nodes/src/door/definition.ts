@@ -56,6 +56,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', levelParentKinds: ['wall'] },
     duplicable: true,
     deletable: true,
   },

@@ -19,6 +19,7 @@ export const dataWidgetDefinition: NodeDefinition<typeof DataWidgetNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { outline: false },
     duplicable: true,
     deletable: true,
     movable: { axes: ['x', 'z'] as const },

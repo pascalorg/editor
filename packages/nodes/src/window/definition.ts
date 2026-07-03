@@ -51,6 +51,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', levelParentKinds: ['wall'] },
     duplicable: true,
     deletable: true,
   },

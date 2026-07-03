@@ -25,6 +25,7 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   capabilities: {
     // Building is a container — sidebar / building switcher drive
     // selection, never 3D click. Same reasoning as `level` / `site`.
+    sceneSelection: { role: 'building' },
     duplicable: false,
     deletable: false,
   },

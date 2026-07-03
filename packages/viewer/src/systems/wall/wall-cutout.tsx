@@ -59,7 +59,7 @@ export const WallCutout = () => {
     const selectedIds = viewerState.selection.selectedIds
     const previewSelectedIds = viewerState.previewSelectedIds
     const hoveredId = viewerState.hoveredId
-    const hoverHighlightMode = viewerState.hoverHighlightMode
+    const hoverHighlightIntent = viewerState.hoverHighlightIntent
     const renderSettings = {
       shading: viewerState.shading,
       textures: viewerState.textures,
@@ -76,13 +76,13 @@ export const WallCutout = () => {
         (id) => useScene.getState().nodes[id as AnyNodeId]?.type === 'wall',
       ),
     )
-    const deleteHoveredWallId =
-      hoverHighlightMode === 'delete' &&
+    const dangerHoveredWallId =
+      hoverHighlightIntent === 'danger' &&
       hoveredId &&
       useScene.getState().nodes[hoveredId as AnyNodeId]?.type === 'wall'
         ? hoveredId
         : null
-    const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
+    const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${dangerHoveredWallId ?? ''}`
 
     const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
     const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)
@@ -125,19 +125,19 @@ export const WallCutout = () => {
         if (!wallNode || wallNode.type !== 'wall') return
 
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, levelMode, u)
-        const isDeleteHighlighted = deleteHoveredWallId === wallId
-        const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
+        const isDangerHighlighted = dangerHoveredWallId === wallId
+        const isSelectionHighlighted = !isDangerHighlighted && highlightedWallIds.has(wallId)
         const materials = getMaterialsForWall(wallNode, renderSettings)
 
         if (hideWall) {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteInvisible
+          ;(wallMesh as Mesh).material = isDangerHighlighted
+            ? materials.dangerInvisible
             : isSelectionHighlighted
               ? materials.highlightedInvisible
               : materials.invisible
         } else {
-          ;(wallMesh as Mesh).material = isDeleteHighlighted
-            ? materials.deleteVisible
+          ;(wallMesh as Mesh).material = isDangerHighlighted
+            ? materials.dangerVisible
             : isSelectionHighlighted
               ? materials.highlightedVisible
               : materials.visible
@@ -171,9 +171,9 @@ export const WallCutout = () => {
         const mats = getMaterialsForWall(wallNode, renderSettings)
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
-        if (current === mats.highlightedVisible || current === mats.deleteVisible) {
+        if (current === mats.highlightedVisible || current === mats.dangerVisible) {
           wallMesh.material = mats.visible
-        } else if (current === mats.highlightedInvisible || current === mats.deleteInvisible) {
+        } else if (current === mats.highlightedInvisible || current === mats.dangerInvisible) {
           wallMesh.material = mats.invisible
         }
       })

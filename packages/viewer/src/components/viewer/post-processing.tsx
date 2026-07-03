@@ -272,7 +272,7 @@ const PostProcessingPasses = ({
     l.set(OVERLAY_LAYER)
     return l
   }, [])
-  const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const hoverHighlightIntent = useViewer((s) => s.hoverHighlightIntent)
   const hoverVisibleColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.visibleColor)), [])
   const hoverHiddenColor = useMemo(() => uniform(new Color(DEFAULT_HOVER_STYLE.hiddenColor)), [])
   const hoverStrength = useMemo(() => uniform(DEFAULT_HOVER_STYLE.strength), [])
@@ -326,7 +326,7 @@ const PostProcessingPasses = ({
   }, [])
 
   useEffect(() => {
-    const style = hoverStyles[hoverHighlightMode] ?? hoverStyles.default
+    const style = hoverStyles[hoverHighlightIntent] ?? hoverStyles.default
     hoverVisibleColor.value.setHex(style.visibleColor)
     hoverHiddenColor.value.setHex(style.hiddenColor)
     hoverStrength.value = style.strength
@@ -334,7 +334,7 @@ const PostProcessingPasses = ({
     invalidate()
   }, [
     hoverHiddenColor,
-    hoverHighlightMode,
+    hoverHighlightIntent,
     hoverPulseMix,
     hoverStrength,
     hoverStyles,

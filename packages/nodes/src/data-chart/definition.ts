@@ -19,6 +19,7 @@ export const dataChartDefinition: NodeDefinition<typeof DataChartNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { outline: false },
     duplicable: true,
     deletable: true,
     movable: { axes: ['x', 'z'] as const },

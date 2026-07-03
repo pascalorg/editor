@@ -28,6 +28,7 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
     // level group — selecting the level instead of the actual node
     // hit. Legacy `allTypes` deliberately omitted containers; we
     // mirror that.
+    sceneSelection: { role: 'level' },
     duplicable: false,
     deletable: true,
   },

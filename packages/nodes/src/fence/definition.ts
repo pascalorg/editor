@@ -48,6 +48,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone-content', zoneFootprint: 'segment' },
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,
     deletable: true,

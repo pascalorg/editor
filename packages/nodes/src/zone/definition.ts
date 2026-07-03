@@ -28,6 +28,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: { role: 'zone' },
     duplicable: true,
     deletable: true,
   },

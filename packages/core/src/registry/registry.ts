@@ -85,6 +85,20 @@ export function isRegistrySelectable(kind: string): boolean {
   return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
 }
 
+export function getSceneSelectionKinds(): string[] {
+  const result: string[] = []
+  for (const [kind, def] of nodeRegistry.entries()) {
+    if (def.capabilities.sceneSelection?.role !== undefined) {
+      result.push(kind)
+    }
+  }
+  return result
+}
+
+export function getSceneSelectionConfig(kind: string) {
+  return nodeRegistry.get(kind)?.capabilities.sceneSelection
+}
+
 /**
  * Whether the kind can be moved in the editor by any registered path.
  * Includes 2D-only floorplan movers as well as 3D-mounted move tools.

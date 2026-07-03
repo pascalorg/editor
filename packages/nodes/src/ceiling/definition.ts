@@ -47,6 +47,12 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    sceneSelection: {
+      role: 'zone-content',
+      zoneFootprint: 'polygon',
+      hover: false,
+      click: false,
+    },
     surfaces: {
       top: { height: (n) => (n as CeilingNode).height },
     },
