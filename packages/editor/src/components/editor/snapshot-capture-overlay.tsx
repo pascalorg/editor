@@ -5,7 +5,10 @@ import { Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
-import useEditor, { type SnapshotCropMode } from '../../store/use-editor'
+import useEditor, {
+  type SnapshotCropMode,
+  type SnapshotStandardAspect,
+} from '../../store/use-editor'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
 // a capture is happening, e.g. `preset`). This one says HOW the captured
@@ -25,14 +28,14 @@ interface Drag {
 }
 
 // Output presets for `standard` captures — long edge stays near 1920.
-const STANDARD_SIZES = {
+const STANDARD_SIZES: Record<SnapshotStandardAspect, { w: number; h: number }> = {
   '16:9': { w: 1920, h: 1080 },
   '9:16': { w: 1080, h: 1920 },
   '4:3': { w: 1920, h: 1440 },
   '3:4': { w: 1440, h: 1920 },
   '1:1': { w: 1440, h: 1440 },
-} as const
-type StandardAspect = keyof typeof STANDARD_SIZES
+}
+type StandardAspect = SnapshotStandardAspect
 
 function getResolution(
   mode: CropMode,
@@ -105,6 +108,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   // crop shape. Matches the unified preset-thumbnail capture flow.
   const isPreset = captureMode.mode === 'preset'
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
+  const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
 
   const [mode, setMode] = useState<CropMode>('standard')
   const [standardAspect, setStandardAspect] = useState<StandardAspect>('16:9')
@@ -145,6 +149,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!isCaptureMode) return
     setMode(isPreset ? 'area' : (requestedCrop ?? 'standard'))
+    setStandardAspect(requestedAspect ?? '16:9')
     setAspectMenuOpen(false)
     setIsDragging(false)
     setCaptureState('idle')
@@ -160,7 +165,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     } else {
       setDrag(null)
     }
-  }, [isCaptureMode, isPreset, requestedCrop])
+  }, [isCaptureMode, isPreset, requestedCrop, requestedAspect])
 
   // Listen for snapshot saved to show feedback then exit
   useEffect(() => {

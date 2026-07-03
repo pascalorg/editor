@@ -368,6 +368,7 @@ export type {
   CaptureMode,
   FloorplanSelectionTool,
   SnapshotCropMode,
+  SnapshotStandardAspect,
   SplitOrientation,
   Tool,
   ToolDefaults,

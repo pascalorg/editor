@@ -86,10 +86,12 @@ export type WorkspaceMode = 'edit' | 'studio'
 // or user-dragged area. Hosts (e.g. the studio capture bar) can preselect it
 // when entering capture mode.
 export type SnapshotCropMode = 'standard' | 'viewport' | 'area'
+/** Aspect presets available to `standard` crops. */
+export type SnapshotStandardAspect = '16:9' | '9:16' | '4:3' | '3:4' | '1:1'
 
 export type CaptureMode =
   | { mode: 'idle' }
-  | { mode: 'standard'; crop?: SnapshotCropMode }
+  | { mode: 'standard'; crop?: SnapshotCropMode; standardAspect?: SnapshotStandardAspect }
   | {
       mode: 'preset'
       isolated: AnyNodeId[]
