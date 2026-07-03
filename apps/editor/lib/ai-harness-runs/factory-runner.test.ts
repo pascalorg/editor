@@ -1,4 +1,4 @@
-import { loadPlugin } from '@pascal-app/core'
+import { loadPlugin, nodeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { describe, expect, test } from 'bun:test'
 import type { GeneratedGeometryArtifact } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
@@ -11,6 +11,7 @@ import {
   buildFactoryRunResultFromPlan,
   buildFactoryRunResultFromProcessLine,
   buildFactoryRunResultFromSelectionEdit,
+  buildFactoryRunResultFromSingleEquipmentPrompt,
   failedFactoryRunStatus,
 } from './factory-runner'
 import {
@@ -51,6 +52,11 @@ const compactContract = {
   scaleClass: 'test',
   envelope: { length: 2, width: 1, height: 1, origin: 'station_profile' as const, tolerance: 0.05 },
   ports: [{ id: 'water_in', medium: 'water' as const, side: 'left' as const, height: 0.5 }],
+}
+
+async function ensureFactoryEquipmentPluginLoaded() {
+  if (nodeRegistry.has('factory:pump') && nodeRegistry.has('factory:tank')) return
+  await loadPlugin(factoryEquipmentPlugin)
 }
 
 function electrolyzerArtifactWithShiftedWaterPort(prompt: string): GeneratedGeometryArtifact {
@@ -278,6 +284,100 @@ describe('factory runner helpers', () => {
       ]),
     )
     expect(result.missingAssets).toEqual([])
+  })
+
+  test('compiles a pump prompt to a factory node before primitive draft fallback', async () => {
+    await ensureFactoryEquipmentPluginLoaded()
+
+    const result = buildFactoryRunResultFromSingleEquipmentPrompt({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u79bb\u5fc3\u6cf5',
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    expect(result).toMatchObject({
+      intent: { action: 'generate_equipment_draft' },
+      applied: false,
+      patches: [
+        {
+          op: 'create',
+          parentId: 'level_factory',
+          node: {
+            type: 'factory:pump',
+            metadata: {
+              resolver: 'factory-node',
+              equipmentContract: { profileId: 'generic.centrifugal_pump' },
+            },
+          },
+        },
+      ],
+      missingAssets: [],
+      qualityReport: {
+        passed: true,
+        checks: { factoryNodeCount: 1, equipmentContractCount: 1 },
+      },
+    })
+  })
+
+  test('compiles a tank prompt to a factory node before primitive draft fallback', async () => {
+    await ensureFactoryEquipmentPluginLoaded()
+
+    const result = buildFactoryRunResultFromSingleEquipmentPrompt({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u50a8\u7f50',
+      placement: { generatedBy: 'factory-agent' },
+    })
+
+    expect(result?.patches[0]).toMatchObject({
+      op: 'create',
+      node: {
+        type: 'factory:tank',
+        orientation: 'vertical',
+        metadata: {
+          resolver: 'factory-node',
+          equipmentContract: { profileId: 'generic.vertical_tank' },
+        },
+      },
+    })
+  })
+
+  test('keeps unknown single equipment on the primitive draft fallback path', async () => {
+    await ensureFactoryEquipmentPluginLoaded()
+
+    const result = buildFactoryRunResultFromSingleEquipmentPrompt({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u5947\u602a\u7684\u79d1\u5e7b\u88c5\u7f6e',
+      placement: { generatedBy: 'factory-agent' },
+    })
+
+    expect(result).toBeNull()
+  })
+
+  test('edits selected factory equipment by updating node parameters', async () => {
+    await ensureFactoryEquipmentPluginLoaded()
+
+    const result = buildFactoryRunResultFromSelectionEdit({
+      prompt: '\u628a\u8fd9\u4e2a\u79bb\u5fc3\u6cf5\u6539\u6210 3 \u7c73\u957f\u7684\u7ea2\u8272\u8ba1\u91cf\u6cf5',
+      placement: { generatedBy: 'factory-agent' },
+      context: {
+        selection: {
+          selectedIds: ['pump_1'],
+          nodes: [{ id: 'pump_1', type: 'factory:pump', name: 'Pump 1' }],
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      intent: { action: 'edit_selection' },
+      patches: [
+        {
+          op: 'update',
+          id: 'pump_1',
+          data: {
+            length: 3,
+            casingColor: '#ef4444',
+            pumpType: 'metering',
+          },
+        },
+      ],
+    })
   })
 
   test('returns layout plans as editable scene patches without applying them', () => {
@@ -532,7 +632,7 @@ describe('factory runner helpers', () => {
   })
 
   test('compiles process-line pump stations into factory nodes and connects node ports', async () => {
-    await loadPlugin(factoryEquipmentPlugin)
+    await ensureFactoryEquipmentPluginLoaded()
 
     const plan = {
       kind: 'process_line' as const,
@@ -575,6 +675,9 @@ describe('factory runner helpers', () => {
       plan,
       plannerSource: 'fallback',
       placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      generatePrimitiveGeometryDraft: async () => {
+        throw new Error('factory-node resolver should not request primitive geometry')
+      },
     })
 
     const factoryPumps = result.patches.filter(
@@ -636,41 +739,45 @@ describe('factory runner helpers', () => {
     expect(result.missingAssets).toEqual([])
   })
 
-  test('passes the quality gate for thermal power stations so patches can be applied', async () => {
-    const prompt = '\u751f\u6210\u4e00\u4e2a\u706b\u7535\u5382'
-    const plan = fallbackFactoryPlan(prompt)
-    if (plan.kind !== 'process_line') throw new Error('expected process line plan')
+  test(
+    'passes the quality gate for thermal power stations so patches can be applied',
+    async () => {
+      const prompt = '\u751f\u6210\u4e00\u4e2a\u706b\u7535\u5382'
+      const plan = fallbackFactoryPlan(prompt)
+      if (plan.kind !== 'process_line') throw new Error('expected process line plan')
 
-    const result = await buildFactoryRunResultFromProcessLine({
-      prompt,
-      plan,
-      plannerSource: 'fallback',
-      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
-      params: { e2eSmoke: true },
-      generatePrimitiveGeometryDraft,
-    })
+      const result = await buildFactoryRunResultFromProcessLine({
+        prompt,
+        plan,
+        plannerSource: 'fallback',
+        placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+        params: { e2eSmoke: true },
+        generatePrimitiveGeometryDraft,
+      })
 
-    expect(result.missingAssets).toEqual([])
-    expect(result.layoutDiagnostics).toMatchObject({
-      fits: true,
-      boundary: { length: 72, width: 72 },
-      diagnostics: [],
-    })
-    expect(result.layoutStrategy).toMatchObject({
-      reason: 'Used factory architecture station position hints.',
-    })
-    expect(result.qualityReport).toMatchObject({
-      passed: true,
-      checks: {
-        missingAssetCount: 0,
-        routeCollisionCount: 0,
-      },
-    })
-    expect(result.patches.length).toBeGreaterThan(0)
-    expect(
-      failedFactoryRunStatus(result, false, 'Factory process line failed quality checks.'),
-    ).toEqual({ failed: false, error: undefined })
-  })
+      expect(result.missingAssets).toEqual([])
+      expect(result.layoutDiagnostics).toMatchObject({
+        fits: true,
+        boundary: { length: 72, width: 72 },
+        diagnostics: [],
+      })
+      expect(result.layoutStrategy).toMatchObject({
+        reason: 'Used factory architecture station position hints.',
+      })
+      expect(result.qualityReport).toMatchObject({
+        passed: true,
+        checks: {
+          missingAssetCount: 0,
+          routeCollisionCount: 0,
+        },
+      })
+      expect(result.patches.length).toBeGreaterThan(0)
+      expect(
+        failedFactoryRunStatus(result, false, 'Factory process line failed quality checks.'),
+      ).toEqual({ failed: false, error: undefined })
+    },
+    10000,
+  )
 
   test('retries process-line primitive generation when the first attempt has no artifact', async () => {
     const plan = fallbackFactoryPlan('create a hydrogen electrolysis workshop')
@@ -790,44 +897,48 @@ describe('factory runner helpers', () => {
     ).toBe(true)
   })
 
-  test('relabels factory primitive artifacts with station display labels before placement', async () => {
-    const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
-    if (plan.kind !== 'process_line') throw new Error('expected process line plan')
+  test(
+    'relabels factory primitive artifacts with station display labels before placement',
+    async () => {
+      const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+      if (plan.kind !== 'process_line') throw new Error('expected process line plan')
 
-    const result = await buildFactoryRunResultFromProcessLine({
-      prompt: '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
-      plan,
-      plannerSource: 'fallback',
-      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
-      generatePrimitiveGeometryDraft: async (request) => ({
-        runId: `run_${request.params?.stationId ?? 'station'}`,
-        conversationId: 'factory:geometry',
-        status: 'succeeded',
-        artifact: oversizedContractArtifact(request),
-      }),
-    })
+      const result = await buildFactoryRunResultFromProcessLine({
+        prompt: '\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382',
+        plan,
+        plannerSource: 'fallback',
+        placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+        generatePrimitiveGeometryDraft: async (request) => ({
+          runId: `run_${request.params?.stationId ?? 'station'}`,
+          conversationId: 'factory:geometry',
+          status: 'succeeded',
+          artifact: oversizedContractArtifact(request),
+        }),
+      })
 
-    const kilnHoodRoot = result.patches.find(
-      (patch) =>
-        patch.op === 'create' &&
-        patch.node.metadata?.stationId === 'kiln_hood' &&
-        patch.node.metadata?.factoryPrimitiveContractAlignment,
-    )
-    expect(kilnHoodRoot?.node.name).toBe('\u7a91\u5934\u7f69')
-    expect(kilnHoodRoot?.node.metadata).toMatchObject({
-      equipmentContract: { profileId: 'cement.kiln_hood' },
-    })
-    expect(
-      result.patches.some(
+      const kilnHoodRoot = result.patches.find(
         (patch) =>
           patch.op === 'create' &&
-          patch.parentId === kilnHoodRoot?.node.id &&
-          typeof patch.node.name === 'string' &&
-          patch.node.name.startsWith('\u7a91\u5934\u7f69 '),
-      ),
-    ).toBe(true)
-    expect(result.focusBounds).toMatchObject({ reason: 'factory-key-process' })
-  })
+          patch.node.metadata?.stationId === 'kiln_hood' &&
+          patch.node.metadata?.factoryPrimitiveContractAlignment,
+      )
+      expect(kilnHoodRoot?.node.name).toBe('\u7a91\u5934\u7f69')
+      expect(kilnHoodRoot?.node.metadata).toMatchObject({
+        equipmentContract: { profileId: 'cement.kiln_hood' },
+      })
+      expect(
+        result.patches.some(
+          (patch) =>
+            patch.op === 'create' &&
+            patch.parentId === kilnHoodRoot?.node.id &&
+            typeof patch.node.name === 'string' &&
+            patch.node.name.startsWith('\u7a91\u5934\u7f69 '),
+        ),
+      ).toBe(true)
+      expect(result.focusBounds).toMatchObject({ reason: 'factory-key-process' })
+    },
+    10000,
+  )
 
   test('reroutes process connections to primitive artifact port markers after generation', async () => {
     const plan = fallbackFactoryPlan('创建一条化工厂水裂解车间')

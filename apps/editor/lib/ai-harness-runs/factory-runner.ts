@@ -1,6 +1,7 @@
 import { findCatalogItem } from '@pascal-app/core/lib/asset-catalog'
 import type { Vec3 } from '@pascal-app/core/lib/primitive-compose'
 import { ItemNode } from '@pascal-app/core/schema'
+import type { GeneratedGeometryArtifact } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
 import {
   buildGeneratedGeometryCreatePatches,
   type GeneratedGeometryCreatePatch,
@@ -9,15 +10,27 @@ import {
 import { buildFactoryGeometryRequestPrompt } from './factory-agent-prompt'
 import { composeFactoryLayout } from './factory-layout-composer'
 import { type FactoryPlan, planFactoryRequest } from './factory-planner'
+import { alignFactoryPrimitiveArtifactToContract } from './factory-primitive-contract-alignment'
+import { evaluateFactoryPrimitiveArtifactContract } from './factory-primitive-quality'
 import { evaluateFactoryQuality, type FactoryQualityReport } from './factory-quality-report'
 import { composeSelectionEdit, type FactorySceneEditPatch } from './factory-selection-edit'
-import type { PrimitiveGeometryGenerationResult } from './primitive-generation-service'
+import type {
+  PrimitiveGeometryGenerationRequest,
+  PrimitiveGeometryGenerationResult,
+} from './primitive-generation-service'
 import { composeProcessLine } from './process-line-composer'
 import { stationDisplayLabel } from './process-line-localization'
+import { compileSingleEquipmentPrompt } from './single-equipment-compiler'
+import type {
+  ProcessRouteObstacle,
+  ProcessRoutePortEndpoint,
+  ProcessRoutePortOverrides,
+} from './process-line-routing'
 import type {
   ProcessLayoutDiagnostics,
   ProcessLayoutStrategy,
   ProcessLineFocusBounds,
+  ProcessPrimitiveRequest,
 } from './process-line-types'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
 
@@ -60,6 +73,12 @@ export type FactoryRunResult = {
   placement: GeneratedGeometryPlacementSpec
   editSummary?: string[]
 }
+
+type PrimitiveGeometryDraftGenerator = (
+  request: PrimitiveGeometryGenerationRequest,
+) => Promise<PrimitiveGeometryGenerationResult>
+
+const PROCESS_PRIMITIVE_MAX_ATTEMPTS = 2
 
 function withFactoryQuality(result: FactoryRunResult): FactoryRunResult {
   return { ...result, qualityReport: evaluateFactoryQuality(result) }
@@ -340,6 +359,50 @@ export function buildFactoryRunResultFromGeometryDraft(input: {
   return withFactoryQuality(result)
 }
 
+export function buildFactoryRunResultFromSingleEquipmentPrompt(input: {
+  prompt: string
+  placement: GeneratedGeometryPlacementSpec
+  context?: unknown
+  plan?: FactoryPlan
+  plannerSource?: 'llm' | 'fallback'
+  updatesOnly?: boolean
+}): FactoryRunResult | null {
+  const compiled = compileSingleEquipmentPrompt({
+    prompt: input.prompt,
+    placement: input.placement,
+    context: input.context,
+  })
+
+  if (compiled.kind === 'generic-equipment-draft') return null
+  if (compiled.kind === 'create-equipment-node') {
+    if (input.updatesOnly) return null
+    return withFactoryQuality({
+      intent: { action: 'generate_equipment_draft', prompt: input.prompt },
+      applied: false,
+      plan: input.plan,
+      plannerSource: input.plannerSource,
+      patches: [compiled.patch],
+      nodeIds: [compiled.patch.node.id],
+      created: [compiled.patch.node.name ?? compiled.patch.node.type],
+      missingAssets: [],
+      placement: input.placement,
+    })
+  }
+
+  return withFactoryQuality({
+    intent: { action: 'edit_selection', prompt: input.prompt },
+    applied: false,
+    plan: input.plan,
+    plannerSource: input.plannerSource,
+    patches: [compiled.patch],
+    nodeIds: [compiled.nodeId],
+    created: [compiled.nodeKind],
+    editSummary: [`${compiled.nodeKind}: equipment parameters updated`],
+    missingAssets: [],
+    placement: input.placement,
+  })
+}
+
 export function buildFactoryRunResultFromPlan(input: {
   prompt: string
   plan: FactoryPlan
@@ -464,6 +527,14 @@ export function buildFactoryRunResultFromSelectionEdit(input: {
   context?: unknown
   placement: GeneratedGeometryPlacementSpec
 }): FactoryRunResult | null {
+  const equipmentEdit = buildFactoryRunResultFromSingleEquipmentPrompt({
+    prompt: input.prompt,
+    context: input.context,
+    placement: input.placement,
+    updatesOnly: true,
+  })
+  if (equipmentEdit) return equipmentEdit
+
   const edit = composeSelectionEdit({
     prompt: input.prompt,
     context: input.context,
@@ -490,24 +561,419 @@ export function buildFactoryRunResultFromSelectionEdit(input: {
   })
 }
 
+function primitivePlacement(
+  request: ProcessPrimitiveRequest,
+  parentPlacement: GeneratedGeometryPlacementSpec,
+): GeneratedGeometryPlacementSpec {
+  return {
+    ...(parentPlacement.parentId == null ? {} : { parentId: parentPlacement.parentId }),
+    position: request.placement.position,
+    rotation: request.placement.rotation,
+    generatedBy: parentPlacement.generatedBy ?? 'factory-agent',
+    metadata: {
+      ...parentPlacement.metadata,
+      ...request.metadata,
+    },
+  }
+}
+
+function rounded(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
+function artifactShapePortId(input: {
+  artifact: GeneratedGeometryArtifact
+  shapeIndex: number
+  expectedPortId: string
+}) {
+  const shape = input.artifact.shapes[input.shapeIndex]
+  if (!shape) return undefined
+  const expected = input.expectedPortId.toLowerCase()
+  const candidates = [shape.semanticRole, shape.sourcePartId, shape.name]
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.toLowerCase())
+  return candidates.some((value) => value === expected || value.includes(expected))
+    ? input.expectedPortId
+    : undefined
+}
+
+function rotateLocalXZ(localX: number, localZ: number, rotation: Vec3) {
+  const yaw = rotation[1] ?? 0
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  return {
+    x: localX * cos - localZ * sin,
+    z: localX * sin + localZ * cos,
+  }
+}
+
+function rotateVec3ByEuler(vector: Vec3, rotation: Vec3): Vec3 {
+  let [x, y, z] = vector
+
+  const cz = Math.cos(rotation[2])
+  const sz = Math.sin(rotation[2])
+  ;[x, y] = [x * cz - y * sz, x * sz + y * cz]
+
+  const cy = Math.cos(rotation[1])
+  const sy = Math.sin(rotation[1])
+  ;[x, z] = [x * cy + z * sy, -x * sy + z * cy]
+
+  const cx = Math.cos(rotation[0])
+  const sx = Math.sin(rotation[0])
+  ;[y, z] = [y * cx - z * sx, y * sx + z * cx]
+
+  return [x, y, z]
+}
+
+function primitiveShapeExtents(shape: GeneratedGeometryArtifact['shapes'][number]): Vec3 {
+  switch (shape.kind) {
+    case 'box':
+    case 'wedge':
+    case 'trapezoid-prism':
+      return [shape.length ?? 1, shape.height ?? 1, shape.width ?? 1]
+    case 'rounded-panel':
+      return [shape.length ?? 1, shape.thickness ?? shape.height ?? 0.04, shape.width ?? 1]
+    case 'cylinder':
+    case 'hollow-cylinder':
+    case 'capsule':
+    case 'cone':
+    case 'frustum': {
+      const radius = Math.max(shape.radius ?? 0, shape.radiusTop ?? 0, shape.radiusBottom ?? 0, 0.1)
+      const height = shape.height ?? 1
+      if (shape.axis === 'x') return [height, radius * 2, radius * 2]
+      if (shape.axis === 'z') return [radius * 2, radius * 2, height]
+      return [radius * 2, height, radius * 2]
+    }
+    case 'sphere':
+    case 'hemisphere': {
+      const radius = shape.radius ?? 0.5
+      const scale = shape.scale ?? [1, 1, 1]
+      return [radius * 2 * scale[0], radius * 2 * scale[1], radius * 2 * scale[2]]
+    }
+    case 'torus': {
+      const radius = (shape.majorRadius ?? shape.radius ?? 0.5) + (shape.tubeRadius ?? 0.08)
+      return [radius * 2, radius * 2, radius * 2]
+    }
+    default:
+      return [0.25, 0.25, 0.25]
+  }
+}
+
+function primitiveArtifactRouteObstacle(input: {
+  request: ProcessPrimitiveRequest
+  artifact: GeneratedGeometryArtifact
+}): ProcessRouteObstacle | undefined {
+  if (!input.artifact.shapes.length) return undefined
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  input.artifact.shapes.forEach((shape, index) => {
+    const transform = input.artifact.transforms[index]
+    const position = transform?.position ?? shape.position
+    const rotation = transform?.rotation ?? shape.rotation ?? [0, 0, 0]
+    const [length, height, width] = primitiveShapeExtents(shape)
+    const localX = position[0] - input.artifact.assemblyPosition[0]
+    const localY = position[1] - input.artifact.assemblyPosition[1]
+    const localZ = position[2] - input.artifact.assemblyPosition[2]
+    const corners: Vec3[] = []
+    for (const x of [-length / 2, length / 2]) {
+      for (const y of [-height / 2, height / 2]) {
+        for (const z of [-width / 2, width / 2]) {
+          corners.push([x, y, z])
+        }
+      }
+    }
+
+    for (const corner of corners) {
+      const rotatedCorner = rotateVec3ByEuler(corner, rotation)
+      const rotated = rotateLocalXZ(
+        localX + rotatedCorner[0],
+        localZ + rotatedCorner[2],
+        input.request.placement.rotation,
+      )
+      minX = Math.min(minX, input.request.placement.position[0] + rotated.x)
+      maxX = Math.max(maxX, input.request.placement.position[0] + rotated.x)
+      minZ = Math.min(minZ, input.request.placement.position[2] + rotated.z)
+      maxZ = Math.max(maxZ, input.request.placement.position[2] + rotated.z)
+      minY = Math.min(minY, input.request.placement.position[1] + localY + rotatedCorner[1])
+      maxY = Math.max(maxY, input.request.placement.position[1] + localY + rotatedCorner[1])
+    }
+  })
+
+  if (![minX, maxX, minZ, maxZ, minY, maxY].every(Number.isFinite)) return undefined
+  const routeClearance = maxY - minY > 3 ? 0.35 : 0.2
+  return {
+    stationId: input.request.station.id,
+    source: 'artifact',
+    minHeight: rounded(minY),
+    maxHeight: rounded(maxY),
+    box: {
+      minX: rounded(minX - routeClearance),
+      maxX: rounded(maxX + routeClearance),
+      minZ: rounded(minZ - routeClearance),
+      maxZ: rounded(maxZ + routeClearance),
+    },
+  }
+}
+
+function extractArtifactPortOverrides(input: {
+  request: ProcessPrimitiveRequest
+  artifact: GeneratedGeometryArtifact
+}): ProcessRoutePortEndpoint[] {
+  const contract = input.request.equipmentContract
+  if (!contract) return []
+
+  const endpoints: ProcessRoutePortEndpoint[] = []
+  for (const port of contract.ports) {
+    const portPosition = artifactPrimitivePortPosition({
+      artifact: input.artifact,
+      expectedPortId: port.id,
+    })
+    if (!portPosition) continue
+    const transformPosition = portPosition
+    const localX = transformPosition[0] - input.artifact.assemblyPosition[0]
+    const localY = transformPosition[1] - input.artifact.assemblyPosition[1]
+    const localZ = transformPosition[2] - input.artifact.assemblyPosition[2]
+    const rotated = rotateLocalXZ(localX, localZ, input.request.placement.rotation)
+    endpoints.push({
+      stationId: input.request.station.id,
+      portId: port.id,
+      medium: port.medium,
+      point: [
+        rounded(input.request.placement.position[0] + rotated.x),
+        rounded(input.request.placement.position[2] + rotated.z),
+      ],
+      height: rounded(input.request.placement.position[1] + localY),
+      side: port.side,
+      profileId: contract.profileId,
+      source: 'artifact',
+    })
+  }
+  return endpoints
+}
+
+function artifactPrimitivePortPosition(input: {
+  artifact: GeneratedGeometryArtifact
+  expectedPortId: string
+}): Vec3 | undefined {
+  const expected = input.expectedPortId.toLowerCase()
+  for (const [shapeIndex, shape] of input.artifact.shapes.entries()) {
+    for (const port of shape.ports ?? []) {
+      const ids = [port.id, port.semanticRole].filter((value): value is string => Boolean(value))
+      if (!ids.some((id) => id.toLowerCase() === expected || id.toLowerCase().includes(expected))) {
+        continue
+      }
+      return port.position ?? input.artifact.transforms[shapeIndex]?.position ?? shape.position
+    }
+  }
+
+  const shapeIndex = input.artifact.shapes.findIndex((_, index) =>
+    Boolean(
+      artifactShapePortId({
+        artifact: input.artifact,
+        shapeIndex: index,
+        expectedPortId: input.expectedPortId,
+      }),
+    ),
+  )
+  if (shapeIndex < 0) return undefined
+  const shape = input.artifact.shapes[shapeIndex]
+  if (!shape) return undefined
+  return input.artifact.transforms[shapeIndex]?.position ?? shape.position
+}
+
+function addPortOverrides(
+  overrides: ProcessRoutePortOverrides,
+  stationId: string,
+  endpoints: ProcessRoutePortEndpoint[],
+) {
+  if (!endpoints.length) return
+  overrides[stationId] = [...(overrides[stationId] ?? []), ...endpoints]
+}
+
+function displayShapeRole(shape: GeneratedGeometryArtifact['shapes'][number], index: number) {
+  return (
+    shape.semanticRole ??
+    shape.sourcePartId ??
+    shape.sourcePartKind?.split('.').pop() ??
+    shape.kind ??
+    `part_${index + 1}`
+  )
+}
+
+function relabelFactoryPrimitiveArtifact(input: {
+  artifact: GeneratedGeometryArtifact
+  request: ProcessPrimitiveRequest
+}): GeneratedGeometryArtifact {
+  const displayName = stationDisplayLabel(input.request.station)
+  const profileId = input.request.equipmentContract?.profileId
+  const shapes = input.artifact.shapes.map((shape, index) => ({
+    ...shape,
+    name: `${displayName} ${displayShapeRole(shape, index)}`,
+  }))
+
+  return {
+    ...input.artifact,
+    title: displayName,
+    assemblyName: displayName,
+    shapes,
+    createdNames: shapes.map((shape) => shape.name ?? displayName),
+    sourceArgs: {
+      ...input.artifact.sourceArgs,
+      factoryDisplayName: displayName,
+      factoryStationId: input.request.station.id,
+      factoryStationRole: input.request.station.role,
+      ...(profileId ? { factoryEquipmentProfileId: profileId } : {}),
+    },
+  }
+}
+
 export async function buildFactoryRunResultFromProcessLine(input: {
   prompt: string
   plan: Extract<FactoryPlan, { kind: 'process_line' }>
   plannerSource?: 'llm' | 'fallback'
   placement: GeneratedGeometryPlacementSpec
   params?: Record<string, unknown>
+  generatePrimitiveGeometryDraft: PrimitiveGeometryDraftGenerator
 }): Promise<FactoryRunResult> {
   const processPlan = composeProcessLine({
     prompt: input.prompt,
     plan: input.plan.process,
     placement: input.placement,
     params: input.params,
+    sections: { connections: false },
+  })
+  const primitivePatches: GeneratedGeometryCreatePatch[] = []
+  const primitiveCreated: string[] = []
+  const primitiveNodeIds: string[] = []
+  const portOverrides: ProcessRoutePortOverrides = { ...processPlan.portOverrides }
+  const routeObstacles: ProcessRouteObstacle[] = []
+  const industryPackRef = input.plan.process.sourcePack
+  const unresolved = new Map(
+    processPlan.primitiveRequests.map((request) => [request.station.id, request.station.label]),
+  )
+  let lastGeometryRunId: string | undefined
+  let lastGeometryStatus: PrimitiveGeometryGenerationResult['status'] | undefined
+
+  for (const request of processPlan.primitiveRequests) {
+    let accepted:
+      | {
+          aligned: ReturnType<typeof alignFactoryPrimitiveArtifactToContract>
+          quality: ReturnType<typeof evaluateFactoryPrimitiveArtifactContract>
+        }
+      | undefined
+
+    for (let attempt = 1; attempt <= PROCESS_PRIMITIVE_MAX_ATTEMPTS; attempt += 1) {
+      const geometry = await input.generatePrimitiveGeometryDraft({
+        prompt: request.prompt,
+        conversationId: 'factory-agent',
+        context: {
+          sourcePrompt: input.prompt,
+          processId: input.plan.process.processId,
+          processLabel: input.plan.process.processLabel,
+          ...(industryPackRef ? { industrySourcePack: industryPackRef } : {}),
+          stationId: request.station.id,
+          stationRole: request.station.role,
+          primitiveAttempt: attempt,
+        },
+        params: {
+          source: 'factory-agent',
+          stationId: request.station.id,
+          primitiveAttempt: attempt,
+          ...(input.params?.e2eSmoke === true ? { e2eSmoke: true } : {}),
+          ...(request.equipmentContract
+            ? {
+                equipmentFamily: request.equipmentContract.equipmentFamily,
+                equipmentProfileId: request.equipmentContract.profileId,
+                equipmentEnvelope: request.equipmentContract.envelope,
+                equipmentPorts: request.equipmentContract.ports,
+                preferredTool: request.equipmentContract.preferredTool,
+              }
+            : {}),
+        },
+        source: 'factory-agent',
+        placementIntent: {
+          requestedRole: request.station.role,
+          desiredFootprint: [request.placement.footprint.length, request.placement.footprint.width],
+          ...(request.equipmentContract
+            ? {
+                desiredEnvelope: [
+                  request.equipmentContract.envelope.length,
+                  request.equipmentContract.envelope.width,
+                  request.equipmentContract.envelope.height,
+                ],
+              }
+            : {}),
+          lineRole: request.station.role,
+        },
+        factoryEquipmentContract: request.equipmentContract,
+      })
+      lastGeometryRunId = geometry.runId
+      lastGeometryStatus = geometry.status
+      if (!geometry.artifact) continue
+      const aligned = alignFactoryPrimitiveArtifactToContract({
+        artifact: geometry.artifact,
+        contract: request.equipmentContract,
+      })
+      const quality = evaluateFactoryPrimitiveArtifactContract({
+        artifact: aligned.artifact,
+        contract: request.equipmentContract,
+      })
+      if (!quality.passed) continue
+      accepted = { aligned, quality }
+      break
+    }
+    if (!accepted) continue
+
+    const displayArtifact = relabelFactoryPrimitiveArtifact({
+      artifact: accepted.aligned.artifact,
+      request,
+    })
+    const routeObstacle = primitiveArtifactRouteObstacle({ request, artifact: displayArtifact })
+    const patchPlan = buildGeneratedGeometryCreatePatches(displayArtifact, {
+      ...primitivePlacement(request, input.placement),
+      metadata: {
+        ...primitivePlacement(request, input.placement).metadata,
+        factoryPrimitiveQuality: accepted.quality,
+        factoryPrimitiveContractAlignment: accepted.aligned.alignment,
+        ...(routeObstacle
+          ? {
+              factoryRouteObstacle: routeObstacle,
+              factoryPrimitiveRouteObstacle: routeObstacle,
+            }
+          : {}),
+      },
+    })
+    primitivePatches.push(...patchPlan.patches)
+    primitiveCreated.push(...patchPlan.created)
+    primitiveNodeIds.push(...patchPlan.nodeIds)
+    addPortOverrides(
+      portOverrides,
+      request.station.id,
+      extractArtifactPortOverrides({ request, artifact: displayArtifact }),
+    )
+    if (routeObstacle) routeObstacles.push(routeObstacle)
+    unresolved.delete(request.station.id)
+  }
+
+  const connectionPlan = composeProcessLine({
+    prompt: input.prompt,
+    plan: input.plan.process,
+    placement: input.placement,
+    params: input.params,
+    sections: { shell: false, stations: false, connections: true },
+    portOverrides,
+    routeObstacles: [...processPlan.routeObstacles, ...routeObstacles],
   })
 
-  const missingAssets = processPlan.primitiveRequests.map((request) => ({
-    name: stationDisplayLabel(request.station),
+  const missingAssets = [...unresolved.values()].map((name) => ({
+    name,
     reason:
-      'No registered equipment node, catalog item, or native resolver matched this station; a station zone placeholder remains.',
+      'Primitive generation did not produce an artifact for this station; a station zone placeholder remains.',
     required: false,
   }))
 
@@ -517,13 +983,15 @@ export async function buildFactoryRunResultFromProcessLine(input: {
       applied: false,
       plan: input.plan,
       plannerSource: input.plannerSource,
-      patches: processPlan.patches,
-      nodeIds: processPlan.nodeIds,
-      created: processPlan.created,
+      patches: [...processPlan.patches, ...primitivePatches, ...connectionPlan.patches],
+      nodeIds: [...processPlan.nodeIds, ...primitiveNodeIds, ...connectionPlan.nodeIds],
+      created: [...processPlan.created, ...primitiveCreated, ...connectionPlan.created],
       missingAssets,
       focusBounds: processPlan.focusBounds,
       layoutDiagnostics: processPlan.layoutDiagnostics,
       layoutStrategy: processPlan.layoutStrategy,
+      geometryRunId: lastGeometryRunId,
+      geometryStatus: lastGeometryStatus,
       placement: input.placement,
     }),
   )
@@ -639,12 +1107,14 @@ async function runFactoryRun(runId: string) {
 
     if (await shouldStopRun(runId, controller.signal)) return
     if (planned.plan.kind === 'process_line') {
+      const { generatePrimitiveGeometryDraft } = await import('./primitive-generation-service')
       const processLineResult = await buildFactoryRunResultFromProcessLine({
         prompt: run.prompt,
         plan: planned.plan,
         plannerSource: planned.source,
         placement,
         params: run.params,
+        generatePrimitiveGeometryDraft,
       })
       await appendRunEvent(runId, {
         type: 'message',
@@ -735,6 +1205,45 @@ async function runFactoryRun(runId: string) {
       lineRole: geometryPlan.lineRole,
       desiredDimensions: geometryPlan.desiredDimensions,
     })
+    const equipmentNodeResult = buildFactoryRunResultFromSingleEquipmentPrompt({
+      prompt: `${run.prompt} ${geometryPlan.equipmentName}`,
+      context: run.context,
+      placement,
+      plan: geometryPlan,
+      plannerSource: planned.source,
+    })
+    if (equipmentNodeResult) {
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: 'Factory equipment node generated; patches are ready but not applied.',
+        data: {
+          stage: 'patch-plan',
+          patchCount: equipmentNodeResult.patches.length,
+          nodeIds: equipmentNodeResult.nodeIds,
+          missingAssets: equipmentNodeResult.missingAssets,
+          qualityReport: equipmentNodeResult.qualityReport,
+        },
+      })
+      await appendRunEvent(runId, { type: 'result', data: equipmentNodeResult })
+      const runStatus = failedFactoryRunStatus(
+        equipmentNodeResult,
+        false,
+        'Factory equipment node failed quality checks.',
+      )
+      await updateRun(runId, {
+        status: runStatus.failed ? 'failed' : 'succeeded',
+        completedAt: new Date().toISOString(),
+        ...(runStatus.failed ? { error: runStatus.error } : {}),
+        result: equipmentNodeResult,
+      })
+      await appendRunEvent(runId, {
+        type: 'status',
+        message: runStatus.failed ? 'failed' : 'succeeded',
+        data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
+      })
+      return
+    }
+
     const { generatePrimitiveGeometryDraft } = await import('./primitive-generation-service')
     const geometry = await generatePrimitiveGeometryDraft({
       prompt: geometryPrompt,
