@@ -115,18 +115,7 @@ export default function IfcConverter() {
     return results
   }, [pascalData, searchQuery])
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const requested = params.get('file')
-    const matched = testFiles.some((f) => f.name === requested)
-    const initial = matched ? requested! : '01-duplex.ifc'
-    loadExampleFile(initial)
-    if (matched) {
-      document.getElementById('try')?.scrollIntoView({ block: 'start' })
-    }
-  }, [])
-
-  const loadAndConvert = async (data: Uint8Array, name: string) => {
+  const loadAndConvert = useCallback(async (data: Uint8Array, name: string) => {
     setFileName(name)
     setStatus('converting')
     setSearchQuery('')
@@ -148,9 +137,9 @@ export default function IfcConverter() {
       setStatus('error')
       setConversionProgress(0)
     }
-  }
+  }, [])
 
-  const loadExampleFile = async (filename: string) => {
+  const loadExampleFile = useCallback(async (filename: string) => {
     setStatus('loading')
     setSelectedFile(filename)
     setError(null)
@@ -175,9 +164,20 @@ export default function IfcConverter() {
       setError(err instanceof Error ? err.message : 'Failed to load file')
       setStatus('error')
     }
-  }
+  }, [loadAndConvert])
 
-  const handleFile = async (file: File) => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const requested = params.get('file')
+    const matched = testFiles.some((f) => f.name === requested)
+    const initial = matched ? requested! : '01-duplex.ifc'
+    loadExampleFile(initial)
+    if (matched) {
+      document.getElementById('try')?.scrollIntoView({ block: 'start' })
+    }
+  }, [loadExampleFile])
+
+  const handleFile = useCallback(async (file: File) => {
     setStatus('loading')
     setError(null)
     setSelectedFile('')
@@ -199,7 +199,7 @@ export default function IfcConverter() {
       setError(err instanceof Error ? err.message : 'Failed to load file')
       setStatus('error')
     }
-  }
+  }, [loadAndConvert])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -210,7 +210,7 @@ export default function IfcConverter() {
     } else {
       setError('Please drop a valid IFC file')
     }
-  }, [])
+  }, [handleFile])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -234,7 +234,7 @@ export default function IfcConverter() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = fileName.replace('.ifc', '') + '_pascal.json'
+    a.download = `${fileName.replace('.ifc', '')}_pascal.json`
     a.click()
     URL.revokeObjectURL(url)
   }

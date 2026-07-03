@@ -81,9 +81,6 @@
         "noNoninteractiveElementInteractions": "off",
         "useButtonType": "off"
       },
-      "nursery": {
-        "noShadow": "off"
-      },
       "security": {
         "noDangerouslySetInnerHtml": "info"
       }
