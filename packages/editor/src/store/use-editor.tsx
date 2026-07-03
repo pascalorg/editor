@@ -82,9 +82,14 @@ export type WorkspaceMode = 'edit' | 'studio'
 // — `ThumbnailGenerator` consults `captureMode.mode === 'preset'` and
 // applies those constraints. Keeping it a discriminated union lets us
 // add future modes without surfacing the choice to end users.
+// How the captured pixels are cropped: full-frame 16:9, raw canvas viewport,
+// or user-dragged area. Hosts (e.g. the studio capture bar) can preselect it
+// when entering capture mode.
+export type SnapshotCropMode = 'standard' | 'viewport' | 'area'
+
 export type CaptureMode =
   | { mode: 'idle' }
-  | { mode: 'standard' }
+  | { mode: 'standard'; crop?: SnapshotCropMode }
   | {
       mode: 'preset'
       isolated: AnyNodeId[]
