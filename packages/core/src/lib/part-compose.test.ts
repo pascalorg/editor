@@ -17,10 +17,10 @@ function expectBladeRotationMatchesRadialPlacement(shape: {
   const actualY = shape.rotation?.[1] ?? 0
   const actualZ = shape.rotation?.[2] ?? 0
   const wrappedDelta = Math.atan2(
-    Math.sin(actualY + expectedAngle),
-    Math.cos(actualY + expectedAngle),
+    Math.sin(actualZ + expectedAngle),
+    Math.cos(actualZ + expectedAngle),
   )
-  expect(actualZ).toBeCloseTo(0, 4)
+  expect(actualY).toBeCloseTo(0, 4)
   expect(wrappedDelta).toBeCloseTo(0, 4)
 }
 

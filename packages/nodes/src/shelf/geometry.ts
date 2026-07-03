@@ -33,6 +33,43 @@ import type { ShelfNode } from './schema'
  */
 const shelfMaterialCache = new Map<string, Material>()
 
+type ShelfCloneableMaterial = Material & {
+  color?: {
+    r: number
+    g: number
+    b: number
+    copy(source: { r: number; g: number; b: number }): unknown
+  }
+  opacity?: number
+  transparent?: boolean
+  roughness?: number
+  metalness?: number
+}
+
+function cloneShelfMaterial(source: Material): Material {
+  const clone = source.clone()
+  const sourceMaterial = source as ShelfCloneableMaterial
+  const cloneMaterial = clone as ShelfCloneableMaterial
+
+  if (sourceMaterial.color && cloneMaterial.color) {
+    cloneMaterial.color.copy(sourceMaterial.color)
+  }
+  if (typeof sourceMaterial.opacity === 'number') {
+    cloneMaterial.opacity = sourceMaterial.opacity
+  }
+  if (typeof sourceMaterial.transparent === 'boolean') {
+    cloneMaterial.transparent = sourceMaterial.transparent
+  }
+  if (typeof sourceMaterial.roughness === 'number') {
+    cloneMaterial.roughness = sourceMaterial.roughness
+  }
+  if (typeof sourceMaterial.metalness === 'number') {
+    cloneMaterial.metalness = sourceMaterial.metalness
+  }
+
+  return clone
+}
+
 function getShelfMaterial(node: ShelfNode): Material {
   const cacheKey = JSON.stringify({
     material: node.material ?? null,
@@ -45,7 +82,7 @@ function getShelfMaterial(node: ShelfNode): Material {
   const material = preset
     ? new MeshStandardMaterial()
     : node.material
-      ? createMaterial(node.material).clone()
+      ? cloneShelfMaterial(createMaterial(node.material))
       : DEFAULT_SHELF_MATERIAL().clone()
 
   if (preset) {

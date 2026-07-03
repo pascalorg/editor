@@ -24,12 +24,12 @@ describe('geometry golden snapshots', () => {
     expect(snapshot).toMatchObject({
       id: 'standing-fan',
       family: 'fan',
-      shapeCount: 49,
-      dimensions: [0.6727, 1.5163, 0.56],
+      shapeCount: 46,
+      dimensions: [0.733, 1.5465, 0.56],
       roles: {
         circular_base: 1,
-        fan_blade: 4,
-        fan_blade_root: 3,
+        fan_blade: 3,
+        fan_hub: 1,
         motor_housing: 2,
         protective_grill: 34,
         support_bracket: 4,

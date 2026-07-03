@@ -540,6 +540,17 @@ export function createMaterial(
           metalness: props.metalness,
         })
 
+  if (isCommonMaterial(threeMaterial)) {
+    threeMaterial.color.set(props.color)
+    threeMaterial.opacity = materialParams.opacity
+    threeMaterial.transparent = materialParams.transparent
+    threeMaterial.side = materialParams.side
+    if (isStandardMaterial(threeMaterial)) {
+      threeMaterial.roughness = props.roughness
+      threeMaterial.metalness = props.metalness
+    }
+  }
+
   applyGradientNodes(threeMaterial, material?.gradient, props.opacity)
 
   materialCache.set(cacheKey, threeMaterial)

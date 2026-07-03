@@ -225,7 +225,7 @@ function compactVehicleAssemblyShapes(
   const lightMat = materialFromColor('#fde68a')
   const tailLightMat = materialFromColor('#ef4444')
   const hubMat = materialFromColor('#cbd5e1')
-  const bodyHeight = height * (style === 'truck' ? 0.42 : 0.38)
+  const bodyHeight = height * 0.38
   const cabinHeight = height * (style === 'sports' ? 0.34 : 0.4)
   const wheelRadius = Math.max(0.16, Math.min(length * 0.085, height * 0.23))
   const wheelY = wheelRadius
@@ -295,6 +295,19 @@ function compactVehicleAssemblyShapes(
       topWidthScale: 0.72,
       cornerRadius: Math.min(width, cabinHeight) * 0.04,
       cornerSegments: 4,
+      material: bodyMat,
+    },
+    {
+      kind: 'rounded-panel',
+      name: `${name} vehicle roof panel`,
+      semanticRole: 'vehicle_roof',
+      sourcePartKind: 'body_shell',
+      position: [cabinX, cabinY + cabinHeight * 0.52, 0],
+      rotation: [0, 0, 0],
+      length: cabinLength * (style === 'sports' ? 0.6 : 0.72),
+      width: cabinWidth * 0.74,
+      thickness: Math.max(0.012, bodyHeight * 0.035),
+      cornerRadius: Math.min(cabinLength, cabinWidth) * 0.035,
       material: bodyMat,
     },
     {
