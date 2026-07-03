@@ -46,7 +46,7 @@ export class PascalMcpClient {
 
   async listOpenAiTools(): Promise<OpenAiTool[]> {
     const client = this.requireClient()
-    const result = await client.listTools()
+    const result = await client.listTools(undefined, { timeout: this.config.mcpRequestTimeoutMs })
     return result.tools.map((tool) => ({
       type: 'function',
       function: {
@@ -60,9 +60,20 @@ export class PascalMcpClient {
     }))
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+  async callTool(
+    name: string,
+    args: Record<string, unknown>,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<unknown> {
     const client = this.requireClient()
-    const result = await client.callTool({ name, arguments: args })
+    // Bound every MCP call: a hung tool would otherwise hold the calling
+    // session's lock indefinitely with no way to recover short of a restart.
+    // The optional signal lets an in-flight call be aborted immediately on a
+    // user cancel instead of only at the next loop boundary.
+    const result = await client.callTool({ name, arguments: args }, undefined, {
+      timeout: this.config.mcpRequestTimeoutMs,
+      ...(options.signal ? { signal: options.signal } : {}),
+    })
     if (result.isError) {
       throw new Error(`MCP tool ${name} failed: ${mcpErrorMessage(result)}`)
     }
@@ -77,7 +88,7 @@ export class PascalMcpClient {
    */
   async readResourceText(uri: string): Promise<string | undefined> {
     const client = this.requireClient()
-    const result = await client.readResource({ uri })
+    const result = await client.readResource({ uri }, { timeout: this.config.mcpRequestTimeoutMs })
     const textContent = result.contents.find(
       (content): content is typeof content & { text: string } =>
         'text' in content && typeof content.text === 'string',
@@ -96,7 +107,7 @@ export class PascalMcpClient {
     args: Record<string, string>,
   ): Promise<Array<{ role: string; content: unknown }>> {
     const client = this.requireClient()
-    const result = await client.getPrompt({ name, arguments: args })
+    const result = await client.getPrompt({ name, arguments: args }, { timeout: this.config.mcpRequestTimeoutMs })
     return result.messages
   }
 

@@ -59,6 +59,20 @@ function editorHref(editorUrl: string): string {
   return editorUrl
 }
 
+function mapSessionMessages(session: WorkflowSession): UiMessage[] {
+  return (session.messages ?? [])
+    .filter(
+      (message) =>
+        (message.role === 'user' || message.role === 'assistant') &&
+        typeof message.content === 'string',
+    )
+    .map((message) => ({
+      id: crypto.randomUUID(),
+      role: message.role as 'user' | 'assistant',
+      content: message.content as string,
+    }))
+}
+
 function createSessionId(sceneId?: string): string {
   const storageKey = `pascal-ai-session:${sceneId ?? 'local-editor'}`
   const existing = window.localStorage.getItem(storageKey)
@@ -76,6 +90,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null)
   const [imageName, setImageName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -96,19 +111,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
         const payload = (await response.json()) as { session: WorkflowSession | null }
         if (!payload.session) return
         setSession(payload.session)
-        setMessages(
-          (payload.session.messages ?? [])
-            .filter(
-              (message) =>
-                (message.role === 'user' || message.role === 'assistant') &&
-                typeof message.content === 'string',
-            )
-            .map((message) => ({
-              id: crypto.randomUUID(),
-              role: message.role as 'user' | 'assistant',
-              content: message.content as string,
-            })),
-        )
+        setMessages(mapSessionMessages(payload.session))
       })
       .catch((loadError: unknown) => {
         if (!(loadError instanceof DOMException && loadError.name === 'AbortError')) {
@@ -122,6 +125,39 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   })
 
+  // Fetch the persisted session directly. Used to recover the real outcome
+  // when a /chat response comes back empty or truncated even though the
+  // backend actually finished and saved the session.
+  const recoverSession = useCallback(async (): Promise<WorkflowSession | null> => {
+    if (!sessionId) return null
+    try {
+      const res = await fetch(`${aiAgentUrl()}/sessions/${encodeURIComponent(sessionId)}`, {
+        cache: 'no-store',
+      })
+      const text = await res.text()
+      if (!res.ok || !text) return null
+      const payload = JSON.parse(text) as { session: WorkflowSession | null }
+      return payload.session ?? null
+    } catch {
+      return null
+    }
+  }, [sessionId])
+
+  const maybeRedirectToScene = useCallback(
+    (body: Record<string, unknown>, target: WorkflowSession) => {
+      const generatedUrl = target.sceneResult?.editorUrl
+      if (
+        body.action === 'confirm' &&
+        generatedUrl &&
+        (target.phase === 'completed' || target.phase === 'completed_with_issues') &&
+        !sceneId
+      ) {
+        window.location.assign(editorHref(generatedUrl))
+      }
+    },
+    [sceneId],
+  )
+
   const callAgent = useCallback(
     async (body: Record<string, unknown>) => {
       if (!sessionId) return
@@ -133,31 +169,75 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId, ...(sceneId ? { sceneId } : {}), ...body }),
         })
-        const payload = (await response.json()) as ChatResponse & { error?: string }
+        // Read as text first — never call response.json() directly, which
+        // throws "Unexpected end of JSON input" on an empty/truncated body
+        // (e.g. a long generation whose HTTP response got cut) and hides the
+        // fact that the generation may have succeeded server-side.
+        const rawText = await response.text()
+        let payload: (ChatResponse & { error?: string }) | null = null
+        if (rawText) {
+          try {
+            payload = JSON.parse(rawText) as ChatResponse & { error?: string }
+          } catch {
+            payload = null
+          }
+        }
+
+        if (!payload) {
+          console.warn('[ai-assistant] /chat returned an empty or non-JSON body', {
+            status: response.status,
+            contentType: response.headers.get('content-type'),
+            bodyLength: rawText.length,
+            bodySnippet: rawText.slice(0, 200),
+          })
+          const recovered = await recoverSession()
+          if (recovered) {
+            // The generation actually completed and was persisted — show it
+            // as the success it is rather than a JSON parse error.
+            setSession(recovered)
+            setMessages(mapSessionMessages(recovered))
+            maybeRedirectToScene(body, recovered)
+            return
+          }
+          throw new Error('AI 服务返回为空或被截断。如果生成可能已完成，请刷新页面查看结果，或稍后重试。')
+        }
+
         if (!response.ok) throw new Error(payload.error ?? `AI request failed (${response.status})`)
         setSession(payload.session)
         setMessages((current) => [
           ...current,
           { id: crypto.randomUUID(), role: 'assistant', content: payload.reply },
         ])
-        const generatedUrl = payload.session.sceneResult?.editorUrl
-        if (
-          body.action === 'confirm' &&
-          generatedUrl &&
-          (payload.session.phase === 'completed' ||
-            payload.session.phase === 'completed_with_issues') &&
-          !sceneId
-        ) {
-          window.location.assign(editorHref(generatedUrl))
-        }
+        maybeRedirectToScene(body, payload.session)
       } catch (requestError) {
         setError(requestError instanceof Error ? requestError.message : String(requestError))
       } finally {
         setBusy(false)
       }
     },
-    [sceneId, sessionId],
+    [maybeRedirectToScene, recoverSession, sceneId, sessionId],
   )
+
+  // Stop an in-flight generation/modification. Sent as a separate, concurrent
+  // request (not through the busy-gated `callAgent`) so it reaches the backend
+  // while the long generation request is still pending — the backend aborts
+  // that run, which then resolves with the cancelled session and updates the
+  // UI. We deliberately don't setSession from here to avoid racing with it.
+  const cancelGeneration = useCallback(async () => {
+    if (!sessionId || cancelling) return
+    setCancelling(true)
+    try {
+      await fetch(`${aiAgentUrl()}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, ...(sceneId ? { sceneId } : {}), action: 'cancel' }),
+      })
+    } catch {
+      // Best-effort: the in-flight request will still surface the outcome.
+    } finally {
+      setCancelling(false)
+    }
+  }, [cancelling, sceneId, sessionId])
 
   const send = useCallback(async () => {
     const message = input.trim()
@@ -264,11 +344,24 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
         {busy && (
           <div className="flex items-center gap-2 text-muted-foreground text-xs">
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-            {session?.phase === 'generating'
-              ? '正在生成并检查场景…'
-              : session?.phase === 'modifying'
-                ? '正在修改并检查场景…'
-                : '正在理解需求…'}
+            <span>
+              {session?.phase === 'generating'
+                ? '正在生成并检查场景…'
+                : session?.phase === 'modifying'
+                  ? '正在修改并检查场景…'
+                  : '正在理解需求…'}
+            </span>
+            {(session?.phase === 'generating' || session?.phase === 'modifying') && (
+              <button
+                className="ml-auto flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                disabled={cancelling}
+                onClick={() => void cancelGeneration()}
+                type="button"
+              >
+                <X className="h-3 w-3" />
+                {cancelling ? '正在停止…' : '停止生成'}
+              </button>
+            )}
           </div>
         )}
         {error && (
@@ -290,7 +383,8 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
       </div>
 
       {(session?.phase === 'awaiting_confirmation' ||
-        session?.phase === 'awaiting_modification_confirmation') && (
+        session?.phase === 'awaiting_modification_confirmation' ||
+        session?.phase === 'clarifying') && (
         <div className="flex gap-2 border-border/70 border-t p-3">
           <button
             className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 font-medium text-sm text-white hover:bg-blue-500 disabled:opacity-50"
@@ -299,7 +393,11 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
             type="button"
           >
             <Check className="h-4 w-4" />
-            {session.phase === 'awaiting_modification_confirmation' ? '确认执行' : '确认并生成'}
+            {session.phase === 'awaiting_modification_confirmation'
+              ? '确认执行'
+              : session.phase === 'clarifying'
+                ? '接受默认并生成'
+                : '确认并生成'}
           </button>
           <button
             className="flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"

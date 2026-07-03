@@ -6,6 +6,7 @@ import {
   formatSummary,
   mergeBrief,
   modifyFailureRecovery,
+  planIngestAction,
   publicEditorUrl,
   shouldModifyExistingScene,
   shouldRouteAsExistingSceneRequest,
@@ -14,7 +15,7 @@ import {
   type WallWithOpenings,
   type ZoneSummary,
 } from './agent'
-import type { DesignBrief, RequirementFact } from './types'
+import type { ChatInput, DesignBrief, RequirementFact, WorkflowSession } from './types'
 
 const thresholds = { usableConfidence: 0.8, partialConfidence: 0.5 }
 
@@ -213,6 +214,99 @@ describe('circulation: findIsolatedBedrooms', () => {
     ]
     const walls = [doorWall('w1', [4, 0], [4, 3])]
     expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
+})
+
+function session(overrides: Partial<WorkflowSession> = {}): WorkflowSession {
+  return {
+    sessionId: 's1',
+    inputType: 'text',
+    phase: 'intake',
+    availability: 'partially_usable',
+    brief: brief(),
+    questions: [],
+    reasons: [],
+    summary: '',
+    messages: [],
+    clarificationRounds: 0,
+    createdAt: 'now',
+    updatedAt: 'now',
+    ...overrides,
+  }
+}
+
+function input(overrides: Partial<ChatInput> = {}): ChatInput {
+  return { sessionId: 's1', ...overrides }
+}
+
+describe('ingest state machine: planIngestAction', () => {
+  test('cancel ends the turn and marks the session cancelled', () => {
+    const s = session({ phase: 'clarifying', questions: ['q'] })
+    const plan = planIngestAction(input({ action: 'cancel' }), s)
+    expect(plan).toEqual({ kind: 'reply', reply: '已取消当前户型设计任务。现有场景没有被修改。' })
+    expect(s.phase).toBe('cancelled')
+    expect(s.questions).toEqual([])
+  })
+
+  test('confirm from awaiting_confirmation routes to generation', () => {
+    const s = session({ phase: 'awaiting_confirmation' })
+    const plan = planIngestAction(input({ action: 'confirm' }), s)
+    expect(plan.kind).toBe('route')
+    expect(plan).toMatchObject({ next: 'generate' })
+    expect(s.phase).toBe('generating')
+  })
+
+  test('confirm from clarifying is the accept-defaults escape hatch', () => {
+    const s = session({ phase: 'clarifying' })
+    const plan = planIngestAction(input({ action: 'confirm' }), s)
+    expect(plan.kind).toBe('route')
+    expect(plan).toMatchObject({ next: 'generate' })
+    if (plan.kind === 'route') expect(plan.reply).toContain('默认假设')
+    expect(s.phase).toBe('generating')
+  })
+
+  test('confirm with a pending modification routes to modify', () => {
+    const s = session({ phase: 'awaiting_modification_confirmation', pendingModification: '换个方向开门' })
+    const plan = planIngestAction(input({ action: 'confirm' }), s)
+    expect(plan).toMatchObject({ kind: 'route', next: 'modify' })
+    expect(s.phase).toBe('modifying')
+  })
+
+  test('confirm when nothing is confirmable is rejected', () => {
+    const s = session({ phase: 'intake' })
+    const plan = planIngestAction(input({ action: 'confirm' }), s)
+    expect(plan.kind).toBe('reply')
+    expect(s.phase).toBe('intake')
+  })
+
+  test('empty input asks for something to work with', () => {
+    const plan = planIngestAction(input({ message: '   ' }), session())
+    expect(plan).toEqual({ kind: 'reply', reply: '请输入户型需求，或上传一张户型图。' })
+  })
+
+  test('a message on a completed scene is routed as an existing-scene request', () => {
+    const s = session({ phase: 'completed' })
+    const plan = planIngestAction(input({ message: '在南墙加一扇窗' }), s)
+    expect(plan).toEqual({ kind: 'route-existing', message: '在南墙加一扇窗' })
+  })
+
+  test('an over-long message is rejected before any work', () => {
+    const plan = planIngestAction(input({ message: 'x'.repeat(5001) }), session())
+    expect(plan.kind).toBe('reply')
+    if (plan.kind === 'reply') expect(plan.reply).toContain('5000')
+  })
+
+  test('an unsupported image fails fast', () => {
+    const s = session()
+    const plan = planIngestAction(input({ imageDataUrl: 'data:image/gif;base64,AAAA' }), s)
+    expect(plan.kind).toBe('reply')
+    expect(s.phase).toBe('failed')
+    expect(s.availability).toBe('unusable')
+  })
+
+  test('an ordinary new requirement is delegated to the intake path', () => {
+    const plan = planIngestAction(input({ message: '85平米三室两厅' }), session())
+    expect(plan).toEqual({ kind: 'intake', message: '85平米三室两厅' })
   })
 })
 

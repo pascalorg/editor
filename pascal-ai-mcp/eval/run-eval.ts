@@ -31,13 +31,18 @@ import {
   checkBedroomCount,
   checkForbiddenRoomTypes,
   checkRequiredRoomTypes,
+  classifyFailure,
+  classifyFurnitureIssues,
   dependencySceneKey,
   determineSuccess,
   findCorpusLevelProblems,
   resolveDependencySceneId,
   validateCaseStructure,
   type EvalCase,
+  type FailureClassification,
+  type FurnitureIssueBreakdown,
 } from './evaluate-run'
+import { scaffoldReviews } from './review'
 
 type CaseRunResult = {
   caseId: string
@@ -53,6 +58,17 @@ type CaseRunResult = {
   workflowCompleted: boolean
   assertionsPassed: boolean
   error?: string
+  // Structured failure classification (undefined for successful runs) so the
+  // raw report shows the real underlying cause — rate limit / HTTP error /
+  // JSON parse / MCP error / clarification — instead of one blanket message.
+  failureStage?: FailureClassification['stage']
+  failureCode?: FailureClassification['code']
+  failureMessage?: string
+  // Model API attempts this session made (from session.modelCallsTotal),
+  // so a run that burned its retries is visible in the report.
+  modelAttempts?: number
+  // Furniture placement outcome breakdown (overlap / out-of-bounds / other).
+  furniture?: FurnitureIssueBreakdown
   elapsedMs: number
   finalPhase?: string
   sceneId?: string | null
@@ -170,13 +186,24 @@ async function runCase(
       const currentPhase = lastResult?.session.phase as WorkflowPhase | undefined
       if ('action' in turn && turn.action === 'confirm' && !canConfirmFromPhase(currentPhase)) {
         const elapsedMs = Date.now() - started
+        const failure = classifyFailure(currentPhase, lastResult?.reply)
+        // Distinguish "the previous turn actually errored out" from "the brief
+        // was underspecified so it's still clarifying" — the old code called
+        // both "大概率卡在澄清阶段", which was wrong for the former.
+        const error = currentPhase === 'failed'
+          ? `第 ${i + 1} 轮准备 confirm，但上一轮已进入 failed：${lastResult?.reply ?? '(无回复)'}`
+          : `第 ${i + 1} 轮尝试 confirm，但当前 phase 是 "${currentPhase}"（不在可确认状态）——很可能澄清未完成，检查用例的消息是否给了足够的面积/房间信息`
         return {
           caseId: testCase.id,
           repeatIndex,
           ok: false,
           workflowCompleted: false,
           assertionsPassed: false,
-          error: `第 ${i + 1} 轮尝试 confirm，但当前 phase 是 "${currentPhase}"（不在 awaiting_confirmation/awaiting_modification_confirmation），大概率卡在澄清阶段——检查用例的消息是否给了足够的面积/房间信息`,
+          error,
+          failureStage: failure?.stage,
+          failureCode: failure?.code,
+          failureMessage: failure?.message ?? lastResult?.reply,
+          modelAttempts: lastResult?.session.modelCallsTotal,
           elapsedMs,
           finalPhase: currentPhase,
           checks: {},
@@ -271,6 +298,7 @@ async function runCase(
       errorParts.push(`建出了不该建的房间类型：${checks.forbiddenRoomTypesFound.join(', ')}`)
     }
 
+    const failure = classifyFailure(session.phase, lastResult!.reply)
     return {
       caseId: testCase.id,
       repeatIndex,
@@ -278,6 +306,11 @@ async function runCase(
       workflowCompleted: workflow.ok,
       assertionsPassed,
       error: errorParts.length > 0 ? errorParts.join('；') : undefined,
+      failureStage: failure?.stage,
+      failureCode: failure?.code,
+      failureMessage: failure?.message,
+      modelAttempts: session.modelCallsTotal,
+      furniture: classifyFurnitureIssues(sceneResult?.furnitureIssues ?? []),
       elapsedMs,
       finalPhase: session.phase,
       sceneId,
@@ -288,13 +321,17 @@ async function runCase(
       checks,
     }
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     return {
       caseId: testCase.id,
       repeatIndex,
       ok: false,
       workflowCompleted: false,
       assertionsPassed: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
+      failureStage: 'unknown',
+      failureCode: 'unknown',
+      failureMessage: message,
       elapsedMs: Date.now() - started,
       checks: {},
     }
@@ -324,6 +361,9 @@ function logResult(result: CaseRunResult): void {
   ].filter(Boolean).join(' ')
   console.log(`[${status}] ${result.caseId} run${result.repeatIndex} (${result.elapsedMs}ms) ${detail} ${checkFlags}`)
   if (!result.ok && result.error) console.log(`         原因：${result.error}`)
+  if (!result.ok && result.failureCode) {
+    console.log(`         失败分类：stage=${result.failureStage} code=${result.failureCode} 模型请求数=${result.modelAttempts ?? '未知'}`)
+  }
 }
 
 function buildSummary(results: CaseRunResult[]) {
@@ -337,7 +377,23 @@ function buildSummary(results: CaseRunResult[]) {
   const nonEmptyRate = (pick: (s: SceneResult) => unknown[]) =>
     withScene.length === 0 ? 0 : withScene.filter(r => pick(r.sceneResult!).length > 0).length / withScene.length
 
+  // Distribution of failure codes across non-successful runs, so a report can
+  // show "3× model_rate_limit" instead of just "0/3 passed".
+  const failureCodeCounts: Record<string, number> = {}
+  for (const r of results) {
+    if (r.ok || !r.failureCode) continue
+    failureCodeCounts[r.failureCode] = (failureCodeCounts[r.failureCode] ?? 0) + 1
+  }
+  const furniturePlacementFailures = sum(r => r.furniture?.total ?? 0)
+  const furnitureOverlapCount = sum(r => r.furniture?.overlapCount ?? 0)
+  const furnitureOutOfBoundsCount = sum(r => r.furniture?.outOfBoundsCount ?? 0)
+
   return {
+    failureCodeCounts,
+    furniturePlacementFailures,
+    furnitureOverlapCount,
+    furnitureOutOfBoundsCount,
+    furnitureIssueRate: nonEmptyRate(s => s.furnitureIssues),
     total,
     successCount,
     errorCount,
@@ -376,10 +432,14 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
     `- 室内窗疑似误判率（strayWindows 非空）：${(summary.strayWindowRate * 100).toFixed(1)}%`,
     `- 动线孤立卧室率（isolatedBedrooms 非空）：${(summary.isolatedBedroomRate * 100).toFixed(1)}%`,
     `- 碰撞率（collisions 非空）：${(summary.collisionRate * 100).toFixed(1)}%`,
-    '',
-    '注：家具放置成功率未纳入本报告——`SceneResult` 目前不携带 `furnitureIssues`（它只出现在回复文本里），要做这个指标需要先把 `furnitureIssues` 加进 `SceneResult`，属于范围外的改动，未在这次一并做。',
+    `- 家具问题率（furnitureIssues 非空）：${(summary.furnitureIssueRate * 100).toFixed(1)}%`,
+    `- 家具未正确放置总数：${summary.furniturePlacementFailures}（其中重叠 ${summary.furnitureOverlapCount}，越界 ${summary.furnitureOutOfBoundsCount}）`,
     '',
   ]
+  const failureEntries = Object.entries(summary.failureCodeCounts)
+  if (failureEntries.length > 0) {
+    lines.push('**失败原因分布（按 failureCode）**：' + failureEntries.map(([code, count]) => `${code}×${count}`).join('，'), '')
+  }
   if (summary.caseConfigErrors.length > 0) {
     lines.push(`**用例配置错误（不是生成问题，是 case JSON 写错了）**：${summary.caseConfigErrors.join(', ')}`, '')
   }
@@ -407,6 +467,15 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
       lines.push(
         `- 诊断：doorlessRooms=${result.sceneResult.doorlessRooms.length}, strayWindows=${result.sceneResult.strayWindows.length}, requirementMismatches=${result.sceneResult.requirementMismatches.length}, isolatedBedrooms=${result.sceneResult.isolatedBedrooms.length}, collisions=${result.sceneResult.collisions.length}`,
       )
+    }
+    if (result.furniture && result.furniture.total > 0) {
+      lines.push(
+        `- 家具问题：共 ${result.furniture.total}（重叠 ${result.furniture.overlapCount}，越界 ${result.furniture.outOfBoundsCount}，其他 ${result.furniture.otherCount}）`,
+      )
+    }
+    if (!result.ok && result.failureCode) {
+      lines.push(`- 失败：stage=${result.failureStage}，code=${result.failureCode}，模型请求数=${result.modelAttempts ?? '未知'}`)
+      if (result.failureMessage) lines.push(`- 失败详情：${result.failureMessage}`)
     }
     lines.push('')
   }
@@ -455,7 +524,11 @@ async function main(): Promise<void> {
   const summary = buildSummary(results)
   writeFileSync(join(reportDir, 'summary.json'), JSON.stringify(summary, null, 2))
   writeFileSync(join(reportDir, 'summary.md'), renderSummaryMarkdown(summary, results))
+  // Scaffold blank human-review templates (one per raw run) and drop the
+  // review 手顺 into the report dir, so every run comes ready to review.
+  const { created } = scaffoldReviews(reportDir)
   console.log(`\n报告已写入 ${reportDir}`)
+  console.log(`已生成 ${created.length} 个评审模板到 reviews/，手顺见 REVIEW_GUIDE.md；填好后运行 bun run eval:review 汇总。`)
 
   await mcp.close()
   process.exit(summary.errorCount > 0 ? 1 : 0)

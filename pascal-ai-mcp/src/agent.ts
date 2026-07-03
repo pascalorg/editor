@@ -1,7 +1,7 @@
-import { END, MemorySaver, START, StateGraph } from '@langchain/langgraph'
+import { END, START, StateGraph } from '@langchain/langgraph'
 import type { AppConfig } from './config'
 import { PascalMcpClient } from './mcp'
-import { OpenAiCompatibleClient } from './openai-compatible'
+import { OpenAiCompatibleClient, type RequestHooks } from './openai-compatible'
 import { SessionStore } from './session-store'
 import type {
   Availability,
@@ -41,6 +41,31 @@ const CONFIRMATION_VALUES = new Set<ConfirmationStatus>([
   'rejected',
 ])
 
+// Structural scaffolding node types created automatically for every project.
+// They exist even in a brand-new empty scene, so they must NOT count as
+// "user content" when deciding whether a scene is safe to rebuild from
+// scratch (see `countActiveContentNodes` / `shouldModifyExistingScene`).
+const SCAFFOLDING_NODE_TYPES = new Set(['project', 'site', 'building', 'level', 'story', 'storey'])
+
+// Thrown at a loop boundary inside a long-running generation/modification
+// when the user has asked to cancel, so the in-flight work unwinds promptly
+// instead of finishing a run the user no longer wants.
+class GenerationCancelledError extends Error {
+  constructor() {
+    super('用户已取消本次生成')
+    this.name = 'GenerationCancelledError'
+  }
+}
+
+// Thrown when a single chat turn exceeds its model-call budget — an absolute
+// safety ceiling against runaway cost/latency (normal jobs never hit it).
+class BudgetExceededError extends Error {
+  constructor(limit: number) {
+    super(`本次任务的模型调用次数超过安全上限（${limit} 次），已自动停止以避免资源浪费`)
+    this.name = 'BudgetExceededError'
+  }
+}
+
 type ExtractionResponse = {
   existingCondition?: unknown[]
   designGoals?: unknown[]
@@ -69,6 +94,20 @@ export class PascalAiAgent {
   private readonly sessions: SessionStore
   private readonly graph: ReturnType<typeof createWorkflowGraph>
   private readonly sessionLocks = new Map<string, Promise<ChatResult>>()
+  // Sessions with a cancel requested while a run is in flight. The running
+  // generation polls this at loop boundaries (`throwIfCancelled`) and aborts.
+  private readonly cancelRequests = new Set<string>()
+  // Abort controller for the in-flight turn of each session, so a cancel can
+  // interrupt the request that's actually running (model fetch or MCP call)
+  // immediately, instead of only at the next loop boundary.
+  private readonly runAbortControllers = new Map<string, AbortController>()
+  // Per-turn model-call counter, keyed by sessionId for the duration of a
+  // single `runChat`. Absent when no turn is running for that session.
+  private readonly modelCallBudgets = new Map<string, number>()
+  // The session's cumulative model-call total *before* the current turn, so
+  // `chargeModelCall` can enforce the per-session ceiling in real time within
+  // the turn rather than only at the next turn's boundary.
+  private readonly sessionPriorTotals = new Map<string, number>()
   // Lazily-fetched, process-lifetime cache of the MCP `pascal://agent-guide`
   // resource. Read once; failures are swallowed so a missing/renamed
   // resource never breaks the main generation flow.
@@ -134,6 +173,16 @@ export class PascalAiAgent {
   }
 
   async chat(input: ChatInput): Promise<ChatResult> {
+    // A cancel that arrives while a run is already in flight signals that run
+    // to abort at its next loop boundary. Setting the flag here (before the
+    // turn is even enqueued behind the lock) is what makes cancellation take
+    // effect *during* generation instead of only after it finishes.
+    if (input.action === 'cancel' && this.sessionLocks.has(input.sessionId)) {
+      this.cancelRequests.add(input.sessionId)
+      // Abort the request that's running right now (model fetch / MCP call)
+      // so cancellation is immediate rather than waiting for it to return.
+      this.runAbortControllers.get(input.sessionId)?.abort()
+    }
     const previous = this.sessionLocks.get(input.sessionId) ?? Promise.resolve(undefined)
     const current = previous
       .catch(() => undefined)
@@ -161,110 +210,88 @@ export class PascalAiAgent {
     const session = this.sessions.get(input.sessionId) ?? createSession(input, now)
     if (input.sceneId) session.sceneId = input.sceneId
 
-    const result = await this.graph.invoke(
-      { input, session, reply: '', next: 'evaluate' },
-      { configurable: { thread_id: input.sessionId } },
-    )
-    result.session.updatedAt = new Date().toISOString()
-    this.sessions.set(input.sessionId, result.session)
-    return { sessionId: input.sessionId, reply: result.reply, session: result.session }
+    // Per-session cumulative cost ceiling. Cancel is always allowed through so
+    // a user can still stop a session that has hit the limit.
+    const priorTotal = session.modelCallsTotal ?? 0
+    if (input.action !== 'cancel' && priorTotal >= this.config.maxModelCallsPerSession) {
+      const reply = '本会话的模型调用已达累计上限，为控制成本已暂停。请新建一个会话继续。'
+      session.updatedAt = new Date().toISOString()
+      this.sessions.set(input.sessionId, session)
+      return { sessionId: input.sessionId, reply, session }
+    }
+
+    this.modelCallBudgets.set(input.sessionId, 0)
+    this.sessionPriorTotals.set(input.sessionId, priorTotal)
+    this.runAbortControllers.set(input.sessionId, new AbortController())
+    try {
+      const result = await this.graph.invoke({ input, session, reply: '', next: 'evaluate' })
+      // Fold this turn's API attempts into the session's running total.
+      result.session.modelCallsTotal = priorTotal + (this.modelCallBudgets.get(input.sessionId) ?? 0)
+      result.session.updatedAt = new Date().toISOString()
+      this.sessions.set(input.sessionId, result.session)
+      return { sessionId: input.sessionId, reply: result.reply, session: result.session }
+    } finally {
+      this.modelCallBudgets.delete(input.sessionId)
+      this.sessionPriorTotals.delete(input.sessionId)
+      this.runAbortControllers.delete(input.sessionId)
+      this.cancelRequests.delete(input.sessionId)
+    }
+  }
+
+  private throwIfCancelled(sessionId: string): void {
+    if (this.cancelRequests.has(sessionId)) throw new GenerationCancelledError()
+  }
+
+  // Single MCP entry point: injects the current turn's cancel signal so a
+  // cancel aborts whatever MCP call is in flight, not just model requests.
+  // All agent MCP calls go through here so cancellation and timeout behaviour
+  // is uniform.
+  private callMcp(sessionId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+    const signal = this.runAbortControllers.get(sessionId)?.signal
+    return this.mcp.callTool(name, args, { signal })
+  }
+
+  // Counts one model API attempt against both the per-turn and the cumulative
+  // per-session budgets, throwing once either ceiling is crossed. A no-op when
+  // no budget is registered (e.g. calls made outside a `runChat`), so it can
+  // never break such callers.
+  private chargeModelCall(sessionId: string): void {
+    const used = this.modelCallBudgets.get(sessionId)
+    if (used === undefined) return
+    const next = used + 1
+    this.modelCallBudgets.set(sessionId, next)
+    if (next > this.config.maxModelCallsPerTurn) {
+      throw new BudgetExceededError(this.config.maxModelCallsPerTurn)
+    }
+    const priorTotal = this.sessionPriorTotals.get(sessionId) ?? 0
+    if (priorTotal + next > this.config.maxModelCallsPerSession) {
+      throw new BudgetExceededError(this.config.maxModelCallsPerSession)
+    }
   }
 
   private async ingest(state: WorkflowGraphState): Promise<Partial<WorkflowGraphState>> {
     const { input } = state
     const session = structuredClone(state.session)
 
-    if (input.action === 'cancel') {
-      session.phase = 'cancelled'
-      session.questions = []
-      return {
-        session,
-        reply: '已取消当前户型设计任务。现有场景没有被修改。',
-        next: 'finish',
-      }
-    }
-
-    if (input.action === 'confirm') {
-      if (session.phase === 'awaiting_modification_confirmation' && session.pendingModification) {
-        session.phase = 'modifying'
-        return { session, reply: '修改已确认，正在更新当前户型。', next: 'modify' }
-      }
-      if (session.phase !== 'awaiting_confirmation') {
-        return {
-          session,
-          reply: '当前需求还没有达到可确认状态，请先补充关键条件。',
-          next: 'finish',
-        }
-      }
-      session.confirmedAt = new Date().toISOString()
-      session.phase = 'generating'
-      session.brief = confirmBrief(session.brief)
-      return { session, reply: '需求已确认，正在生成户型。', next: 'generate' }
-    }
-
-    const message = input.message?.trim() ?? ''
-    if (!message && !input.imageDataUrl) {
-      return {
-        session,
-        reply: '请输入户型需求，或上传一张户型图。',
-        next: 'finish',
-      }
-    }
-    // A prior modification attempt failed and left `phase` here so a plain
-    // {action:'confirm'} can retry the *same* pending request (see
-    // `modify()`'s catch block). But the failure reply also tells the user
-    // they can just describe a new change instead — without this branch,
-    // that new message would fall through to the generic requirement-
-    // extraction path below (treating it as if it were building up a brand
-    // new brief from scratch) rather than being routed as a fresh
-    // modification instruction against the scene that's actually still
-    // there. Clear the stale pending fields first; `routeExistingSceneRequest`
-    // classifies this message's intent and sets fresh ones.
-    if (shouldRouteAsExistingSceneRequest(session.phase, message)) {
-      delete session.pendingModification
-      delete session.pendingOperation
-      return this.routeExistingSceneRequest(session, message)
-    }
-    if (isCompletedPhase(session.phase)) {
-      if (!message) {
-        return {
-          session,
-          reply: '户型已经生成。请用文字描述需要修改的内容。',
-          next: 'finish',
-        }
-      }
-      return this.routeExistingSceneRequest(session, message)
-    }
-    if (message.length > 5000) {
-      return {
-        session,
-        reply: '文字需求不能超过 5000 个字符，请精简后重新提交。',
-        next: 'finish',
-      }
-    }
-    if (input.imageDataUrl && !isSupportedImage(input.imageDataUrl)) {
-      session.phase = 'failed'
-      session.availability = 'unusable'
-      return {
-        session,
-        reply: '当前仅支持单张 JPG、JPEG 或 PNG 户型图，且图片必须小于 20 MB。',
-        next: 'finish',
-      }
-    }
+    // Pure state-machine core decides the turn and applies I/O-free
+    // transitions; only the delegation markers below need MCP/model calls.
+    const plan = planIngestAction(input, session)
+    if (plan.kind === 'reply') return { session, reply: plan.reply, next: 'finish' }
+    if (plan.kind === 'route') return { session, reply: plan.reply, next: plan.next }
+    if (plan.kind === 'route-existing') return this.routeExistingSceneRequest(session, plan.message)
+    const message = plan.message
 
     if (session.phase === 'intake' && session.sceneId && message) {
       try {
-        const loaded = toolPayload(await this.mcp.callTool('load_scene', { id: session.sceneId }))
-        const nodeCount = nullableNumber(loaded.nodeCount) ?? 0
-        if (shouldModifyExistingScene(nodeCount)) {
+        await this.callMcp(session.sessionId, 'load_scene', { id: session.sceneId })
+        const contentNodes = await this.countActiveContentNodes(session.sessionId)
+        if (shouldModifyExistingScene(contentNodes)) {
           return this.routeExistingSceneRequest(session, message)
         }
       } catch (error) {
-        return {
-          session,
-          reply: `无法加载场景 ${session.sceneId}：${errorMessage(error)}。请刷新页面重新打开项目，或稍后重试。`,
-          next: 'finish',
-        }
+        const reply = `无法加载场景 ${session.sceneId}：${errorMessage(error)}。请刷新页面重新打开项目，或稍后重试。`
+        session.messages.push({ role: 'assistant', content: reply })
+        return { session, reply, next: 'finish' }
       }
     }
 
@@ -279,11 +306,11 @@ export class PascalAiAgent {
       return { session, reply: '', next: 'evaluate' }
     } catch (error) {
       session.phase = 'failed'
-      return {
-        session,
-        reply: `需求解析失败：${errorMessage(error)}。你可以重试，已输入的文字仍保留在当前会话中。`,
-        next: 'finish',
-      }
+      const reply = `需求解析失败：${errorMessage(error)}。你可以重试，已输入的文字仍保留在当前会话中。`
+      // Record the failure reply so the eval harness and the /sessions
+      // recovery endpoint can read the real reason instead of an empty tail.
+      session.messages.push({ role: 'assistant', content: reply })
+      return { session, reply, next: 'finish' }
     }
   }
 
@@ -296,7 +323,7 @@ export class PascalAiAgent {
       return { session, reply: '找不到需要核对的场景。', next: 'finish' }
     }
     try {
-      await this.mcp.callTool('load_scene', { id: sceneId })
+      await this.callMcp(session.sessionId, 'load_scene', { id: sceneId })
       const reply = await this.answerSceneQuestion(session, question)
       session.phase = session.sceneResult?.remainingIssueCount
         ? 'completed_with_issues'
@@ -332,14 +359,19 @@ export class PascalAiAgent {
 
     session.pendingModification = message
     session.pendingOperation = intent
-    session.phase = 'awaiting_modification_confirmation'
-    const labels = { create: '新增', update: '修改', delete: '删除' } as const
-    const warning = intent === 'delete'
-      ? '\n\n这是删除操作，确认后目标节点及其关联内容可能被移除。'
-      : ''
-    const reply = `准备${labels[intent]}当前户型：${message}${warning}\n\n请确认后再执行，确认前不会更改场景。`
+    // 删除是破坏性的，可能级联移除关联节点，保留二次确认；新增/修改都通过
+    // apply_patch 完成、可撤销，直接执行以免每次微调都要多一次确认往返。
+    if (intent === 'delete') {
+      session.phase = 'awaiting_modification_confirmation'
+      const reply = `准备删除当前户型内容：${message}\n\n这是删除操作，确认后目标节点及其关联内容可能被移除。请确认后再执行，确认前不会更改场景。`
+      session.messages.push({ role: 'assistant', content: reply })
+      return { session, reply, next: 'finish' }
+    }
+    session.phase = 'modifying'
+    const label = intent === 'create' ? '新增' : '修改'
+    const reply = `正在${label}当前户型：${message}`
     session.messages.push({ role: 'assistant', content: reply })
-    return { session, reply, next: 'finish' }
+    return { session, reply, next: 'modify' }
   }
 
   private async classifySceneIntent(session: WorkflowSession, message: string): Promise<SceneIntent> {
@@ -347,7 +379,7 @@ export class PascalAiAgent {
       // Exclude the last entry: it's `message` itself, already pushed to
       // session.messages by the caller before this runs.
       const history = recentConversationText(session.messages.slice(0, -1))
-      const result = await this.withFastModel(model =>
+      const result = await this.withFastModel(session.sessionId, (model, hooks) =>
         model.json<{ intent?: unknown }>(
           [
             {
@@ -362,6 +394,7 @@ export class PascalAiAgent {
             },
           ],
           'scene-intent',
+          hooks,
         ),
       )
       if (isSceneIntent(result.intent)) return result.intent
@@ -397,7 +430,7 @@ export class PascalAiAgent {
         : ['请补充户型面积或边界尺寸，以及必须包含的功能空间。']
       const reply = reachedLimit
         ? [
-            '目前仍有关键条件未确认。你可以明确接受系统采用合理默认假设，或取消任务。',
+            '目前仍有关键条件未确认。你可以点击“确认”让系统采用合理默认假设直接生成，或点击“取消”结束任务；也可以继续补充下面的条件：',
             ...questions.map((question, index) => `${index + 1}. ${question}`),
           ].join('\n')
         : [
@@ -409,8 +442,10 @@ export class PascalAiAgent {
     }
 
     session.phase = 'awaiting_confirmation'
+    // `session.summary` 仍用结构化摘要（含来源/置信度），它会作为 brief 传给
+    // 生成模型，结构信息对生成质量有用；面向用户展示的是自然语言版本。
     session.summary = formatSummary(session.brief)
-    const reply = `${session.summary}\n\n请确认以上需求。确认后才会生成并修改 Pascal 场景。`
+    const reply = `${formatUserFacingSummary(session.brief)}\n\n确认后我才会开始生成并修改 Pascal 场景。如有不符，请直接补充或纠正。`
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -429,18 +464,29 @@ export class PascalAiAgent {
     const priorSceneId = session.sceneId
     try {
       session.executionSteps = []
+      // Persist the `generating` phase up front. Session state is otherwise
+      // only written at the very end of the turn, so a crash mid-generation
+      // would leave the stored phase stuck at `awaiting_confirmation` with no
+      // trace that a build was underway. This snapshot makes the in-progress
+      // (and any later abandoned scene) state diagnosable after a restart.
+      this.sessions.set(session.sessionId, session)
       const generationArgs = buildGenerationArgs(session)
       if (session.sceneId) {
-        const loaded = toolPayload(await this.mcp.callTool('load_scene', { id: session.sceneId }))
-        const nodeCount = nullableNumber(loaded.nodeCount) ?? 0
-        if (shouldModifyExistingScene(nodeCount)) {
+        const loaded = toolPayload(await this.callMcp(session.sessionId, 'load_scene', { id: session.sceneId }))
+        // Decide by real content nodes, not raw nodeCount: a scene that only
+        // holds structural scaffolding (project/site/building/level) is
+        // genuinely empty and safe to build fresh, but a scene with even one
+        // user-drawn wall must be modified incrementally — never cleared and
+        // rebuilt, which would silently destroy the user's existing work.
+        const contentNodes = await this.countActiveContentNodes(session.sessionId)
+        if (shouldModifyExistingScene(contentNodes)) {
           return await this.applyConfirmedBriefToExistingScene(session, loaded)
         }
         const expectedVersion = nullableNumber(loaded.version)
         if (expectedVersion !== null) generationArgs.expectedVersion = expectedVersion
       }
       const created = toolPayload(
-        await this.mcp.callTool('create_house_from_brief', generationArgs),
+        await this.callMcp(session.sessionId, 'create_house_from_brief', generationArgs),
       )
       session.sceneId = nullableString(created.projectId ?? created.sceneId ?? created.id) ?? undefined
       const levelId = nullableString(created.defaultLevelId)
@@ -448,6 +494,7 @@ export class PascalAiAgent {
       const { diagnostics, repairRounds, toolNamesUsed, furnitureIssues } =
         await this.constructSceneInPhases(session, levelId)
       const sceneVersion = await this.persistScene(
+        session.sessionId,
         session.sceneId,
         diagnostics.validation.valid,
         nullableNumber(created.version),
@@ -464,16 +511,20 @@ export class PascalAiAgent {
         strayWindows: diagnostics.strayWindows,
         requirementMismatches: diagnostics.requirementMismatches,
         isolatedBedrooms: diagnostics.isolatedBedrooms,
+        furnitureIssues,
         repairRounds,
-        remainingIssueCount: countDiagnosticIssues(diagnostics),
+        remainingIssueCount: countAllIssues(diagnostics, furnitureIssues),
       }
       session.sceneResult = sceneResult
       const remaining = sceneResult.remainingIssueCount
       session.phase = remaining === 0 ? 'completed' : 'completed_with_issues'
-      const reply = (remaining === 0
-        ? `户型已生成并通过自动检查。${sceneResult.editorUrl ? `\n打开场景：${sceneResult.editorUrl}` : ''}`
-        : `户型已生成，自动修正已达上限（${repairRounds} 轮），仍有 ${remaining} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-      ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
+      const reply = buildCompletionReply({
+        successText: `户型已生成并通过自动检查。${sceneResult.editorUrl ? `\n打开场景：${sceneResult.editorUrl}` : ''}`,
+        repairRounds,
+        diagnostics,
+        toolNamesUsed,
+        furnitureIssues,
+      })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     } catch (error) {
@@ -490,6 +541,12 @@ export class PascalAiAgent {
           console.warn(`[pascal-ai-mcp] abandoned half-built scene ${session.sceneId} after generate() failure:`, error)
         }
         session.sceneId = priorSceneId
+      }
+      if (error instanceof GenerationCancelledError) {
+        session.phase = 'cancelled'
+        const reply = '已在生成过程中取消。未完成的半成品不会保存到你的项目，已确认的需求仍然保留，可以稍后重新生成。'
+        session.messages.push({ role: 'assistant', content: reply })
+        return { session, reply, next: 'finish' }
       }
       session.phase = 'failed'
       const reply = `户型生成失败：${errorMessage(error)}。已确认的结构化需求仍然保留，可以稍后重试。`
@@ -509,11 +566,12 @@ export class PascalAiAgent {
       { phaseLabel: '在已有户型上应用已确认需求' },
     )
     const sceneVersion = await this.persistScene(
+      session.sessionId,
       sceneId,
       diagnostics.validation.valid,
       nullableNumber(loaded.version),
     )
-    const remainingIssueCount = countDiagnosticIssues(diagnostics)
+    const remainingIssueCount = countAllIssues(diagnostics, furnitureIssues)
     session.sceneResult = {
       sceneId,
       editorUrl: publicEditorUrl(sceneId),
@@ -525,14 +583,18 @@ export class PascalAiAgent {
       strayWindows: diagnostics.strayWindows,
       requirementMismatches: diagnostics.requirementMismatches,
       isolatedBedrooms: diagnostics.isolatedBedrooms,
+      furnitureIssues,
       repairRounds,
       remainingIssueCount,
     }
     session.phase = remainingIssueCount === 0 ? 'completed' : 'completed_with_issues'
-    const reply = (remainingIssueCount === 0
-      ? '已在现有户型基础上完成修改，并通过自动检查。'
-      : `已在现有户型基础上完成修改，自动修正已达上限（${repairRounds} 轮），仍有 ${remainingIssueCount} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-    ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
+    const reply = buildCompletionReply({
+      successText: '已在现有户型基础上完成修改，并通过自动检查。',
+      repairRounds,
+      diagnostics,
+      toolNamesUsed,
+      furnitureIssues,
+    })
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -552,18 +614,22 @@ export class PascalAiAgent {
     }
 
     try {
-      const loaded = toolPayload(await this.mcp.callTool('load_scene', { id: sceneId }))
+      // Persist the `modifying` phase up front so a crash mid-edit is
+      // diagnosable rather than leaving the stored phase at its pre-edit value.
+      this.sessions.set(session.sessionId, session)
+      const loaded = toolPayload(await this.callMcp(session.sessionId, 'load_scene', { id: sceneId }))
       const { diagnostics, repairRounds, toolNamesUsed, furnitureIssues } = await this.refineAndDiagnose(
         session,
         `用户已确认对当前场景执行${operation}操作：${feedback}`,
         { phaseLabel: '按用户要求修改场景' },
       )
       const sceneVersion = await this.persistScene(
+        session.sessionId,
         sceneId,
         diagnostics.validation.valid,
         nullableNumber(loaded.version),
       )
-      const remainingIssueCount = countDiagnosticIssues(diagnostics)
+      const remainingIssueCount = countAllIssues(diagnostics, furnitureIssues)
       session.sceneResult = {
         sceneId,
         editorUrl: publicEditorUrl(sceneId),
@@ -575,19 +641,31 @@ export class PascalAiAgent {
         strayWindows: diagnostics.strayWindows,
         requirementMismatches: diagnostics.requirementMismatches,
         isolatedBedrooms: diagnostics.isolatedBedrooms,
+        furnitureIssues,
         repairRounds,
         remainingIssueCount,
       }
       session.phase = remainingIssueCount === 0 ? 'completed' : 'completed_with_issues'
       delete session.pendingModification
       delete session.pendingOperation
-      const reply = (remainingIssueCount === 0
-        ? '已按你的要求修改当前户型，并通过自动检查。'
-        : `已完成修改，自动修正已达上限（${repairRounds} 轮），仍有 ${remainingIssueCount} 个问题需要人工确认：${describeRemainingIssues(diagnostics)}`
-      ) + furnitureCaveat(toolNamesUsed, furnitureIssues)
+      const reply = buildCompletionReply({
+        successText: '已按你的要求修改当前户型，并通过自动检查。',
+        repairRounds,
+        diagnostics,
+        toolNamesUsed,
+        furnitureIssues,
+      })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     } catch (error) {
+      if (error instanceof GenerationCancelledError) {
+        // Leave pendingModification/pendingOperation and phase intact so the
+        // user can re-confirm the same change later; the scene was not saved.
+        session.phase = 'awaiting_modification_confirmation'
+        const reply = '已在修改过程中取消。原场景保持不变，发送确认即可重试同一修改，或直接描述新的修改需求。'
+        session.messages.push({ role: 'assistant', content: reply })
+        return { session, reply, next: 'finish' }
+      }
       // `pendingModification`/`pendingOperation` are never cleared on this
       // path, but that alone doesn't make them resumable: `ingest()` only
       // re-triggers `modify` from an explicit `{action:'confirm'}` while
@@ -635,8 +713,9 @@ export class PascalAiAgent {
       { role: 'user', content: `${history}${question}` },
     ]
     for (let round = 0; round < this.config.maxToolRounds; round++) {
-      const completion = await this.withModelFallback(model =>
-        model.chat(messages, tools, `${session.sessionId}:inspect`),
+      this.throwIfCancelled(session.sessionId)
+      const completion = await this.withModelFallback(session.sessionId, (model, hooks) =>
+        model.chat(messages, tools, `${session.sessionId}:inspect`, hooks),
       )
       const assistant = completion.choices[0]?.message
       if (!assistant) throw new Error('Model API returned no assistant message')
@@ -649,7 +728,7 @@ export class PascalAiAgent {
         return assistant.content?.trim() || '已完成场景核对，但模型没有返回说明。'
       }
       for (const toolCall of assistant.tool_calls) {
-        messages.push(await this.executeToolCall(toolCall))
+        messages.push(await this.executeToolCall(session.sessionId, toolCall))
       }
     }
     return '已核对当前场景，但查询步骤超过限制；场景没有被修改。'
@@ -671,7 +750,7 @@ conflicts 格式：{"key":"...","existingValue":"...","requestedValue":"...","qu
 questions 每次最多 3 个，只问会改变空间结构的问题。
 已有需求：${JSON.stringify(session.brief)}
 最新文字：${message || '无附带文字'}
-输入类型：${imageDataUrl ? '单张户型图；图片是现状依据，文字是目标或指令' : '纯文字需求'}`
+输入类型：${imageDataUrl ? '单张户型图；图片是现状依据，文字是目标或指令。请尽量从图中识别墙体、门、窗、房间及其大致布局/尺寸，作为 existingCondition 现状事实（识别不确定的放入 uncertainties，不要写成用户确认的事实）' : '纯文字需求'}`
 
     // Retry once on malformed JSON — this call is exactly the kind of
     // strict-JSON-mode request that
@@ -690,13 +769,14 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         : attemptPrompt
 
       try {
-        return await this.withModelFallback(model =>
+        return await this.withModelFallback(session.sessionId, (model, hooks) =>
           model.json<ExtractionResponse>(
             [
               { role: 'system', content: 'Extract architectural requirements into valid JSON only.' },
               { role: 'user', content },
             ],
             `${session.sessionId}:extract:${attempt}`,
+            hooks,
           ),
         )
       } catch (error) {
@@ -808,8 +888,9 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     })
 
     for (let round = 0; round < this.config.maxToolRounds; round++) {
-      const completion = await this.withModelFallback(model =>
-        model.chat(messages, tools, `${session.sessionId}:scene`),
+      this.throwIfCancelled(session.sessionId)
+      const completion = await this.withModelFallback(session.sessionId, (model, hooks) =>
+        model.chat(messages, tools, `${session.sessionId}:scene`, hooks),
       )
       const assistant = completion.choices[0]?.message
       if (!assistant) throw new Error('Model API returned no assistant message')
@@ -823,7 +904,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       }
       for (const toolCall of assistant.tool_calls) {
         toolNamesUsed.add(toolCall.function.name)
-        messages.push(await this.executeToolCall(toolCall, furnitureIssues))
+        messages.push(await this.executeToolCall(session.sessionId, toolCall, furnitureIssues))
       }
     }
     return { messages, converged: false, toolNamesUsed, furnitureIssues }
@@ -870,10 +951,26 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
   // the actual layout room-by-room through MCP's own recommended tool
   // sequence (create_story_shell once, then create_room per room with
   // get_zones checked in between) instead of us precomputing geometry.
+  // Count nodes in the currently-loaded scene that represent actual content
+  // (walls, rooms, zones, openings, items, ...) as opposed to the structural
+  // scaffolding every project has. Used to tell an empty project apart from
+  // one the user has already put work into.
+  private async countActiveContentNodes(sessionId: string): Promise<number> {
+    const scene = toolPayload(await this.callMcp(sessionId, 'get_scene', {}))
+    const nodes = isRecord(scene.nodes) ? scene.nodes : {}
+    let count = 0
+    for (const node of Object.values(nodes)) {
+      if (isRecord(node) && typeof node.type === 'string' && !SCAFFOLDING_NODE_TYPES.has(node.type)) {
+        count++
+      }
+    }
+    return count
+  }
+
   private async clearLevelForRebuild(session: WorkflowSession, levelId: string | null): Promise<void> {
     if (!levelId) throw new Error('Target level is missing')
     try {
-      const scene = toolPayload(await this.mcp.callTool('get_scene', {}))
+      const scene = toolPayload(await this.callMcp(session.sessionId, 'get_scene', {}))
       const nodes = isRecord(scene.nodes) ? scene.nodes : {}
       const level = nodes[levelId]
       if (!isRecord(level) || !Array.isArray(level.children)) {
@@ -881,7 +978,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       }
       for (const childId of level.children) {
         if (typeof childId === 'string') {
-          await this.mcp.callTool('delete_node', { id: childId, cascade: true })
+          await this.callMcp(session.sessionId, 'delete_node', { id: childId, cascade: true })
         }
       }
     } catch (error) {
@@ -920,10 +1017,10 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
    * generation over a cleanup pass — worst case is the pre-existing
    * double-wall behavior, not a broken scene.
    */
-  private async dedupeSharedWalls(levelId: string | null): Promise<void> {
+  private async dedupeSharedWalls(sessionId: string, levelId: string | null): Promise<void> {
     if (!levelId) return
     try {
-      const payload = toolPayload(await this.mcp.callTool('get_walls', { levelId }))
+      const payload = toolPayload(await this.callMcp(sessionId, 'get_walls', { levelId }))
       const walls = Array.isArray(payload.walls) ? payload.walls.filter(isWallSummary) : []
 
       type WorkingWall = WallSummary & { isFragment: boolean }
@@ -1015,7 +1112,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         })
       }
       if (patches.length > 0) {
-        await this.mcp.callTool('apply_patch', { patches })
+        await this.callMcp(sessionId, 'apply_patch', { patches })
       }
     } catch {
       // Best-effort cleanup — see doc comment above.
@@ -1054,7 +1151,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       // problem by hand-building one shared wall per boundary instead of
       // calling create_room per room), so we deduplicate deterministically
       // here rather than asking the model to eyeball coordinate matches.
-      await this.dedupeSharedWalls(levelId)
+      await this.dedupeSharedWalls(session.sessionId, levelId)
       session.executionSteps.push({ phase: 'structure', status: 'completed', label: '逐间建造房间结构' })
     } catch (error) {
       session.executionSteps.push({ phase: 'structure', status: 'failed', label: '结构建造阶段' })
@@ -1138,6 +1235,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     // what it already tried and why the previous round's fix didn't fully
     // resolve the diagnostics, instead of re-guessing from scratch.
     while (repairRounds < this.config.maxRepairRounds && countDiagnosticIssues(diagnostics) > 0) {
+      this.throwIfCancelled(session.sessionId)
       repairRounds++
       const result = await this.runSceneAgent(
         session,
@@ -1169,31 +1267,32 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
 
     const patches: Array<{ op: 'update'; id: string; data: Record<string, unknown> }> = []
     for (const id of ids) {
-      const node = toolPayload(await this.mcp.callTool('get_node', { id })).node
+      const node = toolPayload(await this.callMcp(session.sessionId, 'get_node', { id })).node
       if (!isRecord(node)) continue
       const wallId = typeof node.parentId === 'string'
         ? node.parentId
         : typeof node.wallId === 'string' ? node.wallId : undefined
       if (!wallId) continue
-      const wall = toolPayload(await this.mcp.callTool('get_node', { id: wallId })).node
+      const wall = toolPayload(await this.callMcp(session.sessionId, 'get_node', { id: wallId })).node
       if (!isRecord(wall)) continue
       const data = buildOpeningRepairData(node, wall)
       if (data) patches.push({ op: 'update', id, data })
     }
     if (patches.length === 0) return diagnostics
-    await this.mcp.callTool('apply_patch', { patches })
+    await this.callMcp(session.sessionId, 'apply_patch', { patches })
     return this.collectDiagnostics(session)
   }
 
   private async persistScene(
+    sessionId: string,
     sceneId: string | undefined,
     valid: boolean,
     expectedVersion: number | null,
   ): Promise<number | null> {
     if (!valid || !sceneId) return expectedVersion
-    const status = toolPayload(await this.mcp.callTool('get_project_status', { id: sceneId }))
+    const status = toolPayload(await this.callMcp(sessionId, 'get_project_status', { id: sceneId }))
     const currentVersion = nullableNumber(status.version) ?? expectedVersion
-    const saved = toolPayload(await this.mcp.callTool('save_scene', {
+    const saved = toolPayload(await this.callMcp(sessionId, 'save_scene', {
       id: sceneId,
       projectId: sceneId,
       name: 'Pascal AI 户型方案',
@@ -1205,13 +1304,14 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
   }
 
   private async executeToolCall(
+    sessionId: string,
     toolCall: ToolCall,
     furnitureIssues?: string[],
   ): Promise<ChatMessage> {
     try {
       let args = normalizeToolArgs(toolCall.function.name, parseToolArgs(toolCall.function.arguments))
-      args = await this.correctFloorItemHeight(toolCall.function.name, args)
-      const result = await this.mcp.callTool(toolCall.function.name, args)
+      args = await this.correctFloorItemHeight(sessionId, toolCall.function.name, args)
+      const result = await this.callMcp(sessionId, toolCall.function.name, args)
       if (furnitureIssues) {
         recordFurnitureIssues(toolCall.function.name, args, toolPayload(result), furnitureIssues)
       }
@@ -1222,6 +1322,10 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         content: JSON.stringify(result),
       }
     } catch (error) {
+      // A cancel that aborted this tool call must propagate as a cancellation,
+      // not be swallowed into a tool-result error the model would try to
+      // "recover" from.
+      this.throwIfCancelled(sessionId)
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -1243,6 +1347,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
   // genuinely a floor (wall/ceiling targets legitimately need non-zero Y
   // for mounting height, so those are left untouched).
   private async correctFloorItemHeight(
+    sessionId: string,
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
@@ -1254,7 +1359,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     }
     if (position[1] === 0) return args
     try {
-      const target = toolPayload(await this.mcp.callTool('get_node', { id: targetNodeId })).node
+      const target = toolPayload(await this.callMcp(sessionId, 'get_node', { id: targetNodeId })).node
       const targetType = isRecord(target) ? target.type : undefined
       if (targetType !== 'level' && targetType !== 'slab' && targetType !== 'zone') return args
     } catch {
@@ -1275,11 +1380,11 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     isolatedBedrooms: string[]
   }> {
     const [validationRaw, verificationRaw, collisionsRaw, zonesRaw, wallsRaw] = await Promise.all([
-      this.mcp.callTool('validate_scene', {}),
-      this.mcp.callTool('verify_scene', {}),
-      this.mcp.callTool('check_collisions', {}),
-      this.mcp.callTool('get_zones', {}),
-      this.mcp.callTool('get_walls', {}),
+      this.callMcp(session.sessionId, 'validate_scene', {}),
+      this.callMcp(session.sessionId, 'verify_scene', {}),
+      this.callMcp(session.sessionId, 'check_collisions', {}),
+      this.callMcp(session.sessionId, 'get_zones', {}),
+      this.callMcp(session.sessionId, 'get_walls', {}),
     ])
     const validationPayload = toolPayload(validationRaw)
     const verificationPayload = toolPayload(verificationRaw)
@@ -1315,15 +1420,31 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     }
   }
 
-  private async withModelFallback<T>(operation: (model: OpenAiCompatibleClient) => Promise<T>): Promise<T> {
+  private modelHooks(sessionId: string): RequestHooks {
+    return {
+      signal: this.runAbortControllers.get(sessionId)?.signal,
+      // Charged once per real HTTP attempt from inside the model client, so
+      // internal retries and the fallback call below are all counted.
+      onAttempt: () => this.chargeModelCall(sessionId),
+    }
+  }
+
+  private async withModelFallback<T>(
+    sessionId: string,
+    operation: (model: OpenAiCompatibleClient, hooks: RequestHooks) => Promise<T>,
+  ): Promise<T> {
     if (!this.model) {
       throw new Error('The configured AI provider API key is missing')
     }
+    const hooks = this.modelHooks(sessionId)
     try {
-      return await operation(this.model)
+      return await operation(this.model, hooks)
     } catch (primaryError) {
+      // A cancel must not silently fall back to the secondary model — turn it
+      // into a cancellation the outer generation loop understands.
+      this.throwIfCancelled(sessionId)
       if (!this.fallbackModel) throw primaryError
-      return operation(this.fallbackModel)
+      return operation(this.fallbackModel, hooks)
     }
   }
 
@@ -1332,12 +1453,16 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
    * configured. Falls back to the main model on error or when no fast model
    * is configured, so callers never lose reliability by using this.
    */
-  private async withFastModel<T>(operation: (model: OpenAiCompatibleClient) => Promise<T>): Promise<T> {
-    if (!this.fastModel) return this.withModelFallback(operation)
+  private async withFastModel<T>(
+    sessionId: string,
+    operation: (model: OpenAiCompatibleClient, hooks: RequestHooks) => Promise<T>,
+  ): Promise<T> {
+    if (!this.fastModel) return this.withModelFallback(sessionId, operation)
     try {
-      return await operation(this.fastModel)
+      return await operation(this.fastModel, this.modelHooks(sessionId))
     } catch {
-      return this.withModelFallback(operation)
+      this.throwIfCancelled(sessionId)
+      return this.withModelFallback(sessionId, operation)
     }
   }
 }
@@ -1367,7 +1492,11 @@ function createWorkflowGraph(nodes: {
     .addEdge('generate', END)
     .addEdge('inspect', END)
     .addEdge('modify', END)
-    .compile({ checkpointer: new MemorySaver() })
+    // No checkpointer: every turn is invoked with the full state loaded from
+    // SessionStore (the single source of truth) and this graph runs exactly
+    // one super-step per turn, so a checkpointer would add nothing but an
+    // unbounded, never-pruned in-memory store of past turns (a leak).
+    .compile()
 }
 
 function isCompletedPhase(phase: WorkflowSession['phase']): boolean {
@@ -1402,6 +1531,87 @@ export function shouldRouteAsExistingSceneRequest(phase: WorkflowSession['phase'
   return phase === 'awaiting_modification_confirmation' && message.trim().length > 0
 }
 
+/**
+ * The outcome of the pure `ingest` routing step. `reply`/`route` are terminal
+ * for this turn (the session has already been mutated accordingly).
+ * `route-existing` and `intake` are delegation markers whose remaining work
+ * needs MCP/model I/O and is carried out by the async `ingest` wrapper.
+ */
+export type IngestPlan =
+  | { kind: 'reply'; reply: string }
+  | { kind: 'route'; reply: string; next: 'generate' | 'modify' }
+  | { kind: 'route-existing'; message: string }
+  | { kind: 'intake'; message: string }
+
+/**
+ * Pure routing/state-machine core of `ingest`. Given the incoming input and a
+ * (cloned, mutable) session, it decides the turn's outcome and applies every
+ * phase/brief transition that needs no I/O — cancel, confirm (including the
+ * "accept defaults from clarifying" escape hatch and modification-confirm),
+ * empty input, existing-scene routing, length/format guards. I/O-bound
+ * branches are returned as markers. Exported so all transitions are unit
+ * testable without constructing a live agent or touching MCP/the model.
+ */
+export function planIngestAction(input: ChatInput, session: WorkflowSession): IngestPlan {
+  if (input.action === 'cancel') {
+    session.phase = 'cancelled'
+    session.questions = []
+    return { kind: 'reply', reply: '已取消当前户型设计任务。现有场景没有被修改。' }
+  }
+
+  if (input.action === 'confirm') {
+    if (session.phase === 'awaiting_modification_confirmation' && session.pendingModification) {
+      session.phase = 'modifying'
+      return { kind: 'route', reply: '修改已确认，正在更新当前户型。', next: 'modify' }
+    }
+    // `clarifying` is allowed too: the explicit "接受默认假设，直接生成" escape
+    // hatch that keeps a low-confidence brief from being trapped in the
+    // clarification loop with no way forward.
+    if (session.phase !== 'awaiting_confirmation' && session.phase !== 'clarifying') {
+      return { kind: 'reply', reply: '当前需求还没有达到可确认状态，请先补充关键条件。' }
+    }
+    const acceptedDefaults = session.phase === 'clarifying'
+    session.confirmedAt = new Date().toISOString()
+    session.phase = 'generating'
+    session.brief = confirmBrief(session.brief)
+    return {
+      kind: 'route',
+      reply: acceptedDefaults
+        ? '已按当前信息并采用系统默认假设确认需求，正在生成户型。'
+        : '需求已确认，正在生成户型。',
+      next: 'generate',
+    }
+  }
+
+  const message = input.message?.trim() ?? ''
+  if (!message && !input.imageDataUrl) {
+    return { kind: 'reply', reply: '请输入户型需求，或上传一张户型图。' }
+  }
+  // A failed modification left phase here so a plain confirm can retry it; a
+  // fresh plain message instead means "new change" — clear the stale pending
+  // fields and reclassify it against the still-present scene.
+  if (shouldRouteAsExistingSceneRequest(session.phase, message)) {
+    delete session.pendingModification
+    delete session.pendingOperation
+    return { kind: 'route-existing', message }
+  }
+  if (isCompletedPhase(session.phase)) {
+    if (!message) {
+      return { kind: 'reply', reply: '户型已经生成。请用文字描述需要修改的内容。' }
+    }
+    return { kind: 'route-existing', message }
+  }
+  if (message.length > 5000) {
+    return { kind: 'reply', reply: '文字需求不能超过 5000 个字符，请精简后重新提交。' }
+  }
+  if (input.imageDataUrl && !isSupportedImage(input.imageDataUrl)) {
+    session.phase = 'failed'
+    session.availability = 'unusable'
+    return { kind: 'reply', reply: '当前仅支持单张 JPG、JPEG 或 PNG 户型图，且图片必须小于 20 MB。' }
+  }
+  return { kind: 'intake', message }
+}
+
 export function countDiagnosticIssues(diagnostics: {
   validation: { errors: string[] }
   verificationIssues: string[]
@@ -1421,6 +1631,16 @@ export function countDiagnosticIssues(diagnostics: {
  * Turn remaining diagnostics into a short, human-readable list so the reply
  * says what's actually wrong instead of just a bare count.
  */
+/**
+ * Guidance appended to a "completed with remaining issues" reply so the user
+ * has a concrete next step. "继续修复" is picked up by
+ * `classifySceneIntentFallback` as an `update` intent, which re-enters the
+ * modify path and runs another diagnose/repair pass on the same scene.
+ */
+function remainingIssuesHint(): string {
+  return '\n\n如果希望我再自动尝试修正这些问题，回复"继续修复"即可；也可以直接描述具体改动，或在编辑器中手动调整。'
+}
+
 export function describeRemainingIssues(
   diagnostics: {
     validation: { errors: string[] }
@@ -1497,14 +1717,51 @@ function extractMarkdownSection(markdown: string, heading: string): string | und
 // an item node just as easily as any other node type.
 const FURNITURE_TOOLS = new Set(['place_item', 'furnish_room', 'apply_patch'])
 
-function furnitureCaveat(toolNamesUsed: Set<string>, furnitureIssues: string[] = []): string {
-  const touchedFurniture = [...toolNamesUsed].some(name => FURNITURE_TOOLS.has(name))
-  if (!touchedFurniture) return ''
-  const limit = 5
-  const specific = furnitureIssues.length > 0
-    ? `\n以下家具没有成功放置：\n${furnitureIssues.slice(0, limit).map(issue => `- ${issue}`).join('\n')}${furnitureIssues.length > limit ? `\n……以及另外 ${furnitureIssues.length - limit} 项` : ''}`
+// Combined remaining-issue count = structural diagnostics + furniture that
+// wasn't placed as intended. Furniture failures used to be invisible to
+// remainingIssueCount/phase (they only appeared in reply text), so a scene
+// with overlapping/out-of-bounds furniture was mislabeled fully `completed`.
+export function countAllIssues(
+  diagnostics: Parameters<typeof countDiagnosticIssues>[0],
+  furnitureIssues: string[],
+): number {
+  return countDiagnosticIssues(diagnostics) + furnitureIssues.length
+}
+
+function describeFurnitureIssues(furnitureIssues: string[], limit = 5): string {
+  const shown = furnitureIssues.slice(0, limit).map(issue => `- ${issue}`).join('\n')
+  const more = furnitureIssues.length > limit ? `\n……以及另外 ${furnitureIssues.length - limit} 项` : ''
+  return `有 ${furnitureIssues.length} 件家具未正确放置（越界/重叠/未成功放置）：\n${shown}${more}`
+}
+
+// Builds the completion reply, counting structural diagnostics and furniture
+// failures separately so the message is accurate for furniture-only issues
+// (which the repair loop never attempts) instead of claiming a bogus repair
+// round count.
+function buildCompletionReply(args: {
+  successText: string
+  repairRounds: number
+  diagnostics: Parameters<typeof describeRemainingIssues>[0]
+  toolNamesUsed: Set<string>
+  furnitureIssues: string[]
+}): string {
+  const structural = countDiagnosticIssues(args.diagnostics)
+  const furniture = args.furnitureIssues.length
+  const touchedFurniture = [...args.toolNamesUsed].some(name => FURNITURE_TOOLS.has(name))
+  const generalNote = touchedFurniture
+    ? '\n\n提示：家具的精确摆放（是否贴墙、挡门、朝向）仍建议在编辑器里再确认一下。'
     : ''
-  return `\n\n提示：家具的具体摆放位置未做自动检测（现有检查只覆盖结构、门窗和家具间的粗略重叠，不检查家具是否越界或贴墙贴门），建议在编辑器里确认一下位置。${specific}`
+  if (structural === 0 && furniture === 0) {
+    return `${args.successText}${generalNote}`
+  }
+  const parts: string[] = []
+  if (structural > 0) {
+    parts.push(`自动修正已达上限（${args.repairRounds} 轮），仍有 ${structural} 个结构问题需要人工确认：${describeRemainingIssues(args.diagnostics)}`)
+  }
+  if (furniture > 0) {
+    parts.push(describeFurnitureIssues(args.furnitureIssues))
+  }
+  return `${parts.join('\n\n')}${remainingIssuesHint()}${generalNote}`
 }
 
 /**
@@ -2051,6 +2308,34 @@ export function evaluateBrief(
   return { availability: 'usable', reasons: [], questions: [] }
 }
 
+/**
+ * User-facing brief summary in plain language — no confidence numbers or
+ * source labels (those read like debug output to a non-expert homeowner).
+ * Assumptions and uncertainties are surfaced explicitly as "will be treated
+ * as defaults unless you correct them", so confirming is informed consent
+ * rather than a silent acceptance of everything the system inferred.
+ */
+export function formatUserFacingSummary(brief: DesignBrief): string {
+  const list = (facts: RequirementFact[]) =>
+    facts.map(fact => `${fact.label}：${formatValue(fact.value)}`).join('；')
+  const lines: string[] = ['我目前理解的需求如下：']
+  if (brief.existingCondition.length > 0) lines.push(`· 现状：${list(brief.existingCondition)}`)
+  if (brief.designGoals.length > 0) lines.push(`· 设计目标：${list(brief.designGoals)}`)
+  if (brief.hardConstraints.length > 0) lines.push(`· 硬性约束：${list(brief.hardConstraints)}`)
+  const unconfirmed = [...brief.assumptions, ...brief.uncertainties]
+  if (unconfirmed.length > 0) {
+    lines.push('以下内容我会按默认假设处理（尚未经你确认），如不符请补充：')
+    for (const fact of unconfirmed) lines.push(`  - ${fact.label}：${formatValue(fact.value)}`)
+  }
+  for (const conflict of brief.conflicts) {
+    lines.push(`  - 待确认冲突：${conflict.question}`)
+  }
+  if (lines.length === 1) {
+    lines.push('（暂未提取到明确信息，将主要依据合理默认假设生成，你可以随时补充。）')
+  }
+  return lines.join('\n')
+}
+
 export function formatSummary(brief: DesignBrief): string {
   const section = (title: string, facts: RequirementFact[]) => {
     if (facts.length === 0) return `${title}\n- 无`
@@ -2255,8 +2540,12 @@ export function publicEditorUrl(sceneId: string | null): string | null {
   return sceneId ? `/scene/${encodeURIComponent(sceneId)}` : null
 }
 
-export function shouldModifyExistingScene(nodeCount: number): boolean {
-  return nodeCount > 4
+// `count` is the number of *content* nodes (scaffolding excluded, see
+// `countActiveContentNodes`). Any real content at all means the scene is the
+// user's existing work and must be modified incrementally rather than cleared
+// and rebuilt.
+export function shouldModifyExistingScene(count: number): boolean {
+  return count > 0
 }
 
 export function isSceneQuestion(message: string): boolean {
@@ -2273,7 +2562,7 @@ export function classifySceneIntentFallback(message: string): SceneIntent {
   const value = message.trim()
   if (/(?:删除|删掉|移除|去掉|拆除)/.test(value)) return 'delete'
   if (/(?:新增|添加|加一个|创建|放置|摆放|增加)/.test(value)) return 'create'
-  if (/(?:修改|改成|改为|调整|移动|缩短|延长|扩大|缩小|重命名|替换)/.test(value)) return 'update'
+  if (/(?:继续修复|修复|再修|重新修|继续优化|再优化|修改|改成|改为|调整|移动|缩短|延长|扩大|缩小|重命名|替换)/.test(value)) return 'update'
   if (
     isSceneQuestion(value) ||
     /(?:查看|查询|检查|核对|测量|告诉我|显示)/.test(value)

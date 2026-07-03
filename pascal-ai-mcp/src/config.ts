@@ -26,10 +26,13 @@ export type AppConfig = {
   mcpToken?: string
   mcpCommand: string
   mcpArgs: string[]
+  mcpRequestTimeoutMs: number
   pascalDataDir?: string
   maxToolRounds: number
   maxClarificationRounds: number
   maxRepairRounds: number
+  maxModelCallsPerTurn: number
+  maxModelCallsPerSession: number
   usableConfidence: number
   partialConfidence: number
 }
@@ -91,10 +94,28 @@ export function loadConfig(): AppConfig {
     mcpToken: emptyToUndefined(process.env.PASCAL_MCP_TOKEN),
     mcpCommand: process.env.PASCAL_MCP_COMMAND || 'bun',
     mcpArgs: splitArgs(process.env.PASCAL_MCP_ARGS || '../packages/mcp/src/bin/pascal-mcp.ts --stdio'),
+    // Per-call timeout for a single MCP tool invocation. Without this a hung
+    // MCP call blocks the session's lock forever (the conversation never
+    // recovers until the process is restarted). Generation tools (e.g.
+    // create_house_from_brief) can legitimately take a while, so the default
+    // is generous.
+    mcpRequestTimeoutMs: parseIntWithDefault(
+      process.env.PASCAL_MCP_REQUEST_TIMEOUT_MS || process.env.AI_MCP_REQUEST_TIMEOUT_MS,
+      120_000,
+    ),
     pascalDataDir: emptyToUndefined(process.env.PASCAL_DATA_DIR),
     maxToolRounds: parseIntWithDefault(process.env.AI_MCP_MAX_TOOL_ROUNDS, 12),
     maxClarificationRounds: parseIntWithDefault(process.env.AI_MAX_CLARIFICATION_ROUNDS, 3),
     maxRepairRounds: parseIntWithDefault(process.env.AI_MAX_REPAIR_ROUNDS, 3),
+    // Absolute safety ceiling on model API calls in a single chat turn. All
+    // internal loops are already individually bounded (tool rounds, phases,
+    // repair/clarification rounds), so this only trips on pathological
+    // runaway — it exists to cap cost/latency, not to gate normal jobs.
+    maxModelCallsPerTurn: parseIntWithDefault(process.env.AI_MAX_MODEL_CALLS_PER_TURN, 200),
+    // Cumulative ceiling across all turns of one session. A single turn is
+    // already capped by maxModelCallsPerTurn; this stops an unbounded
+    // multi-turn conversation from accumulating cost without limit.
+    maxModelCallsPerSession: parseIntWithDefault(process.env.AI_MAX_MODEL_CALLS_PER_SESSION, 1000),
     usableConfidence: parseBoundedFloat(process.env.AI_USABLE_CONFIDENCE, 0.8),
     partialConfidence: parseBoundedFloat(process.env.AI_PARTIAL_CONFIDENCE, 0.5),
   }

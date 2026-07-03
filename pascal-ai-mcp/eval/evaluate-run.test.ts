@@ -4,6 +4,8 @@ import {
   checkBedroomCount,
   checkForbiddenRoomTypes,
   checkRequiredRoomTypes,
+  classifyFailure,
+  classifyFurnitureIssues,
   dependencySceneKey,
   determineSuccess,
   findCorpusLevelProblems,
@@ -25,11 +27,60 @@ function sceneResult(overrides: Partial<SceneResult> = {}): SceneResult {
     strayWindows: [],
     requirementMismatches: [],
     isolatedBedrooms: [],
+    furnitureIssues: [],
     repairRounds: 0,
     remainingIssueCount: 0,
     ...overrides,
   }
 }
+
+describe('classifyFailure', () => {
+  test('completed runs are not classified as failures', () => {
+    expect(classifyFailure('completed', '户型已生成并通过自动检查。')).toBeUndefined()
+    expect(classifyFailure('completed_with_issues', 'x')).toBeUndefined()
+  })
+
+  test('rate-limited requirement extraction is model_rate_limit, not clarification', () => {
+    const result = classifyFailure('failed', '需求解析失败：Model API failed after 5 attempt(s): 429 Too Many Requests。你可以重试')
+    expect(result).toMatchObject({ stage: 'requirement_extraction', code: 'model_rate_limit' })
+  })
+
+  test('http 500 during extraction is model_http_error', () => {
+    const result = classifyFailure('failed', '需求解析失败：Model API failed after 5 attempt(s): 500 Internal Server Error')
+    expect(result).toMatchObject({ stage: 'requirement_extraction', code: 'model_http_error' })
+  })
+
+  test('invalid JSON is invalid_model_json', () => {
+    const result = classifyFailure('failed', '需求解析失败：Unexpected end of JSON input')
+    expect(result?.code).toBe('invalid_model_json')
+  })
+
+  test('mcp failure during generation is mcp_error', () => {
+    const result = classifyFailure('failed', '户型生成失败：MCP tool create_house_from_brief failed: boom')
+    expect(result).toMatchObject({ stage: 'generation', code: 'mcp_error' })
+  })
+
+  test('still clarifying is clarification_incomplete', () => {
+    const result = classifyFailure('clarifying', '还需要确认以下关键条件：1. 面积是多少？')
+    expect(result).toMatchObject({ stage: 'confirmation', code: 'clarification_incomplete' })
+  })
+})
+
+describe('classifyFurnitureIssues', () => {
+  test('buckets overlap and out-of-bounds separately', () => {
+    const result = classifyFurnitureIssues([
+      'coffee-table: overlaps another item',
+      'bathroom-sink: outside room bounds',
+      'fridge: overlaps another item',
+      '目录中找不到 "x"，已用占位方块代替',
+    ])
+    expect(result).toEqual({ total: 4, overlapCount: 2, outOfBoundsCount: 1, otherCount: 1 })
+  })
+
+  test('empty list is all zeros', () => {
+    expect(classifyFurnitureIssues([])).toEqual({ total: 0, overlapCount: 0, outOfBoundsCount: 0, otherCount: 0 })
+  })
+})
 
 describe('determineSuccess', () => {
   test('completed with a real sceneId is success', () => {

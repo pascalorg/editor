@@ -103,6 +103,10 @@ export type SceneResult = {
   strayWindows: string[]
   requirementMismatches: string[]
   isolatedBedrooms: string[]
+  // Furniture that wasn't placed as intended (overlap, out-of-bounds, catalog
+  // miss / not placed). Previously only surfaced in the reply text and not
+  // counted anywhere; now structured here and folded into remainingIssueCount.
+  furnitureIssues: string[]
   repairRounds: number
   remainingIssueCount: number
 }
@@ -119,6 +123,9 @@ export type WorkflowSession = {
   summary: string
   messages: ChatMessage[]
   clarificationRounds: number
+  // Cumulative count of model API attempts made across every turn of this
+  // session, enforced against config.maxModelCallsPerSession.
+  modelCallsTotal?: number
   confirmedAt?: string
   sceneResult?: SceneResult
   pendingModification?: string

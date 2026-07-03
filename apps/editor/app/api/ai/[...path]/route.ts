@@ -16,7 +16,13 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
         request.method === 'GET' || request.method === 'DELETE' ? undefined : await request.text(),
       cache: 'no-store',
     })
-    return new NextResponse(response.body, {
+    // Buffer the full upstream body before responding. Streaming
+    // `response.body` through for a multi-minute /chat generation risked the
+    // client receiving a truncated/empty body (then failing `response.json()`
+    // with "Unexpected end of JSON input") even though the agent finished and
+    // saved the session. Reading it fully here avoids that truncation.
+    const bodyText = await response.text()
+    return new NextResponse(bodyText, {
       status: response.status,
       headers: { 'Content-Type': response.headers.get('content-type') ?? 'application/json' },
     })

@@ -39,6 +39,90 @@ export function determineSuccess(
   return { ok: true }
 }
 
+// --- Failure classification (for the raw report) ---
+
+export type FailureStage =
+  | 'requirement_extraction'
+  | 'generation'
+  | 'modification'
+  | 'inspection'
+  | 'confirmation'
+  | 'unknown'
+
+export type FailureCode =
+  | 'model_timeout'
+  | 'model_rate_limit'
+  | 'model_http_error'
+  | 'invalid_model_json'
+  | 'clarification_incomplete'
+  | 'mcp_error'
+  | 'cancelled'
+  | 'unknown'
+
+export type FailureClassification = {
+  stage: FailureStage
+  code: FailureCode
+  message: string
+}
+
+/**
+ * Best-effort classification of *why* a run didn't succeed, derived from the
+ * agent's final reply (which embeds the underlying error text) and the phase.
+ * Returns undefined for genuinely completed runs. This replaces the previous
+ * blanket "大概率卡在澄清阶段" explanation, which was wrong whenever the real
+ * cause was rate limiting, an HTTP error, a JSON parse failure, or an MCP
+ * error during requirement extraction.
+ */
+export function classifyFailure(
+  phase: WorkflowPhase | undefined,
+  reply: string | undefined,
+): FailureClassification | undefined {
+  if (phase === 'completed' || phase === 'completed_with_issues') return undefined
+  const text = (reply ?? '').trim()
+
+  let stage: FailureStage = 'unknown'
+  if (/需求解析失败/.test(text)) stage = 'requirement_extraction'
+  else if (/户型生成失败|无法加载场景/.test(text)) stage = 'generation'
+  else if (/场景修改失败/.test(text)) stage = 'modification'
+  else if (/场景核对失败/.test(text)) stage = 'inspection'
+  else if (phase === 'clarifying' || phase === 'awaiting_confirmation') stage = 'confirmation'
+
+  let code: FailureCode = 'unknown'
+  if (/取消|cancelled/i.test(text)) code = 'cancelled'
+  else if (/429|rate.?limit|too many requests/i.test(text)) code = 'model_rate_limit'
+  else if (/timeout|timed out|ETIMEDOUT|abort/i.test(text)) code = 'model_timeout'
+  else if (/invalid.*json|unexpected (token|end of json)|not valid json|json.*parse/i.test(text)) {
+    code = 'invalid_model_json'
+  } else if (/MCP tool .* failed|mcp\b/i.test(text)) code = 'mcp_error'
+  else if (/Model API (failed|request failed)|\bhttp\b|\b5\d\d\b/i.test(text)) code = 'model_http_error'
+  else if (phase === 'clarifying' || phase === 'awaiting_confirmation') code = 'clarification_incomplete'
+
+  return { stage, code, message: text }
+}
+
+export type FurnitureIssueBreakdown = {
+  total: number
+  overlapCount: number
+  outOfBoundsCount: number
+  otherCount: number
+}
+
+/** Buckets structured furniture issues for the report (overlap / out-of-bounds / other). */
+export function classifyFurnitureIssues(issues: string[]): FurnitureIssueBreakdown {
+  let overlapCount = 0
+  let outOfBoundsCount = 0
+  for (const issue of issues) {
+    if (/overlap|重叠/i.test(issue)) overlapCount++
+    else if (/outside|out of bounds|越界|超出/i.test(issue)) outOfBoundsCount++
+  }
+  return {
+    total: issues.length,
+    overlapCount,
+    outOfBoundsCount,
+    otherCount: issues.length - overlapCount - outOfBoundsCount,
+  }
+}
+
 export type BedroomCountCheck = { ok: boolean; expected: number; actual: number | null }
 
 /**
