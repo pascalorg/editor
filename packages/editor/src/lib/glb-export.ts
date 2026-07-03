@@ -216,6 +216,20 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
       }
       return
     }
+    // The scalar branch above only catches `material == null`; an ARRAY material
+    // (multi-material / group geometry) is never `== null`, so a slot that was
+    // never assigned — e.g. `[validMat, undefined]` — slips through and reaches
+    // GLTFExporter, which reads `material.isShaderMaterial` on every group's
+    // material and crashes on the undefined slot. Don't drop the mesh (the other
+    // slots may be real geometry): fill any null/undefined holes with the hidden
+    // placeholder so the exporter never sees an undefined material.
+    if (
+      (renderable.isMesh === true || renderable.isLine === true || renderable.isPoints === true) &&
+      Array.isArray(renderable.material) &&
+      renderable.material.some((m) => m == null)
+    ) {
+      renderable.material = renderable.material.map((m) => m ?? PLACEHOLDER_MATERIAL)
+    }
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || isRenderableMesh(mesh)) return
     if (mesh.children.length > 0) {

@@ -107,6 +107,26 @@ describe('prepareSceneForExport', () => {
     expect(visibleChildren).toHaveLength(1)
   })
 
+  test('fills undefined slots in an array material so no undefined survives the prune', () => {
+    // Multi-material / group geometry where one slot was never assigned:
+    // `mesh.material = [validMat, undefined]`. The scalar-null guard doesn't
+    // catch this (an array is never `== null`), so the undefined slot used to
+    // reach GLTFExporter and crash on `material.isShaderMaterial`.
+    const root = new THREE.Group()
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))
+    mesh.material = [nodeMaterial(), undefined as unknown as THREE.Material]
+    root.add(mesh)
+
+    const { scene } = prepareSceneForExport(root, {})
+
+    const exported = scene.children[0] as THREE.Mesh
+    const materials = exported.material as THREE.Material[]
+    expect(Array.isArray(materials)).toBe(true)
+    expect(materials).toHaveLength(2)
+    // No undefined/null slot survives; every slot is a real material.
+    expect(materials.every((m) => m != null)).toBe(true)
+  })
+
   test('stamps identity from the scene registry and strips other userData', () => {
     const root = new THREE.Group()
     const doorGroup = new THREE.Group()
