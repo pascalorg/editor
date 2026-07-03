@@ -152,7 +152,7 @@ export function newCabinetCompartment(type: CabinetCompartmentType): CabinetComp
 }
 
 export function fridgeCabinetStack(type: CabinetFridgeCompartmentType): CabinetCompartment[] {
-  return [newCabinetCompartment(type), { ...newCabinetCompartment('shelf'), shelfCount: 1 }]
+  return [newCabinetCompartment(type), { ...newCabinetCompartment('drawer'), drawerCount: 1 }]
 }
 
 export function cooktopCabinetStack(type: CabinetCooktopCompartmentType): CabinetCompartment[] {
@@ -330,7 +330,6 @@ export function replaceCabinetCompartmentStack(
     compartmentIndex === index ? next : compartment,
   )
   if (lockedApplianceHeight(next) == null) return replaced
-  if (isFridgeCompartmentType(next.type)) return replaced
   if (isHoodCompartmentType(next.type)) return replaced
   if (next.type === 'dishwasher') return replaced
   if (next.type === 'pull-out-pantry') return replaced
@@ -348,6 +347,9 @@ export function replaceCabinetCompartmentStack(
   if (node.carcassHeight - lockedHeight < minHeight) return replaced
 
   const filler = newCabinetCompartment(fillerType)
+  if (isFridgeCompartmentType(next.type)) {
+    return [...replaced.slice(0, index + 1), filler, ...replaced.slice(index + 1)]
+  }
   return [...replaced.slice(0, index), filler, ...replaced.slice(index)]
 }
 

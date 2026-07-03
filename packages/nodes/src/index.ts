@@ -1,7 +1,7 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
-import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 import { buildingDefinition } from './building'
+import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
@@ -115,8 +115,8 @@ export const builtinPlugin: Plugin = {
 }
 
 export { boxVentDefinition } from './box-vent'
-export { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 export { buildingDefinition } from './building'
+export { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
-import type { MaterialSchema } from '../schema/material'
+import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
@@ -914,6 +914,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    */
   floorplanMoveTarget?: FloorplanMoveTarget<z.infer<S>>
   /**
+   * Extra floating-menu actions contributed by this kind. The editor renders
+   * the returned descriptors generically; kind-specific mutation stays here
+   * and runs through `SceneApi`.
+   */
+  quickActions?: NodeQuickActionProvider<z.infer<S>>
+  /**
    * Geometry reads sibling/parent/child nodes (e.g. wall miters, opening
    * dimensions); the floor-plan layer must rebuild it whenever a
    * sibling-affecting node is being dragged live.
@@ -1142,7 +1148,7 @@ export type AssetRef = {
 }
 
 export type SystemContribution = {
-  module: () => Promise<{ default: ComponentType }>
+  module: () => Promise<{ default: ComponentType<{ sceneApi: SceneApi }> }>
   priority?: number
 }
 
@@ -1202,6 +1208,15 @@ export type Capabilities = {
    */
   ceilingCut?: CeilingCutCapability
   paint?: PaintCapability
+  /**
+   * In-scene click action dispatch (e.g. a cooktop knob toggling its burner).
+   * The editor's selection-manager walks the pointer hit's object chain
+   * through `resolveTarget`; when it returns non-null, `activate` runs and a
+   * `true` return consumes the click (no selection change). Keeps interactive
+   * sub-meshes registry-driven instead of `if (node.type === '<kind>')` arms
+   * in the editor.
+   */
+  sceneAction?: SceneActionCapability
   /**
    * Declares the kind's paintable slots — the `{ slotId, label, default }`
    * contract shared by items (scanned from the GLB) and procedural kinds
@@ -1318,6 +1333,11 @@ export type SlotDeclaration = {
 
 export type PaintCapability = {
   /**
+   * Material-picker target represented by this paint capability. Omit when
+   * the kind should not show up as a toolbar target from plain selection.
+   */
+  materialTarget?: MaterialTarget
+  /**
    * Opt this kind into the painter's `room` application scope: a paint click
    * spreads to every same-kind node bounding the clicked node's room (walls and
    * slabs). The room geometry is resolved by the editor from `Space.polygon`;
@@ -1371,6 +1391,45 @@ export type PaintCapability = {
     materialPreset: string | undefined
   } | null
 }
+
+/**
+ * Per-kind in-scene click actions. A kind that builds interactive sub-meshes
+ * (a gas-hob knob, a switch) tags them via `userData` in its geometry builder,
+ * resolves the tag back out of the pointer hit in `resolveTarget`, and runs
+ * the state change in `activate`. The editor owns only the generic dispatch:
+ * walk the hit object's parent chain, and when `resolveTarget` returns
+ * non-null, call `activate`; a `true` return consumes the click.
+ *
+ * `activate` receives a `SceneApi` so the kind never imports `useScene`
+ * directly; transient animation frames may write through
+ * `useLiveNodeOverrides` + `markDirty` and commit once at the end.
+ */
+export type SceneActionCapability<T = unknown> = {
+  /** Extract this kind's action target from one object in the hit chain. */
+  resolveTarget: (object: { userData: Record<string, unknown> }) => T | null
+  /** Run the action. Return `true` to consume the click (skip selection). */
+  activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
+}
+
+export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'
+
+export type NodeQuickActionResult = {
+  selectedIds?: AnyNodeId[]
+}
+
+export type NodeQuickAction = {
+  id: string
+  label: string
+  title?: string
+  icon?: NodeQuickActionIcon
+  disabled?: boolean
+  run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
+}
+
+export type NodeQuickActionProvider<N> = (args: {
+  node: N
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+}) => NodeQuickAction[]
 
 export type PaintResolveArgs = {
   node: AnyNode
@@ -1509,7 +1568,54 @@ export type MovableConfig = {
     /** Snap radius in meters (XZ). Defaults to 0.5. */
     radius?: number
   }
+  /**
+   * The node's `position` lives in a parent node's local frame (a cabinet
+   * module inside its run) rather than the level frame. The generic move
+   * tool converts the plan-frame cursor through these hooks, previews the
+   * child via `useLiveNodeOverrides` (dirtying the parent so its composite
+   * geometry re-flows), and skips the world-frame floor-collision box.
+   */
+  parentFrame?: MovableParentFrame
   override?: (ctx: CapabilityCtx) => MovableConfig | null
+}
+
+export type MovableParentFrame = {
+  /** The parent node owning the local frame; `null` → move in plan frame. */
+  resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => AnyNode | null
+  /** Parent's Y rotation, composed onto the child's preview rotation. */
+  parentRotationY: (parent: AnyNode) => number
+  localToPlan: (
+    parent: AnyNode,
+    local: readonly [number, number, number],
+  ) => [number, number, number]
+  planToLocal: (
+    parent: AnyNode,
+    planX: number,
+    localY: number,
+    planZ: number,
+  ) => [number, number, number]
+  /**
+   * Optional 2D live-transform projection. Used by the floor-plan layer for
+   * nodes whose live position is already in the parent-local frame and must not
+   * be treated as a level-frame / floor-placed position.
+   */
+  floorplanLiveTransform?: (args: { node: AnyNode; live: LiveTransformLike }) => AnyNode
+  /**
+   * Optional magnetic snap in the parent's local frame (e.g. a module edge
+   * mating flush with a sibling module). Runs when magnetic snapping is
+   * active; returns the (possibly unchanged) local position.
+   */
+  magneticSnap?: (
+    node: AnyNode,
+    parent: AnyNode,
+    local: readonly [number, number, number],
+    nodes: Readonly<Record<string, AnyNode>>,
+  ) => [number, number, number]
+}
+
+export type LiveTransformLike = {
+  position: [number, number, number]
+  rotation: number
 }
 
 export type RotatableConfig = {

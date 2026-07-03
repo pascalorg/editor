@@ -63,7 +63,6 @@ import {
   resolveSelectedIdsForNodeClick,
   type SelectionModifierKeys,
   selectionModifiersFromEvent,
-  shouldPreserveSelectedCabinetHostTarget,
   shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
@@ -216,152 +215,24 @@ function getEventObject(event: NodeEvent): Object3D {
   return eventWithObject.object ?? event.nativeEvent.object
 }
 
-type CabinetCooktopKnobTarget = {
-  type: 'gas'
-  compartmentIndex: number
-  burnerIndex: number
-}
-
-function cabinetCooktopElementCount(layout: unknown): number {
-  switch (layout) {
-    case 'gas-2burner':
-    case 'induction-2zone':
-      return 2
-    case 'gas-6burner':
-      return 6
-    case 'gas-5burner-wok':
-      return 5
-    default:
-      return 4
-  }
-}
-
-function resolveCabinetCooktopKnobTarget(object: Object3D | null): CabinetCooktopKnobTarget | null {
+/**
+ * Registry-driven in-scene click actions (`capabilities.sceneAction`): walk
+ * the pointer hit's object chain, ask the clicked kind to resolve an action
+ * target from each object's userData, and run it. Returns `true` when the
+ * kind consumed the click (no selection change should happen).
+ */
+function dispatchSceneAction(node: AnyNode, object: Object3D | null): boolean {
+  const sceneAction = nodeRegistry.get(node.type)?.capabilities?.sceneAction
+  if (!sceneAction) return false
   let current: Object3D | null = object
   while (current) {
-    const target = current.userData.cabinetCooktopKnob as CabinetCooktopKnobTarget | undefined
-    if (
-      target?.type === 'gas' &&
-      Number.isInteger(target.compartmentIndex) &&
-      Number.isInteger(target.burnerIndex) &&
-      target.compartmentIndex >= 0 &&
-      target.burnerIndex >= 0
-    ) {
-      return target
+    const target = sceneAction.resolveTarget(current)
+    if (target !== null) {
+      return sceneAction.activate(node, target, createSceneApi(useScene))
     }
     current = current.parent
   }
-  return null
-}
-
-function resolveCooktopActiveBurners(compartment: any, count: number): number[] {
-  if (Array.isArray(compartment.cooktopActiveBurners)) {
-    const indices = compartment.cooktopActiveBurners.filter(
-      (index: unknown): index is number =>
-        Number.isInteger(index) && (index as number) >= 0 && (index as number) < count,
-    )
-    return [...new Set<number>(indices)].sort((a, b) => a - b)
-  }
-  return compartment.cooktopBurnersOn === true
-    ? Array.from({ length: count }, (_, index) => index)
-    : []
-}
-
-function resolveCooktopKnobProgress(
-  compartment: any,
-  count: number,
-  activeBurners: readonly number[],
-): number[] {
-  const active = new Set(activeBurners)
-  return Array.from({ length: count }, (_, index) => {
-    const value = compartment.cooktopKnobProgress?.[index]
-    return typeof value === 'number' && Number.isFinite(value)
-      ? Math.max(0, Math.min(1, value))
-      : active.has(index)
-        ? 1
-        : 0
-  })
-}
-
-function withCooktopBurnerProgress(
-  node: AnyNode,
-  target: CabinetCooktopKnobTarget,
-  progress: number,
-  nextActiveBurners: readonly number[],
-): Partial<AnyNode> | null {
-  const stack = (node as { stack?: unknown }).stack
-  if (!Array.isArray(stack)) return null
-  const compartment = stack[target.compartmentIndex]
-  if (!compartment || typeof compartment !== 'object') return null
-  const current = compartment as any
-  if (current.type !== 'cooktop-gas') return null
-
-  const count = cabinetCooktopElementCount(current.cooktopLayout)
-  const nextProgress = resolveCooktopKnobProgress(current, count, nextActiveBurners)
-  nextProgress[target.burnerIndex] = Math.max(0, Math.min(1, progress))
-
-  return {
-    stack: stack.map((entry, index) =>
-      index === target.compartmentIndex
-        ? {
-            ...(entry as object),
-            cooktopBurnersOn: nextActiveBurners.length > 0,
-            cooktopActiveBurners: [...nextActiveBurners],
-            cooktopKnobProgress: nextProgress,
-          }
-        : entry,
-    ),
-  } as Partial<AnyNode>
-}
-
-function toggleCabinetCooktopKnob(node: AnyNode, target: CabinetCooktopKnobTarget): boolean {
-  const stack = (node as { stack?: unknown }).stack
-  if (!Array.isArray(stack)) return false
-  const compartment = stack[target.compartmentIndex]
-  if (!compartment || typeof compartment !== 'object') return false
-  const current = compartment as any
-  if (current.type !== 'cooktop-gas') return false
-
-  const count = cabinetCooktopElementCount(current.cooktopLayout)
-  if (target.burnerIndex >= count) return false
-
-  const activeBurners = resolveCooktopActiveBurners(current, count)
-  const wasActive = activeBurners.includes(target.burnerIndex)
-  const nextActiveBurners = wasActive
-    ? activeBurners.filter((index) => index !== target.burnerIndex)
-    : [...activeBurners, target.burnerIndex].sort((a, b) => a - b)
-  const from = resolveCooktopKnobProgress(current, count, activeBurners)[target.burnerIndex] ?? 0
-  const to = wasActive ? 0 : 1
-  const nodeId = node.id as AnyNodeId
-  const startedAt = performance.now()
-  const duration = 180
-
-  const tick = (time: number) => {
-    const elapsed = Math.max(0, time - startedAt)
-    const t = Math.min(1, elapsed / duration)
-    const eased = 1 - (1 - t) ** 3
-    const progress = from + (to - from) * eased
-    const patch = withCooktopBurnerProgress(node, target, progress, nextActiveBurners)
-    if (patch) {
-      useLiveNodeOverrides.getState().set(nodeId, patch as Record<string, unknown>)
-      useScene.getState().markDirty(nodeId)
-    }
-
-    if (t < 1) {
-      requestAnimationFrame(tick)
-      return
-    }
-
-    useLiveNodeOverrides.getState().clear(nodeId)
-    const finalPatch = withCooktopBurnerProgress(node, target, to, nextActiveBurners)
-    if (finalPatch) {
-      useScene.getState().updateNode(nodeId, finalPatch)
-    } else {
-      useScene.getState().markDirty(nodeId)
-    }
-  }
-  requestAnimationFrame(tick)
-  return true
+  return false
 }
 
 function getIntersectionMaterialIndex(
@@ -468,40 +339,20 @@ function resolveSelectModeNodeTarget(event: NodeEvent): AnyNode {
   return event.node
 }
 
-function resolveDirectMoveTarget(node: AnyNode): AnyNode {
-  if (node.type === 'cabinet-module' && node.parentId) {
-    const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-    if (
-      parentNode?.type === 'cabinet' &&
-      shouldPreserveSelectedCabinetHostTarget({
-        node: parentNode,
-        selectedIds: useViewer.getState().selection.selectedIds,
-        armedCabinetId: useEditor.getState().cabinetHostDragArmedId,
-      })
-    ) {
-      return parentNode
-    }
-  }
-
-  return node
-}
-
-function resolveCabinetSelectionTarget(node: AnyNode): AnyNode {
-  if (node.type !== 'cabinet-module' || !node.parentId) return node
-
-  const parentNode = useScene.getState().nodes[node.parentId as AnyNodeId]
-  if (
-    parentNode?.type === 'cabinet' &&
-    shouldPreserveSelectedCabinetHostTarget({
-      node: parentNode,
-      selectedIds: useViewer.getState().selection.selectedIds,
-      armedCabinetId: useEditor.getState().cabinetHostDragArmedId,
-    })
-  ) {
-    return parentNode
-  }
-
-  return node
+/**
+ * Kinds whose `position` lives in a host parent's frame (`movable.parentFrame`
+ * — e.g. a cabinet module inside its run) route clicks / hovers / direct-move
+ * to the parent while the parent is the sole selection: the user explicitly
+ * picked the composite, so interacting with a child keeps operating on it.
+ * Clicking a child while anything else is selected drills into the child.
+ */
+function resolveHostSelectionTarget(node: AnyNode): AnyNode {
+  const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
+  if (!parentFrame) return node
+  const parent = parentFrame.resolveParent(node, useScene.getState().nodes)
+  if (!parent) return node
+  const selectedIds = useViewer.getState().selection.selectedIds
+  return selectedIds.length === 1 && selectedIds[0] === parent.id ? parent : node
 }
 
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
@@ -1347,7 +1198,7 @@ export const SelectionManager = () => {
       if (pointer.button !== 0 || !isCommandModifier(pointer)) return
 
       const eventNode = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
-      const node = resolveDirectMoveTarget(eventNode)
+      const node = resolveHostSelectionTarget(eventNode)
       if (!canDirectMoveNode(node)) return
       if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
 
@@ -1619,8 +1470,7 @@ export const SelectionManager = () => {
       const activeScope = useInteractionScope.getState().scope
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
-      const knobTarget = resolveCabinetCooktopKnobTarget(getEventObject(event))
-      if (knobTarget && toggleCabinetCooktopKnob(event.node, knobTarget)) {
+      if (dispatchSceneAction(event.node, getEventObject(event))) {
         event.stopPropagation()
         clickHandledRef.current = true
         setTimeout(() => {
@@ -1629,7 +1479,7 @@ export const SelectionManager = () => {
         return
       }
 
-      const node = resolveCabinetSelectionTarget(resolveSelectModeNodeTarget(event))
+      const node = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))
 
       // A ceiling is selectable only through its corner handles, never via
       // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
@@ -1858,7 +1708,7 @@ export const SelectionManager = () => {
       // surface move tools keep tracking — but the select-hover outline must
       // stay put, so don't repaint under the cursor mid-drag.
       if (useViewer.getState().inputDragging) return
-      const node = resolveCabinetSelectionTarget(resolveSelectModeNodeTarget(event))
+      const node = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1886,7 +1736,7 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (useViewer.getState().inputDragging) return
-      const nodeId = resolveCabinetSelectionTarget(resolveSelectModeNodeTarget(event))?.id
+      const nodeId = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
@@ -2231,6 +2081,7 @@ const SelectionMaterialSync = () => {
   }, [])
 
   useEffect(() => {
+    void geometryRevision
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
     for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
@@ -2310,6 +2161,7 @@ const EditorOutlinerSync = () => {
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
+    void geometryRevision
     let idsToHighlight: string[] = []
 
     // 1. Determine what should be highlighted based on Phase

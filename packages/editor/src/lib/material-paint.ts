@@ -48,7 +48,6 @@ export type PaintableMaterialTarget =
       | 'cupola'
       | 'eyebrow-vent'
     >
-  | 'cabinet'
   | 'item'
 
 export type SingleSurfaceMaterialRole = 'surface'
@@ -275,7 +274,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       nodes,
     })
     if (surface) {
-      const sourceTarget = selectedNode.type as PaintableMaterialTarget
+      const sourceTarget = (paintCap.materialTarget ?? selectedNode.type) as PaintableMaterialTarget
       return hasActivePaintMaterial({
         material: surface.material,
         materialPreset: surface.materialPreset,
@@ -353,18 +352,19 @@ export function resolveActivePaintMaterialFromSelection(params: {
   // Wall / chimney / dormer flow through the registry-driven path
   // at the top of this function.
 
+  // Slot-backed kinds resolve via the registry-driven `getEffectiveMaterial`
+  // path at the top of this function, including legacy inline-material
+  // fallbacks when their capability exposes one.
+
   if (
-    ((selectedNode.type === 'fence' ||
+    (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
-      selectedNode.type === 'shelf' ||
-      selectedNode.type === 'cabinet' ||
-      selectedNode.type === 'cabinet-module') &&
-      selectedMaterialTarget.role === 'surface')
+      selectedNode.type === 'shelf') &&
+    selectedMaterialTarget.role === 'surface'
   ) {
     // Roof vents previously lived here too; they now resolve via the
     // registry-driven `getEffectiveMaterial` path at the top of this function.
-    const target =
-      selectedNode.type === 'cabinet-module' ? 'cabinet' : selectedNode.type
+    const target = selectedNode.type
     return hasActivePaintMaterial({
       material: selectedNode.material,
       materialPreset: selectedNode.materialPreset,
@@ -390,6 +390,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   const selectedNode = nodes[selectedId]
   if (!selectedNode) return null
+
+  const registryPaintTarget = nodeRegistry.get(selectedNode.type)?.capabilities?.paint
+    ?.materialTarget
+  if (registryPaintTarget) return registryPaintTarget as PaintableMaterialTarget
 
   if (selectedNode.type === 'wall') {
     return 'wall'
@@ -421,10 +425,6 @@ export function resolvePaintTargetFromSelection(params: {
 
   if (selectedNode.type === 'shelf') {
     return 'shelf'
-  }
-
-  if (selectedNode.type === 'cabinet' || selectedNode.type === 'cabinet-module') {
-    return 'cabinet'
   }
 
   if (selectedNode.type === 'item') {

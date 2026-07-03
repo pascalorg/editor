@@ -1,7 +1,7 @@
 import z from 'zod'
 import { BoxVentNode } from './nodes/box-vent'
-import { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 import { BuildingNode } from './nodes/building'
+import { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 import { CeilingNode } from './nodes/ceiling'
 import { ChimneyNode } from './nodes/chimney'
 import { ColumnNode } from './nodes/column'

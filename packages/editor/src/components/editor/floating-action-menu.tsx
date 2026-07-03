@@ -3,11 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type CabinetModuleNode,
-  CabinetModuleNode as CabinetModuleNodeSchema,
-  type CabinetNode,
   type CeilingNode,
   ColumnNode,
+  createSceneApi,
   DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
@@ -23,6 +21,8 @@ import {
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
+  type NodeQuickAction,
+  type NodeQuickActionIcon,
   nodeRegistry,
   RoofSegmentNode,
   type SlabNode,
@@ -42,6 +42,7 @@ import { useFrame } from '@react-three/fiber'
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
@@ -151,356 +152,61 @@ function getAttributeVersion(
     : 0
 }
 
+function QuickActionIcon({ icon }: { icon: NodeQuickActionIcon | undefined }) {
+  switch (icon) {
+    case 'add-left':
+      return (
+        <>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5" />
+        </>
+      )
+    case 'add-right':
+      return (
+        <>
+          <Plus className="h-3.5 w-3.5" />
+          <ArrowRight className="h-3.5 w-3.5" />
+        </>
+      )
+    case 'add':
+      return <Plus className="h-3.5 w-3.5" />
+    default:
+      return null
+  }
+}
+
+function collectQuickActionNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  selectedId: string | null,
+): Record<AnyNodeId, AnyNode> | null {
+  if (!selectedId) return null
+  const selected = nodes[selectedId as AnyNodeId]
+  if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
+
+  const collected: Record<AnyNodeId, AnyNode> = { [selected.id as AnyNodeId]: selected }
+  const add = (id: string | null | undefined) => {
+    if (!id) return
+    const node = nodes[id as AnyNodeId]
+    if (node) collected[node.id as AnyNodeId] = node
+  }
+  const addChildren = (node: AnyNode | undefined) => {
+    for (const childId of (node as { children?: readonly string[] } | undefined)?.children ?? []) {
+      add(childId)
+    }
+  }
+
+  add(selected.parentId ?? null)
+  addChildren(selected)
+  const parent = selected.parentId ? nodes[selected.parentId as AnyNodeId] : undefined
+  addChildren(parent)
+
+  return collected
+}
+
 // Pooled scratch for the per-frame anchor recompute (see useFrame below) so a
 // dragged node doesn't allocate a fresh Box3 + Vector3 every frame.
 const _anchorBox = new THREE.Box3()
 const _anchorCenter = new THREE.Vector3()
-
-type CabinetEditableNode = CabinetNode | CabinetModuleNode
-type CabinetContext = {
-  run: CabinetNode
-  module: CabinetModuleNode | null
-}
-
-const CABINET_BASE_WIDTH = 0.6
-const CABINET_WALL_DEPTH = 0.32
-const CABINET_WALL_CARCASS_HEIGHT = 0.72
-const CABINET_TALL_DEPTH = 0.58
-const CABINET_TALL_PLINTH_HEIGHT = 0.1
-const CABINET_TALL_CARCASS_HEIGHT = 2.07
-const CABINET_EDGE_EPSILON = 1e-4
-
-function cabinetCompartmentId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return `cc_${crypto.randomUUID().slice(0, 8)}`
-  }
-  return `cc_${Date.now().toString(36)}`
-}
-
-function defaultDoorStack(shelfCount: number) {
-  return [{ id: cabinetCompartmentId(), type: 'door' as const, shelfCount }]
-}
-
-function cabinetMetadataRecord(metadata: CabinetEditableNode['metadata']): Record<string, unknown> {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>)
-    : {}
-}
-
-function bumpCabinetRunsLayoutRevisionOnLevel(
-  scene: ReturnType<typeof useScene.getState>,
-  levelId: AnyNodeId,
-) {
-  for (const candidate of Object.values(scene.nodes)) {
-    if (candidate.type !== 'cabinet' || candidate.parentId !== levelId) continue
-    const metadata = cabinetMetadataRecord(candidate.metadata)
-    const currentRevision =
-      typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-    scene.updateNode(candidate.id as AnyNodeId, {
-      metadata: {
-        ...metadata,
-        cabinetLayoutRevision: currentRevision + 1,
-      },
-    })
-  }
-}
-
-function bumpCabinetRunLayoutRevision(
-  scene: ReturnType<typeof useScene.getState>,
-  run: CabinetNode,
-) {
-  const metadata = cabinetMetadataRecord(run.metadata)
-  const currentRevision =
-    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-  scene.updateNode(run.id as AnyNodeId, {
-    metadata: {
-      ...metadata,
-      cabinetLayoutRevision: currentRevision + 1,
-    },
-  })
-  if (run.parentId) bumpCabinetRunsLayoutRevisionOnLevel(scene, run.parentId as AnyNodeId)
-}
-
-function runModuleBaseY(run: Pick<CabinetNode, 'showPlinth' | 'plinthHeight'>) {
-  return run.showPlinth ? run.plinthHeight : 0
-}
-
-function totalCabinetHeight(
-  node: Pick<
-    CabinetEditableNode,
-    'showPlinth' | 'plinthHeight' | 'carcassHeight' | 'withCountertop' | 'countertopThickness'
-  >,
-) {
-  return (
-    (node.showPlinth ? node.plinthHeight : 0) +
-    node.carcassHeight +
-    (node.withCountertop ? node.countertopThickness : 0)
-  )
-}
-
-function wallBottomHeightForTallAlignment() {
-  return (
-    totalCabinetHeight({
-      showPlinth: true,
-      plinthHeight: CABINET_TALL_PLINTH_HEIGHT,
-      carcassHeight: CABINET_TALL_CARCASS_HEIGHT,
-      withCountertop: false,
-      countertopThickness: 0,
-    }) - CABINET_WALL_CARCASS_HEIGHT
-  )
-}
-
-function backAlignZ(baseDepth: number, wallDepth: number) {
-  return -(baseDepth - wallDepth) / 2
-}
-
-function backAnchoredModuleZ(currentZ: number, currentDepth: number, nextDepth: number) {
-  return currentZ + (nextDepth - currentDepth) / 2
-}
-
-function cabinetModulesForRun(
-  run: CabinetNode,
-  nodes: Record<AnyNodeId, AnyNode>,
-): CabinetModuleNode[] {
-  return (run.children ?? [])
-    .map((id) => nodes[id as AnyNodeId])
-    .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
-}
-
-function resolveCabinetContext(
-  node: AnyNode,
-  nodes: Record<AnyNodeId, AnyNode>,
-): CabinetContext | null {
-  if (node.type === 'cabinet') return { run: node, module: null }
-  if (node.type !== 'cabinet-module' || !node.parentId) return null
-  const parent = nodes[node.parentId as AnyNodeId]
-  if (parent?.type === 'cabinet') return { run: parent, module: node }
-  return null
-}
-
-function resolveCabinetType(module: CabinetModuleNode, run: CabinetNode): 'base' | 'tall' {
-  return module.cabinetType ?? (run.runTier === 'tall' ? 'tall' : 'base')
-}
-
-function wallChildOf(
-  module: CabinetModuleNode,
-  nodes: Record<AnyNodeId, AnyNode>,
-): CabinetModuleNode | null {
-  for (const childId of module.children ?? []) {
-    const child = nodes[childId as AnyNodeId]
-    if (child?.type === 'cabinet-module') return child
-  }
-  return null
-}
-
-function resolveCabinetSideInsertX({
-  anchorModule,
-  nodes,
-  run,
-  side,
-}: {
-  anchorModule: CabinetModuleNode | null
-  nodes: Record<AnyNodeId, AnyNode>
-  run: CabinetNode
-  side: 'left' | 'right'
-}): number | null {
-  const modules = cabinetModulesForRun(run, nodes)
-  if (modules.length === 0)
-    return side === 'left' ? -CABINET_BASE_WIDTH / 2 : CABINET_BASE_WIDTH / 2
-
-  if (!anchorModule) {
-    const edge =
-      side === 'left'
-        ? Math.min(...modules.map((module) => module.position[0] - module.width / 2))
-        : Math.max(...modules.map((module) => module.position[0] + module.width / 2))
-    return side === 'left' ? edge - CABINET_BASE_WIDTH / 2 : edge + CABINET_BASE_WIDTH / 2
-  }
-
-  const selectedLeft = anchorModule.position[0] - anchorModule.width / 2
-  const selectedRight = anchorModule.position[0] + anchorModule.width / 2
-  const siblings = modules.filter((module) => module.id !== anchorModule.id)
-
-  if (side === 'left') {
-    const nearestLeft = siblings
-      .map((module) => module.position[0] + module.width / 2)
-      .filter((edge) => edge <= selectedLeft + CABINET_EDGE_EPSILON)
-      .reduce<number | null>((best, edge) => (best == null || edge > best ? edge : best), null)
-    if (
-      nearestLeft != null &&
-      selectedLeft - nearestLeft < CABINET_BASE_WIDTH - CABINET_EDGE_EPSILON
-    ) {
-      return null
-    }
-    return selectedLeft - CABINET_BASE_WIDTH / 2
-  }
-
-  const nearestRight = siblings
-    .map((module) => module.position[0] - module.width / 2)
-    .filter((edge) => edge >= selectedRight - CABINET_EDGE_EPSILON)
-    .reduce<number | null>((best, edge) => (best == null || edge < best ? edge : best), null)
-  if (
-    nearestRight != null &&
-    nearestRight - selectedRight < CABINET_BASE_WIDTH - CABINET_EDGE_EPSILON
-  ) {
-    return null
-  }
-  return selectedRight + CABINET_BASE_WIDTH / 2
-}
-
-function addCabinetModuleSide({
-  anchorModule,
-  run,
-  side,
-  setSelection,
-}: {
-  anchorModule: CabinetModuleNode | null
-  run: CabinetNode
-  side: 'left' | 'right'
-  setSelection: ReturnType<typeof useViewer.getState>['setSelection']
-}) {
-  const scene = useScene.getState()
-  const modules = cabinetModulesForRun(run, scene.nodes)
-  const x = resolveCabinetSideInsertX({
-    anchorModule,
-    nodes: scene.nodes,
-    run,
-    side,
-  })
-  if (x == null) return
-  const depth = run.depth
-  const z = anchorModule
-    ? backAnchoredModuleZ(anchorModule.position[2], anchorModule.depth, depth)
-    : 0
-  const module = CabinetModuleNodeSchema.parse({
-    name: `Base Cabinet ${modules.length + 1}`,
-    parentId: run.id,
-    position: [x, runModuleBaseY(run), z],
-    width: CABINET_BASE_WIDTH,
-    depth,
-    carcassHeight: run.carcassHeight,
-    plinthHeight: run.plinthHeight,
-    toeKickDepth: run.toeKickDepth,
-    countertopThickness: 0,
-    countertopOverhang: run.countertopOverhang,
-    showPlinth: false,
-    withCountertop: false,
-  })
-  scene.createNode(module, run.id as AnyNodeId)
-  scene.dirtyNodes.add(run.id as AnyNodeId)
-  bumpCabinetRunLayoutRevision(scene, run)
-  setSelection({ selectedIds: [module.id] })
-  sfxEmitter.emit('sfx:item-place')
-}
-
-function addWallCabinetAbove({
-  module,
-  run,
-  setSelection,
-}: {
-  module: CabinetModuleNode
-  run: CabinetNode
-  setSelection: ReturnType<typeof useViewer.getState>['setSelection']
-}) {
-  const scene = useScene.getState()
-  if (resolveCabinetType(module, run) !== 'base') return
-  if (wallChildOf(module, scene.nodes)) return
-
-  const wall = CabinetModuleNodeSchema.parse({
-    name: 'Wall Cabinet',
-    parentId: module.id,
-    position: [
-      0,
-      wallBottomHeightForTallAlignment() - module.position[1],
-      backAlignZ(module.depth, CABINET_WALL_DEPTH),
-    ],
-    width: module.width,
-    depth: CABINET_WALL_DEPTH,
-    carcassHeight: CABINET_WALL_CARCASS_HEIGHT,
-    plinthHeight: 0,
-    toeKickDepth: 0,
-    countertopThickness: 0,
-    countertopOverhang: 0,
-    showPlinth: false,
-    withCountertop: false,
-    stack: defaultDoorStack(1),
-  })
-  scene.createNode(wall, module.id as AnyNodeId)
-  scene.dirtyNodes.add(module.id as AnyNodeId)
-  setSelection({ selectedIds: [wall.id] })
-  sfxEmitter.emit('sfx:item-place')
-}
-
-function switchCabinetToTall({
-  module,
-  run,
-  setSelection,
-}: {
-  module: CabinetModuleNode
-  run: CabinetNode
-  setSelection: ReturnType<typeof useViewer.getState>['setSelection']
-}) {
-  const scene = useScene.getState()
-  if (resolveCabinetType(module, run) !== 'base') return
-  const wallChild = wallChildOf(module, scene.nodes)
-  if (wallChild) scene.deleteNode(wallChild.id as AnyNodeId)
-  scene.updateNode(module.id as AnyNodeId, {
-    name: 'Tall Cabinet',
-    cabinetType: 'tall',
-    depth: CABINET_TALL_DEPTH,
-    position: [
-      module.position[0],
-      runModuleBaseY(run),
-      backAnchoredModuleZ(module.position[2], module.depth, CABINET_TALL_DEPTH),
-    ],
-    carcassHeight: CABINET_TALL_CARCASS_HEIGHT,
-    plinthHeight: CABINET_TALL_PLINTH_HEIGHT,
-    toeKickDepth: 0.075,
-    showPlinth: false,
-    countertopThickness: 0,
-    countertopOverhang: run.countertopOverhang,
-    withCountertop: false,
-    stack: defaultDoorStack(3),
-  })
-  scene.dirtyNodes.add(run.id as AnyNodeId)
-  bumpCabinetRunLayoutRevision(scene, run)
-  setSelection({ selectedIds: [module.id] })
-  sfxEmitter.emit('sfx:item-pick')
-}
-
-function switchCabinetToBase({
-  module,
-  run,
-  setSelection,
-}: {
-  module: CabinetModuleNode
-  run: CabinetNode
-  setSelection: ReturnType<typeof useViewer.getState>['setSelection']
-}) {
-  const scene = useScene.getState()
-  if (resolveCabinetType(module, run) !== 'tall') return
-  scene.updateNode(module.id as AnyNodeId, {
-    name: 'Base Cabinet',
-    cabinetType: 'base',
-    depth: run.depth,
-    position: [
-      module.position[0],
-      runModuleBaseY(run),
-      backAnchoredModuleZ(module.position[2], module.depth, run.depth),
-    ],
-    carcassHeight: run.carcassHeight,
-    plinthHeight: run.plinthHeight,
-    toeKickDepth: run.toeKickDepth,
-    showPlinth: false,
-    countertopThickness: 0,
-    countertopOverhang: run.countertopOverhang,
-    withCountertop: false,
-    stack: defaultDoorStack(1),
-  })
-  scene.dirtyNodes.add(run.id as AnyNodeId)
-  bumpCabinetRunLayoutRevision(scene, run)
-  setSelection({ selectedIds: [module.id] })
-  sfxEmitter.emit('sfx:item-pick')
-}
 
 function getObjectGeometryKey(object: THREE.Object3D): string {
   const parts: string[] = []
@@ -611,43 +317,22 @@ export function FloatingActionMenu() {
   })
 
   // Only show for single selection of specific types
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
 
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
-  const allNodes = useScene((s) => s.nodes)
-  const cabinetContext = useMemo(
-    () => (node ? resolveCabinetContext(node, allNodes) : null),
-    [allNodes, node],
+  const quickActionNodes = useScene(useShallow((s) => collectQuickActionNodes(s.nodes, selectedId)))
+  const quickActions = useMemo<NodeQuickAction[]>(
+    () =>
+      node && quickActionNodes
+        ? (nodeRegistry.get(node.type)?.quickActions?.({
+            node: node as never,
+            nodes: quickActionNodes,
+          }) ?? [])
+        : [],
+    [node, quickActionNodes],
   )
-  const selectedCabinetType =
-    cabinetContext?.module && cabinetContext.run
-      ? resolveCabinetType(cabinetContext.module, cabinetContext.run)
-      : null
-  const hasWallCabinet =
-    cabinetContext?.module && selectedCabinetType === 'base'
-      ? Boolean(wallChildOf(cabinetContext.module, allNodes))
-      : false
-  const cabinetSideAvailability = useMemo(() => {
-    if (!cabinetContext) return null
-    return {
-      left:
-        resolveCabinetSideInsertX({
-          anchorModule: cabinetContext.module,
-          nodes: allNodes,
-          run: cabinetContext.run,
-          side: 'left',
-        }) != null,
-      right:
-        resolveCabinetSideInsertX({
-          anchorModule: cabinetContext.module,
-          nodes: allNodes,
-          run: cabinetContext.run,
-          side: 'right',
-        }) != null,
-    }
-  }, [allNodes, cabinetContext])
   // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
   // NodeDefinition with `capabilities.selectable`) get the floating menu
   // by default too. Phase 4 collapses these into a single registry check.
@@ -1051,57 +736,18 @@ export function FloatingActionMenu() {
     [node],
   )
 
-  const handleAddCabinetSide = useCallback(
-    (side: 'left' | 'right') => (e: React.MouseEvent) => {
+  const handleQuickAction = useCallback(
+    (action: NodeQuickAction) => (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!cabinetContext) return
-      addCabinetModuleSide({
-        anchorModule: cabinetContext.module,
-        run: cabinetContext.run,
-        side,
-        setSelection,
-      })
+      if (!node || action.disabled) return
+      const result = action.run({ node, sceneApi: createSceneApi(useScene) })
+      if (result?.selectedIds) setSelection({ selectedIds: result.selectedIds })
+      if (result?.selectedIds) {
+        const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)
+        sfxEmitter.emit(selectedDifferentNode ? 'sfx:item-place' : 'sfx:item-pick')
+      }
     },
-    [cabinetContext, setSelection],
-  )
-
-  const handleAddWallCabinet = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!cabinetContext?.module) return
-      addWallCabinetAbove({
-        module: cabinetContext.module,
-        run: cabinetContext.run,
-        setSelection,
-      })
-    },
-    [cabinetContext, setSelection],
-  )
-
-  const handleSwitchCabinetToTall = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!cabinetContext?.module) return
-      switchCabinetToTall({
-        module: cabinetContext.module,
-        run: cabinetContext.run,
-        setSelection,
-      })
-    },
-    [cabinetContext, setSelection],
-  )
-
-  const handleSwitchCabinetToBase = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!cabinetContext?.module) return
-      switchCabinetToBase({
-        module: cabinetContext.module,
-        run: cabinetContext.run,
-        setSelection,
-      })
-    },
-    [cabinetContext, setSelection],
+    [node, setSelection],
   )
 
   if (
@@ -1156,80 +802,26 @@ export function FloatingActionMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             />
-            {cabinetContext ? (
+            {quickActions.length > 0 ? (
               <div
                 className="pointer-events-auto mt-1 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
               >
-                {cabinetSideAvailability?.left ? (
+                {quickActions.map((action) => (
                   <button
-                    aria-label="Add cabinet to the left"
-                    className="tooltip-trigger flex items-center gap-1 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-                    onClick={handleAddCabinetSide('left')}
-                    title="Add cabinet to the left"
+                    aria-label={action.title ?? action.label}
+                    className="tooltip-trigger flex items-center gap-1 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    disabled={action.disabled}
+                    key={action.id}
+                    onClick={handleQuickAction(action)}
+                    title={action.title ?? action.label}
                     type="button"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    <Plus className="h-3.5 w-3.5" />
+                    <QuickActionIcon icon={action.icon} />
+                    <span>{action.label}</span>
                   </button>
-                ) : null}
-                {cabinetContext.module ? (
-                  <>
-                    {cabinetSideAvailability?.left ? (
-                      <div className="mx-0.5 h-5 w-px bg-border/70" />
-                    ) : null}
-                    {selectedCabinetType === 'base' ? (
-                      <>
-                        <button
-                          className="tooltip-trigger rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                          disabled={hasWallCabinet}
-                          onClick={handleAddWallCabinet}
-                          title={
-                            hasWallCabinet
-                              ? 'A wall cabinet already exists above this cabinet'
-                              : 'Add wall cabinet above'
-                          }
-                          type="button"
-                        >
-                          Wall
-                        </button>
-                        <button
-                          className="tooltip-trigger rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-                          onClick={handleSwitchCabinetToTall}
-                          title="Switch to tall cabinet"
-                          type="button"
-                        >
-                          Tall
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        className="tooltip-trigger rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-                        onClick={handleSwitchCabinetToBase}
-                        title="Switch to base cabinet"
-                        type="button"
-                      >
-                        Base
-                      </button>
-                    )}
-                    {cabinetSideAvailability?.right ? (
-                      <div className="mx-0.5 h-5 w-px bg-border/70" />
-                    ) : null}
-                  </>
-                ) : null}
-                {cabinetSideAvailability?.right ? (
-                  <button
-                    aria-label="Add cabinet to the right"
-                    className="tooltip-trigger flex items-center gap-1 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground"
-                    onClick={handleAddCabinetSide('right')}
-                    title="Add cabinet to the right"
-                    type="button"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
+                ))}
               </div>
             ) : null}
             {/* Height-drag dimension pill. Absolutely positioned just above

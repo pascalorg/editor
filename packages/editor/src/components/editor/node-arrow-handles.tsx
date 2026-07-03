@@ -143,19 +143,11 @@ type CenteredGuideDecoration = {
   radius: (node: AnyNode, sceneApi: SceneApiForHandles) => number
 }
 
-function guideDecorationCenter(
-  decoration: unknown,
-  node: AnyNode,
-  sceneApi: SceneApiForHandles,
-) {
+function guideDecorationCenter(decoration: unknown, node: AnyNode, sceneApi: SceneApiForHandles) {
   return (decoration as CenteredGuideDecoration | undefined)?.center?.(node, sceneApi)
 }
 
-function guideDecorationRadius(
-  decoration: unknown,
-  node: AnyNode,
-  sceneApi: SceneApiForHandles,
-) {
+function guideDecorationRadius(decoration: unknown, node: AnyNode, sceneApi: SceneApiForHandles) {
   return (decoration as CenteredGuideDecoration).radius(node, sceneApi)
 }
 

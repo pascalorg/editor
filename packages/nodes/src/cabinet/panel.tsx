@@ -13,7 +13,6 @@ import {
   SegmentedControl,
   SliderControl,
   ToggleControl,
-  useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Minus, Pause, Play, Plus, Trash } from 'lucide-react'
@@ -934,7 +933,6 @@ function CabinetRunPanel({
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const setCabinetHostDragArmedId = useEditor((s) => s.setCabinetHostDragArmedId)
   const animationFrameRef = useRef<number | null>(null)
   const animationTargetRef = useRef<0 | 1 | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -1064,12 +1062,14 @@ export default function CabinetPanel() {
     setSelection({ selectedIds: [] })
   }, [setSelection])
 
+  // Selecting the run as the sole selection is enough: the selection-manager's
+  // parent-frame routing keeps clicks on child modules targeting the run while
+  // it stays the single selected node.
   const backToRun = useCallback(() => {
     if (node?.type === 'cabinet-module' && node.parentId) {
-      setCabinetHostDragArmedId(node.parentId as AnyNodeId)
       setSelection({ selectedIds: [node.parentId] })
     }
-  }, [node, setCabinetHostDragArmedId, setSelection])
+  }, [node, setSelection])
 
   const stopAnimation = useCallback(() => {
     if (animationFrameRef.current != null) {

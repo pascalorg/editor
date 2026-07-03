@@ -1416,6 +1416,11 @@ function buildFloorplanEntryGeometry({
   const applyLiveTransform = (sourceNode: AnyNode): AnyNode => {
     if (!live) return sourceNode
     const hasPosition = Array.isArray((sourceNode as { position?: unknown }).position)
+    const parentFrameProjection = nodeRegistry.get(sourceNode.type)?.capabilities?.movable
+      ?.parentFrame?.floorplanLiveTransform
+    if (parentFrameProjection) {
+      return parentFrameProjection({ node: sourceNode, live })
+    }
     if (sourceNode.type === 'door' || sourceNode.type === 'window') {
       const r = (sourceNode as { rotation?: unknown }).rotation
       return {
@@ -1424,18 +1429,6 @@ function buildFloorplanEntryGeometry({
         rotation: Array.isArray(r)
           ? [(r[0] as number) ?? 0, live.rotation, (r[2] as number) ?? 0]
           : r,
-      } as AnyNode
-    }
-    if (sourceNode.type === 'cabinet-module') {
-      const r = (sourceNode as { rotation?: unknown }).rotation
-      return {
-        ...sourceNode,
-        position: live.position,
-        rotation: Array.isArray(r)
-          ? [(r[0] as number) ?? 0, live.rotation, (r[2] as number) ?? 0]
-          : typeof r === 'number'
-            ? live.rotation
-            : r,
       } as AnyNode
     }
     if ((def.capabilities?.floorPlaced || def.floorplanScope === 'building') && hasPosition) {

@@ -1,8 +1,8 @@
 export type {
   BoxVentEvent,
-  CabinetModuleEvent,
-  CabinetEvent,
   BuildingEvent,
+  CabinetEvent,
+  CabinetModuleEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,

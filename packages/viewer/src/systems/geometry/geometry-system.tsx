@@ -59,11 +59,11 @@ export const GeometrySystem = () => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const bumpGeometryRevision = useViewer((s) => s.bumpGeometryRevision)
   // The shared scene-material library, threaded into each builder's ctx so
   // pure geometry builders can resolve `scene:<id>` slot refs without
   // importing `useScene`.
   const sceneMaterials = useScene((s) => s.materials)
-  const bumpGeometryRevision = useViewer((s) => s.bumpGeometryRevision)
   // Per-node cache of the last-built geometry key (for kinds that declare
   // `def.geometryKey`). Lets us skip a dispose+rebuild when a node is dirty
   // but its geometry inputs are unchanged — e.g. an item reparenting onto a
@@ -109,6 +109,7 @@ export const GeometrySystem = () => {
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
+    let rebuiltGeometry = false
 
     // Phase 1 — group dirty nodes by (kind, parentId). Kinds that
     // declare `def.computeLevelData` get one batch precompute per
@@ -161,8 +162,6 @@ export const GeometrySystem = () => {
         (def.computeLevelData as (s: ReadonlyArray<AnyNode>) => unknown)(siblings),
       )
     }
-
-    let rebuiltGeometry = false
 
     // Phase 3 — per-node rebuild. Each node receives its batch's
     // precomputed `levelData` in ctx.

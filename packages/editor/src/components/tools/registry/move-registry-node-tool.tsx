@@ -5,8 +5,6 @@ import '../../../three-types'
 import {
   type AnyNode,
   type AnyNodeId,
-  type CabinetNode,
-  type CabinetModuleNode,
   analyzePortConnectivity,
   bboxCornerAnchors,
   collectAlignmentAnchors,
@@ -61,77 +59,10 @@ const PORT_SNAP_RADIUS_M = 0.5
 const VALID_COLOR = 0x22_c5_5e
 const INVALID_COLOR = 0xef_44_44
 
-type CabinetRunBounds = {
-  dimensions: [number, number, number]
-  center: [number, number, number]
-}
-
 type DragBoundsOverride = {
   size: [number, number, number]
   center?: [number, number, number]
   centerY?: number
-}
-
-function resolveCabinetRunBounds(
-  node: AnyNode,
-  nodes: ReturnType<typeof useScene.getState>['nodes'],
-): CabinetRunBounds | null {
-  if (node.type !== 'cabinet') return null
-  const modules = (node.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId] as CabinetModuleNode | undefined)
-    .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
-
-  if (modules.length === 0) return null
-
-  const minX = Math.min(...modules.map((module) => module.position[0] - module.width / 2))
-  const maxX = Math.max(...modules.map((module) => module.position[0] + module.width / 2))
-  const minZ = Math.min(...modules.map((module) => module.position[2] - module.depth / 2))
-  const maxZ = Math.max(...modules.map((module) => module.position[2] + module.depth / 2))
-  const topY = Math.max(
-    ...modules.map((module) => module.position[1] + module.carcassHeight),
-    (node.showPlinth ? node.plinthHeight : 0) + node.carcassHeight,
-  )
-  const totalHeight = topY + (node.withCountertop ? node.countertopThickness : 0)
-  const width = Math.max(0.01, maxX - minX)
-  const depth = Math.max(0.01, maxZ - minZ, node.depth)
-
-  return {
-    dimensions: [width, Math.max(0.01, totalHeight), depth],
-    center: [(minX + maxX) / 2, totalHeight / 2, (minZ + maxZ) / 2],
-  }
-}
-
-function resolveCabinetModuleParent(node: AnyNode): CabinetNode | null {
-  if (node.type !== 'cabinet-module' || !node.parentId) return null
-  const parent = useScene.getState().nodes[node.parentId as AnyNodeId]
-  return parent?.type === 'cabinet' ? (parent as CabinetNode) : null
-}
-
-function cabinetLocalToPlan(
-  parent: CabinetNode,
-  localPosition: [number, number, number],
-): [number, number, number] {
-  const cos = Math.cos(parent.rotation)
-  const sin = Math.sin(parent.rotation)
-  const [lx, ly, lz] = localPosition
-  return [
-    parent.position[0] + lx * cos + lz * sin,
-    parent.position[1] + ly,
-    parent.position[2] - lx * sin + lz * cos,
-  ]
-}
-
-function cabinetPlanToLocal(
-  parent: CabinetNode,
-  planX: number,
-  localY: number,
-  planZ: number,
-): [number, number, number] {
-  const dx = planX - parent.position[0]
-  const dz = planZ - parent.position[2]
-  const cos = Math.cos(parent.rotation)
-  const sin = Math.sin(parent.rotation)
-  return [dx * cos - dz * sin, localY, dx * sin + dz * cos]
 }
 
 function offsetPlanPositionByLocalCenter(
@@ -148,88 +79,23 @@ function offsetPlanPositionByLocalCenter(
   ]
 }
 
-function movingCabinetRunAnchors(
+/**
+ * Alignment anchors for the moving node. When the kind declares
+ * `capabilities.dragBounds` with an off-origin `center` (a composite cabinet
+ * run whose modules extend past the node origin), the anchors come from that
+ * declared box instead of the origin-centred footprint.
+ */
+function movingDragBoundsAnchors(
   node: AnyNode,
-  bounds: CabinetRunBounds | null,
+  bounds: DragBoundsOverride | null,
   x: number,
   z: number,
   rotationY: number,
 ) {
-  if (!bounds) return movingFootprintAnchors(node, x, z, rotationY)
+  if (!bounds?.center) return movingFootprintAnchors(node, x, z, rotationY)
   const center = offsetPlanPositionByLocalCenter([x, 0, z], bounds.center, rotationY)
-  const aabb = footprintAABBFrom(center, bounds.dimensions, rotationY)
+  const aabb = footprintAABBFrom(center, bounds.size, rotationY)
   return bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ)
-}
-
-function resolveCabinetModuleMagneticSnap(
-  node: AnyNode,
-  parent: CabinetNode | null,
-  localPosition: [number, number, number],
-): [number, number, number] {
-  if (!parent || node.type !== 'cabinet-module') return localPosition
-
-  const nodes = useScene.getState().nodes
-  const moving = node as CabinetModuleNode
-  const movingHalfWidth = moving.width / 2
-  const movingHalfDepth = moving.depth / 2
-  const movingMinX = localPosition[0] - movingHalfWidth
-  const movingMaxX = localPosition[0] + movingHalfWidth
-  const movingMinZ = localPosition[2] - movingHalfDepth
-  const movingMaxZ = localPosition[2] + movingHalfDepth
-  let bestDeltaX = 0
-  let bestDistanceX = Number.POSITIVE_INFINITY
-  let bestDeltaZ = 0
-  let bestDistanceZ = Number.POSITIVE_INFINITY
-
-  const considerX = (delta: number) => {
-    const distance = Math.abs(delta)
-    if (distance > ALIGNMENT_THRESHOLD_M) return
-    if (distance < bestDistanceX) {
-      bestDeltaX = delta
-      bestDistanceX = distance
-    }
-  }
-  const considerZ = (delta: number) => {
-    const distance = Math.abs(delta)
-    if (distance > ALIGNMENT_THRESHOLD_M) return
-    if (distance < bestDistanceZ) {
-      bestDeltaZ = delta
-      bestDistanceZ = distance
-    }
-  }
-
-  for (const childId of parent.children ?? []) {
-    if (childId === node.id) continue
-    const sibling = nodes[childId as AnyNodeId]
-    if (sibling?.type !== 'cabinet-module') continue
-    const module = sibling as CabinetModuleNode
-    const siblingHalfWidth = module.width / 2
-    const siblingHalfDepth = module.depth / 2
-    const siblingMinX = module.position[0] - siblingHalfWidth
-    const siblingMaxX = module.position[0] + siblingHalfWidth
-    const siblingMinZ = module.position[2] - siblingHalfDepth
-    const siblingMaxZ = module.position[2] + siblingHalfDepth
-
-    const depthBandsTouch =
-      movingMinZ <= siblingMaxZ + ALIGNMENT_THRESHOLD_M &&
-      movingMaxZ >= siblingMinZ - ALIGNMENT_THRESHOLD_M
-    if (depthBandsTouch) {
-      considerX(siblingMinX - movingMaxX)
-      considerX(siblingMaxX - movingMinX)
-    }
-
-    const widthBandsTouch =
-      movingMinX <= siblingMaxX + ALIGNMENT_THRESHOLD_M &&
-      movingMaxX >= siblingMinX - ALIGNMENT_THRESHOLD_M
-    if (widthBandsTouch) {
-      considerZ(module.position[2] - localPosition[2])
-      considerZ(siblingMinZ - movingMinZ)
-      considerZ(siblingMaxZ - movingMaxZ)
-    }
-  }
-
-  if (!Number.isFinite(bestDistanceX) && !Number.isFinite(bestDistanceZ)) return localPosition
-  return [localPosition[0] + bestDeltaX, localPosition[1], localPosition[2] + bestDeltaZ]
 }
 
 /**
@@ -339,7 +205,15 @@ const CLICK_TRIGGER_KINDS = [
 ] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
-  const cabinetModuleParent = useMemo(() => resolveCabinetModuleParent(node), [node])
+  // Kinds whose `position` lives in a host parent's local frame declare
+  // `movable.parentFrame` (cabinet module ↔ its run). The tool converts the
+  // plan-frame cursor through the capability's hooks and previews via
+  // `useLiveNodeOverrides` so the parent's composite geometry re-flows.
+  const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame ?? null
+  const frameParent = useMemo(
+    () => parentFrame?.resolveParent(node, useScene.getState().nodes) ?? null,
+    [parentFrame, node],
+  )
   const originalPosition: [number, number, number] = useMemo(
     () =>
       'position' in node && Array.isArray((node as { position?: unknown }).position)
@@ -405,17 +279,31 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // refuse an invalid drop unless Alt forces it. The gate + footprint both come
   // from the kind's declarative `floorPlaced` capability, so opting a new kind
   // in is just `collides: true` — no change here.
+  // Parent-frame kinds skip the world-frame floor-collision box — their
+  // position isn't in the level frame the spatial grid indexes.
   const collides =
-    node.type !== 'cabinet-module' &&
-    nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
-  const cabinetRunBounds = useMemo(
-    () => resolveCabinetRunBounds(node, useScene.getState().nodes),
+    !frameParent && nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
+  // Snapshot the scene once at drag-start — bounds depend on `node` (locked
+  // for the lifetime of this tool) and any sibling state the kind reads. If a
+  // future kind needs live sibling state mid-drag, switch to a subscribed
+  // selector; for v1 (elevator shaft, cabinet run) start-time is correct and
+  // avoids subscribing the whole `nodes` map.
+  const dragBounds = useMemo(
+    (): DragBoundsOverride | null =>
+      (nodeRegistry.get(node.type)?.capabilities?.dragBounds?.(node, useScene.getState().nodes) as
+        | DragBoundsOverride
+        | undefined) ?? null,
     [node],
   )
-  const resolvedFootprint = useMemo(() => {
-    if (cabinetRunBounds) return cabinetRunBounds.dimensions
-    return nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ?? null
-  }, [cabinetRunBounds, node])
+  // Collision extents: the declared drag bounds (composite kinds — a cabinet
+  // run spans its modules) win over the single-node footprint.
+  const resolvedFootprint = useMemo(
+    () =>
+      dragBounds?.size ??
+      nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.footprint?.(node)?.dimensions ??
+      null,
+    [dragBounds, node],
+  )
   const boxDimensions = useMemo(
     () => (collides ? resolvedFootprint : null),
     [collides, resolvedFootprint],
@@ -423,12 +311,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const [valid, setValid] = useState(true)
   const previewRotationY = useCallback(
     (rotationY = rotationRef.current) =>
-      cabinetModuleParent ? cabinetModuleParent.rotation + rotationY : rotationY,
-    [cabinetModuleParent],
+      parentFrame && frameParent ? parentFrame.parentRotationY(frameParent) + rotationY : rotationY,
+    [parentFrame, frameParent],
   )
   const visualPositionFor = useCallback(
     (position: [number, number, number], rotationY = rotationRef.current) => {
-      if (cabinetModuleParent) return cabinetLocalToPlan(cabinetModuleParent, position)
+      if (parentFrame && frameParent) return parentFrame.localToPlan(frameParent, position)
       return getFloorStackPreviewPosition({
         node,
         position,
@@ -440,14 +328,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         })(),
       })
     },
-    [cabinetModuleParent, node],
+    [parentFrame, frameParent, node],
   )
   const canonicalPositionFromPlan = useCallback(
     (planX: number, localY: number, planZ: number): [number, number, number] =>
-      cabinetModuleParent
-        ? cabinetPlanToLocal(cabinetModuleParent, planX, localY, planZ)
+      parentFrame && frameParent
+        ? parentFrame.planToLocal(frameParent, planX, localY, planZ)
         : [planX, localY, planZ],
-    [cabinetModuleParent],
+    [parentFrame, frameParent],
   )
   const originalPlanPosition = useMemo(
     () => visualPositionFor(originalPosition, originalRotationY),
@@ -550,19 +438,19 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
     }
 
-    const syncCabinetRunPreview = (position: [number, number, number]) => {
-      if (!cabinetModuleParent) return
+    const syncParentFramePreview = (position: [number, number, number]) => {
+      if (!frameParent) return
       useLiveNodeOverrides.getState().set(node.id, {
         position,
         rotation: rotationRef.current,
       })
-      useScene.getState().markDirty(cabinetModuleParent.id as AnyNodeId)
+      useScene.getState().markDirty(frameParent.id as AnyNodeId)
     }
 
-    const clearCabinetRunPreview = () => {
-      if (!cabinetModuleParent) return
+    const clearParentFramePreview = () => {
+      if (!frameParent) return
       useLiveNodeOverrides.getState().clear(node.id)
-      useScene.getState().markDirty(cabinetModuleParent.id as AnyNodeId)
+      useScene.getState().markDirty(frameParent.id as AnyNodeId)
     }
 
     setCursorPosition(getVisualPosition(originalPosition, originalRotationY))
@@ -665,9 +553,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const bypass = !isMagneticSnapActive()
       if (!bypass && alignmentCandidates.length > 0) {
         const result = resolveAlignment({
-          moving: movingCabinetRunAnchors(
+          moving: movingDragBoundsAnchors(
             node,
-            cabinetRunBounds,
+            dragBounds,
             x,
             z,
             previewRotationY(rotationRef.current),
@@ -702,13 +590,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
 
       let position = canonicalPositionFromPlan(x, originalPosition[1], z)
-      if (!bypass && cabinetModuleParent) {
-        const snappedPosition = resolveCabinetModuleMagneticSnap(
+      if (!bypass && parentFrame?.magneticSnap && frameParent) {
+        const snappedPosition = parentFrame.magneticSnap(
           node,
-          cabinetModuleParent,
+          frameParent,
           position,
+          useScene.getState().nodes,
         )
-        if (snappedPosition !== position) {
+        if (
+          snappedPosition[0] !== position[0] ||
+          snappedPosition[1] !== position[1] ||
+          snappedPosition[2] !== position[2]
+        ) {
           position = snappedPosition
           const snappedPlanPosition = getVisualPosition(position)
           x = snappedPlanPosition[0]
@@ -737,7 +630,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         position,
         rotation: rotationRef.current,
       })
-      syncCabinetRunPreview(position)
+      syncParentFramePreview(position)
       markMovedNodeDirty()
       // Carry connected ductwork along (preview only — committed on drop).
       previewConnectivity(position, rotationRef.current)
@@ -846,7 +739,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Connected ductwork is now committed to the store — drop its live
       // overrides so the renderers read the canonical path/position.
       clearConnectivityOverrides()
-      clearCabinetRunPreview()
+      clearParentFramePreview()
       applyMeshPose(position)
 
       useAlignmentGuides.getState().clear()
@@ -899,7 +792,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         position,
         rotation: rotationRef.current,
       })
-      syncCabinetRunPreview(position)
+      syncParentFramePreview(position)
       markMovedNodeDirty()
       // Rotating the fitting swings its collars — connected ducts follow.
       previewConnectivity(position, rotationRef.current)
@@ -946,7 +839,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const onCancel = () => {
       useLiveTransforms.getState().clear(node.id)
       clearConnectivityOverrides()
-      clearCabinetRunPreview()
+      clearParentFramePreview()
       if (isNew) {
         useScene.getState().deleteNode(node.id as AnyNodeId)
       } else {
@@ -981,7 +874,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (!(committed || isNew || finalisedBy2D)) {
         useLiveTransforms.getState().clear(node.id)
         clearConnectivityOverrides()
-        clearCabinetRunPreview()
+        clearParentFramePreview()
         applyMeshPose(originalPosition, originalRotationY)
         markMovedNodeDirty()
       }
@@ -989,9 +882,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
   }, [
     boxDimensions,
-    cabinetRunBounds,
+    dragBounds,
     canonicalPositionFromPlan,
-    cabinetModuleParent,
+    parentFrame,
+    frameParent,
     cursorAttached,
     portSnapConfig,
     exitMoveMode,
@@ -1006,23 +900,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     visualPositionFor,
   ])
 
-  // Snapshot the scene once at drag-start — bounds depend on `node` (locked
-  // for the lifetime of this tool) and any sibling state the kind reads. If a
-  // future kind needs live sibling state mid-drag, switch to a subscribed
-  // selector; for v1 (elevator shaft height from level set) start-time is
-  // correct and avoids subscribing the whole `nodes` map.
-  const dragBounds = useMemo(
-    (): DragBoundsOverride | null =>
-      cabinetRunBounds
-        ? { size: cabinetRunBounds.dimensions, center: cabinetRunBounds.center }
-        : ((nodeRegistry
-            .get(node.type)
-            ?.capabilities?.dragBounds?.(node, useScene.getState().nodes) as
-            | DragBoundsOverride
-            | undefined) ?? null),
-    [cabinetRunBounds, node],
-  )
-
   // Forward-facing triangle for the footprint-box branch (item / shelf / column
   // — anything that renders `<PlacementBox>`). Published to the editor-side
   // overlay; the `<DragBoundingBox>` branch (e.g. stair, which has no centred
@@ -1035,17 +912,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       position: cursorPosition,
       rotationY: cursorRotationY,
       depth: boxDimensions[2],
-      center: cabinetRunBounds
-        ? [cabinetRunBounds.center[0], cabinetRunBounds.center[2]]
-        : undefined,
+      center: dragBounds?.center ? [dragBounds.center[0], dragBounds.center[2]] : undefined,
       reversed: facing.reversed,
     })
-  }, [previewVisible, facing, boxDimensions, cabinetRunBounds, cursorPosition, cursorRotationY])
+  }, [previewVisible, facing, boxDimensions, dragBounds, cursorPosition, cursorRotationY])
   useEffect(() => () => useFacingPose.getState().clear(), [])
 
   if (!previewVisible) return null
 
-  if (boxDimensions && node.type !== 'cabinet') {
+  if (boxDimensions && !dragBounds?.center) {
     return (
       <PlacementBox
         dimensions={boxDimensions}

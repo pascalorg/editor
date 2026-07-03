@@ -3,9 +3,9 @@ import mitt from 'mitt'
 import type { Object3D } from 'three'
 import type {
   BoxVentNode,
+  BuildingNode,
   CabinetModuleNode,
   CabinetNode,
-  BuildingNode,
   CeilingNode,
   ChimneyNode,
   ColumnNode,

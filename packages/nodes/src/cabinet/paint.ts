@@ -1,6 +1,7 @@
 import { createSlotPaintCapability, previewGeometrySlot } from '../shared/slot-paint'
 
 export const cabinetPaint = createSlotPaintCapability({
+  materialTarget: 'cabinet',
   resolveRole: ({ hitObject }) => {
     const slotId = (hitObject?.userData as { slotId?: string | null } | undefined)?.slotId
     return typeof slotId === 'string' ? slotId : null

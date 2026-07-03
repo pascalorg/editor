@@ -9,8 +9,11 @@ import type {
 } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { buildCabinetGeometry } from './geometry'
+import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { cabinetQuickActions } from './quick-actions'
+import { cabinetSceneAction } from './scene-action'
 import { CabinetModuleNode, CabinetNode } from './schema'
 import { cabinetSlots } from './slots'
 import {
@@ -67,12 +70,15 @@ function bumpCabinetRunLayoutRevision(sceneApi: SceneApi, run: CabinetNodeType) 
     typeof metadataRecord.cabinetLayoutRevision === 'number'
       ? metadataRecord.cabinetLayoutRevision
       : 0
-  sceneApi.update(run.id as AnyNodeId, {
-    metadata: {
-      ...metadataRecord,
-      cabinetLayoutRevision: currentRevision + 1,
-    },
-  } as Partial<AnyNode>)
+  sceneApi.update(
+    run.id as AnyNodeId,
+    {
+      metadata: {
+        ...metadataRecord,
+        cabinetLayoutRevision: currentRevision + 1,
+      },
+    } as Partial<AnyNode>,
+  )
   sceneApi.markDirty(run.id as AnyNodeId)
 }
 
@@ -115,9 +121,7 @@ function cabinetModulesForRun(
   run: CabinetNodeType,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): CabinetModuleNodeType[] {
-  return (run.children ?? [])
-    .map((childId) => nodes[childId as AnyNodeId])
-    .filter(isCabinetModule)
+  return (run.children ?? []).map((childId) => nodes[childId as AnyNodeId]).filter(isCabinetModule)
 }
 
 function includeCabinetModuleBounds(
@@ -226,21 +230,19 @@ function cabinetModuleSideOpen(
   side: 'left' | 'right',
   sceneApi: SceneApi,
 ) {
-  const parent = module.parentId
-    ? sceneApi.get(module.parentId as AnyNodeId)
-    : undefined
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
   if (!isCabinetRun(parent)) return true
   const sorted = sortedCabinetModules(cabinetModulesForRun(parent, sceneApi.nodes()))
   const index = sorted.findIndex((entry) => entry.id === module.id)
   if (index < 0) return true
   const neighbor = side === 'left' ? sorted[index - 1] : sorted[index + 1]
   if (!neighbor) return true
-  const edge = side === 'left'
-    ? module.position[0] - module.width / 2
-    : module.position[0] + module.width / 2
-  const neighborEdge = side === 'left'
-    ? neighbor.position[0] + neighbor.width / 2
-    : neighbor.position[0] - neighbor.width / 2
+  const edge =
+    side === 'left' ? module.position[0] - module.width / 2 : module.position[0] + module.width / 2
+  const neighborEdge =
+    side === 'left'
+      ? neighbor.position[0] + neighbor.width / 2
+      : neighbor.position[0] - neighbor.width / 2
   return Math.abs(edge - neighborEdge) > CABINET_ADJACENCY_EPSILON
 }
 
@@ -253,8 +255,7 @@ function commitRunResize(
   const nextRun = { ...run, ...patch }
   const syncDepth = typeof patch.depth === 'number'
   const syncHeight = typeof patch.carcassHeight === 'number'
-  const syncPosition =
-    patch.showPlinth !== undefined || typeof patch.plinthHeight === 'number'
+  const syncPosition = patch.showPlinth !== undefined || typeof patch.plinthHeight === 'number'
 
   if (syncDepth || syncHeight || syncPosition) {
     for (const module of cabinetModulesForRun(run, sceneApi.nodes())) {
@@ -284,13 +285,16 @@ function commitRunResize(
         sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
         const wallChild = wallChildOf(module, sceneApi.nodes())
         if (wallChild && typeof modulePatch.depth === 'number') {
-          sceneApi.update(wallChild.id as AnyNodeId, {
-            position: [
-              wallChild.position[0],
-              wallChild.position[1],
-              backAlignZ(modulePatch.depth, wallChild.depth),
-            ],
-          } as Partial<AnyNode>)
+          sceneApi.update(
+            wallChild.id as AnyNodeId,
+            {
+              position: [
+                wallChild.position[0],
+                wallChild.position[1],
+                backAlignZ(modulePatch.depth, wallChild.depth),
+              ],
+            } as Partial<AnyNode>,
+          )
         }
       }
     }
@@ -321,14 +325,17 @@ function commitModuleResize(
     sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
     const wallChild = wallChildOf(module, sceneApi.nodes())
     if (wallChild) {
-      sceneApi.update(wallChild.id as AnyNodeId, {
-        width: patch.width,
-        position: [
-          wallChild.position[0],
-          wallChild.position[1],
-          backAlignZ(patch.depth ?? module.depth, wallChild.depth),
-        ],
-      } as Partial<AnyNode>)
+      sceneApi.update(
+        wallChild.id as AnyNodeId,
+        {
+          width: patch.width,
+          position: [
+            wallChild.position[0],
+            wallChild.position[1],
+            backAlignZ(patch.depth ?? module.depth, wallChild.depth),
+          ],
+        } as Partial<AnyNode>,
+      )
     }
     bumpCabinetRunLayoutRevision(sceneApi, parentRun)
     return
@@ -362,13 +369,16 @@ function commitModuleResize(
 
   const wallChild = wallChildOf(module, sceneApi.nodes())
   if (wallChild && typeof modulePatch.depth === 'number') {
-    sceneApi.update(wallChild.id as AnyNodeId, {
-      position: [
-        wallChild.position[0],
-        wallChild.position[1],
-        backAlignZ(modulePatch.depth, wallChild.depth),
-      ],
-    } as Partial<AnyNode>)
+    sceneApi.update(
+      wallChild.id as AnyNodeId,
+      {
+        position: [
+          wallChild.position[0],
+          wallChild.position[1],
+          backAlignZ(modulePatch.depth, wallChild.depth),
+        ],
+      } as Partial<AnyNode>,
+    )
   }
 }
 
@@ -400,7 +410,7 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     apply: (node, width) => ({
       width,
       position: [
-        node.position[0] + sign * (width - node.width) / 2,
+        node.position[0] + (sign * (width - node.width)) / 2,
         node.position[1],
         node.position[2],
       ],
@@ -428,19 +438,11 @@ function cabinetDepthHandle(): HandleDescriptor<CabinetEditableNode> {
     currentValue: (node) => node.depth,
     apply: (node, depth) => ({
       depth,
-      position: [
-        node.position[0],
-        node.position[1],
-        node.position[2] + (depth - node.depth) / 2,
-      ],
+      position: [node.position[0], node.position[1], node.position[2] + (depth - node.depth) / 2],
     }),
     commit: commitCabinetResize,
     placement: {
-      position: (node) => [
-        0,
-        cabinetTotalHeight(node) / 2,
-        node.depth / 2 + SIDE_HANDLE_OFFSET,
-      ],
+      position: (node) => [0, cabinetTotalHeight(node) / 2, node.depth / 2 + SIDE_HANDLE_OFFSET],
     },
   }
 }
@@ -455,11 +457,7 @@ function cabinetHeightHandle(): HandleDescriptor<CabinetEditableNode> {
     apply: (_node, carcassHeight) => ({ carcassHeight }),
     commit: commitCabinetResize,
     placement: {
-      position: (node) => [
-        0,
-        cabinetTotalHeight(node) + HEIGHT_HANDLE_OFFSET,
-        0,
-      ],
+      position: (node) => [0, cabinetTotalHeight(node) + HEIGHT_HANDLE_OFFSET, 0],
     },
   }
 }
@@ -526,10 +524,7 @@ function cabinetHandles(node: CabinetNodeType): HandleDescriptor<CabinetNodeType
 
 function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
   const stack = stackForCabinet(node)
-  return (
-    stack.length > 0 &&
-    stack.every((compartment) => isHoodCompartmentType(compartment.type))
-  )
+  return stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
 }
 
 function cabinetModuleHandles(
@@ -624,6 +619,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       return { size: bounds.size, center: bounds.center }
     },
     paint: cabinetPaint,
+    sceneAction: cabinetSceneAction,
     slots: () => cabinetSlots(),
   },
 
@@ -664,6 +660,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetFloorplan,
+  quickActions: cabinetQuickActions,
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
@@ -726,7 +723,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: { axes: ['x', 'z'], gridSnap: true, parentFrame: cabinetModuleParentFrame },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
@@ -747,6 +744,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       collides: true,
     },
     paint: cabinetPaint,
+    sceneAction: cabinetSceneAction,
     slots: () => cabinetSlots(),
   },
 
@@ -781,6 +779,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetModuleFloorplan,
+  quickActions: cabinetQuickActions,
 
   presentation: {
     label: 'Cabinet Module',

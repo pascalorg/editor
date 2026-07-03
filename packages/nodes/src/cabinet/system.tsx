@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type SceneApi, sceneRegistry } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import type { BufferAttribute, Material, Mesh, Object3D } from 'three'
@@ -64,13 +64,13 @@ function animateCabinetFlames(root: Object3D, elapsedTime: number, updateTubes: 
  * still bake the current pose at build time; this system only acts when
  * the value drifts from what the mounted group last showed.
  */
-const CabinetAnimationSystem = () => {
+const CabinetAnimationSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
   const appliedRef = useRef(new Map<string, number>())
   const lastTubeUpdateRef = useRef(0)
 
   useFrame(({ clock }) => {
     const applied = appliedRef.current
-    const nodes = useScene.getState().nodes
+    const nodes = sceneApi.nodes()
     // Throttle the heavy JS flame-tube vertex rebuild to ~30fps; the cheap
     // ring/core/halo pulses stay at the render frame rate.
     const updateTubes = clock.elapsedTime - lastTubeUpdateRef.current >= 1 / 30

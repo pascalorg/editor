@@ -83,23 +83,6 @@ export function shouldPreserveSelectedRoofHostTarget({
   )
 }
 
-export function shouldPreserveSelectedCabinetHostTarget({
-  node,
-  selectedIds,
-  armedCabinetId,
-}: {
-  node: AnyNode
-  selectedIds: readonly string[]
-  armedCabinetId: string | null
-}): boolean {
-  return (
-    node.type === 'cabinet' &&
-    armedCabinetId === node.id &&
-    selectedIds.length === 1 &&
-    selectedIds[0] === node.id
-  )
-}
-
 export function resolveNodeSelectionTarget(node: AnyNode): NodeSelectionTarget | null {
   if (node.type === 'building') {
     return { phase: 'site' }

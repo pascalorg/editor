@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
+  applyWorldScaleBoxUVs,
   Brush,
   type ColorPreset,
   createDefaultMaterial,
@@ -220,7 +221,7 @@ function buildFrontGeometry(
   if (node.handleStyle === 'cutout')
     return buildCutoutFrontGeometry(node, width, height, drawer, hinge)
   if (node.handleStyle === 'hole') return buildHoleFrontGeometry(node, width, height, drawer, hinge)
-  return new BoxGeometry(width, height, node.frontThickness)
+  return createWorldScaleBoxGeometry(width, height, node.frontThickness)
 }
 
 function buildHoleFrontGeometry(
@@ -230,7 +231,7 @@ function buildHoleFrontGeometry(
   drawer: boolean,
   hinge: 'left' | 'right' | null,
 ): BufferGeometry {
-  const base = new BoxGeometry(width, height, node.frontThickness)
+  const base = createWorldScaleBoxGeometry(width, height, node.frontThickness)
   const radius = drawer ? 0.011 : 0.01
   const x =
     hinge == null
@@ -252,6 +253,12 @@ function buildHoleFrontGeometry(
 type CabinetGeometryNode = CabinetNode | CabinetModuleNode
 type CabinetSlotMaterials = Record<CabinetSlotId, Material>
 type FridgeSection = 'fresh' | 'freezer'
+
+function createWorldScaleBoxGeometry(width: number, height: number, depth: number): BoxGeometry {
+  const geometry = new BoxGeometry(width, height, depth)
+  applyWorldScaleBoxUVs(geometry, width, height, depth)
+  return geometry
+}
 
 function cabinetTotalHeight(
   node: Pick<
@@ -643,7 +650,8 @@ function addBox(
     typeof materialOrColor === 'string'
       ? new MeshStandardMaterial({ color: materialOrColor, metalness: 0.08, roughness: 0.72 })
       : materialOrColor
-  const mesh = stampSlot(new Mesh(new BoxGeometry(size[0], size[1], size[2]), material), slotId)
+  const geometry = createWorldScaleBoxGeometry(size[0], size[1], size[2])
+  const mesh = stampSlot(new Mesh(geometry, material), slotId)
   mesh.name = name
   mesh.position.set(position[0], position[1], position[2])
   mesh.castShadow = true

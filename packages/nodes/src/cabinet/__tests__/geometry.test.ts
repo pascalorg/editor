@@ -16,6 +16,7 @@ import {
   FRIDGE_COLUMN_WIDTH,
   FRIDGE_STANDARD_DEPTH,
   FRIDGE_WIDE_WIDTH,
+  fridgeCabinetStack,
   HOOD_CANOPY_DEPTH,
   HOOD_CURVED_TOTAL_HEIGHT,
   HOOD_DUCT_SIZE,
@@ -34,6 +35,16 @@ function findMeshByName(root: { children: unknown[] }, name: string): Mesh {
     if (item.children) queue.push(...item.children)
   }
   throw new Error(`Mesh not found: ${name}`)
+}
+
+function findMeshByNamePrefix(root: { children: unknown[] }, prefix: string): Mesh {
+  const queue = [...root.children]
+  while (queue.length > 0) {
+    const item = queue.shift() as { children?: unknown[]; name?: string }
+    if (item.name?.startsWith(prefix)) return item as Mesh
+    if (item.children) queue.push(...item.children)
+  }
+  throw new Error(`Mesh not found with prefix: ${prefix}`)
 }
 
 function hasVertex(
@@ -103,6 +114,32 @@ function countertopBounds(group: Object3D) {
       }
     })
     .sort((a, b) => a.minX - b.minX)
+}
+
+function boxTopUvSpan(mesh: Mesh) {
+  const uv = mesh.geometry.getAttribute('uv') as BufferAttribute
+  const faceStart = 8
+  const values = Array.from({ length: 4 }, (_, index) => ({
+    u: uv.getX(faceStart + index),
+    v: uv.getY(faceStart + index),
+  }))
+  return {
+    u: Math.max(...values.map((value) => value.u)) - Math.min(...values.map((value) => value.u)),
+    v: Math.max(...values.map((value) => value.v)) - Math.min(...values.map((value) => value.v)),
+  }
+}
+
+function boxFrontUvSpan(mesh: Mesh) {
+  const uv = mesh.geometry.getAttribute('uv') as BufferAttribute
+  const faceStart = 16
+  const values = Array.from({ length: 4 }, (_, index) => ({
+    u: uv.getX(faceStart + index),
+    v: uv.getY(faceStart + index),
+  }))
+  return {
+    u: Math.max(...values.map((value) => value.u)) - Math.min(...values.map((value) => value.u)),
+    v: Math.max(...values.map((value) => value.v)) - Math.min(...values.map((value) => value.v)),
+  }
 }
 
 describe('buildCabinetGeometry — cutout handles', () => {
@@ -688,6 +725,28 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(hinge.rotation.y).toBeGreaterThan(1.9)
   })
 
+  test('fridge cabinet fills tall-carcass remainder with a drawer front above the fridge', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      showPlinth: false,
+      stack: fridgeCabinetStack('fridge-single'),
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const fridgePanel = worldBounds(
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-panel'),
+    )
+    const drawerFront = worldBounds(findMeshByNamePrefix(group, 'cabinet-drawer-front-'))
+    const cabinetTop = worldBounds(findMeshByName(group, 'cabinet-top'))
+
+    expect(cabinetTop.max.y).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
+    expect(fridgePanel.max.y).toBeLessThan(drawerFront.min.y)
+    expect(drawerFront.max.y).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
+  })
+
   test('double refrigerator opens opposing side-by-side leaves', () => {
     const node = CabinetModuleNode.parse({
       cabinetType: 'tall',
@@ -902,6 +961,46 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertop).toBeDefined()
     expect(countertop!.minZ).toBeCloseTo(-standardDepth / 2)
     expect(countertop!.maxZ).toBeCloseTo(shiftedZ + nextDepth / 2 + run.countertopOverhang)
+  })
+
+  test('countertop UVs stay world-scaled when cabinet dimensions change', () => {
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_uv-countertop',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.04,
+      width: 1.4,
+      depth: 0.72,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(module, undefined, 'rendered', true)
+    const countertop = findMeshByName(group, 'cabinet-countertop')
+    const span = boxTopUvSpan(countertop)
+
+    expect(span.u).toBeCloseTo(module.width + module.countertopOverhang * 2)
+    expect(span.v).toBeCloseTo(module.depth + module.countertopOverhang)
+  })
+
+  test('drawer front UVs stay world-scaled when cabinet dimensions change', () => {
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_uv-drawers',
+      width: 1.25,
+      depth: 0.62,
+      carcassHeight: 0.84,
+      frontGap: 0.006,
+      stack: [{ id: 'drawers', type: 'drawer', drawerCount: 3 }],
+    })
+
+    const group = buildCabinetGeometry(module, undefined, 'rendered', true)
+    const drawerFront = findMeshByNamePrefix(group, 'cabinet-drawer-front-')
+    const span = boxFrontUvSpan(drawerFront)
+    const expectedWidth = module.width - 3 * module.frontGap
+    const usableHeight = module.carcassHeight - 2 * module.frontGap
+    const expectedHeight = (usableHeight - 2 * module.frontGap) / 3
+
+    expect(span.u).toBeCloseTo(expectedWidth)
+    expect(span.v).toBeCloseTo(expectedHeight)
   })
 
   test('countertop overhang does not enter an adjacent tall module span', () => {

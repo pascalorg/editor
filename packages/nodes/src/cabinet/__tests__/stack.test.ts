@@ -150,7 +150,7 @@ describe('appliance compartments', () => {
     expect(FRIDGE_COLUMN_HEIGHT).toBeCloseTo(1.78)
   })
 
-  test('fridgeCabinetStack adds a single-shelf top compartment above the fridge', () => {
+  test('fridgeCabinetStack fills the tall-cabinet remainder with a drawer front', () => {
     const stack = fridgeCabinetStack('fridge-single')
     const rows = normalizeCabinetStack({
       width: FRIDGE_COLUMN_WIDTH,
@@ -161,8 +161,8 @@ describe('appliance compartments', () => {
     expect(stack).toHaveLength(2)
     expect(stack[0]!.type).toBe('fridge-single')
     expect(stack[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
-    expect(stack[1]!.type).toBe('shelf')
-    expect(stack[1]!.shelfCount).toBe(1)
+    expect(stack[1]!.type).toBe('drawer')
+    expect(stack[1]!.drawerCount).toBe(1)
     expect(rows[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
     expect(rows[1]!.height).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT - FRIDGE_COLUMN_HEIGHT)
   })
@@ -175,8 +175,8 @@ describe('appliance compartments', () => {
     expect(patch.carcassHeight).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
     expect(patch.stack).toHaveLength(2)
     expect(patch.stack?.[0]?.type).toBe('fridge-single')
-    expect(patch.stack?.[1]?.type).toBe('shelf')
-    expect(patch.stack?.[1]?.shelfCount).toBe(1)
+    expect(patch.stack?.[1]?.type).toBe('drawer')
+    expect(patch.stack?.[1]?.drawerCount).toBe(1)
   })
 
   test('cooktop stack keeps storage below a countertop-mounted overlay', () => {
@@ -386,6 +386,30 @@ describe('appliance compartments', () => {
 
     expect(replaced).toHaveLength(1)
     expect(replaced[0]!.type).toBe('fridge-single')
+  })
+
+  test('replacing a tall cabinet compartment with a refrigerator adds a drawer filler', () => {
+    const replaced = replaceCabinetCompartmentStack(
+      {
+        width: FRIDGE_COLUMN_WIDTH,
+        carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+        stack: [{ id: 'door', type: 'door', doorType: 'double' }],
+      },
+      0,
+      { id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT },
+      'drawer',
+    )
+    const rows = normalizeCabinetStack({
+      width: FRIDGE_COLUMN_WIDTH,
+      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      stack: replaced,
+    })
+
+    expect(replaced).toHaveLength(2)
+    expect(replaced[0]!.type).toBe('fridge-single')
+    expect(replaced[1]!.type).toBe('drawer')
+    expect(rows[0]!.height).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
+    expect(rows[1]!.height).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT - FRIDGE_COLUMN_HEIGHT)
   })
 
   test('newCabinetCompartment seeds fixed range hood heights', () => {
