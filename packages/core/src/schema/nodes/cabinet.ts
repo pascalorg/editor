@@ -10,15 +10,36 @@ const CabinetCompartment = z.object({
     'door',
     'oven',
     'microwave',
+    'dishwasher',
+    'cooktop-gas',
+    'cooktop-induction',
+    'pull-out-pantry',
     'fridge-single',
     'fridge-double',
     'fridge-top-freezer',
     'fridge-bottom-freezer',
+    'hood-pyramid',
+    'hood-curved-glass',
   ]),
   height: z.number().positive().max(2.5).optional(),
   doorType: z.enum(['single-left', 'single-right', 'double', 'glass']).optional(),
   drawerCount: z.number().int().min(1).max(6).optional(),
   shelfCount: z.number().int().min(0).max(8).optional(),
+  pantryRackStyle: z.enum(['wire', 'tray', 'glass']).optional(),
+  cooktopBurnersOn: z.boolean().optional(),
+  cooktopActiveBurners: z.array(z.number().int().min(0).max(8)).optional(),
+  cooktopKnobProgress: z.array(z.number().min(0).max(1)).optional(),
+  cooktopShowGrate: z.boolean().optional(),
+  cooktopLayout: z
+    .enum([
+      'gas-2burner',
+      'gas-4burner',
+      'gas-5burner-wok',
+      'gas-6burner',
+      'induction-2zone',
+      'induction-4zone',
+    ])
+    .optional(),
 })
 
 export const CabinetNode = BaseNode.extend({

@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   type CabinetModuleNode,
   type CabinetNode,
   type GeometryContext,
@@ -23,10 +24,13 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import {
+  AdditiveBlending,
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
   CylinderGeometry,
+  DoubleSide,
   ExtrudeGeometry,
+  Float32BufferAttribute,
   FrontSide,
   Group,
   type Material,
@@ -34,17 +38,40 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   type Object3D,
+  RingGeometry,
   Shape,
   SphereGeometry,
   TorusGeometry,
 } from 'three'
+import {
+  COOKTOP_FLAME_COUNT,
+  cooktopFlameSeed,
+  createCooktopFlameGeometry,
+  updateCooktopFlameTube,
+} from './cooktop-flame'
 import { type CabinetSlotId, cabinetSlots } from './slots'
 import {
+  type CabinetCompartment,
+  type CabinetCooktopCompartmentType,
   type CabinetFridgeCompartmentType,
+  type CabinetHoodCompartmentType,
+  type CooktopLayout,
+  compartmentCooktopActiveBurners,
+  compartmentCooktopBurnersOn,
+  compartmentCooktopKnobProgress,
+  compartmentCooktopLayout,
+  compartmentCooktopShowGrate,
   compartmentDoorType,
   compartmentDrawerCount,
+  compartmentPullOutPantryRackStyle,
   compartmentShelfCount,
+  DEFAULT_CEILING_HEIGHT,
+  HOOD_CANOPY_DEPTH,
+  HOOD_CURVED_BODY_HEIGHT,
+  HOOD_DUCT_SIZE,
+  isHoodCompartmentType,
   normalizeCabinetStack,
+  type PullOutPantryRackStyle,
 } from './stack'
 
 const DRAWER_MIN_OPEN = 0.32
@@ -393,8 +420,11 @@ function getRunSpans(modules: CabinetModuleNode[]) {
     minX: number
     maxX: number
     centerX: number
+    centerZ: number
     width: number
     depth: number
+    minZ: number
+    maxZ: number
     topY: number
     hasCountertop: boolean
   }> = []
@@ -402,6 +432,8 @@ function getRunSpans(modules: CabinetModuleNode[]) {
   for (const module of sorted) {
     const minX = module.position[0] - module.width / 2
     const maxX = module.position[0] + module.width / 2
+    const minZ = module.position[2] - module.depth / 2
+    const maxZ = module.position[2] + module.depth / 2
     const topY = module.position[1] + module.carcassHeight
     const hasCountertop = (module.cabinetType ?? 'base') !== 'tall'
     const current = spans.at(-1)
@@ -415,8 +447,11 @@ function getRunSpans(modules: CabinetModuleNode[]) {
         minX,
         maxX,
         centerX: module.position[0],
+        centerZ: module.position[2],
         width: module.width,
         depth: module.depth,
+        minZ,
+        maxZ,
         topY,
         hasCountertop,
       })
@@ -424,9 +459,12 @@ function getRunSpans(modules: CabinetModuleNode[]) {
     }
 
     current.maxX = Math.max(current.maxX, maxX)
+    current.minZ = Math.min(current.minZ, minZ)
+    current.maxZ = Math.max(current.maxZ, maxZ)
     current.width = Math.max(0.01, current.maxX - current.minX)
     current.centerX = (current.minX + current.maxX) / 2
-    current.depth = Math.max(current.depth, module.depth)
+    current.depth = Math.max(0.01, current.maxZ - current.minZ)
+    current.centerZ = (current.minZ + current.maxZ) / 2
     current.topY = Math.max(current.topY, topY)
   }
 
@@ -463,8 +501,11 @@ function siblingCabinetSpansInRunLocal(node: CabinetNode, ctx?: GeometryContext)
               minX: -sibling.width / 2,
               maxX: sibling.width / 2,
               centerX: 0,
+              centerZ: 0,
               width: sibling.width,
               depth: sibling.depth,
+              minZ: -sibling.depth / 2,
+              maxZ: sibling.depth / 2,
               topY: sibling.carcassHeight,
               hasCountertop: sibling.runTier !== 'tall',
             },
@@ -479,7 +520,7 @@ function siblingCabinetSpansInRunLocal(node: CabinetNode, ctx?: GeometryContext)
         minX: originX + span.minX,
         maxX: originX + span.maxX,
         depth: span.depth,
-        z: originZ,
+        z: originZ + span.centerZ,
       })
     }
   }
@@ -555,11 +596,12 @@ function buildCabinetRunGeometry(
     const toeKickDepth = node.showPlinth
       ? Math.min(node.toeKickDepth, span.depth - node.boardThickness * 2)
       : 0
+    const plinthDepth = Math.max(node.boardThickness, span.depth - toeKickDepth)
     if (node.showPlinth && plinth > 0) {
       addBox(
         group,
-        [span.width, plinth, Math.max(node.boardThickness, span.depth - toeKickDepth)],
-        [span.centerX, plinth / 2, -(toeKickDepth / 2)],
+        [span.width, plinth, plinthDepth],
+        [span.centerX, plinth / 2, span.minZ + plinthDepth / 2],
         materials.plinth,
         'cabinet-run-plinth',
         'plinth',
@@ -577,7 +619,7 @@ function buildCabinetRunGeometry(
         [
           span.centerX + (rightOverhang - leftOverhang) / 2,
           span.topY + node.countertopThickness / 2,
-          0.01,
+          span.centerZ + node.countertopOverhang / 2,
         ],
         materials.countertop,
         'cabinet-run-countertop',
@@ -608,6 +650,164 @@ function addBox(
   mesh.receiveShadow = true
   group.add(mesh)
   return mesh
+}
+
+function buildFrustumGeometry(
+  bottomWidth: number,
+  bottomDepth: number,
+  topWidth: number,
+  topDepth: number,
+  height: number,
+  topOffsetZ: number,
+): BufferGeometry {
+  const bx = bottomWidth / 2
+  const bz = bottomDepth / 2
+  const tx = topWidth / 2
+  const tz = topDepth / 2
+  const b0 = [-bx, 0, -bz]
+  const b1 = [bx, 0, -bz]
+  const b2 = [bx, 0, bz]
+  const b3 = [-bx, 0, bz]
+  const t0 = [-tx, height, topOffsetZ - tz]
+  const t1 = [tx, height, topOffsetZ - tz]
+  const t2 = [tx, height, topOffsetZ + tz]
+  const t3 = [-tx, height, topOffsetZ + tz]
+  const quads: number[][][] = [
+    [b3, b2, t2, t3],
+    [b1, b0, t0, t1],
+    [b0, b3, t3, t0],
+    [b2, b1, t1, t2],
+    [t0, t3, t2, t1],
+    [b0, b1, b2, b3],
+  ]
+  const positions: number[] = []
+  for (const [a, b, c, d] of quads) {
+    positions.push(...a!, ...b!, ...c!, ...a!, ...c!, ...d!)
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
+function resolveHoodDuctTopY(node: CabinetGeometryNode, ctx: GeometryContext | undefined): number {
+  let baseY = node.position?.[1] ?? 0
+  let cursor: AnyNode | null = ctx?.parent ?? null
+  let guard = 0
+  while (cursor && (cursor.type === 'cabinet' || cursor.type === 'cabinet-module') && guard < 8) {
+    const position = (cursor as { position?: unknown }).position
+    if (Array.isArray(position) && typeof position[1] === 'number') baseY += position[1]
+    cursor = cursor.parentId ? (ctx?.resolve<AnyNode>(cursor.parentId as AnyNodeId) ?? null) : null
+    guard += 1
+  }
+  let ceiling = DEFAULT_CEILING_HEIGHT
+  const levelChildren = (cursor as { children?: unknown } | null)?.children
+  if (Array.isArray(levelChildren)) {
+    const wallHeights = levelChildren
+      .map((id) => ctx?.resolve<AnyNode>(id as AnyNodeId))
+      .filter((child): child is AnyNode => child?.type === 'wall')
+      .map((wall) => (wall as { height?: number }).height ?? DEFAULT_CEILING_HEIGHT)
+    if (wallHeights.length > 0) ceiling = Math.max(...wallHeights)
+  }
+  return ceiling - baseY
+}
+
+function addRangeHoodCompartment(
+  group: Group,
+  node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
+  kind: CabinetHoodCompartmentType,
+  bottomY: number,
+  height: number,
+  ctx: GeometryContext | undefined,
+  index: number,
+) {
+  const width = node.width
+  const backZ = -node.depth / 2
+  const canopyCenterZ = backZ + HOOD_CANOPY_DEPTH / 2
+  const ductCenterZ = backZ + HOOD_DUCT_SIZE / 2 + 0.02
+  const name = `cabinet-${kind}-${index}`
+
+  let ductBottomY: number
+  if (kind === 'hood-pyramid') {
+    const frustum = buildFrustumGeometry(
+      width,
+      HOOD_CANOPY_DEPTH,
+      HOOD_DUCT_SIZE + 0.04,
+      HOOD_DUCT_SIZE + 0.04,
+      height,
+      ductCenterZ - canopyCenterZ,
+    )
+    const canopy = stampSlot(new Mesh(frustum, materials.appliance), 'appliance')
+    canopy.name = `${name}-canopy`
+    canopy.position.set(0, bottomY, canopyCenterZ)
+    canopy.castShadow = true
+    canopy.receiveShadow = true
+    group.add(canopy)
+
+    addBox(
+      group,
+      [width, 0.02, HOOD_CANOPY_DEPTH],
+      [0, bottomY + 0.01, canopyCenterZ],
+      materials.appliance,
+      `${name}-rim`,
+      'appliance',
+    )
+    ductBottomY = bottomY + height
+  } else {
+    const bodyDepth = Math.min(0.3, HOOD_CANOPY_DEPTH)
+    const bodyCenterZ = backZ + bodyDepth / 2
+    addBox(
+      group,
+      [width, HOOD_CURVED_BODY_HEIGHT, bodyDepth],
+      [0, bottomY + HOOD_CURVED_BODY_HEIGHT / 2, bodyCenterZ],
+      materials.appliance,
+      `${name}-body`,
+      'appliance',
+    )
+
+    const glassThickness = 0.008
+    const zFront = backZ + bodyDepth
+    const zBack = backZ + 0.04
+    const yBottom = bottomY + HOOD_CURVED_BODY_HEIGHT
+    const yTop = bottomY + height
+    const profile = new Shape()
+    profile.moveTo(zFront, yBottom)
+    profile.quadraticCurveTo(zFront, yTop, zBack, yTop)
+    profile.lineTo(zBack, yTop - glassThickness)
+    profile.quadraticCurveTo(
+      zFront - glassThickness,
+      yTop - glassThickness,
+      zFront - glassThickness,
+      yBottom,
+    )
+    profile.lineTo(zFront, yBottom)
+    const visorGeometry = new ExtrudeGeometry(profile, {
+      depth: width,
+      bevelEnabled: false,
+      curveSegments: 24,
+      steps: 1,
+    })
+    visorGeometry.rotateY(-Math.PI / 2)
+    visorGeometry.translate(width / 2, 0, 0)
+    visorGeometry.computeVertexNormals()
+    const visor = stampSlot(new Mesh(visorGeometry, materials.glass), 'glass')
+    visor.name = `${name}-glass-visor`
+    visor.castShadow = true
+    group.add(visor)
+    ductBottomY = bottomY + HOOD_CURVED_BODY_HEIGHT
+  }
+
+  const ductTopY = Math.max(ductBottomY + 0.05, resolveHoodDuctTopY(node, ctx))
+  const ductHeight = ductTopY - ductBottomY
+  addBox(
+    group,
+    [HOOD_DUCT_SIZE, ductHeight, HOOD_DUCT_SIZE],
+    [0, ductBottomY + ductHeight / 2, ductCenterZ],
+    materials.appliance,
+    `${name}-duct`,
+    'appliance',
+  )
 }
 
 function addBarHandle(
@@ -1082,6 +1282,53 @@ const microwavePanelMaterial = new MeshStandardMaterial({
   color: '#16191d',
   metalness: 0.55,
   roughness: 0.36,
+})
+const cooktopGlassMaterial = new MeshStandardMaterial({
+  color: '#17191c',
+  metalness: 0.45,
+  roughness: 0.07,
+})
+const cooktopBurnerMaterial = new MeshStandardMaterial({
+  color: '#7d8389',
+  metalness: 0.85,
+  roughness: 0.3,
+})
+const cooktopTrimMaterial = new MeshStandardMaterial({
+  color: '#3a3d41',
+  metalness: 0.85,
+  roughness: 0.3,
+})
+const cooktopGrateMaterial = new MeshStandardMaterial({
+  color: '#0d0e10',
+  metalness: 0.55,
+  roughness: 0.5,
+})
+const cooktopInductionZoneMaterial = new MeshStandardMaterial({
+  color: '#07111f',
+  emissive: '#2563eb',
+  emissiveIntensity: 0.22,
+  metalness: 0.05,
+  roughness: 0.2,
+})
+const cooktopInductionActiveZoneMaterial = new MeshStandardMaterial({
+  color: '#0b1f3a',
+  emissive: '#38bdf8',
+  emissiveIntensity: 0.75,
+  metalness: 0.05,
+  roughness: 0.18,
+})
+const cooktopKnobOnMaterial = new MeshStandardMaterial({
+  color: '#ffb86b',
+  emissive: '#f97316',
+  emissiveIntensity: 0.45,
+  metalness: 0.2,
+  roughness: 0.24,
+})
+const cooktopKnobHitMaterial = new MeshBasicMaterial({
+  colorWrite: false,
+  depthWrite: false,
+  transparent: true,
+  opacity: 0,
 })
 const refrigeratorSilverMaterial = new MeshStandardMaterial({
   color: '#c9ccd0',
@@ -3173,6 +3420,1045 @@ function addApplianceCompartment(
   }
 }
 
+const GAS_HOB_BURNER_RADIUS = 0.052
+type CooktopBurnerSpec = { x: number; z: number; size: number }
+const GAS_HOB_BURNER_LAYOUTS: Record<
+  Extract<CooktopLayout, 'gas-2burner' | 'gas-4burner' | 'gas-5burner-wok' | 'gas-6burner'>,
+  CooktopBurnerSpec[]
+> = {
+  'gas-2burner': [
+    { x: -0.11, z: 0, size: 1 },
+    { x: 0.11, z: 0, size: 1 },
+  ],
+  'gas-4burner': [
+    { x: -0.144, z: -0.096, size: 1 },
+    { x: -0.144, z: 0.096, size: 0.85 },
+    { x: 0.144, z: -0.096, size: 0.85 },
+    { x: 0.144, z: 0.096, size: 1 },
+  ],
+  'gas-5burner-wok': [
+    { x: -0.24, z: -0.11, size: 0.85 },
+    { x: 0.24, z: -0.11, size: 1 },
+    { x: -0.24, z: 0.11, size: 1 },
+    { x: 0.24, z: 0.11, size: 0.85 },
+    { x: 0, z: 0, size: 1.5 },
+  ],
+  'gas-6burner': [
+    { x: -0.3, z: -0.11, size: 1 },
+    { x: 0, z: -0.11, size: 0.85 },
+    { x: 0.3, z: -0.11, size: 1 },
+    { x: -0.3, z: 0.11, size: 0.85 },
+    { x: 0, z: 0.11, size: 1 },
+    { x: 0.3, z: 0.11, size: 0.85 },
+  ],
+}
+type InductionZoneSpec = { x: number; z: number; radius: number; w?: number; d?: number }
+const INDUCTION_ZONE_LAYOUTS: Record<
+  Extract<CooktopLayout, 'induction-2zone' | 'induction-4zone'>,
+  InductionZoneSpec[]
+> = {
+  'induction-2zone': [
+    { x: -0.13, z: 0, radius: 0.072 },
+    { x: 0.13, z: 0, radius: 0.072 },
+  ],
+  'induction-4zone': [
+    { x: -0.18, z: 0.108, radius: 0.066 },
+    { x: 0.18, z: 0.108, radius: 0.054 },
+    { x: -0.18, z: -0.108, radius: 0.054 },
+    { x: 0.18, z: -0.108, radius: 0.066 },
+  ],
+}
+function gasHobBurners(layout: CooktopLayout): CooktopBurnerSpec[] {
+  return layout in GAS_HOB_BURNER_LAYOUTS
+    ? GAS_HOB_BURNER_LAYOUTS[
+        layout as Extract<
+          CooktopLayout,
+          'gas-2burner' | 'gas-4burner' | 'gas-5burner-wok' | 'gas-6burner'
+        >
+      ]
+    : GAS_HOB_BURNER_LAYOUTS['gas-5burner-wok']
+}
+
+function inductionZones(layout: CooktopLayout): InductionZoneSpec[] {
+  return layout in INDUCTION_ZONE_LAYOUTS
+    ? INDUCTION_ZONE_LAYOUTS[
+        layout as Extract<CooktopLayout, 'induction-2zone' | 'induction-4zone'>
+      ]
+    : INDUCTION_ZONE_LAYOUTS['induction-4zone']
+}
+
+function addCooktopFrameBorder(
+  group: Group,
+  name: string,
+  width: number,
+  depth: number,
+  y: number,
+) {
+  const t = 0.014
+  const h = 0.012
+  addBox(
+    group,
+    [width, h, t],
+    [0, y, -depth / 2 + t / 2],
+    cooktopTrimMaterial,
+    `${name}-frame-back`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [width, h, t],
+    [0, y, depth / 2 - t / 2],
+    cooktopTrimMaterial,
+    `${name}-frame-front`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [t, h, depth - 2 * t],
+    [-width / 2 + t / 2, y, 0],
+    cooktopTrimMaterial,
+    `${name}-frame-left`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [t, h, depth - 2 * t],
+    [width / 2 - t / 2, y, 0],
+    cooktopTrimMaterial,
+    `${name}-frame-right`,
+    'appliance',
+  )
+}
+
+function addGasHobBurner(
+  group: Group,
+  name: string,
+  center: [number, number, number],
+  size: number,
+  burnerIndex: number,
+  active: boolean,
+  progress: number,
+) {
+  const r = GAS_HOB_BURNER_RADIUS * size
+  const [x, y, z] = center
+  const base = stampSlot(
+    new Mesh(new CylinderGeometry(r, r * 1.1, 0.012, 28), cooktopBurnerMaterial),
+    'appliance',
+  )
+  base.name = `${name}-burner-${burnerIndex}-base`
+  base.position.set(x, y, z)
+  base.castShadow = true
+  base.receiveShadow = true
+  group.add(base)
+
+  const ring = stampSlot(
+    new Mesh(new TorusGeometry(r * 0.72, 0.011, 10, 30), cooktopGrateMaterial),
+    'appliance',
+  )
+  ring.name = `${name}-burner-${burnerIndex}-ring`
+  ring.rotation.x = Math.PI / 2
+  ring.position.set(x, y + 0.012, z)
+  ring.castShadow = true
+  group.add(ring)
+
+  const cap = stampSlot(
+    new Mesh(new CylinderGeometry(r * 0.48, r * 0.6, 0.012, 24), cooktopGrateMaterial),
+    'hardware',
+  )
+  cap.name = `${name}-burner-${burnerIndex}-cap`
+  cap.position.set(x, y + 0.017, z)
+  cap.castShadow = true
+  group.add(cap)
+
+  if (active || progress > 0.04) {
+    addCooktopCurvedFlames(group, name, x, y, z, r, burnerIndex, progress)
+  }
+}
+
+function addContinuousCooktopGrate(
+  group: Group,
+  name: string,
+  width: number,
+  depth: number,
+  y: number,
+  burners: CooktopBurnerSpec[],
+) {
+  const t = 0.011
+  const bar = 0.008
+  addBox(
+    group,
+    [width, bar, t],
+    [0, y, -depth / 2 + t / 2],
+    cooktopGrateMaterial,
+    `${name}-continuous-grate-back`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [width, bar, t],
+    [0, y, depth / 2 - t / 2],
+    cooktopGrateMaterial,
+    `${name}-continuous-grate-front`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [t, bar, depth],
+    [-width / 2 + t / 2, y, 0],
+    cooktopGrateMaterial,
+    `${name}-continuous-grate-left`,
+    'appliance',
+  )
+  addBox(
+    group,
+    [t, bar, depth],
+    [width / 2 - t / 2, y, 0],
+    cooktopGrateMaterial,
+    `${name}-continuous-grate-right`,
+    'appliance',
+  )
+
+  const rowZs = [...new Set(burners.map((burner) => Number(burner.z.toFixed(3))))].sort(
+    (a, b) => a - b,
+  )
+  const colXs = [...new Set(burners.map((burner) => Number(burner.x.toFixed(3))))].sort(
+    (a, b) => a - b,
+  )
+  for (let i = 0; i < rowZs.length - 1; i += 1) {
+    addBox(
+      group,
+      [width, bar, t],
+      [0, y, (rowZs[i]! + rowZs[i + 1]!) / 2],
+      cooktopGrateMaterial,
+      `${name}-continuous-grate-row-${i}`,
+      'appliance',
+    )
+  }
+  for (let i = 0; i < colXs.length - 1; i += 1) {
+    addBox(
+      group,
+      [t, bar, depth],
+      [(colXs[i]! + colXs[i + 1]!) / 2, y, 0],
+      cooktopGrateMaterial,
+      `${name}-continuous-grate-column-${i}`,
+      'appliance',
+    )
+  }
+}
+
+function createCooktopFlameMaterial(color: string, opacity: number) {
+  return new MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+    side: DoubleSide,
+  })
+}
+
+function createCooktopFlameBodyMaterial() {
+  return new MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.92,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+    side: DoubleSide,
+  })
+}
+
+function addCooktopCurvedFlames(
+  group: Group,
+  name: string,
+  x: number,
+  y: number,
+  z: number,
+  radius: number,
+  burnerIndex: number,
+  progress: number,
+) {
+  const flameRoot = new Group()
+  flameRoot.name = `${name}-burner-${burnerIndex}-flames`
+  flameRoot.position.set(x, y + 0.028, z)
+  flameRoot.userData.cabinetFlameRoot = { progress }
+  flameRoot.scale.setScalar(Math.max(0.18, progress))
+  group.add(flameRoot)
+
+  // Faint heat shimmer only — anything stronger reads as a solid dome that
+  // hides the flames inside it.
+  const halo = stampSlot(
+    new Mesh(
+      new SphereGeometry(radius * 1.08, 14, 10),
+      createCooktopFlameMaterial('#ff7a3a', 0.05),
+    ),
+    'appliance',
+  )
+  halo.name = `${name}-burner-${burnerIndex}-flame-halo`
+  halo.userData.cabinetFlamePulse = { phase: 0.2, amplitude: 0.05, base: 1 }
+  halo.userData.cabinetFlameMaterialPulse = { phase: 1.1, base: 0.05, amplitude: 0.015 }
+  flameRoot.add(halo)
+
+  // Flat ignition glow lapping the burner crown (not a torus — reads as the
+  // hot ring at the base of the flames in reference photos).
+  const ring = stampSlot(
+    new Mesh(
+      new RingGeometry(radius * 0.25, radius * 0.95, 32),
+      createCooktopFlameMaterial('#ff8838', 0.6),
+    ),
+    'appliance',
+  )
+  ring.name = `${name}-burner-${burnerIndex}-flame-ring`
+  ring.rotation.x = -Math.PI / 2
+  ring.position.y = 0.001
+  ring.userData.cabinetFlameMaterialPulse = { phase: 1.7, base: 0.55, amplitude: 0.1 }
+  flameRoot.add(ring)
+
+  const core = stampSlot(
+    new Mesh(new SphereGeometry(radius * 0.34, 14, 10), createCooktopFlameMaterial('#7eb8ff', 0.6)),
+    'appliance',
+  )
+  core.name = `${name}-burner-${burnerIndex}-flame-core`
+  core.position.y = 0.022
+  core.userData.cabinetFlamePulse = { phase: 0.8, amplitude: 0.08, base: 0.95 }
+  core.userData.cabinetFlameMaterialPulse = { phase: 0.8, base: 0.55, amplitude: 0.08 }
+  flameRoot.add(core)
+
+  for (let flameIndex = 0; flameIndex < COOKTOP_FLAME_COUNT; flameIndex += 1) {
+    const angle = (Math.PI * 2 * flameIndex) / COOKTOP_FLAME_COUNT
+    const seed = cooktopFlameSeed(flameIndex)
+    const flameGroup = new Group()
+    flameGroup.name = `${name}-burner-${burnerIndex}-flame-${flameIndex}`
+    flameGroup.position.set(Math.cos(angle) * radius * 0.55, 0, Math.sin(angle) * radius * 0.55)
+    flameGroup.rotation.y = -angle
+
+    const geometry = createCooktopFlameGeometry()
+    const positions = geometry.getAttribute('position') as Float32BufferAttribute
+    // Bake a resting pose so static builds (tests, screenshots) show flames
+    // even before the animation system's first tick.
+    updateCooktopFlameTube(positions.array as Float32Array, 0, seed, radius)
+    const body = stampSlot(new Mesh(geometry, createCooktopFlameBodyMaterial()), 'appliance')
+    body.name = `${name}-burner-${burnerIndex}-flame-${flameIndex}-body`
+    body.userData.cabinetFlameJet = { seed, burnerR: radius }
+    flameGroup.add(body)
+
+    flameRoot.add(flameGroup)
+  }
+}
+
+function addInductionZone(
+  group: Group,
+  name: string,
+  zone: InductionZoneSpec,
+  y: number,
+  zoneIndex: number,
+  active: boolean,
+) {
+  const material = active ? cooktopInductionActiveZoneMaterial : cooktopInductionZoneMaterial
+  if (zone.w && zone.d) {
+    addBox(
+      group,
+      [zone.w, 0.002, zone.d],
+      [zone.x, y, zone.z],
+      material,
+      `${name}-zone-${zoneIndex}-flex-pad`,
+      'appliance',
+    )
+  }
+
+  const fill = stampSlot(
+    new Mesh(new CylinderGeometry(zone.radius * 0.92, zone.radius * 0.92, 0.002, 64), material),
+    'appliance',
+  )
+  fill.name = `${name}-zone-${zoneIndex}-fill`
+  fill.position.set(zone.x, y + 0.001, zone.z)
+  group.add(fill)
+
+  for (let ringIndex = 0; ringIndex < 3; ringIndex += 1) {
+    const ring = stampSlot(
+      new Mesh(new TorusGeometry(zone.radius * (1 - ringIndex * 0.24), 0.0022, 8, 72), material),
+      'appliance',
+    )
+    ring.name = `${name}-zone-${zoneIndex}-ring-${ringIndex}`
+    ring.rotation.x = Math.PI / 2
+    ring.position.set(zone.x, y + 0.003 + ringIndex * 0.0006, zone.z)
+    group.add(ring)
+  }
+}
+
+function addCooktopCompartment(
+  group: Group,
+  node: CabinetGeometryNode,
+  compartment: CabinetCompartment,
+  type: CabinetCooktopCompartmentType,
+  topY: number,
+  index: number,
+) {
+  const layout = compartmentCooktopLayout(compartment, type)
+  const activeBurners = new Set(compartmentCooktopActiveBurners(compartment, type))
+  const knobProgress = compartmentCooktopKnobProgress(compartment, type)
+  const burnersOn = activeBurners.size > 0 || compartmentCooktopBurnersOn(compartment)
+  const name =
+    type === 'cooktop-gas' ? `cabinet-cooktop-gas-${index}` : `cabinet-cooktop-induction-${index}`
+  const frameWidth = Math.max(0.32, Math.min(node.width - 0.01, 0.76))
+  const frameDepth = Math.max(0.28, Math.min(node.depth - 0.04, 0.53))
+  const surfaceWidth = Math.max(0.28, frameWidth - 0.026)
+  const surfaceDepth = Math.max(0.24, frameDepth - 0.026)
+  const surfaceThickness = 0.012
+  const surfaceY = topY + surfaceThickness / 2 - 0.002
+  addCooktopFrameBorder(group, name, frameWidth, frameDepth, topY + 0.006)
+  const surface = stampSlot(
+    new Mesh(new BoxGeometry(surfaceWidth, surfaceThickness, surfaceDepth), cooktopGlassMaterial),
+    'appliance',
+  )
+  surface.name = `${name}-surface`
+  surface.position.set(0, surfaceY, 0)
+  surface.castShadow = true
+  surface.receiveShadow = true
+  group.add(surface)
+
+  if (type === 'cooktop-gas') {
+    const burners = gasHobBurners(layout)
+    burners.forEach((burner, burnerIndex) => {
+      const progress = knobProgress[burnerIndex] ?? (activeBurners.has(burnerIndex) ? 1 : 0)
+      addGasHobBurner(
+        group,
+        name,
+        [burner.x, topY + surfaceThickness + 0.004, burner.z],
+        burner.size,
+        burnerIndex,
+        activeBurners.has(burnerIndex),
+        progress,
+      )
+    })
+    if (compartmentCooktopShowGrate(compartment)) {
+      addContinuousCooktopGrate(
+        group,
+        name,
+        surfaceWidth + 0.02,
+        surfaceDepth + 0.02,
+        topY + surfaceThickness + 0.036,
+        burners,
+      )
+    }
+
+    const knobMargin = 0.06
+    const knobSpan = surfaceWidth - knobMargin * 2
+    const knobStep = knobSpan / Math.max(1, burners.length - 1)
+    const knobZ = surfaceDepth * 0.42
+    for (let knobIndex = 0; knobIndex < burners.length; knobIndex += 1) {
+      const knobX = -knobSpan / 2 + knobIndex * knobStep
+      const progress = knobProgress[knobIndex] ?? (activeBurners.has(knobIndex) ? 1 : 0)
+      const knobAngle = -2.3 * progress
+      const knobUserData = {
+        type: 'gas',
+        compartmentIndex: index,
+        burnerIndex: knobIndex,
+      }
+      const hit = stampSlot(
+        new Mesh(new CylinderGeometry(0.03, 0.03, 0.06, 12), cooktopKnobHitMaterial),
+        'hardware',
+      )
+      hit.name = `${name}-knob-${knobIndex}-hit`
+      hit.position.set(knobX, topY + surfaceThickness + 0.019, knobZ)
+      hit.userData.cabinetCooktopKnob = knobUserData
+      group.add(hit)
+
+      const collar = stampSlot(
+        new Mesh(new CylinderGeometry(0.016, 0.018, 0.006, 20), cooktopTrimMaterial),
+        'hardware',
+      )
+      collar.name = `${name}-knob-${knobIndex}-collar`
+      collar.position.set(knobX, topY + surfaceThickness + 0.006, knobZ)
+      collar.userData.cabinetCooktopKnob = knobUserData
+      group.add(collar)
+
+      const knob = stampSlot(
+        new Mesh(new CylinderGeometry(0.012, 0.015, 0.02, 20), cooktopGrateMaterial),
+        'hardware',
+      )
+      knob.name = `${name}-knob-${knobIndex}`
+      knob.position.set(knobX, topY + surfaceThickness + 0.019, knobZ)
+      knob.rotation.y = knobAngle
+      knob.userData.cabinetCooktopKnob = knobUserData
+      knob.castShadow = true
+      group.add(knob)
+
+      // Child of the knob so it turns with it and keeps pointing radially.
+      const notch = stampSlot(
+        new Mesh(
+          new BoxGeometry(0.003, 0.004, 0.011),
+          progress > 0.5 ? cooktopKnobOnMaterial : cooktopTrimMaterial,
+        ),
+        'hardware',
+      )
+      notch.name = `${name}-knob-${knobIndex}-notch`
+      notch.position.set(0, 0.012, 0.011)
+      knob.add(notch)
+    }
+    return
+  }
+
+  const zones = inductionZones(layout)
+  zones.forEach((zone, zoneIndex) => {
+    addInductionZone(
+      group,
+      name,
+      zone,
+      topY + surfaceThickness + 0.002,
+      zoneIndex,
+      activeBurners.has(zoneIndex),
+    )
+  })
+
+  const controlBar = stampSlot(
+    new Mesh(
+      new BoxGeometry(Math.min(0.24, surfaceWidth * 0.38), 0.003, 0.012),
+      applianceDisplayMaterial,
+    ),
+    'appliance',
+  )
+  controlBar.name = `${name}-touch-control-bar`
+  controlBar.position.set(0, topY + surfaceThickness + 0.003, surfaceDepth / 2 - 0.045)
+  group.add(controlBar)
+  for (let dotIndex = 0; dotIndex < zones.length + 2; dotIndex += 1) {
+    const dot = stampSlot(
+      new Mesh(
+        new CylinderGeometry(0.005, 0.005, 0.002, 14),
+        burnersOn ? cooktopInductionActiveZoneMaterial : cooktopInductionZoneMaterial,
+      ),
+      'appliance',
+    )
+    dot.name = `${name}-touch-dot-${dotIndex}`
+    dot.position.set(
+      -0.015 * (zones.length + 1) + dotIndex * 0.03,
+      topY + surfaceThickness + 0.005,
+      surfaceDepth / 2 - 0.066,
+    )
+    group.add(dot)
+  }
+}
+
+function addDishwasherCompartment(
+  group: Group,
+  node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
+  faceWidth: number,
+  faceHeight: number,
+  faceCenterY: number,
+  openingWidth: number,
+  openingDepth: number,
+  frontZ: number,
+  index: number,
+) {
+  const name = `cabinet-dishwasher-${index}`
+  const gap = node.frontGap
+  const frontThickness = node.frontThickness
+  const doorWidth = Math.max(0.01, faceWidth - gap * 2)
+  const doorHeight = Math.max(0.01, faceHeight - gap * 2)
+  const doorCenterY = faceCenterY
+  const wall = APPLIANCE_CAVITY_WALL
+  const tubWidth = Math.max(0.05, Math.min(openingWidth, doorWidth) - wall * 2)
+  const tubHeight = Math.max(0.05, doorHeight - wall * 2)
+  const tubDepth = Math.max(0.08, Math.min(0.5, openingDepth - 0.04))
+  const tubFrontZ = frontZ - frontThickness / 2 - 0.006
+  const tubBackZ = tubFrontZ - tubDepth
+  const tubCenterZ = tubBackZ + tubDepth / 2
+  const topBandHeight = Math.min(0.07, doorHeight * 0.1)
+  const faceZ = frontThickness / 2
+
+  addBox(
+    group,
+    [tubWidth + wall * 2, tubHeight + wall * 2, wall],
+    [0, doorCenterY, tubBackZ + wall / 2],
+    refrigeratorLinerMaterial,
+    `${name}-tub-back`,
+    'applianceInterior',
+  )
+  addBox(
+    group,
+    [tubWidth + wall * 2, wall, tubDepth],
+    [0, doorCenterY + tubHeight / 2 + wall / 2, tubCenterZ],
+    refrigeratorLinerMaterial,
+    `${name}-tub-top`,
+    'applianceInterior',
+  )
+  addBox(
+    group,
+    [tubWidth + wall * 2, wall, tubDepth],
+    [0, doorCenterY - tubHeight / 2 - wall / 2, tubCenterZ],
+    refrigeratorLinerMaterial,
+    `${name}-tub-bottom`,
+    'applianceInterior',
+  )
+  addBox(
+    group,
+    [wall, tubHeight, tubDepth],
+    [-tubWidth / 2 - wall / 2, doorCenterY, tubCenterZ],
+    refrigeratorLinerMaterial,
+    `${name}-tub-left`,
+    'applianceInterior',
+  )
+  addBox(
+    group,
+    [wall, tubHeight, tubDepth],
+    [tubWidth / 2 + wall / 2, doorCenterY, tubCenterZ],
+    refrigeratorLinerMaterial,
+    `${name}-tub-right`,
+    'applianceInterior',
+  )
+
+  addWireRack(
+    group,
+    materials,
+    Math.max(0.02, tubWidth - 0.04),
+    Math.max(0.02, tubDepth - 0.08),
+    doorCenterY + tubHeight * 0.18,
+    tubCenterZ,
+    `${name}-upper-rack`,
+  )
+  addWireRack(
+    group,
+    materials,
+    Math.max(0.02, tubWidth - 0.04),
+    Math.max(0.02, tubDepth - 0.08),
+    doorCenterY - tubHeight * 0.18,
+    tubCenterZ,
+    `${name}-lower-rack`,
+  )
+
+  const sprayArmY = doorCenterY - tubHeight * 0.36
+  const sprayArm = stampSlot(
+    new Mesh(new BoxGeometry(tubWidth * 0.64, 0.008, 0.012), refrigeratorLinerAccentMaterial),
+    'applianceInterior',
+  )
+  sprayArm.name = `${name}-spray-arm`
+  sprayArm.position.set(0, sprayArmY, tubFrontZ - tubDepth * 0.2)
+  group.add(sprayArm)
+  const sprayHub = stampSlot(
+    new Mesh(new CylinderGeometry(0.018, 0.018, 0.012, 24), refrigeratorLinerAccentMaterial),
+    'applianceInterior',
+  )
+  sprayHub.name = `${name}-spray-hub`
+  sprayHub.rotation.x = Math.PI / 2
+  sprayHub.position.set(0, sprayArmY, tubFrontZ - tubDepth * 0.2)
+  group.add(sprayHub)
+
+  const hingeGroup = new Group()
+  hingeGroup.name = `${name}-door-hinge`
+  hingeGroup.position.set(0, doorCenterY - doorHeight / 2, frontZ)
+  hingeGroup.rotation.x = OVEN_OPEN_ANGLE * (node.operationState ?? 0)
+  hingeGroup.userData.cabinetPose = { type: 'rotate', axis: 'x', angle: OVEN_OPEN_ANGLE }
+  group.add(hingeGroup)
+
+  const leaf = new Group()
+  leaf.name = `${name}-door`
+  leaf.position.set(0, doorHeight / 2, 0)
+  hingeGroup.add(leaf)
+
+  const panel = stampSlot(
+    new Mesh(
+      roundedButtonGeometry(
+        doorWidth,
+        doorHeight,
+        frontThickness,
+        Math.min(doorWidth, doorHeight) * 0.035,
+      ),
+      materials.appliance,
+    ),
+    'appliance',
+  )
+  panel.name = `${name}-door-panel`
+  panel.castShadow = true
+  panel.receiveShadow = true
+  leaf.add(panel)
+
+  const trimThickness = Math.max(0.006, Math.min(0.01, Math.min(doorWidth, doorHeight) * 0.018))
+  const trimZ = faceZ + 0.004
+  addBox(
+    leaf,
+    [doorWidth - trimThickness * 2.4, trimThickness, frontThickness * 0.18],
+    [0, doorHeight / 2 - trimThickness * 1.2, trimZ],
+    refrigeratorDarkTrimMaterial,
+    `${name}-outer-trim-top`,
+    'appliance',
+  )
+  addBox(
+    leaf,
+    [doorWidth - trimThickness * 2.4, trimThickness, frontThickness * 0.16],
+    [0, -doorHeight / 2 + trimThickness * 1.2, trimZ],
+    refrigeratorDarkTrimMaterial,
+    `${name}-outer-trim-bottom`,
+    'appliance',
+  )
+  for (const side of [-1, 1]) {
+    addBox(
+      leaf,
+      [trimThickness, doorHeight - trimThickness * 2.4, frontThickness * 0.14],
+      [side * (doorWidth / 2 - trimThickness * 1.2), 0, trimZ],
+      refrigeratorDarkTrimMaterial,
+      `${name}-outer-trim-${side < 0 ? 'left' : 'right'}`,
+      'appliance',
+    )
+  }
+
+  const bandWidth = doorWidth - trimThickness * 5
+  const bandHeight = Math.max(0.045, topBandHeight * 0.82)
+  const bandY = doorHeight / 2 - trimThickness * 3.3 - bandHeight / 2
+  const controlPanel = stampSlot(
+    new Mesh(
+      roundedButtonGeometry(bandWidth, bandHeight, frontThickness * 0.18, bandHeight * 0.18),
+      microwavePanelMaterial,
+    ),
+    'appliance',
+  )
+  controlPanel.name = `${name}-control-panel`
+  controlPanel.position.set(0, bandY, faceZ + 0.006)
+  controlPanel.castShadow = true
+  leaf.add(controlPanel)
+
+  const displayWidth = Math.min(0.105, doorWidth * 0.2)
+  const display = stampSlot(
+    new Mesh(roundedButtonGeometry(displayWidth, 0.018, 0.004, 0.003), microwaveScreenMaterial),
+    'appliance',
+  )
+  display.name = `${name}-display`
+  display.position.set(-bandWidth * 0.28, bandY, faceZ + 0.018)
+  leaf.add(display)
+  addMicrowaveDisplaySegments(leaf, -bandWidth * 0.28, bandY, faceZ + 0.014, displayWidth, name)
+  for (let i = 0; i < 4; i += 1)
+    addBox(
+      leaf,
+      [0.018, 0.006, 0.003],
+      [bandWidth * 0.03 + i * 0.034, bandY, faceZ + 0.019],
+      microwaveButtonMaterial,
+      `${name}-cycle-button-${i}`,
+      'appliance',
+    )
+
+  const handleY = bandY - bandHeight / 2 - 0.018
+  addBox(
+    leaf,
+    [doorWidth * 0.66, 0.018, 0.008],
+    [0, handleY, faceZ + 0.008],
+    microwavePanelMaterial,
+    `${name}-pocket-handle-shadow`,
+    'appliance',
+  )
+  addBox(
+    leaf,
+    [doorWidth * 0.58, 0.007, 0.006],
+    [0, handleY + 0.005, faceZ + 0.017],
+    refrigeratorSilverMaterial,
+    `${name}-pocket-handle-lip`,
+    'appliance',
+  )
+
+  const lowerVisualTop = handleY - 0.025
+  const toeVentY = -doorHeight / 2 + 0.042
+  const centerPanelHeight = Math.max(0.08, lowerVisualTop - toeVentY - 0.052)
+  const centerPanelY = toeVentY + 0.042 + centerPanelHeight / 2
+  const centerPanel = stampSlot(
+    new Mesh(
+      roundedButtonGeometry(
+        doorWidth - trimThickness * 7,
+        centerPanelHeight,
+        frontThickness * 0.1,
+        Math.min(0.012, centerPanelHeight * 0.05),
+      ),
+      refrigeratorSilverMaterial,
+    ),
+    'appliance',
+  )
+  centerPanel.name = `${name}-brushed-front-panel`
+  centerPanel.position.set(0, centerPanelY, faceZ + 0.009)
+  centerPanel.castShadow = true
+  centerPanel.receiveShadow = true
+  leaf.add(centerPanel)
+  addBox(
+    leaf,
+    [doorWidth - trimThickness * 10, 0.01, 0.002],
+    [0, centerPanelY + centerPanelHeight * 0.42, faceZ + 0.016],
+    refrigeratorSealMaterial,
+    `${name}-front-highlight`,
+    'appliance',
+  )
+  for (const offsetX of [-0.5, 0.5]) {
+    addBox(
+      leaf,
+      [0.004, centerPanelHeight * 0.86, 0.002],
+      [offsetX * (doorWidth - trimThickness * 8), centerPanelY, faceZ + 0.015],
+      refrigeratorSealMaterial,
+      `${name}-front-groove-${offsetX < 0 ? 'left' : 'right'}`,
+      'appliance',
+    )
+  }
+  for (let i = 0; i < 3; i += 1) {
+    addBox(
+      leaf,
+      [0.003, centerPanelHeight * 0.82, 0.002],
+      [(-0.12 + i * 0.12) * doorWidth, centerPanelY, faceZ + 0.014],
+      refrigeratorSealMaterial,
+      `${name}-brushed-line-${i}`,
+      'appliance',
+    )
+  }
+  addBox(
+    leaf,
+    [Math.min(0.052, doorWidth * 0.1), 0.012, 0.004],
+    [doorWidth * 0.31, centerPanelY + centerPanelHeight * 0.34, faceZ + 0.019],
+    refrigeratorBrassAccentMaterial,
+    `${name}-badge`,
+    'appliance',
+  )
+  addBox(
+    leaf,
+    [Math.min(0.18, doorWidth * 0.34), 0.046, 0.012],
+    [doorWidth * 0.22, -doorHeight * 0.1, -frontThickness / 2 - 0.018],
+    microwaveScreenMaterial,
+    `${name}-detergent-cup`,
+    'applianceInterior',
+  )
+
+  addBox(
+    leaf,
+    [doorWidth * 0.54, 0.024, frontThickness * 0.2],
+    [0, toeVentY, faceZ + 0.008],
+    refrigeratorDarkTrimMaterial,
+    `${name}-toe-vent`,
+    'appliance',
+  )
+  for (let i = 0; i < 5; i += 1) {
+    addBox(
+      leaf,
+      [0.03, 0.0035, 0.004],
+      [-doorWidth * 0.16 + i * doorWidth * 0.08, toeVentY, faceZ + 0.015],
+      microwaveScreenMaterial,
+      `${name}-toe-vent-slat-${i}`,
+      'appliance',
+    )
+  }
+}
+
+function addPullOutPantryBasket(
+  group: Group,
+  materials: CabinetSlotMaterials,
+  width: number,
+  depth: number,
+  y: number,
+  zCenter: number,
+  name: string,
+  rackStyle: PullOutPantryRackStyle,
+  toLocal: (position: [number, number, number]) => [number, number, number],
+) {
+  const rail = 0.008
+  const basketHeight = 0.045
+  const panelHeight = 0.07
+  if (rackStyle !== 'wire') {
+    const material = rackStyle === 'glass' ? materials.glass : materials.carcass
+    const panelThickness = rackStyle === 'glass' ? 0.006 : 0.012
+    addBox(
+      group,
+      [width, panelThickness, depth],
+      toLocal([0, y, zCenter]),
+      material,
+      `${name}-${rackStyle}-tray-floor`,
+      rackStyle === 'glass' ? 'glass' : 'carcass',
+    )
+    addBox(
+      group,
+      [width, panelHeight, panelThickness],
+      toLocal([0, y + panelHeight / 2, zCenter + depth / 2 - panelThickness / 2]),
+      material,
+      `${name}-${rackStyle}-front-panel`,
+      rackStyle === 'glass' ? 'glass' : 'carcass',
+    )
+    addBox(
+      group,
+      [width, panelHeight, panelThickness],
+      toLocal([0, y + panelHeight / 2, zCenter - depth / 2 + panelThickness / 2]),
+      material,
+      `${name}-${rackStyle}-back-panel`,
+      rackStyle === 'glass' ? 'glass' : 'carcass',
+    )
+    for (const side of [-1, 1]) {
+      addBox(
+        group,
+        [panelThickness, panelHeight, depth],
+        toLocal([side * (width / 2 - panelThickness / 2), y + panelHeight / 2, zCenter]),
+        material,
+        `${name}-${rackStyle}-${side < 0 ? 'left' : 'right'}-panel`,
+        rackStyle === 'glass' ? 'glass' : 'carcass',
+      )
+    }
+    return
+  }
+
+  addBox(
+    group,
+    [width, rail, depth],
+    toLocal([0, y, zCenter]),
+    materials.hardware,
+    `${name}-floor`,
+    'hardware',
+  )
+  addBox(
+    group,
+    [width, rail, rail],
+    toLocal([0, y + basketHeight, zCenter + depth / 2 - rail / 2]),
+    materials.hardware,
+    `${name}-front-rail`,
+    'hardware',
+  )
+  addBox(
+    group,
+    [width, rail, rail],
+    toLocal([0, y + basketHeight, zCenter - depth / 2 + rail / 2]),
+    materials.hardware,
+    `${name}-back-rail`,
+    'hardware',
+  )
+  for (const side of [-1, 1]) {
+    addBox(
+      group,
+      [rail, basketHeight, depth],
+      toLocal([side * (width / 2 - rail / 2), y + basketHeight / 2, zCenter]),
+      materials.hardware,
+      `${name}-${side < 0 ? 'left' : 'right'}-side-rail`,
+      'hardware',
+    )
+  }
+  for (let i = 1; i <= 3; i += 1) {
+    addBox(
+      group,
+      [rail, basketHeight * 0.72, depth * 0.84],
+      toLocal([-width / 2 + (width * i) / 4, y + basketHeight * 0.48, zCenter]),
+      materials.hardware,
+      `${name}-divider-${i}`,
+      'hardware',
+    )
+  }
+}
+
+function addPullOutPantryCompartment(
+  group: Group,
+  node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
+  faceWidth: number,
+  faceHeight: number,
+  faceCenterY: number,
+  openingWidth: number,
+  openingDepth: number,
+  frontZ: number,
+  compartment: CabinetCompartment,
+  index: number,
+) {
+  const name = `cabinet-pull-out-pantry-${index}`
+  const rackStyle = compartmentPullOutPantryRackStyle(compartment)
+  const frontWidth = Math.max(0.01, faceWidth - node.frontGap * 2)
+  const frontHeight = Math.max(0.01, faceHeight - node.frontGap * 2)
+  const rackWidth = Math.max(0.04, Math.min(openingWidth - 0.05, frontWidth - 0.04))
+  const rackDepth = Math.max(0.08, openingDepth - 0.08)
+  const rackHeight = Math.max(0.12, frontHeight - 0.14)
+  const rackCenterY = faceCenterY
+  const rackCenterZ = frontZ - node.frontThickness / 2 - rackDepth / 2 - 0.025
+  const openDistance = Math.min(rackDepth * 0.82, 0.48)
+  const openScale = node.operationState ?? 0
+  const motion = new Group()
+  motion.name = `${name}-slide`
+  motion.position.set(0, 0, openDistance * openScale)
+  motion.userData.cabinetPose = { type: 'translate', axis: 'z', distance: openDistance }
+  group.add(motion)
+  const toLocal = (position: [number, number, number]): [number, number, number] => position
+
+  const front = stampSlot(
+    new Mesh(buildFrontGeometry(node, frontWidth, frontHeight, false, null), materials.front),
+    'front',
+  )
+  front.name = `${name}-front`
+  front.position.set(...toLocal([0, faceCenterY, frontZ]))
+  front.castShadow = true
+  front.receiveShadow = true
+  motion.add(front)
+
+  if (node.handleStyle !== 'cutout' && node.handleStyle !== 'hole') {
+    const handleLength = Math.max(0.18, Math.min(frontHeight * 0.52, 0.72))
+    addBarHandle(
+      motion,
+      toLocal([0, faceCenterY, frontZ + node.frontThickness / 2]),
+      handleLength,
+      true,
+      `${name}-handle`,
+      materials.hardware,
+    )
+  }
+
+  const rail = 0.01
+  for (const side of [-1, 1]) {
+    addBox(
+      motion,
+      [rail, rackHeight, rail],
+      toLocal([
+        side * (rackWidth / 2 - rail / 2),
+        rackCenterY,
+        rackCenterZ - rackDepth / 2 + rail / 2,
+      ]),
+      materials.hardware,
+      `${name}-${side < 0 ? 'left' : 'right'}-rear-upright`,
+      'hardware',
+    )
+    addBox(
+      motion,
+      [rail, rackHeight, rail],
+      toLocal([
+        side * (rackWidth / 2 - rail / 2),
+        rackCenterY,
+        rackCenterZ + rackDepth / 2 - rail / 2,
+      ]),
+      materials.hardware,
+      `${name}-${side < 0 ? 'left' : 'right'}-front-upright`,
+      'hardware',
+    )
+  }
+
+  const basketCount = Math.max(2, Math.min(8, Math.floor(compartmentShelfCount(compartment))))
+  const bottomY = rackCenterY - rackHeight / 2 + 0.08
+  const usableHeight = Math.max(0.1, rackHeight - 0.16)
+  for (let i = 0; i < basketCount; i += 1) {
+    const y = bottomY + (usableHeight * i) / Math.max(1, basketCount - 1)
+    addPullOutPantryBasket(
+      motion,
+      materials,
+      rackWidth,
+      rackDepth,
+      y,
+      rackCenterZ,
+      `${name}-basket-${i}`,
+      rackStyle,
+      toLocal,
+    )
+  }
+
+  addBox(
+    motion,
+    [rackWidth * 0.72, 0.012, rackDepth],
+    toLocal([0, rackCenterY + rackHeight / 2 - 0.018, rackCenterZ]),
+    materials.hardware,
+    `${name}-top-tie`,
+    'hardware',
+  )
+  addBox(
+    motion,
+    [rackWidth * 0.72, 0.012, rackDepth],
+    toLocal([0, rackCenterY - rackHeight / 2 + 0.018, rackCenterZ]),
+    materials.hardware,
+    `${name}-bottom-tie`,
+    'hardware',
+  )
+}
+
 export function buildCabinetGeometry(
   node: CabinetGeometryNode,
   ctx?: GeometryContext,
@@ -3184,10 +4470,30 @@ export function buildCabinetGeometry(
   if (node.type === 'cabinet') {
     const run = buildCabinetRunGeometry(node, ctx, shading, textures, colorPreset, sceneTheme)
     if (run) return run
+    return new Group()
   }
 
   const group = new Group()
   const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
+
+  const hoodRows = normalizeCabinetStack(node)
+  if (hoodRows.length > 0 && hoodRows.every((row) => isHoodCompartmentType(row.compartment.type))) {
+    const hoodPlinth = node.showPlinth ? node.plinthHeight : 0
+    hoodRows.forEach((row) => {
+      addRangeHoodCompartment(
+        group,
+        node,
+        materials,
+        row.compartment.type as CabinetHoodCompartmentType,
+        hoodPlinth + row.y0,
+        row.height,
+        ctx,
+        row.index,
+      )
+    })
+    return group
+  }
+
   const width = node.width
   const depth = node.depth
   const board = node.boardThickness
@@ -3273,6 +4579,20 @@ export function buildCabinetGeometry(
   }
   const rows = normalizeCabinetStack(node)
   rows.forEach((row, index) => {
+    if (row.compartment.type === 'cooktop-gas' || row.compartment.type === 'cooktop-induction') {
+      const countertopClearance = 0.001
+      const effectiveCountertopThickness = Math.max(countertopThickness, 0.02)
+      addCooktopCompartment(
+        group,
+        node,
+        row.compartment,
+        row.compartment.type,
+        topY + effectiveCountertopThickness + countertopClearance,
+        index,
+      )
+      return
+    }
+
     const isFirst = index === 0
     const isLast = index === rows.length - 1
     const bottomOccupancy = isFirst ? bottomLift : board / 2
@@ -3366,6 +4686,39 @@ export function buildCabinetGeometry(
       return
     }
 
+    if (row.compartment.type === 'dishwasher') {
+      addDishwasherCompartment(
+        group,
+        node,
+        materials,
+        faceWidth,
+        faceHeight,
+        faceCenterY,
+        openingWidth,
+        openingDepth,
+        frontZ,
+        index,
+      )
+      return
+    }
+
+    if (row.compartment.type === 'pull-out-pantry') {
+      addPullOutPantryCompartment(
+        group,
+        node,
+        materials,
+        faceWidth,
+        faceHeight,
+        faceCenterY,
+        openingWidth,
+        openingDepth,
+        frontZ,
+        row.compartment,
+        index,
+      )
+      return
+    }
+
     if (row.compartment.type === 'oven' || row.compartment.type === 'microwave') {
       addApplianceCompartment(
         group,
@@ -3400,6 +4753,20 @@ export function buildCabinetGeometry(
         openingWidth,
         openingDepth,
         frontZ,
+        index,
+      )
+      return
+    }
+
+    if (isHoodCompartmentType(row.compartment.type)) {
+      addRangeHoodCompartment(
+        group,
+        node,
+        materials,
+        row.compartment.type,
+        plinth + row.y0,
+        row.height,
+        ctx,
         index,
       )
     }

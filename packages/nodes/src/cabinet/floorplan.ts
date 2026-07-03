@@ -17,16 +17,14 @@ export function buildCabinetFloorplan(
   const modules = ctx.children.filter(
     (child): child is CabinetModuleNode => child.type === 'cabinet-module',
   )
-  if (modules.length > 0) {
-    const minX = Math.min(...modules.map((module) => module.position[0] - module.width / 2))
-    const maxX = Math.max(...modules.map((module) => module.position[0] + module.width / 2))
-    const maxDepth = Math.max(...modules.map((module) => module.depth), node.depth)
-    const width = Math.max(0.01, maxX - minX)
-    const centerX = (minX + maxX) / 2
-    return buildCabinetLikeFloorplan(node.position, node.rotation, width, maxDepth, ctx, centerX)
-  }
+  if (modules.length === 0) return null
 
-  return buildCabinetLikeFloorplan(node.position, node.rotation, node.width, node.depth, ctx)
+  const minX = Math.min(...modules.map((module) => module.position[0] - module.width / 2))
+  const maxX = Math.max(...modules.map((module) => module.position[0] + module.width / 2))
+  const maxDepth = Math.max(...modules.map((module) => module.depth), node.depth)
+  const width = Math.max(0.01, maxX - minX)
+  const centerX = (minX + maxX) / 2
+  return buildCabinetLikeFloorplan(node.position, node.rotation, width, maxDepth, ctx, centerX)
 }
 
 export function buildCabinetModuleFloorplan(

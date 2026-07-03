@@ -8,6 +8,7 @@ import {
   nodeRegistry,
   type SurfaceRole,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -190,7 +191,8 @@ export const GeometrySystem = () => {
       // never skipped. This kills the board remount + pointer enter/leave
       // churn when an item reparents onto a shelf.
       if (def.geometryKey) {
-        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}`
+        const childLiveOverrideKey = liveChildOverrideKey(node)
+        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}|${childLiveOverrideKey}`
         if (shouldReuseGeometryBuild(builtGeometryKeyRef.current, id, group, builtKey)) {
           clearDirty(id as AnyNodeId)
           continue
@@ -255,6 +257,19 @@ export const GeometrySystem = () => {
   return null
 }
 
+function liveChildOverrideKey(node: AnyNode): string {
+  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
+  if (!Array.isArray(childIds) || childIds.length === 0) return ''
+
+  const overrides = useLiveNodeOverrides.getState().overrides
+  const entries: Array<[AnyNodeId, unknown]> = []
+  for (const childId of childIds) {
+    const override = overrides.get(childId)
+    if (override) entries.push([childId, override])
+  }
+  return entries.length === 0 ? '' : JSON.stringify(entries)
+}
+
 function nodeReferencesSceneMaterial(node: AnyNode): boolean {
   const slots = (node as { slots?: Record<string, string> }).slots
   if (!slots) return false
@@ -270,15 +285,18 @@ function buildGeometryContext(
   levelData: unknown,
   materials: GeometryContext['materials'],
 ): GeometryContext {
-  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
+  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => {
+    const resolved = nodes[id]
+    return resolved ? (getEffectiveNode(resolved) as N) : undefined
+  }
 
   const childIds = (node as unknown as { children?: AnyNodeId[] }).children
   const children: AnyNode[] = Array.isArray(childIds)
-    ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
+    ? childIds.map((cid) => resolve<AnyNode>(cid)).filter((n): n is AnyNode => n !== undefined)
     : []
 
   const parentId = node.parentId as AnyNodeId | null
-  const parent: AnyNode | null = parentId ? (nodes[parentId] ?? null) : null
+  const parent: AnyNode | null = parentId ? (resolve<AnyNode>(parentId) ?? null) : null
 
   // Siblings = same kind, same parent, excluding self. Walks the parent's
   // children array; falls back to scanning the whole scene if the parent
@@ -289,13 +307,13 @@ function buildGeometryContext(
     if (Array.isArray(parentChildIds)) {
       for (const sid of parentChildIds) {
         if (sid === node.id) continue
-        const s = nodes[sid]
+        const s = resolve<AnyNode>(sid)
         if (s && s.type === node.type) siblings.push(s)
       }
     } else {
-      siblings = Object.values(nodes).filter(
-        (n) => n !== node && n.type === node.type && n.parentId === parentId,
-      )
+      siblings = Object.values(nodes)
+        .filter((n) => n !== node && n.type === node.type && n.parentId === parentId)
+        .map((n) => getEffectiveNode(n))
     }
   }
 

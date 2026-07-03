@@ -1184,13 +1184,16 @@ export type Capabilities = {
    * the box to wrap just the shaft they're moving.
    *
    * `size`: `[width, height, depth]` in the node's local frame.
+   * `center`: optional full local center. Use this when the footprint is
+   * offset from the node origin, such as a composite cabinet run after modules
+   * have been deleted or shifted.
    * `centerY`: optional Y center; defaults to `size[1] / 2` (box sits on
    * the ground plane). Override when the local origin isn't at the base.
    */
   dragBounds?: (
     node: AnyNode,
     nodes?: Readonly<Record<string, AnyNode>>,
-  ) => { size: [number, number, number]; centerY?: number }
+  ) => { size: [number, number, number]; center?: [number, number, number]; centerY?: number }
   roofAccessory?: RoofAccessoryConfig
   /**
    * Kind cuts a hole in the ceiling surface it is attached to (e.g. recessed

@@ -1,16 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId, GeometryContext } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, GeometryContext, LinearResizeHandle } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { Box3 } from 'three'
+import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { buildCabinetGeometry } from '../geometry'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 import { cabinetSlots } from '../slots'
 import {
+  backAnchoredModuleZ,
+  COOKTOP_DEFAULT_HEIGHT,
+  COOKTOP_STANDARD_WIDTH,
+  DISHWASHER_STANDARD_HEIGHT,
+  DISHWASHER_STANDARD_WIDTH,
   FRIDGE_COLUMN_HEIGHT,
   FRIDGE_COLUMN_WIDTH,
   FRIDGE_STANDARD_DEPTH,
   FRIDGE_WIDE_WIDTH,
+  HOOD_CANOPY_DEPTH,
+  HOOD_CURVED_TOTAL_HEIGHT,
+  HOOD_DUCT_SIZE,
+  HOOD_PYRAMID_CANOPY_HEIGHT,
   MICROWAVE_STANDARD_HEIGHT,
+  PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
+  PULL_OUT_PANTRY_STANDARD_WIDTH,
+  TALL_CABINET_CARCASS_HEIGHT,
 } from '../stack'
 
 function findMeshByName(root: { children: unknown[] }, name: string): Mesh {
@@ -85,6 +98,8 @@ function countertopBounds(group: Object3D) {
       return {
         minX: mesh.position.x + box!.min.x,
         maxX: mesh.position.x + box!.max.x,
+        minZ: mesh.position.z + box!.min.z,
+        maxZ: mesh.position.z + box!.max.z,
       }
     })
     .sort((a, b) => a.minX - b.minX)
@@ -150,6 +165,14 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       if (object.name === name) found = object
     })
     if (!found) throw new Error(`Object not found: ${name}`)
+    return found
+  }
+
+  function hasObjectByName(root: Object3D, name: string): boolean {
+    let found = false
+    root.traverse((object) => {
+      if (object.name === name) found = true
+    })
     return found
   }
 
@@ -325,6 +348,261 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     const microwaveHinge = findObjectByName(microwaveGroup, 'cabinet-microwave-0-door-hinge')
     expect(microwaveHinge.rotation.y).toBeCloseTo(-Math.PI / 2)
     expect(microwaveHinge.rotation.x).toBeCloseTo(0)
+  })
+
+  test('dishwasher compartment emits tub racks, controls, toe vent, and drop-down door', () => {
+    const node = CabinetModuleNode.parse({
+      width: DISHWASHER_STANDARD_WIDTH,
+      carcassHeight: DISHWASHER_STANDARD_HEIGHT,
+      operationState: 1,
+      stack: [{ id: 'dishwasher', type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-tub-back')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-upper-rack-bar-1')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-lower-rack-bar-1')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-spray-arm')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-control-panel')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-display')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-display-segment-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-cycle-button-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-outer-trim-top')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-outer-trim-left')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-pocket-handle-lip')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-brushed-front-panel')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-front-highlight')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-front-groove-left')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-brushed-line-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-badge')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-detergent-cup')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-toe-vent-slat-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-door-panel').userData.slotId).toBe(
+      'appliance',
+    )
+
+    const hinge = findObjectByName(group, 'cabinet-dishwasher-0-door-hinge')
+    expect(hinge.rotation.x).toBeCloseTo((88 * Math.PI) / 180)
+    expect(hinge.rotation.y).toBeCloseTo(0)
+
+    const door = findObjectByName(group, 'cabinet-dishwasher-0-door')
+    expect(findObjectByName(group, 'cabinet-dishwasher-0-toe-vent').parent).toBe(door)
+    expect(findMeshByName(group, 'cabinet-dishwasher-0-detergent-cup').position.z).toBeLessThan(0)
+  })
+
+  test('gas cooktop emits trim, five stepped burners, continuous grate, and knobs', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        { id: 'cooktop', type: 'cooktop-gas', height: COOKTOP_DEFAULT_HEIGHT },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-surface').userData.slotId).toBe('appliance')
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-frame-front')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-frame-left')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-4-base')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-ring')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-3-cap').userData.slotId).toBe(
+      'hardware',
+    )
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-row-1')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-continuous-grate-column-1')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-knob-4')).toBeDefined()
+    expect(
+      findMeshByName(group, 'cabinet-cooktop-gas-1-knob-4-hit').userData.cabinetCooktopKnob,
+    ).toEqual({
+      type: 'gas',
+      compartmentIndex: 1,
+      burnerIndex: 4,
+    })
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-knob-4-notch')).toBeDefined()
+  })
+
+  test('gas cooktop can hide the top grate and show individual burner flames', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        {
+          id: 'cooktop',
+          type: 'cooktop-gas',
+          height: COOKTOP_DEFAULT_HEIGHT,
+          cooktopActiveBurners: [0],
+          cooktopKnobProgress: [1, 0, 0, 0, 0],
+          cooktopShowGrate: false,
+        },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-continuous-grate-front')).toBe(false)
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-ring')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-core')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-burner-0-flame-0')).toBeDefined()
+    expect(hasObjectByName(group, 'cabinet-cooktop-gas-1-burner-1-flame-ring')).toBe(false)
+    expect(findMeshByName(group, 'cabinet-cooktop-gas-1-knob-0').rotation.y).toBeLessThan(0)
+  })
+
+  test('induction cooktop emits ceramic surface, heating zones, and touch controls', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        { id: 'cooktop', type: 'cooktop-induction', height: COOKTOP_DEFAULT_HEIGHT },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-surface').userData.slotId).toBe(
+      'appliance',
+    )
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-0')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-fill')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-ring-2')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-zone-3-ring-1')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-touch-control-bar')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-cooktop-induction-1-touch-dot-4')).toBeDefined()
+  })
+
+  test('induction cooktop can show active zone glow', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        {
+          id: 'cooktop',
+          type: 'cooktop-induction',
+          height: COOKTOP_DEFAULT_HEIGHT,
+          cooktopBurnersOn: true,
+        },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const fill = findMeshByName(group, 'cabinet-cooktop-induction-1-zone-0-fill')
+    const dot = findMeshByName(group, 'cabinet-cooktop-induction-1-touch-dot-0')
+
+    expect(fill.material).toBe(dot.material)
+  })
+
+  test('cooktop seats into the countertop instead of floating above it', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      withCountertop: true,
+      countertopThickness: 0.02,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        { id: 'cooktop', type: 'cooktop-gas', height: COOKTOP_DEFAULT_HEIGHT },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const surface = worldBounds(findMeshByName(group, 'cabinet-cooktop-gas-1-surface'))
+    const countertopTop = node.plinthHeight + node.carcassHeight + node.countertopThickness
+
+    expect(surface.min.y).toBeLessThan(countertopTop)
+    expect(surface.max.y).toBeGreaterThan(countertopTop)
+  })
+
+  test('cooktop does not reserve a blank front row below the countertop', () => {
+    const node = CabinetModuleNode.parse({
+      width: COOKTOP_STANDARD_WIDTH,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer', type: 'drawer', drawerCount: 2 },
+        { id: 'cooktop', type: 'cooktop-gas', height: COOKTOP_DEFAULT_HEIGHT },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const topDrawer = worldBounds(findMeshByName(group, 'cabinet-drawer-front-0.460-1'))
+    const topBoardY = node.plinthHeight + node.carcassHeight
+
+    expect(topDrawer.max.y).toBeGreaterThan(topBoardY - 0.04)
+    expect(hasObjectByName(group, 'cabinet-back-1')).toBe(false)
+  })
+
+  test('pull-out pantry emits a narrow sliding rack with basket shelves', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: PULL_OUT_PANTRY_STANDARD_WIDTH,
+      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      operationState: 1,
+      stack: [
+        {
+          id: 'pullout',
+          type: 'pull-out-pantry',
+          height: TALL_CABINET_CARCASS_HEIGHT,
+          shelfCount: PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
+        },
+      ],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const slide = findObjectByName(group, 'cabinet-pull-out-pantry-0-slide')
+    expect(slide.userData.cabinetPose.type).toBe('translate')
+    expect(slide.userData.cabinetPose.axis).toBe('z')
+    expect(slide.userData.cabinetPose.distance).toBeGreaterThan(0)
+    expect(slide.position.z).toBeCloseTo(slide.userData.cabinetPose.distance)
+    expect(findMeshByName(group, 'cabinet-pull-out-pantry-0-front')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-pull-out-pantry-0-handle')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-pull-out-pantry-0-left-front-upright')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-pull-out-pantry-0-basket-0-front-rail')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-pull-out-pantry-0-basket-4-divider-2')).toBeDefined()
+  })
+
+  test('pull-out pantry supports tray and glass rack styles', () => {
+    const tray = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        cabinetType: 'tall',
+        width: PULL_OUT_PANTRY_STANDARD_WIDTH,
+        carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+        stack: [
+          {
+            id: 'pullout',
+            type: 'pull-out-pantry',
+            height: TALL_CABINET_CARCASS_HEIGHT,
+            shelfCount: 3,
+            pantryRackStyle: 'tray',
+          },
+        ],
+      }),
+      undefined,
+      'rendered',
+      false,
+    )
+    const glass = buildCabinetGeometry(
+      CabinetModuleNode.parse({
+        cabinetType: 'tall',
+        width: PULL_OUT_PANTRY_STANDARD_WIDTH,
+        carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+        stack: [
+          {
+            id: 'pullout',
+            type: 'pull-out-pantry',
+            height: TALL_CABINET_CARCASS_HEIGHT,
+            shelfCount: 3,
+            pantryRackStyle: 'glass',
+          },
+        ],
+      }),
+      undefined,
+      'rendered',
+      false,
+    )
+
+    expect(
+      findMeshByName(tray, 'cabinet-pull-out-pantry-0-basket-0-tray-front-panel'),
+    ).toBeDefined()
+    expect(
+      findMeshByName(glass, 'cabinet-pull-out-pantry-0-basket-0-glass-front-panel').userData.slotId,
+    ).toBe('glass')
   })
 
   test('single refrigerator emits steel door, shelves, bins, vents, and an opening hinge', () => {
@@ -538,6 +816,94 @@ describe('buildCabinetGeometry — appliance compartments', () => {
 })
 
 describe('buildCabinetGeometry — run countertops', () => {
+  test('empty cabinet runs render no fallback cabinet mesh', () => {
+    const run = CabinetNode.parse({
+      ...cabinetDefinition.defaults(),
+      id: 'cabinet_empty-run',
+      children: [],
+    })
+
+    const group = buildCabinetGeometry(run, geometryContext({ children: [] }), 'rendered', false)
+
+    expect(group.children).toHaveLength(0)
+  })
+
+  test('run plinth follows shifted module depth extents instead of growing backward', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_mixed-depth-run',
+      showPlinth: true,
+      plinthHeight: 0.1,
+      toeKickDepth: 0.075,
+      boardThickness: 0.018,
+    })
+    const standardDepth = 0.58
+    const fridgeZ = backAnchoredModuleZ(0, standardDepth, FRIDGE_STANDARD_DEPTH)
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_tall',
+        parentId: run.id,
+        cabinetType: 'tall',
+        position: [-0.3, 0.1, 0],
+        width: 0.6,
+        depth: standardDepth,
+        carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_fridge',
+        parentId: run.id,
+        cabinetType: 'tall',
+        position: [0.38, 0.1, fridgeZ],
+        width: FRIDGE_COLUMN_WIDTH,
+        depth: FRIDGE_STANDARD_DEPTH,
+        carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      }),
+    ]
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+    const plinth = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+
+    expect(plinth.min.z).toBeCloseTo(-standardDepth / 2)
+    expect(plinth.max.z).toBeCloseTo(fridgeZ + FRIDGE_STANDARD_DEPTH / 2 - run.toeKickDepth)
+  })
+
+  test('run countertop follows shifted module depth extents instead of staying centered', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_shifted-depth-countertop',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const standardDepth = 0.58
+    const nextDepth = 0.78
+    const shiftedZ = backAnchoredModuleZ(0, standardDepth, nextDepth)
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, shiftedZ],
+      width: 0.6,
+      depth: nextDepth,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module] }),
+      'rendered',
+      false,
+    )
+    const [countertop] = countertopBounds(group)
+
+    expect(countertop).toBeDefined()
+    expect(countertop!.minZ).toBeCloseTo(-standardDepth / 2)
+    expect(countertop!.maxZ).toBeCloseTo(shiftedZ + nextDepth / 2 + run.countertopOverhang)
+  })
+
   test('countertop overhang does not enter an adjacent tall module span', () => {
     const run = CabinetNode.parse({
       withCountertop: true,
@@ -681,5 +1047,223 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertops.length).toBe(1)
     expect(countertops[0]!.minX).toBeCloseTo(-0.32)
     expect(countertops[0]!.maxX).toBeCloseTo(0.3)
+  })
+})
+
+describe('cabinet handles', () => {
+  function localPointToWorld(
+    node: { position: [number, number, number]; rotation?: number },
+    point: readonly [number, number, number],
+  ) {
+    const rotation = node.rotation ?? 0
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+    return [
+      node.position[0] + point[0] * cos + point[2] * sin,
+      node.position[1] + point[1],
+      node.position[2] - point[0] * sin + point[2] * cos,
+    ] as const
+  }
+
+  function linearHandles() {
+    const node = CabinetModuleNode.parse({
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+    const handles =
+      typeof cabinetModuleDefinition.handles === 'function'
+        ? cabinetModuleDefinition.handles(node)
+        : (cabinetModuleDefinition.handles ?? [])
+    return {
+      node,
+      handles: handles.filter(
+        (handle): handle is LinearResizeHandle<typeof node> => handle.kind === 'linear-resize',
+      ),
+    }
+  }
+
+  test('width arrows resize from the chosen side instead of around center', () => {
+    const { node, handles } = linearHandles()
+    const leftHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'max')
+    const rightHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'min')
+
+    expect(leftHandle).toBeDefined()
+    expect(rightHandle).toBeDefined()
+    expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
+    expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
+  })
+
+  test('depth arrow keeps the back aligned and grows toward the front', () => {
+    const { node, handles } = linearHandles()
+    const depthHandle = handles.find((handle) => handle.axis === 'z')
+
+    expect(depthHandle).toBeDefined()
+    expect(depthHandle!.anchor).toBe('min')
+    expect(depthHandle!.apply(node, 0.78, null as never).position?.[2]).toBeCloseTo(0.1)
+  })
+
+  test('run rotation keeps the cabinet bounding-box center fixed', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_offset-run',
+      position: [4, 0, 3],
+      rotation: Math.PI / 8,
+      children: ['cabinet-module_left' as AnyNodeId, 'cabinet-module_right' as AnyNodeId],
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_left',
+        parentId: run.id,
+        position: [0.2, 0.1, 0],
+        width: 0.4,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_right',
+        parentId: run.id,
+        position: [0.7, 0.1, 0.1],
+        width: 0.6,
+        depth: 0.78,
+      }),
+    ]
+    const nodes = Object.fromEntries(
+      [run, ...modules].map((node) => [node.id as AnyNodeId, node as AnyNode]),
+    ) as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      nodes: () => nodes,
+    }
+    const rotateHandle = (
+      typeof cabinetDefinition.handles === 'function'
+        ? cabinetDefinition.handles(run)
+        : (cabinetDefinition.handles ?? [])
+    ).find((handle) => handle.kind === 'arc-resize' && handle.shape === 'rotate')
+
+    expect(rotateHandle).toBeDefined()
+    if (!(rotateHandle && rotateHandle.kind === 'arc-resize')) return
+
+    const center = rotateHandle.rotationCenter!(run, sceneApi as never)
+    const before = localPointToWorld(run, center)
+    const patch = rotateHandle.apply(run, Math.PI / 4, sceneApi as never)
+    const after = localPointToWorld({ ...run, ...patch }, center)
+
+    expect(after[0]).toBeCloseTo(before[0])
+    expect(after[1]).toBeCloseTo(before[1])
+    expect(after[2]).toBeCloseTo(before[2])
+  })
+})
+
+describe('buildCabinetGeometry — range hood compartments', () => {
+  function hoodModule(type: 'hood-pyramid' | 'hood-curved-glass', hoodHeight: number) {
+    return CabinetModuleNode.parse({
+      id: 'cabinet-module_hood',
+      cabinetType: 'base',
+      position: [0, 1.45, 0],
+      width: 0.6,
+      depth: 0.32,
+      carcassHeight: Math.max(0.4, hoodHeight),
+      showPlinth: false,
+      withCountertop: false,
+      stack: [{ id: 'hood', type, height: hoodHeight }],
+    })
+  }
+
+  test('pyramid hood emits canopy, rim, and duct in the appliance slot with no carcass boxes', () => {
+    const node = hoodModule('hood-pyramid', HOOD_PYRAMID_CANOPY_HEIGHT)
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const canopy = findMeshByName(group, 'cabinet-hood-pyramid-0-canopy')
+    const duct = findMeshByName(group, 'cabinet-hood-pyramid-0-duct')
+    expect(canopy.userData.slotId).toBe('appliance')
+    expect(duct.userData.slotId).toBe('appliance')
+    expect(findMeshByName(group, 'cabinet-hood-pyramid-0-rim')).toBeDefined()
+
+    expect(findMeshesBySlot(group, 'carcass')).toHaveLength(0)
+    expect(() => findMeshByName(group, 'cabinet-side-left')).toThrow()
+    expect(() => findMeshByName(group, 'cabinet-top')).toThrow()
+  })
+
+  test('pyramid canopy protrudes past the wall cabinet depth', () => {
+    const node = hoodModule('hood-pyramid', HOOD_PYRAMID_CANOPY_HEIGHT)
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const canopy = findMeshByName(group, 'cabinet-hood-pyramid-0-canopy')
+    const bounds = worldBounds(canopy)
+    expect(bounds.max.z).toBeGreaterThan(node.depth / 2)
+    expect(bounds.max.z).toBeCloseTo(-node.depth / 2 + HOOD_CANOPY_DEPTH)
+  })
+
+  test('duct is centered, sized to the duct cross-section, and reaches the fallback ceiling', () => {
+    const node = hoodModule('hood-pyramid', HOOD_PYRAMID_CANOPY_HEIGHT)
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const duct = findMeshByName(group, 'cabinet-hood-pyramid-0-duct')
+    const bounds = worldBounds(duct)
+    expect(bounds.max.x - bounds.min.x).toBeCloseTo(HOOD_DUCT_SIZE)
+    expect((bounds.max.x + bounds.min.x) / 2).toBeCloseTo(0)
+    // module base sits at y=1.45 world, so local duct top = 2.5 - 1.45
+    expect(bounds.max.y).toBeCloseTo(2.5 - 1.45)
+  })
+
+  test('duct reaches the tallest wall height when the parent chain resolves to a level with walls', () => {
+    const node = hoodModule('hood-pyramid', HOOD_PYRAMID_CANOPY_HEIGHT)
+    const baseModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_base',
+      parentId: 'cabinet_run' as AnyNodeId,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      carcassHeight: 0.72,
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run',
+      parentId: 'level_0' as AnyNodeId,
+      position: [0, 0, 0],
+      children: ['cabinet-module_base' as AnyNodeId],
+    })
+    const level = {
+      id: 'level_0',
+      type: 'level',
+      parentId: null,
+      children: ['wall_a', 'cabinet_run'],
+    } as unknown as AnyNode
+    const wall = {
+      id: 'wall_a',
+      type: 'wall',
+      parentId: 'level_0',
+      height: 3.0,
+    } as unknown as AnyNode
+    const nodes = new Map<string, AnyNode>([
+      [baseModule.id, baseModule as AnyNode],
+      [run.id, run as AnyNode],
+      ['level_0', level],
+      ['wall_a', wall],
+    ])
+    const ctx: GeometryContext = {
+      children: [],
+      parent: baseModule as AnyNode,
+      resolve: (id) => nodes.get(id) as never,
+      siblings: [],
+    }
+    const group = buildCabinetGeometry(node, ctx, 'rendered', false)
+
+    const duct = findMeshByName(group, 'cabinet-hood-pyramid-0-duct')
+    const bounds = worldBounds(duct)
+    // world base = 1.45 (hood) + 0.1 (base module) + 0 (run) = 1.55; ceiling 3.0
+    expect(bounds.max.y).toBeCloseTo(3.0 - 1.55)
+  })
+
+  test('curved glass hood emits a stainless body and a glass visor', () => {
+    const node = hoodModule('hood-curved-glass', HOOD_CURVED_TOTAL_HEIGHT)
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const body = findMeshByName(group, 'cabinet-hood-curved-glass-0-body')
+    expect(body.userData.slotId).toBe('appliance')
+    const visor = findMeshByName(group, 'cabinet-hood-curved-glass-0-glass-visor')
+    expect(visor.userData.slotId).toBe('glass')
+    expect(findMeshByName(group, 'cabinet-hood-curved-glass-0-duct')).toBeDefined()
+    expect(findMeshesBySlot(group, 'carcass')).toHaveLength(0)
+
+    const visorBounds = worldBounds(visor)
+    expect(visorBounds.max.x - visorBounds.min.x).toBeCloseTo(node.width)
+    expect(visorBounds.max.y).toBeCloseTo(HOOD_CURVED_TOTAL_HEIGHT)
   })
 })

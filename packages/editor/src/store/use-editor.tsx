@@ -93,11 +93,6 @@ function resolveMovingNodeTarget(
     | CabinetNode
     | CabinetModuleNode,
 ) {
-  if (node.type === 'cabinet-module' && node.parentId) {
-    const parent = useScene.getState().nodes[node.parentId as AnyNodeId]
-    if (parent?.type === 'cabinet') return parent as CabinetNode
-  }
-
   return node
 }
 
@@ -273,6 +268,8 @@ type EditorState = {
   setPlacementDragMode: (dragMode: boolean) => void
   roofHostDragArmedId: AnyNodeId | null
   setRoofHostDragArmedId: (nodeId: AnyNodeId | null) => void
+  cabinetHostDragArmedId: AnyNodeId | null
+  setCabinetHostDragArmedId: (nodeId: AnyNodeId | null) => void
   setMovingNode: (
     node:
       | ItemNode
@@ -908,6 +905,8 @@ const useEditor = create<EditorState>()(
       setPlacementDragMode: (dragMode) => set({ placementDragMode: dragMode }),
       roofHostDragArmedId: null,
       setRoofHostDragArmedId: (nodeId) => set({ roofHostDragArmedId: nodeId }),
+      cabinetHostDragArmedId: null,
+      setCabinetHostDragArmedId: (nodeId) => set({ cabinetHostDragArmedId: nodeId }),
       // The node being placed/moved now lives inside the interaction scope
       // (`useMovingNode` / `getMovingNode`), not a `useEditor` flag. This setter
       // remains the single entry point: it drives the scope and still touches
