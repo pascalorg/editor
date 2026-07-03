@@ -10,6 +10,91 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./store": {
+      "types": "./dist/store/use-viewer.d.ts",
+      "import": "./dist/store/use-viewer.js",
+      "default": "./dist/store/use-viewer.js"
+    },
+    "./edge-style": {
+      "types": "./dist/lib/edge-style.d.ts",
+      "import": "./dist/lib/edge-style.js",
+      "default": "./dist/lib/edge-style.js"
+    },
+    "./materials": {
+      "types": "./dist/lib/materials.d.ts",
+      "import": "./dist/lib/materials.js",
+      "default": "./dist/lib/materials.js"
+    },
+    "./scene-themes": {
+      "types": "./dist/lib/scene-themes.d.ts",
+      "import": "./dist/lib/scene-themes.js",
+      "default": "./dist/lib/scene-themes.js"
+    },
+    "./layers": {
+      "types": "./dist/lib/layers.d.ts",
+      "import": "./dist/lib/layers.js",
+      "default": "./dist/lib/layers.js"
+    },
+    "./node-events": {
+      "types": "./dist/hooks/use-node-events.d.ts",
+      "import": "./dist/hooks/use-node-events.js",
+      "default": "./dist/hooks/use-node-events.js"
+    },
+    "./use-asset-url": {
+      "types": "./dist/hooks/use-asset-url.d.ts",
+      "import": "./dist/hooks/use-asset-url.js",
+      "default": "./dist/hooks/use-asset-url.js"
+    },
+    "./gltf-ktx2": {
+      "types": "./dist/hooks/use-gltf-ktx2.d.ts",
+      "import": "./dist/hooks/use-gltf-ktx2.js",
+      "default": "./dist/hooks/use-gltf-ktx2.js"
+    },
+    "./safe-geometry": {
+      "types": "./dist/lib/safe-geometry.d.ts",
+      "import": "./dist/lib/safe-geometry.js",
+      "default": "./dist/lib/safe-geometry.js"
+    },
+    "./csg-utils": {
+      "types": "./dist/lib/csg-utils.d.ts",
+      "import": "./dist/lib/csg-utils.js",
+      "default": "./dist/lib/csg-utils.js"
+    },
+    "./create-cylinder-geometry": {
+      "types": "./dist/lib/create-cylinder-geometry.d.ts",
+      "import": "./dist/lib/create-cylinder-geometry.js",
+      "default": "./dist/lib/create-cylinder-geometry.js"
+    },
+    "./column-geometry": {
+      "types": "./dist/systems/column/column-geometry.d.ts",
+      "import": "./dist/systems/column/column-geometry.js",
+      "default": "./dist/systems/column/column-geometry.js"
+    },
+    "./node-renderer": {
+      "types": "./dist/components/renderers/node-renderer.d.ts",
+      "import": "./dist/components/renderers/node-renderer.js",
+      "default": "./dist/components/renderers/node-renderer.js"
+    },
+    "./polygon-union": {
+      "types": "./dist/lib/polygon-union.d.ts",
+      "import": "./dist/lib/polygon-union.js",
+      "default": "./dist/lib/polygon-union.js"
+    },
+    "./wall-materials": {
+      "types": "./dist/systems/wall/wall-materials.d.ts",
+      "import": "./dist/systems/wall/wall-materials.js",
+      "default": "./dist/systems/wall/wall-materials.js"
+    },
+    "./roof-materials": {
+      "types": "./dist/systems/roof/roof-materials.d.ts",
+      "import": "./dist/systems/roof/roof-materials.js",
+      "default": "./dist/systems/roof/roof-materials.js"
+    },
+    "./stair-materials": {
+      "types": "./dist/systems/stair/stair-materials.d.ts",
+      "import": "./dist/systems/stair/stair-materials.js",
+      "default": "./dist/systems/stair/stair-materials.js"
     }
   },
   "files": [

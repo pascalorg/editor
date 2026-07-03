@@ -75,6 +75,17 @@ function ViewerControls() {
 }
 ```
 
+## Public Subpaths
+
+The package root is the application-facing API for `<Viewer>` and high-level viewer utilities. Prefer focused subpaths for integration code that needs a narrow dependency:
+
+```typescript
+import useViewer from '@pascal-app/viewer/store'
+import { useAssetUrl } from '@pascal-app/viewer/use-asset-url'
+```
+
+Some renderer and system helpers are also exported as subpaths so built-in nodes and plugin nodes can share viewer behavior without importing the full package root. Treat helpers such as `@pascal-app/viewer/wall-materials`, `@pascal-app/viewer/roof-materials`, `@pascal-app/viewer/stair-materials`, and `@pascal-app/viewer/column-geometry` as viewer integration surfaces: they must stay free of editor-only concepts such as tools, modes, paint state, floorplan state, and `useEditor`.
+
 ## Asset CDN Helpers
 
 ```typescript

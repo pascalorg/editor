@@ -5,6 +5,7 @@
     "build": "turbo run build",
     "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
     "dev:editor": "bun --cwd apps/editor dev",
+    "smoke:dev": "bun --cwd apps/editor smoke:dev",
     "dev:articraft": "node scripts/dev-with-articraft.mjs",
     "dev:aircraft": "node scripts/dev-with-articraft.mjs",
     "lint": "biome lint",

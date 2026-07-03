@@ -10,18 +10,13 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  useEditor,
-  useSidebarStore,
-  type ViewMode,
-} from '@pascal-app/editor'
-import {
-  type EdgeMode,
-  getSceneTheme,
-  type RenderShading,
-  SCENE_THEMES,
-  type SceneSurfaceRole,
-  useViewer,
-} from '@pascal-app/viewer'
+} from '@pascal-app/editor/components/ui/dropdown-menu'
+import { useSidebarStore } from '@pascal-app/editor/components/sidebar/store'
+import useEditor, { type ViewMode } from '@pascal-app/editor/store'
+import type { EdgeMode } from '@pascal-app/viewer/edge-style'
+import type { RenderShading } from '@pascal-app/viewer/materials'
+import { getSceneTheme, SCENE_THEMES, type SceneSurfaceRole } from '@pascal-app/viewer/scene-themes'
+import useViewer from '@pascal-app/viewer/store'
 import {
   Box,
   Check,
@@ -426,9 +421,7 @@ function DisplayMenu() {
             {showGrid ? t('common.on', 'On') : t('common.off', 'Off')}
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => keepOpen(e, () => setShowZoneLabels(!showZoneLabels))}
-        >
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowZoneLabels(!showZoneLabels))}>
           <IconifyIcon height={16} icon="mdi:tag-text-outline" width={16} />
           <span>{t('toolbar.zoneNames', '区名')}</span>
           <span className="ml-auto text-muted-foreground text-xs">

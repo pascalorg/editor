@@ -2,23 +2,43 @@
 
 import { emitter } from '@pascal-app/core'
 import '@/lib/bootstrap'
-import {
-  AiChatPanel,
-  applySceneGraphToEditor,
-  Editor,
-  ItemsPanel,
-  type SceneGraph,
-  type SidebarTab,
-  useEditor,
-  useSidebarStore,
-} from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import Editor from '@pascal-app/editor/components/editor'
+import { useSidebarStore } from '@pascal-app/editor/components/sidebar/store'
+import type { SidebarTab } from '@pascal-app/editor/components/sidebar/types'
+import { applySceneGraphToEditor, type SceneGraph } from '@pascal-app/editor/scene'
+import useEditor from '@pascal-app/editor/store'
+import useViewer from '@pascal-app/viewer/store'
 import { Layers, MessageCircle, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { t } from '@/i18n'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
+
+const LazyAiChatPanel = lazy(async () => {
+  const mod = await import('@pascal-app/editor/components/sidebar/ai-chat-panel')
+  return { default: mod.AiChatPanel }
+})
+const LazyItemsPanel = lazy(async () => {
+  const mod = await import('@pascal-app/editor/components/sidebar/items-panel')
+  return { default: mod.ItemsPanel }
+})
+
+function AiChatPanel() {
+  return (
+    <Suspense fallback={null}>
+      <LazyAiChatPanel />
+    </Suspense>
+  )
+}
+
+function ItemsPanel() {
+  return (
+    <Suspense fallback={null}>
+      <LazyItemsPanel />
+    </Suspense>
+  )
+}
 
 export interface SceneMeta {
   id: string

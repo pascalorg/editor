@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { KTX2Loader } from 'three/examples/jsm/Addons.js'
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 
 const ktx2LoaderInstance = new KTX2Loader()

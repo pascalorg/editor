@@ -1,6 +1,6 @@
 'use client'
 
-import type { SceneGraph } from '@pascal-app/editor'
+import type { SceneGraph } from '@pascal-app/editor/scene'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
 import { t } from '@/i18n'

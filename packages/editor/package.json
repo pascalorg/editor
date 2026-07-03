@@ -7,7 +7,15 @@
     ".": "./src/index.tsx",
     "./i18n": "./src/i18n/index.ts",
     "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./components/editor": "./src/components/editor/index.tsx",
+    "./components/sidebar/ai-chat-panel": "./src/components/ui/sidebar/panels/ai-chat-panel/index.tsx",
+    "./components/sidebar/items-panel": "./src/components/ui/sidebar/panels/items-panel/index.tsx",
+    "./components/sidebar/store": "./src/components/ui/primitives/sidebar.tsx",
+    "./components/sidebar/types": "./src/components/ui/sidebar/tab-bar.tsx",
+    "./components/ui/dropdown-menu": "./src/components/ui/primitives/dropdown-menu.tsx",
     "./floorplan": "./src/lib/floorplan/index.ts",
+    "./scene": "./src/lib/scene.ts",
+    "./store": "./src/store/use-editor.tsx",
     "./svg-paths": "./src/components/editor-2d/svg-paths.ts"
   },
   "scripts": {

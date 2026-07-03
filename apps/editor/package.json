@@ -4,9 +4,10 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ../../.env.local -- next dev --port 3002",
+    "dev": "dotenv -e ../../.env.local -- next dev --webpack --port 3002",
     "build": "dotenv -e ../../.env.local -- next build",
     "start": "next start",
+    "smoke:dev": "node scripts/dev-server-smoke.mjs",
     "e2e": "playwright test",
     "e2e:factory": "playwright test e2e/factory-ai.spec.ts",
     "factory:render-qa": "playwright test e2e/factory-render-quality.spec.ts",

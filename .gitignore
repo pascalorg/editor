@@ -46,6 +46,10 @@ yarn-error.log*
 og-test
 .env*.local
 /.omx/
+/.codex-artifacts/
+/.codex-temp/
+/backups/
+/codex-*.png
 
 # Local external checkouts / generated runtime state
 /articraft/
