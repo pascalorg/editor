@@ -22,6 +22,8 @@ import {
 } from './process-catalog-resolver'
 import { resolveProcessEquipmentContract } from './process-equipment-contracts'
 import { stationDisplayLabel } from './process-line-localization'
+import { resolveFactoryEquipmentNode } from './factory-equipment-node-resolver'
+import type { ProcessRoutePortEndpoint } from './process-line-routing'
 import type {
   FactoryRouteObstacleMetadata,
   ProcessEquipmentContract,
@@ -33,6 +35,7 @@ import type {
 
 export type ProcessStationEquipmentResolver =
   | 'catalog-item'
+  | 'factory-node'
   | 'native-box'
   | 'native-pipe'
   | 'native-pipe-fitting'
@@ -45,6 +48,7 @@ type ArtifactShape = GeneratedGeometryArtifact['shapes'][number]
 export type ProcessStationEquipmentResolution = {
   patches: GeneratedGeometryCreatePatch[]
   primitiveRequest: ProcessPrimitiveRequest | null
+  portOverrides?: ProcessRoutePortEndpoint[]
   routeObstacle?: FactoryRouteObstacleMetadata
   resolved: boolean
   resolver: ProcessStationEquipmentResolver
@@ -654,6 +658,21 @@ export function resolveProcessStationEquipment(input: {
     station: input.station,
   })
   const withContract = { ...input, equipmentContract }
+  const factoryNode = resolveFactoryEquipmentNode({
+    ...input,
+    contract: equipmentContract,
+  })
+  if (factoryNode) {
+    return {
+      patches: [factoryNode.patch],
+      primitiveRequest: null,
+      portOverrides: factoryNode.portOverrides,
+      routeObstacle: factoryNode.routeObstacle,
+      resolved: true,
+      resolver: 'factory-node',
+      reason: `station equipment contract compiled to ${factoryNode.nodeKind}`,
+    }
+  }
   if (equipmentContract?.preferredResolver === 'native-tank') {
     const routeObstacle = routeObstacleForStation({
       stationPlacement: input.stationPlacement,

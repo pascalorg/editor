@@ -39,6 +39,8 @@ export type FactoryQualityReport = {
     connectionCount?: number
     routedConnectionCount?: number
     primitiveQualityCount: number
+    equipmentContractCount: number
+    factoryNodeCount: number
     catalogItemCount: number
     localAssetCount: number
     missingAssetCount: number
@@ -218,6 +220,7 @@ function routeObstacleFromMetadata(
     stationId,
     source:
       value.source === 'artifact' ||
+      value.source === 'factory-node' ||
       value.source === 'layout' ||
       value.source === 'native' ||
       value.source === 'catalog' ||
@@ -256,6 +259,8 @@ export function evaluateFactoryQuality(input: QualityResultInput): FactoryQualit
   const createdIds = new Set<string>()
   let duplicateNodeIdCount = 0
   let primitiveQualityCount = 0
+  let equipmentContractCount = 0
+  let factoryNodeCount = 0
   let catalogItemCount = 0
   let localAssetCount = 0
   let routeCollisionCount = 0
@@ -272,6 +277,32 @@ export function evaluateFactoryQuality(input: QualityResultInput): FactoryQualit
     createdIds.add(node.id)
 
     const metadata = nodeMetadata(node)
+    const equipmentContract = metadata.equipmentContract
+    if (isRecord(equipmentContract)) {
+      equipmentContractCount += 1
+    }
+    if (node.type.startsWith('factory:')) {
+      factoryNodeCount += 1
+      const routeObstacle = routeObstacleFromMetadata(metadata)
+      if (!isRecord(equipmentContract)) {
+        issue(
+          issues,
+          'warning',
+          'factory_node_missing_equipment_contract',
+          `Factory node ${node.name} has no equipment contract metadata.`,
+          { nodeId: node.id, stationId: stringValue(metadata.stationId) },
+        )
+      }
+      if (!routeObstacle || routeObstacle.source !== 'factory-node') {
+        issue(
+          issues,
+          'warning',
+          'factory_node_missing_route_obstacle',
+          `Factory node ${node.name} has no factory-node route obstacle.`,
+          { nodeId: node.id, stationId: stringValue(metadata.stationId) },
+        )
+      }
+    }
     const primitiveQuality = metadata.factoryPrimitiveQuality
     if (isRecord(primitiveQuality)) {
       primitiveQualityCount += 1
@@ -463,6 +494,8 @@ export function evaluateFactoryQuality(input: QualityResultInput): FactoryQualit
       connectionCount: plan?.connections.length,
       routedConnectionCount,
       primitiveQualityCount,
+      equipmentContractCount,
+      factoryNodeCount,
       catalogItemCount,
       localAssetCount,
       missingAssetCount: input.missingAssets.length,

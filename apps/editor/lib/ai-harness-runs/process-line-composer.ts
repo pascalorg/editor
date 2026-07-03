@@ -54,6 +54,7 @@ export type ProcessLineComposerResult = {
   layoutDiagnostics: ProcessLayoutDiagnostics
   layoutStrategy: ProcessLayoutStrategy
   primitiveRequests: ProcessPrimitiveRequest[]
+  portOverrides: ProcessRoutePortOverrides
   routeObstacles: ProcessRouteObstacle[]
   summary: string
 }
@@ -273,7 +274,7 @@ function stationMetadata(input: {
     stationLabel: input.station.label,
     stationDisplayLabel: stationDisplayLabel(input.station),
     stationIndex: input.stationIndex,
-    safetyTags: input.station.safetyTags,
+    ...(input.station.safetyTags?.length ? { safetyTags: input.station.safetyTags } : {}),
   }
 }
 
@@ -1068,6 +1069,7 @@ export function composeProcessLine(input: {
   const equipmentPatches: GeneratedGeometryCreatePatch[] = []
   const primitiveRequests: ProcessPrimitiveRequest[] = []
   const stationRouteObstacles: ProcessRouteObstacle[] = []
+  const stationPortOverrides: ProcessRoutePortOverrides = {}
   const missingAssets: FactoryMissingAsset[] = []
 
   if (sections.stations) {
@@ -1127,6 +1129,12 @@ export function composeProcessLine(input: {
         }),
       )
       equipmentPatches.push(...resolved.patches)
+      if (resolved.portOverrides?.length) {
+        stationPortOverrides[station.id] = [
+          ...(stationPortOverrides[station.id] ?? []),
+          ...resolved.portOverrides,
+        ]
+      }
       if (resolved.routeObstacle) stationRouteObstacles.push(resolved.routeObstacle)
       if (resolved.primitiveRequest) {
         primitiveRequests.push(resolved.primitiveRequest)
@@ -1140,6 +1148,11 @@ export function composeProcessLine(input: {
     })
   }
 
+  const mergedPortOverrides: ProcessRoutePortOverrides = { ...input.portOverrides }
+  for (const [stationId, ports] of Object.entries(stationPortOverrides)) {
+    mergedPortOverrides[stationId] = [...(mergedPortOverrides[stationId] ?? []), ...ports]
+  }
+
   const connectionPatches = sections.connections
     ? [
         ...createCementTertiaryAirDuctPatch({
@@ -1148,7 +1161,7 @@ export function composeProcessLine(input: {
           stationPlacements,
           boundary: resolvedBoundary,
           routeObstacles: [...stationRouteObstacles, ...(input.routeObstacles ?? [])],
-          portOverrides: input.portOverrides,
+          portOverrides: mergedPortOverrides,
           sourcePrompt: input.prompt,
           placement: input.placement,
         }),
@@ -1162,7 +1175,7 @@ export function composeProcessLine(input: {
             placements: placementByStation,
             stationPlacements,
             boundary: resolvedBoundary,
-            portOverrides: input.portOverrides,
+            portOverrides: mergedPortOverrides,
             routeObstacles,
           })
           if (!route) return []
@@ -1214,6 +1227,7 @@ export function composeProcessLine(input: {
     layoutDiagnostics,
     layoutStrategy,
     primitiveRequests,
+    portOverrides: mergedPortOverrides,
     routeObstacles: stationRouteObstacles,
     summary: `${plan.processLabel}: ${plan.stations.length} stations, ${plan.connections.length} connections`,
   }

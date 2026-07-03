@@ -1,3 +1,5 @@
+import { loadPlugin } from '@pascal-app/core'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { describe, expect, test } from 'bun:test'
 import type { GeneratedGeometryArtifact } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
 import { fallbackFactoryPlan } from './factory-planner'
@@ -453,6 +455,8 @@ describe('factory runner helpers', () => {
             patchCount: result.patches.length,
             createdNodeCount: result.created.length,
             primitiveQualityCount: 0,
+            equipmentContractCount: 0,
+            factoryNodeCount: 0,
             catalogItemCount: 0,
             localAssetCount: 0,
             missingAssetCount: 0,
@@ -524,6 +528,111 @@ describe('factory runner helpers', () => {
           patch.node.metadata?.stationRole === 'electrolyzer',
       ),
     ).toBe(true)
+    expect(result.missingAssets).toEqual([])
+  })
+
+  test('compiles process-line pump stations into factory nodes and connects node ports', async () => {
+    await loadPlugin(factoryEquipmentPlugin)
+
+    const plan = {
+      kind: 'process_line' as const,
+      reason: 'pump transfer line',
+      process: {
+        processId: 'chemical_pump_transfer',
+        processLabel: 'Chemical pump transfer line',
+        domain: 'chemical' as const,
+        layoutStyle: 'linear' as const,
+        dimensions: { length: 12, width: 5 },
+        stations: [
+          {
+            id: 'feed_pump',
+            label: 'Feed centrifugal pump',
+            role: 'pump',
+            equipmentHint: 'centrifugal pump skid',
+          },
+          {
+            id: 'booster_pump',
+            label: 'Booster centrifugal pump',
+            role: 'pump',
+            equipmentHint: 'centrifugal pump',
+          },
+        ],
+        connections: [
+          {
+            fromStationId: 'feed_pump',
+            toStationId: 'booster_pump',
+            medium: 'water' as const,
+            visualKind: 'pipe' as const,
+            fromPortId: 'outlet',
+            toPortId: 'inlet',
+          },
+        ],
+      },
+    }
+
+    const result = await buildFactoryRunResultFromProcessLine({
+      prompt: 'create a chemical centrifugal pump transfer line',
+      plan,
+      plannerSource: 'fallback',
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    const factoryPumps = result.patches.filter(
+      (patch) => patch.op === 'create' && patch.node.type === 'factory:pump',
+    )
+    expect(factoryPumps).toHaveLength(2)
+    expect(
+      result.patches.some((patch) => patch.op === 'create' && patch.node.type === 'assembly'),
+    ).toBe(false)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.op === 'create' &&
+          factoryPumps.some((pump) => pump.op === 'create' && patch.parentId === pump.node.id),
+      ),
+    ).toBe(false)
+
+    const feedPump = factoryPumps.find(
+      (patch) => patch.op === 'create' && patch.node.metadata?.stationId === 'feed_pump',
+    )
+    expect(feedPump?.node.metadata).toMatchObject({
+      resolver: 'factory-node',
+      factoryRouteObstacle: {
+        source: 'factory-node',
+        stationId: 'feed_pump',
+        box: {
+          minX: expect.any(Number),
+          maxX: expect.any(Number),
+          minZ: expect.any(Number),
+          maxZ: expect.any(Number),
+        },
+      },
+      equipmentContract: {
+        profileId: 'generic.centrifugal_pump',
+        envelope: { length: 2.6, width: 1.1, height: 1.4 },
+      },
+    })
+
+    const pipe = result.patches.find(
+      (patch) => patch.op === 'create' && patch.node.type === 'pipe',
+    )
+    expect(pipe?.node.metadata).toMatchObject({
+      fromStationId: 'feed_pump',
+      toStationId: 'booster_pump',
+      fromPortId: 'outlet',
+      fromPortSource: 'node',
+      toPortId: 'inlet',
+      toPortSource: 'node',
+    })
+    expect(result.qualityReport).toMatchObject({
+      passed: true,
+      checks: {
+        factoryNodeCount: 2,
+        equipmentContractCount: 2,
+        primitiveQualityCount: 0,
+        routeCollisionCount: 0,
+      },
+    })
     expect(result.missingAssets).toEqual([])
   })
 

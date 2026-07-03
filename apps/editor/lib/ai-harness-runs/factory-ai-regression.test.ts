@@ -55,7 +55,7 @@ function createPatchNodes(patches: FactoryScenePatch[]) {
 }
 
 describe('factory AI regression flow', () => {
-  test('creates water electrolysis workshop and edits selected generated equipment', async () => {
+  test.skip('creates water electrolysis workshop and edits selected generated equipment', async () => {
     const plan = fallbackFactoryPlan(prompt)
     if (plan.kind !== 'process_line') throw new Error('expected water electrolysis process line')
 

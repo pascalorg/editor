@@ -278,6 +278,22 @@ const WATER_ELECTROLYSIS_PROFILES: EquipmentProfile[] = [
   },
 ]
 
+const GENERIC_FACTORY_NODE_PROFILES: EquipmentProfile[] = [
+  {
+    profileId: 'generic.centrifugal_pump',
+    equipmentFamily: 'pump.centrifugal',
+    scaleClass: 'conceptual_compact',
+    envelope: { length: 2.6, width: 1.1, height: 1.4, origin: 'station_profile', tolerance: 0.08 },
+    aliases: [/centrifugal[_\s-]?pump|transfer[_\s-]?pump|\bpump\b|\u79bb\u5fc3\u6cf5|\u6cf5/i],
+    preferredResolver: 'factory-node',
+    primarySemanticRole: 'pump',
+    ports: [
+      { id: 'inlet', medium: 'water', side: 'left', height: 0.58, offset: 0 },
+      { id: 'outlet', medium: 'water', side: 'right', height: 0.78, offset: 0 },
+    ],
+  },
+]
+
 const CEMENT_CLINKER_PROFILES: EquipmentProfile[] = [
   {
     profileId: 'cement.bucket_elevator',
@@ -1041,6 +1057,7 @@ function inferProfilePackPortsFromParts(
 function preferredProfilePackResolver(raw: Record<string, unknown>, id: string) {
   if (
     raw.preferredResolver === 'catalog-item' ||
+    raw.preferredResolver === 'factory-node' ||
     raw.preferredResolver === 'native-box' ||
     raw.preferredResolver === 'native-tank' ||
     raw.preferredResolver === 'primitive' ||
@@ -1255,7 +1272,7 @@ export function resolveProcessEquipmentContract(input: {
     ? WATER_ELECTROLYSIS_PROFILES
     : isCementClinker
       ? CEMENT_CLINKER_PROFILES
-      : undefined
+      : GENERIC_FACTORY_NODE_PROFILES
 
   const profile = profiles?.find((candidate) => profileMatches(candidate, input.station))
   if (profile) {

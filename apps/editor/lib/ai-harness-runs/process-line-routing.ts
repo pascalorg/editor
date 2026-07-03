@@ -37,7 +37,7 @@ export type ProcessRoutePortEndpoint = {
   height: number
   side: ProcessEquipmentPort['side']
   profileId: string
-  source?: 'profile' | 'artifact'
+  source?: 'profile' | 'artifact' | 'node'
 }
 
 export type ProcessRoutePortOverrides = Record<string, ProcessRoutePortEndpoint[]>
@@ -45,7 +45,7 @@ export type ProcessRoutePortOverrides = Record<string, ProcessRoutePortEndpoint[
 export type ProcessRouteObstacle = {
   stationId: string
   box: ProcessStationClearanceBox
-  source?: 'layout' | 'artifact' | 'native' | 'catalog' | 'profile-parts'
+  source?: 'layout' | 'artifact' | 'factory-node' | 'native' | 'catalog' | 'profile-parts'
   minHeight?: number
   maxHeight?: number
 }
@@ -247,7 +247,7 @@ function selectOverridePort(input: {
       (mediumMatches(port, input.connection.medium) ? 100 : 0) +
       directionScore({ id: port.portId }, input.endpoint) +
       sideScore(port, input.endpoint) +
-      (port.source === 'artifact' ? 12 : 0)
+      (port.source === 'artifact' || port.source === 'node' ? 12 : 0)
     if (!best || score > best.score) best = { port, score }
   }
   return best && best.score >= 80 ? best.port : undefined
@@ -883,7 +883,12 @@ export function routeProcessConnection(input: {
   })
   const replacementObstacleStationIds = new Set(
     (input.routeObstacles ?? [])
-      .filter((item) => item.source === 'artifact' || item.source === 'profile-parts')
+      .filter(
+        (item) =>
+          item.source === 'artifact' ||
+          item.source === 'factory-node' ||
+          item.source === 'profile-parts',
+      )
       .map((item) => item.stationId),
   )
   const placementObstacles: RouteObstacle[] = input.stationPlacements

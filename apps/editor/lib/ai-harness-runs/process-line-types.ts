@@ -59,7 +59,13 @@ export type ProcessEquipmentContract = {
   ports: ProcessEquipmentPort[]
   requiredRoles?: string[]
   preferredTool?: 'compose_parts' | 'compose_assembly'
-  preferredResolver?: 'catalog-item' | 'native-box' | 'native-tank' | 'primitive' | 'profile-parts'
+  preferredResolver?:
+    | 'catalog-item'
+    | 'factory-node'
+    | 'native-box'
+    | 'native-tank'
+    | 'primitive'
+    | 'profile-parts'
   profileParts?: Record<string, unknown>[]
   primarySemanticRole?: string
 }
@@ -186,7 +192,7 @@ export type ProcessLineFocusBounds = {
 
 export type FactoryRouteObstacleMetadata = {
   stationId: string
-  source: 'layout' | 'artifact' | 'native' | 'catalog' | 'profile-parts'
+  source: 'layout' | 'artifact' | 'factory-node' | 'native' | 'catalog' | 'profile-parts'
   minHeight?: number
   maxHeight?: number
   box: ProcessStationClearanceBox

@@ -23,11 +23,35 @@ export type GenericEquipmentDraft = {
 }
 
 function metadataFor(spec: EquipmentSpec): Record<string, EquipmentParamValue> {
-  return {
+  const metadata: Record<string, EquipmentParamValue> = {
     generatedBy: 'equipment-spec-compiler',
     equipmentProfileId: spec.profileId,
-    ...(spec.metadata ?? {}),
   }
+  for (const [key, value] of Object.entries((spec.metadata ?? {}) as Record<string, unknown>)) {
+    const jsonValue = equipmentParamValue(value)
+    if (jsonValue !== undefined) metadata[key] = jsonValue
+  }
+  return metadata
+}
+
+function equipmentParamValue(value: unknown): EquipmentParamValue | undefined {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return value
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => {
+      const jsonValue = equipmentParamValue(item)
+      return jsonValue === undefined ? [] : [jsonValue]
+    })
+  }
+  if (typeof value === 'object') {
+    const record: Record<string, EquipmentParamValue> = {}
+    for (const [key, item] of Object.entries(value)) {
+      const jsonValue = equipmentParamValue(item)
+      if (jsonValue !== undefined) record[key] = jsonValue
+    }
+    return record
+  }
+  return undefined
 }
 
 export function createEquipmentNodePatch(input: {
