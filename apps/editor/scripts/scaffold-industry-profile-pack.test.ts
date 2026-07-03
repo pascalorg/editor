@@ -2,6 +2,10 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
+import { compileProcessStationEquipment } from '../lib/equipment-spec-compiler'
+import { normalizeIndustryPackV2Manifest } from '../lib/industry-pack-v2'
 import { auditProfilePackValidation, validateProfilePackDir } from '../lib/profile-packs'
 import {
   normalizeIndustryPackSpec,
@@ -48,7 +52,7 @@ describe('scaffold-industry-profile-pack', () => {
                   id: 'main_line',
                   displayLabel: 'Main line',
                   order: 10,
-                  stationIds: ['test_machine'],
+                  stationIds: ['feed_pump', 'buffer_tank'],
                 },
               ],
             },
@@ -65,57 +69,80 @@ describe('scaffold-industry-profile-pack', () => {
               defaultDimensions: { length: 12, width: 6 },
               stations: [
                 {
-                  id: 'test_machine',
-                  label: 'Test machine',
-                  displayLabel: 'Test machine',
-                  role: 'test_machine',
-                  equipmentHint: 'test_industry.test_machine generic test machine',
+                  id: 'feed_pump',
+                  label: 'Feed pump',
+                  displayLabel: 'Feed pump',
+                  role: 'feed_pump',
+                  equipmentHint: 'test_industry.feed_pump centrifugal pump',
                   footprintHint: 'medium',
                 },
                 {
-                  id: 'control_panel',
-                  label: 'Control panel',
-                  displayLabel: 'Control panel',
-                  role: 'control_panel',
-                  equipmentHint: 'industrial operator control panel',
-                  footprintHint: 'small',
+                  id: 'buffer_tank',
+                  label: 'Buffer tank',
+                  displayLabel: 'Buffer tank',
+                  role: 'buffer_tank',
+                  equipmentHint: 'test_industry.buffer_tank vertical storage tank',
+                  footprintHint: 'medium',
                 },
               ],
               connections: [
                 {
-                  fromStationId: 'control_panel',
-                  toStationId: 'test_machine',
-                  medium: 'power',
-                  visualKind: 'cable_tray',
+                  fromStationId: 'buffer_tank',
+                  toStationId: 'feed_pump',
+                  medium: 'liquid',
+                  visualKind: 'pipe',
                 },
               ],
             },
           ],
           devices: [
             {
-              id: 'test_machine',
-              name: 'Test machine',
-              aliases: ['test machine', 'test equipment'],
-              layoutFamily: 'generic_industrial_layout',
-              family: 'generic',
-              defaultDimensions: { length: 1.2, width: 0.8, height: 0.9 },
-              primarySemanticRole: 'machine_body',
+              id: 'feed_pump',
+              name: 'Feed pump',
+              aliases: ['feed pump', 'centrifugal pump'],
+              nodeKind: 'factory:pump',
+              layoutFamily: 'pump_skid_layout',
+              family: 'pump',
+              defaultDimensions: { length: 2.4, width: 1, height: 1.3 },
+              equipmentDefaults: { pumpType: 'centrifugal', flowRate: 160, motorPower: 22 },
+              primarySemanticRole: 'pump_casing',
               parts: [
                 {
-                  kind: 'generic_body',
-                  semanticRole: 'machine_body',
+                  kind: 'volute_casing',
+                  semanticRole: 'pump_casing',
                   required: true,
-                  length: 1.2,
-                  width: 0.8,
-                  height: 0.9,
                 },
                 {
-                  kind: 'operator_panel',
-                  semanticRole: 'control_panel',
+                  kind: 'ribbed_motor_body',
+                  semanticRole: 'pump_motor',
                   required: true,
                 },
               ],
               forbiddenRoles: ['vehicle_cabin'],
+              shapeCount: { min: 2, max: 24 },
+            },
+            {
+              id: 'buffer_tank',
+              name: 'Buffer tank',
+              aliases: ['buffer tank', 'storage tank'],
+              nodeKind: 'factory:tank',
+              layoutFamily: 'vertical_tank_layout',
+              family: 'tank',
+              defaultDimensions: { length: 2.2, width: 2.2, height: 3.4 },
+              equipmentDefaults: { orientation: 'vertical', capacity: 12, liquidLevel: 0.55 },
+              primarySemanticRole: 'tank_shell',
+              parts: [
+                {
+                  kind: 'cylindrical_tank',
+                  semanticRole: 'tank_shell',
+                  required: true,
+                },
+                {
+                  kind: 'outlet_port',
+                  semanticRole: 'tank_nozzle',
+                  required: true,
+                },
+              ],
               shapeCount: { min: 2, max: 24 },
             },
           ],
@@ -127,6 +154,7 @@ describe('scaffold-industry-profile-pack', () => {
     )
 
     const outputRoot = path.join(root, 'cloud')
+    if (!nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
     const result = await scaffoldIndustryProfilePack({
       specPath,
       outputRoot,
@@ -138,20 +166,24 @@ describe('scaffold-industry-profile-pack', () => {
     expect(result.manifest).toMatchObject({
       id: 'industry.test-industry.basic',
       version: '0.1.0',
+      schemaVersion: '2.0',
       capabilities: ['factory_creation'],
+      dependsOnPlugins: ['pascal:factory-equipment'],
       profiles: ['profiles/generated.json'],
+      equipmentBindings: expect.arrayContaining([
+        expect.objectContaining({ profileId: 'test_industry.feed_pump', nodeKind: 'factory:pump' }),
+        expect.objectContaining({ profileId: 'test_industry.buffer_tank', nodeKind: 'factory:tank' }),
+      ]),
       factoryArchitectures: ['factory-architectures/generated.json'],
       processTemplates: ['process-templates/generated.json'],
       qualityRules: ['quality-rules/generated-quality.json'],
     })
-    expect(validation.profiles).toHaveLength(1)
+    expect(validation.profiles).toHaveLength(2)
     expect(validation.resources.factoryArchitectures).toHaveLength(1)
     expect(validation.resources.processTemplates).toHaveLength(1)
-    expect(validation.profiles[0]).toMatchObject({
-      id: 'test_industry.test_machine',
-      qualityRules: 'quality.test_industry.test_machine',
-      primarySemanticRole: 'machine_body',
-    })
+    expect(validation.profiles.map((profile) => profile.id)).toEqual(
+      expect.arrayContaining(['test_industry.feed_pump', 'test_industry.buffer_tank']),
+    )
     expect(audit).toMatchObject({ ok: true })
     expect(audit.summary).toMatchObject({ packKind: 'factory-capable' })
     expect(await fs.readFile(path.join(result.packDir, 'README.md'), 'utf8')).toContain(
@@ -166,11 +198,31 @@ describe('scaffold-industry-profile-pack', () => {
         ),
       ),
     ).toHaveLength(1)
+    const processTemplates = JSON.parse(
+      await fs.readFile(path.join(result.packDir, 'process-templates', 'generated.json'), 'utf8'),
+    )
+    expect(processTemplates).toHaveLength(1)
+    expect(processTemplates[0].stations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'feed_pump', profileId: 'test_industry.feed_pump' }),
+        expect.objectContaining({ id: 'buffer_tank', profileId: 'test_industry.buffer_tank' }),
+      ]),
+    )
+    const v2Manifest = normalizeIndustryPackV2Manifest(validation.manifest)
     expect(
-      JSON.parse(
-        await fs.readFile(path.join(result.packDir, 'process-templates', 'generated.json'), 'utf8'),
-      ),
-    ).toHaveLength(1)
+      compileProcessStationEquipment({
+        manifest: v2Manifest,
+        profiles: validation.resources.rawProfiles,
+        station: { id: 'feed_pump', profileId: 'test_industry.feed_pump' },
+      }),
+    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:pump' } })
+    expect(
+      compileProcessStationEquipment({
+        manifest: v2Manifest,
+        profiles: validation.resources.rawProfiles,
+        station: { id: 'buffer_tank', profileId: 'test_industry.buffer_tank' },
+      }),
+    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:tank' } })
   })
 
   test('rejects factory architecture quantity expansion fields', () => {
@@ -255,6 +307,7 @@ describe('scaffold-industry-profile-pack', () => {
       specPath,
       outputRoot: path.join(root, 'cloud'),
       force: true,
+      validate: false,
     })
 
     expect(result.authoringWarnings.map((warning) => warning.code)).toEqual(

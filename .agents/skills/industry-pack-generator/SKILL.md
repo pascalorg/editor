@@ -17,9 +17,10 @@ Use this skill to create or expand installable Pascal geometry knowledge/profile
    - Use one focused industry or extension domain per pack.
    - Prefer `industry.{industry}.basic` for a self-contained base pack.
    - Prefer `industry.{industry}.{extension}` with `dependsOn` for extensions.
-3. Draft an industry pack spec JSON with equipment profiles, parts, primary roles, aliases, visual cues, and quality constraints.
+3. Draft a v2 industry pack spec JSON with equipment profiles, parts, primary roles, aliases, visual cues, quality constraints, and equipment-node intent.
    - For basic packs, include `factoryArchitectures` and `processTemplates`.
    - For extension packs, include them only when the extension adds a new factory-level process.
+   - For pump/tank-like equipment, include `nodeKind`, `processPorts`, and `equipmentDefaults` so the scaffold can emit `equipmentBindings`.
 4. Run the scaffold:
 
 ```bash
@@ -43,6 +44,7 @@ bun apps/editor/scripts/profile-pack-qa.ts <pack-id>@<version> --limit 3
 
 - Generate data first, not TypeScript hardcoding.
 - Reuse common part kinds from `packages/core/src/lib/part-registry.ts`.
+- Default new packages to schema v2 with `dependsOnPlugins` and `equipmentBindings`.
 - Use `generic_industrial_layout` unless a known layout family is clearly better.
 - Put device-specific knowledge in profiles and quality rules.
 - Do not invent a new family/layout for one equipment unless the layout is reusable.

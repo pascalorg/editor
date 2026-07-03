@@ -9,6 +9,8 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
   "name": "Cement Basic Equipment Pack",
   "version": "0.1.0",
   "description": "Focused cement plant equipment pack.",
+  "schemaVersion": "2.0",
+  "dependsOnPlugins": ["pascal:factory-equipment"],
   "capabilities": ["factory_creation"],
   "factoryArchitectures": [
     {
@@ -45,6 +47,7 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
           "displayLabel": "Rotary kiln",
           "role": "rotary_kiln",
           "equipmentHint": "cement.rotary_kiln long inclined rotary kiln",
+          "profileId": "cement.rotary_kiln",
           "footprintHint": "long"
         }
       ]
@@ -55,9 +58,15 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
       "id": "rotary_kiln",
       "name": "Rotary kiln",
       "aliases": ["rotary kiln", "cement kiln", "回转窑", "水泥回转窑"],
+      "nodeKind": "factory:tank",
       "layoutFamily": "vessel_layout",
       "family": "tank",
       "defaultDimensions": { "length": 12, "width": 2.2, "height": 2.4 },
+      "processPorts": [
+        { "id": "inlet", "side": "left", "diameter": 0.3 },
+        { "id": "outlet", "side": "right", "diameter": 0.28 }
+      ],
+      "equipmentDefaults": { "orientation": "horizontal", "capacity": 30, "liquidLevel": 0.35 },
       "primarySemanticRole": "kiln_shell",
       "parts": [
         {
@@ -83,7 +92,9 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
 - `id`: optional. Defaults to `industry.{industry}.basic`.
 - `name`: optional. Defaults to `{industry} Basic Equipment Pack`.
 - `version`: optional. Defaults to `0.1.0`.
+- `schemaVersion`: optional. Defaults to `2.0`.
 - `dependsOn`: optional for extension packs, for example `[{ "id": "industry.fine-chemical.basic", "version": ">=0.1.0" }]`.
+- `dependsOnPlugins`: optional. Defaults to `["pascal:factory-equipment"]` for v2 equipment-node packs.
 - `capabilities`: optional. Use `["factory_creation"]` only when the pack includes factory/process knowledge.
 - `factoryArchitectures`: required when `capabilities` includes `factory_creation`; otherwise optional. Defines the whole-plant module tree.
 - `processTemplates`: required when `capabilities` includes `factory_creation`; otherwise optional. Defines stations, aliases, and station connections.
@@ -95,6 +106,8 @@ When `capabilities` includes `factory_creation`, QA enforces:
 
 - At least one `factoryArchitectures` resource.
 - At least one `processTemplates` resource.
+- Every station must resolve through `profileId`/`equipmentProfileId` to an `equipmentBindings[]`
+  entry or declare `genericFallback.reason`.
 - Every process-template station must be covered by a device profile, native resolver, or catalog resolver hint.
 - Every architecture module `stationIds[]` entry must exist in the matching process template.
 - Factory creation is intentionally single-process-template per request. Do not add quantity expansion fields such as `parameters`, `flows`, `countParam`, `defaultCount`, `minCount`, `maxCount`, or `replicatedStationIds`.
@@ -106,7 +119,11 @@ If the pack only provides equipment profiles, omit `factory_creation`; QA will c
 - `id`, `name`, `aliases`, `parts`, `primarySemanticRole` are required.
 - `layoutFamily` defaults to `generic_industrial_layout`.
 - `family` defaults to `generic`.
+- `nodeKind` may be `factory:pump` or `factory:tank`; otherwise the scaffold infers known equipment kinds from profile text.
 - `defaultDimensions` should describe the whole equipment envelope.
+- `processPorts` declares device-level ports that v2 `portMap` must cover.
+- `equipmentDefaults` declares equipment-node parameters such as pump type, flow rate, motor power,
+  tank orientation, capacity, or liquid level.
 - `parts[].kind` must exist in the Part Registry.
 - `parts[].semanticRole` should be stable and domain-specific.
 - `qualityRequiredRoles` can add roles beyond required parts.
@@ -131,6 +148,8 @@ The scaffold writes:
 - `quality-rules/generated-quality.json`
 
 The generated `README.md` labels the pack as `factory-capable` or `device-only` and lists supported factory/process templates when factory creation is enabled.
+The generated `pack.json` uses schema v2, includes `dependsOnPlugins`, and writes inferred
+`equipmentBindings` for profiles that map to factory equipment nodes.
 
 Run validation after generation:
 

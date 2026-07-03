@@ -10,6 +10,13 @@ import {
   validateDeviceProfileDefinition,
 } from '@pascal-app/core/lib/device-profile-registry'
 import { exists, findRepoRoot, sanitizeSegment } from './generated-assets/manifest'
+import {
+  normalizeIndustryPackV2Manifest,
+  validateIndustryPackV2,
+  type IndustryPackV2EquipmentBinding,
+  type IndustryPackV2ProcessTemplate,
+  type IndustryPackV2ValidationProfile,
+} from './industry-pack-v2'
 
 export type ProfilePackManifest = {
   id: string
@@ -33,6 +40,8 @@ export type ProfilePackManifest = {
   equipmentContracts?: string[]
   catalogBindings?: string[]
   dependsOn?: ProfilePackDependency[]
+  dependsOnPlugins?: string[]
+  equipmentBindings?: IndustryPackV2EquipmentBinding[]
 }
 
 export type ProfilePackCapability = 'factory_creation'
@@ -121,6 +130,7 @@ export type ProfilePackValidationResult = {
   manifest: ProfilePackManifest
   profiles: DeviceProfileDefinition[]
   resources: {
+    rawProfiles: IndustryPackV2ValidationProfile[]
     layouts: Array<Record<string, unknown>>
     partPresets: Array<Record<string, unknown>>
     qualityRules: Array<Record<string, unknown>>
@@ -278,6 +288,15 @@ export function normalizeProfilePackManifest(value: unknown): ProfilePackManifes
       : {}),
     ...(dependencyArray(value.dependsOn).length > 0
       ? { dependsOn: dependencyArray(value.dependsOn) }
+      : {}),
+    ...(schemaVersion === '2.0'
+      ? (() => {
+          const v2 = normalizeIndustryPackV2Manifest(value)
+          return {
+            dependsOnPlugins: v2.dependsOnPlugins,
+            equipmentBindings: v2.equipmentBindings,
+          }
+        })()
       : {}),
   }
 }
@@ -529,8 +548,8 @@ export function auditProfilePackValidation(
   if (!SEMVER_PATTERN.test(manifest.version)) {
     issues.push(`pack.json version "${manifest.version}" must be semver.`)
   }
-  if (manifest.schemaVersion !== '1.1') {
-    warnings.push(`pack.json schemaVersion "${manifest.schemaVersion}" is not the current 1.1.`)
+  if (manifest.schemaVersion !== '2.0') {
+    warnings.push(`pack.json schemaVersion "${manifest.schemaVersion}" is not the current 2.0.`)
   }
   if (!manifest.description?.trim()) {
     warnings.push('pack.json description is recommended for cloud publishing.')
@@ -546,6 +565,24 @@ export function auditProfilePackValidation(
     warnings.push(
       'Pack includes factory resources but does not declare capabilities: ["factory_creation"].',
     )
+  }
+  if (manifest.schemaVersion === '2.0') {
+    try {
+      const v2Manifest = normalizeIndustryPackV2Manifest(manifest)
+      const v2Validation = validateIndustryPackV2({
+        manifest: v2Manifest,
+        profiles: resources.rawProfiles,
+        processTemplates: resources.processTemplates as IndustryPackV2ProcessTemplate[],
+      })
+      issues.push(...v2Validation.issues)
+      warnings.push(...v2Validation.warnings)
+    } catch (error) {
+      issues.push(
+        `Industry pack v2 validation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
   }
 
   const profileIds = profiles.map((profile) => profile.id)
@@ -717,6 +754,7 @@ async function loadPackResourcesFromDir(
   manifest: ProfilePackManifest,
 ): Promise<ProfilePackValidationResult['resources']> {
   const resources: ProfilePackValidationResult['resources'] = {
+    rawProfiles: [],
     layouts: [],
     partPresets: [],
     qualityRules: [],
@@ -762,6 +800,7 @@ function loadPackResourcesFromZip(
   manifest: ProfilePackManifest,
 ): ProfilePackValidationResult['resources'] {
   const resources: ProfilePackValidationResult['resources'] = {
+    rawProfiles: [],
     layouts: [],
     partPresets: [],
     qualityRules: [],
@@ -820,6 +859,7 @@ export async function validateProfilePackDir(dir: string): Promise<ProfilePackVa
         warnings.push(`Ignored non-object profile in ${rel}.`)
         continue
       }
+      resources.rawProfiles.push(profilePayload(raw) as IndustryPackV2ValidationProfile)
       const profile = withPackMetadata(
         normalizeDeviceProfileInput(profilePayload(raw), 'imported_pack', 'stable'),
         manifest,
@@ -855,6 +895,7 @@ export function validateProfilePackZip(buffer: Buffer): ProfilePackValidationRes
         warnings.push(`Ignored non-object profile in ${rel}.`)
         continue
       }
+      resources.rawProfiles.push(profilePayload(raw) as IndustryPackV2ValidationProfile)
       const profile = withPackMetadata(
         normalizeDeviceProfileInput(profilePayload(raw), 'imported_pack', 'stable'),
         manifest,

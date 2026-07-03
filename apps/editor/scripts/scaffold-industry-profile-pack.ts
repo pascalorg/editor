@@ -1,6 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { findRepoRoot } from '../lib/generated-assets/manifest'
+import {
+  annotateProcessTemplatesForV2,
+  FACTORY_EQUIPMENT_PLUGIN_ID,
+  inferEquipmentBindingsForProfiles,
+  withDefaultV2ProfileFields,
+} from '../lib/industry-pack-v2-migration'
 import {
   auditProfilePackValidation,
   type ProfilePackDependency,
@@ -18,8 +26,11 @@ export type IndustryPackDeviceSpec = {
   family?: string
   layoutFamily?: string
   archetypeFamily?: string
+  nodeKind?: 'factory:pump' | 'factory:tank'
   preferredResolver?: 'catalog-item' | 'native-box' | 'native-tank' | 'primitive' | 'profile-parts'
   defaultDimensions?: Record<string, number>
+  processPorts?: JsonRecord[]
+  equipmentDefaults?: JsonRecord
   parts: Array<JsonRecord & { kind: string; semanticRole: string; required?: boolean }>
   primarySemanticRole: string
   visualCues?: string[]
@@ -41,6 +52,7 @@ export type IndustryPackSpec = {
   capabilities?: Array<'factory_creation'>
   description?: string
   dependsOn?: ProfilePackDependency[]
+  dependsOnPlugins?: string[]
   devices: IndustryPackDeviceSpec[]
   factoryArchitectures?: JsonRecord[]
   processTemplates?: JsonRecord[]
@@ -143,6 +155,9 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
     ...(stringValue(raw.description) ? { description: stringValue(raw.description) } : {}),
     family: stringValue(raw.family) ?? 'generic',
     layoutFamily: stringValue(raw.layoutFamily) ?? 'generic_industrial_layout',
+    ...(raw.nodeKind === 'factory:pump' || raw.nodeKind === 'factory:tank'
+      ? { nodeKind: raw.nodeKind }
+      : {}),
     ...(stringValue(raw.archetypeFamily)
       ? { archetypeFamily: stringValue(raw.archetypeFamily) }
       : {}),
@@ -150,6 +165,10 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
       ? { preferredResolver: preferredResolver(raw.preferredResolver) }
       : {}),
     ...(defaultDimensions ? { defaultDimensions } : {}),
+    ...(recordArray(raw.processPorts, `Device ${id} processPorts`)?.length
+      ? { processPorts: recordArray(raw.processPorts, `Device ${id} processPorts`) }
+      : {}),
+    ...(isRecord(raw.equipmentDefaults) ? { equipmentDefaults: raw.equipmentDefaults } : {}),
     parts,
     primarySemanticRole,
     ...(stringArray(raw.visualCues).length ? { visualCues: stringArray(raw.visualCues) } : {}),
@@ -234,6 +253,7 @@ export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
         })
         .filter((dependency): dependency is ProfilePackDependency => Boolean(dependency))
     : undefined
+  const dependsOnPlugins = stringArray(raw.dependsOnPlugins)
   const factoryArchitectures = recordArray(raw.factoryArchitectures, 'factoryArchitectures')
   const processTemplates = recordArray(raw.processTemplates, 'processTemplates')
   assertSingleProcessFactoryArchitectures(factoryArchitectures)
@@ -245,13 +265,14 @@ export function normalizeIndustryPackSpec(raw: unknown): IndustryPackSpec {
     ...(stringValue(raw.name) ? { name: stringValue(raw.name) } : {}),
     industry,
     version: stringValue(raw.version) ?? '0.1.0',
-    schemaVersion: stringValue(raw.schemaVersion) ?? '1.1',
+    schemaVersion: stringValue(raw.schemaVersion) ?? '2.0',
     knowledgeSchemaVersion: stringValue(raw.knowledgeSchemaVersion) ?? '1.0',
     appCompatibility: stringValue(raw.appCompatibility) ?? '>=0.8.0',
     locale: stringArray(raw.locale).length ? stringArray(raw.locale) : ['zh-CN', 'en-US'],
     ...(capabilities.length ? { capabilities } : {}),
     ...(stringValue(raw.description) ? { description: stringValue(raw.description) } : {}),
     ...(dependsOn?.length ? { dependsOn } : {}),
+    ...(dependsOnPlugins.length ? { dependsOnPlugins } : {}),
     devices: raw.devices.map((device) => normalizeDevice(device, industry)),
     ...(factoryArchitectures?.length ? { factoryArchitectures } : {}),
     ...(processTemplates?.length ? { processTemplates } : {}),
@@ -366,7 +387,7 @@ function collectAuthoringWarnings(spec: IndustryPackSpec) {
 
 function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
   const ruleId = qualityRuleId(device.id, device.qualityRuleId)
-  return {
+  return withDefaultV2ProfileFields({
     id: device.id,
     name: device.name,
     aliases: device.aliases,
@@ -374,8 +395,11 @@ function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
     layoutFamily: device.layoutFamily ?? 'generic_industrial_layout',
     ...(device.archetypeFamily ? { archetypeFamily: device.archetypeFamily } : {}),
     ...(device.preferredResolver ? { preferredResolver: device.preferredResolver } : {}),
+    ...(device.nodeKind ? { nodeKind: device.nodeKind } : {}),
     family: device.family ?? 'generic',
     ...(device.defaultDimensions ? { defaultDimensions: device.defaultDimensions } : {}),
+    ...(device.processPorts?.length ? { processPorts: device.processPorts } : {}),
+    ...(device.equipmentDefaults ? { equipmentDefaults: device.equipmentDefaults } : {}),
     parts: device.parts,
     primarySemanticRole: device.primarySemanticRole,
     qualityRules: ruleId,
@@ -383,7 +407,7 @@ function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
     status: 'stable',
     source: 'imported_pack',
     ...(device.description ? { description: device.description } : {}),
-  }
+  })
 }
 
 function qualityRuleFromDevice(device: IndustryPackDeviceSpec) {
@@ -528,29 +552,39 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
   const processTemplateFile = spec.processTemplates?.length
     ? 'process-templates/generated.json'
     : undefined
+  const profiles = spec.devices.map((device) => profileFromDevice(device, spec.industry))
+  const equipmentBindings = inferEquipmentBindingsForProfiles(profiles)
+  const processTemplates = spec.processTemplates?.length
+    ? annotateProcessTemplatesForV2({
+        processTemplates: spec.processTemplates,
+        profiles,
+        bindings: equipmentBindings,
+      })
+    : undefined
   const manifest = {
     id,
     name: spec.name ?? `${spec.industry} Basic Equipment Pack`,
     industry: spec.industry,
     version,
-    schemaVersion: spec.schemaVersion ?? '1.1',
+    schemaVersion: spec.schemaVersion ?? '2.0',
     knowledgeSchemaVersion: spec.knowledgeSchemaVersion ?? '1.0',
     appCompatibility: spec.appCompatibility ?? '>=0.8.0',
     locale: spec.locale ?? ['zh-CN', 'en-US'],
     ...(spec.capabilities?.length ? { capabilities: spec.capabilities } : {}),
     description: spec.description ?? `Generated ${spec.industry} industry profile pack.`,
     ...(spec.dependsOn?.length ? { dependsOn: spec.dependsOn } : {}),
+    dependsOnPlugins: spec.dependsOnPlugins?.length
+      ? spec.dependsOnPlugins
+      : [FACTORY_EQUIPMENT_PLUGIN_ID],
     profiles: [profileFile],
+    equipmentBindings,
     ...(factoryArchitectureFile ? { factoryArchitectures: [factoryArchitectureFile] } : {}),
     ...(processTemplateFile ? { processTemplates: [processTemplateFile] } : {}),
     qualityRules: [qualityFile],
   }
 
   await writeJson(path.join(packDir, 'pack.json'), manifest)
-  await writeJson(
-    path.join(packDir, profileFile),
-    spec.devices.map((device) => profileFromDevice(device, spec.industry)),
-  )
+  await writeJson(path.join(packDir, profileFile), profiles)
   await writeJson(
     path.join(packDir, qualityFile),
     spec.devices.map((device) => qualityRuleFromDevice(device)),
@@ -559,11 +593,12 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
     await writeJson(path.join(packDir, factoryArchitectureFile), spec.factoryArchitectures)
   }
   if (processTemplateFile) {
-    await writeJson(path.join(packDir, processTemplateFile), spec.processTemplates)
+    await writeJson(path.join(packDir, processTemplateFile), processTemplates)
   }
   await writeReadme(path.join(packDir, 'README.md'), spec, authoringWarnings)
 
   const validation = options.validate === false ? undefined : await validateProfilePackDir(packDir)
+  if (validation && !nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
   const audit = validation ? auditProfilePackValidation(validation) : undefined
   if (audit && !audit.ok) {
     throw new Error(`Generated pack failed audit: ${audit.issues.join('; ')}`)

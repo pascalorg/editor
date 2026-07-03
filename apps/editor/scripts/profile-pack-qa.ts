@@ -2,10 +2,12 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadPlugin, nodeRegistry } from '@pascal-app/core'
 import {
   type DeviceProfileDefinition,
   evaluateDeviceProfileQuality,
 } from '@pascal-app/core/lib/device-profile-registry'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { generatePrimitiveGeometryDraft } from '../lib/ai-harness-runs/primitive-generation-service'
 import { findRepoRoot, sanitizeSegment } from '../lib/generated-assets/manifest'
 import {
@@ -362,6 +364,9 @@ async function runProfileQa(
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const validation = await loadValidation(options.packRef)
+  if (validation.manifest.schemaVersion === '2.0' && !nodeRegistry.has('factory:pump')) {
+    await loadPlugin(factoryEquipmentPlugin)
+  }
   const audit = auditProfilePackValidation(validation)
   const outputDir = path.join(
     repoRoot,

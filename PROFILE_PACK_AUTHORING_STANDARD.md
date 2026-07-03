@@ -27,11 +27,23 @@ industry.example.basic-0.1.0/
   "name": "Cement Basic Equipment Pack",
   "industry": "cement",
   "version": "0.1.0",
-  "schemaVersion": "1.1",
+  "schemaVersion": "2.0",
   "knowledgeSchemaVersion": "1.0",
   "appCompatibility": ">=0.8.0",
   "locale": ["zh-CN", "en-US"],
+  "dependsOnPlugins": ["pascal:factory-equipment"],
   "profiles": ["profiles/pyroprocess.json"],
+  "equipmentBindings": [
+    {
+      "profileId": "cement.process_pump",
+      "nodeKind": "factory:pump",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "processPorts.inlet.diameter": "inletDiameter"
+      },
+      "portMap": { "inlet": "inlet", "outlet": "outlet" }
+    }
+  ],
   "layouts": ["layouts/pyroprocess-layouts.json"],
   "partPresets": ["part-presets/cement-parts.json"],
   "editableSchemas": ["editable-schemas/common-equipment.json"],
@@ -47,7 +59,26 @@ Rules:
 - All paths are relative, safe paths inside the package.
 - A basic package must be useful without manually installing another package.
 - Extension packages may use `dependsOn`; installation resolves dependencies automatically.
+- `dependsOnPlugins` declares executable equipment node plugins required by v2 bindings.
+- `equipmentBindings` maps profile-level knowledge to registered equipment nodes such as
+  `factory:pump` and `factory:tank`.
 - Do not mix unrelated industries in one package.
+
+## Equipment Bindings
+
+Schema v2 packages are equipment binding packages. A profile that can become a stable equipment
+node should have an `equipmentBindings[]` entry instead of relying on primitive assembly as the main
+path.
+
+Rules:
+
+- `nodeKind` must be registered before QA runs.
+- `paramMap` source paths must exist on the raw profile, and target fields must exist on the node
+  schema.
+- `portMap` must cover every `processPorts[].id` declared by the profile.
+- Factory process stations should declare `profileId`/`equipmentProfileId` when they resolve to an
+  equipment node.
+- Stations that intentionally remain primitive/generic must declare `genericFallback.reason`.
 
 ## Device Profiles
 
@@ -201,10 +232,11 @@ Required gates:
 
 1. Manifest schema and path safety.
 2. Device profile registry validation.
-3. Cross-resource reference validation.
-4. Deterministic compose smoke through primitive generation.
-5. Quality score and role coverage.
-6. Rendered screenshot output for review.
+3. v2 equipment binding validation.
+4. Cross-resource reference validation.
+5. Deterministic equipment-node compile smoke.
+6. Quality score and role coverage.
+7. Rendered screenshot output for review.
 
 AI skills may generate candidate packages, but packages should only be published after these
 repository-local gates pass.
