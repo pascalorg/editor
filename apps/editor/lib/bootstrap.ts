@@ -7,6 +7,7 @@ import {
   setPluginDiscovery,
 } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
@@ -75,10 +76,9 @@ export async function loadExternalPlugins(): Promise<void> {
   }
 }
 
-// Register the first-party example plugin (trees node + presets rail panel)
-// through the same discovery hook a third-party pack would use. Must be set
-// before `loadExternalPlugins()` reads it below.
-setPluginDiscovery(async () => [treesPlugin])
+// Register first-party plugins through the same discovery hook a third-party
+// pack would use. Must be set before `loadExternalPlugins()` reads it below.
+setPluginDiscovery(async () => [factoryEquipmentPlugin, treesPlugin])
 
 loadBuiltinsSync()
 void loadExternalPlugins()

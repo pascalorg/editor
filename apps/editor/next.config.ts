@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/articraft-bridge',
     '@pascal-app/nodes',
     '@pascal-app/mcp',
+    '@pascal-app/plugin-factory-equipment',
     '@pascal-app/plugin-trees',
     '@dgreenheck/ez-tree',
   ],
