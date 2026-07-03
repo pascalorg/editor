@@ -597,7 +597,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
 
       let position = canonicalPositionFromPlan(x, originalPosition[1], z)
-      if (!bypass && parentFrame?.magneticSnap && frameParent) {
+      if (magnetic && parentFrame?.magneticSnap && frameParent) {
         const snappedPosition = parentFrame.magneticSnap(
           node,
           frameParent,
