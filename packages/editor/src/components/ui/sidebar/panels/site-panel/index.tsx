@@ -51,6 +51,7 @@ import {
 import { useUploadStore } from '../../../../../store/use-upload'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
+import { SceneStructurePanel } from './scene-structure-panel'
 import { focusTreeNode, TreeNode } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 
@@ -1568,6 +1569,9 @@ const BuildingItem = memo(function BuildingItem({
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                 <MultiSelectionBadge />
+                <div className="h-80 border-border/50 border-b">
+                  <SceneStructurePanel />
+                </div>
                 <ContentSection />
               </div>
             </div>
