@@ -561,3 +561,99 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
     await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
   }
 })
+
+test('dragging a fixed live data field onto a Data Lens card binds semantic equipment', async ({
+  page,
+  request,
+}) => {
+  const sceneId = `scene-structure-drag-data-binding-${Date.now()}-${test.info().parallelIndex}`
+  const createResponse = await request.post('/api/scenes', {
+    data: {
+      id: sceneId,
+      name: 'Scene Drag Data Binding E2E',
+      graph: refineryStructureGraph(),
+    },
+  })
+  expect(createResponse.status()).toBe(201)
+
+  try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
+    await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000,
+    })
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: Partial<FactoryE2eBridge>
+              }
+            ).__pascalFactoryE2e
+            return typeof bridge?.sceneNodes === 'function'
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true)
+
+    await page.getByTestId('sidebar-tab-site').click()
+    await page.getByTestId('canvas-lens-data').click()
+    await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('Ready to bind')
+
+    await page.evaluate(
+      ({ path, targetTestId }) => {
+        const target = document.querySelector<HTMLElement>(`[data-testid="${targetTestId}"]`)
+        if (!target) throw new Error('Missing drop target')
+        const dataTransfer = new DataTransfer()
+        dataTransfer.setData('application/x-pascal-live-data-path', path)
+        dataTransfer.setData('text/plain', path)
+        target.dispatchEvent(
+          new DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer,
+          }),
+        )
+        target.dispatchEvent(
+          new DragEvent('drop', {
+            bubbles: true,
+            cancelable: true,
+            dataTransfer,
+          }),
+        )
+      },
+      {
+        path: 'refinery.tank.level',
+        targetTestId: `data-lens-card-${ids.tank}`,
+      },
+    )
+
+    await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('1 binding')
+    await expect(page.getByTestId(`data-lens-binding-${ids.tank}`)).toContainText(
+      'level: refinery.tank.level',
+    )
+    await expect(page.getByTestId(`data-lens-value-${ids.tank}`)).toContainText('62')
+
+    await page.getByTestId(`data-lens-card-${ids.tank}`).click()
+    await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
+    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
+      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    }
+    await page.getByTestId('semantic-inspector-tab-data').click()
+    await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
+      'level: refinery.tank.level',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText(
+      'refinery.tank.level',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('62')
+  } finally {
+    await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
+  }
+})

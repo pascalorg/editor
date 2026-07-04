@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../../../lib/utils'
 
 const DEFAULT_HTTP_ENDPOINT = 'http://localhost:3102'
+export const LIVE_DATA_PATH_DRAG_MIME = 'application/x-pascal-live-data-path'
 
 function websocketEndpointFromHttp(endpoint: string): string {
   const trimmed = endpoint.trim().replace(/\/+$/, '')
@@ -111,6 +112,7 @@ export function LiveDataPanel() {
           </button>
           <button
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-white/10 hover:text-white"
+            data-testid="live-data-panel-toggle-details"
             onClick={() => setExpanded((value) => !value)}
             title="数据源设置"
             type="button"
@@ -155,8 +157,15 @@ export function LiveDataPanel() {
       <div className="mt-3 grid max-h-48 gap-1 overflow-y-auto">
         {visiblePaths.map((path) => (
           <div
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white/[0.04] px-2 py-1.5 text-xs"
+            className="grid cursor-grab grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md bg-white/[0.04] px-2 py-1.5 text-xs transition hover:bg-white/[0.08] active:cursor-grabbing"
+            data-testid={`live-data-path-${path.path}`}
+            draggable
             key={path.path}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'copy'
+              event.dataTransfer.setData(LIVE_DATA_PATH_DRAG_MIME, path.path)
+              event.dataTransfer.setData('text/plain', path.path)
+            }}
           >
             <div className="min-w-0">
               <div className="truncate text-white">{path.label}</div>

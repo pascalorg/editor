@@ -548,7 +548,7 @@ Deliverables:
 
 - Fixed/demo live data source for Phase 5 validation.
 - Message preview and semantic field detector.
-- Assisted field-to-equipment binding from Inspector and AI generation preview.
+- Assisted field-to-equipment binding from Inspector, AI generation preview, and fixed-field drag/drop.
 - Data binding inspector and Data Lens overlays.
 - Dynamic preview runtime for semantic level, flow, and alarm pulse bindings.
 
@@ -564,10 +564,11 @@ Phase 5 delivery status:
 - Done: fixed factory live data source is seeded automatically for editor scenes.
 - Done: selected semantic equipment exposes binding targets in the AI context and Inspector Data tab.
 - Done: AI data-binding preview can write deterministic `dynamicBindings` to the selected node.
+- Done: fixed live data fields can be dragged onto Data Lens equipment cards to create semantic bindings.
 - Done: Data Lens and Semantic Inspector read the same binding contract and show current values.
 - Done: browser coverage verifies tank level binding, alarm pulse binding, dynamic preview animation, and reset/reseed persistence.
 - Deferred: user-managed WebSocket source add/remove UI. For the current product phase, data sources remain fixed while the binding workflow is hardened.
-- Deferred: drag/drop field binding. Current assisted binding uses semantic target selection and AI/Inspector controls.
+- Deferred: freeform drop-to-raw-3D-surface targeting and multi-source field browsing. Current drag/drop is scoped to fixed fields and Data Lens equipment cards.
 
 ### Phase 6: Workflow Graph And Run History
 

@@ -8,6 +8,7 @@ import {
   defaultSemanticLiveDataPath,
   formatSemanticLiveDataBindingTargets,
   planSemanticLiveDataBinding,
+  planSemanticLiveDataBindingForPath,
   semanticLiveDataBindingTargets,
   upsertSemanticLiveDataBinding,
 } from './semantic-live-data-bindings'
@@ -152,6 +153,48 @@ describe('semantic live data bindings', () => {
         scaleEffect: 'alarmPulse',
       },
     ])
+  })
+
+  test('plans drag-and-drop binding from fixed live data paths', () => {
+    const tankNode = AssemblyNode.parse({
+      id: 'assembly_tank',
+      type: 'assembly',
+    }) as AnyNode
+    const pumpNode = AssemblyNode.parse({
+      id: 'assembly_pump',
+      type: 'assembly',
+    }) as AnyNode
+
+    expect(
+      planSemanticLiveDataBindingForPath({
+        path: 'refinery.tank.level',
+        profile: tankProfile,
+        node: tankNode,
+      }),
+    ).toMatchObject({
+      target: { id: 'tank-level' },
+      path: 'refinery.tank.level',
+    })
+    expect(
+      planSemanticLiveDataBindingForPath({
+        path: 'refinery.crude.flowRate',
+        profile: pumpProfile,
+        node: pumpNode,
+      }),
+    ).toMatchObject({
+      target: { id: 'pump-flow' },
+      path: 'refinery.crude.flowRate',
+    })
+    expect(
+      planSemanticLiveDataBindingForPath({
+        path: 'alarm.count',
+        profile: tankProfile,
+        node: tankNode,
+      }),
+    ).toMatchObject({
+      target: { id: 'alarm-pulse' },
+      path: 'alarm.count',
+    })
   })
 
   test('upserts metadata dynamic bindings without duplicating the semantic target', () => {

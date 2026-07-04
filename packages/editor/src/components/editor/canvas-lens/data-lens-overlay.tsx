@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   formatLiveDataValue,
   isDynamicBinding,
@@ -13,8 +14,10 @@ import {
 import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { Database, Radio, RadioTower } from 'lucide-react'
+import type { DragEvent } from 'react'
 import { memo, useMemo } from 'react'
 import { resolveObjectCapabilities } from '../../../lib/object-capabilities'
+import { planSemanticLiveDataBindingForPath } from '../../../lib/semantic-live-data-bindings'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import {
@@ -43,6 +46,8 @@ type LiveDataLensContext = {
   paths: LiveDataPath[]
   values: Record<string, LiveDataValue>
 }
+
+const LIVE_DATA_PATH_DRAG_MIME = 'application/x-pascal-live-data-path'
 
 function dynamicBindingsFrom(metadata: AnyRecord) {
   return Array.isArray(metadata.dynamicBindings)
@@ -131,6 +136,8 @@ function dataLensItems(nodes: LensNodeMap, context: LiveDataLensContext) {
 export const DataLensOverlay = memo(function DataLensOverlay() {
   const canvasLens = useEditor((state) => state.canvasLens)
   const nodes = useScene((state) => state.nodes)
+  const updateNode = useScene((state) => state.updateNode)
+  const markDirty = useScene((state) => state.markDirty)
   const paths = useLiveData((state) => state.paths)
   const values = useLiveData((state) => state.values)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
@@ -149,6 +156,27 @@ export const DataLensOverlay = memo(function DataLensOverlay() {
         const selected = selectedIdSet.has(item.nodeId)
         const bound = item.status === 'bound'
         const Icon = bound ? RadioTower : Database
+        const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
+          const path =
+            event.dataTransfer.getData(LIVE_DATA_PATH_DRAG_MIME) ||
+            event.dataTransfer.getData('text/plain')
+          if (!path) return
+          event.preventDefault()
+          event.stopPropagation()
+          const nodeMap = nodes as Record<string, AnyNode | undefined>
+          const node = nodeMap[item.nodeId]
+          const profile = resolveObjectCapabilities(node, nodeMap)
+          if (!profile) return
+          const plan = planSemanticLiveDataBindingForPath({
+            path,
+            profile,
+            node: node as AnyNode | undefined,
+          })
+          if (!plan) return
+          updateNode(plan.nodeId as AnyNodeId, plan.patch)
+          markDirty(plan.nodeId as AnyNodeId)
+          setSelection({ selectedIds: [plan.nodeId as AnyNodeId] })
+        }
         return (
           <Html
             center
@@ -170,6 +198,16 @@ export const DataLensOverlay = memo(function DataLensOverlay() {
               )}
               data-data-lens-node-id={item.nodeId}
               data-testid={`data-lens-card-${item.nodeId}`}
+              onDragOver={(event) => {
+                if (
+                  event.dataTransfer.types.includes(LIVE_DATA_PATH_DRAG_MIME) ||
+                  event.dataTransfer.types.includes('text/plain')
+                ) {
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'copy'
+                }
+              }}
+              onDrop={handleDrop}
               onClick={() => setSelection({ selectedIds: [item.nodeId as AnyNodeId] })}
               type="button"
             >

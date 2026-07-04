@@ -402,3 +402,36 @@ export function planSemanticLiveDataBinding(input: {
         : `Used default binding target ${selected.target.label}.`,
   }
 }
+
+export function planSemanticLiveDataBindingForPath(input: {
+  path: string
+  profile: ObjectCapabilityProfile
+  node: AnyNode | undefined
+}): SemanticLiveDataBindingPlan | null {
+  const path = input.path.trim()
+  if (!(path && input.node)) return null
+  const targets = semanticLiveDataBindingTargets(input.profile)
+  if (!targets.length) return null
+  const ranked = targets
+    .map((target, index) => ({
+      target,
+      score: scorePath(path, path, target),
+      index,
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+  const selected = ranked[0]
+  if (!selected) return null
+  return {
+    nodeId: input.profile.nodeId,
+    label: input.profile.label ?? input.profile.nodeId,
+    target: selected.target,
+    path,
+    patch: upsertSemanticLiveDataBinding({
+      node: input.node,
+      profile: input.profile,
+      target: selected.target,
+      path,
+    }),
+    reason: `Dropped ${path} onto ${input.profile.label ?? input.profile.nodeId}.`,
+  }
+}
