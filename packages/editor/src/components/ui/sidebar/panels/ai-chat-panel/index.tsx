@@ -2112,6 +2112,7 @@ interface ChatMessage {
   articraftResult?: ArticraftResult
   imageTo3dResult?: ImageTo3DResult
   factoryRunSummary?: FactoryRunSummary
+  generationPlanPreview?: ChatGenerationPlanPreview
   geometryArtifact?: GeneratedGeometryArtifact
   modelArtifact?: GeneratedModelArtifact
   toolCalls?: Array<{
@@ -2121,6 +2122,81 @@ interface ChatMessage {
   }>
   isToolResult?: boolean
   toolCallId?: string
+}
+
+type AiIntentRouteEvidence = {
+  kind: string
+  confidence: number
+  reason: string
+  previewId?: string
+  requiredPack?: {
+    id: string
+    version?: string
+    installed: boolean
+    reason?: string
+  }
+}
+
+type AiIntentRequiredPack = {
+  id: string
+  version: string
+  industry: string
+  label: string
+  installed: boolean
+  installState: 'installed' | 'missing'
+  reason: string
+  matchedKeyword: string
+}
+
+type AiIntentRoute = {
+  kind:
+    | 'create-factory'
+    | 'create-equipment'
+    | 'edit-selected-equipment'
+    | 'edit-selected-part'
+    | 'bind-live-data'
+    | 'create-asset-from-image'
+    | 'create-joint-asset'
+    | 'generic-geometry'
+    | 'ask-or-explain'
+  confidence: number
+  prompt: string
+  reason: string
+  requiresPreview: boolean
+  execution: 'factory' | 'primitive' | 'image-to-3d' | 'articraft' | 'data-binding' | 'none'
+  requiredPack?: AiIntentRequiredPack
+  blockers: readonly string[]
+}
+
+type GenerationPlanPreviewStep = {
+  id: string
+  label: string
+  status: 'ready' | 'blocked' | 'info'
+  detail: string
+}
+
+type GenerationPlanPreview = {
+  id: string
+  routeKind: AiIntentRoute['kind']
+  execution: AiIntentRoute['execution']
+  applyMode: 'direct' | 'confirm' | 'blocked'
+  canvasImpact: 'none' | 'low' | 'medium' | 'high'
+  summary: string
+  blockers: readonly string[]
+  steps: readonly GenerationPlanPreviewStep[]
+  requiredPack?: AiIntentRequiredPack
+  selectedNodeIds: readonly string[]
+}
+
+type ChatGenerationPlanPreview = GenerationPlanPreview & {
+  prompt: string
+  image?: ChatImageAttachment
+  route: AiIntentRoute
+}
+
+type AiIntentPreviewResponse = {
+  route: AiIntentRoute
+  preview: GenerationPlanPreview
 }
 
 type GeneratedModelArtifact = {
@@ -3352,6 +3428,214 @@ function FactoryRunSummaryCard({
   )
 }
 
+function intentRouteLabel(kind: AiIntentRoute['kind']) {
+  switch (kind) {
+    case 'create-factory':
+      return '工厂生成'
+    case 'create-equipment':
+      return '设备生成'
+    case 'edit-selected-equipment':
+      return '编辑设备'
+    case 'edit-selected-part':
+      return '编辑部件'
+    case 'bind-live-data':
+      return '数据绑定'
+    case 'create-asset-from-image':
+      return '图生建模'
+    case 'create-joint-asset':
+      return '关节资产'
+    case 'generic-geometry':
+      return '几何搭建'
+    case 'ask-or-explain':
+      return '说明回答'
+  }
+}
+
+function generationPlanImpactLabel(impact: GenerationPlanPreview['canvasImpact']) {
+  if (impact === 'high') return '高影响'
+  if (impact === 'medium') return '中影响'
+  if (impact === 'low') return '低影响'
+  return '不改画布'
+}
+
+function generationPlanApplyLabel(applyMode: GenerationPlanPreview['applyMode']) {
+  if (applyMode === 'blocked') return '需处理'
+  if (applyMode === 'confirm') return '待确认'
+  return '可直接执行'
+}
+
+function buildIntentRouteEvidence(preview: ChatGenerationPlanPreview): AiIntentRouteEvidence {
+  return {
+    kind: preview.route.kind,
+    confidence: preview.route.confidence,
+    reason: preview.route.reason,
+    previewId: preview.id,
+    requiredPack: preview.route.requiredPack
+      ? {
+          id: preview.route.requiredPack.id,
+          version: preview.route.requiredPack.version,
+          installed: preview.route.requiredPack.installed,
+          reason: preview.route.requiredPack.reason,
+        }
+      : undefined,
+  }
+}
+
+function GenerationPlanPreviewCard({
+  disabled,
+  onApply,
+  onCancel,
+  onEditPrompt,
+  onInstallPack,
+  preview,
+}: {
+  disabled?: boolean
+  onApply: () => void
+  onCancel: () => void
+  onEditPrompt: () => void
+  onInstallPack: () => void
+  preview: ChatGenerationPlanPreview
+}) {
+  const blocked = preview.applyMode === 'blocked'
+  const confirm = preview.applyMode === 'confirm'
+  const statusClass = blocked
+    ? 'border-amber-400/40 bg-amber-400/10 text-amber-200'
+    : confirm
+      ? 'border-[#a684ff]/40 bg-[#a684ff]/10 text-[#d6c5ff]'
+      : 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+  const statusIcon = blocked
+    ? 'mdi:alert-circle-outline'
+    : confirm
+      ? 'mdi:clipboard-check-outline'
+      : 'mdi:play-circle-outline'
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-2 text-foreground shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-medium">
+            <Icon className="size-3.5 text-[#a684ff]" icon="mdi:routes" />
+            <span className="truncate">{intentRouteLabel(preview.routeKind)}</span>
+          </div>
+          <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            {preview.summary}
+          </div>
+        </div>
+        <span
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]',
+            statusClass,
+          )}
+        >
+          <Icon className="size-3" icon={statusIcon} />
+          {generationPlanApplyLabel(preview.applyMode)}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="rounded-lg border border-border/50 bg-accent/20 px-2 py-1">
+          <div className="text-[9px] text-muted-foreground">影响</div>
+          <div className="truncate text-[11px] font-medium text-foreground">
+            {generationPlanImpactLabel(preview.canvasImpact)}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border/50 bg-accent/20 px-2 py-1">
+          <div className="text-[9px] text-muted-foreground">执行</div>
+          <div className="truncate text-[11px] font-medium text-foreground">
+            {preview.execution}
+          </div>
+        </div>
+      </div>
+
+      {preview.requiredPack ? (
+        <div
+          className={cn(
+            'rounded-lg border px-2 py-1.5 text-[11px]',
+            preview.requiredPack.installed
+              ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+              : 'border-amber-400/30 bg-amber-400/10 text-amber-200',
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate font-medium">{preview.requiredPack.label}</span>
+            <span className="shrink-0 font-mono text-[10px]">
+              {preview.requiredPack.id}@{preview.requiredPack.version}
+            </span>
+          </div>
+          <div className="mt-1 leading-snug opacity-80">{preview.requiredPack.reason}</div>
+        </div>
+      ) : null}
+
+      <div className="space-y-1">
+        {preview.steps.map((step) => {
+          const stepClass =
+            step.status === 'blocked'
+              ? 'text-amber-300'
+              : step.status === 'ready'
+                ? 'text-emerald-300'
+                : 'text-muted-foreground'
+          const icon =
+            step.status === 'blocked'
+              ? 'mdi:alert'
+              : step.status === 'ready'
+                ? 'mdi:check'
+                : 'mdi:information-outline'
+          return (
+            <div className={cn('flex items-center gap-1.5 text-[11px]', stepClass)} key={step.id}>
+              <Icon className="size-3.5 shrink-0" icon={icon} />
+              <span className="min-w-0 flex-1 truncate" title={step.detail}>
+                {step.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {blocked && preview.requiredPack && !preview.requiredPack.installed ? (
+          <button
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-amber-400/35 bg-amber-400/10 px-2 py-1 text-[10px] font-medium text-amber-100 transition-colors hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
+            onClick={onInstallPack}
+            type="button"
+          >
+            <Icon className="size-3" icon="mdi:cloud-download-outline" />
+            安装资源包
+          </button>
+        ) : (
+          <button
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[#a684ff]/35 bg-[#a684ff]/10 px-2 py-1 text-[10px] font-medium text-[#e5d8ff] transition-colors hover:bg-[#a684ff]/20 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={disabled}
+            onClick={onApply}
+            type="button"
+          >
+            <Icon className="size-3" icon="mdi:play" />
+            Apply
+          </button>
+        )}
+        <button
+          className="inline-flex items-center justify-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-sky-400/50 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled}
+          onClick={onEditPrompt}
+          type="button"
+        >
+          <Icon className="size-3" icon="mdi:pencil-outline" />
+          编辑
+        </button>
+        <button
+          className="inline-flex items-center justify-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-amber-400/50 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled}
+          onClick={onCancel}
+          type="button"
+        >
+          <Icon className="size-3" icon="mdi:close" />
+          取消
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function getArticraftMetadata(result: ArticraftResult, nodeName: string) {
   const linkName = nodeName.replace(/_v\d+$/, '')
   const joint = result.joints.find((candidate) => candidate.child === linkName)
@@ -3401,6 +3685,7 @@ function compactAiChatMessageForLocalStorage(message: ChatMessage): ChatMessage 
     content: truncateAiChatStorageText(message.content),
   }
   delete compact.image
+  delete compact.generationPlanPreview
   return compact
 }
 
@@ -5542,7 +5827,11 @@ export function AiChatPanel() {
     window.dispatchEvent(new Event('generated-assets:updated'))
   }, [])
 
-  const sendImageTo3DMessage = useCallback(async (text: string, image?: ChatImageAttachment) => {
+  const sendImageTo3DMessage = useCallback(async (
+    text: string,
+    image?: ChatImageAttachment,
+    intentRoute?: AiIntentRouteEvidence,
+  ) => {
     if (!image) {
       setMessages((prev) => [
         ...prev,
@@ -5584,6 +5873,7 @@ export function AiChatPanel() {
             category: 'equipment',
             save: false,
           },
+          ...(intentRoute ? { intentRoute } : {}),
         }),
         signal: controller.signal,
       })
@@ -5647,7 +5937,11 @@ export function AiChatPanel() {
     }
   }, [conversationId, markGenerationStopped, subscribeImageTo3DRun])
 
-  const sendArticraftMessage = useCallback(async (text: string, image?: ChatImageAttachment) => {
+  const sendArticraftMessage = useCallback(async (
+    text: string,
+    image?: ChatImageAttachment,
+    intentRoute?: AiIntentRouteEvidence,
+  ) => {
     const controller = new AbortController()
     activeAbortControllerRef.current = controller
     setInput('')
@@ -5676,6 +5970,7 @@ export function AiChatPanel() {
           prompt,
           articraftMode: 'articulated',
           ...(image ? { image } : {}),
+          ...(intentRoute ? { intentRoute } : {}),
         }),
         signal: controller.signal,
       })
@@ -5936,7 +6231,10 @@ export function AiChatPanel() {
     [callApi, executeToolCall],
   )
 
-  const sendMessage = useCallback(async (overrideText?: string) => {
+  const sendMessage = useCallback(async (
+    overrideText?: string,
+    intentRoute?: AiIntentRouteEvidence,
+  ) => {
     const text = (overrideText ?? input).trim()
     const attachedImage = generationMode === 'primitive' ? undefined : imageAttachment
     if (loading) return
@@ -6015,6 +6313,7 @@ export function AiChatPanel() {
             latestArtifactCandidate: latestGeometryArtifactCandidate,
             recentMessages: messages,
           },
+          ...(intentRoute ? { intentRoute } : {}),
         }),
         signal: controller.signal,
       })
@@ -6081,13 +6380,32 @@ export function AiChatPanel() {
     }
   }, [])
 
-  const sendFactoryMessage = useCallback(async () => {
-    const text = input.trim()
+  const sendFactoryMessage = useCallback(async (
+    overrideText?: string,
+    intentRoute?: AiIntentRouteEvidence,
+    options?: { replacePreviewMessageIndex?: number; skipUserMessage?: boolean },
+  ) => {
+    const text = (overrideText ?? input).trim()
     if (!text || loading) return
     const controller = new AbortController()
     activeAbortControllerRef.current = controller
-    setInput('')
+    if (!overrideText) setInput('')
     setImageAttachment(undefined)
+    const previewMessageIndex = options?.replacePreviewMessageIndex
+    if (previewMessageIndex != null) {
+      const progressMessage: ChatMessage = {
+        role: 'assistant',
+        content: '',
+        factoryRunSummary: buildFactoryProgressSummary({
+          message: '正在理解需求并准备工厂场景变更。',
+        }),
+      }
+      setMessages((prev) => {
+        const updated = [...prev]
+        updated[previewMessageIndex] = progressMessage
+        return updated
+      })
+    } else {
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: text },
@@ -6099,6 +6417,7 @@ export function AiChatPanel() {
         }),
       },
     ])
+    }
     setLoading(true)
 
     try {
@@ -6118,6 +6437,7 @@ export function AiChatPanel() {
             ...(selection ? { selection } : {}),
             ...(sceneContext ? { scene: sceneContext } : {}),
           },
+          ...(intentRoute ? { intentRoute } : {}),
         }),
         signal: controller.signal,
       })
@@ -6168,32 +6488,213 @@ export function AiChatPanel() {
     }
   }, [conversationId, input, loading, markGenerationStopped, messages, subscribeFactoryRun, t])
 
-  const handleFactoryKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        sendFactoryMessage()
+  const buildIntentPreviewSelection = useCallback(() => {
+    const nodeIds = useViewer.getState().selection.selectedIds.map(String).filter(Boolean)
+    if (!nodeIds.length) return undefined
+    const firstNode = sceneNodes[nodeIds[0] as AnyNodeId]
+    const metadata =
+      firstNode && isRecord((firstNode as { metadata?: unknown }).metadata)
+        ? ((firstNode as { metadata?: unknown }).metadata as Record<string, unknown>)
+        : undefined
+    const semanticRole =
+      typeof metadata?.semanticRole === 'string'
+        ? metadata.semanticRole
+        : typeof metadata?.primarySemanticRole === 'string'
+          ? metadata.primarySemanticRole
+          : undefined
+    const sourcePartKind =
+      typeof metadata?.sourcePartKind === 'string'
+        ? metadata.sourcePartKind
+        : typeof metadata?.partKind === 'string'
+          ? metadata.partKind
+          : undefined
+    let assemblyId: string | undefined
+    let parentId = firstNode ? (firstNode as { parentId?: unknown }).parentId : undefined
+    const visited = new Set<string>()
+    while (typeof parentId === 'string' && !visited.has(parentId)) {
+      visited.add(parentId)
+      const parent = sceneNodes[parentId as AnyNodeId]
+      if (!parent) break
+      if (parent.type === 'assembly') {
+        assemblyId = parent.id
+        break
+      }
+      parentId = (parent as { parentId?: unknown }).parentId
+    }
+
+    return {
+      nodeIds,
+      nodeType: firstNode?.type,
+      assemblyId,
+      semanticRole,
+      sourcePartKind,
+    }
+  }, [sceneNodes])
+
+  const fetchGenerationPlanPreview = useCallback(
+    async (text: string, image?: ChatImageAttachment) => {
+      const response = await fetch('/api/ai-harness/intent-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: text,
+          imageAttached: Boolean(image),
+          generationMode,
+          conversationPurpose,
+          selection: buildIntentPreviewSelection(),
+          ...(image ? { image: { name: image.name, type: image.type, dataUrl: image.dataUrl } } : {}),
+        }),
+      })
+      const data = (await response.json().catch(() => ({}))) as Partial<AiIntentPreviewResponse> & {
+        error?: string
+        message?: string
+      }
+      if (!response.ok || !data.route || !data.preview) {
+        throw new Error(data.message ?? data.error ?? response.statusText)
+      }
+      return {
+        ...data.preview,
+        prompt: text,
+        image,
+        route: data.route,
+      } satisfies ChatGenerationPlanPreview
+    },
+    [buildIntentPreviewSelection, conversationPurpose, generationMode],
+  )
+
+  const executeGenerationPlanPreview = useCallback(
+    async (preview: ChatGenerationPlanPreview, messageIndex?: number) => {
+      const intentRoute = buildIntentRouteEvidence(preview)
+      if (preview.execution === 'factory') {
+        setConversationPurpose('factory')
+        setModeMenuOpen(false)
+        await sendFactoryMessage(preview.prompt, intentRoute, {
+          replacePreviewMessageIndex: messageIndex,
+          skipUserMessage: messageIndex != null,
+        })
+        return
+      }
+      if (preview.execution === 'primitive') {
+        await sendMessage(preview.prompt, intentRoute)
+        return
+      }
+      if (preview.execution === 'image-to-3d') {
+        await sendImageTo3DMessage(preview.prompt, preview.image, intentRoute)
+        return
+      }
+      if (preview.execution === 'articraft') {
+        await sendArticraftMessage(preview.prompt, preview.image, intentRoute)
+        return
+      }
+      setMessages((prev) => {
+        const result: ChatMessage = {
+          role: 'assistant',
+          content:
+            preview.execution === 'data-binding'
+              ? '数据绑定预览已生成；请选择目标设备并在数据面板中完成绑定。'
+              : preview.summary,
+        }
+        if (messageIndex == null) return [...prev, result]
+        const updated = [...prev]
+        updated[messageIndex] = result
+        return updated
+      })
+    },
+    [sendArticraftMessage, sendFactoryMessage, sendImageTo3DMessage, sendMessage],
+  )
+
+  const installGenerationPlanPreviewPack = useCallback(
+    async (preview: ChatGenerationPlanPreview, messageIndex: number) => {
+      const pack = preview.requiredPack
+      if (!pack || pack.installed) return
+      setProfilePackImporting(true)
+      setProfilePackStatus(`正在安装 ${pack.label} 行业资源包...`)
+      try {
+        const response = await fetch('/api/profile-packs/cloud', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: pack.id, version: pack.version }),
+        })
+        const data = (await response.json().catch(() => ({}))) as { message?: string; error?: string }
+        if (!response.ok) throw new Error(data.message ?? data.error ?? response.statusText)
+        await refreshProfilePacks()
+        const refreshedPreview = await fetchGenerationPlanPreview(preview.prompt, preview.image)
+        setProfilePackStatus(`${pack.label} 已安装，可以应用生成计划。`)
+        setMessages((prev) => {
+          const updated = [...prev]
+          if (updated[messageIndex]?.generationPlanPreview) {
+            updated[messageIndex] = {
+              ...updated[messageIndex]!,
+              generationPlanPreview: refreshedPreview,
+            }
+          }
+          return updated
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setProfilePackStatus(`行业资源包安装失败：${message}`)
+      } finally {
+        setProfilePackImporting(false)
       }
     },
-    [sendFactoryMessage],
+    [fetchGenerationPlanPreview, refreshProfilePacks],
   )
 
   const handleAssetSubmit = useCallback(() => {
-    if (
-      shouldRouteAssetPromptToFactory({
-        generationMode,
-        hasImageAttachment: Boolean(imageAttachment),
-        text: input,
-      })
-    ) {
-      setConversationPurpose('factory')
-      setModeMenuOpen(false)
-      setImageAttachment(undefined)
-      void sendFactoryMessage()
+    if (loading) return
+    const text = input.trim()
+    const attachedImage = generationMode === 'primitive' ? undefined : imageAttachment
+    if (generationMode === 'image-to-3d' && !attachedImage) {
+      void sendImageTo3DMessage(text, attachedImage)
       return
     }
-    void sendMessage()
-  }, [generationMode, imageAttachment, input, sendFactoryMessage, sendMessage])
+    if (!text && !attachedImage) return
+
+    void (async () => {
+      try {
+        const preview = await fetchGenerationPlanPreview(
+          text || 'Describe the image and generate a 3D object.',
+          attachedImage,
+        )
+        if (preview.applyMode === 'direct') {
+          await executeGenerationPlanPreview(preview)
+          return
+        }
+        setInput('')
+        setImageAttachment(undefined)
+        if (preview.route.kind === 'create-factory') {
+          setConversationPurpose('factory')
+          setModeMenuOpen(false)
+        }
+        setMessages((prev) => [
+          ...prev,
+          { role: 'user', content: preview.prompt, ...(attachedImage ? { image: attachedImage } : {}) },
+          { role: 'assistant', content: '', generationPlanPreview: preview },
+        ])
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: t('aiChat.error', {
+              fallback: '出错了：{message}',
+              params: { message },
+            }),
+          },
+        ])
+      }
+    })()
+  }, [
+    executeGenerationPlanPreview,
+    fetchGenerationPlanPreview,
+    generationMode,
+    imageAttachment,
+    input,
+    loading,
+    sendImageTo3DMessage,
+    t,
+  ])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -6495,6 +6996,24 @@ export function AiChatPanel() {
                 ) : null}
                 <div className="whitespace-pre-wrap">{msg.content}</div>
               </div>
+            ) : msg.generationPlanPreview ? (
+              <GenerationPlanPreviewCard
+                disabled={loading || profilePackImporting}
+                onApply={() => void executeGenerationPlanPreview(msg.generationPlanPreview!, i)}
+                onCancel={() => {
+                  setMessages((prev) => prev.filter((_, index) => index !== i))
+                }}
+                onEditPrompt={() => {
+                  setInput(msg.generationPlanPreview!.prompt)
+                  setImageAttachment(msg.generationPlanPreview!.image)
+                  setMessages((prev) => prev.filter((_, index) => index !== i))
+                  inputRef.current?.focus()
+                }}
+                onInstallPack={() =>
+                  void installGenerationPlanPreviewPack(msg.generationPlanPreview!, i)
+                }
+                preview={msg.generationPlanPreview}
+              />
             ) : msg.factoryRunSummary &&
               !msg.modelArtifact &&
               !msg.geometryArtifact &&
@@ -6992,7 +7511,7 @@ export function AiChatPanel() {
               )}
               data-testid="factory-chat-input"
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleFactoryKeyDown}
+              onKeyDown={handleKeyDown}
               placeholder="描述你想创建或修改的工厂布局…"
               ref={inputRef}
               rows={inputExpanded ? 6 : 3}
@@ -7015,7 +7534,7 @@ export function AiChatPanel() {
               )}
               data-testid="factory-chat-send"
               disabled={!input.trim() || loading}
-              onClick={sendFactoryMessage}
+              onClick={handleAssetSubmit}
               title="Send"
               type="button"
             >
