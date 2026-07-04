@@ -84,7 +84,10 @@ function refineryStructureGraph() {
           profileId: 'refinery.atmospheric_distillation_unit',
           equipmentFamily: 'column',
           editablePartRoles: ['vessel_shell'],
-          ports: [{ id: 'inlet', medium: 'crude', side: 'west' }],
+          ports: [
+            { id: 'inlet', medium: 'crude', side: 'west' },
+            { id: 'outlet', medium: 'product', side: 'east' },
+          ],
         },
       },
     },
@@ -125,7 +128,10 @@ function refineryStructureGraph() {
           profileId: 'refinery.product_storage_tank',
           equipmentFamily: 'tank',
           editablePartRoles: ['vessel_shell', 'liquid_volume'],
-          ports: [{ id: 'outlet', medium: 'product', side: 'east' }],
+          ports: [
+            { id: 'inlet', medium: 'product', side: 'west' },
+            { id: 'outlet', medium: 'product', side: 'east' },
+          ],
         },
       },
     },
@@ -158,7 +164,12 @@ function refineryStructureGraph() {
       metadata: {
         processId: 'refinery_basic_complex',
         processDisplayLabel: 'Refinery',
-        stationId: 'product_storage_tank',
+        fromStationId: 'atmospheric_distillation',
+        toStationId: 'product_storage_tank',
+        fromPortId: 'outlet',
+        toPortId: 'inlet',
+        medium: 'material',
+        visualKind: 'pipe',
       },
     },
   }
@@ -203,6 +214,9 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
     await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeVisible()
     await expect(page.getByTestId(`process-lens-port-${ids.tower}-inlet`)).toBeVisible()
+    await expect(page.getByTestId(`process-lens-port-${ids.tower}-outlet`)).toBeVisible()
+    await expect(page.getByTestId(`process-lens-port-${ids.tank}-inlet`)).toBeVisible()
+    await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeVisible()
 
     await page.getByTestId(`process-lens-station-${ids.tower}`).click()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
@@ -214,6 +228,7 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await page.getByTestId('canvas-lens-data').click()
     await expect(page.getByTestId('canvas-lens-data')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
+    await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeHidden()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',

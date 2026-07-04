@@ -12,11 +12,25 @@ import useEditor from '../../../store/use-editor'
 
 type ProcessLensStation = {
   nodeId: string
+  stationId?: string
+  processId?: string
   label: string
   detail?: string
   badge?: string
   position: [number, number, number]
   ports: string[]
+}
+
+type ProcessLensRoute = {
+  id: string
+  fromNodeId: string
+  toNodeId: string
+  fromPortId?: string
+  toPortId?: string
+  medium?: string
+  visualKind?: string
+  points: [[number, number, number], [number, number, number]]
+  midpoint: [number, number, number]
 }
 
 type AnyRecord = Record<string, unknown>
@@ -40,6 +54,30 @@ function vector3(value: unknown): [number, number, number] | undefined {
 
 function numberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
+}
+
+function metadataOf(node: AnyNode | undefined) {
+  const metadata = (node as unknown as { metadata?: unknown })?.metadata
+  return isRecord(metadata) ? metadata : {}
+}
+
+function equipmentAssemblyOf(metadata: AnyRecord) {
+  return isRecord(metadata.equipmentAssembly) ? metadata.equipmentAssembly : undefined
+}
+
+function stationIdOf(node: AnyNode | undefined) {
+  const metadata = metadataOf(node)
+  const assembly = equipmentAssemblyOf(metadata)
+  return stringValue(metadata.stationId) ?? stringValue(assembly?.stationId)
+}
+
+function processIdOf(node: AnyNode | undefined) {
+  const metadata = metadataOf(node)
+  return stringValue(metadata.processId)
 }
 
 function estimateNodeLabelHeight(node: AnyNode | undefined) {
@@ -85,6 +123,8 @@ function processLensStations(
       const profile = resolveObjectCapabilities(node, nodes)
       return {
         nodeId: item.nodeId,
+        stationId: stationIdOf(node),
+        processId: processIdOf(node),
         label: item.label,
         detail: item.detail ?? group.label,
         badge: item.badge,
@@ -93,6 +133,111 @@ function processLensStations(
       }
     }),
   )
+}
+
+function routeEndpoint(metadata: AnyRecord, primaryKey: string, alternateKeys: string[]) {
+  return (
+    stringValue(metadata[primaryKey]) ??
+    alternateKeys.map((key) => stringValue(metadata[key])).find(Boolean)
+  )
+}
+
+function processLensRoutes(
+  nodes: Record<string, AnyNode | undefined>,
+  stations: ProcessLensStation[],
+) {
+  const stationByStationId = new Map<string, ProcessLensStation>()
+  for (const station of stations) {
+    if (station.stationId && !stationByStationId.has(station.stationId)) {
+      stationByStationId.set(station.stationId, station)
+    }
+  }
+
+  const routes: ProcessLensRoute[] = []
+  const seenRoutes = new Set<string>()
+  for (const node of Object.values(nodes)) {
+    const metadata = metadataOf(node)
+    const fromStationId = routeEndpoint(metadata, 'fromStationId', [
+      'sourceStationId',
+      'upstreamStationId',
+    ])
+    const toStationId = routeEndpoint(metadata, 'toStationId', [
+      'targetStationId',
+      'downstreamStationId',
+    ])
+    if (!fromStationId || !toStationId || fromStationId === toStationId) continue
+
+    const fromStation = stationByStationId.get(fromStationId)
+    const toStation = stationByStationId.get(toStationId)
+    if (!fromStation || !toStation) continue
+
+    const processId = stringValue(metadata.processId)
+    if (
+      processId &&
+      ((fromStation.processId && fromStation.processId !== processId) ||
+        (toStation.processId && toStation.processId !== processId))
+    ) {
+      continue
+    }
+
+    const fromPortId = stringValue(metadata.fromPortId)
+    const toPortId = stringValue(metadata.toPortId)
+    const routeKey = [
+      fromStation.nodeId,
+      toStation.nodeId,
+      fromPortId ?? '',
+      toPortId ?? '',
+      stringValue(metadata.visualKind) ?? '',
+    ].join(':')
+    if (seenRoutes.has(routeKey)) continue
+    seenRoutes.add(routeKey)
+
+    const y = Math.max(fromStation.position[1], toStation.position[1]) + 0.25
+    const fromPoint: [number, number, number] = [
+      fromStation.position[0],
+      y,
+      fromStation.position[2],
+    ]
+    const toPoint: [number, number, number] = [toStation.position[0], y, toStation.position[2]]
+    routes.push({
+      id: routeKey,
+      fromNodeId: fromStation.nodeId,
+      toNodeId: toStation.nodeId,
+      fromPortId,
+      toPortId,
+      medium: stringValue(metadata.medium),
+      visualKind: stringValue(metadata.visualKind),
+      points: [fromPoint, toPoint],
+      midpoint: [(fromPoint[0] + toPoint[0]) / 2, y + 0.15, (fromPoint[2] + toPoint[2]) / 2],
+    })
+  }
+
+  return routes.slice(0, 48)
+}
+
+function routeColor(route: ProcessLensRoute) {
+  if (route.medium === 'power' || route.visualKind === 'cable_tray') return '#facc15'
+  if (route.medium === 'gas' || route.medium === 'hydrogen' || route.medium === 'oxygen')
+    return '#93c5fd'
+  if (route.medium === 'water' || route.medium === 'cooling') return '#38bdf8'
+  if (route.visualKind === 'hot_gas_duct' || route.visualKind === 'hot_material_chute')
+    return '#fb923c'
+  return '#67e8f9'
+}
+
+function routeSegment(route: ProcessLensRoute) {
+  const [fromPoint, toPoint] = route.points
+  const dx = toPoint[0] - fromPoint[0]
+  const dz = toPoint[2] - fromPoint[2]
+  return {
+    length: Math.max(0.1, Math.hypot(dx, dz)),
+    position: [(fromPoint[0] + toPoint[0]) / 2, fromPoint[1], (fromPoint[2] + toPoint[2]) / 2] as [
+      number,
+      number,
+      number,
+    ],
+    rotationY: Math.atan2(-dz, dx),
+  }
 }
 
 export const ProcessLensOverlay = memo(function ProcessLensOverlay() {
@@ -105,13 +250,38 @@ export const ProcessLensOverlay = memo(function ProcessLensOverlay() {
     () => (canvasLens === 'process' ? processLensStations(nodes, rootNodeIds) : []),
     [canvasLens, nodes, rootNodeIds],
   )
+  const routes = useMemo(
+    () => (canvasLens === 'process' ? processLensRoutes(nodes, stations) : []),
+    [canvasLens, nodes, stations],
+  )
+  const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds])
 
   if (canvasLens !== 'process' || stations.length === 0) return null
 
   return (
     <group name="process-lens-overlay">
+      {routes.map((route) => {
+        const color = routeColor(route)
+        const segment = routeSegment(route)
+        return (
+          <group key={route.id}>
+            <mesh position={segment.position} rotation={[0, segment.rotationY, 0]}>
+              <boxGeometry args={[segment.length, 0.035, 0.035]} />
+              <meshBasicMaterial color={color} opacity={0.75} transparent />
+            </mesh>
+            <Html center distanceFactor={20} position={route.midpoint} zIndexRange={[35, 0]}>
+              <div
+                className="pointer-events-none rounded-full border border-white/15 bg-zinc-950/75 px-2 py-0.5 text-[9px] text-cyan-50 shadow-lg backdrop-blur"
+                data-testid={`process-lens-route-${route.fromNodeId}-${route.toNodeId}`}
+              >
+                {[route.fromPortId ?? 'out', route.toPortId ?? 'in'].join(' -> ')}
+              </div>
+            </Html>
+          </group>
+        )
+      })}
       {stations.map((station) => {
-        const selected = selectedIds.map(String).includes(station.nodeId)
+        const selected = selectedIdSet.has(station.nodeId)
         return (
           <Html
             center
