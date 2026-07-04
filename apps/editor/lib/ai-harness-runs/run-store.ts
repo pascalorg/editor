@@ -9,6 +9,7 @@ import type {
   AiConversationSummary,
   AiHarnessRun,
   AiHarnessRunEvent,
+  AiHarnessRunIntentRouteEvidence,
   AiHarnessRunMode,
   AiHarnessRunStatus,
 } from './types'
@@ -160,6 +161,7 @@ export async function createRun(input: {
   maxTurns?: number
   params?: Record<string, unknown>
   context?: unknown
+  intentRoute?: AiHarnessRunIntentRouteEvidence
   image?: { name: string; type: string; dataUrl: string }
 }) {
   const now = new Date().toISOString()
@@ -186,12 +188,20 @@ export async function createRun(input: {
     maxTurns: input.maxTurns,
     params: input.params,
     context: input.context,
+    intentRoute: input.intentRoute,
     image,
     createdAt: now,
     updatedAt: now,
   }
   await writeJsonAtomic(await runPath(id), run)
   await appendRunEvent(id, { type: 'status', message: 'queued', data: { status: 'queued' } })
+  if (input.intentRoute) {
+    await appendRunEvent(id, {
+      type: 'message',
+      message: 'intent_route',
+      data: { intentRoute: input.intentRoute },
+    })
+  }
   await addActiveRun(run.conversationId, id, run.mode)
   return run
 }

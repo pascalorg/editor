@@ -10,6 +10,19 @@ export type AiHarnessRunImage = {
   path: string
 }
 
+export type AiHarnessRunIntentRouteEvidence = {
+  kind: string
+  confidence: number
+  reason: string
+  previewId?: string
+  requiredPack?: {
+    id: string
+    version?: string
+    installed: boolean
+    reason?: string
+  }
+}
+
 export type AiHarnessRun = {
   id: string
   conversationId: string
@@ -20,6 +33,7 @@ export type AiHarnessRun = {
   maxTurns?: number
   params?: Record<string, unknown>
   context?: unknown
+  intentRoute?: AiHarnessRunIntentRouteEvidence
   image?: AiHarnessRunImage
   createdAt: string
   startedAt?: string

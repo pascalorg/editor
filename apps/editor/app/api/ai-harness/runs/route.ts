@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
 import { resolveArticraftMaxTurns } from '@/lib/ai-harness-runs/articraft-turn-budget'
+import { buildAiIntentPreview } from '@/lib/ai-harness-runs/intent-preview-service'
 import { createRun, listRecentRuns } from '@/lib/ai-harness-runs/run-store'
-import type { AiHarnessRun, AiHarnessRunMode } from '@/lib/ai-harness-runs/types'
+import type {
+  AiConversationPurpose,
+  AiHarnessRun,
+  AiHarnessRunIntentRouteEvidence,
+  AiHarnessRunMode,
+} from '@/lib/ai-harness-runs/types'
+import { listInstalledProfilePacks } from '@/lib/profile-packs'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,6 +32,47 @@ function decodeJsonBody(bytes: ArrayBuffer) {
   }
 
   return new TextDecoder().decode(bytes)
+}
+
+function asRunMode(value: unknown): AiHarnessRunMode | undefined {
+  return value === 'articraft' ||
+    value === 'image-to-3d' ||
+    value === 'primitive' ||
+    value === 'factory'
+    ? value
+    : undefined
+}
+
+function asConversationPurpose(value: unknown): AiConversationPurpose | undefined {
+  return value === 'factory' || value === 'asset' ? value : undefined
+}
+
+export function parseRunIntentRouteEvidence(
+  value: unknown,
+): AiHarnessRunIntentRouteEvidence | undefined {
+  if (!isRecord(value)) return undefined
+  const kind = typeof value.kind === 'string' ? value.kind : ''
+  const reason = typeof value.reason === 'string' ? value.reason : ''
+  const confidence = typeof value.confidence === 'number' ? value.confidence : Number.NaN
+  if (!kind || !reason || !Number.isFinite(confidence)) return undefined
+  const requiredPack = isRecord(value.requiredPack)
+    ? {
+        id: typeof value.requiredPack.id === 'string' ? value.requiredPack.id : '',
+        version:
+          typeof value.requiredPack.version === 'string' ? value.requiredPack.version : undefined,
+        installed: value.requiredPack.installed === true,
+        reason:
+          typeof value.requiredPack.reason === 'string' ? value.requiredPack.reason : undefined,
+      }
+    : undefined
+
+  return {
+    kind,
+    confidence,
+    reason,
+    previewId: typeof value.previewId === 'string' ? value.previewId : undefined,
+    requiredPack: requiredPack?.id ? requiredPack : undefined,
+  }
 }
 
 export async function parseAiHarnessRunRequestBody(request: Request): Promise<unknown> {
@@ -60,7 +108,9 @@ export async function POST(request: Request) {
   }
 
   const mode = body.mode
-  if (!(mode === 'articraft' || mode === 'image-to-3d' || mode === 'primitive' || mode === 'factory')) {
+  if (
+    !(mode === 'articraft' || mode === 'image-to-3d' || mode === 'primitive' || mode === 'factory')
+  ) {
     return NextResponse.json({ error: 'Unsupported run mode' }, { status: 400 })
   }
 
@@ -78,17 +128,51 @@ export async function POST(request: Request) {
     : undefined
 
   try {
+    const installedPacks = await listInstalledProfilePacks()
+    const preview = buildAiIntentPreview({
+      request: {
+        prompt: prompt || 'Generate a 3D model from the reference image',
+        imageAttached: Boolean(image),
+        generationMode: asRunMode(mode),
+        conversationPurpose: asConversationPurpose(body.conversationPurpose),
+      },
+      installedPacks,
+    })
+    if (preview.route.kind === 'create-factory' && preview.preview.applyMode === 'blocked') {
+      return NextResponse.json(
+        {
+          error: 'intent_blocked',
+          message: preview.preview.summary,
+          route: preview.route,
+          preview: preview.preview,
+        },
+        { status: 409 },
+      )
+    }
+    const providedIntentRoute = parseRunIntentRouteEvidence(body.intentRoute)
+    const intentRoute: AiHarnessRunIntentRouteEvidence = providedIntentRoute ?? {
+      kind: preview.route.kind,
+      confidence: preview.route.confidence,
+      reason: preview.route.reason,
+      previewId: preview.preview.id,
+      requiredPack: preview.route.requiredPack
+        ? {
+            id: preview.route.requiredPack.id,
+            version: preview.route.requiredPack.version,
+            installed: preview.route.requiredPack.installed,
+            reason: preview.route.requiredPack.reason,
+          }
+        : undefined,
+    }
     const run = await createRun({
       conversationId: typeof body.conversationId === 'string' ? body.conversationId : 'default',
       mode: mode as AiHarnessRunMode,
       prompt: prompt || 'Generate a 3D model from the reference image',
       articraftMode: body.articraftMode === 'static' ? 'static' : 'articulated',
-      maxTurns:
-        mode === 'articraft'
-          ? resolveArticraftMaxTurns(prompt, body.maxTurns)
-          : undefined,
+      maxTurns: mode === 'articraft' ? resolveArticraftMaxTurns(prompt, body.maxTurns) : undefined,
       params: isRecord(body.params) ? body.params : undefined,
       context: body.context,
+      intentRoute,
       image,
     })
 
