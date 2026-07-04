@@ -189,8 +189,10 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
-  const runs = await listRecentRuns()
+export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const limit = Number.parseInt(url.searchParams.get('limit') ?? '20', 10)
+  const runs = await listRecentRuns(Number.isFinite(limit) ? limit : undefined)
   return NextResponse.json({
     runs,
     workflowSummaries: runs.map((run) => summarizeAiWorkflowGraph(buildAiWorkflowGraph({ run }))),

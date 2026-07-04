@@ -588,6 +588,14 @@ Validation:
 - Factory generation run shows pack resolver, template resolver, equipment compiler, route composer, quality report.
 - User can re-run only one station after changing its profile.
 
+Phase 6 delivery status:
+
+- Done: AI harness runs expose a derived workflow graph from existing run/result/event data.
+- Done: recent runs expose compact workflow summaries for a run history panel.
+- Done: the AI panel includes a minimal Runs inspector that opens the workflow stages for a selected run.
+- Deferred: station-scoped re-run from a stage.
+- Deferred: save generation plan as reusable template.
+
 ### Phase 7: Image And Joint Asset Integration
 
 Goal:

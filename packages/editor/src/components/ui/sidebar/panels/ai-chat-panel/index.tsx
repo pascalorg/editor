@@ -2350,6 +2350,7 @@ const AI_CHAT_STORAGE_MESSAGE_LIMIT = 40
 const AI_CHAT_STORAGE_FALLBACK_MESSAGE_LIMIT = 12
 const AI_CHAT_STORAGE_CONTENT_MAX_LENGTH = 20_000
 const CONVERSATION_HISTORY_PAGE_SIZE = 15
+const RUN_HISTORY_LIMIT = 12
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -3792,6 +3793,48 @@ type AiConversationSummary = {
   updatedAt: string
 }
 
+type AiWorkflowStageStatus =
+  | 'pending'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'skipped'
+  | 'blocked'
+
+type AiWorkflowStageSummary = {
+  id: string
+  label: string
+  status: AiWorkflowStageStatus
+  summary: string
+  metrics?: { label: string; value: string }[]
+  details?: string[]
+  rerunnable?: boolean
+}
+
+type AiWorkflowGraphSummary = {
+  runId: string
+  mode: NonNullable<ChatMessage['generationRun']>['mode']
+  status: NonNullable<ChatMessage['generationRun']>['status']
+  title: string
+  summary: string
+  stageCount: number
+  succeededStageCount: number
+  failedStageCount: number
+  blockedStageCount: number
+  templateAvailable: boolean
+}
+
+type AiWorkflowGraph = {
+  runId: string
+  mode: NonNullable<ChatMessage['generationRun']>['mode']
+  status: NonNullable<ChatMessage['generationRun']>['status']
+  title: string
+  summary: string
+  stages: AiWorkflowStageSummary[]
+  rerunTargets?: { stageId: string; label: string; supported: boolean; reason: string }[]
+  templateCandidate?: { available: boolean; label: string; reason: string }
+}
+
 function isAiConversationPurpose(value: unknown): value is AiConversationPurpose {
   return value === 'factory' || value === 'asset'
 }
@@ -3823,6 +3866,23 @@ function conversationHistoryIcon(conversation: AiConversationSummary) {
     label: t('aiChat.conversation', 'Conversation'),
     className: 'border-border/60 bg-accent/35 text-muted-foreground',
   }
+}
+
+function workflowStatusClass(status: AiWorkflowStageStatus | AiWorkflowGraphSummary['status']) {
+  if (status === 'succeeded') return 'border-emerald-400/35 bg-emerald-400/10 text-emerald-200'
+  if (status === 'failed') return 'border-amber-400/35 bg-amber-400/10 text-amber-200'
+  if (status === 'blocked') return 'border-orange-400/35 bg-orange-400/10 text-orange-200'
+  if (status === 'running') return 'border-sky-400/35 bg-sky-400/10 text-sky-200'
+  return 'border-border/60 bg-accent/25 text-muted-foreground'
+}
+
+function workflowStatusIcon(status: AiWorkflowStageStatus | AiWorkflowGraphSummary['status']) {
+  if (status === 'succeeded') return 'mdi:check-circle-outline'
+  if (status === 'failed') return 'mdi:alert-circle-outline'
+  if (status === 'blocked') return 'mdi:lock-alert-outline'
+  if (status === 'running') return 'mdi:loading'
+  if (status === 'skipped') return 'mdi:debug-step-over'
+  return 'mdi:circle-outline'
 }
 
 function buildArticraftResultFromJobData(prompt: string, resultData: Record<string, unknown>) {
@@ -3891,6 +3951,11 @@ export function AiChatPanel() {
   const [conversationHistoryOpen, setConversationHistoryOpen] = useState(false)
   const [conversationHistory, setConversationHistory] = useState<AiConversationSummary[]>([])
   const [conversationHistoryLoading, setConversationHistoryLoading] = useState(false)
+  const [runHistoryOpen, setRunHistoryOpen] = useState(false)
+  const [runHistory, setRunHistory] = useState<AiWorkflowGraphSummary[]>([])
+  const [runHistoryLoading, setRunHistoryLoading] = useState(false)
+  const [selectedWorkflowGraph, setSelectedWorkflowGraph] = useState<AiWorkflowGraph | null>(null)
+  const [selectedWorkflowRunId, setSelectedWorkflowRunId] = useState<string | null>(null)
   const [generationMode, setGenerationMode] = useState<AiGenerationMode>(
     aiChatPanelState.generationMode,
   )
@@ -5672,10 +5737,45 @@ export function AiChatPanel() {
     }
   }, [])
 
+  const refreshRunHistory = useCallback(async () => {
+    setRunHistoryLoading(true)
+    try {
+      const response = await fetch(`/api/ai-harness/runs?limit=${RUN_HISTORY_LIMIT}`, {
+        cache: 'no-store',
+      })
+      const data = await response.json().catch(() => ({}))
+      const summaries =
+        isRecord(data) && Array.isArray(data.workflowSummaries)
+          ? (data.workflowSummaries as AiWorkflowGraphSummary[])
+          : []
+      setRunHistory(summaries.slice(0, RUN_HISTORY_LIMIT))
+    } catch {
+      setRunHistory([])
+    } finally {
+      setRunHistoryLoading(false)
+    }
+  }, [])
+
+  const inspectRunWorkflow = useCallback(async (runId: string) => {
+    if (!runId) return
+    setSelectedWorkflowRunId(runId)
+    try {
+      const response = await fetch(`/api/ai-harness/runs/${encodeURIComponent(runId)}/workflow`, {
+        cache: 'no-store',
+      })
+      const data = await response.json().catch(() => ({}))
+      const graph = isRecord(data) && isRecord(data.workflowGraph) ? data.workflowGraph : null
+      setSelectedWorkflowGraph(graph as AiWorkflowGraph | null)
+    } catch {
+      setSelectedWorkflowGraph(null)
+    }
+  }, [])
+
   useEffect(() => {
     if (!panelHydrated) return
     void refreshConversationHistory()
-  }, [conversationId, panelHydrated, refreshConversationHistory])
+    void refreshRunHistory()
+  }, [conversationId, panelHydrated, refreshConversationHistory, refreshRunHistory])
 
   const closeActiveRunSources = useCallback(() => {
     for (const source of activeRunEventSourcesRef.current.values()) {
@@ -6839,11 +6939,31 @@ export function AiChatPanel() {
       {articraftViewerModalElement}
       <div className="relative flex items-center justify-end gap-1.5 border-border/50 border-b px-3 py-2.5">
         <button
+          aria-expanded={runHistoryOpen}
+          aria-haspopup="menu"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-accent/25 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-sky-400/50 hover:text-sky-200"
+          data-testid="ai-run-history-toggle"
+          onClick={() => {
+            setRunHistoryOpen((open) => !open)
+            setConversationHistoryOpen(false)
+            void refreshRunHistory()
+          }}
+          type="button"
+        >
+          <Icon className="size-3.5" icon="mdi:source-branch" />
+          Runs
+          <Icon
+            className={cn('size-3.5 transition-transform', runHistoryOpen && 'rotate-180')}
+            icon="mdi:chevron-down"
+          />
+        </button>
+        <button
           aria-expanded={conversationHistoryOpen}
           aria-haspopup="menu"
           className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-accent/25 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-[#a684ff]/50 hover:text-[#a684ff]"
           onClick={() => {
             setConversationHistoryOpen((open) => !open)
+            setRunHistoryOpen(false)
             void refreshConversationHistory()
           }}
           type="button"
@@ -6941,6 +7061,108 @@ export function AiChatPanel() {
                 {conversationHistoryLoading ? (
                   <div className="px-2 py-2 text-center text-[10px] text-muted-foreground">
                     {t('aiChat.loadingConversationHistory', 'Loading history...')}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+        {runHistoryOpen ? (
+          <div className="absolute top-full right-3 z-30 mt-1.5 w-[min(26rem,calc(100%-1.5rem))] rounded-xl border border-border/70 bg-background/95 p-1.5 shadow-xl backdrop-blur">
+            {runHistory.length === 0 ? (
+              <div className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                {runHistoryLoading ? 'Loading runs...' : 'No runs yet'}
+              </div>
+            ) : (
+              <div className="max-h-[32rem] space-y-1 overflow-y-auto [scrollbar-color:#3a3a3d_#050505] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-button]:hidden [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3d] [&::-webkit-scrollbar-track]:bg-[#050505]">
+                {runHistory.map((run) => {
+                  const active = run.runId === selectedWorkflowRunId
+                  return (
+                    <div
+                      className={cn(
+                        'rounded-lg border px-2 py-2 transition-colors',
+                        active ? 'border-sky-400/45 bg-sky-400/10' : 'border-transparent hover:bg-accent/45',
+                      )}
+                      data-testid={`ai-run-history-item-${run.runId}`}
+                      key={run.runId}
+                    >
+                      <button
+                        className="flex w-full items-start gap-2 text-left"
+                        onClick={() => void inspectRunWorkflow(run.runId)}
+                        type="button"
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md border',
+                            workflowStatusClass(run.status),
+                          )}
+                        >
+                          <Icon
+                            className={cn('size-3.5', run.status === 'running' && 'animate-spin')}
+                            icon={workflowStatusIcon(run.status)}
+                          />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[11px] font-medium text-foreground">
+                              {run.title}
+                            </span>
+                            <span className="shrink-0 rounded border border-border/60 px-1 py-0.5 text-[9px] text-muted-foreground">
+                              {run.mode}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                            {run.succeededStageCount}/{run.stageCount} stages · {run.summary}
+                          </span>
+                        </span>
+                      </button>
+                      {active && selectedWorkflowGraph ? (
+                        <div
+                          className="mt-2 space-y-1.5 rounded-lg border border-border/50 bg-black/20 p-2"
+                          data-testid="ai-run-workflow-graph"
+                        >
+                          {selectedWorkflowGraph.stages.map((stage) => (
+                            <div className="grid gap-1" key={stage.id}>
+                              <div className="flex items-center gap-1.5 text-[10px]">
+                                <Icon
+                                  className={cn(
+                                    'size-3.5 shrink-0',
+                                    stage.status === 'running' && 'animate-spin',
+                                  )}
+                                  icon={workflowStatusIcon(stage.status)}
+                                />
+                                <span className="min-w-0 flex-1 truncate text-foreground">
+                                  {stage.label}
+                                </span>
+                                <span
+                                  className={cn(
+                                    'shrink-0 rounded border px-1 py-0.5 text-[9px]',
+                                    workflowStatusClass(stage.status),
+                                  )}
+                                >
+                                  {stage.status}
+                                </span>
+                              </div>
+                              <div className="pl-5 text-[9px] leading-snug text-muted-foreground">
+                                {stage.summary}
+                              </div>
+                            </div>
+                          ))}
+                          {selectedWorkflowGraph.templateCandidate ? (
+                            <div className="rounded border border-border/50 bg-accent/20 px-2 py-1 text-[9px] text-muted-foreground">
+                              Template:{' '}
+                              {selectedWorkflowGraph.templateCandidate.available ? 'available' : 'not ready'} ·{' '}
+                              {selectedWorkflowGraph.templateCandidate.reason}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+                {runHistoryLoading ? (
+                  <div className="px-2 py-2 text-center text-[10px] text-muted-foreground">
+                    Loading runs...
                   </div>
                 ) : null}
               </div>
