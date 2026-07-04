@@ -77,6 +77,11 @@ function refineryStructureGraph() {
         processDisplayLabel: 'Refinery',
         stationId: 'atmospheric_distillation',
         equipmentRole: 'distillation',
+        liveDataBinding: {
+          enabled: true,
+          dataKey: 'machine.temperature',
+          effect: 'color',
+        },
         sourcePack: { id: 'industry.refinery.basic', version: '0.2.0' },
         equipmentAssembly: {
           kind: 'semantic-assembly',
@@ -245,6 +250,14 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
     await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeHidden()
     await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeHidden()
+    await expect(page.getByTestId(`data-lens-card-${ids.tower}`)).toBeVisible()
+    await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible()
+    await expect(page.getByTestId(`data-lens-status-${ids.tower}`)).toContainText('1 binding')
+    await expect(page.getByTestId(`data-lens-binding-${ids.tower}`)).toContainText(
+      'color: machine.temperature',
+    )
+    await expect(page.getByTestId(`data-lens-value-${ids.tower}`)).toContainText('28')
+    await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('Ready to bind')
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).not.toHaveAttribute(
       'data-scene-structure-selected',
       'true',

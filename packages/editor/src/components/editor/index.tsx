@@ -74,6 +74,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { usePluginPanels } from '../ui/sidebar/use-plugin-panels'
+import { DataLensOverlay } from './canvas-lens/data-lens-overlay'
 import { EquipmentLensOverlay } from './canvas-lens/equipment-lens-overlay'
 import { ProcessLensOverlay } from './canvas-lens/process-lens-overlay'
 import { CustomCameraControls } from './custom-camera-controls'
@@ -705,6 +706,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
         <>
           <ProcessLensOverlay />
           <EquipmentLensOverlay />
+          <DataLensOverlay />
         </>
       )}
       {!(isLoading || isFirstPersonMode || isPreviewMode) && <SnapAwareGrid />}

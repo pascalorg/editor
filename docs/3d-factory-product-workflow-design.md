@@ -486,12 +486,13 @@ Foundation delivered:
 - Scene Structure e2e verifies Lens switching can happen while Process structure and station selection remain stable.
 - Process Lens MVP renders station labels, exposed port chips, and explicit route arrows on the canvas; clicking a Process Lens station selects the same assembly used by Scene Structure.
 - Equipment Lens MVP renders semantic equipment cards, footprint outlines, editable part chips, and port counts from the shared object capability resolver; clicking an Equipment Lens card selects the same assembly used by Scene Structure and Inspector.
+- Data Lens MVP renders bound and ready-to-bind equipment cards from live-data and dynamic binding metadata; bound cards show binding summaries and sample values while preserving normal selection behavior.
 
 Next implementation slices:
 
-- Data Lens overlay: bound/unbound equipment status and live-value label anchors.
 - Process Lens polish: route decluttering, port-side anchors, and branch labels for dense process plants.
 - Equipment Lens polish: true assembly bounds, part-side anchors, and direct affordances for editable semantic parts.
+- Data Lens polish: live websocket freshness, alarm severity colors, and direct binding entry points.
 
 ### Phase 4: Semantic Inspector
 
