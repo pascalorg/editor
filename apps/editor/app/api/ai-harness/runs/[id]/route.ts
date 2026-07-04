@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { loadRun } from '@/lib/ai-harness-runs/run-store'
+import { listRunEvents, loadRun } from '@/lib/ai-harness-runs/run-store'
 import type { AiHarnessRun } from '@/lib/ai-harness-runs/types'
+import { buildAiWorkflowGraph } from '@/lib/ai-harness-runs/workflow-summary'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,7 +28,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const { id } = await params
   const run = await loadRun(id)
   if (!run) return NextResponse.json({ error: 'not_found' }, { status: 404 })
-  return NextResponse.json({ run })
+  const events = await listRunEvents(id, { limit: 500 })
+  return NextResponse.json({ run, workflowGraph: buildAiWorkflowGraph({ run, events }) })
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {

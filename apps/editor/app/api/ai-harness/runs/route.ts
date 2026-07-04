@@ -8,6 +8,10 @@ import type {
   AiHarnessRunIntentRouteEvidence,
   AiHarnessRunMode,
 } from '@/lib/ai-harness-runs/types'
+import {
+  buildAiWorkflowGraph,
+  summarizeAiWorkflowGraph,
+} from '@/lib/ai-harness-runs/workflow-summary'
 import { listInstalledProfilePacks } from '@/lib/profile-packs'
 
 export const runtime = 'nodejs'
@@ -186,5 +190,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({ runs: await listRecentRuns() })
+  const runs = await listRecentRuns()
+  return NextResponse.json({
+    runs,
+    workflowSummaries: runs.map((run) => summarizeAiWorkflowGraph(buildAiWorkflowGraph({ run }))),
+  })
 }
