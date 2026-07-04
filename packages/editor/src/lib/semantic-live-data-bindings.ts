@@ -183,6 +183,22 @@ export function semanticLiveDataBindingTargets(
     })
   }
 
+  targets.push({
+    id: 'alarm-pulse',
+    label: 'Alarm pulse',
+    type: 'scale',
+    semanticType: 'generic',
+    preferredPaths: ['alarm.count', 'machine.status'],
+    description: 'Pulse the selected equipment when an alarm/status field is active.',
+    binding: {
+      condition: 'greaterThan',
+      value: 0,
+      scaleEffect: 'alarmPulse',
+      outputRange: [1, 1.18],
+      speedRange: [0, 8],
+    },
+  })
+
   return targets
 }
 
@@ -303,6 +319,12 @@ function scoreTarget(prompt: string, target: SemanticLiveDataBindingTarget) {
     score += 5
   }
   if (
+    target.id === 'alarm-pulse' &&
+    textIncludesAny(text, ['alarm', 'alert', 'warning', 'pulse', '报警', '告警', '闪烁', '脉冲'])
+  ) {
+    score += 7
+  }
+  if (
     textIncludesAny(
       text,
       target.preferredPaths.map((path) => path.toLocaleLowerCase()),
@@ -315,7 +337,8 @@ function scoreTarget(prompt: string, target: SemanticLiveDataBindingTarget) {
 
 function scorePath(prompt: string, path: string, target: SemanticLiveDataBindingTarget) {
   const text = lowerPrompt(prompt)
-  let score = target.preferredPaths.includes(path) ? 4 : 0
+  const preferredIndex = target.preferredPaths.indexOf(path)
+  let score = preferredIndex >= 0 ? Math.max(1, 6 - preferredIndex) : 0
   if (text.includes(path.toLocaleLowerCase())) score += 8
   for (const segment of path.toLocaleLowerCase().split('.')) {
     if (segment && text.includes(segment)) score += 1
@@ -324,6 +347,7 @@ function scorePath(prompt: string, path: string, target: SemanticLiveDataBinding
   if (target.type === 'flow' && /flow|流量/.test(path)) score += 2
   if (target.type === 'speed' && /speed|速度|转速/.test(path)) score += 2
   if (target.type === 'color' && /temperature|temp|温度/.test(path)) score += 2
+  if (target.id === 'alarm-pulse' && /alarm|status|报警|告警/.test(path)) score += 4
   return score
 }
 

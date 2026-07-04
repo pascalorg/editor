@@ -26,6 +26,20 @@ const tankProfile: ObjectCapabilityProfile = {
   equipmentFamily: 'tank',
 }
 
+const pumpProfile: ObjectCapabilityProfile = {
+  nodeId: 'assembly_pump',
+  nodeType: 'assembly',
+  label: 'Crude transfer pump',
+  sources: ['semantic-assembly'],
+  capabilities: [],
+  editableParts: [],
+  ports: [],
+  dataBindings: [],
+  recipeId: 'factory:pump',
+  profileId: 'refinery.transfer_pump',
+  equipmentFamily: 'pump',
+}
+
 describe('semantic live data bindings', () => {
   test('suggests a tank level binding from fixed live data fields', () => {
     const target = semanticLiveDataBindingTargets(tankProfile)[0]
@@ -90,6 +104,52 @@ describe('semantic live data bindings', () => {
         id: 'semantic_live_assembly_tank_tank-level',
         type: 'level',
         path: 'refinery.tank.level',
+      },
+    ])
+  })
+
+  test('plans pump flow binding to the refinery flow field', () => {
+    const node = AssemblyNode.parse({
+      id: 'assembly_pump',
+      type: 'assembly',
+    }) as AnyNode
+    const plan = planSemanticLiveDataBinding({
+      prompt: '把泵的流量绑定到 refinery crude flowRate',
+      profiles: [pumpProfile],
+      nodes: { assembly_pump: node },
+      paths: FIXED_FACTORY_LIVE_DATA_PATHS,
+    })
+
+    expect(plan).toMatchObject({
+      nodeId: 'assembly_pump',
+      path: 'refinery.crude.flowRate',
+      target: { id: 'pump-flow', type: 'flow' },
+    })
+  })
+
+  test('plans alarm pulse binding for selected equipment', () => {
+    const node = AssemblyNode.parse({
+      id: 'assembly_tank',
+      type: 'assembly',
+    }) as AnyNode
+    const plan = planSemanticLiveDataBinding({
+      prompt: '报警时让选中设备脉冲闪烁',
+      profiles: [tankProfile],
+      nodes: { assembly_tank: node },
+      paths: FIXED_FACTORY_LIVE_DATA_PATHS,
+    })
+
+    expect(plan).toMatchObject({
+      nodeId: 'assembly_tank',
+      path: 'alarm.count',
+      target: { id: 'alarm-pulse', type: 'scale' },
+    })
+    expect((plan?.patch.metadata as Record<string, unknown>).dynamicBindings).toMatchObject([
+      {
+        id: 'semantic_live_assembly_tank_alarm-pulse',
+        type: 'scale',
+        path: 'alarm.count',
+        scaleEffect: 'alarmPulse',
       },
     ])
   })

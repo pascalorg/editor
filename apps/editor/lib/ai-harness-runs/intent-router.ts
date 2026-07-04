@@ -77,6 +77,7 @@ const imageIntentPattern = /图生|图片|照片|参考图|\bimage\b|\bphoto\b|\
 const jointIntentPattern = /关节|骨骼|机械臂|可动资产|\barticulated\b|\bjoint\b|\brig\b/iu
 const dataBindingIntentPattern =
   /websocket|数据绑定|绑定.*数据|实时数据|mqtt|opc|\blive data\b|\btelemetry\b/iu
+const alarmBindingIntentPattern = /报警|告警|\balarm\b|\balert\b|\bwarning\b|\bpulse\b|脉冲|闪烁/iu
 const explainIntentPattern =
   /为什么|是什么|来自哪里|来自哪个|解释|说明|\bwhy\b|\bwhat\b|\bexplain\b/iu
 
@@ -121,7 +122,10 @@ export function routeAiIntent(input: AiIntentRouterInput): AiIntentRoute {
     })
   }
 
-  if (dataBindingIntentPattern.test(prompt)) {
+  if (
+    dataBindingIntentPattern.test(prompt) ||
+    (selection?.nodeIds.length && alarmBindingIntentPattern.test(prompt))
+  ) {
     return route({
       kind: 'bind-live-data',
       confidence: 0.86,

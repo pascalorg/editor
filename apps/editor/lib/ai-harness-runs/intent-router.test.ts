@@ -107,6 +107,22 @@ describe('AI intent router', () => {
     })
   })
 
+  test('routes selected alarm pulse requests to live data binding', () => {
+    const route = routeAiIntent({
+      prompt: 'pulse the selected equipment when alarm count is active',
+      selection: {
+        nodeIds: ['assembly_tank'],
+        nodeType: 'assembly',
+      },
+    })
+
+    expect(route).toMatchObject({
+      kind: 'bind-live-data',
+      execution: 'data-binding',
+      blockers: [],
+    })
+  })
+
   test('routes image prompts to image-to-3d', () => {
     const route = routeAiIntent({
       prompt: '根据这张图片生成设备',

@@ -168,9 +168,16 @@ function stepsForRoute(route: AiIntentRoute): readonly GenerationPlanStep[] {
       },
       {
         id: 'configure-binding',
-        label: 'Configure data binding',
+        label: 'Detect live data field',
         status: route.selectionScope?.nodeIds.length ? 'ready' : 'blocked',
-        detail: 'Map websocket or telemetry fields to editable equipment/part properties.',
+        detail: 'Choose the best fixed/live telemetry path for the requested semantic effect.',
+      },
+      {
+        id: 'apply-semantic-binding',
+        label: 'Apply semantic binding',
+        status: route.selectionScope?.nodeIds.length ? 'ready' : 'blocked',
+        detail:
+          'Write a dynamic binding to the selected equipment so Data Lens and preview runtime can read the same contract.',
       },
     ]
   }
