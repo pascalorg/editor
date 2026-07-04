@@ -418,6 +418,8 @@ Validation:
 
 ### Phase 2: Scene Structure Panel
 
+Status: delivered for v2 foundation.
+
 Goal:
 
 - Replace floor-only mental model with switchable scene structures.
@@ -433,6 +435,29 @@ Validation:
 - Refinery defaults to process/spatial grouping.
 - Building/floor projects can still use floor grouping.
 - Selecting a station in Process mode selects the correct assembly on canvas.
+
+Delivered:
+
+- Site panel now opens with Scene Structure as the primary structure view.
+- Auto mode chooses Process for industry/factory scenes, Elevation for building/floor scenes, and Spatial for general scenes.
+- Process mode collapses refinery/factory stations to representative assemblies instead of listing every primitive, pipe, and detail part.
+- Spatial, System, Data, Asset Source, and Elevation modes are available from the same panel.
+- Elevation mode preserves the previous floor/level content instead of deleting the old building workflow.
+- Structure rows synchronize selection with canvas/inspector and scroll selected rows into view.
+- Inspector and AI now share object capability profiles, so selected-object edits can see semantic parts, editable params, and read-only ports.
+
+Verification:
+
+- `bun test packages/editor/src/lib/scene-structure.test.ts`
+- `bun test packages/editor/src/lib/object-capabilities.test.ts packages/editor/src/lib/ai-chat-harness/context-builder.test.ts`
+- `bunx playwright test e2e/scene-structure.spec.ts`
+- `bun run --cwd apps/editor check-types`
+
+Deferred to later phases:
+
+- Canvas overlays, port arrows, process arrows, footprints, data labels, and maintenance access highlights belong to Phase 3 Canvas Lenses.
+- Full Equipment/Parts/Ports/Data/Source inspector tabs belong to Phase 4 Semantic Inspector.
+- Scene Structure search, large-scene virtualization, and saved per-project structure preferences are product polish items after the v2 foundation is stable.
 
 ### Phase 3: Canvas Lenses
 

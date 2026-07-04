@@ -4,13 +4,23 @@ import {
   Boxes,
   Building2,
   Cable,
+  CircleDot,
   Database,
   Factory,
   Layers,
   Map,
   Package,
+  Search,
 } from 'lucide-react'
-import { type ComponentType, memo, type ReactNode, useMemo, useState } from 'react'
+import {
+  type ComponentType,
+  memo,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { cn } from '../../../../../lib/utils'
 import {
   buildSceneStructure,
@@ -31,6 +41,10 @@ const STRUCTURE_MODES: Array<{
   { id: 'asset-source', label: 'Source', icon: Package },
   { id: 'elevation', label: 'Elevation', icon: Layers },
 ]
+
+function modeLabel(mode: SceneStructureMode) {
+  return STRUCTURE_MODES.find((item) => item.id === mode)?.label ?? mode
+}
 
 function focusNode(nodeId: string) {
   emitter.emit('camera-controls:focus', { nodeId: nodeId as AnyNodeId })
@@ -55,6 +69,13 @@ const StructureItemRow = memo(function StructureItemRow({ item }: { item: SceneS
   const selected = useViewer((state) => state.selection.selectedIds.includes(item.nodeId))
   const hovered = useViewer((state) => state.hoveredId === item.nodeId)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const rowRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!selected) return
+    rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
+
   return (
     <button
       className={cn(
@@ -66,10 +87,12 @@ const StructureItemRow = memo(function StructureItemRow({ item }: { item: SceneS
             : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
       )}
       data-scene-structure-node-id={item.nodeId}
+      data-scene-structure-selected={selected ? 'true' : undefined}
       onClick={(event) => selectStructureItem(item, event)}
       onDoubleClick={() => focusNode(item.nodeId)}
       onMouseEnter={() => setHoveredId(item.nodeId as AnyNodeId)}
       onMouseLeave={() => setHoveredId(null)}
+      ref={rowRef}
       type="button"
     >
       <Boxes className="h-3.5 w-3.5 shrink-0 opacity-70" />
@@ -102,8 +125,24 @@ export const SceneStructurePanel = memo(function SceneStructurePanel({
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="scene-structure-panel">
       <div className="border-border/50 border-b bg-[#2C2C2E] p-1">
+        <div className="mb-1 flex items-center gap-1">
+          <button
+            className={cn(
+              'flex h-7 min-w-0 flex-1 items-center justify-center gap-1 rounded-md px-2 text-[11px] transition-colors',
+              mode === null
+                ? 'bg-[#3e3e3e] text-foreground ring-1 ring-border/50'
+                : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            )}
+            data-testid="scene-structure-mode-auto"
+            onClick={() => setMode(null)}
+            type="button"
+          >
+            <CircleDot className="h-3.5 w-3.5" />
+            <span className="truncate">Auto: {modeLabel(suggestedMode)}</span>
+          </button>
+        </div>
         <div className="grid grid-cols-3 gap-1">
           {STRUCTURE_MODES.map((item) => {
             const Icon = item.icon
@@ -116,6 +155,7 @@ export const SceneStructurePanel = memo(function SceneStructurePanel({
                     ? 'bg-[#3e3e3e] text-foreground ring-1 ring-border/50'
                     : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
                 )}
+                data-testid={`scene-structure-mode-${item.id}`}
                 key={item.id}
                 onClick={() => setMode(item.id)}
                 type="button"
@@ -133,7 +173,7 @@ export const SceneStructurePanel = memo(function SceneStructurePanel({
           <Building2 className="h-3.5 w-3.5" />
           Scene Structure
         </span>
-        <span>
+        <span data-testid="scene-structure-summary">
           {tree.summary.itemCount} objects / {tree.summary.groupCount} groups
         </span>
       </div>
@@ -143,8 +183,14 @@ export const SceneStructurePanel = memo(function SceneStructurePanel({
       ) : (
         <div className="subtle-scrollbar min-h-0 flex-1 overflow-y-auto">
           {tree.groups.length === 0 ? (
-            <div className="px-3 py-4 text-muted-foreground text-sm">
-              No objects in this structure.
+            <div className="px-3 py-5 text-muted-foreground text-sm">
+              <Search className="mb-2 h-4 w-4 opacity-70" />
+              <div className="font-medium text-foreground text-xs">
+                No {modeLabel(activeMode)} objects
+              </div>
+              <div className="mt-1 text-xs">
+                Switch structure mode or add objects with matching scene metadata.
+              </div>
             </div>
           ) : (
             tree.groups.map((group) => (
