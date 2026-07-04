@@ -531,10 +531,11 @@ Foundation delivered:
 - Data tab summarizes live-data and dynamic binding metadata without creating new binding state.
 - Source tab shows industry pack, process, role, generated source, and capability source tags.
 - Equipment tab now embeds semantic equipment instance parameters, so recipe/profile identity and editable device-level parameters live in one place.
+- Parts tab now acts as a semantic part editor entry: editable parts expose material and opacity controls in place while still supporting part selection.
 
 Next implementation slices:
 
-- Add ladder/platform-specific part controls once refinery/cement recipes expose those part contracts.
+- Add ladder/platform-specific part controls once refinery/cement recipes expose those part contracts beyond generic material controls.
 
 ### Phase 5: Data Binding Workflow
 

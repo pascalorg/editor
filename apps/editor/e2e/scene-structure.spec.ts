@@ -262,6 +262,12 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('semantic-inspector-equipment-param-shellOpacity')).toBeVisible()
     await page.getByTestId('semantic-inspector-tab-parts').click()
     await expect(page.getByTestId(`semantic-inspector-part-vessel_shell`)).toBeVisible()
+    await expect(page.getByTestId('semantic-inspector-part-vessel_shell-controls')).toContainText(
+      'Part material',
+    )
+    await expect(page.getByTestId('semantic-inspector-part-vessel_shell-opacity')).toContainText(
+      'Opacity',
+    )
     await page.getByTestId('semantic-inspector-tab-ports').click()
     await expect(page.getByTestId('semantic-inspector-port-inlet')).toContainText('crude')
     await expect(page.getByTestId('semantic-inspector-port-outlet')).toContainText('product')

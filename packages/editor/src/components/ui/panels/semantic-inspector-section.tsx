@@ -1,6 +1,14 @@
 'use client'
 
-import { type AnyNodeId, isDynamicBinding, isLiveDataBindingConfig, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getMaterialPresetByRef,
+  isDynamicBinding,
+  isLiveDataBindingConfig,
+  type MaterialSchema,
+  useScene,
+} from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { Box, Database, GitBranch, Plug, Tag, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -10,8 +18,14 @@ import {
   type ObjectPortSummary,
   resolveObjectCapabilities,
 } from '../../../lib/object-capabilities'
+import {
+  DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
+  withMaterialProperties,
+} from '../../../lib/material-appearance'
 import { cn } from '../../../lib/utils'
+import { MaterialSwatchField } from '../controls/material-swatch-field'
 import { PanelSection } from '../controls/panel-section'
+import { SliderControl } from '../controls/slider-control'
 import { SemanticEquipmentParamControls } from './semantic-equipment-params'
 
 type SemanticInspectorTab = 'equipment' | 'parts' | 'ports' | 'data' | 'source'
@@ -155,6 +169,104 @@ function partLabel(part: ObjectPartSummary) {
   return part.semanticRole ?? part.sourcePartKind ?? part.nodeId ?? 'part'
 }
 
+function materialSide(value: unknown): 'front' | 'back' | 'double' {
+  return value === 'back' || value === 'double' ? value : 'front'
+}
+
+function readPartMaterial(node: AnyNode | undefined) {
+  const material = (node as { material?: MaterialSchema } | undefined)?.material
+  const materialPreset = (node as { materialPreset?: string } | undefined)?.materialPreset
+  const presetProperties = getMaterialPresetByRef(materialPreset)?.mapProperties
+  const mergedProperties = {
+    ...DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
+    ...presetProperties,
+    ...material?.properties,
+  }
+  return {
+    material,
+    materialPreset: material ? undefined : materialPreset,
+    properties: {
+      color: mergedProperties.color,
+      roughness: mergedProperties.roughness,
+      metalness: mergedProperties.metalness,
+      opacity: mergedProperties.opacity,
+      transparent: mergedProperties.transparent,
+      side: materialSide(mergedProperties.side),
+    },
+  }
+}
+
+function PartMaterialControls({ part }: { part: ObjectPartSummary }) {
+  const nodeId = part.nodeId as AnyNodeId | undefined
+  const node = useScene((state) => (nodeId ? state.nodes[nodeId] : undefined))
+  const updateNode = useScene((state) => state.updateNode)
+  if (!(node && nodeId && part.editable)) return null
+
+  const values = readPartMaterial(node)
+  const label = partLabel(part)
+
+  const writeMaterial = (material: MaterialSchema | undefined, materialPreset?: string) => {
+    updateNode(nodeId, {
+      material,
+      materialPreset,
+    } as Partial<AnyNode>)
+    useScene.getState().markDirty(nodeId)
+  }
+
+  return (
+    <div
+      className="grid gap-1.5 rounded border border-border/35 bg-muted/10 p-2"
+      data-testid={`semantic-inspector-part-${label}-controls`}
+    >
+      <MaterialSwatchField
+        label="Part material"
+        selectedMaterialPreset={values.materialPreset}
+        value={values.material}
+        onChange={(material) => {
+          const nextProperties = {
+            ...values.properties,
+            ...material.properties,
+          }
+          writeMaterial({
+            ...material,
+            preset: 'custom',
+            properties: {
+              color: nextProperties.color,
+              roughness: nextProperties.roughness,
+              metalness: nextProperties.metalness,
+              opacity: nextProperties.opacity,
+              side: materialSide(nextProperties.side),
+              transparent:
+                (material.properties?.opacity ?? values.properties.opacity) < 1 ||
+                material.properties?.transparent === true ||
+                material.gradient?.stops.some((stop) => stop.opacity < 1) === true,
+            },
+          })
+        }}
+        onSelectMaterialPreset={(materialPreset) => writeMaterial(undefined, materialPreset)}
+      />
+      <div data-testid={`semantic-inspector-part-${label}-opacity`}>
+        <SliderControl
+          label="Opacity"
+          max={1}
+          min={0.05}
+          onChange={(opacity) =>
+            writeMaterial(
+              withMaterialProperties(
+                { preset: 'custom', properties: values.properties },
+                { opacity },
+              ),
+            )
+          }
+          precision={2}
+          step={0.01}
+          value={values.properties.opacity}
+        />
+      </div>
+    </div>
+  )
+}
+
 function PartsTab({ parts }: { parts: ObjectPartSummary[] }) {
   const setSelection = useViewer((state) => state.setSelection)
   if (parts.length === 0) {
@@ -166,23 +278,31 @@ function PartsTab({ parts }: { parts: ObjectPartSummary[] }) {
   }
   return (
     <div className="grid gap-1.5" data-testid="semantic-inspector-parts">
-      {parts.map((part, index) => (
-        <button
-          className="flex items-center justify-between gap-2 rounded border border-border/45 bg-background/40 px-2 py-1.5 text-left text-[11px] transition-colors hover:border-emerald-300/50 hover:bg-emerald-300/10"
-          data-testid={`semantic-inspector-part-${partLabel(part)}`}
-          disabled={!part.nodeId}
-          key={`${part.nodeId ?? 'part'}-${partLabel(part)}-${index}`}
-          onClick={() => {
-            if (part.nodeId) setSelection({ selectedIds: [part.nodeId as AnyNodeId] })
-          }}
-          type="button"
-        >
-          <span className="min-w-0 truncate text-foreground">{partLabel(part)}</span>
-          <span className={part.editable ? 'text-emerald-300' : 'text-muted-foreground'}>
-            {part.editable ? 'editable' : 'locked'}
-          </span>
-        </button>
-      ))}
+      {parts.map((part, index) => {
+        const label = partLabel(part)
+        return (
+          <div
+            className="grid gap-1.5 rounded border border-border/45 bg-background/40 p-1.5"
+            key={`${part.nodeId ?? 'part'}-${label}-${index}`}
+          >
+            <button
+              className="flex items-center justify-between gap-2 rounded px-1 py-1 text-left text-[11px] transition-colors hover:bg-emerald-300/10"
+              data-testid={`semantic-inspector-part-${label}`}
+              disabled={!part.nodeId}
+              onClick={() => {
+                if (part.nodeId) setSelection({ selectedIds: [part.nodeId as AnyNodeId] })
+              }}
+              type="button"
+            >
+              <span className="min-w-0 truncate text-foreground">{label}</span>
+              <span className={part.editable ? 'text-emerald-300' : 'text-muted-foreground'}>
+                {part.editable ? 'editable' : 'locked'}
+              </span>
+            </button>
+            <PartMaterialControls part={part} />
+          </div>
+        )
+      })}
     </div>
   )
 }
