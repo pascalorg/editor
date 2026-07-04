@@ -1159,6 +1159,134 @@ test('data widget renders websocket values from the shared live data store', asy
   }
 })
 
+test('AI data binding applies alarm pulse and preview runtime animates scale', async ({
+  page,
+  request,
+}) => {
+  const sceneId = await createScene(request)
+
+  try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
+    await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 180_000,
+    })
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+    await expectFactoryBridge(page)
+
+    await page.evaluate((nodeId) => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.selectNode(nodeId)
+    }, ids.reference)
+
+    await page.getByTestId('sidebar-tab-ai').click()
+    await expect(page.getByTestId('factory-chat-input')).toBeVisible({ timeout: 30_000 })
+    await page
+      .getByTestId('factory-chat-input')
+      .fill('pulse the selected equipment when alarm count is active')
+    await page.getByTestId('factory-chat-send').click()
+
+    await expect(page.getByTestId('generation-plan-preview-bind-live-data')).toBeVisible({
+      timeout: 30_000,
+    })
+    await page.getByTestId('generation-plan-preview-apply-bind-live-data').click()
+    await expect(page.getByText('Bound Static reference beam Alarm pulse')).toBeVisible({
+      timeout: 30_000,
+    })
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            const node = bridge?.sceneNodes()[nodeId] as SceneNode | undefined
+            const bindings = node?.metadata?.dynamicBindings as
+              | Array<Record<string, unknown>>
+              | undefined
+            return bindings?.map((binding) => ({
+              id: binding.id,
+              type: binding.type,
+              path: binding.path,
+              scaleEffect: binding.scaleEffect,
+            }))
+          }, ids.reference),
+        { timeout: 30_000 },
+      )
+      .toContainEqual({
+        id: `semantic_live_${ids.reference}_alarm-pulse`,
+        type: 'scale',
+        path: 'alarm.count',
+        scaleEffect: 'alarmPulse',
+      })
+
+    await page.evaluate(() => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.setPreviewMode(true)
+    })
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const runtime = (
+              window as Window & {
+                __pascalDynamicPreviewRuntime?: {
+                  entries?: Array<{ nodeId: string; scale: [number, number, number] }>
+                }
+              }
+            ).__pascalDynamicPreviewRuntime
+            return runtime?.entries?.find((entry) => entry.nodeId === nodeId)?.scale ?? null
+          }, ids.reference),
+        { timeout: 30_000 },
+      )
+      .not.toBeNull()
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const runtime = (
+              window as Window & {
+                __pascalDynamicPreviewRuntime?: {
+                  entries?: Array<{ nodeId: string; scale: [number, number, number] }>
+                }
+              }
+            ).__pascalDynamicPreviewRuntime
+            const scale = runtime?.entries?.find((entry) => entry.nodeId === nodeId)?.scale
+            return scale ? Math.max(...scale) : 1
+          }, ids.reference),
+        { timeout: 30_000 },
+      )
+      .toBeGreaterThan(1.02)
+  } finally {
+    await page
+      .evaluate(() => {
+        const bridge = (
+          window as Window & {
+            __pascalFactoryE2e?: FactoryE2eBridge
+          }
+        ).__pascalFactoryE2e
+        bridge?.setPreviewMode(false)
+      })
+      .catch(() => undefined)
+    await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
+  }
+})
+
 test('dynamic inspector binds a selected node to websocket data and saves metadata', async ({
   page,
   request,

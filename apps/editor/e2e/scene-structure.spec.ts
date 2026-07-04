@@ -17,6 +17,19 @@ type SceneNode = {
   metadata?: Record<string, unknown>
 }
 
+type FactoryE2eBridge = {
+  sceneNodes: () => Record<string, SceneNode>
+  selectNode: (nodeId: string) => void
+  setPreviewMode: (enabled: boolean) => void
+  liveDataValue: (path: string) => unknown
+  nodeTransform: (nodeId: string) => {
+    position: [number, number, number]
+    rotation: [number, number, number]
+    scale: [number, number, number]
+    visible: boolean
+  } | null
+}
+
 const ids = {
   site: 'site_scene_structure_e2e',
   building: 'building_scene_structure_e2e',
@@ -345,6 +358,124 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await page.getByTestId('scene-structure-mode-auto').click()
     await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: Process')
     await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
+  } finally {
+    await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
+  }
+})
+
+test('AI data binding applies semantic tank level and appears in Data Lens and Inspector', async ({
+  page,
+  request,
+}) => {
+  const sceneId = `scene-structure-data-binding-${Date.now()}-${test.info().parallelIndex}`
+  const createResponse = await request.post('/api/scenes', {
+    data: {
+      id: sceneId,
+      name: 'Scene Data Binding E2E',
+      graph: refineryStructureGraph(),
+    },
+  })
+  expect(createResponse.status()).toBe(201)
+
+  try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
+    await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000,
+    })
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: Partial<FactoryE2eBridge>
+              }
+            ).__pascalFactoryE2e
+            return (
+              typeof bridge?.sceneNodes === 'function' &&
+              typeof bridge.selectNode === 'function' &&
+              typeof bridge.liveDataValue === 'function'
+            )
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true)
+
+    await page.evaluate((nodeId) => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.selectNode(nodeId)
+    }, ids.tank)
+
+    await page.getByTestId('sidebar-tab-ai').click()
+    await expect(page.getByTestId('factory-chat-input')).toBeVisible({ timeout: 30_000 })
+    await page.getByTestId('factory-chat-input').fill('bind selected tank level to live data')
+    await page.getByTestId('factory-chat-send').click()
+
+    await expect(page.getByTestId('generation-plan-preview-bind-live-data')).toBeVisible({
+      timeout: 30_000,
+    })
+    await page.getByTestId('generation-plan-preview-apply-bind-live-data').click()
+    await expect(page.getByText('Bound Product tank farm Tank liquid level')).toBeVisible({
+      timeout: 30_000,
+    })
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            const nodes = (bridge?.sceneNodes() ?? {}) as Record<string, SceneNode>
+            const node = nodes[nodeId]
+            const bindings = node?.metadata?.dynamicBindings as Array<Record<string, unknown>>
+            return bindings?.map((binding) => ({
+              id: binding.id,
+              type: binding.type,
+              path: binding.path,
+            }))
+          }, ids.tank),
+        { timeout: 30_000 },
+      )
+      .toContainEqual({
+        id: `semantic_live_${ids.tank}_tank-level`,
+        type: 'level',
+        path: 'refinery.tank.level',
+      })
+
+    await page.getByTestId('sidebar-tab-site').click()
+    await page.getByTestId('canvas-lens-data').click()
+    await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('1 binding')
+    await expect(page.getByTestId(`data-lens-binding-${ids.tank}`)).toContainText(
+      'level: refinery.tank.level',
+    )
+    await expect(page.getByTestId(`data-lens-value-${ids.tank}`)).toContainText('62')
+
+    await page.getByTestId(`data-lens-card-${ids.tank}`).click()
+    await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
+    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
+      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    }
+    await page.getByTestId('semantic-inspector-tab-data').click()
+    await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
+      'level: refinery.tank.level',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText(
+      'refinery.tank.level',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('62')
   } finally {
     await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
   }

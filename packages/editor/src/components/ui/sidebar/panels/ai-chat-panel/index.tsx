@@ -3526,7 +3526,10 @@ function GenerationPlanPreviewCard({
       : 'mdi:play-circle-outline'
 
   return (
-    <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-2 text-foreground shadow-sm">
+    <div
+      className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-2 text-foreground shadow-sm"
+      data-testid={`generation-plan-preview-${preview.routeKind}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-medium">
@@ -3621,6 +3624,7 @@ function GenerationPlanPreviewCard({
         ) : (
           <button
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[#a684ff]/35 bg-[#a684ff]/10 px-2 py-1 text-[10px] font-medium text-[#e5d8ff] transition-colors hover:bg-[#a684ff]/20 disabled:cursor-not-allowed disabled:opacity-50"
+            data-testid={`generation-plan-preview-apply-${preview.routeKind}`}
             disabled={disabled}
             onClick={onApply}
             type="button"
