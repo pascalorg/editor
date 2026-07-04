@@ -1,8 +1,10 @@
 import { type AnyNode, type DynamicType, isDynamicBinding } from '@pascal-app/core'
+import { readAssetSourceContract } from './asset-source-contract'
 
 export type ObjectSourceKind =
   | 'builtin-node'
   | 'semantic-assembly'
+  | 'image-to-3d'
   | 'ai-geometry'
   | 'industry-pack'
   | 'catalog-item'
@@ -351,9 +353,28 @@ export function resolveObjectCapabilities(
   }))
   const dataBindings = dataBindingsFrom(metadata)
   const nodeType = String(node.type)
+  const assetSource = readAssetSourceContract(metadata)
 
   pushUnique(sources, 'manual')
   pushUnique(sources, 'builtin-node')
+  if (assetSource?.kind === 'image-to-3d') {
+    pushUnique(sources, 'image-to-3d')
+  }
+  if (assetSource?.kind === 'articraft') {
+    pushUnique(sources, 'articraft')
+  }
+  if (assetSource?.kind === 'ai-geometry') {
+    pushUnique(sources, 'ai-geometry')
+  }
+  if (assetSource?.kind === 'industry-pack') {
+    pushUnique(sources, 'industry-pack')
+  }
+  if (assetSource?.kind === 'catalog-item') {
+    pushUnique(sources, 'catalog-item')
+  }
+  if (assetSource?.kind === 'factory-equipment') {
+    pushUnique(sources, 'factory-equipment')
+  }
   if (nodeType === 'item' && (metadata.catalogItemId || (node as { asset?: unknown }).asset)) {
     pushUnique(sources, 'catalog-item')
   }

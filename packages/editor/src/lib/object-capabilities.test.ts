@@ -10,6 +10,16 @@ import {
 
 const ASSEMBLY_ID = 'assembly_storage_tank' as AnyNodeId
 
+function node(input: Record<string, unknown>): AnyNode {
+  return {
+    object: 'node',
+    visible: true,
+    parentId: null,
+    metadata: {},
+    ...input,
+  } as unknown as AnyNode
+}
+
 function capabilitiesOf(profile: NonNullable<ReturnType<typeof resolveObjectCapabilities>>) {
   return new Set(profile.capabilities.map((capability) => capability.id))
 }
@@ -154,6 +164,35 @@ describe('object capabilities', () => {
     )
     expect(sourceSet(profiles[1]!).has('ai-geometry')).toBe(true)
     expect(profiles[1]?.editableParts[0]?.semanticRole).toBe('vessel_shell')
+  })
+
+  test('reads standard asset source metadata for image-generated assets', () => {
+    const item = node({
+      id: 'item_image_pump',
+      type: 'item',
+      name: 'Image pump',
+      asset: {
+        id: 'image-to-3d-pump',
+        category: 'equipment',
+        name: 'Image pump',
+        thumbnail: '/items/image-to-3d-pump/thumbnail.png',
+        src: '/items/image-to-3d-pump/model.glb',
+      },
+      metadata: {
+        assetSource: {
+          kind: 'image-to-3d',
+          assetId: 'image-to-3d-pump',
+          provider: 'fal',
+          prompt: 'make a pump from this image',
+        },
+      },
+    })
+
+    const profile = resolveObjectCapabilities(item)
+
+    expect(sourceSet(profile!).has('image-to-3d')).toBe(true)
+    expect(sourceSet(profile!).has('catalog-item')).toBe(true)
+    expect(capabilitiesOf(profile!).has('catalog.asset')).toBe(true)
   })
 
   test('formats selected capabilities for AI-safe edit context', () => {

@@ -168,6 +168,30 @@ describe('scene structure', () => {
         name: 'Catalog valve',
         metadata: { catalogItemId: 'valve.glb' },
       }),
+      item_image: node({
+        id: 'item_image',
+        type: 'item',
+        name: 'Image generated pump',
+        metadata: {
+          assetSource: {
+            kind: 'image-to-3d',
+            assetId: 'image-to-3d-pump',
+            provider: 'fal',
+          },
+        },
+      }),
+      item_articraft: node({
+        id: 'item_articraft',
+        type: 'item',
+        name: 'Joint crane',
+        metadata: {
+          assetSource: {
+            kind: 'articraft',
+            assetId: 'articraft-rec_crane',
+            recordId: 'rec_crane',
+          },
+        },
+      }),
     }
 
     const systems = buildSceneStructure({ nodes, mode: 'system' })
@@ -177,5 +201,13 @@ describe('scene structure', () => {
     expect(systems.groups.map((group) => group.label)).toContain('Piping')
     expect(sources.groups.map((group) => group.label)).toContain('Industry packs')
     expect(sources.groups.map((group) => group.label)).toContain('Catalog assets')
+    expect(sources.groups.map((group) => group.label)).toContain('Image-generated assets')
+    expect(sources.groups.map((group) => group.label)).toContain('Joint assets')
+    expect(sources.groups.find((group) => group.id === 'image-to-3d')?.items[0]?.detail).toBe(
+      'fal · image-to-3d-pump',
+    )
+    expect(sources.groups.find((group) => group.id === 'articraft')?.items[0]?.detail).toBe(
+      'Articraft · rec_crane',
+    )
   })
 })

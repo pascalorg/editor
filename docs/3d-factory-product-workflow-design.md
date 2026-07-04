@@ -615,6 +615,11 @@ Validation:
 - Joint asset exposes articulation controls.
 - AI edits can target generated asset without losing source metadata.
 
+Phase 7 delivery status:
+
+- Done: placed image-to-3D and Articraft assets write a standard `metadata.assetSource` contract.
+- Done: object capability reads and Scene Structure Source grouping recognize the standard asset source contract.
+
 ### Phase 8: Product Polish And Safety
 
 Goal:

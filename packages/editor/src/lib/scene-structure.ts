@@ -1,4 +1,5 @@
 import type { AnyNode } from '@pascal-app/core'
+import { assetSourceLabel, readAssetSourceContract } from './asset-source-contract'
 import { resolveObjectCapabilities } from './object-capabilities'
 
 export type SceneStructureMode =
@@ -401,8 +402,20 @@ function buildDataGroups(nodes: NodeMap): SceneStructureGroup[] {
 }
 
 function primarySource(node: AnyNode, nodes: NodeMap) {
+  const assetSource = readAssetSourceContract(metadataOf(node))
+  if (assetSource?.kind === 'image-to-3d') {
+    return { id: 'image-to-3d', label: 'Image-generated assets' }
+  }
+  if (assetSource?.kind === 'articraft') return { id: 'articraft', label: 'Joint assets' }
+  if (assetSource?.kind === 'industry-pack') return { id: 'industry-pack', label: 'Industry packs' }
+  if (assetSource?.kind === 'ai-geometry') return { id: 'ai-geometry', label: 'AI geometry' }
+  if (assetSource?.kind === 'catalog-item') return { id: 'catalog-item', label: 'Catalog assets' }
+  if (assetSource?.kind === 'factory-equipment') {
+    return { id: 'factory-equipment', label: 'Factory plugins' }
+  }
   const sources = resolveObjectCapabilities(node, nodes)?.sources ?? []
   if (sources.includes('industry-pack')) return { id: 'industry-pack', label: 'Industry packs' }
+  if (sources.includes('image-to-3d')) return { id: 'image-to-3d', label: 'Image-generated assets' }
   if (sources.includes('ai-geometry')) return { id: 'ai-geometry', label: 'AI geometry' }
   if (sources.includes('catalog-item')) return { id: 'catalog-item', label: 'Catalog assets' }
   if (sources.includes('articraft')) return { id: 'articraft', label: 'Joint assets' }
@@ -416,7 +429,8 @@ function buildAssetSourceGroups(nodes: NodeMap): SceneStructureGroup[] {
   const groups = new Map<string, SceneStructureGroup>()
   for (const node of structureCandidates(nodes)) {
     const source = primarySource(node, nodes)
-    addItem(groups, source, createItem(node, undefined, nodeType(node)))
+    const detail = assetSourceLabel(readAssetSourceContract(metadataOf(node)))
+    addItem(groups, source, createItem(node, detail, nodeType(node)))
   }
   return sortedGroups(groups)
 }

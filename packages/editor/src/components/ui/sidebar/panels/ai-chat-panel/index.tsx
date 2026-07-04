@@ -57,6 +57,10 @@ import {
   parseArticraftPose,
   type ArticraftJointMetadata,
 } from '../../../../../lib/articraft-joints'
+import {
+  articraftAssetSource,
+  imageTo3DAssetSource,
+} from '../../../../../lib/asset-source-contract'
 import { buildSelectionCapabilityContext } from '../../../../../lib/object-capabilities'
 import { planSemanticLiveDataBinding } from '../../../../../lib/semantic-live-data-bindings'
 import { cn } from '../../../../../lib/utils'
@@ -2230,6 +2234,7 @@ type GeneratedModelArtifact = {
   asset: AssetInput
   userPrompt: string
   createdAt: string
+  runId?: string
   placedAt?: string
   savedAt?: string
 }
@@ -4473,6 +4478,20 @@ export function AiChatPanel() {
         sourceTool: artifact.sourceTool,
         artifactId: artifact.id,
         provider: artifact.provider,
+        assetSource:
+          artifact.sourceTool === 'image-to-3d'
+            ? imageTo3DAssetSource({
+                assetId: artifact.id,
+                provider: artifact.provider,
+                prompt: artifact.userPrompt,
+                runId: artifact.runId,
+              })
+            : articraftAssetSource({
+                assetId: artifact.id,
+                recordId: artifact.id.replace(/^articraft-/, ''),
+                prompt: artifact.userPrompt,
+                runId: artifact.runId,
+              }),
       },
     })
 
@@ -4625,6 +4644,12 @@ export function AiChatPanel() {
         asset: result.asset,
         position: [0, 0, 0],
         metadata: {
+          assetSource: articraftAssetSource({
+            assetId: result.asset.id,
+            recordId: result.recordId,
+            recordPath: result.recordPath,
+            prompt: result.prompt,
+          }),
           articraft: {
             ...getArticraftMetadata(result, result.name),
             modelData: result.data,
@@ -4675,6 +4700,12 @@ export function AiChatPanel() {
           data: {
             metadata: {
               ...existingMetadata,
+              assetSource: articraftAssetSource({
+                assetId: result.assetId,
+                recordId: result.recordId,
+                recordPath: result.recordPath,
+                prompt: result.prompt,
+              }),
               articraft: articraftMetadata,
               ...(jointMetadata ? { articraftJoint: toSceneJointMetadata(jointMetadata) } : {}),
             },
@@ -4858,6 +4889,7 @@ export function AiChatPanel() {
         asset,
         userPrompt: prompt,
         createdAt: new Date().toISOString(),
+        runId,
       }
 
       setMessages((prev) => {
