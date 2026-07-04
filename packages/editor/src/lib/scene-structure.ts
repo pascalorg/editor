@@ -198,32 +198,78 @@ function sourcePackLabel(metadata: AnyRecord) {
 
 function buildProcessGroups(nodes: NodeMap): SceneStructureGroup[] {
   const groups = new Map<string, SceneStructureGroup>()
+  const stations = new Map<
+    string,
+    {
+      node: AnyNode
+      processId?: string
+      stationId?: string
+      label: string
+      detail?: string
+      badge?: string
+      rank: number
+    }
+  >()
   for (const node of structureCandidates(nodes)) {
     const metadata = metadataOf(node)
     const assembly = equipmentAssembly(metadata)
     const processId = stringValue(metadata.processId)
     const stationId = stringValue(metadata.stationId) ?? stringValue(assembly?.stationId)
-    if (!processId && !stationId && !assembly) continue
-    const groupId = processId ?? 'process:single-equipment'
-    const label =
-      stringValue(metadata.processDisplayLabel) ??
-      stringValue(metadata.processLabel) ??
-      (processId ? processId.replaceAll('_', ' ') : 'Single equipment')
+    if (!stationId && !assembly) continue
+    const stationKey = stationId ? `${processId ?? 'process'}:${stationId}` : String(node.id)
+    const rank = processStationRank(node)
+    const current = stations.get(stationKey)
+    if (current && current.rank > rank) continue
+    if (current && current.rank === rank && String(current.node.id) < String(node.id)) continue
+    const badge =
+      stringValue(metadata.equipmentRole) ??
+      stringValue(assembly?.equipmentFamily) ??
+      stringValue(equipmentContract(metadata)?.equipmentFamily)
+    stations.set(stationKey, {
+      node,
+      processId,
+      stationId,
+      label:
+        stringValue(metadata.processDisplayLabel) ??
+        stringValue(metadata.processLabel) ??
+        (processId ? processId.replaceAll('_', ' ') : 'Single equipment'),
+      detail: sourcePackLabel(metadata),
+      badge: badge === stationId ? undefined : badge,
+      rank,
+    })
+  }
+
+  for (const station of stations.values()) {
+    const assembly = equipmentAssembly(metadataOf(station.node))
+    const groupId = station.processId ?? 'process:single-equipment'
     addItem(
       groups,
       {
         id: groupId,
-        label,
-        detail: sourcePackLabel(metadata),
+        label: station.label,
+        detail: station.detail,
       },
       createItem(
-        node,
-        stationId ? `station: ${stationId}` : stringValue(assembly?.profileId),
-        stringValue(metadata.equipmentRole) ?? stringValue(assembly?.equipmentFamily),
+        station.node,
+        station.stationId ? `station: ${station.stationId}` : stringValue(assembly?.profileId),
+        station.badge,
       ),
     )
   }
   return sortedGroups(groups)
+}
+
+function processStationRank(node: AnyNode) {
+  const type = nodeType(node)
+  const metadata = metadataOf(node)
+  if (equipmentAssembly(metadata) || equipmentContract(metadata)) return 50
+  if (type === 'assembly') return 40
+  if (type === 'tank' || type.startsWith('factory:')) return 35
+  if (type === 'item') return 30
+  if (type === 'zone') return 20
+  if (CIVIL_TYPES.has(type)) return 10
+  if (PIPE_TYPES.has(type)) return 5
+  return 15
 }
 
 function nearestLevel(node: AnyNode, nodes: NodeMap): AnyNode | undefined {

@@ -25,9 +25,20 @@ describe('scene structure', () => {
       level_1: node({
         id: 'level_1',
         type: 'level',
-        children: ['assembly_tower'],
+        children: ['zone_tower', 'assembly_tower', 'pipe_tee'],
         parentId: 'building_1',
         level: 0,
+      }),
+      zone_tower: node({
+        id: 'zone_tower',
+        type: 'zone',
+        name: 'Atmospheric distillation zone',
+        parentId: 'level_1',
+        metadata: {
+          processId: 'refinery_basic_complex',
+          processDisplayLabel: 'Refinery',
+          stationId: 'atmospheric_distillation',
+        },
       }),
       assembly_tower: node({
         id: 'assembly_tower',
@@ -47,6 +58,17 @@ describe('scene structure', () => {
             profileId: 'refinery.atmospheric_distillation_unit',
             equipmentFamily: 'column',
           },
+        },
+      }),
+      pipe_tee: node({
+        id: 'pipe_tee',
+        type: 'pipe-fitting',
+        name: 'Atmospheric branch tee',
+        parentId: 'level_1',
+        metadata: {
+          processId: 'refinery_basic_complex',
+          processDisplayLabel: 'Refinery',
+          stationId: 'atmospheric_distillation',
         },
       }),
       box_shell: node({

@@ -10,7 +10,7 @@ import {
   Map,
   Package,
 } from 'lucide-react'
-import { type ComponentType, memo, useMemo, useState } from 'react'
+import { type ComponentType, memo, type ReactNode, useMemo, useState } from 'react'
 import { cn } from '../../../../../lib/utils'
 import {
   buildSceneStructure,
@@ -86,7 +86,11 @@ const StructureItemRow = memo(function StructureItemRow({ item }: { item: SceneS
   )
 })
 
-export const SceneStructurePanel = memo(function SceneStructurePanel() {
+export const SceneStructurePanel = memo(function SceneStructurePanel({
+  elevationContent,
+}: {
+  elevationContent?: ReactNode
+}) {
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const suggestedMode = useMemo(() => suggestSceneStructureMode(nodes), [nodes])
@@ -134,36 +138,42 @@ export const SceneStructurePanel = memo(function SceneStructurePanel() {
         </span>
       </div>
 
-      <div className="subtle-scrollbar min-h-0 flex-1 overflow-y-auto">
-        {tree.groups.length === 0 ? (
-          <div className="px-3 py-4 text-muted-foreground text-sm">No objects in this structure.</div>
-        ) : (
-          tree.groups.map((group) => (
-            <div className="border-border/50 border-b" key={group.id}>
-              <div className="flex items-center justify-between gap-2 bg-muted/20 px-3 py-2">
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-[13px] text-foreground">
-                    {group.label}
-                  </span>
-                  {group.detail && (
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {group.detail}
-                    </span>
-                  )}
-                </span>
-                <span className="shrink-0 rounded bg-background/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  {group.items.length}
-                </span>
-              </div>
-              <div>
-                {group.items.map((item) => (
-                  <StructureItemRow item={item} key={`${group.id}:${item.id}`} />
-                ))}
-              </div>
+      {activeMode === 'elevation' && elevationContent ? (
+        <div className="subtle-scrollbar min-h-0 flex-1 overflow-y-auto">{elevationContent}</div>
+      ) : (
+        <div className="subtle-scrollbar min-h-0 flex-1 overflow-y-auto">
+          {tree.groups.length === 0 ? (
+            <div className="px-3 py-4 text-muted-foreground text-sm">
+              No objects in this structure.
             </div>
-          ))
-        )}
-      </div>
+          ) : (
+            tree.groups.map((group) => (
+              <div className="border-border/50 border-b" key={group.id}>
+                <div className="flex items-center justify-between gap-2 bg-muted/20 px-3 py-2">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-[13px] text-foreground">
+                      {group.label}
+                    </span>
+                    {group.detail && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {group.detail}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 rounded bg-background/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    {group.items.length}
+                  </span>
+                </div>
+                <div>
+                  {group.items.map((item) => (
+                    <StructureItemRow item={item} key={`${group.id}:${item.id}`} />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 })

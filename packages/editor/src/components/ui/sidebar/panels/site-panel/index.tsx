@@ -1567,12 +1567,9 @@ const BuildingItem = memo(function BuildingItem({
                 />
                 <LayerToggle />
               </div>
-              <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="relative min-h-0 flex-1 overflow-hidden">
                 <MultiSelectionBadge />
-                <div className="h-80 border-border/50 border-b">
-                  <SceneStructurePanel />
-                </div>
-                <ContentSection />
+                <SceneStructurePanel elevationContent={<ContentSection />} />
               </div>
             </div>
           </motion.div>
