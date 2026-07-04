@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
 import type { WallHit } from '../../shared/wall-attach-target'
-import { resolveCabinetWallFaceOffset, resolveCabinetWallSnapPlacement } from '../wall-snap'
+import { CabinetModuleNode, CabinetNode } from '../schema'
+import {
+  collectCabinetWallSnapNeighbors,
+  resolveCabinetWallFaceOffset,
+  resolveCabinetWallSnapPlacement,
+} from '../wall-snap'
 
 function wallHit(overrides: Partial<WallHit> = {}): WallHit {
   const wall = WallNode.parse({
@@ -131,5 +136,268 @@ describe('resolveCabinetWallSnapPlacement', () => {
     })
 
     expect(offset).toBeGreaterThan(0.09)
+  })
+})
+
+/**
+ * L-corner fixture: wall A runs (0,0)→(2,0), wall B joins at (2,0) and runs
+ * to (2,2) — into wall A's front (+plan-y) side. Both 0.2 m thick.
+ */
+function cornerFixture() {
+  const level = LevelNode.parse({
+    id: 'level_corner',
+    children: ['wall_corner-a', 'wall_corner-b' as AnyNodeId],
+  })
+  const wallA = WallNode.parse({
+    id: 'wall_corner-a',
+    parentId: level.id,
+    start: [0, 0],
+    end: [2, 0],
+    thickness: 0.2,
+  })
+  const wallB = WallNode.parse({
+    id: 'wall_corner-b',
+    parentId: level.id,
+    start: [2, 0],
+    end: [2, 2],
+    thickness: 0.2,
+  })
+  const nodes = {
+    [level.id]: level,
+    [wallA.id]: wallA,
+    [wallB.id]: wallB,
+  } as Record<AnyNodeId, AnyNode>
+  return { level, wallA, wallB, nodes }
+}
+
+describe('resolveCabinetWallFaceOffset', () => {
+  test('resolves half the wall thickness on a straight wall face, signed by side', () => {
+    const level = LevelNode.parse({
+      id: 'level_straight',
+      children: ['wall_snap-test' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_snap-test',
+      parentId: level.id,
+      start: [0, 0],
+      end: [2, 0],
+      thickness: 0.2,
+    })
+    const nodes = { [level.id]: level, [wall.id]: wall } as Record<AnyNodeId, AnyNode>
+
+    const front = resolveCabinetWallFaceOffset({
+      hit: wallHit({ wall }),
+      nodes,
+      parentLevelId: level.id,
+    })
+    const back = resolveCabinetWallFaceOffset({
+      hit: wallHit({ wall, side: 'back' }),
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(front).toBeCloseTo(0.1)
+    expect(back).toBeCloseTo(-0.1)
+  })
+
+  test('follows the miter diagonal on the joined face of an L-corner', () => {
+    const { level, wallA, nodes } = cornerFixture()
+    const offsetAt = (localX: number, side: WallHit['side'] = 'front') =>
+      resolveCabinetWallFaceOffset({
+        hit: wallHit({ wall: wallA, localX, side }),
+        nodes,
+        parentLevelId: level.id,
+      })
+
+    // Away from the junction the front face is the plain half-thickness.
+    expect(offsetAt(0.5)).toBeCloseTo(0.1)
+    // The miter cuts the front face back linearly toward the corner point.
+    expect(offsetAt(1.95)).toBeCloseTo(0.05)
+    expect(offsetAt(2)).toBeCloseTo(0)
+    // The back face is untouched by a front-side junction.
+    expect(offsetAt(1.95, 'back')).toBeCloseTo(-0.1)
+  })
+
+  test('falls back to half the wall thickness when the ray misses the footprint', () => {
+    const { level, wallA, nodes } = cornerFixture()
+
+    const front = resolveCabinetWallFaceOffset({
+      hit: wallHit({ wall: wallA, localX: -1 }),
+      nodes,
+      parentLevelId: level.id,
+    })
+    const back = resolveCabinetWallFaceOffset({
+      hit: wallHit({ wall: wallA, localX: -1, side: 'back' }),
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(front).toBeCloseTo(0.1)
+    expect(back).toBeCloseTo(-0.1)
+  })
+
+  test('falls back to half the wall thickness when the level has no walls', () => {
+    const offset = resolveCabinetWallFaceOffset({
+      hit: wallHit(),
+      nodes: {} as Record<AnyNodeId, AnyNode>,
+      parentLevelId: 'level_missing' as AnyNodeId,
+    })
+
+    expect(offset).toBeCloseTo(0.1)
+  })
+})
+
+describe('collectCabinetWallSnapNeighbors', () => {
+  const levelId = 'level_neighbors' as AnyNodeId
+
+  function neighborFixture(cabinetOverrides: {
+    position?: [number, number, number]
+    rotation?: number
+    parentId?: AnyNodeId
+  }) {
+    const level = LevelNode.parse({
+      id: levelId,
+      children: ['wall_snap-test' as AnyNodeId],
+    })
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_neighbor',
+      parentId: cabinetOverrides.parentId ?? level.id,
+      // Back flush against the front face of the [0,0]→[2,0] wall:
+      // z = thickness/2 + depth/2 = 0.1 + 0.29.
+      position: cabinetOverrides.position ?? [0.7, 0, 0.39],
+      rotation: cabinetOverrides.rotation ?? 0,
+      width: 0.6,
+      depth: 0.58,
+    })
+    return {
+      level,
+      cabinet,
+      nodes: { [level.id]: level, [cabinet.id]: cabinet } as Record<AnyNodeId, AnyNode>,
+    }
+  }
+
+  test('collects a same-face cabinet as a local-x edge interval', () => {
+    const { nodes } = neighborFixture({})
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(1)
+    expect(neighbors[0]!.minX).toBeCloseTo(0.4)
+    expect(neighbors[0]!.maxX).toBeCloseTo(1.0)
+  })
+
+  test('tolerates rotation within the yaw threshold', () => {
+    const { nodes } = neighborFixture({ rotation: 0.05 })
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(1)
+  })
+
+  test('ignores cabinets whose rotation does not match the wall face yaw', () => {
+    const { nodes } = neighborFixture({ rotation: Math.PI / 2 })
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(0)
+  })
+
+  test('ignores cabinets standing off the hit wall face', () => {
+    // Right yaw, but 21 cm proud of the flush position — past the face-match threshold.
+    const { nodes } = neighborFixture({ position: [0.7, 0, 0.6] })
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(0)
+  })
+
+  test('ignores cabinets parented to another level', () => {
+    const { nodes } = neighborFixture({ parentId: 'level_other' as AnyNodeId })
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(0)
+  })
+
+  test('ignores cabinets whose span cannot reach the moving cabinet on the wall', () => {
+    // Entirely left of the wall start: maxX = -0.7 < width / 2.
+    const { nodes } = neighborFixture({ position: [-1, 0, 0.39] })
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    expect(neighbors).toHaveLength(0)
+  })
+
+  test('measures a run with modules from the module span, not the run node width', () => {
+    const { level } = neighborFixture({})
+    const run = CabinetNode.parse({
+      id: 'cabinet_neighbor',
+      parentId: level.id,
+      position: [0.5, 0, 0.39],
+      rotation: 0,
+      width: 0.6,
+      depth: 0.58,
+      children: ['cabinet-module_a', 'cabinet-module_b' as AnyNodeId],
+    })
+    const moduleA = CabinetModuleNode.parse({
+      id: 'cabinet-module_a',
+      parentId: run.id,
+      position: [0.3, 0.1, 0],
+      width: 0.6,
+    })
+    const moduleB = CabinetModuleNode.parse({
+      id: 'cabinet-module_b',
+      parentId: run.id,
+      position: [0.9, 0.1, 0],
+      width: 0.6,
+    })
+    const nodes = {
+      [level.id]: level,
+      [run.id]: run,
+      [moduleA.id]: moduleA,
+      [moduleB.id]: moduleB,
+    } as Record<AnyNodeId, AnyNode>
+
+    const neighbors = collectCabinetWallSnapNeighbors({
+      hit: wallHit(),
+      nodes,
+      parentLevelId: levelId,
+      width: 0.6,
+    })
+
+    // Module span is run-local [0, 1.2] → plan [0.5, 1.7] along the wall.
+    expect(neighbors).toHaveLength(1)
+    expect(neighbors[0]!.minX).toBeCloseTo(0.5)
+    expect(neighbors[0]!.maxX).toBeCloseTo(1.7)
   })
 })

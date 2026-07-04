@@ -47,6 +47,20 @@ function findMeshByNamePrefix(root: { children: unknown[] }, prefix: string): Me
   throw new Error(`Mesh not found with prefix: ${prefix}`)
 }
 
+/**
+ * Coordinate-encoded names (`cabinet-drawer-front-<centerY>-<i>`) shift when
+ * dimension defaults change; match on the stable prefix/suffix instead.
+ */
+function findMeshByNamePattern(root: { children: unknown[] }, pattern: RegExp): Mesh {
+  const queue = [...root.children]
+  while (queue.length > 0) {
+    const item = queue.shift() as { children?: unknown[]; name?: string }
+    if (item.name && pattern.test(item.name)) return item as Mesh
+    if (item.children) queue.push(...item.children)
+  }
+  throw new Error(`Mesh not found matching: ${pattern}`)
+}
+
 function hasVertex(
   mesh: Mesh,
   predicate: (point: { x: number; y: number; z: number }) => boolean,
@@ -151,7 +165,7 @@ describe('buildCabinetGeometry — cutout handles', () => {
       stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
     })
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)
-    const leftDoor = findMeshByName(group, 'cabinet-door-left-0.460')
+    const leftDoor = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+$/)
 
     leftDoor.geometry.computeBoundingBox()
     const box = leftDoor.geometry.boundingBox
@@ -558,7 +572,7 @@ describe('buildCabinetGeometry — appliance compartments', () => {
       ],
     })
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)
-    const topDrawer = worldBounds(findMeshByName(group, 'cabinet-drawer-front-0.460-1'))
+    const topDrawer = worldBounds(findMeshByNamePattern(group, /^cabinet-drawer-front-[\d.]+-1$/))
     const topBoardY = node.plinthHeight + node.carcassHeight
 
     expect(topDrawer.max.y).toBeGreaterThan(topBoardY - 0.04)
