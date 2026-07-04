@@ -32,7 +32,6 @@ import {
   parseArticraftPose,
   type ArticraftJointMetadata,
 } from '../../../lib/articraft-joints'
-import { resolveObjectCapabilities } from '../../../lib/object-capabilities'
 import { isPlanDragMovableNode } from '../../../lib/plan-drag'
 import { buildSemanticEquipmentEditableParamUpdates } from '../../../lib/semantic-equipment-editing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -45,6 +44,7 @@ import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
 import { PanelWrapper } from './panel-wrapper'
+import { SemanticInspectorSection } from './semantic-inspector-section'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -132,7 +132,7 @@ export function ParametricInspector() {
         title={assembly?.name ?? node?.name ?? 'Equipment'}
         width={320}
       >
-        <ObjectCapabilitiesSection nodeId={semanticEquipmentAssemblyId} />
+        <SemanticInspectorSection nodeId={semanticEquipmentAssemblyId} />
         <SemanticEquipmentAssemblySection nodeId={semanticEquipmentAssemblyId} />
       </PanelWrapper>
     )
@@ -168,7 +168,7 @@ export function ParametricInspector() {
       title={title}
       width={320}
     >
-      <ObjectCapabilitiesSection nodeId={selectedId} />
+      <SemanticInspectorSection nodeId={selectedId} />
       {parametrics?.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={translatePanelGroupLabel(group.label)}>
           {group.fields.map((field, fi) => (
@@ -209,88 +209,6 @@ export function ParametricInspector() {
         </PanelSection>
       )}
     </PanelWrapper>
-  )
-}
-
-function ObjectCapabilitiesSection({ nodeId }: { nodeId: AnyNodeId }) {
-  const nodes = useScene((s) => s.nodes)
-  const profile = useMemo(() => resolveObjectCapabilities(nodes[nodeId], nodes), [nodeId, nodes])
-  if (!profile) return null
-
-  const shownCapabilities = profile.capabilities.slice(0, 5)
-  const hiddenCapabilityCount = Math.max(0, profile.capabilities.length - shownCapabilities.length)
-  const shownParts = profile.editableParts.filter((part) => part.editable).slice(0, 6)
-  const shownPorts = profile.ports.slice(0, 4)
-
-  return (
-    <PanelSection title='Capabilities'>
-      <div className='space-y-2 px-2 py-1 text-xs'>
-        <div className='flex flex-wrap gap-1'>
-          {profile.sources.map((source) => (
-            <span
-              className='rounded border border-border/70 bg-background/60 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground'
-              key={source}
-            >
-              {source}
-            </span>
-          ))}
-        </div>
-        {profile.equipmentFamily || profile.recipeId || profile.profileId ? (
-          <div className='space-y-0.5 text-[11px] text-muted-foreground'>
-            {profile.equipmentFamily && <div>Family: {profile.equipmentFamily}</div>}
-            {profile.recipeId && <div>Recipe: {profile.recipeId}</div>}
-            {profile.profileId && <div>Profile: {profile.profileId}</div>}
-          </div>
-        ) : null}
-        <div className='grid gap-1'>
-          {shownCapabilities.map((capability) => (
-            <div
-              className='flex items-center justify-between gap-2 rounded border border-border/50 bg-muted/20 px-2 py-1'
-              key={`${capability.id}-${capability.target}`}
-            >
-              <span className='min-w-0 truncate text-foreground'>{capability.label}</span>
-              <span className={capability.editable ? 'text-emerald-300' : 'text-muted-foreground'}>
-                {capability.editable ? 'editable' : 'read-only'}
-              </span>
-            </div>
-          ))}
-          {hiddenCapabilityCount > 0 && (
-            <div className='text-[11px] text-muted-foreground'>+{hiddenCapabilityCount} more</div>
-          )}
-        </div>
-        {shownParts.length > 0 && (
-          <div className='space-y-1'>
-            <div className='text-[11px] font-medium text-muted-foreground'>Editable parts</div>
-            <div className='flex flex-wrap gap-1'>
-              {shownParts.map((part, index) => (
-                <span
-                  className='rounded bg-sky-500/10 px-1.5 py-0.5 text-[11px] text-sky-100'
-                  key={`${part.nodeId ?? 'part'}-${part.semanticRole ?? part.sourcePartKind ?? index}`}
-                >
-                  {part.semanticRole ?? part.sourcePartKind ?? part.nodeId}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {shownPorts.length > 0 && (
-          <div className='space-y-1'>
-            <div className='text-[11px] font-medium text-muted-foreground'>Ports</div>
-            <div className='flex flex-wrap gap-1'>
-              {shownPorts.map((port) => (
-                <span
-                  className='rounded bg-amber-500/10 px-1.5 py-0.5 text-[11px] text-amber-100'
-                  key={port.id}
-                >
-                  {port.id}
-                  {port.medium ? `:${port.medium}` : ''}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </PanelSection>
   )
 }
 

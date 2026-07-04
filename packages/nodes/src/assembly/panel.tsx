@@ -14,6 +14,7 @@ import {
   PanelSection,
   PanelWrapper,
   SemanticEquipmentAssemblySection,
+  SemanticInspectorSection,
   SliderControl,
   triggerSFX,
   useEditor,
@@ -138,6 +139,7 @@ export default function AssemblyPanel() {
       title={node.name || '\u7ec4\u5408'}
       width={300}
     >
+      <SemanticInspectorSection nodeId={selectedId as AnyNodeId} />
       <PanelSection title={'\u7ec4\u5408'}>
         <div className="rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-muted-foreground text-xs leading-5">
           {'\u5df2\u7ec4\u5408'} {childCount}{' '}

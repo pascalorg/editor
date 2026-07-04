@@ -205,7 +205,8 @@ test('scene structure defaults factory scenes to process and preserves elevation
       timeout: 120_000,
     })
 
-    await page.getByRole('button', { name: /^(场景|Site)$/ }).click()
+    await page.getByTestId('sidebar-tab-site').click()
+    await expect(page.getByTestId('sidebar-tab-site')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('scene-structure-panel')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: Process')
     await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
@@ -229,6 +230,24 @@ test('scene structure defaults factory scenes to process and preserves elevation
       'true',
     )
     await expect(page.getByRole('heading', { name: 'Atmospheric distillation unit' })).toBeVisible()
+    if (!(await page.getByTestId('semantic-inspector').isVisible())) {
+      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    }
+    await expect(page.getByTestId('semantic-inspector-equipment')).toBeVisible()
+    await expect(page.getByTestId('semantic-inspector-equipment')).toContainText('column')
+    await page.getByTestId('semantic-inspector-tab-parts').click()
+    await expect(page.getByTestId(`semantic-inspector-part-vessel_shell`)).toBeVisible()
+    await page.getByTestId('semantic-inspector-tab-ports').click()
+    await expect(page.getByTestId('semantic-inspector-port-inlet')).toContainText('crude')
+    await expect(page.getByTestId('semantic-inspector-port-outlet')).toContainText('product')
+    await page.getByTestId('semantic-inspector-tab-data').click()
+    await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
+      'color: machine.temperature',
+    )
+    await page.getByTestId('semantic-inspector-tab-source').click()
+    await expect(page.getByTestId('semantic-inspector-source')).toContainText(
+      'industry.refinery.basic@0.2.0',
+    )
 
     await page.getByTestId('canvas-lens-equipment').click()
     await expect(page.getByTestId('canvas-lens-equipment')).toHaveAttribute('aria-pressed', 'true')

@@ -24,12 +24,14 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
         const isActive = activeTab === tab.id
         return (
           <button
+            aria-pressed={isActive}
             className={cn(
               'relative h-7 rounded-md px-3 font-medium text-sm transition-colors',
               isActive
                 ? 'bg-accent text-foreground'
                 : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
             )}
+            data-testid={`sidebar-tab-${tab.id}`}
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             type="button"
