@@ -1,57 +1,114 @@
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
-import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { compileSingleEquipmentPrompt } from './single-equipment-compiler'
 
 describe('single equipment compiler', () => {
-  beforeEach(async () => {
-    nodeRegistry._reset()
-    await loadPlugin(factoryEquipmentPlugin)
-  })
-
-  afterEach(() => {
-    nodeRegistry._reset()
-  })
-
-  test('compiles a centrifugal pump prompt to a factory pump node', () => {
+  test('compiles a centrifugal pump prompt to a semantic assembly', () => {
     const result = compileSingleEquipmentPrompt({
       prompt: '\u751f\u6210\u4e00\u4e2a\u79bb\u5fc3\u6cf5',
       placement: { parentId: 'level_factory', position: [1, 0, 2], generatedBy: 'factory-agent' },
     })
 
-    expect(result.kind).toBe('create-equipment-node')
-    if (result.kind !== 'create-equipment-node') throw new Error('expected create result')
-    expect(result.patch).toMatchObject({
+    expect(result.kind).toBe('create-semantic-assembly')
+    if (result.kind !== 'create-semantic-assembly') throw new Error('expected semantic assembly')
+    expect(result.patchPlan.patches[0]).toMatchObject({
       op: 'create',
       parentId: 'level_factory',
       node: {
-        type: 'factory:pump',
-        position: [1, 0, 2],
-        pumpType: 'centrifugal',
+        type: 'assembly',
         metadata: {
-          resolver: 'factory-node',
-          factoryNodeKind: 'factory:pump',
-          equipmentContract: { profileId: 'generic.centrifugal_pump' },
+          sourceTool: 'semantic_recipe',
+          resolver: 'semantic-assembly',
+          recipeId: 'factory:centrifugal-pump',
+          equipmentAssembly: {
+            kind: 'semantic-assembly',
+            profileId: 'generic.centrifugal_pump',
+            recipeId: 'factory:centrifugal-pump',
+            editableParams: expect.arrayContaining([
+              expect.objectContaining({ key: 'casingColor' }),
+              expect.objectContaining({ key: 'motorColor' }),
+              expect.objectContaining({ key: 'motorPower' }),
+            ]),
+          },
+          equipmentContract: {
+            profileId: 'generic.centrifugal_pump',
+            recipeId: 'factory:centrifugal-pump',
+          },
         },
       },
     })
+    expect(
+      result.patchPlan.patches.some(
+        (patch) => patch.op === 'create' && patch.node.type === 'factory:pump',
+      ),
+    ).toBe(false)
+    expect(result.patchPlan.patches.map((patch) => patch.node.metadata?.semanticRole)).toEqual(
+      expect.arrayContaining(['support_base', 'drive_motor', 'volute_casing']),
+    )
   })
 
-  test('compiles a storage tank prompt to a factory tank node', () => {
+  test('compiles a storage tank prompt to a recipe semantic assembly with liquid volume', () => {
     const result = compileSingleEquipmentPrompt({
-      prompt: '\u751f\u6210\u4e00\u4e2a\u50a8\u7f50',
+      prompt: '\u751f\u6210\u4e00\u4e2a\u539f\u6cb9\u50a8\u7f50\uff0c\u6db2\u4f4d82%\uff0c\u58f3\u4f53\u534a\u900f\u660e',
       placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
     })
 
-    expect(result.kind).toBe('create-equipment-node')
-    if (result.kind !== 'create-equipment-node') throw new Error('expected create result')
-    expect(result.patch.node).toMatchObject({
-      type: 'factory:tank',
-      orientation: 'vertical',
-      metadata: {
-        resolver: 'factory-node',
-        factoryNodeKind: 'factory:tank',
-        equipmentContract: { profileId: 'generic.vertical_tank' },
+    expect(result.kind).toBe('create-semantic-assembly')
+    if (result.kind !== 'create-semantic-assembly') throw new Error('expected semantic assembly')
+    expect(result.patchPlan.patches[0]).toMatchObject({
+      op: 'create',
+      parentId: 'level_factory',
+      node: {
+        type: 'assembly',
+        metadata: {
+          sourceTool: 'semantic_recipe',
+          resolver: 'semantic-assembly',
+          recipeId: 'factory:storage-tank',
+          sourceArgs: {
+            recipeParams: {
+              liquidLevel: 0.82,
+              shellOpacity: 0.34,
+            },
+          },
+          equipmentAssembly: {
+            kind: 'semantic-assembly',
+            profileId: 'generic.vertical_tank',
+            recipeId: 'factory:storage-tank',
+            params: {
+              liquidLevel: 0.82,
+              shellOpacity: 0.34,
+            },
+            editableParams: expect.arrayContaining([
+              expect.objectContaining({ key: 'liquidLevel' }),
+              expect.objectContaining({ key: 'shellOpacity' }),
+              expect.objectContaining({ key: 'liquidOpacity' }),
+              expect.objectContaining({ key: 'liquidColor' }),
+            ]),
+          },
+          equipmentContract: {
+            profileId: 'generic.vertical_tank',
+            recipeId: 'factory:storage-tank',
+          },
+        },
+      },
+    })
+    expect(result.patchPlan.patches.map((patch) => patch.node.metadata?.semanticRole)).toEqual(
+      expect.arrayContaining([
+        'vessel_shell',
+        'liquid_volume',
+        'inlet_port',
+        'outlet_port',
+        'access_ladder',
+      ]),
+    )
+    const liquidPatch = result.patchPlan.patches.find(
+      (patch) => patch.node.metadata?.semanticRole === 'liquid_volume',
+    )
+    expect(liquidPatch?.node).toMatchObject({
+      type: 'cylinder',
+      material: {
+        properties: {
+          transparent: true,
+        },
       },
     })
   })

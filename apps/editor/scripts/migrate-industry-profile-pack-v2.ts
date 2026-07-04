@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import {
   annotateProcessTemplatesForV2,
@@ -133,7 +133,7 @@ export async function migrateIndustryProfilePackToV2(
   })
   await writeJson(manifestPath, nextManifest)
 
-  if (!nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
+  if (!semanticRecipeRegistry.has('factory:centrifugal-pump')) await loadPlugin(factoryEquipmentPlugin)
   const validation = await validateProfilePackDir(outDir)
   const audit = auditProfilePackValidation(validation)
   if (!audit.ok) {

@@ -1,5 +1,11 @@
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
+import {
+  getWallCurveFrameAt,
+  isCurvedWall,
+  sampleWallCenterline,
+} from '../../systems/wall/wall-curve'
+import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
@@ -253,27 +259,17 @@ function segmentsCollinearAndOverlap(
   bz2: number,
 ): boolean {
   const EPSILON = 1e-6
-
-  // Cross product to check collinearity
   const cross1 = (ax2 - ax1) * (bz1 - az1) - (az2 - az1) * (bx1 - ax1)
   const cross2 = (ax2 - ax1) * (bz2 - az1) - (az2 - az1) * (bx2 - ax1)
+  if (Math.abs(cross1) > EPSILON || Math.abs(cross2) > EPSILON) return false
 
-  if (Math.abs(cross1) > EPSILON || Math.abs(cross2) > EPSILON) {
-    return false // Not collinear
-  }
-
-  // Check if a point is on segment b
   const onSegment = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
     Math.min(px, qx) - EPSILON <= rx &&
     rx <= Math.max(px, qx) + EPSILON &&
     Math.min(pz, qz) - EPSILON <= rz &&
     rz <= Math.max(pz, qz) + EPSILON
 
-  // BOTH endpoints of wall (a) must be on edge (b) for substantial overlap
-  const a1OnB = onSegment(bx1, bz1, bx2, bz2, ax1, az1)
-  const a2OnB = onSegment(bx1, bz1, bx2, bz2, ax2, az2)
-
-  return a1OnB && a2OnB
+  return onSegment(bx1, bz1, bx2, bz2, ax1, az1) && onSegment(bx1, bz1, bx2, bz2, ax2, az2)
 }
 
 /**
@@ -286,7 +282,7 @@ function segmentsCollinearAndOverlap(
  * Note: A wall with just one endpoint touching the edge but the rest outside
  * is NOT considered overlapping (adjacent only).
  */
-export function wallOverlapsPolygon(
+function legacyWallOverlapsPolygon(
   start: [number, number],
   end: [number, number],
   polygon: Array<[number, number]>,
@@ -343,6 +339,185 @@ export function wallOverlapsPolygon(
   }
 
   return false
+}
+
+function pointSegmentDistance(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared < 1e-18) return Math.hypot(px - ax, pz - az)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lengthSquared))
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t))
+}
+
+const ON_BOUNDARY_EPSILON = 1e-4
+const WALL_SLAB_MIN_OVERLAP = 0.05
+
+function pointOnPolygonBoundary(px: number, pz: number, polygon: Array<[number, number]>): boolean {
+  const n = polygon.length
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = polygon[i]!
+    const [bx, bz] = polygon[(i + 1) % n]!
+    if (pointSegmentDistance(px, pz, ax, az, bx, bz) <= ON_BOUNDARY_EPSILON) return true
+  }
+  return false
+}
+
+function segmentInsideLength(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  polygon: Array<[number, number]>,
+): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return 0
+
+  const ts = [0, 1]
+  const n = polygon.length
+  for (let i = 0; i < n; i++) {
+    const [px, pz] = polygon[i]!
+    const [qx, qz] = polygon[(i + 1) % n]!
+    const ex = qx - px
+    const ez = qz - pz
+    const denom = dx * ez - dz * ex
+    if (Math.abs(denom) < 1e-12) continue
+    const t = ((px - ax) * ez - (pz - az) * ex) / denom
+    const s = ((px - ax) * dz - (pz - az) * dx) / denom
+    if (t > 0 && t < 1 && s >= -1e-9 && s <= 1 + 1e-9) ts.push(t)
+  }
+  ts.sort((a, b) => a - b)
+
+  let inside = 0
+  for (let i = 1; i < ts.length; i++) {
+    const t0 = ts[i - 1]!
+    const t1 = ts[i]!
+    if (t1 - t0 < 1e-9) continue
+    const tm = (t0 + t1) / 2
+    const mx = ax + dx * tm
+    const mz = az + dz * tm
+    if (pointOnPolygonBoundary(mx, mz, polygon) || pointInPolygon(mx, mz, polygon)) {
+      inside += (t1 - t0) * length
+    }
+  }
+  return inside
+}
+
+function polylineInsideLength(
+  points: Array<{ x: number; y: number }>,
+  polygon: Array<[number, number]>,
+): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    total += segmentInsideLength(a.x, a.y, b.x, b.y, polygon)
+  }
+  return total
+}
+
+type WallOverlapInput = {
+  start: [number, number]
+  end: [number, number]
+  curveOffset?: number
+  thickness?: number
+}
+
+function wallTestPolylines(
+  start: [number, number],
+  end: [number, number],
+  curveOffset: number,
+  halfThickness: number,
+): Array<Array<{ x: number; y: number }>> {
+  const wallLike = { start, end, curveOffset }
+  if (curveOffset !== 0 && isCurvedWall(wallLike)) {
+    const count = 16
+    const center: Array<{ x: number; y: number }> = []
+    const left: Array<{ x: number; y: number }> = []
+    const right: Array<{ x: number; y: number }> = []
+    for (let i = 0; i <= count; i++) {
+      const frame = getWallCurveFrameAt(wallLike, i / count)
+      center.push(frame.point)
+      left.push({
+        x: frame.point.x + frame.normal.x * halfThickness,
+        y: frame.point.y + frame.normal.y * halfThickness,
+      })
+      right.push({
+        x: frame.point.x - frame.normal.x * halfThickness,
+        y: frame.point.y - frame.normal.y * halfThickness,
+      })
+    }
+    return halfThickness > 0 ? [center, left, right] : [center]
+  }
+
+  const center = [
+    { x: start[0], y: start[1] },
+    { x: end[0], y: end[1] },
+  ]
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-10 || halfThickness <= 0) return [center]
+  const nx = (-dz / len) * halfThickness
+  const nz = (dx / len) * halfThickness
+  return [
+    center,
+    [
+      { x: start[0] + nx, y: start[1] + nz },
+      { x: end[0] + nx, y: end[1] + nz },
+    ],
+    [
+      { x: start[0] - nx, y: start[1] - nz },
+      { x: end[0] - nx, y: end[1] - nz },
+    ],
+  ]
+}
+
+export function wallOverlapsPolygon(
+  startOrWall: [number, number] | WallOverlapInput,
+  endOrPolygon: [number, number] | Array<[number, number]>,
+  polygonArg?: Array<[number, number]>,
+): boolean {
+  let start: [number, number]
+  let end: [number, number]
+  let polygon: Array<[number, number]>
+  let curveOffset = 0
+  let thickness = DEFAULT_WALL_THICKNESS
+  if (Array.isArray(startOrWall)) {
+    start = startOrWall as [number, number]
+    end = endOrPolygon as [number, number]
+    polygon = polygonArg as Array<[number, number]>
+  } else {
+    start = startOrWall.start
+    end = startOrWall.end
+    curveOffset = startOrWall.curveOffset ?? 0
+    thickness = startOrWall.thickness ?? DEFAULT_WALL_THICKNESS
+    polygon = endOrPolygon as Array<[number, number]>
+  }
+
+  const polylines = wallTestPolylines(start, end, curveOffset, Math.max(thickness / 2, 0))
+  const center = polylines[0]!
+  let centerLength = 0
+  for (let i = 1; i < center.length; i++) {
+    centerLength += Math.hypot(center[i]!.x - center[i - 1]!.x, center[i]!.y - center[i - 1]!.y)
+  }
+  if (centerLength < 1e-9) return false
+
+  let overlap = 0
+  for (const line of polylines) {
+    overlap = Math.max(overlap, polylineInsideLength(line, polygon))
+  }
+  const threshold = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, centerLength * 0.5))
+  return overlap >= threshold
 }
 
 export class SpatialGridManager {
@@ -755,14 +930,29 @@ export class SpatialGridManager {
    * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    */
-  getSlabElevationForWall(levelId: string, start: [number, number], end: [number, number]): number {
+  getSlabElevationForWall(
+    levelId: string,
+    start: [number, number],
+    end: [number, number],
+    curveOffset = 0,
+    thickness = DEFAULT_WALL_THICKNESS,
+  ): number {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
+
+    const wallLike: WallOverlapInput = { start, end, curveOffset, thickness }
+    const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
+    const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
+      ? sampleWallCenterline(wallLike, 8)
+      : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
+          x: start[0] + (end[0] - start[0]) * t,
+          y: start[1] + (end[1] - start[1]) * t,
+        }))
 
     let maxElevation = Number.NEGATIVE_INFINITY
     for (const slab of slabMap.values()) {
       if (slab.polygon.length < 3) continue
-      if (!wallOverlapsPolygon(start, end, slab.polygon)) continue
+      if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
 
       const holes = slab.holes || []
       if (holes.length === 0) {
@@ -775,15 +965,11 @@ export class SpatialGridManager {
       // Sample multiple points along the wall to check whether any portion lies on
       // solid slab (not inside any hole). Checking only the midpoint fails when the
       // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
-      const dx = end[0] - start[0]
-      const dz = end[1] - start[1]
       let hasValidPoint = false
-      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-        const px = start[0] + dx * t
-        const pz = start[1] + dz * t
+      for (const sample of holeSamplePoints) {
         let inHole = false
         for (const hole of holes) {
-          if (hole.length >= 3 && pointInPolygon(px, pz, hole)) {
+          if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
             inHole = true
             break
           }

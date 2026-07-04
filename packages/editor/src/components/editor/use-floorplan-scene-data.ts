@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
   type DoorNode,
@@ -39,7 +40,9 @@ function useLevelChildren<TNode extends AnyNode>(
         return [] as TNode[]
       }
 
-      return levelNode.children.map((childId) => state.nodes[childId]).filter(typeGuard)
+      return levelNode.children
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter(typeGuard)
     }),
   )
 }
@@ -127,7 +130,7 @@ export function useFloorplanSceneData({
       }
 
       return nextLevelNode.children
-        .map((childId) => state.nodes[childId])
+        .map((childId) => state.nodes[childId as AnyNodeId])
         .filter((node): node is RoofNode => node?.type === 'roof' && node.visible !== false)
     }),
   )
@@ -143,7 +146,7 @@ export function useFloorplanSceneData({
       }
 
       const nextWalls = nextLevelNode.children
-        .map((childId) => state.nodes[childId])
+        .map((childId) => state.nodes[childId as AnyNodeId])
         .filter((node): node is WallNode => node?.type === 'wall')
 
       return nextWalls.flatMap((wall) =>

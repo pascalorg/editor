@@ -1,0 +1,200 @@
+[
+  {
+    "id": "agv_material_cart",
+    "name": "AGV material cart",
+    "aliases": [
+      "agv",
+      "agv cart",
+      "agv vehicle",
+      "automated guided vehicle",
+      "amr",
+      "amr cart",
+      "autonomous mobile robot",
+      "mobile robot platform",
+      "vga cart",
+      "vga小车",
+      "agv小车",
+      "自动导引车",
+      "自动搬运车",
+      "搬运小车",
+      "物流小车"
+    ],
+    "industry": "logistics",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "material_handling",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 1.45,
+      "width": 0.9,
+      "height": 0.48
+    },
+    "parts": [
+      {
+        "kind": "mobile_platform_chassis",
+        "semanticRole": "vehicle_body",
+        "required": true,
+        "length": 1.45,
+        "width": 0.9,
+        "height": 0.28,
+        "position": [
+          0,
+          0.17,
+          0
+        ],
+        "cornerRadius": 0.2,
+        "primaryColor": "#e5e7eb",
+        "secondaryColor": "#334155",
+        "darkColor": "#111827",
+        "accentColor": "#38bdf8"
+      },
+      {
+        "kind": "wheel_set",
+        "semanticRole": "drive_wheel",
+        "required": true,
+        "count": 4,
+        "length": 1.05,
+        "width": 0.68,
+        "radius": 0.095,
+        "wheelWidth": 0.045,
+        "position": [
+          0,
+          0.1,
+          0
+        ]
+      },
+      {
+        "kind": "bar_pair",
+        "semanticRole": "safety_bumper",
+        "required": true,
+        "length": 0.82,
+        "height": 0.055,
+        "position": [
+          0.72,
+          0.15,
+          0
+        ],
+        "color": "#020617"
+      },
+      {
+        "kind": "lidar_sensor",
+        "semanticRole": "front_navigation_sensor",
+        "required": true,
+        "axis": "x",
+        "radius": 0.045,
+        "height": 0.035,
+        "position": [
+          0.75,
+          0.21,
+          0
+        ],
+        "darkColor": "#0f172a",
+        "accentColor": "#38bdf8"
+      },
+      {
+        "kind": "lidar_sensor",
+        "semanticRole": "rear_navigation_sensor",
+        "required": true,
+        "axis": "x",
+        "radius": 0.035,
+        "height": 0.03,
+        "position": [
+          -0.75,
+          0.2,
+          0
+        ],
+        "darkColor": "#0f172a",
+        "accentColor": "#38bdf8"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "left_status_light_strip",
+        "required": true,
+        "length": 0.72,
+        "height": 0.035,
+        "thickness": 0.012,
+        "position": [
+          0,
+          0.21,
+          0.455
+        ],
+        "color": "#38bdf8"
+      },
+      {
+        "kind": "status_light_strip",
+        "semanticRole": "right_status_light_strip",
+        "required": true,
+        "length": 0.72,
+        "height": 0.035,
+        "thickness": 0.012,
+        "position": [
+          0,
+          0.21,
+          -0.455
+        ],
+        "color": "#38bdf8"
+      },
+      {
+        "kind": "emergency_stop_button",
+        "semanticRole": "emergency_stop_button",
+        "required": true,
+        "axis": "y",
+        "radius": 0.035,
+        "height": 0.032,
+        "position": [
+          0.42,
+          0.37,
+          0.22
+        ],
+        "color": "#ef4444"
+      },
+      {
+        "kind": "warning_label",
+        "semanticRole": "safety_label",
+        "length": 0.16,
+        "width": 0.07,
+        "position": [
+          0.2,
+          0.335,
+          0.31
+        ]
+      }
+    ],
+    "primarySemanticRole": "vehicle_body",
+    "qualityRules": "quality.agv_material_cart",
+    "visualCues": [
+      "low rounded rectangular chassis",
+      "dark bumper skirt",
+      "flat top load platform",
+      "hidden low drive wheels",
+      "blue side status light strips",
+      "front lidar navigation sensor",
+      "red emergency stop button"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Factory AGV/AMR material-handling platform with low rounded chassis, dark bumper skirt, load deck, hidden drive wheels, side status lights, navigation sensors, and emergency stop.",
+    "editableSchemaRef": "mobile_platform.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 48,
+      "parts": {
+        "front_navigation_sensor": {
+          "detailLevel": "low"
+        },
+        "rear_navigation_sensor": {
+          "detailLevel": "low"
+        },
+        "left_status_light_strip": {
+          "detailLevel": "low"
+        },
+        "right_status_light_strip": {
+          "detailLevel": "low"
+        },
+        "safety_label": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "preferredResolver": "profile-parts"
+  }
+]

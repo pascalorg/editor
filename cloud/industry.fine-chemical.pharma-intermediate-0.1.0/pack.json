@@ -1,0 +1,48 @@
+{
+  "id": "industry.fine-chemical.pharma-intermediate",
+  "name": "Fine Chemical Pharma Intermediate Pack",
+  "industry": "fine-chemical.pharma-intermediate",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Pharmaceutical intermediate extension pack. The fine-chemical base pack is installed automatically as a dependency.",
+  "profiles": [
+    "profiles/pharma-intermediate.json"
+  ],
+  "qualityRules": [
+    "quality-rules/pharma-intermediate-quality.json"
+  ],
+  "dependsOn": [
+    {
+      "id": "industry.fine-chemical.basic",
+      "version": ">=0.1.0"
+    }
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "fine_chemical.pharma.crystallization_kettle",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    }
+  ]
+}

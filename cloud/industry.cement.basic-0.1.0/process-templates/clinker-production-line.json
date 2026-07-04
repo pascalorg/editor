@@ -1,0 +1,193 @@
+[
+  {
+    "processId": "cement_clinker_production_line",
+    "processLabel": "Cement clinker production line",
+    "processDisplayLabel": "水泥熟料产线",
+    "domain": "chemical",
+    "aliases": [
+      "水泥熟料产线",
+      "熟料工序",
+      "熟料烧成工序",
+      "熟料生产工序",
+      "熟料产线",
+      "水泥熟料",
+      "熟料煅烧",
+      "水泥窑",
+      "cement clinker line",
+      "clinker production line",
+      "clinker kiln line"
+    ],
+    "requiredRoles": [
+      "raw_meal_feed",
+      "preheater_tower",
+      "rotary_kiln",
+      "grate_cooler",
+      "clinker_conveying",
+      "clinker_silo",
+      "kiln_dedusting"
+    ],
+    "defaultLayoutStyle": "linear",
+    "defaultDimensions": {
+      "length": 34,
+      "width": 12
+    },
+    "safetyTags": [
+      "hot_material",
+      "dust",
+      "rotating_equipment",
+      "heavy_industry"
+    ],
+    "stations": [
+      {
+        "id": "raw_meal_feed",
+        "label": "Raw meal feed elevator",
+        "displayLabel": "生料喂料",
+        "role": "raw_meal_feed",
+        "equipmentHint": "cement bucket elevator and raw meal feed chute feeding the preheater tower",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "material",
+          "elevator"
+        ],
+        "profileId": "cement.preheater_tower"
+      },
+      {
+        "id": "preheater_tower",
+        "label": "Preheater tower",
+        "displayLabel": "预热器塔",
+        "role": "preheater_tower",
+        "equipmentHint": "cement.preheater_tower cyclone preheater tower with calciner riser, platforms, meal drop pipes, and gas ducts",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "hot_gas",
+          "dust",
+          "height"
+        ],
+        "profileId": "cement.preheater_tower"
+      },
+      {
+        "id": "rotary_kiln",
+        "label": "Rotary kiln",
+        "displayLabel": "回转窑",
+        "role": "rotary_kiln",
+        "equipmentHint": "cement.rotary_kiln long inclined rotary kiln with riding rings, support rollers, girth gear, drive unit, kiln tail feed hopper, and kiln head outlet",
+        "footprintHint": "long",
+        "safetyTags": [
+          "hot_material",
+          "rotating_equipment"
+        ],
+        "profileId": "cement.rotary_kiln"
+      },
+      {
+        "id": "grate_cooler",
+        "label": "Grate cooler",
+        "displayLabel": "篦冷机",
+        "role": "grate_cooler",
+        "equipmentHint": "cement.grate_cooler clinker grate cooler with hot clinker inlet, grate bed, drive unit, and service platform",
+        "footprintHint": "long",
+        "safetyTags": [
+          "hot_material",
+          "cooling_air"
+        ],
+        "profileId": "cement.grate_cooler"
+      },
+      {
+        "id": "clinker_conveying",
+        "label": "Clinker conveyor",
+        "displayLabel": "熟料输送",
+        "role": "clinker_conveying",
+        "equipmentHint": "cement.belt_conveyor clinker conveyor transferring cooled clinker to storage",
+        "footprintHint": "long",
+        "safetyTags": [
+          "material",
+          "conveyor"
+        ],
+        "profileId": "cement.belt_conveyor"
+      },
+      {
+        "id": "clinker_silo",
+        "label": "Clinker silo",
+        "displayLabel": "熟料库",
+        "role": "clinker_silo",
+        "equipmentHint": "cement.clinker_silo tall clinker storage silo with top feed inlet and bottom discharge hopper",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "storage",
+          "dust"
+        ],
+        "profileId": "cement.clinker_silo"
+      },
+      {
+        "id": "bag_filter",
+        "label": "Kiln bag filter",
+        "displayLabel": "窑尾袋收尘器",
+        "role": "kiln_dedusting",
+        "equipmentHint": "cement.bag_filter baghouse dust collector for kiln, preheater, and cooler exhaust dust",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "dust",
+          "exhaust"
+        ],
+        "profileId": "cement.bag_filter"
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "raw_meal_feed",
+        "toStationId": "preheater_tower",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "raw_meal_out",
+        "toPortId": "raw_meal_in"
+      },
+      {
+        "fromStationId": "preheater_tower",
+        "toStationId": "rotary_kiln",
+        "medium": "material",
+        "visualKind": "hot_material_chute",
+        "fromPortId": "hot_meal_out",
+        "toPortId": "hot_meal_in"
+      },
+      {
+        "fromStationId": "rotary_kiln",
+        "toStationId": "grate_cooler",
+        "medium": "material",
+        "visualKind": "hot_material_chute",
+        "fromPortId": "clinker_out",
+        "toPortId": "hot_clinker_in"
+      },
+      {
+        "fromStationId": "grate_cooler",
+        "toStationId": "clinker_conveying",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "cooled_clinker_out",
+        "toPortId": "material_in"
+      },
+      {
+        "fromStationId": "clinker_conveying",
+        "toStationId": "clinker_silo",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "material_out",
+        "toPortId": "top_feed_inlet"
+      },
+      {
+        "fromStationId": "preheater_tower",
+        "toStationId": "bag_filter",
+        "medium": "gas",
+        "visualKind": "hot_gas_duct",
+        "fromPortId": "exhaust_gas_out",
+        "toPortId": "dust_gas_in"
+      },
+      {
+        "fromStationId": "grate_cooler",
+        "toStationId": "bag_filter",
+        "medium": "gas",
+        "visualKind": "hot_gas_duct",
+        "fromPortId": "cooler_exhaust_out",
+        "toPortId": "dust_gas_in"
+      }
+    ]
+  }
+]

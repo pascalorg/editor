@@ -92,6 +92,8 @@ export const LevelNode = BaseNode.extend({
         TorusNode.shape.id,
         TrapezoidPrismNode.shape.id,
         WedgeNode.shape.id,
+        objectId('factory-pump') as unknown as typeof AssemblyNode.shape.id,
+        objectId('factory-tank') as unknown as typeof AssemblyNode.shape.id,
       ]),
     )
     .default([]),

@@ -1,6 +1,28 @@
 import { describe, expect, test } from 'bun:test'
+import { registerNode, nodeRegistry } from '@pascal-app/core/registry'
 import { BoxNode, ItemNode, LevelNode, ZoneNode } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import { validateFactoryScenePatches } from './factory-scene-patch-safety'
+
+const registeredSafetyTestKind = 'factory:safety-test'
+
+function ensureSafetyTestNodeRegistered() {
+  if (nodeRegistry.has(registeredSafetyTestKind)) return
+  registerNode({
+    kind: registeredSafetyTestKind,
+    schemaVersion: 1,
+    schema: z.object({
+      object: z.literal('node').default('node'),
+      id: z.string(),
+      type: z.literal(registeredSafetyTestKind),
+      parentId: z.string().nullable().default(null),
+      metadata: z.record(z.string(), z.unknown()).default({}),
+    }),
+    category: 'furnish',
+    defaults: () => ({ object: 'node', parentId: null, metadata: {} }),
+    capabilities: {},
+  })
+}
 
 describe('factory scene patch safety', () => {
   test('accepts valid create and update patches against known scene ids', () => {
@@ -52,6 +74,26 @@ describe('factory scene patch safety', () => {
     expect(result.issues.map((item) => item.code)).toContain('delete_missing_target')
   })
 
+  test('warns but does not reject update patches whose target is missing', () => {
+    const box = BoxNode.parse({ id: 'box_1', name: 'Pump skid' })
+
+    const result = validateFactoryScenePatches(
+      [
+        { op: 'update', id: 'site_generated', data: { name: 'Generated site' } },
+        { op: 'create', parentId: 'level_1', node: box },
+      ],
+      { existingNodeIds: ['level_1'] },
+    )
+
+    expect(result.safe).toBe(true)
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        code: 'update_missing_target',
+        severity: 'warning',
+      }),
+    ])
+  })
+
   test('rejects create patches whose parent is missing', () => {
     const box = BoxNode.parse({ id: 'box_1', name: 'Cabinet' })
 
@@ -78,6 +120,28 @@ describe('factory scene patch safety', () => {
     )
 
     expect(result.safe).toBe(true)
+    expect(result.issues).toEqual([])
+  })
+
+  test('accepts create patches for registered plugin node schemas', () => {
+    ensureSafetyTestNodeRegistered()
+
+    const result = validateFactoryScenePatches(
+      [
+        {
+          op: 'create',
+          parentId: 'level_1',
+          node: {
+            id: 'factory-safety-test_1',
+            type: registeredSafetyTestKind,
+          },
+        },
+      ],
+      { existingNodeIds: ['level_1'] },
+    )
+
+    expect(result.safe).toBe(true)
+    expect(result.createCount).toBe(1)
     expect(result.issues).toEqual([])
   })
 

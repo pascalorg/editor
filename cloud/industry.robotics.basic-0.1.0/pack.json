@@ -1,0 +1,35 @@
+{
+  "id": "industry.robotics.basic",
+  "name": "Robotics Basic Equipment Pack",
+  "industry": "robotics",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Basic industrial robotics geometry knowledge pack with articulated robot arm profiles, layouts, presets, and quality rules.",
+  "profiles": [
+    "profiles/robot-arms.json"
+  ],
+  "layouts": [
+    "layouts/articulated-robot-six-axis.json",
+    "layouts/articulated-robot-four-axis.json"
+  ],
+  "partPresets": [
+    "part-presets/robot-arm-parts.json"
+  ],
+  "qualityRules": [
+    "quality-rules/robot-arm-quality.json",
+    "quality-rules/robot-arm-four-axis-quality.json"
+  ],
+  "editableSchemas": [
+    "editable-schemas/robot-arm-common.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": []
+}

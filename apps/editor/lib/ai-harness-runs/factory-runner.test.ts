@@ -1,6 +1,6 @@
 import { loadPlugin, nodeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { GeneratedGeometryArtifact } from '../../../../packages/editor/src/lib/ai-generated-geometry-core'
 import { fallbackFactoryPlan } from './factory-planner'
 import { evaluateFactoryPrimitiveArtifactContract } from './factory-primitive-quality'
@@ -19,6 +19,7 @@ import {
   type PrimitiveGeometryGenerationRequest,
 } from './primitive-generation-service'
 import { composeProcessLine } from './process-line-composer'
+import { installIndustryPacksForTests } from './test-industry-pack-setup'
 
 const artifact: GeneratedGeometryArtifact = {
   id: 'ai_geometry_factory_test',
@@ -137,6 +138,20 @@ function oversizedContractArtifact(
 }
 
 describe('factory runner helpers', () => {
+  let restoreIndustryPacks: (() => Promise<void>) | undefined
+
+  beforeAll(async () => {
+    restoreIndustryPacks = await installIndustryPacksForTests([
+      { id: 'industry.cement.basic', version: '0.1.0' },
+      { id: 'industry.thermal-power.basic', version: '0.1.0' },
+      { id: 'industry.refinery.basic', version: '0.1.0' },
+    ])
+  })
+
+  afterAll(async () => {
+    await restoreIndustryPacks?.()
+  })
+
   test('builds an equipment-focused geometry prompt', () => {
     expect(
       buildFactoryGeometryPrompt('生成一台输送机', {
@@ -286,7 +301,7 @@ describe('factory runner helpers', () => {
     expect(result.missingAssets).toEqual([])
   })
 
-  test('compiles a pump prompt to a factory node before primitive draft fallback', async () => {
+  test('compiles a pump prompt to a semantic assembly before primitive draft fallback', async () => {
     await ensureFactoryEquipmentPluginLoaded()
 
     const result = buildFactoryRunResultFromSingleEquipmentPrompt({
@@ -297,28 +312,36 @@ describe('factory runner helpers', () => {
     expect(result).toMatchObject({
       intent: { action: 'generate_equipment_draft' },
       applied: false,
-      patches: [
-        {
-          op: 'create',
-          parentId: 'level_factory',
-          node: {
-            type: 'factory:pump',
-            metadata: {
-              resolver: 'factory-node',
-              equipmentContract: { profileId: 'generic.centrifugal_pump' },
-            },
-          },
-        },
-      ],
       missingAssets: [],
       qualityReport: {
         passed: true,
-        checks: { factoryNodeCount: 1, equipmentContractCount: 1 },
+        checks: { factoryNodeCount: 0, equipmentContractCount: 1 },
       },
     })
+    expect(result?.patches[0]).toMatchObject({
+      op: 'create',
+      parentId: 'level_factory',
+      node: {
+        type: 'assembly',
+        metadata: {
+          resolver: 'semantic-assembly',
+          equipmentAssembly: {
+            kind: 'semantic-assembly',
+            profileId: 'generic.centrifugal_pump',
+          },
+          equipmentContract: { profileId: 'generic.centrifugal_pump' },
+        },
+      },
+    })
+    expect(
+      result?.patches.some((patch) => patch.op === 'create' && patch.node.type === 'factory:pump'),
+    ).toBe(false)
+    expect(result?.patches.map((patch) => patch.node.metadata?.semanticRole)).toEqual(
+      expect.arrayContaining(['support_base', 'drive_motor', 'volute_casing']),
+    )
   })
 
-  test('compiles a tank prompt to a factory node before primitive draft fallback', async () => {
+  test('compiles a tank prompt to a semantic assembly before primitive draft fallback', async () => {
     await ensureFactoryEquipmentPluginLoaded()
 
     const result = buildFactoryRunResultFromSingleEquipmentPrompt({
@@ -329,14 +352,23 @@ describe('factory runner helpers', () => {
     expect(result?.patches[0]).toMatchObject({
       op: 'create',
       node: {
-        type: 'factory:tank',
-        orientation: 'vertical',
+        type: 'assembly',
         metadata: {
-          resolver: 'factory-node',
+          resolver: 'semantic-assembly',
+          equipmentAssembly: {
+            kind: 'semantic-assembly',
+            profileId: 'generic.vertical_tank',
+          },
           equipmentContract: { profileId: 'generic.vertical_tank' },
         },
       },
     })
+    expect(
+      result?.patches.some((patch) => patch.op === 'create' && patch.node.type === 'factory:tank'),
+    ).toBe(false)
+    expect(result?.patches.map((patch) => patch.node.metadata?.semanticRole)).toEqual(
+      expect.arrayContaining(['vessel_shell', 'inlet_port', 'outlet_port', 'access_ladder']),
+    )
   })
 
   test('keeps unknown single equipment on the primitive draft fallback path', async () => {
@@ -612,7 +644,13 @@ describe('factory runner helpers', () => {
     })
     expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays', repaired: true })
     expect(
-      result.patches.some((patch) => patch.op === 'create' && patch.node.type === 'tank'),
+      result.patches.some(
+        (patch) =>
+          patch.op === 'create' &&
+          patch.node.type === 'assembly' &&
+          patch.node.metadata?.equipmentAssembly &&
+          patch.node.metadata?.stationId === 'hydrogen_separator',
+      ),
     ).toBe(true)
     expect(
       result.patches.some((patch) => patch.op === 'create' && patch.node.type === 'pipe'),
@@ -631,7 +669,7 @@ describe('factory runner helpers', () => {
     expect(result.missingAssets).toEqual([])
   })
 
-  test('compiles process-line pump stations into factory nodes and connects node ports', async () => {
+  test('compiles process-line pump stations into semantic assemblies and connects profile ports', async () => {
     await ensureFactoryEquipmentPluginLoaded()
 
     const plan = {
@@ -676,32 +714,28 @@ describe('factory runner helpers', () => {
       plannerSource: 'fallback',
       placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
       generatePrimitiveGeometryDraft: async () => {
-        throw new Error('factory-node resolver should not request primitive geometry')
+        throw new Error('semantic assembly resolver should not request primitive geometry')
       },
     })
 
-    const factoryPumps = result.patches.filter(
-      (patch) => patch.op === 'create' && patch.node.type === 'factory:pump',
+    const pumpAssemblies = result.patches.filter(
+      (patch) =>
+        patch.op === 'create' &&
+        patch.node.type === 'assembly' &&
+        ['feed_pump', 'booster_pump'].includes(String(patch.node.metadata?.stationId)),
     )
-    expect(factoryPumps).toHaveLength(2)
+    expect(pumpAssemblies).toHaveLength(2)
     expect(
-      result.patches.some((patch) => patch.op === 'create' && patch.node.type === 'assembly'),
-    ).toBe(false)
-    expect(
-      result.patches.some(
-        (patch) =>
-          patch.op === 'create' &&
-          factoryPumps.some((pump) => pump.op === 'create' && patch.parentId === pump.node.id),
-      ),
+      result.patches.some((patch) => patch.op === 'create' && patch.node.type === 'factory:pump'),
     ).toBe(false)
 
-    const feedPump = factoryPumps.find(
+    const feedPump = pumpAssemblies.find(
       (patch) => patch.op === 'create' && patch.node.metadata?.stationId === 'feed_pump',
     )
     expect(feedPump?.node.metadata).toMatchObject({
-      resolver: 'factory-node',
+      resolver: 'semantic-assembly',
       factoryRouteObstacle: {
-        source: 'factory-node',
+        source: 'profile-parts',
         stationId: 'feed_pump',
         box: {
           minX: expect.any(Number),
@@ -710,11 +744,29 @@ describe('factory runner helpers', () => {
           maxZ: expect.any(Number),
         },
       },
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'generic.centrifugal_pump',
+        editablePartRoles: expect.arrayContaining(['support_base', 'drive_motor', 'volute_casing']),
+      },
       equipmentContract: {
         profileId: 'generic.centrifugal_pump',
         envelope: { length: 2.6, width: 1.1, height: 1.4 },
       },
     })
+    const feedPumpChildren = result.patches.filter(
+      (patch) => feedPump?.op === 'create' && patch.parentId === feedPump.node.id,
+    )
+    expect(feedPumpChildren.length).toBeGreaterThan(0)
+    expect(feedPumpChildren.map((patch) => patch.node.metadata?.semanticRole)).toEqual(
+      expect.arrayContaining([
+        'support_base',
+        'drive_motor',
+        'volute_casing',
+        'inlet_port',
+        'outlet_port',
+      ]),
+    )
 
     const pipe = result.patches.find(
       (patch) => patch.op === 'create' && patch.node.type === 'pipe',
@@ -723,14 +775,14 @@ describe('factory runner helpers', () => {
       fromStationId: 'feed_pump',
       toStationId: 'booster_pump',
       fromPortId: 'outlet',
-      fromPortSource: 'node',
+      fromPortSource: 'profile',
       toPortId: 'inlet',
-      toPortSource: 'node',
+      toPortSource: 'profile',
     })
     expect(result.qualityReport).toMatchObject({
       passed: true,
       checks: {
-        factoryNodeCount: 2,
+        factoryNodeCount: 0,
         equipmentContractCount: 2,
         primitiveQualityCount: 0,
         routeCollisionCount: 0,

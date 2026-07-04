@@ -20,7 +20,7 @@ Use this skill to create or expand installable Pascal geometry knowledge/profile
 3. Draft a v2 industry pack spec JSON with equipment profiles, parts, primary roles, aliases, visual cues, quality constraints, and equipment-node intent.
    - For basic packs, include `factoryArchitectures` and `processTemplates`.
    - For extension packs, include them only when the extension adds a new factory-level process.
-   - For pump/tank-like equipment, include `nodeKind`, `processPorts`, and `equipmentDefaults` so the scaffold can emit `equipmentBindings`.
+   - For recipe-backed equipment, include `recipeId`, `processPorts`, and `equipmentDefaults` so the scaffold can emit `equipmentBindings`.
 4. Run the scaffold:
 
 ```bash

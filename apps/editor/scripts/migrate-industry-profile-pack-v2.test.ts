@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { compileProcessStationEquipment } from '../lib/equipment-spec-compiler'
 import { normalizeIndustryPackV2Manifest } from '../lib/industry-pack-v2'
@@ -125,7 +125,9 @@ describe('migrate-industry-profile-pack-v2', () => {
       'utf8',
     )
 
-    if (!nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
+    if (!semanticRecipeRegistry.has('factory:centrifugal-pump')) {
+      await loadPlugin(factoryEquipmentPlugin)
+    }
     const result = await migrateIndustryProfilePackToV2({ packDir: source, outDir: out })
     const validation = await validateProfilePackDir(out)
     const audit = auditProfilePackValidation(validation)
@@ -134,8 +136,14 @@ describe('migrate-industry-profile-pack-v2', () => {
       schemaVersion: '2.0',
       dependsOnPlugins: ['pascal:factory-equipment'],
       equipmentBindings: expect.arrayContaining([
-        expect.objectContaining({ profileId: 'audit.feed_pump', nodeKind: 'factory:pump' }),
-        expect.objectContaining({ profileId: 'audit.buffer_tank', nodeKind: 'factory:tank' }),
+        expect.objectContaining({
+          profileId: 'audit.feed_pump',
+          recipeId: 'factory:centrifugal-pump',
+        }),
+        expect.objectContaining({
+          profileId: 'audit.buffer_tank',
+          recipeId: 'factory:storage-tank',
+        }),
       ]),
     })
     expect(audit.ok).toBe(true)
@@ -157,13 +165,13 @@ describe('migrate-industry-profile-pack-v2', () => {
         profiles: validation.resources.rawProfiles,
         station: { id: 'feed_pump', profileId: 'audit.feed_pump' },
       }),
-    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:pump' } })
+    ).toMatchObject({ kind: 'semantic-assembly', spec: { recipeId: 'factory:centrifugal-pump' } })
     expect(
       compileProcessStationEquipment({
         manifest,
         profiles: validation.resources.rawProfiles,
         station: { id: 'buffer_tank', profileId: 'audit.buffer_tank' },
       }),
-    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:tank' } })
+    ).toMatchObject({ kind: 'semantic-assembly', spec: { recipeId: 'factory:storage-tank' } })
   })
 })

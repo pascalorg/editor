@@ -1,5 +1,6 @@
 import {
   applyFactoryArchitectureToPlan,
+  loadCloudIndustryProcessTemplates,
   loadIndustryProcessTemplates,
 } from './industry-factory-knowledge'
 import type {
@@ -179,6 +180,27 @@ export function matchProcessTemplate(prompt: string): ProcessTemplate | undefine
   const matches = allProcessTemplates().filter((template) =>
     template.aliases.some((pattern) => pattern.test(prompt)),
   )
+  if (isFactoryScopePrompt(prompt)) {
+    return matches.find(isWholeFactoryTemplate) ?? matches[0]
+  }
+  return matches[0]
+}
+
+export function matchUnavailableProcessTemplate(prompt: string): ProcessTemplate | undefined {
+  const availableKeys = new Set(
+    allProcessTemplates().map(
+      (template) =>
+        `${template.sourcePack?.id ?? 'builtin'}@${template.sourcePack?.version ?? '0.0.0'}:${template.processId}`,
+    ),
+  )
+  const matches = loadCloudIndustryProcessTemplates()
+    .filter(
+      (template) =>
+        !availableKeys.has(
+          `${template.sourcePack?.id ?? 'builtin'}@${template.sourcePack?.version ?? '0.0.0'}:${template.processId}`,
+        ),
+    )
+    .filter((template) => template.aliases.some((pattern) => pattern.test(prompt)))
   if (isFactoryScopePrompt(prompt)) {
     return matches.find(isWholeFactoryTemplate) ?? matches[0]
   }

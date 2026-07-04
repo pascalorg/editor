@@ -78,6 +78,27 @@ export {
 } from './dynamics/types'
 export * from './equipment'
 export {
+  registerSemanticRecipe,
+  semanticRecipeRegistry,
+  assertSemanticRecipeComposeResult,
+  assertSemanticRecipeDefinition,
+  type SemanticRecipeComposeInput,
+  type SemanticRecipeComposeResult,
+  type SemanticRecipeDefinition,
+  type SemanticRecipeEditableParam,
+  type SemanticRecipeEditableParamEffect,
+  type SemanticRecipeEditableParamKind,
+  type SemanticRecipeEnvelope,
+  type SemanticRecipeId,
+  type SemanticRecipePart,
+  type SemanticRecipePort,
+  type SemanticRecipePortSide,
+  type SemanticRecipeRegistry,
+  type SemanticRecipeValidationIssue,
+  validateSemanticRecipeComposeResult,
+  validateSemanticRecipeDefinition,
+} from './registry/semantic-recipes'
+export {
   sceneRegistry,
   useRegistry,
 } from './hooks/scene-registry/scene-registry'

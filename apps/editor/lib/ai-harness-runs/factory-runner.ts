@@ -374,16 +374,16 @@ export function buildFactoryRunResultFromSingleEquipmentPrompt(input: {
   })
 
   if (compiled.kind === 'generic-equipment-draft') return null
-  if (compiled.kind === 'create-equipment-node') {
+  if (compiled.kind === 'create-semantic-assembly') {
     if (input.updatesOnly) return null
     return withFactoryQuality({
       intent: { action: 'generate_equipment_draft', prompt: input.prompt },
       applied: false,
       plan: input.plan,
       plannerSource: input.plannerSource,
-      patches: [compiled.patch],
-      nodeIds: [compiled.patch.node.id],
-      created: [compiled.patch.node.name ?? compiled.patch.node.type],
+      patches: compiled.patchPlan.patches,
+      nodeIds: compiled.patchPlan.nodeIds,
+      created: compiled.patchPlan.created,
       missingAssets: [],
       placement: input.placement,
     })

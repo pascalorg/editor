@@ -885,9 +885,7 @@ export function routeProcessConnection(input: {
     (input.routeObstacles ?? [])
       .filter(
         (item) =>
-          item.source === 'artifact' ||
-          item.source === 'factory-node' ||
-          item.source === 'profile-parts',
+          item.source === 'artifact' || item.source === 'factory-node',
       )
       .map((item) => item.stationId),
   )

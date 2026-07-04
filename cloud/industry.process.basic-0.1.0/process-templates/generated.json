@@ -1,0 +1,407 @@
+[
+  {
+    "processId": "process_industry_basic_plant",
+    "processLabel": "Process industry basic plant",
+    "processDisplayLabel": "流程行业基础工厂",
+    "domain": "chemical",
+    "aliases": [
+      "流程行业基础包",
+      "流程行业基础工厂",
+      "流程工业基础工厂",
+      "流程工业工厂",
+      "流程生产线",
+      "通用流程车间",
+      "化工流程车间",
+      "基础流程生产线",
+      "做一个流程行业基础工厂",
+      "生成一个流程行业基础工厂",
+      "process industry plant",
+      "process plant",
+      "basic process plant",
+      "process production line"
+    ],
+    "requiredRoles": [
+      "raw_material_tank",
+      "metering_pump_skid",
+      "mixing_tank",
+      "stirred_reactor",
+      "heat_exchanger",
+      "filter_vessel",
+      "centrifuge",
+      "product_storage_tank",
+      "pipe_corridor",
+      "control_cabinet",
+      "utility_blower",
+      "air_compressor_skid",
+      "bulk_material_silo",
+      "valve_station"
+    ],
+    "defaultLayoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 58,
+      "width": 26
+    },
+    "safetyTags": [
+      "process_pipe",
+      "chemical",
+      "rotating_equipment",
+      "utilities"
+    ],
+    "stations": [
+      {
+        "id": "raw_material_tank",
+        "label": "Raw material storage tank",
+        "displayLabel": "原料储罐",
+        "role": "raw_material_tank",
+        "equipmentHint": "process.raw_material_tank vertical raw material storage tank with cylindrical shell, inlet outlet nozzles, ladder, and skid legs",
+        "footprintHint": "large",
+        "safetyTags": [
+          "storage",
+          "material"
+        ],
+        "profileId": "process.raw_material_tank"
+      },
+      {
+        "id": "metering_pump_skid",
+        "label": "Metering pump skid",
+        "displayLabel": "计量泵撬",
+        "role": "metering_pump_skid",
+        "equipmentHint": "process.metering_pump_skid compact metering pump skid with pump casing, drive motor, pipe manifold, base frame, and control panel",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "pump",
+          "rotating_equipment"
+        ],
+        "profileId": "process.metering_pump_skid"
+      },
+      {
+        "id": "mixing_tank",
+        "label": "Mixing tank",
+        "displayLabel": "配料搅拌罐",
+        "role": "mixing_tank",
+        "equipmentHint": "process.mixing_tank vertical mixing tank with cylindrical vessel, top agitator, feed inlet, discharge outlet, and service ladder",
+        "footprintHint": "large",
+        "safetyTags": [
+          "mixing",
+          "vessel"
+        ],
+        "profileId": "process.mixing_tank"
+      },
+      {
+        "id": "stirred_reactor",
+        "label": "Stirred reactor",
+        "displayLabel": "搅拌反应釜",
+        "role": "stirred_reactor",
+        "equipmentHint": "process.stirred_reactor jacketed stirred reactor with rounded cylindrical vessel, top agitator, manway, nozzles, pipe manifold, and service platform",
+        "footprintHint": "large",
+        "safetyTags": [
+          "reactor",
+          "pressure_vessel"
+        ],
+        "profileId": "process.stirred_reactor"
+      },
+      {
+        "id": "heat_exchanger",
+        "label": "Heat exchanger",
+        "displayLabel": "管壳式换热器",
+        "role": "heat_exchanger",
+        "equipmentHint": "process.heat_exchanger horizontal shell and tube heat exchanger on skid with end caps, pipe ports, and support saddles",
+        "footprintHint": "long",
+        "safetyTags": [
+          "thermal",
+          "pressure_vessel"
+        ],
+        "profileId": "process.heat_exchanger"
+      },
+      {
+        "id": "filter_vessel",
+        "label": "Filter vessel",
+        "displayLabel": "过滤器",
+        "role": "filter_vessel",
+        "equipmentHint": "process.filter_vessel vertical process filter vessel with cylindrical body, pipe nozzles, bottom outlet, and skid support",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "separation",
+          "filter"
+        ],
+        "profileId": "process.filter_vessel"
+      },
+      {
+        "id": "centrifuge",
+        "label": "Centrifuge",
+        "displayLabel": "离心机",
+        "role": "centrifuge",
+        "equipmentHint": "process.centrifuge industrial centrifuge with cylindrical bowl housing, motor drive, outlet chute, skid base, and operator panel",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "separation",
+          "rotating_equipment"
+        ],
+        "profileId": "process.centrifuge"
+      },
+      {
+        "id": "tray_dryer",
+        "label": "Tray dryer",
+        "displayLabel": "真空托盘干燥机",
+        "role": "tray_dryer",
+        "equipmentHint": "process.tray_dryer rectangular vacuum tray dryer chamber with front door, pipe manifold, skid base, and control panel",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "drying",
+          "thermal"
+        ],
+        "profileId": "process.tray_dryer"
+      },
+      {
+        "id": "product_storage_tank",
+        "label": "Product storage tank",
+        "displayLabel": "成品储罐",
+        "role": "product_storage_tank",
+        "equipmentHint": "process.product_storage_tank vertical product storage tank with cylindrical shell, outlet nozzle, inlet nozzle, ladder, and support skirt",
+        "footprintHint": "large",
+        "safetyTags": [
+          "storage",
+          "product"
+        ],
+        "profileId": "process.raw_material_tank"
+      },
+      {
+        "id": "packaging_station",
+        "label": "Packaging station",
+        "displayLabel": "包装工位",
+        "role": "packaging_station",
+        "equipmentHint": "process.packaging_station downstream packaging station with conveyor frame, compact packing body, control box, and discharge rollers",
+        "footprintHint": "large",
+        "safetyTags": [
+          "packaging",
+          "conveyor"
+        ],
+        "profileId": "process.packaging_station"
+      },
+      {
+        "id": "pipe_corridor",
+        "label": "Process pipe corridor",
+        "displayLabel": "工艺管廊",
+        "role": "pipe_corridor",
+        "equipmentHint": "process.pipe_corridor long process pipe corridor with parallel pipes, pipe elbows, valves, flanges, and utility header",
+        "footprintHint": "long",
+        "safetyTags": [
+          "pipe",
+          "utility"
+        ],
+        "profileId": "process.pipe_corridor"
+      },
+      {
+        "id": "control_cabinet",
+        "label": "Control cabinet",
+        "displayLabel": "控制柜",
+        "role": "control_cabinet",
+        "equipmentHint": "process.control_cabinet electrical control cabinet with HMI display, cable tray, warning labels, and cabinet doors",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "electrical",
+          "control"
+        ],
+        "profileId": "process.control_cabinet"
+      },
+      {
+        "id": "bulk_material_silo",
+        "label": "Bulk material silo",
+        "displayLabel": "粉体料仓",
+        "role": "bulk_material_silo",
+        "equipmentHint": "process.bulk_material_silo vertical bulk material silo with cylindrical bin, conical hopper bottom, support frame, outlet spout, and level indicator",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "storage",
+          "bulk_material"
+        ],
+        "profileId": "process.bulk_material_silo"
+      },
+      {
+        "id": "valve_station",
+        "label": "Valve manifold station",
+        "displayLabel": "阀组站",
+        "role": "valve_station",
+        "equipmentHint": "process.valve_station process valve manifold station with parallel pipes, valve bodies, handwheels, flanges, and compact support skid",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "pipe",
+          "valve"
+        ],
+        "profileId": "process.valve_station"
+      },
+      {
+        "id": "utility_blower",
+        "label": "Utility blower",
+        "displayLabel": "公用鼓风机",
+        "role": "utility_blower",
+        "equipmentHint": "process.utility_blower industrial utility blower with volute casing, impeller, drive motor, inlet outlet ports, and skid base",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "rotating_equipment",
+          "air"
+        ],
+        "profileId": "process.utility_blower"
+      },
+      {
+        "id": "air_compressor_skid",
+        "label": "Air compressor skid",
+        "displayLabel": "空压机撬",
+        "role": "air_compressor_skid",
+        "equipmentHint": "process.air_compressor_skid compressed air compressor skid with rounded compressor body, ribbed drive motor, receiver pipe ports, and local control box",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "compressed_air",
+          "utility"
+        ],
+        "profileId": "process.air_compressor_skid"
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "raw_material_tank",
+        "toStationId": "metering_pump_skid",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "raw_outlet",
+        "toPortId": "pump_suction"
+      },
+      {
+        "fromStationId": "metering_pump_skid",
+        "toStationId": "mixing_tank",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "pump_discharge",
+        "toPortId": "mixing_feed"
+      },
+      {
+        "fromStationId": "mixing_tank",
+        "toStationId": "stirred_reactor",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "mixing_outlet",
+        "toPortId": "reactor_feed"
+      },
+      {
+        "fromStationId": "stirred_reactor",
+        "toStationId": "heat_exchanger",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "reactor_outlet",
+        "toPortId": "exchanger_process_in"
+      },
+      {
+        "fromStationId": "heat_exchanger",
+        "toStationId": "filter_vessel",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "exchanger_process_out",
+        "toPortId": "filter_inlet"
+      },
+      {
+        "fromStationId": "filter_vessel",
+        "toStationId": "centrifuge",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "filter_outlet",
+        "toPortId": "centrifuge_feed"
+      },
+      {
+        "fromStationId": "centrifuge",
+        "toStationId": "tray_dryer",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "wet_solid_out",
+        "toPortId": "dryer_feed"
+      },
+      {
+        "fromStationId": "tray_dryer",
+        "toStationId": "product_storage_tank",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "dryer_out",
+        "toPortId": "product_inlet"
+      },
+      {
+        "fromStationId": "product_storage_tank",
+        "toStationId": "packaging_station",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "product_outlet",
+        "toPortId": "packaging_in"
+      },
+      {
+        "fromStationId": "pipe_corridor",
+        "toStationId": "stirred_reactor",
+        "medium": "cooling",
+        "visualKind": "pipe",
+        "fromPortId": "cooling_header",
+        "toPortId": "reactor_jacket"
+      },
+      {
+        "fromStationId": "pipe_corridor",
+        "toStationId": "heat_exchanger",
+        "medium": "water",
+        "visualKind": "pipe",
+        "fromPortId": "utility_header",
+        "toPortId": "exchanger_utility_in"
+      },
+      {
+        "fromStationId": "control_cabinet",
+        "toStationId": "metering_pump_skid",
+        "medium": "power",
+        "visualKind": "cable_tray",
+        "fromPortId": "mcc_out",
+        "toPortId": "pump_drive"
+      },
+      {
+        "fromStationId": "control_cabinet",
+        "toStationId": "stirred_reactor",
+        "medium": "power",
+        "visualKind": "cable_tray",
+        "fromPortId": "mcc_out",
+        "toPortId": "agitator_drive"
+      },
+      {
+        "fromStationId": "bulk_material_silo",
+        "toStationId": "mixing_tank",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "silo_discharge",
+        "toPortId": "mixing_solid_feed"
+      },
+      {
+        "fromStationId": "filter_vessel",
+        "toStationId": "valve_station",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "filter_outlet",
+        "toPortId": "valve_inlet"
+      },
+      {
+        "fromStationId": "valve_station",
+        "toStationId": "centrifuge",
+        "medium": "material",
+        "visualKind": "pipe",
+        "fromPortId": "valve_outlet",
+        "toPortId": "centrifuge_feed"
+      },
+      {
+        "fromStationId": "utility_blower",
+        "toStationId": "pipe_corridor",
+        "medium": "gas",
+        "visualKind": "air_duct",
+        "fromPortId": "blower_discharge",
+        "toPortId": "air_header"
+      },
+      {
+        "fromStationId": "air_compressor_skid",
+        "toStationId": "pipe_corridor",
+        "medium": "gas",
+        "visualKind": "pipe",
+        "fromPortId": "compressed_air_out",
+        "toPortId": "air_header"
+      }
+    ]
+  }
+]

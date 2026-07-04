@@ -1,0 +1,150 @@
+{
+  "id": "industry.fine-chemical.basic",
+  "name": "Fine Chemical Basic Equipment Pack",
+  "industry": "fine-chemical",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Common fine-chemical process equipment profiles for batch reaction, separation, thermal exchange, drying, storage, dosing, and utility skids.",
+  "profiles": [
+    "profiles/reaction.json",
+    "profiles/separation.json",
+    "profiles/thermal.json",
+    "profiles/storage-dosing.json"
+  ],
+  "qualityRules": [
+    "quality-rules/fine-chemical-quality.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "fine_chemical.stirred_batch_reactor",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.mixing_tank",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.nutsche_filter",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.shell_tube_condenser",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.distillation_column",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.solvent_storage_tank",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.height": "height",
+        "defaultDimensions.diameter": "length",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "fine_chemical.metering_pump_skid",
+      "recipeId": "factory:centrifugal-pump",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.pumpType": "pumpType",
+        "equipmentDefaults.flowRate": "flowRate",
+        "equipmentDefaults.motorPower": "motorPower",
+        "equipmentDefaults.skidMounted": "skidMounted"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    }
+  ]
+}

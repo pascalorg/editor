@@ -1,15 +1,10 @@
 import type { ZodObject } from 'zod'
 import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin, PluginPanel } from './types'
+import { registerSemanticRecipe, semanticRecipeRegistry } from './semantic-recipes'
 
 const HOST_API_VERSION = 1 as const
 
 function isDevMode(): boolean {
-  try {
-    const meta = import.meta as { env?: { DEV?: boolean } }
-    if (typeof meta?.env?.DEV === 'boolean') return meta.env.DEV
-  } catch {
-    // Some runtimes do not expose import.meta.env.
-  }
   if (typeof process !== 'undefined' && process.env?.NODE_ENV) {
     return process.env.NODE_ENV !== 'production'
   }
@@ -244,6 +239,11 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     // ship a panel id of `'main'`. The namespaced id is what the sidebar
     // uses as `activeSidebarPanel`.
     panelRegistry._register({ ...panel, id: `${plugin.id}:${panel.id}` })
+  }
+  for (const recipe of plugin.semanticRecipes ?? []) {
+    if (!semanticRecipeRegistry.has(recipe.id)) {
+      registerSemanticRecipe(recipe)
+    }
   }
   // Associate every node kind with the plugin's first panel — the panel a
   // host's "find in catalog" should open to place more of that kind.

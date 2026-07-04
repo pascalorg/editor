@@ -1,0 +1,52 @@
+{
+  "id": "industry.appliance-assembly.basic",
+  "name": "Appliance Assembly Basic Equipment Pack",
+  "industry": "appliance-assembly",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Factory-capable home appliance final assembly pack for a strict two-floor workshop building with roof, mezzanine production areas, conveyor lines, kitting, foaming, testing, aging, packaging, palletizing, controls, and utility equipment.",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "appliance_assembly.mezzanine_storage_rack",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    }
+  ]
+}

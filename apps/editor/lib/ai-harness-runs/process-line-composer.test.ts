@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { fallbackFactoryPlan } from './factory-planner'
 import { composeProcessLine } from './process-line-composer'
 import { routeSegmentIntersectsClearanceBox } from './process-line-routing'
+import { installIndustryPacksForTests } from './test-industry-pack-setup'
 
 function waterElectrolysisPlan() {
   const plan = fallbackFactoryPlan('create a hydrogen electrolysis workshop')
@@ -49,7 +50,20 @@ function polygonBounds(polygon: Array<[number, number]>) {
 }
 
 describe('process line composer', () => {
-  test('composes water electrolysis workshop with native tanks and connections', () => {
+  let restoreIndustryPacks: (() => Promise<void>) | undefined
+
+  beforeAll(async () => {
+    restoreIndustryPacks = await installIndustryPacksForTests([
+      { id: 'industry.cement.basic', version: '0.1.0' },
+      { id: 'industry.refinery.basic', version: '0.1.0' },
+    ])
+  }, 30000)
+
+  afterAll(async () => {
+    await restoreIndustryPacks?.()
+  }, 30000)
+
+  test('composes water electrolysis workshop with semantic tank assemblies and connections', () => {
     const result = composeProcessLine({
       prompt: 'create a hydrogen electrolysis workshop',
       plan: waterElectrolysisPlan(),
@@ -68,7 +82,14 @@ describe('process line composer', () => {
     expect(result.primitiveRequests.map((request) => request.station.role)).toContain(
       'electrolyzer',
     )
-    expect(result.patches.some((patch) => patch.node.type === 'tank')).toBe(true)
+    expect(
+      result.patches.some(
+        (patch) =>
+          patch.node.type === 'assembly' &&
+          patch.node.metadata?.equipmentAssembly &&
+          patch.node.metadata?.stationId === 'hydrogen_separator',
+      ),
+    ).toBe(true)
     expect(result.patches.some((patch) => patch.node.type === 'pipe')).toBe(true)
     expect(result.patches.some((patch) => patch.node.type === 'pipe-fitting')).toBe(true)
     expect(result.patches.some((patch) => patch.node.type === 'cable-tray')).toBe(true)
@@ -85,7 +106,8 @@ describe('process line composer', () => {
     expect(
       result.patches.every(
         (patch) =>
-          patch.node.metadata?.generatedBy === 'factory-agent' &&
+          (patch.node.metadata?.generatedBy === 'factory-agent' ||
+            patch.node.metadata?.generatedBy === 'ai-geometry') &&
           patch.node.metadata?.processId === 'water_electrolysis_hydrogen',
       ),
     ).toBe(true)
@@ -126,7 +148,7 @@ describe('process line composer', () => {
     )
     const hydrogenTank = result.patches.find(
       (patch) =>
-        patch.node.type === 'tank' && patch.node.metadata?.stationId === 'hydrogen_separator',
+        patch.node.type === 'assembly' && patch.node.metadata?.stationId === 'hydrogen_separator',
     )
 
     expect(shellZone?.node.name).toBe('\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4')
@@ -145,6 +167,36 @@ describe('process line composer', () => {
     ).toMatchObject({
       label: 'Electrolyzer stack array',
       displayLabel: '\u7535\u89e3\u69fd\u7ec4',
+    })
+  })
+
+  test('names occupied building zones distinctly from their process station zone', () => {
+    const result = composeProcessLine({
+      prompt: '\u751f\u6210\u4e00\u4e2a\u70bc\u6cb9\u5382',
+      plan: refineryPlan(),
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+    })
+
+    const stationZone = result.patches.find(
+      (patch) =>
+        patch.node.type === 'zone' &&
+        patch.node.metadata?.stationId === 'control_room' &&
+        patch.node.metadata?.role === 'process-line-station',
+    )
+    const buildingZone = result.patches.find(
+      (patch) =>
+        patch.node.type === 'zone' &&
+        patch.node.metadata?.stationId === 'control_room' &&
+        patch.node.metadata?.role === 'layout-zone' &&
+        patch.node.metadata?.resolver === 'native-occupied-building',
+    )
+
+    expect(stationZone?.node.name).toBe('\u4e2d\u63a7\u5ba4')
+    expect(buildingZone?.node.name).toBe('\u4e2d\u63a7\u697c')
+    expect(buildingZone?.node.metadata).toMatchObject({
+      stationDisplayLabel: '\u4e2d\u63a7\u5ba4',
+      processDisplayLabel: '\u4e2d\u63a7\u697c',
+      parentProcessDisplayLabel: '\u57fa\u7840\u70bc\u6cb9\u5382',
     })
   })
 
@@ -468,7 +520,11 @@ describe('process line composer', () => {
         patch.node.metadata?.equipmentContract?.profileId === 'cement.bucket_elevator',
     )
     expect(rawMealFeed?.node.metadata).toMatchObject({
-      resolver: 'profile-parts',
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'cement.bucket_elevator',
+      },
       equipmentContract: {
         profileId: 'cement.bucket_elevator',
       },
@@ -599,7 +655,7 @@ describe('process line composer', () => {
     expect(Math.max(...ductDiameters)).toBeLessThanOrEqual(0.16)
   }, 10000)
 
-  test('composes refinery with crude, intermediate, and product native tank farms', () => {
+  test('composes refinery with crude, intermediate, and product semantic tank farms', () => {
     const result = composeProcessLine({
       prompt: '\u751f\u6210\u4e00\u4e2a\u70bc\u6cb9\u5382',
       plan: refineryPlan(),
@@ -613,14 +669,52 @@ describe('process line composer', () => {
     expect(result.layoutStrategy).toMatchObject({ style: 'parallel_bays', repaired: true })
 
     const tankStations = result.patches
-      .filter((patch) => patch.node.type === 'tank')
+      .filter(
+        (patch) =>
+          patch.node.type === 'assembly' &&
+          patch.node.metadata?.equipmentAssembly &&
+          patch.node.metadata?.equipmentContract,
+      )
       .map((patch) => patch.node.metadata?.stationId)
 
     expect(tankStations).toEqual(
       expect.arrayContaining([
         'crude_storage_tank',
+        'atmospheric_distillation_unit',
+        'vacuum_distillation_unit',
         'intermediate_storage_tank',
         'product_storage_tank',
+      ]),
+    )
+    const semanticAssemblies = result.patches.filter(
+      (patch) => patch.node.type === 'assembly' && patch.node.metadata?.equipmentAssembly,
+    )
+    expect(
+      semanticAssemblies
+        .map((patch) => patch.node.metadata?.equipmentAssembly?.recipeId)
+        .filter(Boolean),
+    ).toEqual(
+      expect.arrayContaining([
+        'factory:distillation-unit',
+        'factory:refinery-auxiliary-unit',
+        'factory:refinery-reactor-unit',
+        'factory:storage-tank',
+      ]),
+    )
+    expect(
+      result.patches.map((patch) => patch.node.metadata?.semanticRole),
+    ).toEqual(
+      expect.arrayContaining([
+        'distillation_column_shell',
+        'vacuum_column_shell',
+        'helical_ladder_tread',
+        'fcc_reactor',
+        'hydrotreater_reactor',
+        'reformer_reactor_train',
+        'claus_reactor',
+        'flare_stack',
+        'main_pipe_header',
+        'boiler_body',
       ]),
     )
     expect(
@@ -679,7 +773,7 @@ describe('process line composer', () => {
         (patch) =>
           patch.node.type === 'assembly' &&
           patch.node.metadata?.stationId === 'control_room' &&
-          patch.node.metadata?.resolver === 'profile-parts',
+          patch.node.metadata?.resolver === 'semantic-assembly',
       ),
     ).toBe(false)
     expect(result.primitiveRequests.map((request) => request.station.id)).not.toContain(

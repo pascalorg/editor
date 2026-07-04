@@ -1347,7 +1347,7 @@ const ContentSection = memo(function ContentSection() {
       if (!selectedLevelId) return []
       const lvl = s.nodes[selectedLevelId] as LevelNode | undefined
       if (!lvl) return []
-      return lvl.children.filter((childId) => s.nodes[childId]?.type !== 'zone')
+      return lvl.children.filter((childId) => s.nodes[childId as AnyNodeId]?.type !== 'zone')
     }),
   )
 
@@ -1401,7 +1401,7 @@ const ContentSection = memo(function ContentSection() {
             depth={0}
             isLast={index === elementChildren.length - 1}
             key={childId}
-            nodeId={childId}
+            nodeId={childId as AnyNodeId}
           />
         ))}
       </div>

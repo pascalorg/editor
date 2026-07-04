@@ -1,0 +1,241 @@
+{
+  "id": "industry.refinery.basic",
+  "name": "炼油厂基础行业包",
+  "industry": "refinery",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区。",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "refinery.crude_storage_tank",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "refinery.product_storage_tank",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "refinery.intermediate_storage_tank",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "refinery.desalter",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "refinery.atmospheric_distillation_unit",
+      "recipeId": "factory:distillation-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.columnKind": "columnKind"
+      },
+      "portMap": {
+        "desalted_crude_in": "feed_inlet",
+        "naphtha_distillate_out": "overhead_product_outlet",
+        "middle_distillate_out": "overhead_product_outlet",
+        "atmospheric_residue_out": "bottoms_outlet"
+      }
+    },
+    {
+      "profileId": "refinery.vacuum_distillation_unit",
+      "recipeId": "factory:distillation-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.columnKind": "columnKind"
+      },
+      "portMap": {
+        "atmospheric_residue_in": "bottoms_outlet",
+        "vacuum_gas_oil_out": "overhead_product_outlet",
+        "vacuum_residue_out": "bottoms_outlet",
+        "vacuum_overhead_out": "overhead_product_outlet"
+      }
+    },
+    {
+      "profileId": "refinery.fluid_catalytic_cracking_unit",
+      "recipeId": "factory:refinery-reactor-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "vacuum_gas_oil_in": "vacuum_gas_oil_in",
+        "cracked_product_out": "cracked_product_out",
+        "rich_gas_out": "rich_gas_out",
+        "flue_gas_out": "cracked_product_out"
+      }
+    },
+    {
+      "profileId": "refinery.hydrotreating_unit",
+      "recipeId": "factory:refinery-reactor-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "hydrotreater_feed_in": "naphtha_in",
+        "hydrogen_in": "naphtha_in",
+        "treated_product_out": "reformate_out",
+        "acid_gas_out": "reformate_out"
+      }
+    },
+    {
+      "profileId": "refinery.catalytic_reformer_unit",
+      "recipeId": "factory:refinery-reactor-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "naphtha_in": "naphtha_in",
+        "reformate_out": "reformate_out",
+        "hydrogen_rich_gas_out": "reformate_out"
+      }
+    },
+    {
+      "profileId": "refinery.sulfur_recovery_unit",
+      "recipeId": "factory:refinery-reactor-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "acid_gas_in": "acid_gas_in",
+        "sulfur_out": "sulfur_out"
+      }
+    },
+    {
+      "profileId": "refinery.flare_system",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "relief_gas_in": "relief_gas_in",
+        "flare_tip": "flare_tip"
+      }
+    },
+    {
+      "profileId": "refinery.pipe_rack",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "rack_in": "rack_in",
+        "rack_out": "rack_out"
+      }
+    },
+    {
+      "profileId": "refinery.utility_boiler",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "equipmentDefaults.variant": "variant"
+      },
+      "portMap": {
+        "fuel_gas_in": "fuel_gas_in",
+        "steam_out": "steam_out"
+      }
+    }
+  ]
+}

@@ -138,6 +138,22 @@ describe('factory scene patch apply', () => {
     ])
   })
 
+  test('skips updates whose target is not in the current scene', () => {
+    const level = LevelNode.parse({ id: 'level_factory' })
+    const box = BoxNode.parse({ id: 'box_factory_part' })
+
+    const operations = buildFactoryScenePatchOperations(
+      [
+        { op: 'update', id: 'site_generated', data: { name: 'Generated site' } },
+        { op: 'create', parentId: level.id, node: box },
+      ],
+      { existingNodeIds: [level.id] },
+    )
+
+    expect(operations.updateOps).toEqual([])
+    expect(operations.createOps).toEqual([{ parentId: level.id, node: box }])
+  })
+
   test('applies generated levels and roof children created in the same patch batch', () => {
     const ground = LevelNode.parse({ id: 'level_ground', level: 0 })
     const building = BuildingNode.parse({ id: 'building_main', children: [ground.id] })

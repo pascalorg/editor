@@ -22,6 +22,15 @@ function isDev(): boolean {
   return env?.NODE_ENV !== 'production'
 }
 
+function shouldLoadNaturePlugin(): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env
+  return (
+    env?.PASCAL_ENABLE_NATURE_PLUGIN === '1' ||
+    env?.NEXT_PUBLIC_PASCAL_ENABLE_NATURE_PLUGIN === '1'
+  )
+}
+
 /**
  * Synchronously register every built-in node kind. Runs as a side
  * effect at module import time so the registry is populated *before*
@@ -78,7 +87,9 @@ export async function loadExternalPlugins(): Promise<void> {
 
 // Register first-party plugins through the same discovery hook a third-party
 // pack would use. Must be set before `loadExternalPlugins()` reads it below.
-setPluginDiscovery(async () => [factoryEquipmentPlugin, treesPlugin])
+setPluginDiscovery(async () =>
+  shouldLoadNaturePlugin() ? [factoryEquipmentPlugin, treesPlugin] : [factoryEquipmentPlugin],
+)
 
 loadBuiltinsSync()
 void loadExternalPlugins()

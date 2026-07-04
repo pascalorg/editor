@@ -1,4 +1,4 @@
-import { type LevelNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type LevelNode, useScene } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
@@ -66,7 +66,7 @@ export const LevelTreeNode = memo(function LevelTreeNode({
           depth={depth + 1}
           isLast={index === children.length - 1}
           key={childId}
-          nodeId={childId}
+          nodeId={childId as AnyNodeId}
         />
       ))}
     </TreeNodeWrapper>

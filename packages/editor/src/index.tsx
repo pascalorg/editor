@@ -119,6 +119,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
+export { SemanticEquipmentAssemblySection } from './components/ui/panels/parametric-inspector'
 // Presets popover — used by kind-owned door / window panels for their
 // hardware / type / opening presets.
 export { PresetsPopover } from './components/ui/panels/presets/presets-popover'

@@ -1,0 +1,52 @@
+{
+  "id": "industry.discrete-manufacturing.basic",
+  "name": "离散制造基础包",
+  "industry": "discrete-manufacturing",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "离散制造基础包 ：覆盖 CNC 加工中心、装配工位、AGV 牵引车、工装台、测试台、物料车和码垛工作站等典型离散制造设备。",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "discrete_manufacturing.storage_rack",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    }
+  ]
+}

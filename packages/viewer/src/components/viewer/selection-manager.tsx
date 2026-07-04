@@ -10,8 +10,8 @@ import {
   type LevelNode,
   type NodeEvent,
   pointInPolygon,
-  sceneRegistry,
   type SceneSelectionConfig,
+  sceneRegistry,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -184,8 +184,9 @@ const getStrategy = (): SelectionStrategy | null => {
   const computeNextIds = (node: AnyNode, selectedIds: string[], event?: any): string[] => {
     const isMeta = event?.metaKey || event?.nativeEvent?.metaKey
     const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey
+    const isShift = event?.shiftKey || event?.nativeEvent?.shiftKey
 
-    if (isMeta || isCtrl) {
+    if (isMeta || isCtrl || isShift) {
       if (selectedIds.includes(node.id)) {
         return selectedIds.filter((id) => id !== node.id)
       }

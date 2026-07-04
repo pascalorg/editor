@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   buildFactoryPlannerPrompt,
   fallbackFactoryPlan,
@@ -6,8 +6,29 @@ import {
   planFactoryRequest,
   shouldPreferFallbackFactoryPlan,
 } from './factory-planner'
+import {
+  installIndustryPacksForTests,
+  withIndustryPackDisabledForTests,
+} from './test-industry-pack-setup'
 
 describe('factory planner', () => {
+  let restoreIndustryPacks: (() => Promise<void>) | undefined
+
+  beforeAll(async () => {
+    restoreIndustryPacks = await installIndustryPacksForTests([
+      { id: 'industry.cement.basic', version: '0.1.0' },
+      { id: 'industry.thermal-power.basic', version: '0.1.0' },
+      { id: 'industry.refinery.basic', version: '0.1.0' },
+      { id: 'industry.discrete-manufacturing.basic', version: '0.1.0' },
+      { id: 'industry.process.basic', version: '0.1.0' },
+      { id: 'industry.electrolytic-aluminum.basic', version: '0.1.0' },
+    ])
+  })
+
+  afterAll(async () => {
+    await restoreIndustryPacks?.()
+  })
+
   test('routes house requests to layout instead of geometry', () => {
     const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u623f\u5b50')
 
@@ -85,6 +106,26 @@ describe('factory planner', () => {
           'control_and_safety',
         ]),
       )
+    }
+  })
+
+  test('requires installing or enabling a cloud industry pack before using its template', async () => {
+    const restoreCement = await withIndustryPackDisabledForTests({
+      id: 'industry.cement.basic',
+      version: '0.1.0',
+    })
+    try {
+      const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u4e2a\u6c34\u6ce5\u5de5\u5382')
+
+      expect(plan).toMatchObject({
+        kind: 'missing',
+        missingName: expect.stringContaining('industry.cement.basic@0.1.0'),
+      })
+      if (plan.kind === 'missing') {
+        expect(plan.reason).toContain('simulated cloud')
+      }
+    } finally {
+      await restoreCement()
     }
   })
 

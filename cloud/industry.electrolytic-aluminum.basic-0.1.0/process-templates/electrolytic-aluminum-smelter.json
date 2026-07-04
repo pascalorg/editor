@@ -1,0 +1,255 @@
+[
+  {
+    "processId": "electrolytic_aluminum_smelter_full",
+    "processLabel": "Electrolytic aluminum smelter",
+    "processDisplayLabel": "电解铝厂",
+    "domain": "metallurgy",
+    "aliases": [
+      "电解铝厂",
+      "铝电解厂",
+      "电解铝车间",
+      "生成一个电解铝厂",
+      "创建一个电解铝厂",
+      "aluminum smelter",
+      "aluminium smelter",
+      "electrolytic aluminum plant",
+      "aluminum electrolysis plant"
+    ],
+    "requiredRoles": [
+      "rectifier_transformer_station",
+      "alumina_storage_silo",
+      "alumina_conveying_line",
+      "potline_module",
+      "pot_tending_crane",
+      "dry_scrubber_baghouse",
+      "vacuum_tapping_ladle",
+      "anode_assembly_station",
+      "molten_aluminum_holding_furnace",
+      "continuous_ingot_casting_line"
+    ],
+    "defaultLayoutStyle": "parallel_bays",
+    "defaultDimensions": {
+      "length": 72,
+      "width": 32
+    },
+    "safetyTags": [
+      "molten_metal",
+      "high_current",
+      "fluoride_fume",
+      "heavy_industry",
+      "crane"
+    ],
+    "stations": [
+      {
+        "id": "rectifier_transformer_station",
+        "label": "Rectifier transformer station",
+        "displayLabel": "整流变压器站",
+        "role": "rectifier_transformer_station",
+        "equipmentHint": "electrolytic_aluminum.rectifier_transformer_station rectifier transformer station with transformer body, radiator bank, rectifier cabinet, control panel, copper busbar, and safety fence",
+        "footprintHint": "large",
+        "safetyTags": [
+          "high_current",
+          "power",
+          "electrical"
+        ],
+        "profileId": "electrolytic_aluminum.rectifier_transformer_station"
+      },
+      {
+        "id": "alumina_storage_silo",
+        "label": "Alumina storage silo",
+        "displayLabel": "氧化铝仓",
+        "role": "alumina_storage_silo",
+        "equipmentHint": "electrolytic_aluminum.alumina_storage_silo tall alumina powder silo with cylindrical shell, conical discharge hopper, pneumatic conveying pipe, and access ladder",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "powder",
+          "storage",
+          "height"
+        ],
+        "profileId": "electrolytic_aluminum.alumina_storage_silo"
+      },
+      {
+        "id": "alumina_conveying_line",
+        "label": "Alumina conveying line",
+        "displayLabel": "氧化铝输送线",
+        "role": "alumina_conveying_line",
+        "equipmentHint": "electrolytic_aluminum.alumina_conveying_line covered alumina conveying line with conveyor frame, roller bed, feed hopper, and drive unit",
+        "footprintHint": "long",
+        "safetyTags": [
+          "powder",
+          "conveyor"
+        ],
+        "profileId": "electrolytic_aluminum.alumina_conveying_line"
+      },
+      {
+        "id": "potline_module",
+        "label": "Aluminum potline module",
+        "displayLabel": "铝电解槽列",
+        "role": "potline_module",
+        "equipmentHint": "electrolytic_aluminum.potline_module two long rows of reduction pots with covered hoods, anode cover rows, copper busbars, alumina feed manifold, fume collection header, and side service platforms",
+        "footprintHint": "long",
+        "safetyTags": [
+          "molten_metal",
+          "high_current",
+          "fluoride_fume"
+        ],
+        "profileId": "electrolytic_aluminum.electrolytic_cell"
+      },
+      {
+        "id": "pot_tending_crane",
+        "label": "Pot tending overhead crane",
+        "displayLabel": "电解多功能天车",
+        "role": "pot_tending_crane",
+        "equipmentHint": "electrolytic_aluminum.pot_tending_crane pot tending overhead crane with bridge girder, runway rails, tool carriage, hoist drive, operator cabin, and vertical anode-changing tool",
+        "footprintHint": "long",
+        "safetyTags": [
+          "crane",
+          "maintenance",
+          "height"
+        ],
+        "profileId": "electrolytic_aluminum.pot_tending_crane"
+      },
+      {
+        "id": "anode_assembly_station",
+        "label": "Anode assembly station",
+        "displayLabel": "阳极组装站",
+        "role": "anode_assembly_station",
+        "equipmentHint": "electrolytic_aluminum.anode_assembly_station anode assembly station with frame, carbon block table, anode carbon block, rodding bar, control panel, and safety guard",
+        "footprintHint": "large",
+        "safetyTags": [
+          "carbon",
+          "material_handling"
+        ],
+        "profileId": "electrolytic_aluminum.anode_assembly_station"
+      },
+      {
+        "id": "dry_scrubber_baghouse",
+        "label": "Dry scrubber baghouse",
+        "displayLabel": "干法净化布袋除尘",
+        "role": "dry_scrubber_baghouse",
+        "equipmentHint": "electrolytic_aluminum.dry_scrubber_baghouse dry scrubber and baghouse fume treatment with rectangular filter body, dust hoppers, gas inlet header, induced draft fan, clean gas stack, and maintenance platform",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "fluoride_fume",
+          "dust",
+          "exhaust"
+        ],
+        "profileId": "electrolytic_aluminum.dry_scrubber_baghouse"
+      },
+      {
+        "id": "vacuum_tapping_ladle",
+        "label": "Vacuum tapping ladle",
+        "displayLabel": "真空抬包",
+        "role": "vacuum_tapping_ladle",
+        "equipmentHint": "electrolytic_aluminum.vacuum_tapping_ladle round molten aluminum vacuum tapping ladle with top suction nozzle, side tapping spout, lifting trunnions, and transport saddle",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "molten_metal",
+          "transfer"
+        ],
+        "profileId": "electrolytic_aluminum.vacuum_tapping_ladle"
+      },
+      {
+        "id": "molten_aluminum_holding_furnace",
+        "label": "Molten aluminum holding furnace",
+        "displayLabel": "铝液保温炉",
+        "role": "molten_aluminum_holding_furnace",
+        "equipmentHint": "electrolytic_aluminum.molten_aluminum_holding_furnace horizontal molten aluminum holding furnace with furnace shell, access door, tap spout, exhaust stack, and operator platform",
+        "footprintHint": "large",
+        "safetyTags": [
+          "molten_metal",
+          "thermal"
+        ],
+        "profileId": "electrolytic_aluminum.molten_aluminum_holding_furnace"
+      },
+      {
+        "id": "continuous_ingot_casting_line",
+        "label": "Continuous ingot casting line",
+        "displayLabel": "连续铸锭线",
+        "role": "continuous_ingot_casting_line",
+        "equipmentHint": "electrolytic_aluminum.continuous_ingot_casting_line continuous aluminum ingot casting line with casting conveyor frame, mold chain, pouring tundish, end drive, operator panel, and safety guard",
+        "footprintHint": "long",
+        "safetyTags": [
+          "molten_metal",
+          "casting",
+          "conveyor"
+        ],
+        "profileId": "electrolytic_aluminum.alumina_conveying_line"
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "rectifier_transformer_station",
+        "toStationId": "potline_module",
+        "medium": "power",
+        "visualKind": "busbar",
+        "fromPortId": "dc_busbar_out",
+        "toPortId": "high_current_busbar"
+      },
+      {
+        "fromStationId": "alumina_storage_silo",
+        "toStationId": "alumina_conveying_line",
+        "medium": "material",
+        "visualKind": "pneumatic_pipe",
+        "fromPortId": "silo_discharge",
+        "toPortId": "feed_hopper"
+      },
+      {
+        "fromStationId": "alumina_conveying_line",
+        "toStationId": "potline_module",
+        "medium": "material",
+        "visualKind": "material_conveyor",
+        "fromPortId": "alumina_out",
+        "toPortId": "alumina_feed_manifold"
+      },
+      {
+        "fromStationId": "anode_assembly_station",
+        "toStationId": "pot_tending_crane",
+        "medium": "material",
+        "visualKind": "material_transfer",
+        "fromPortId": "prepared_anode_out",
+        "toPortId": "anode_changing_tool"
+      },
+      {
+        "fromStationId": "pot_tending_crane",
+        "toStationId": "potline_module",
+        "medium": "material",
+        "visualKind": "crane_transfer",
+        "fromPortId": "anode_changing_tool",
+        "toPortId": "anode_cover_row"
+      },
+      {
+        "fromStationId": "potline_module",
+        "toStationId": "dry_scrubber_baghouse",
+        "medium": "gas",
+        "visualKind": "fume_duct",
+        "fromPortId": "pot_hood_panel",
+        "toPortId": "gas_inlet_header"
+      },
+      {
+        "fromStationId": "potline_module",
+        "toStationId": "vacuum_tapping_ladle",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_transfer",
+        "fromPortId": "metal_tap",
+        "toPortId": "vacuum_suction_nozzle"
+      },
+      {
+        "fromStationId": "vacuum_tapping_ladle",
+        "toStationId": "molten_aluminum_holding_furnace",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_transfer",
+        "fromPortId": "tapping_spout_pipe",
+        "toPortId": "tap_spout"
+      },
+      {
+        "fromStationId": "molten_aluminum_holding_furnace",
+        "toStationId": "continuous_ingot_casting_line",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_chute",
+        "fromPortId": "tap_spout",
+        "toPortId": "pouring_tundish"
+      }
+    ]
+  }
+]

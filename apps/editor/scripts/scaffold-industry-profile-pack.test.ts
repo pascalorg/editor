@@ -2,11 +2,15 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { compileProcessStationEquipment } from '../lib/equipment-spec-compiler'
 import { normalizeIndustryPackV2Manifest } from '../lib/industry-pack-v2'
-import { auditProfilePackValidation, validateProfilePackDir } from '../lib/profile-packs'
+import {
+  auditProfilePackValidation,
+  validateProfilePackDir,
+  validateProfilePackZip,
+} from '../lib/profile-packs'
 import {
   normalizeIndustryPackSpec,
   scaffoldIndustryProfilePack,
@@ -100,7 +104,7 @@ describe('scaffold-industry-profile-pack', () => {
               id: 'feed_pump',
               name: 'Feed pump',
               aliases: ['feed pump', 'centrifugal pump'],
-              nodeKind: 'factory:pump',
+              recipeId: 'factory:centrifugal-pump',
               layoutFamily: 'pump_skid_layout',
               family: 'pump',
               defaultDimensions: { length: 2.4, width: 1, height: 1.3 },
@@ -125,7 +129,7 @@ describe('scaffold-industry-profile-pack', () => {
               id: 'buffer_tank',
               name: 'Buffer tank',
               aliases: ['buffer tank', 'storage tank'],
-              nodeKind: 'factory:tank',
+              recipeId: 'factory:storage-tank',
               layoutFamily: 'vertical_tank_layout',
               family: 'tank',
               defaultDimensions: { length: 2.2, width: 2.2, height: 3.4 },
@@ -154,15 +158,19 @@ describe('scaffold-industry-profile-pack', () => {
     )
 
     const outputRoot = path.join(root, 'cloud')
-    if (!nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
+    if (!semanticRecipeRegistry.has('factory:centrifugal-pump')) {
+      await loadPlugin(factoryEquipmentPlugin)
+    }
     const result = await scaffoldIndustryProfilePack({
       specPath,
       outputRoot,
       force: true,
     })
     const validation = await validateProfilePackDir(result.packDir)
+    const zipValidation = validateProfilePackZip(await fs.readFile(result.zipPath!))
     const audit = auditProfilePackValidation(validation)
 
+    expect(result.zipPath).toBe(path.join(outputRoot, 'industry.test-industry.basic-0.1.0.zip'))
     expect(result.manifest).toMatchObject({
       id: 'industry.test-industry.basic',
       version: '0.1.0',
@@ -171,14 +179,21 @@ describe('scaffold-industry-profile-pack', () => {
       dependsOnPlugins: ['pascal:factory-equipment'],
       profiles: ['profiles/generated.json'],
       equipmentBindings: expect.arrayContaining([
-        expect.objectContaining({ profileId: 'test_industry.feed_pump', nodeKind: 'factory:pump' }),
-        expect.objectContaining({ profileId: 'test_industry.buffer_tank', nodeKind: 'factory:tank' }),
+        expect.objectContaining({
+          profileId: 'test_industry.feed_pump',
+          recipeId: 'factory:centrifugal-pump',
+        }),
+        expect.objectContaining({
+          profileId: 'test_industry.buffer_tank',
+          recipeId: 'factory:storage-tank',
+        }),
       ]),
       factoryArchitectures: ['factory-architectures/generated.json'],
       processTemplates: ['process-templates/generated.json'],
       qualityRules: ['quality-rules/generated-quality.json'],
     })
     expect(validation.profiles).toHaveLength(2)
+    expect(zipValidation.profiles).toHaveLength(2)
     expect(validation.resources.factoryArchitectures).toHaveLength(1)
     expect(validation.resources.processTemplates).toHaveLength(1)
     expect(validation.profiles.map((profile) => profile.id)).toEqual(
@@ -215,14 +230,172 @@ describe('scaffold-industry-profile-pack', () => {
         profiles: validation.resources.rawProfiles,
         station: { id: 'feed_pump', profileId: 'test_industry.feed_pump' },
       }),
-    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:pump' } })
+    ).toMatchObject({ kind: 'semantic-assembly', spec: { recipeId: 'factory:centrifugal-pump' } })
     expect(
       compileProcessStationEquipment({
         manifest: v2Manifest,
         profiles: validation.resources.rawProfiles,
         station: { id: 'buffer_tank', profileId: 'test_industry.buffer_tank' },
       }),
-    ).toMatchObject({ kind: 'equipment-node', spec: { nodeKind: 'factory:tank' } })
+    ).toMatchObject({ kind: 'semantic-assembly', spec: { recipeId: 'factory:storage-tank' } })
+  })
+
+  test('accepts registered refinery semantic recipes in scaffold specs', async () => {
+    const root = await tempDir()
+    const specPath = path.join(root, 'spec.json')
+    await fs.writeFile(
+      specPath,
+      JSON.stringify(
+        {
+          industry: 'test-refinery',
+          id: 'industry.test-refinery.basic',
+          capabilities: ['factory_creation'],
+          processTemplates: [
+            {
+              processId: 'test_refinery_full',
+              processLabel: 'Test refinery',
+              aliases: ['test refinery'],
+              stations: [
+                {
+                  id: 'atmospheric_distillation_unit',
+                  label: 'Atmospheric distillation unit',
+                  role: 'atmospheric_distillation_unit',
+                  equipmentHint: 'test_refinery.atmospheric_distillation_unit',
+                  profileId: 'test_refinery.atmospheric_distillation_unit',
+                },
+                {
+                  id: 'flare_system',
+                  label: 'Flare system',
+                  role: 'flare_system',
+                  equipmentHint: 'test_refinery.flare_system',
+                  profileId: 'test_refinery.flare_system',
+                },
+              ],
+            },
+          ],
+          factoryArchitectures: [
+            {
+              id: 'test_refinery.factory',
+              label: 'Test refinery factory',
+              processId: 'test_refinery_full',
+              modules: [
+                {
+                  id: 'main',
+                  order: 10,
+                  stationIds: ['atmospheric_distillation_unit', 'flare_system'],
+                },
+              ],
+            },
+          ],
+          devices: [
+            {
+              id: 'atmospheric_distillation_unit',
+              name: 'Atmospheric distillation unit',
+              aliases: ['atmospheric distillation unit', 'CDU'],
+              recipeId: 'factory:distillation-unit',
+              family: 'distillation_column',
+              defaultDimensions: { length: 10.5, width: 6, height: 13.5 },
+              equipmentDefaults: { columnType: 'atmospheric' },
+              processPorts: [
+                { id: 'crude_feed_inlet', medium: 'material', side: 'left', diameter: 0.24 },
+                {
+                  id: 'overhead_product_outlet',
+                  medium: 'material',
+                  side: 'right',
+                  diameter: 0.18,
+                },
+              ],
+              primarySemanticRole: 'distillation_column_shell',
+              parts: [
+                {
+                  kind: 'cylindrical_tank',
+                  semanticRole: 'distillation_column_shell',
+                  required: true,
+                },
+                {
+                  kind: 'heat_exchanger',
+                  semanticRole: 'preheat_exchanger',
+                  required: true,
+                },
+                {
+                  kind: 'generic_body',
+                  semanticRole: 'fired_heater',
+                  required: true,
+                },
+              ],
+            },
+            {
+              id: 'flare_system',
+              name: 'Flare system',
+              aliases: ['flare system'],
+              recipeId: 'factory:refinery-auxiliary-unit',
+              family: 'generic',
+              defaultDimensions: { length: 4.2, width: 2.6, height: 14 },
+              equipmentDefaults: { variant: 'flare' },
+              processPorts: [
+                { id: 'relief_gas_in', medium: 'gas', side: 'left', diameter: 0.18 },
+                { id: 'flare_tip', medium: 'gas', side: 'top', diameter: 0.12 },
+              ],
+              primarySemanticRole: 'flare_stack',
+              parts: [
+                {
+                  kind: 'chimney_stack',
+                  semanticRole: 'flare_stack',
+                  required: true,
+                },
+                {
+                  kind: 'cylindrical_tank',
+                  semanticRole: 'knockout_drum',
+                  required: true,
+                },
+                {
+                  kind: 'pipe_run',
+                  semanticRole: 'relief_gas_inlet',
+                  required: true,
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    )
+
+    const result = await scaffoldIndustryProfilePack({
+      specPath,
+      outputRoot: path.join(root, 'cloud'),
+      force: true,
+    })
+    const validation = await validateProfilePackDir(result.packDir)
+    const v2Manifest = normalizeIndustryPackV2Manifest(validation.manifest)
+
+    expect(result.manifest.equipmentBindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          profileId: 'test_refinery.atmospheric_distillation_unit',
+          recipeId: 'factory:distillation-unit',
+        }),
+        expect.objectContaining({
+          profileId: 'test_refinery.flare_system',
+          recipeId: 'factory:refinery-auxiliary-unit',
+        }),
+      ]),
+    )
+    expect(
+      compileProcessStationEquipment({
+        manifest: v2Manifest,
+        profiles: validation.resources.rawProfiles,
+        station: {
+          id: 'atmospheric_distillation_unit',
+          profileId: 'test_refinery.atmospheric_distillation_unit',
+        },
+      }),
+    ).toMatchObject({ kind: 'semantic-assembly', spec: { recipeId: 'factory:distillation-unit' } })
+    expect(validateProfilePackZip(await fs.readFile(result.zipPath!)).manifest).toMatchObject({
+      id: 'industry.test-refinery.basic',
+    })
   })
 
   test('rejects factory architecture quantity expansion fields', () => {

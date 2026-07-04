@@ -1,10 +1,9 @@
 import type {
   EquipmentParamValue,
-  EquipmentSpec,
-  NodeRegistry,
+  SemanticRecipeRegistry,
   Vec3,
 } from '@pascal-app/core'
-import { nodeRegistry } from '@pascal-app/core'
+import { semanticRecipeRegistry } from '@pascal-app/core'
 import type {
   IndustryPackV2EquipmentBinding,
   IndustryPackV2Manifest,
@@ -26,7 +25,7 @@ export type EquipmentSourcePreset = {
   id?: string
   label?: string
   profileId?: string
-  nodeKind?: string
+  recipeId?: string
   params?: Record<string, EquipmentParamValue>
 }
 
@@ -37,14 +36,14 @@ export type EquipmentBindingResolverInput = {
   prompt?: string
   station?: EquipmentSourceStation
   preset?: EquipmentSourcePreset
-  registry?: NodeRegistry
+  registry?: SemanticRecipeRegistry
 }
 
 export type EquipmentBindingResolution = {
   binding: IndustryPackV2EquipmentBinding
   profile: IndustryPackV2ValidationProfile
   source: EquipmentBindingSource
-  match: 'profile-id' | 'node-kind' | 'text'
+  match: 'profile-id' | 'recipe-id' | 'text'
 }
 
 type UnknownRecord = Record<string, unknown>
@@ -117,8 +116,8 @@ function sourceProfileId(input: EquipmentBindingResolverInput): string | undefin
   )
 }
 
-function sourceNodeKind(input: EquipmentBindingResolverInput): string | undefined {
-  return input.preset?.nodeKind
+function sourceRecipeId(input: EquipmentBindingResolverInput): string | undefined {
+  return input.preset?.recipeId
 }
 
 function sourceText(input: EquipmentBindingResolverInput): string {
@@ -137,9 +136,9 @@ function sourceText(input: EquipmentBindingResolverInput): string {
 export function resolveEquipmentBinding(
   input: EquipmentBindingResolverInput,
 ): EquipmentBindingResolution | null {
-  const registry = input.registry ?? nodeRegistry
+  const registry = input.registry ?? semanticRecipeRegistry
   const profilesById = new Map(input.profiles.map((profile) => [profile.id, profile]))
-  const bindings = input.manifest.equipmentBindings.filter((binding) => registry.has(binding.nodeKind))
+  const bindings = input.manifest.equipmentBindings.filter((binding) => registry.has(binding.recipeId))
 
   const profileId = sourceProfileId(input)
   if (profileId) {
@@ -148,11 +147,11 @@ export function resolveEquipmentBinding(
     if (binding && profile) return { binding, profile, source: input.source, match: 'profile-id' }
   }
 
-  const nodeKind = sourceNodeKind(input)
-  if (nodeKind) {
-    const binding = bindings.find((candidate) => candidate.nodeKind === nodeKind)
+  const recipeId = sourceRecipeId(input)
+  if (recipeId) {
+    const binding = bindings.find((candidate) => candidate.recipeId === recipeId)
     const profile = binding ? profilesById.get(binding.profileId) : undefined
-    if (binding && profile) return { binding, profile, source: input.source, match: 'node-kind' }
+    if (binding && profile) return { binding, profile, source: input.source, match: 'recipe-id' }
   }
 
   const text = sourceText(input)
@@ -167,13 +166,22 @@ export function resolveEquipmentBinding(
   return null
 }
 
+export type SemanticEquipmentSpec = {
+  recipeId: string
+  profileId: string
+  params: Record<string, EquipmentParamValue>
+  position?: Vec3
+  rotation?: Vec3
+  metadata?: Record<string, EquipmentParamValue>
+}
+
 export function createEquipmentSpecFromV2Binding(input: {
   resolution: EquipmentBindingResolution
   position?: Vec3
   rotation?: Vec3
   paramOverrides?: Record<string, EquipmentParamValue>
   metadata?: Record<string, EquipmentParamValue>
-}): EquipmentSpec | null {
+}): SemanticEquipmentSpec | null {
   const params: Record<string, EquipmentParamValue> = {}
   for (const [sourcePath, targetField] of Object.entries(input.resolution.binding.paramMap)) {
     const value = readPath(input.resolution.profile, sourcePath)
@@ -181,8 +189,8 @@ export function createEquipmentSpecFromV2Binding(input: {
     params[targetField] = value
   }
 
-  const spec: EquipmentSpec = {
-    nodeKind: input.resolution.binding.nodeKind,
+  const spec: SemanticEquipmentSpec = {
+    recipeId: input.resolution.binding.recipeId,
     profileId: input.resolution.binding.profileId,
     params: { ...params, ...(input.paramOverrides ?? {}) },
     metadata: {

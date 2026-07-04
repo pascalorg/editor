@@ -126,10 +126,7 @@ describe('device profile source loader', () => {
       extraPackDirs: [
         path.join(
           root,
-          'apps',
-          'editor',
-          'data',
-          'profile-pack-cloud',
+          'cloud',
           'industry.cement.basic-0.1.0',
         ),
       ],

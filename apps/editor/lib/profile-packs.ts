@@ -1,6 +1,8 @@
+import fsSync from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { inflateRawSync } from 'node:zlib'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import {
   type DeviceProfileDefinition,
   EDITABLE_SCHEMA_DEFINITIONS,
@@ -9,6 +11,7 @@ import {
   normalizeEditableSchemaInput,
   validateDeviceProfileDefinition,
 } from '@pascal-app/core/lib/device-profile-registry'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { exists, findRepoRoot, sanitizeSegment } from './generated-assets/manifest'
 import {
   normalizeIndustryPackV2Manifest,
@@ -174,6 +177,15 @@ type ZipEntry = {
   bytes: Buffer
 }
 
+async function ensureProfilePackPluginDependencies(manifest: ProfilePackManifest) {
+  if (
+    manifest.dependsOnPlugins?.includes('pascal:factory-equipment') &&
+    !semanticRecipeRegistry.has('factory:centrifugal-pump')
+  ) {
+    await loadPlugin(factoryEquipmentPlugin)
+  }
+}
+
 const MAX_PROFILE_PACK_BYTES = 8 * 1024 * 1024
 const PACK_ID_PATTERN = /^industry\.[a-z0-9]+(?:[.-][a-z0-9]+)*\.[a-z0-9]+(?:[.-][a-z0-9]+)*$/
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
@@ -322,7 +334,56 @@ export function profilePackIndexPath(repoRoot: string) {
 }
 
 export function simulatedProfilePackCloudRoot(repoRoot: string) {
-  return path.join(repoRoot, 'apps', 'editor', 'data', 'profile-pack-cloud')
+  return path.join(repoRoot, 'cloud')
+}
+
+function findRepoRootSync(start = process.cwd()) {
+  let current = path.resolve(start)
+  for (;;) {
+    if (
+      fsSync.existsSync(path.join(current, 'package.json')) &&
+      fsSync.existsSync(path.join(current, 'apps', 'editor'))
+    ) {
+      return current
+    }
+    const parent = path.dirname(current)
+    if (parent === current) return path.resolve(start)
+    current = parent
+  }
+}
+
+function readEnabledPackIndexSync(repoRoot: string): EnabledPackIndex {
+  try {
+    const parsed = JSON.parse(fsSync.readFileSync(profilePackIndexPath(repoRoot), 'utf8'))
+    if (!isRecord(parsed) || !Array.isArray(parsed.enabledPacks)) return { enabledPacks: [] }
+    return {
+      enabledPacks: parsed.enabledPacks.filter(isRecord).map((entry) => ({
+        id: stringValue(entry.id) ?? '',
+        version: stringValue(entry.version) ?? '',
+        path: stringValue(entry.path) ?? '',
+        enabled: entry.enabled !== false,
+        installedAt: stringValue(entry.installedAt) ?? new Date(0).toISOString(),
+      })),
+    }
+  } catch {
+    return { enabledPacks: [] }
+  }
+}
+
+export function enabledProfilePackDirsSync(): string[] {
+  const repoRoot = findRepoRootSync()
+  const storeRoot = profilePackStoreRoot(repoRoot)
+  if (!fsSync.existsSync(storeRoot)) return []
+  const index = readEnabledPackIndexSync(repoRoot)
+  const enabledByPath = new Map(index.enabledPacks.map((entry) => [entry.path, entry]))
+  return fsSync
+    .readdirSync(storeRoot, { withFileTypes: true })
+    .filter((entry) => {
+      if (!entry.isDirectory()) return false
+      if (!fsSync.existsSync(path.join(storeRoot, entry.name, 'pack.json'))) return false
+      return enabledByPath.get(entry.name)?.enabled !== false
+    })
+    .map((entry) => path.join(storeRoot, entry.name))
 }
 
 async function readEnabledPackIndex(repoRoot: string): Promise<EnabledPackIndex> {
@@ -1077,6 +1138,7 @@ export async function listCloudProfilePacks(): Promise<CloudProfilePack[]> {
     try {
       const zipPath = path.join(cloudRoot, entry.name)
       const validation = validateProfilePackZip(await fs.readFile(zipPath))
+      await ensureProfilePackPluginDependencies(validation.manifest)
       const audit = auditProfilePackValidation(validation)
       const installedPack = installedByIdVersion.get(
         `${validation.manifest.id}@${validation.manifest.version}`,

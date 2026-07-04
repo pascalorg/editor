@@ -13,6 +13,7 @@ import type {
 import {
   allProcessTemplates,
   buildProcessLinePlanFromTemplate,
+  matchUnavailableProcessTemplate,
   matchProcessTemplate,
 } from './process-template-registry'
 
@@ -460,6 +461,15 @@ export function fallbackFactoryPlan(prompt: string): FactoryPlan {
       reason:
         'Request matches a known process-line template; compose stations, equipment, and connections.',
       process: buildProcessLinePlanFromTemplate(processTemplate, normalized),
+    }
+  }
+  const unavailableTemplate = matchUnavailableProcessTemplate(normalized)
+  if (unavailableTemplate?.sourcePack) {
+    return {
+      kind: 'missing',
+      reason:
+        'Request matches an industry process template that exists in the simulated cloud, but the required industry pack is not installed or enabled locally.',
+      missingName: `${unavailableTemplate.processDisplayLabel ?? unavailableTemplate.processLabel} (${unavailableTemplate.sourcePack.id}@${unavailableTemplate.sourcePack.version})`,
     }
   }
   const type = inferLayoutType(normalized)

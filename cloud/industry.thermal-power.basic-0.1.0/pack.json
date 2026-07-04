@@ -1,0 +1,180 @@
+{
+  "id": "industry.thermal-power.basic",
+  "name": "Thermal Power Plant Basic Equipment Pack",
+  "industry": "thermal-power",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Factory-capable coal-fired thermal power plant profile pack based on a campus-style plant layout with cooling towers, boiler and turbine island, coal handling, flue-gas cleanup, chimney, switchyard, and auxiliary buildings.",
+  "profiles": [
+    "profiles/generated.json"
+  ],
+  "qualityRules": [
+    "quality-rules/generated-quality.json"
+  ],
+  "capabilities": [
+    "factory_creation"
+  ],
+  "factoryArchitectures": [
+    "factory-architectures/generated.json"
+  ],
+  "processTemplates": [
+    "process-templates/generated.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": [
+    {
+      "profileId": "thermal_power.natural_draft_cooling_tower",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.circulating_water_pump_house",
+      "recipeId": "factory:centrifugal-pump",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.pumpType": "pumpType",
+        "equipmentDefaults.flowRate": "flowRate",
+        "equipmentDefaults.motorPower": "motorPower",
+        "equipmentDefaults.skidMounted": "skidMounted"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.coal_yard_stockpile",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.surface_condenser",
+      "recipeId": "factory:centrifugal-pump",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.pumpType": "pumpType",
+        "equipmentDefaults.flowRate": "flowRate",
+        "equipmentDefaults.motorPower": "motorPower",
+        "equipmentDefaults.skidMounted": "skidMounted"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.fgd_absorber",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.fly_ash_silo",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.water_treatment_building",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    },
+    {
+      "profileId": "thermal_power.generator_step_up_transformer",
+      "recipeId": "factory:storage-tank",
+      "paramMap": {
+        "defaultDimensions.length": "length",
+        "defaultDimensions.width": "width",
+        "defaultDimensions.height": "height",
+        "processPorts.inlet.diameter": "inletDiameter",
+        "processPorts.outlet.diameter": "outletDiameter",
+        "equipmentDefaults.orientation": "orientation",
+        "equipmentDefaults.capacity": "capacity",
+        "equipmentDefaults.liquidLevel": "liquidLevel"
+      },
+      "portMap": {
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    }
+  ]
+}

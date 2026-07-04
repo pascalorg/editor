@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import {
   type DeviceProfileDefinition,
   evaluateDeviceProfileQuality,
@@ -364,7 +364,10 @@ async function runProfileQa(
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const validation = await loadValidation(options.packRef)
-  if (validation.manifest.schemaVersion === '2.0' && !nodeRegistry.has('factory:pump')) {
+  if (
+    validation.manifest.schemaVersion === '2.0' &&
+    !semanticRecipeRegistry.has('factory:centrifugal-pump')
+  ) {
     await loadPlugin(factoryEquipmentPlugin)
   }
   const audit = auditProfilePackValidation(validation)

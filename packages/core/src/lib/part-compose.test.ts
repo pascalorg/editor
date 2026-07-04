@@ -621,6 +621,31 @@ describe('composePartPrimitives', () => {
     expect(shell?.height).toBe(13.2)
   })
 
+  test('composes tank liquid volume as an editable transparent cylinder', () => {
+    const shapes = composePartPrimitives({
+      name: 'Storage tank liquid preview',
+      parts: [
+        {
+          kind: 'liquid_volume',
+          semanticRole: 'liquid_volume',
+          height: 2.4,
+          radius: 0.9,
+          position: [0, 1.2, 0],
+          color: '#38bdf8',
+          opacity: 0.58,
+        },
+      ],
+    })
+
+    const liquid = shapes.find((shape) => shape.semanticRole === 'liquid_volume')
+    expect(liquid?.kind).toBe('cylinder')
+    expect(liquid?.height).toBe(2.4)
+    expect(liquid?.radius).toBe(0.9)
+    expect(liquid?.material?.properties?.color).toBe('#38bdf8')
+    expect(liquid?.material?.properties?.transparent).toBe(true)
+    expect(liquid?.material?.properties?.opacity).toBe(0.58)
+  })
+
   test('composes agitator tank parts with vessel shell, heads, mixer, nozzles, and legs', () => {
     const shapes = composePartPrimitives({
       name: 'Stirred reactor',
@@ -779,6 +804,31 @@ describe('composePartPrimitives', () => {
     )
     expect(shapes.some((shape) => shape.semanticRole === 'helical_stair_post')).toBe(true)
     expect(shapes.every((shape) => shape.sourcePartKind === 'helical_stair')).toBe(true)
+  })
+
+  test('composes dedicated helical ladder parts for process columns', () => {
+    const shapes = composePartPrimitives({
+      name: 'Column access ladder',
+      detail: 'low',
+      parts: [
+        {
+          kind: 'helical_ladder',
+          height: 5.5,
+          innerRadius: 0.8,
+          outerRadius: 1.12,
+          stepCount: 14,
+          ringCount: 10,
+          sweepAngle: Math.PI * 3.5,
+        },
+      ],
+    })
+
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_tread').length).toBeGreaterThan(14)
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_guard_rail')).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_stringer')).toHaveLength(2)
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_landing')).toHaveLength(2)
+    expect(shapes.some((shape) => shape.semanticRole === 'helical_ladder_post')).toBe(true)
+    expect(shapes.every((shape) => shape.sourcePartKind === 'helical_ladder')).toBe(true)
   })
 
   test('composes preheater tower frame and cyclone separator units', () => {

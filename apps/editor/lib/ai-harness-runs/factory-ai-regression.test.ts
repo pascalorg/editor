@@ -75,7 +75,13 @@ describe('factory AI regression flow', () => {
     expect(processResult.intent.action).toBe('process_line_plan')
     expect(processResult.missingAssets).toEqual([])
     expect(
-      processResult.patches.some((patch) => patch.op === 'create' && patch.node.type === 'tank'),
+      processResult.patches.some(
+        (patch) =>
+          patch.op === 'create' &&
+          patch.node.type === 'assembly' &&
+          patch.node.metadata?.equipmentAssembly &&
+          patch.node.metadata?.stationId === 'hydrogen_separator',
+      ),
     ).toBe(true)
     expect(
       processResult.patches.some((patch) => patch.op === 'create' && patch.node.type === 'pipe'),
@@ -139,34 +145,33 @@ describe('factory AI regression flow', () => {
       }),
     ).toMatchObject({ safe: true })
 
-    const verticalTank = createPatchNodes(processResult.patches).find(
-      (node) => node.type === 'tank' && (node as unknown as { kind?: string }).kind === 'vertical',
+    const vesselShell = createPatchNodes(processResult.patches).find(
+      (node) => node.metadata?.semanticRole === 'vessel_shell',
     )
-    if (!verticalTank) throw new Error('expected an editable vertical tank')
+    if (!vesselShell) throw new Error('expected an editable vessel shell part')
 
-    const tankEdit = buildFactoryRunResultFromSelectionEdit({
-      prompt: '\u628a\u8fd9\u4e2a\u50a8\u7f50\u6539\u6210\u5367\u5f0f',
+    const shellEdit = buildFactoryRunResultFromSelectionEdit({
+      prompt: '\u628a\u8fd9\u4e2a\u50a8\u7f50\u58f3\u4f53\u6539\u6210\u7ea2\u8272',
       placement: { generatedBy: 'factory-agent' },
       context: {
         selection: {
-          selectedIds: [verticalTank.id],
+          selectedIds: [vesselShell.id],
           nodes: [
             {
-              id: verticalTank.id,
-              type: 'tank',
-              name: verticalTank.name,
-              kind: (verticalTank as unknown as { kind?: string }).kind,
+              id: vesselShell.id,
+              type: vesselShell.type,
+              name: vesselShell.name,
+              metadata: vesselShell.metadata,
             },
           ],
         },
       },
     })
 
-    expect(tankEdit?.patches).toEqual([
-      { op: 'update', id: verticalTank.id, data: { kind: 'horizontal' } },
-    ])
+    expect(shellEdit?.patches.length).toBeGreaterThan(0)
+    expect(shellEdit?.patches.every((patch) => patch.op === 'update')).toBe(true)
     expect(
-      validateFactoryScenePatches(tankEdit?.patches ?? [], {
+      validateFactoryScenePatches(shellEdit?.patches ?? [], {
         existingNodeIds: createdNodeIds,
       }),
     ).toMatchObject({ safe: true })

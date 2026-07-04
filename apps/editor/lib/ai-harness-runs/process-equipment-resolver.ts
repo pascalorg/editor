@@ -21,12 +21,18 @@ import {
   resolveProcessCatalogEquipment,
 } from './process-catalog-resolver'
 import { resolveProcessEquipmentContract } from './process-equipment-contracts'
+import {
+  STORAGE_TANK_EDITABLE_PART_ROLES,
+  STORAGE_TANK_RECIPE_ID,
+} from '@pascal-app/plugin-factory-equipment'
+import { compileEquipmentRecipeContract } from './equipment-recipe-compiler'
 import { stationDisplayLabel } from './process-line-localization'
 import { resolveFactoryEquipmentNode } from './factory-equipment-node-resolver'
 import type { ProcessRoutePortEndpoint } from './process-line-routing'
 import type {
   FactoryRouteObstacleMetadata,
   ProcessEquipmentContract,
+  ProcessConnectionMedium,
   ProcessLinePlan,
   ProcessPrimitiveRequest,
   ProcessStationPlan,
@@ -76,6 +82,53 @@ function parentPatch(
 
 function equipmentContractMetadata(equipmentContract: ProcessEquipmentContract | undefined) {
   return equipmentContract ? { equipmentContract } : {}
+}
+
+function semanticAssemblyMetadata(equipmentContract: ProcessEquipmentContract) {
+  return {
+    equipmentAssembly: {
+      kind: 'semantic-assembly',
+      profileId: equipmentContract.profileId,
+      ...(equipmentContract.recipeId ? { recipeId: equipmentContract.recipeId } : {}),
+      ...(equipmentContract.recipeSource ? { recipeSource: equipmentContract.recipeSource } : {}),
+      equipmentFamily: equipmentContract.equipmentFamily,
+      primarySemanticRole: equipmentContract.primarySemanticRole,
+      envelope: equipmentContract.envelope,
+      ports: equipmentContract.ports,
+      editableParams: equipmentContract.editableParams ?? [],
+      editablePartRoles: equipmentContract.requiredRoles ?? [],
+      recipeSource: 'profile-parts',
+    },
+  }
+}
+
+function inheritedProcessPartMetadata(metadata: Record<string, unknown>) {
+  const { generatedBy: _generatedBy, ...context } = metadata
+  return context
+}
+
+function inheritProcessPartMetadata(
+  patches: GeneratedGeometryCreatePatch[],
+  metadata: Record<string, unknown>,
+) {
+  const context = inheritedProcessPartMetadata(metadata)
+  return patches.map((patch) => {
+    if (patch.op !== 'create') return patch
+    const nodeMetadata =
+      typeof patch.node.metadata === 'object' && patch.node.metadata !== null
+        ? patch.node.metadata
+        : {}
+    return {
+      ...patch,
+      node: {
+        ...patch.node,
+        metadata: {
+          ...context,
+          ...nodeMetadata,
+        },
+      },
+    } as GeneratedGeometryCreatePatch
+  })
 }
 
 function rounded(value: number) {
@@ -299,6 +352,60 @@ function processMedium(station: ProcessStationPlan) {
   if (/oxygen|\u6c27/i.test(text)) return 'oxygen'
   if (/water|cooling|\u6c34|\u51b7\u5374/i.test(text)) return 'water'
   return 'utility'
+}
+
+function tankPortMedium(station: ProcessStationPlan): ProcessConnectionMedium {
+  const medium = processMedium(station)
+  return medium === 'utility' ? 'material' : medium
+}
+
+function storageTankContractForStation(input: {
+  station: ProcessStationPlan
+  stationPlacement: StationPlacement
+  equipmentContract?: ProcessEquipmentContract
+}): ProcessEquipmentContract {
+  const existing = input.equipmentContract
+  if (existing?.recipeId || existing?.profileParts?.length) return existing
+  const text = stationText(input.station)
+  const horizontal = /buffer|horizontal|\u7f13\u51b2|\u5367/.test(text)
+  const tall = input.station.footprintHint === 'tall' || /separator|\u5206\u79bb\u5668/.test(text)
+  const length = existing?.envelope.length ?? input.stationPlacement.footprint.length
+  const width = existing?.envelope.width ?? input.stationPlacement.footprint.width
+  const height = existing?.envelope.height ?? (horizontal ? Math.max(1.4, width) : tall ? 2.8 : 1.9)
+  const orientation = horizontal ? 'horizontal' : 'vertical'
+  const medium = tankPortMedium(input.station)
+  return {
+    profileId: existing?.profileId ?? `generic.${orientation}_storage_tank`,
+    equipmentFamily: existing?.equipmentFamily ?? 'tank.storage',
+    scaleClass: existing?.scaleClass ?? 'station_semantic_assembly',
+    envelope: existing?.envelope ?? {
+      length,
+      width,
+      height,
+      origin: 'station_profile',
+      tolerance: 0.08,
+    },
+    ports: existing?.ports?.length
+      ? existing.ports
+      : [
+          { id: 'inlet', medium, side: 'left', height: height * 0.58, offset: 0 },
+          { id: 'outlet', medium, side: 'right', height: height * 0.38, offset: 0 },
+        ],
+    requiredRoles: existing?.requiredRoles ?? [...STORAGE_TANK_EDITABLE_PART_ROLES],
+    recipeId: STORAGE_TANK_RECIPE_ID,
+    recipeSource: 'builtin-contract',
+    recipeParams: {
+      orientation,
+      ...(/hydrogen|\u6c22/.test(text)
+        ? { shellColor: '#fde68a' }
+        : /oxygen|\u6c27/.test(text)
+          ? { shellColor: '#bfdbfe' }
+          : {}),
+    },
+    preferredTool: existing?.preferredTool ?? 'compose_parts',
+    preferredResolver: 'profile-parts',
+    primarySemanticRole: existing?.primarySemanticRole ?? 'vessel_shell',
+  }
 }
 
 function createNativeBoxPatch(input: {
@@ -551,21 +658,25 @@ function createProfilePartsPatch(input: {
   metadata: Record<string, unknown>
   equipmentContract: ProcessEquipmentContract
 }) {
-  const envelope = input.equipmentContract.envelope
+  const compiled = compileEquipmentRecipeContract(input.equipmentContract)
+  const equipmentContract = compiled?.contract ?? input.equipmentContract
+  const envelope = equipmentContract.envelope
+  const profileParts = compiled?.result.parts ?? equipmentContract.profileParts
+  if (!profileParts?.length) return null
   const routeObstacle = routeObstacleForStation({
     stationPlacement: input.stationPlacement,
-    equipmentContract: input.equipmentContract,
+    equipmentContract,
     source: 'profile-parts',
   })
   const sourceArgs: PartComposeInput = {
     name: stationDisplayLabel(input.station),
-    family: input.equipmentContract.equipmentFamily,
+    family: equipmentContract.equipmentFamily,
     detail: 'high',
     length: envelope.length,
     width: envelope.width,
     depth: envelope.width,
     height: envelope.height,
-    parts: input.equipmentContract.profileParts,
+    parts: profileParts,
     autoComplete: false,
     enhanceVisualDetails: false,
     registryPartPlan: true,
@@ -598,12 +709,13 @@ function createProfilePartsPatch(input: {
     title: stationDisplayLabel(input.station),
     sourceTool: 'profile_parts',
     sourceArgs: {
-      profileId: input.equipmentContract.profileId,
-      family: input.equipmentContract.equipmentFamily,
+      profileId: equipmentContract.profileId,
+      ...(equipmentContract.recipeId ? { recipeId: equipmentContract.recipeId } : {}),
+      family: equipmentContract.equipmentFamily,
       length: envelope.length,
       width: envelope.width,
       height: envelope.height,
-      primarySemanticRole: input.equipmentContract.primarySemanticRole,
+      primarySemanticRole: equipmentContract.primarySemanticRole,
     },
     userPrompt: input.station.equipmentHint,
     version: 1,
@@ -619,15 +731,15 @@ function createProfilePartsPatch(input: {
     createdNames: artifactShapes.map((shape) => shape.name ?? shape.kind),
     shapeDetails: formatGeneratedShapeDetails(artifactShapes, transforms),
     geometryBrief: {
-      category: input.equipmentContract.equipmentFamily,
+      category: equipmentContract.equipmentFamily,
       units: 'meters',
       expectedDimensions: {
         length: envelope.length,
         width: envelope.width,
         height: envelope.height,
       },
-      requiredRoles: input.equipmentContract.requiredRoles,
-      semanticRoles: input.equipmentContract.requiredRoles,
+      requiredRoles: equipmentContract.requiredRoles,
+      semanticRoles: equipmentContract.requiredRoles,
     },
   }
   const patchPlan = buildGeneratedGeometryCreatePatches(artifact, {
@@ -637,13 +749,14 @@ function createProfilePartsPatch(input: {
     metadata: {
       ...input.metadata,
       equipmentRole: input.station.role,
-      resolver: 'profile-parts',
-      resolverReason: 'industry profile parts resolved without LLM geometry',
+      resolver: 'semantic-assembly',
+      resolverReason: 'industry equipment contract compiled to editable semantic assembly',
       factoryRouteObstacle: routeObstacle,
-      ...equipmentContractMetadata(input.equipmentContract),
+      ...semanticAssemblyMetadata(equipmentContract),
+      ...equipmentContractMetadata(equipmentContract),
     },
   })
-  return { patches: patchPlan.patches, routeObstacle }
+  return { patches: inheritProcessPartMetadata(patchPlan.patches, input.metadata), routeObstacle }
 }
 
 export function resolveProcessStationEquipment(input: {
@@ -658,22 +771,26 @@ export function resolveProcessStationEquipment(input: {
     station: input.station,
   })
   const withContract = { ...input, equipmentContract }
-  const factoryNode = resolveFactoryEquipmentNode({
-    ...input,
-    contract: equipmentContract,
-  })
-  if (factoryNode) {
-    return {
-      patches: [factoryNode.patch],
-      primitiveRequest: null,
-      portOverrides: factoryNode.portOverrides,
-      routeObstacle: factoryNode.routeObstacle,
-      resolved: true,
-      resolver: 'factory-node',
-      reason: `station equipment contract compiled to ${factoryNode.nodeKind}`,
-    }
-  }
   if (equipmentContract?.preferredResolver === 'native-tank') {
+    const tankContract = storageTankContractForStation({
+      station: input.station,
+      stationPlacement: input.stationPlacement,
+      equipmentContract,
+    })
+    const profileParts = createProfilePartsPatch({
+      ...input,
+      equipmentContract: tankContract,
+    })
+    if (profileParts?.patches.length) {
+      return {
+        patches: profileParts.patches,
+        primitiveRequest: null,
+        routeObstacle: profileParts.routeObstacle,
+        resolved: true,
+        resolver: 'profile-parts',
+        reason: 'native tank contract compiled to semantic assembly',
+      }
+    }
     const routeObstacle = routeObstacleForStation({
       stationPlacement: input.stationPlacement,
       equipmentContract,
@@ -702,6 +819,21 @@ export function resolveProcessStationEquipment(input: {
         resolver: 'profile-parts',
         reason: 'station equipment contract selected profile parts',
       }
+    }
+  }
+  const factoryNode = resolveFactoryEquipmentNode({
+    ...input,
+    contract: equipmentContract,
+  })
+  if (factoryNode) {
+    return {
+      patches: [factoryNode.patch],
+      primitiveRequest: null,
+      portOverrides: factoryNode.portOverrides,
+      routeObstacle: factoryNode.routeObstacle,
+      resolved: true,
+      resolver: 'factory-node',
+      reason: `station equipment contract compiled to ${factoryNode.nodeKind}`,
     }
   }
   const catalogMatch = resolveProcessCatalogEquipment({
@@ -782,6 +914,25 @@ export function resolveProcessStationEquipment(input: {
   }
 
   if (isTankLikeStation(input.station)) {
+    const tankContract = storageTankContractForStation({
+      station: input.station,
+      stationPlacement: input.stationPlacement,
+      equipmentContract,
+    })
+    const profileParts = createProfilePartsPatch({
+      ...input,
+      equipmentContract: tankContract,
+    })
+    if (profileParts?.patches.length) {
+      return {
+        patches: profileParts.patches,
+        primitiveRequest: null,
+        routeObstacle: profileParts.routeObstacle,
+        resolved: true,
+        resolver: 'profile-parts',
+        reason: 'tank-like station compiled to semantic assembly',
+      }
+    }
     const routeObstacle = routeObstacleForStation({
       stationPlacement: input.stationPlacement,
       equipmentContract,

@@ -43,7 +43,7 @@ function useLevelGuides(): GuideNode[] {
       const level = state.nodes[levelId]
       if (!level || level.type !== 'level') return [] as GuideNode[]
       return (level as LevelNode).children
-        .map((id) => state.nodes[id])
+        .map((id) => state.nodes[id as AnyNodeId])
         .filter((node): node is GuideNode => node?.type === 'guide')
     }),
   )
@@ -59,7 +59,7 @@ function useLevelScans(): ScanNode[] {
       const level = state.nodes[levelId]
       if (!level || level.type !== 'level') return [] as ScanNode[]
       return (level as LevelNode).children
-        .map((id) => state.nodes[id])
+        .map((id) => state.nodes[id as AnyNodeId])
         .filter((node): node is ScanNode => node?.type === 'scan')
     }),
   )

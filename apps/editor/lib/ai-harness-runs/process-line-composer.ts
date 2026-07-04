@@ -657,6 +657,17 @@ function isOccupiedBuildingStation(station: ProcessStationPlan) {
   )
 }
 
+function occupiedBuildingDisplayLabel(station: ProcessStationPlan) {
+  const label = stationDisplayLabel(station)
+  const isControlRoom = station.id === 'control_room' || station.role === 'control_room'
+  const hasCjk = /[\u4e00-\u9fff]/.test(label)
+  if (isControlRoom) {
+    if (hasCjk) return label.endsWith('\u5ba4') ? `${label.slice(0, -1)}\u697c` : `${label}\u697c`
+    return `${label} building`
+  }
+  return hasCjk ? `${label}\u5efa\u7b51` : `${label} building`
+}
+
 function createOccupiedBuildingPatches(input: {
   plan: ProcessLinePlan
   station: ProcessStationPlan
@@ -678,6 +689,7 @@ function createOccupiedBuildingPatches(input: {
     sourcePrompt: input.sourcePrompt,
     placement: input.placement,
   })
+  const buildingDisplayLabel = occupiedBuildingDisplayLabel(input.station)
   const patchPlan = buildFactoryLayoutCreatePatches({
     prompt: `${stationDisplayLabel(input.station)} 5m x 4m x 2.5m flat roof control room`,
     plan: {
@@ -697,7 +709,7 @@ function createOccupiedBuildingPatches(input: {
       metadata: {
         ...metadata,
         parentProcessDisplayLabel: metadata.processDisplayLabel,
-        processDisplayLabel: stationDisplayLabel(input.station),
+        processDisplayLabel: buildingDisplayLabel,
         equipmentRole: input.station.role,
         resolver: 'native-occupied-building',
         resolverReason: 'occupied building station uses native wall/slab/roof nodes',

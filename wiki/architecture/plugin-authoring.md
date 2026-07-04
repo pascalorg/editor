@@ -25,6 +25,9 @@ export const myPlugin: Plugin = {
     { id: 'catalog', label: 'Catalog', icon: { kind: 'iconify', name: 'lucide:sofa' },
       component: () => import('./catalog-panel') },
   ],
+  semanticRecipes: [
+    // Optional constrained generators for editable semantic assemblies.
+  ],
 }
 ```
 

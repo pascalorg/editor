@@ -1,0 +1,160 @@
+[
+  {
+    "processId": "electrolytic_aluminum_potroom_casting_line",
+    "processLabel": "Electrolytic aluminum potroom and casting line",
+    "processDisplayLabel": "电解铝电解车间与铸造线",
+    "domain": "metallurgy",
+    "aliases": [
+      "电解铝电解车间",
+      "电解车间和铸造线",
+      "铝电解生产线",
+      "potroom and casting line",
+      "aluminum potline",
+      "aluminum electrolysis line"
+    ],
+    "requiredRoles": [
+      "potline_module",
+      "pot_tending_crane",
+      "dry_scrubber_baghouse",
+      "vacuum_tapping_ladle",
+      "molten_aluminum_holding_furnace",
+      "continuous_ingot_casting_line"
+    ],
+    "defaultLayoutStyle": "linear",
+    "defaultDimensions": {
+      "length": 46,
+      "width": 16
+    },
+    "safetyTags": [
+      "molten_metal",
+      "high_current",
+      "fluoride_fume",
+      "crane"
+    ],
+    "stations": [
+      {
+        "id": "potline_module",
+        "label": "Aluminum potline module",
+        "displayLabel": "铝电解槽列",
+        "role": "potline_module",
+        "equipmentHint": "electrolytic_aluminum.potline_module two long rows of reduction pots with covered hoods, anode cover rows, copper busbars, alumina feed manifold, fume collection header, and side service platforms",
+        "footprintHint": "long",
+        "safetyTags": [
+          "molten_metal",
+          "high_current",
+          "fluoride_fume"
+        ],
+        "profileId": "electrolytic_aluminum.electrolytic_cell"
+      },
+      {
+        "id": "pot_tending_crane",
+        "label": "Pot tending overhead crane",
+        "displayLabel": "电解多功能天车",
+        "role": "pot_tending_crane",
+        "equipmentHint": "electrolytic_aluminum.pot_tending_crane overhead pot tending crane above potline with bridge girder, trolley, hoist, cabin, and vertical tool",
+        "footprintHint": "long",
+        "safetyTags": [
+          "crane",
+          "maintenance"
+        ],
+        "profileId": "electrolytic_aluminum.pot_tending_crane"
+      },
+      {
+        "id": "dry_scrubber_baghouse",
+        "label": "Dry scrubber baghouse",
+        "displayLabel": "干法净化布袋除尘",
+        "role": "dry_scrubber_baghouse",
+        "equipmentHint": "electrolytic_aluminum.dry_scrubber_baghouse side fume treatment branch with filter body, hoppers, inlet header, fan, stack, and maintenance platform",
+        "footprintHint": "tall",
+        "safetyTags": [
+          "fluoride_fume",
+          "dust",
+          "exhaust"
+        ],
+        "profileId": "electrolytic_aluminum.dry_scrubber_baghouse"
+      },
+      {
+        "id": "vacuum_tapping_ladle",
+        "label": "Vacuum tapping ladle",
+        "displayLabel": "真空抬包",
+        "role": "vacuum_tapping_ladle",
+        "equipmentHint": "electrolytic_aluminum.vacuum_tapping_ladle molten aluminum transfer ladle between potroom and holding furnace",
+        "footprintHint": "medium",
+        "safetyTags": [
+          "molten_metal",
+          "transfer"
+        ],
+        "profileId": "electrolytic_aluminum.vacuum_tapping_ladle"
+      },
+      {
+        "id": "molten_aluminum_holding_furnace",
+        "label": "Molten aluminum holding furnace",
+        "displayLabel": "铝液保温炉",
+        "role": "molten_aluminum_holding_furnace",
+        "equipmentHint": "electrolytic_aluminum.molten_aluminum_holding_furnace horizontal holding furnace with tap spout and operator platform",
+        "footprintHint": "large",
+        "safetyTags": [
+          "molten_metal",
+          "thermal"
+        ],
+        "profileId": "electrolytic_aluminum.molten_aluminum_holding_furnace"
+      },
+      {
+        "id": "continuous_ingot_casting_line",
+        "label": "Continuous ingot casting line",
+        "displayLabel": "连续铸锭线",
+        "role": "continuous_ingot_casting_line",
+        "equipmentHint": "electrolytic_aluminum.continuous_ingot_casting_line long casting conveyor with repeated ingot molds, pouring tundish, drive unit, and guard fence",
+        "footprintHint": "long",
+        "safetyTags": [
+          "molten_metal",
+          "casting",
+          "conveyor"
+        ],
+        "profileId": "electrolytic_aluminum.continuous_ingot_casting_line"
+      }
+    ],
+    "connections": [
+      {
+        "fromStationId": "pot_tending_crane",
+        "toStationId": "potline_module",
+        "medium": "material",
+        "visualKind": "crane_transfer",
+        "fromPortId": "anode_changing_tool",
+        "toPortId": "anode_cover_row"
+      },
+      {
+        "fromStationId": "potline_module",
+        "toStationId": "dry_scrubber_baghouse",
+        "medium": "gas",
+        "visualKind": "fume_duct",
+        "fromPortId": "pot_hood_panel",
+        "toPortId": "gas_inlet_header"
+      },
+      {
+        "fromStationId": "potline_module",
+        "toStationId": "vacuum_tapping_ladle",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_transfer",
+        "fromPortId": "metal_tap",
+        "toPortId": "vacuum_suction_nozzle"
+      },
+      {
+        "fromStationId": "vacuum_tapping_ladle",
+        "toStationId": "molten_aluminum_holding_furnace",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_transfer",
+        "fromPortId": "tapping_spout_pipe",
+        "toPortId": "tap_spout"
+      },
+      {
+        "fromStationId": "molten_aluminum_holding_furnace",
+        "toStationId": "continuous_ingot_casting_line",
+        "medium": "molten_metal",
+        "visualKind": "hot_metal_chute",
+        "fromPortId": "tap_spout",
+        "toPortId": "pouring_tundish"
+      }
+    ]
+  }
+]

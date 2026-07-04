@@ -1,0 +1,2903 @@
+[
+  {
+    "id": "refinery.crude_storage_tank",
+    "name": "Crude storage tank",
+    "aliases": [
+      "原油储罐",
+      "原油罐区",
+      "crude storage tank",
+      "crude tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:storage-tank",
+    "recipeParams": {
+      "orientation": "vertical",
+      "shellColor": "#cbd5e1"
+    },
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 5.6,
+      "width": 5.6,
+      "height": 4.2
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 4.2,
+        "radius": 2.4,
+        "axis": "y",
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "product_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "editableSchemaRef": "vessel.common",
+    "qualityRules": "quality.refinery.crude_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂原油罐区储罐。",
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    }
+  },
+  {
+    "id": "refinery.product_storage_tank",
+    "name": "Product storage tank",
+    "aliases": [
+      "成品储罐",
+      "汽柴油储罐",
+      "product storage tank",
+      "finished product tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:storage-tank",
+    "recipeParams": {
+      "orientation": "vertical",
+      "shellColor": "#e5e7eb"
+    },
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 5.2,
+      "width": 5.2,
+      "height": 3.8
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 3.8,
+        "radius": 2.2,
+        "axis": "y",
+        "primaryColor": "#e5e7eb"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "loading_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "editableSchemaRef": "vessel.common",
+    "qualityRules": "quality.refinery.product_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂汽油、柴油等成品油罐区储罐。",
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    }
+  },
+  {
+    "id": "refinery.intermediate_storage_tank",
+    "name": "Intermediate storage tank",
+    "aliases": [
+      "中间料储罐",
+      "半成品罐区",
+      "中间罐区",
+      "intermediate storage tank",
+      "semi finished tank farm",
+      "intermediate tank farm"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:storage-tank",
+    "recipeParams": {
+      "orientation": "vertical",
+      "shellColor": "#d1d5db"
+    },
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 4.8,
+      "width": 4.8,
+      "height": 3.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "height": 3.6,
+        "radius": 2,
+        "axis": "y",
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "distillate_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "conversion_feed_outlet"
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_ladder"
+      }
+    ],
+    "primarySemanticRole": "vessel_shell",
+    "editableSchemaRef": "vessel.common",
+    "qualityRules": "quality.refinery.intermediate_storage_tank",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Intermediate naphtha, gas oil, and blend-component tankage between distillation and conversion units.",
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    }
+  },
+  {
+    "id": "refinery.desalter",
+    "name": "Crude desalter",
+    "aliases": [
+      "电脱盐器",
+      "脱盐罐",
+      "crude desalter"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "family": "tank",
+    "defaultDimensions": {
+      "length": 4.8,
+      "width": 1.4,
+      "height": 1.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "desalter_vessel",
+        "length": 4.6,
+        "radius": 0.62,
+        "axis": "x",
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_base"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "crude_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "desalted_crude_outlet"
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "electrical_control_box"
+      }
+    ],
+    "primarySemanticRole": "desalter_vessel",
+    "qualityRules": "quality.refinery.desalter",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "常减压前处理的卧式电脱盐容器。",
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "horizontal",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    }
+  },
+  {
+    "id": "refinery.atmospheric_distillation_unit",
+    "name": "Atmospheric distillation unit",
+    "aliases": [
+      "常压蒸馏塔",
+      "常压塔",
+      "crude distillation unit",
+      "atmospheric distillation unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:distillation-unit",
+    "recipeParams": {
+      "columnRole": "distillation_column_shell",
+      "exchangerRole": "heat_exchanger_shell",
+      "heaterRole": "fired_heater",
+      "manifoldRole": "side_draw_manifold"
+    },
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 10.5,
+      "width": 6,
+      "height": 13.5
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "distillation_column_shell",
+        "height": 13.2,
+        "radius": 0.78,
+        "axis": "y",
+        "position": [
+          -1.7,
+          3.6,
+          0
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "id": "tray-band-1",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          -1.6,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-2",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          0,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-3",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          1.5,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-4",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          3.1,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-5",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          4.7,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-6",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          6.2,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-7",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          7.8,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "tray-band-8",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "distillation_column_shell",
+        "axis": "y",
+        "radius": 0.86,
+        "tubeRadius": 0.048,
+        "includeBolts": false,
+        "position": [
+          -1.7,
+          9.4,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "pre_flash_shell",
+        "kind": "cylindrical_tank",
+        "semanticRole": "pre_flash_column_shell",
+        "height": 7.5,
+        "radius": 0.55,
+        "axis": "y",
+        "position": [
+          -3.4,
+          0.75,
+          0
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "id": "pf-band-1",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "pre_flash_column_shell",
+        "axis": "y",
+        "radius": 0.62,
+        "tubeRadius": 0.042,
+        "includeBolts": false,
+        "position": [
+          -3.4,
+          -2.2,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "pf-band-2",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "pre_flash_column_shell",
+        "axis": "y",
+        "radius": 0.62,
+        "tubeRadius": 0.042,
+        "includeBolts": false,
+        "position": [
+          -3.4,
+          -0.8,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "pf-band-3",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "pre_flash_column_shell",
+        "axis": "y",
+        "radius": 0.62,
+        "tubeRadius": 0.042,
+        "includeBolts": false,
+        "position": [
+          -3.4,
+          0.6,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "pf-band-4",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "pre_flash_column_shell",
+        "axis": "y",
+        "radius": 0.62,
+        "tubeRadius": 0.042,
+        "includeBolts": false,
+        "position": [
+          -3.4,
+          2,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "pf-band-5",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "pre_flash_column_shell",
+        "axis": "y",
+        "radius": 0.62,
+        "tubeRadius": 0.042,
+        "includeBolts": false,
+        "position": [
+          -3.4,
+          3.4,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "stripper_1_shell",
+        "kind": "cylindrical_tank",
+        "semanticRole": "side_stripper_column",
+        "height": 4,
+        "radius": 0.28,
+        "axis": "y",
+        "position": [
+          -2.8,
+          -1,
+          2.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "id": "st1-band-1",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "side_stripper_column",
+        "axis": "y",
+        "radius": 0.33,
+        "tubeRadius": 0.032,
+        "includeBolts": false,
+        "position": [
+          -2.8,
+          -2.2,
+          2.2
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "st1-band-2",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "side_stripper_column",
+        "axis": "y",
+        "radius": 0.33,
+        "tubeRadius": 0.032,
+        "includeBolts": false,
+        "position": [
+          -2.8,
+          -0.2,
+          2.2
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "stripper_2_shell",
+        "kind": "cylindrical_tank",
+        "semanticRole": "side_stripper_column",
+        "height": 4,
+        "radius": 0.28,
+        "axis": "y",
+        "position": [
+          -1.2,
+          -1,
+          2.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "id": "st2-band-1",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "side_stripper_column",
+        "axis": "y",
+        "radius": 0.33,
+        "tubeRadius": 0.032,
+        "includeBolts": false,
+        "position": [
+          -1.2,
+          -2.2,
+          2.2
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "st2-band-2",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "side_stripper_column",
+        "axis": "y",
+        "radius": 0.33,
+        "tubeRadius": 0.032,
+        "includeBolts": false,
+        "position": [
+          -1.2,
+          -0.2,
+          2.2
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "preheat_exchanger",
+        "length": 2.6,
+        "radius": 0.34,
+        "axis": "x",
+        "position": [
+          1.6,
+          0.75,
+          -0.9
+        ]
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "fired_heater",
+        "length": 1.8,
+        "width": 1.2,
+        "height": 2.6,
+        "position": [
+          1.75,
+          1.3,
+          0.95
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "side_draw_manifold",
+        "length": 3.4,
+        "radius": 0.08,
+        "position": [
+          -1.7,
+          5.5,
+          0.9
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform",
+        "attachToRole": "distillation_column_shell",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.8,
+          0
+        ]
+      },
+      {
+        "id": "column_access_ladder",
+        "kind": "helical_ladder",
+        "semanticRole": "external_spiral_ladder",
+        "sourcePartKind": "helical_ladder",
+        "position": [
+          -1.7,
+          6.6,
+          0
+        ],
+        "height": 11.4,
+        "innerRadius": 0.92,
+        "outerRadius": 1.28,
+        "width": 0.36,
+        "depth": 0.22,
+        "sweepAngle": 15.08,
+        "startAngle": 0.31,
+        "stepCount": 36,
+        "ringCount": 28,
+        "railingHeight": 0.42,
+        "wireRadius": 0.018,
+        "metalColor": "#94a3b8"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "crude_feed_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "overhead_product_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "atmospheric_residue_out",
+        "axis": "x",
+        "radius": 0.12,
+        "length": 0.34,
+        "position": [
+          -1.7,
+          0.62,
+          0.72
+        ],
+        "metalColor": "#9ca3af"
+      }
+    ],
+    "primarySemanticRole": "distillation_column_shell",
+    "qualityRules": "quality.refinery.atmospheric_distillation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "原油初馏常压蒸馏装置，带加热炉、换热器和侧线。",
+    "visualCues": [
+      "CDU is a CLUSTER of towers, not a single column: pre-flash tower (left, medium height ~7.5u) + main atmospheric column (center, tallest ~13.2u with 8 tray-band rings) + 2 short side strippers (front, short ~4u with narrow radius)",
+      "the three tower types form a staggered group — pre-flash tower and strippers are clearly shorter than the main column",
+      "each tower has visible flange rings segmenting it into tray sections — NOT smooth cylinders",
+      "fired heater and preheat exchanger train sit to the right of the main column at ground level",
+      "side draw manifold runs horizontally along the front face of the main column",
+      "overhead naphtha line from the main column top; atmospheric residue exits at column base"
+    ],
+    "roleAliases": {
+      "distillation_column_shell": [
+        "crude_column",
+        "atmospheric_tower",
+        "fractionator_shell",
+        "cylindrical_tank"
+      ],
+      "tray_band": [
+        "tray_section",
+        "fractionation_tray_band",
+        "flange_ring"
+      ],
+      "preheat_exchanger": [
+        "crude_preheat_train",
+        "heat_exchanger"
+      ],
+      "fired_heater": [
+        "crude_heater",
+        "charge_heater",
+        "generic_body"
+      ],
+      "side_draw_manifold": [
+        "naphtha_kerosene_diesel_side_draws",
+        "side_draw_piping",
+        "pipe_manifold"
+      ],
+      "crude_feed_inlet": [
+        "desalted_crude_in",
+        "inlet_port"
+      ],
+      "overhead_product_outlet": [
+        "naphtha_overhead_out",
+        "outlet_port"
+      ],
+      "atmospheric_residue_out": [
+        "bottom_residue_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "axis": "y",
+      "mainColumnPosition": "upstream_tower",
+      "heaterSide": "right",
+      "sideDrawSide": "front"
+    },
+    "processPorts": [
+      {
+        "id": "desalted_crude_in",
+        "medium": "material",
+        "side": "left",
+        "height": 2.1,
+        "offset": 0
+      },
+      {
+        "id": "naphtha_distillate_out",
+        "medium": "material",
+        "side": "top",
+        "height": 13.1,
+        "offset": 0.2
+      },
+      {
+        "id": "middle_distillate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 6.5,
+        "offset": 0.2
+      },
+      {
+        "id": "atmospheric_residue_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.7,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 160,
+      "parts": {
+        "tray-band-1": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-2": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-3": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-4": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-5": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-6": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-7": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "tray-band-8": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "pf-band-1": {
+          "detailLevel": "low",
+          "count": 10,
+          "boltCount": 0
+        },
+        "pf-band-2": {
+          "detailLevel": "low",
+          "count": 10,
+          "boltCount": 0
+        },
+        "pf-band-3": {
+          "detailLevel": "low",
+          "count": 10,
+          "boltCount": 0
+        },
+        "pf-band-4": {
+          "detailLevel": "low",
+          "count": 10,
+          "boltCount": 0
+        },
+        "pf-band-5": {
+          "detailLevel": "low",
+          "count": 10,
+          "boltCount": 0
+        },
+        "st1-band-1": {
+          "detailLevel": "low",
+          "count": 8,
+          "boltCount": 0
+        },
+        "st1-band-2": {
+          "detailLevel": "low",
+          "count": 8,
+          "boltCount": 0
+        },
+        "st2-band-1": {
+          "detailLevel": "low",
+          "count": 8,
+          "boltCount": 0
+        },
+        "st2-band-2": {
+          "detailLevel": "low",
+          "count": 8,
+          "boltCount": 0
+        },
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "equipmentDefaults": {
+      "columnKind": "atmospheric"
+    }
+  },
+  {
+    "id": "refinery.vacuum_distillation_unit",
+    "name": "Vacuum distillation unit",
+    "aliases": [
+      "减压蒸馏塔",
+      "减压塔",
+      "vacuum distillation unit",
+      "vacuum tower"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:distillation-unit",
+    "recipeParams": {
+      "columnKind": "vacuum",
+      "columnRole": "vacuum_column_shell",
+      "exchangerRole": "heat_exchanger_shell",
+      "heaterRole": "vacuum_heater",
+      "manifoldRole": "vacuum_line"
+    },
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 6.8,
+      "width": 4.4,
+      "height": 11.8
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vacuum_column_shell",
+        "height": 11.4,
+        "radius": 1.05,
+        "axis": "y",
+        "position": [
+          -1.35,
+          3.75,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "condenser_exchanger",
+        "length": 2.4,
+        "radius": 0.34,
+        "axis": "x",
+        "position": [
+          1.4,
+          0.75,
+          -0.85
+        ]
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "vacuum_heater",
+        "length": 1.7,
+        "width": 1.1,
+        "height": 2.4,
+        "position": [
+          1.55,
+          1.2,
+          0.9
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "vacuum_line",
+        "length": 3.2,
+        "radius": 0.12,
+        "position": [
+          -1.35,
+          5.2,
+          0.85
+        ]
+      },
+      {
+        "id": "vdu-band-1",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          -1.5,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "vdu-band-2",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          0.3,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "vdu-band-3",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          2.1,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "vdu-band-4",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          3.8,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "vdu-band-5",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          5.5,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "id": "vdu-band-6",
+        "kind": "flange_ring",
+        "semanticRole": "tray_band",
+        "attachToRole": "vacuum_column_shell",
+        "axis": "y",
+        "radius": 1.14,
+        "tubeRadius": 0.055,
+        "includeBolts": false,
+        "position": [
+          -1.35,
+          7.2,
+          0
+        ],
+        "metalColor": "#94a3b8"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform",
+        "attachToRole": "vacuum_column_shell",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.6,
+          0
+        ]
+      },
+      {
+        "id": "column_access_ladder",
+        "kind": "helical_ladder",
+        "semanticRole": "external_spiral_ladder",
+        "sourcePartKind": "helical_ladder",
+        "position": [
+          -1.35,
+          5.7,
+          0
+        ],
+        "height": 10.1,
+        "innerRadius": 1.24,
+        "outerRadius": 1.66,
+        "width": 0.42,
+        "depth": 0.25,
+        "sweepAngle": 13.19,
+        "startAngle": -0.47,
+        "stepCount": 30,
+        "ringCount": 24,
+        "railingHeight": 0.42,
+        "wireRadius": 0.02,
+        "metalColor": "#94a3b8"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "atmospheric_residue_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "vacuum_gas_oil_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "vacuum_residue_outlet",
+        "axis": "x",
+        "radius": 0.14,
+        "length": 0.34,
+        "position": [
+          -1.35,
+          0.55,
+          0.78
+        ],
+        "metalColor": "#9ca3af"
+      }
+    ],
+    "primarySemanticRole": "vacuum_column_shell",
+    "qualityRules": "quality.refinery.vacuum_distillation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "处理常压渣油的减压蒸馏装置。",
+    "visualCues": [
+      "wide vacuum tower segmented into sections by 6 evenly-spaced flange rings — the tower looks like stacked cylinders, NOT a smooth tube",
+      "noticeably larger diameter than the atmospheric distillation column — fatter and shorter",
+      "vacuum heater and condenser/exchanger train near the base",
+      "large overhead vacuum line and ejector/condenser connection",
+      "side outlet for vacuum gas oil feed to FCC",
+      "bottom heavy vacuum residue outlet feeding delayed coker or residue conversion"
+    ],
+    "roleAliases": {
+      "vacuum_column_shell": [
+        "vacuum_tower",
+        "wide_vacuum_fractionator",
+        "cylindrical_tank"
+      ],
+      "condenser_exchanger": [
+        "overhead_condenser",
+        "heat_exchanger"
+      ],
+      "vacuum_heater": [
+        "vacuum_charge_heater",
+        "fired_heater",
+        "generic_body"
+      ],
+      "vacuum_line": [
+        "overhead_vacuum_line",
+        "ejector_line",
+        "pipe_run"
+      ],
+      "vacuum_gas_oil_outlet": [
+        "vgo_outlet",
+        "fcc_feed_out",
+        "outlet_port"
+      ],
+      "vacuum_residue_outlet": [
+        "bottom_residue_out",
+        "delayed_coker_feed_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "axis": "y",
+      "largerDiameterThan": "atmospheric_distillation_unit",
+      "residueOutlet": "bottom"
+    },
+    "processPorts": [
+      {
+        "id": "atmospheric_residue_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1.4,
+        "offset": 0
+      },
+      {
+        "id": "vacuum_gas_oil_out",
+        "medium": "material",
+        "side": "right",
+        "height": 5.8,
+        "offset": 0.2
+      },
+      {
+        "id": "vacuum_residue_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.55,
+        "offset": 0
+      },
+      {
+        "id": "vacuum_overhead_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 11.6,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 110,
+      "parts": {
+        "vdu-band-1": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "vdu-band-2": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "vdu-band-3": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "vdu-band-4": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "vdu-band-5": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "vdu-band-6": {
+          "detailLevel": "low",
+          "count": 12,
+          "boltCount": 0
+        },
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "equipmentDefaults": {
+      "columnKind": "vacuum"
+    }
+  },
+  {
+    "id": "refinery.fluid_catalytic_cracking_unit",
+    "name": "Fluid catalytic cracking unit",
+    "aliases": [
+      "催化裂化装置",
+      "FCC装置",
+      "fluid catalytic cracking",
+      "FCC unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-reactor-unit",
+    "recipeParams": {
+      "variant": "fcc",
+      "primaryRole": "fcc_reactor",
+      "secondaryRole": "catalyst_regenerator",
+      "separatorRole": "main_fractionator",
+      "pipeRole": "riser_pipe",
+      "stackRole": "flue_gas_stack",
+      "cycloneRole": "cyclone_separator"
+    },
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.2,
+      "width": 4.2,
+      "height": 7.2
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "fcc_reactor",
+        "height": 5.8,
+        "radius": 0.65,
+        "axis": "y",
+        "position": [
+          -1.9,
+          2.95,
+          -0.45
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "catalyst_regenerator",
+        "height": 5.2,
+        "radius": 0.82,
+        "axis": "y",
+        "position": [
+          0.2,
+          2.65,
+          0.35
+        ],
+        "primaryColor": "#bfc7d5"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "main_fractionator",
+        "height": 6.2,
+        "radius": 0.58,
+        "axis": "y",
+        "position": [
+          2.2,
+          3.05,
+          -0.35
+        ],
+        "primaryColor": "#d9dee8"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "riser_pipe",
+        "length": 3.2,
+        "radius": 0.09,
+        "position": [
+          -0.85,
+          3.7,
+          -0.1
+        ]
+      },
+      {
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "cyclone_separator"
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "flue_gas_stack",
+        "height": 6,
+        "radius": 0.42,
+        "position": [
+          0,
+          3,
+          0
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "service_platform"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "vacuum_gas_oil_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "cracked_product_outlet"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "spent_catalyst_standpipe",
+        "axis": "y",
+        "length": 2.4,
+        "radius": 0.07,
+        "position": [
+          -0.8,
+          2.2,
+          0.18
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "regenerated_catalyst_standpipe",
+        "axis": "y",
+        "length": 2.2,
+        "radius": 0.07,
+        "position": [
+          0.92,
+          2.1,
+          -0.12
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "rich_gas_outlet",
+        "axis": "y",
+        "radius": 0.11,
+        "length": 0.34,
+        "position": [
+          2.2,
+          6.25,
+          -0.35
+        ],
+        "metalColor": "#9ca3af"
+      }
+    ],
+    "primarySemanticRole": "fcc_reactor",
+    "qualityRules": "quality.refinery.fluid_catalytic_cracking_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "催化裂化反应再生装置，表达反应器、再生器、提升管、旋风分离和烟囱。",
+    "visualCues": [
+      "FCC complex is a reactor-regenerator pair plus main fractionator, not a single box",
+      "riser pipe climbs from the feed side into the reactor, with catalyst standpipe between reactor and regenerator",
+      "larger catalyst regenerator vessel has flue gas stack and cyclone separator details near the top",
+      "main fractionator tower sits beside the reactor-regenerator pair for cracked products",
+      "rich gas outlet goes to LPG recovery/gas fractionation during normal operation; do not route it directly to flare"
+    ],
+    "roleAliases": {
+      "fcc_reactor": [
+        "reactor_vessel",
+        "riser_reactor",
+        "cylindrical_tank"
+      ],
+      "catalyst_regenerator": [
+        "regenerator_vessel",
+        "catalyst_burner_regenerator",
+        "cylindrical_tank"
+      ],
+      "main_fractionator": [
+        "fcc_fractionator",
+        "product_fractionator",
+        "cylindrical_tank"
+      ],
+      "riser_pipe": [
+        "feed_riser",
+        "catalyst_riser",
+        "pipe_run"
+      ],
+      "spent_catalyst_standpipe": [
+        "catalyst_standpipe",
+        "pipe_run"
+      ],
+      "regenerated_catalyst_standpipe": [
+        "regenerated_catalyst_line",
+        "pipe_run"
+      ],
+      "cyclone_separator": [
+        "regenerator_cyclone",
+        "cyclone_separator_unit"
+      ],
+      "flue_gas_stack": [
+        "regenerator_stack",
+        "chimney_stack"
+      ],
+      "rich_gas_outlet": [
+        "fcc_rich_gas_out",
+        "lpg_gas_out",
+        "outlet_port"
+      ],
+      "cracked_product_outlet": [
+        "fcc_gasoline_lco_slurry_out",
+        "outlet_port"
+      ]
+    },
+    "layoutHints": {
+      "cluster": "reactor_regenerator_fractionator",
+      "reactorSide": "left",
+      "regeneratorSide": "center",
+      "fractionatorSide": "right"
+    },
+    "processPorts": [
+      {
+        "id": "vacuum_gas_oil_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1.2,
+        "offset": -0.4
+      },
+      {
+        "id": "cracked_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 3.2,
+        "offset": 0
+      },
+      {
+        "id": "rich_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 6.4,
+        "offset": 0.25
+      },
+      {
+        "id": "flue_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 7,
+        "offset": -0.25
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 80,
+      "parts": {
+        "cyclone_separator": {
+          "detailLevel": "low"
+        },
+        "service_platform": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "equipmentDefaults": {
+      "variant": "fcc"
+    }
+  },
+  {
+    "id": "refinery.hydrotreating_unit",
+    "name": "Hydrotreating unit",
+    "aliases": [
+      "加氢精制装置",
+      "加氢装置",
+      "hydrotreating unit",
+      "hydrotreater"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-reactor-unit",
+    "recipeParams": {
+      "variant": "hydrotreating",
+      "primaryRole": "hydrotreater_reactor",
+      "exchangerRole": "heat_exchanger_shell",
+      "separatorRole": "high_pressure_separator",
+      "pipeRole": "hydrogen_header"
+    },
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 6.4,
+      "width": 3.2,
+      "height": 4.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "hydrotreater_reactor",
+        "height": 4.2,
+        "radius": 0.55,
+        "axis": "y",
+        "position": [
+          -1.45,
+          2.15,
+          -0.35
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "feed_effluent_exchanger",
+        "length": 2.4,
+        "radius": 0.3,
+        "axis": "x",
+        "position": [
+          0.8,
+          0.68,
+          -0.85
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "high_pressure_separator",
+        "length": 3.4,
+        "radius": 0.48,
+        "axis": "x",
+        "position": [
+          1.4,
+          0.85,
+          0.75
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "hydrogen_header",
+        "length": 3.2,
+        "radius": 0.07,
+        "position": [
+          0.15,
+          1.8,
+          0.9
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "hydrogen_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "treated_product_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "acid_gas_outlet",
+        "axis": "y",
+        "radius": 0.1,
+        "length": 0.3,
+        "position": [
+          -1.45,
+          4.45,
+          -0.35
+        ],
+        "metalColor": "#9ca3af"
+      }
+    ],
+    "primarySemanticRole": "hydrotreater_reactor",
+    "qualityRules": "quality.refinery.hydrotreating_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "加氢精制反应器列，包含反应器、换热器、分离罐和氢气入口。",
+    "visualCues": [
+      "high-pressure hydrotreater reactor train with vertical reactor and horizontal high-pressure separator",
+      "feed-effluent exchanger and heater/exchanger group ahead of the reactor",
+      "hydrogen header visibly entering the reactor train from the reformer/hydrogen system",
+      "acid gas outlet toward sulfur recovery and treated product outlet toward product tankage",
+      "compact pressure-vessel skid with dense piping, not an atmospheric storage tank"
+    ],
+    "roleAliases": {
+      "hydrotreater_reactor": [
+        "hydrotreating_reactor",
+        "hds_reactor",
+        "cylindrical_tank"
+      ],
+      "feed_effluent_exchanger": [
+        "feed_exchanger",
+        "heat_exchanger"
+      ],
+      "high_pressure_separator": [
+        "hp_separator",
+        "separator_drum",
+        "cylindrical_tank"
+      ],
+      "hydrogen_header": [
+        "hydrogen_makeup_header",
+        "pipe_manifold"
+      ],
+      "hydrogen_inlet": [
+        "makeup_hydrogen_in",
+        "inlet_port"
+      ],
+      "acid_gas_outlet": [
+        "h2s_acid_gas_out",
+        "outlet_port"
+      ],
+      "treated_product_outlet": [
+        "desulfurized_product_out",
+        "outlet_port"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "hydrotreater_feed_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.9,
+        "offset": 0
+      },
+      {
+        "id": "hydrogen_in",
+        "medium": "hydrogen",
+        "side": "back",
+        "height": 1.8,
+        "offset": 0.4
+      },
+      {
+        "id": "treated_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 1,
+        "offset": 0
+      },
+      {
+        "id": "acid_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 4.4,
+        "offset": 0
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 64
+    },
+    "equipmentDefaults": {
+      "variant": "reformer"
+    }
+  },
+  {
+    "id": "refinery.catalytic_reformer_unit",
+    "name": "Catalytic reformer unit",
+    "aliases": [
+      "催化重整装置",
+      "重整装置",
+      "catalytic reformer",
+      "reformer unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-reactor-unit",
+    "recipeParams": {
+      "variant": "reformer",
+      "primaryRole": "reformer_reactor_train",
+      "heaterRole": "reformer_fired_heater",
+      "exchangerRole": "heat_exchanger_shell",
+      "separatorRole": "reformer_separator",
+      "pipeRole": "hydrogen_rich_gas_header"
+    },
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.2,
+      "width": 3.4,
+      "height": 4.4
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "reformer_reactor_train",
+        "height": 4,
+        "radius": 0.48,
+        "axis": "y",
+        "position": [
+          -1.8,
+          2.05,
+          -0.45
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "reformer_fired_heater",
+        "length": 1.7,
+        "width": 1.1,
+        "height": 2.1,
+        "position": [
+          0.25,
+          1.05,
+          0.85
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "reformer_exchanger",
+        "length": 2.2,
+        "radius": 0.3,
+        "axis": "x",
+        "position": [
+          1.25,
+          0.68,
+          -0.85
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "reformer_separator",
+        "length": 2.8,
+        "radius": 0.42,
+        "axis": "x",
+        "position": [
+          2.05,
+          0.78,
+          0.7
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "naphtha_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "reformate_outlet"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "hydrogen_rich_gas_header",
+        "length": 3,
+        "radius": 0.065,
+        "position": [
+          1.2,
+          3.45,
+          0.88
+        ],
+        "metalColor": "#38bdf8"
+      }
+    ],
+    "primarySemanticRole": "reformer_reactor_train",
+    "qualityRules": "quality.refinery.catalytic_reformer_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "石脑油重整反应器列，包含多段反应器、加热炉、换热器和气液分离。",
+    "visualCues": [
+      "catalytic reformer has multiple vertical reactors in series with fired heaters between stages",
+      "reformer separator/hydrogen separator produces hydrogen-rich gas",
+      "naphtha feed enters after hydrotreating; reformate product exits to gasoline/product blending",
+      "hydrogen-rich gas header should be visible and available to hydrotreating units",
+      "reactor train and heaters are lower than distillation towers but more complex than a simple vessel"
+    ],
+    "roleAliases": {
+      "reformer_reactor_train": [
+        "reformer_reactors",
+        "platformer_reactors",
+        "cylindrical_tank"
+      ],
+      "reformer_fired_heater": [
+        "interheater",
+        "charge_heater",
+        "generic_body"
+      ],
+      "reformer_exchanger": [
+        "feed_effluent_exchanger",
+        "heat_exchanger"
+      ],
+      "reformer_separator": [
+        "hydrogen_separator",
+        "separator_drum",
+        "cylindrical_tank"
+      ],
+      "hydrogen_rich_gas_header": [
+        "reformer_hydrogen_out",
+        "hydrogen_header",
+        "pipe_manifold"
+      ],
+      "naphtha_inlet": [
+        "hydrotreated_naphtha_in",
+        "inlet_port"
+      ],
+      "reformate_outlet": [
+        "high_octane_reformate_out",
+        "outlet_port"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "naphtha_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.95,
+        "offset": 0
+      },
+      {
+        "id": "reformate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.9,
+        "offset": 0
+      },
+      {
+        "id": "hydrogen_rich_gas_out",
+        "medium": "hydrogen",
+        "side": "top",
+        "height": 3.7,
+        "offset": 0.25
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 68
+    },
+    "equipmentDefaults": {
+      "variant": "reformer"
+    }
+  },
+  {
+    "id": "refinery.sulfur_recovery_unit",
+    "name": "Sulfur recovery unit",
+    "aliases": [
+      "硫回收装置",
+      "Claus装置",
+      "sulfur recovery unit",
+      "Claus unit"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "vessel_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-reactor-unit",
+    "recipeParams": {
+      "variant": "sulfur",
+      "primaryRole": "claus_reactor",
+      "exchangerRole": "heat_exchanger_shell",
+      "stackRole": "tail_gas_stack"
+    },
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 5.4,
+      "width": 2.8,
+      "height": 4.6
+    },
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "claus_reactor",
+        "length": 2.2,
+        "radius": 0.48,
+        "axis": "x",
+        "position": [
+          -0.8,
+          0.48,
+          -0.4
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "sulfur_condenser",
+        "length": 1.8,
+        "radius": 0.3,
+        "axis": "x",
+        "position": [
+          1.2,
+          0.48,
+          -0.4
+        ]
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "tail_gas_stack",
+        "height": 3.8,
+        "radius": 0.18,
+        "position": [
+          1.6,
+          1.9,
+          0.6
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "acid_gas_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "sulfur_outlet"
+      }
+    ],
+    "primarySemanticRole": "claus_reactor",
+    "qualityRules": "quality.refinery.sulfur_recovery_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "酸性气硫回收单元，包含热反应器、冷凝器和尾气烟囱。",
+    "processPorts": [
+      {
+        "id": "acid_gas_in",
+        "medium": "gas",
+        "side": "left",
+        "diameter": 0.16
+      },
+      {
+        "id": "sulfur_out",
+        "medium": "material",
+        "side": "right",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "variant": "sulfur"
+    }
+  },
+  {
+    "id": "refinery.flare_system",
+    "name": "Flare system",
+    "aliases": [
+      "火炬系统",
+      "火炬塔",
+      "flare system",
+      "flare stack"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-auxiliary-unit",
+    "recipeParams": {
+      "variant": "flare",
+      "primaryRole": "flare_stack",
+      "vesselRole": "knockout_drum",
+      "pipeRole": "relief_gas_inlet"
+    },
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 2.6,
+      "height": 14
+    },
+    "parts": [
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "flare_stack",
+        "height": 13.5,
+        "radius": 0.28,
+        "warningStripes": true,
+        "position": [
+          0,
+          6.75,
+          0
+        ]
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "knockout_drum",
+        "length": 2.2,
+        "radius": 0.36,
+        "axis": "x",
+        "position": [
+          1.6,
+          0.36,
+          0.6
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "relief_gas_inlet",
+        "axis": "y",
+        "length": 1.8,
+        "radius": 0.06,
+        "position": [
+          1.6,
+          1.3,
+          0.6
+        ],
+        "metalColor": "#64748b"
+      }
+    ],
+    "primarySemanticRole": "flare_stack",
+    "qualityRules": "quality.refinery.flare_system",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂放空火炬系统，包含火炬筒和入口分液罐（分液罐置于火炬塔旁地面侧）。",
+    "processPorts": [
+      {
+        "id": "relief_gas_in",
+        "medium": "gas",
+        "side": "left",
+        "diameter": 0.18
+      },
+      {
+        "id": "flare_tip",
+        "medium": "gas",
+        "side": "top",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "variant": "flare"
+    }
+  },
+  {
+    "id": "refinery.pipe_rack",
+    "name": "Main pipe rack",
+    "aliases": [
+      "主管廊",
+      "管廊",
+      "pipe rack",
+      "main pipe rack"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "linear_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-auxiliary-unit",
+    "recipeParams": {
+      "variant": "pipe-rack",
+      "primaryRole": "main_pipe_header",
+      "pipeRole": "parallel_pipe_run",
+      "frameRole": "pipe_rack_support_frame"
+    },
+    "family": "pipe_system",
+    "defaultDimensions": {
+      "length": 12,
+      "width": 1.4,
+      "height": 2.2
+    },
+    "parts": [
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "main_pipe_header",
+        "length": 10,
+        "radius": 0.065,
+        "count": 6,
+        "position": [
+          0,
+          2.15,
+          0.28
+        ]
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "parallel_pipe_run",
+        "length": 10,
+        "radius": 0.055,
+        "axis": "x",
+        "position": [
+          0,
+          1.35,
+          -0.28
+        ]
+      },
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "pipe_rack_support_frame",
+        "height": 2.4,
+        "levelCount": 2
+      }
+    ],
+    "primarySemanticRole": "main_pipe_header",
+    "qualityRules": "quality.refinery.pipe_rack",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂主流程侧边管廊，主管线布置在管廊中层和上层，而不是贴地穿过支架底部。",
+    "visualCues": [
+      "elevated main pipe header on the upper rack tier",
+      "parallel process pipe run on the middle rack tier",
+      "open steel support frame keeps the ground bay clear"
+    ],
+    "processPorts": [
+      {
+        "id": "rack_in",
+        "medium": "material",
+        "side": "left",
+        "diameter": 0.18
+      },
+      {
+        "id": "rack_out",
+        "medium": "material",
+        "side": "right",
+        "diameter": 0.18
+      }
+    ],
+    "equipmentDefaults": {
+      "variant": "pipe-rack"
+    }
+  },
+  {
+    "id": "refinery.utility_boiler",
+    "name": "Utility boiler",
+    "aliases": [
+      "公用工程锅炉",
+      "锅炉房",
+      "utility boiler",
+      "steam boiler"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "recipeId": "factory:refinery-auxiliary-unit",
+    "recipeParams": {
+      "variant": "boiler",
+      "primaryRole": "boiler_body",
+      "vesselRole": "steam_drum",
+      "pipeRole": "steam_header",
+      "stackRole": "boiler_stack",
+      "controlRole": "boiler_control_box"
+    },
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.2,
+      "width": 2.3,
+      "height": 3.6
+    },
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "boiler_body",
+        "length": 3.8,
+        "width": 1.35,
+        "height": 1.55,
+        "position": [
+          0,
+          0.78,
+          0
+        ],
+        "primaryColor": "#9ca3af",
+        "cornerRadius": 0.08
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "steam_drum",
+        "length": 3.25,
+        "radius": 0.26,
+        "axis": "x",
+        "position": [
+          0,
+          1.9,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "mud_drum",
+        "length": 3.05,
+        "radius": 0.16,
+        "axis": "x",
+        "position": [
+          0,
+          0.52,
+          -0.08
+        ],
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "boiler_tube_bank",
+        "length": 3.15,
+        "radius": 0.048,
+        "count": 7,
+        "position": [
+          0,
+          1.18,
+          0.78
+        ]
+      },
+      {
+        "kind": "chimney_stack",
+        "semanticRole": "boiler_stack",
+        "height": 3.6,
+        "radius": 0.18,
+        "position": [
+          1.55,
+          1.8,
+          -0.88
+        ],
+        "warningStripes": true
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "steam_header",
+        "length": 3.5,
+        "radius": 0.055,
+        "count": 3,
+        "position": [
+          0,
+          2.24,
+          0.1
+        ]
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "burner_front",
+        "length": 0.9,
+        "height": 0.58,
+        "position": [
+          -1.15,
+          0.82,
+          0.72
+        ],
+        "color": "#111827"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "burner_windbox",
+        "length": 0.95,
+        "width": 0.42,
+        "height": 0.62,
+        "position": [
+          -1.15,
+          0.82,
+          1.02
+        ],
+        "primaryColor": "#475569",
+        "cornerRadius": 0.04
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "fuel_gas_train",
+        "length": 1.3,
+        "radius": 0.045,
+        "axis": "x",
+        "position": [
+          -1.15,
+          0.86,
+          1.34
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "boiler_access_platform",
+        "length": 3.1,
+        "width": 0.68,
+        "height": 1.55,
+        "overallHeight": 0.65,
+        "position": [
+          0.2,
+          1.55,
+          -1
+        ]
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "boiler_control_box",
+        "length": 0.64,
+        "width": 0.24,
+        "height": 0.86,
+        "position": [
+          1.55,
+          0.62,
+          0.95
+        ]
+      }
+    ],
+    "primarySemanticRole": "boiler_body",
+    "qualityRules": "quality.refinery.utility_boiler",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂公用工程锅炉和蒸汽总管。",
+    "visualCues": [
+      "packaged rectangular furnace casing",
+      "visible horizontal steam drum",
+      "lower mud drum below the tube bank",
+      "front tube bank and burner opening",
+      "striped stack",
+      "service platform and control box"
+    ],
+    "processPorts": [
+      {
+        "id": "fuel_gas_in",
+        "medium": "gas",
+        "side": "left",
+        "diameter": 0.14
+      },
+      {
+        "id": "steam_out",
+        "medium": "gas",
+        "side": "right",
+        "diameter": 0.16
+      }
+    ],
+    "equipmentDefaults": {
+      "variant": "boiler"
+    }
+  },
+  {
+    "id": "refinery.control_room",
+    "name": "Control room and MCC",
+    "aliases": [
+      "中控室",
+      "控制室",
+      "MCC",
+      "control room"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "box_enclosure_layout",
+    "preferredResolver": "profile-parts",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 4.6,
+      "width": 2.4,
+      "height": 2.4
+    },
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "control_room_floor_slab",
+        "length": 4,
+        "width": 2.4,
+        "height": 0.12,
+        "position": [
+          0,
+          0.06,
+          0
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_front_wall",
+        "length": 3.8,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          0,
+          1,
+          1.12
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_back_wall",
+        "length": 3.8,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          0,
+          1,
+          -1.12
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_left_wall",
+        "length": 2.2,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          -1.92,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_right_wall",
+        "length": 2.2,
+        "height": 1.8,
+        "thickness": 0.08,
+        "position": [
+          1.92,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#d1d5db",
+        "cornerRadius": 0.02
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "control_room_flat_roof",
+        "length": 4,
+        "height": 2.5,
+        "thickness": 0.14,
+        "position": [
+          0,
+          1.94,
+          0
+        ],
+        "rotation": [
+          1.5707963267948966,
+          0,
+          0
+        ],
+        "accentColor": "#94a3b8",
+        "cornerRadius": 0.03
+      },
+      {
+        "kind": "generic_opening",
+        "semanticRole": "blast_door",
+        "length": 0.78,
+        "height": 1.35,
+        "position": [
+          -1.15,
+          0.78,
+          1.17
+        ]
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "control_room_window",
+        "length": 0.92,
+        "height": 0.42,
+        "position": [
+          0.45,
+          1.28,
+          1.17
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.42
+      },
+      {
+        "kind": "generic_detail_accent",
+        "semanticRole": "side_observation_window",
+        "length": 0.72,
+        "height": 0.38,
+        "position": [
+          1.97,
+          1.24,
+          0.3
+        ],
+        "rotation": [
+          0,
+          1.5707963267948966,
+          0
+        ],
+        "accentColor": "#88c0d0",
+        "opacity": 0.38
+      },
+      {
+        "kind": "control_box",
+        "semanticRole": "mcc_panel",
+        "position": [
+          1.2,
+          0.75,
+          -0.95
+        ]
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "cable_tray_entry",
+        "length": 1.8,
+        "radius": 0.035,
+        "axis": "x",
+        "position": [
+          0,
+          0.42,
+          -1.35
+        ]
+      }
+    ],
+    "primarySemanticRole": "control_room_front_wall",
+    "qualityRules": "quality.refinery.control_room",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "炼油厂中控室和电气控制柜区域。",
+    "visualCues": [
+      "small control-room building assembled from separate wall panels and a flat roof",
+      "front wall with blast door and blue observation window",
+      "side observation window facing process units",
+      "floor slab, four walls, and roof read as a small house rather than one equipment box",
+      "MCC panel and cable-tray entry remain visible"
+    ]
+  },
+  {
+    "id": "refinery.gas_fractionation_unit",
+    "name": "Gas fractionation and LPG recovery unit",
+    "aliases": [
+      "气体分馏装置",
+      "气分装置",
+      "LPG回收",
+      "FCC气分",
+      "gas fractionation unit",
+      "LPG recovery unit",
+      "gas plant"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "distillation_column_layout",
+    "preferredResolver": "profile-parts",
+    "family": "distillation_column",
+    "defaultDimensions": {
+      "length": 6.8,
+      "width": 3.4,
+      "height": 6.8
+    },
+    "primarySemanticRole": "deethanizer_column",
+    "qualityRules": "quality.refinery.gas_fractionation_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "FCC rich gas/LPG recovery and gas fractionation section for dry gas, LPG/propylene/butane streams; normal downstream of FCC rich gas, not a flare.",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "deethanizer_column",
+        "required": true,
+        "axis": "y",
+        "height": 5.8,
+        "radius": 0.42,
+        "position": [
+          -1.6,
+          2.95,
+          -0.4
+        ],
+        "primaryColor": "#d1d5db"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "debutanizer_column",
+        "required": true,
+        "axis": "y",
+        "height": 5.2,
+        "radius": 0.46,
+        "position": [
+          0.15,
+          2.65,
+          0.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "lpg_surge_drum",
+        "required": true,
+        "axis": "x",
+        "length": 2.1,
+        "radius": 0.32,
+        "position": [
+          1.6,
+          0.72,
+          -0.75
+        ],
+        "primaryColor": "#dbe3ee"
+      },
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "overhead_condenser",
+        "length": 2.2,
+        "radius": 0.28,
+        "axis": "x",
+        "position": [
+          1.55,
+          0.72,
+          0.75
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "rich_gas_header",
+        "length": 3.4,
+        "radius": 0.06,
+        "position": [
+          -0.1,
+          1.5,
+          1.05
+        ]
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "fractionator_platform",
+        "attachToRole": "deethanizer_column",
+        "anchor": "service_side",
+        "offset": [
+          0,
+          1.4,
+          0
+        ]
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "fcc_rich_gas_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "dry_gas_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "lpg_product_outlet"
+      }
+    ],
+    "visualCues": [
+      "two or more narrow fractionation columns near FCC",
+      "horizontal LPG surge drum and overhead condenser at grade",
+      "rich gas feed header from FCC, dry gas/LPG product outlets",
+      "dense small piping but no flare flame or tall emergency stack"
+    ],
+    "roleAliases": {
+      "deethanizer_column": [
+        "gas_fractionator_column",
+        "cylindrical_tank"
+      ],
+      "debutanizer_column": [
+        "lpg_splitter_column",
+        "cylindrical_tank"
+      ],
+      "lpg_surge_drum": [
+        "lpg_receiver",
+        "cylindrical_tank"
+      ],
+      "rich_gas_header": [
+        "fcc_rich_gas_feed",
+        "pipe_manifold"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "fcc_rich_gas_in",
+        "medium": "gas",
+        "side": "left",
+        "height": 1.5,
+        "offset": 0
+      },
+      {
+        "id": "dry_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 5.8,
+        "offset": -0.4
+      },
+      {
+        "id": "lpg_product_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.75,
+        "offset": -0.75
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 62
+    }
+  },
+  {
+    "id": "refinery.delayed_coker_unit",
+    "name": "Delayed coker unit",
+    "aliases": [
+      "延迟焦化装置",
+      "焦化装置",
+      "减压渣油焦化",
+      "delayed coker",
+      "coker unit",
+      "residue coker"
+    ],
+    "industry": "refinery",
+    "layoutFamily": "generic_industrial_layout",
+    "preferredResolver": "profile-parts",
+    "family": "reactor",
+    "defaultDimensions": {
+      "length": 7.4,
+      "width": 4.4,
+      "height": 9
+    },
+    "primarySemanticRole": "coke_drum_pair",
+    "qualityRules": "quality.refinery.delayed_coker_unit",
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Delayed coker for vacuum residue conversion, with paired coke drums, coker fractionator, fired heater, overhead lines, and coke handling base.",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coke_drum_pair",
+        "required": true,
+        "axis": "y",
+        "height": 8.2,
+        "radius": 0.58,
+        "position": [
+          -1.15,
+          4.15,
+          -0.5
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coke_drum_pair",
+        "required": true,
+        "axis": "y",
+        "height": 8.2,
+        "radius": 0.58,
+        "position": [
+          -0.05,
+          4.15,
+          -0.5
+        ],
+        "primaryColor": "#9ca3af"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "coker_fractionator",
+        "required": true,
+        "axis": "y",
+        "height": 6.4,
+        "radius": 0.52,
+        "position": [
+          1.65,
+          3.25,
+          0.2
+        ],
+        "primaryColor": "#cbd5e1"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "coker_fired_heater",
+        "required": true,
+        "length": 1.7,
+        "width": 1.2,
+        "height": 2,
+        "position": [
+          -1,
+          1,
+          1.1
+        ],
+        "primaryColor": "#78716c"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "overhead_vapor_line",
+        "length": 3.8,
+        "radius": 0.07,
+        "position": [
+          0.35,
+          7.8,
+          -0.2
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "coke_handling_base",
+        "required": true,
+        "length": 3.2,
+        "width": 1.6,
+        "height": 0.22,
+        "position": [
+          -0.6,
+          0.11,
+          -0.5
+        ],
+        "metalColor": "#111827"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "coker_drum_platform",
+        "length": 2.8,
+        "width": 0.36,
+        "height": 0.32,
+        "overallHeight": 0.18,
+        "position": [
+          -0.6,
+          7.2,
+          0.28
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "vacuum_residue_inlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "coker_distillate_outlet"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "petroleum_coke_outlet"
+      }
+    ],
+    "visualCues": [
+      "two tall coke drums side by side are the signature feature",
+      "fractionator tower beside drums and fired heater near feed side",
+      "overhead vapor line from coke drums to fractionator",
+      "heavy base/coke handling area below drums",
+      "vacuum residue feed inlet and coker distillate outlet"
+    ],
+    "roleAliases": {
+      "coke_drum_pair": [
+        "coke_drum",
+        "paired_coke_drums",
+        "cylindrical_tank"
+      ],
+      "coker_fractionator": [
+        "fractionator",
+        "cylindrical_tank"
+      ],
+      "coker_fired_heater": [
+        "coker_heater",
+        "generic_body"
+      ],
+      "overhead_vapor_line": [
+        "drum_overhead_line",
+        "pipe_manifold"
+      ]
+    },
+    "processPorts": [
+      {
+        "id": "vacuum_residue_in",
+        "medium": "material",
+        "side": "left",
+        "height": 1,
+        "offset": 1.1
+      },
+      {
+        "id": "coker_distillate_out",
+        "medium": "material",
+        "side": "right",
+        "height": 3.2,
+        "offset": 0.2
+      },
+      {
+        "id": "coke_out",
+        "medium": "material",
+        "side": "bottom",
+        "height": 0.25,
+        "offset": -0.5
+      }
+    ],
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 82,
+      "parts": {
+        "coker_drum_platform": {
+          "detailLevel": "low"
+        }
+      }
+    }
+  }
+]

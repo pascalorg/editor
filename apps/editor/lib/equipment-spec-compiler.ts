@@ -1,16 +1,17 @@
-import type { AnyNodeId, EquipmentParamValue, EquipmentSpec, NodeRegistry, Vec3 } from '@pascal-app/core'
+import type { AnyNodeId, EquipmentParamValue, SemanticRecipeRegistry, Vec3 } from '@pascal-app/core'
 import {
   createEquipmentSpecFromV2Binding,
   resolveEquipmentBinding,
+  type SemanticEquipmentSpec,
   type EquipmentSourcePreset,
   type EquipmentSourceStation,
 } from './equipment-binding-resolver'
 import {
-  createEquipmentNodePatch,
   createGenericEquipmentDraft,
-  type EquipmentNodeCreatePatch,
   type GenericEquipmentDraft,
 } from './equipment-node-patches'
+import { createSemanticAssemblyPatchPlan } from './equipment-semantic-assembly-patches'
+import type { GeneratedGeometryPatchPlan } from '../../../packages/editor/src/lib/ai-generated-geometry-nodes'
 import type {
   IndustryPackV2Manifest,
   IndustryPackV2ValidationProfile,
@@ -27,14 +28,14 @@ export type EquipmentCompileInput = {
   rotation?: Vec3
   paramOverrides?: Record<string, EquipmentParamValue>
   metadata?: Record<string, EquipmentParamValue>
-  registry?: NodeRegistry
+  registry?: SemanticRecipeRegistry
 }
 
 export type EquipmentCompileResult =
   | {
-      kind: 'equipment-node'
-      spec: EquipmentSpec
-      patch: EquipmentNodeCreatePatch
+      kind: 'semantic-assembly'
+      spec: SemanticEquipmentSpec
+      patchPlan: GeneratedGeometryPatchPlan
     }
   | {
       kind: 'generic-equipment-draft'
@@ -87,14 +88,32 @@ function compileEquipmentFromSource(
     }
   }
 
-  return {
-    kind: 'equipment-node',
+  const patchPlan = createSemanticAssemblyPatchPlan({
     spec,
-    patch: createEquipmentNodePatch({
-      spec,
-      parentId: input.parentId,
-      registry: input.registry,
-    }),
+    prompt: input.prompt,
+    placement: {
+      parentId: input.parentId ?? undefined,
+      position: input.position,
+      rotation: input.rotation,
+    },
+  })
+  if (!patchPlan) {
+    return {
+      kind: 'generic-equipment-draft',
+      draft: createGenericEquipmentDraft({
+        source,
+        prompt: input.prompt,
+        stationId: input.station?.id,
+        presetId: input.preset?.id,
+        reason: `Equipment recipe "${spec.recipeId}" could not produce a semantic assembly.`,
+      }),
+    }
+  }
+
+  return {
+    kind: 'semantic-assembly',
+    spec,
+    patchPlan,
   }
 }
 

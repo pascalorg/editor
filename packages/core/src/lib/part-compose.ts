@@ -66,6 +66,7 @@ export type PartComposeKind =
   | 'cooling_tower_shell'
   | 'cooling_tower_rim'
   | 'chimney_stack'
+  | 'liquid_volume'
   | 'valve_body'
   | 'handwheel'
   | 'bicycle_wheels'
@@ -127,6 +128,7 @@ export type PartComposeKind =
   | 'bearing_block'
   | 'support_roller_pair'
   | 'structural_tower_frame'
+  | 'helical_ladder'
   | 'helical_stair'
   | 'cyclone_separator_unit'
   | 'coupling_guard'
@@ -1330,6 +1332,16 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'ring_stair':
     case 'annular_stair':
       return 'helical_stair'
+    case 'helical_ladder':
+    case 'helical_ladders':
+    case 'spiral_ladder':
+    case 'spiral_ladders':
+    case 'spiral_access_ladder':
+    case 'spiral_access_stair':
+    case 'tower_helical_ladder':
+    case 'column_spiral_ladder':
+    case 'wraparound_ladder':
+      return 'helical_ladder'
     case 'cyclone_separator_unit':
     case 'cyclone_unit':
     case 'preheater_cyclone':
@@ -1345,6 +1357,11 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'cylindrical_tank':
     case 'pressure_vessel':
       return 'cylindrical_tank'
+    case 'liquid_volume':
+    case 'liquid_level':
+    case 'tank_liquid':
+    case 'fluid_volume':
+      return 'liquid_volume'
     case 'cooling_tower_shell':
     case 'natural_draft_cooling_tower':
     case 'hyperboloid_cooling_tower':
@@ -5561,6 +5578,41 @@ function composeCylindricalTank(
   return applyPartRotation(shapes, center, part.rotation)
 }
 
+function composeLiquidVolume(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const axis = partAxis(part.axis, 'y')
+  const radius = clamp(part.radius, 0.5, 0.04, 6)
+  const height = clamp(part.height ?? part.length, 1, 0.02, 24)
+  const center = add(origin, part.position ?? [0, height / 2, 0])
+  const opacity = clamp(part.opacity, 0.58, 0.08, 0.92)
+  const mat =
+    part.material ??
+    (part.materialPreset
+      ? { preset: part.materialPreset }
+      : material(part.color ?? input.secondaryColor ?? '#38bdf8', 0.24, 0.04, opacity))
+  return applyPartRotation(
+    [
+      {
+        kind: 'cylinder',
+        name: `${part.name ?? input.name ?? 'object'} liquid volume`,
+        semanticRole: part.semanticRole ?? 'liquid_volume',
+        sourcePartKind: part.sourcePartKind ?? 'liquid_volume',
+        position: center,
+        axis,
+        radius,
+        height,
+        radialSegments: ringSegments(input.detail),
+        material: mat,
+      },
+    ],
+    center,
+    part.rotation,
+  )
+}
+
 function composeCoolingTowerShell(
   input: PartComposeInput,
   part: PartComposePartInput,
@@ -8302,7 +8354,9 @@ function composeHelicalStair(
     0.48,
     0.5,
   )
-  const sourcePartKind = part.sourcePartKind ?? 'helical_stair'
+  const sourcePartKind =
+    part.sourcePartKind ?? (part.kind === 'helical_ladder' ? 'helical_ladder' : 'helical_stair')
+  const accessLabel = sourcePartKind === 'helical_ladder' ? 'helical ladder' : 'helical stair'
   const shapes: PrimitiveShapeInput[] = []
   const pointAt = (radius: number, angle: number, y: number): Vec3 => [
     center[0] + Math.cos(angle) * radius,
@@ -8322,8 +8376,11 @@ function composeHelicalStair(
     const y = bottomY + height * t
     shapes.push({
       kind: 'box',
-      name: `${part.name ?? input.name ?? 'tower'} helical stair tread ${i + 1}`,
-      semanticRole: part.semanticRole ?? 'helical_stair_tread',
+      name: `${part.name ?? input.name ?? 'tower'} ${accessLabel} tread ${i + 1}`,
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_tread'
+          : (part.semanticRole ?? 'helical_stair_tread'),
       sourcePartKind,
       position: pointAt(centerRadius, angle, y),
       rotation: [0, -angle, 0],
@@ -8352,7 +8409,10 @@ function composeHelicalStair(
     {
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} continuous outer guard rail`,
-      semanticRole: 'helical_stair_guard_rail',
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_guard_rail'
+          : 'helical_stair_guard_rail',
       sourcePartKind,
       position: [center[0], center[1] + railHeight, center[2]],
       path: helixPath,
@@ -8364,7 +8424,10 @@ function composeHelicalStair(
     {
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} continuous outer mid rail`,
-      semanticRole: 'helical_stair_mid_rail',
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_mid_rail'
+          : 'helical_stair_mid_rail',
       sourcePartKind,
       position: [center[0], center[1] + railHeight * 0.55, center[2]],
       path: helixPath,
@@ -8376,7 +8439,10 @@ function composeHelicalStair(
     {
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} outer tread stringer`,
-      semanticRole: 'helical_stair_stringer',
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_stringer'
+          : 'helical_stair_stringer',
       sourcePartKind,
       position: [center[0], center[1] - treadThickness * 0.4, center[2]],
       path: helixPath,
@@ -8388,7 +8454,10 @@ function composeHelicalStair(
     {
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} inner tread stringer`,
-      semanticRole: 'helical_stair_stringer',
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_stringer'
+          : 'helical_stair_stringer',
       sourcePartKind,
       position: [center[0], center[1] - treadThickness * 0.4, center[2]],
       path: innerHelixPath,
@@ -8405,8 +8474,11 @@ function composeHelicalStair(
     const y = bottomY + height * t
     shapes.push({
       kind: 'box',
-      name: `${part.name ?? input.name ?? 'tower'} helical stair ${index === 0 ? 'bottom' : 'top'} landing`,
-      semanticRole: 'helical_stair_landing',
+      name: `${part.name ?? input.name ?? 'tower'} ${accessLabel} ${index === 0 ? 'bottom' : 'top'} landing`,
+      semanticRole:
+        sourcePartKind === 'helical_ladder'
+          ? 'helical_ladder_landing'
+          : 'helical_stair_landing',
       sourcePartKind,
       position: pointAt(centerRadius, angle, y),
       rotation: [0, -angle, 0],
@@ -8424,13 +8496,14 @@ function composeHelicalStair(
     const y = bottomY + height * t
     shapes.push({
       ...tubeBetween(
-        `${part.name ?? input.name ?? 'tower'} helical stair post ${i + 1}`,
+        `${part.name ?? input.name ?? 'tower'} ${accessLabel} post ${i + 1}`,
         pointAt(outerStringerRadius, angle, y),
         pointAt(outerStringerRadius, angle, y + railHeight),
         wireRadius,
         steel,
       ),
-      semanticRole: 'helical_stair_post',
+      semanticRole:
+        sourcePartKind === 'helical_ladder' ? 'helical_ladder_post' : 'helical_stair_post',
       sourcePartKind,
     })
   }
@@ -10433,6 +10506,7 @@ function partCenter(part: PartComposePartInput, kind: PartComposeKind | null): V
       return [0, 0.22, 0]
     case 'structural_tower_frame':
       return [0, clamp(part.height, 5, 1, 16) / 2, 0]
+    case 'helical_ladder':
     case 'helical_stair':
       return [0, clamp(part.height ?? part.overallHeight, 6, 0.8, 18) / 2, 0]
     case 'cyclone_separator_unit':
@@ -12939,6 +13013,8 @@ function semanticRoleForPartShape(kind: PartComposeKind, shape: PrimitiveShapeIn
       if (name.includes('nozzle')) return 'inlet_port'
       if (name.includes('dished end')) return 'vessel_head'
       return 'vessel_shell'
+    case 'liquid_volume':
+      return 'liquid_volume'
     case 'agitator_tank':
       if (name.includes('motor')) return 'agitator_motor'
       if (name.includes('shaft')) return 'agitator_shaft'
@@ -13221,6 +13297,7 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
       case 'structural_tower_frame':
         shapes.push(...composeStructuralTowerFrame(input, part, origin))
         break
+      case 'helical_ladder':
       case 'helical_stair':
         shapes.push(...composeHelicalStair(input, part, origin))
         break
@@ -13328,6 +13405,9 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'cylindrical_tank':
         shapes.push(...composeCylindricalTank(input, part, origin))
+        break
+      case 'liquid_volume':
+        shapes.push(...composeLiquidVolume(input, part, origin))
         break
       case 'cooling_tower_shell':
         shapes.push(...composeCoolingTowerShell(input, part, origin))

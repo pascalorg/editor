@@ -36,7 +36,7 @@ industry.example.basic-0.1.0/
   "equipmentBindings": [
     {
       "profileId": "cement.process_pump",
-      "nodeKind": "factory:pump",
+      "recipeId": "factory:centrifugal-pump",
       "paramMap": {
         "defaultDimensions.length": "length",
         "processPorts.inlet.diameter": "inletDiameter"
@@ -60,24 +60,24 @@ Rules:
 - A basic package must be useful without manually installing another package.
 - Extension packages may use `dependsOn`; installation resolves dependencies automatically.
 - `dependsOnPlugins` declares executable equipment node plugins required by v2 bindings.
-- `equipmentBindings` maps profile-level knowledge to registered equipment nodes such as
-  `factory:pump` and `factory:tank`.
+- `equipmentBindings` maps profile-level knowledge to registered semantic equipment recipes such as
+  `factory:centrifugal-pump`, `factory:storage-tank`, or `factory:distillation-unit`.
 - Do not mix unrelated industries in one package.
 
 ## Equipment Bindings
 
-Schema v2 packages are equipment binding packages. A profile that can become a stable equipment
-node should have an `equipmentBindings[]` entry instead of relying on primitive assembly as the main
-path.
+Schema v2 packages are equipment binding packages. A profile that can become a stable semantic
+assembly should have an `equipmentBindings[]` entry instead of relying on primitive assembly as the
+main path.
 
 Rules:
 
-- `nodeKind` must be registered before QA runs.
-- `paramMap` source paths must exist on the raw profile, and target fields must exist on the node
-  schema.
+- `recipeId` must be registered before QA runs.
+- `paramMap` source paths must exist on the raw profile, and target fields must exist on the recipe
+  parameter schema.
 - `portMap` must cover every `processPorts[].id` declared by the profile.
 - Factory process stations should declare `profileId`/`equipmentProfileId` when they resolve to an
-  equipment node.
+  equipment recipe.
 - Stations that intentionally remain primitive/generic must declare `genericFallback.reason`.
 
 ## Device Profiles
@@ -243,11 +243,11 @@ repository-local gates pass.
 
 ## Simulated Cloud Governance
 
-The local simulated cloud lives at `apps/editor/data/profile-pack-cloud/`. It intentionally keeps
+The local simulated cloud lives at `cloud/`. It intentionally keeps
 both editable source directories and installable zip files:
 
 ```txt
-apps/editor/data/profile-pack-cloud/
+cloud/
   industry.cement.basic-0.1.0/
   industry.cement.basic-0.1.0.zip
 ```

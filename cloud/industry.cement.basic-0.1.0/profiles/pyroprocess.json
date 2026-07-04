@@ -1,0 +1,1165 @@
+[
+  {
+    "id": "cement.rotary_kiln",
+    "name": "回转窑",
+    "aliases": [
+      "回转窑",
+      "水泥回转窑",
+      "水泥窑",
+      "rotary kiln",
+      "cement kiln",
+      "kiln shell"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 6.4,
+      "width": 0.8,
+      "height": 0.9,
+      "diameter": 0.4
+    },
+    "primarySemanticRole": "vessel_shell",
+    "processPorts": [
+      {
+        "id": "hot_meal_in",
+        "medium": "material",
+        "side": "left",
+        "height": 0.9,
+        "offset": 0
+      },
+      {
+        "id": "clinker_out",
+        "medium": "material",
+        "side": "right",
+        "height": 0.65,
+        "offset": 0
+      },
+      {
+        "id": "kiln_exhaust_out",
+        "medium": "gas",
+        "side": "left",
+        "height": 1.1,
+        "offset": -0.25
+      },
+      {
+        "id": "power_in",
+        "medium": "power",
+        "side": "back",
+        "height": 0.35,
+        "offset": 0.9
+      }
+    ],
+    "qualityRules": "quality.cement.rotary_kiln",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "vessel_shell",
+        "required": true,
+        "axis": "x",
+        "length": 6,
+        "radius": 0.2,
+        "position": [
+          0,
+          0.34,
+          0
+        ],
+        "primaryColor": "#6f747a",
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "kiln_support_base",
+        "required": true,
+        "length": 6.2,
+        "width": 0.7,
+        "height": 0.12,
+        "position": [
+          0,
+          0.05,
+          0
+        ],
+        "metalColor": "#6b7280"
+      },
+      {
+        "id": "riding-ring-tail",
+        "kind": "flange_ring",
+        "semanticRole": "riding_ring",
+        "required": true,
+        "axis": "x",
+        "radius": 0.23,
+        "tubeRadius": 0.018,
+        "includeBolts": false,
+        "position": [
+          -2,
+          0.36,
+          0
+        ],
+        "metalColor": "#4b5563"
+      },
+      {
+        "id": "riding-ring-center",
+        "kind": "flange_ring",
+        "semanticRole": "riding_ring",
+        "required": true,
+        "axis": "x",
+        "radius": 0.23,
+        "tubeRadius": 0.018,
+        "includeBolts": false,
+        "position": [
+          0,
+          0.34,
+          0
+        ],
+        "metalColor": "#4b5563"
+      },
+      {
+        "id": "riding-ring-head",
+        "kind": "flange_ring",
+        "semanticRole": "riding_ring",
+        "required": true,
+        "axis": "x",
+        "radius": 0.23,
+        "tubeRadius": 0.018,
+        "includeBolts": false,
+        "position": [
+          2,
+          0.32,
+          0
+        ],
+        "metalColor": "#4b5563"
+      },
+      {
+        "id": "support-roller-tail",
+        "kind": "support_roller_pair",
+        "semanticRole": "support_roller",
+        "required": true,
+        "length": 0.42,
+        "width": 0.56,
+        "height": 0.18,
+        "radius": 0.05,
+        "rollerLength": 0.16,
+        "position": [
+          -2,
+          0.12,
+          0
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "support-roller-center",
+        "kind": "support_roller_pair",
+        "semanticRole": "support_roller",
+        "required": true,
+        "length": 0.42,
+        "width": 0.56,
+        "height": 0.18,
+        "radius": 0.05,
+        "rollerLength": 0.16,
+        "position": [
+          0,
+          0.12,
+          0
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "support-roller-head",
+        "kind": "support_roller_pair",
+        "semanticRole": "support_roller",
+        "required": true,
+        "length": 0.42,
+        "width": 0.56,
+        "height": 0.18,
+        "radius": 0.05,
+        "rollerLength": 0.16,
+        "position": [
+          2,
+          0.12,
+          0
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "girth-gear",
+        "kind": "flange_ring",
+        "semanticRole": "girth_gear",
+        "axis": "x",
+        "radius": 0.26,
+        "tubeRadius": 0.025,
+        "includeBolts": false,
+        "position": [
+          0.9,
+          0.33,
+          0
+        ],
+        "metalColor": "#374151"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "kiln_drive_unit",
+        "required": true,
+        "length": 0.7,
+        "height": 0.22,
+        "radius": 0.08,
+        "position": [
+          0.9,
+          0.17,
+          -0.55
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#475569"
+      },
+      {
+        "kind": "coupling_guard",
+        "semanticRole": "drive_coupling_guard",
+        "length": 0.42,
+        "radius": 0.055,
+        "position": [
+          0.9,
+          0.26,
+          -0.38
+        ],
+        "color": "#facc15"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "kiln_tail_feed_hopper",
+        "required": true,
+        "length": 0.55,
+        "width": 0.36,
+        "height": 0.52,
+        "position": [
+          -3.25,
+          0.58,
+          0
+        ],
+        "primaryColor": "#94a3b8"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "kiln_head_outlet",
+        "required": true,
+        "radius": 0.14,
+        "length": 0.34,
+        "axis": "x",
+        "position": [
+          3.25,
+          0.3,
+          0
+        ],
+        "metalColor": "#9ca3af"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "inspection_platform",
+        "length": 3,
+        "width": 0.24,
+        "height": 0.34,
+        "overallHeight": 0.22,
+        "position": [
+          0.45,
+          0.62,
+          0.38
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
+      }
+    ],
+    "dimensionRules": [
+      {
+        "from": "diameter",
+        "toPart": "cylindrical_tank",
+        "toParam": "diameter"
+      },
+      {
+        "from": "length",
+        "toPart": "cylindrical_tank",
+        "toParam": "height",
+        "scale": 0.92
+      }
+    ],
+    "visualCues": [
+      "long slightly inclined kiln shell",
+      "normalized from common cement kiln proportions such as 4m x 60m with L/D around 15",
+      "three riding rings around the shell",
+      "three support stations, each with paired trunnion rollers under the riding ring",
+      "girth gear close to the middle drive station with side drive unit",
+      "yellow coupling guard near the drive",
+      "feed hopper at the higher kiln tail",
+      "discharge hood at the lower kiln head",
+      "service platform and guard rail along one side"
+    ],
+    "layoutHints": {
+      "axis": "x",
+      "inclinePercent": 4,
+      "supportStations": 3,
+      "lengthToDiameterRatio": 15,
+      "drivePosition": "middle-right",
+      "platformSide": "right"
+    },
+    "roleAliases": {
+      "kiln_shell": [
+        "vessel_shell",
+        "cylindrical_tank"
+      ],
+      "kiln_support_base": [
+        "support_pier",
+        "support_base",
+        "concrete_pier",
+        "skid_base"
+      ],
+      "inspection_platform": [
+        "maintenance_platform",
+        "platform_railing",
+        "access_platform"
+      ],
+      "kiln_tail_feed_hopper": [
+        "feed_end_hood",
+        "feed_chute",
+        "inlet_port",
+        "hopper_body"
+      ],
+      "kiln_head_outlet": [
+        "discharge_end_hood",
+        "discharge_chute",
+        "outlet_port"
+      ],
+      "riding_ring": [
+        "tyre_ring",
+        "kiln_tyre",
+        "support_ring",
+        "flange_ring"
+      ],
+      "support_roller": [
+        "support_rollers",
+        "roller_array",
+        "trunnion_roller",
+        "bearing_block",
+        "support_roller_pair"
+      ],
+      "girth_gear": [
+        "gear_ring",
+        "drive_ring"
+      ],
+      "kiln_drive_unit": [
+        "drive_pinion",
+        "drive_gearbox",
+        "motor_gearbox_unit"
+      ]
+    },
+    "forbiddenRoles": [
+      "vehicle_tire",
+      "aircraft_wing",
+      "vehicle_cabin"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥熟料煅烧用长筒形回转窑 profile，强调窑体、轮带、托轮、传动、窑尾料斗和检修平台。",
+    "editableSchemaRef": "rotary_equipment.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 90,
+      "parts": {
+        "riding-ring-tail": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "riding-ring-center": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "riding-ring-head": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "support-roller-tail": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "support-roller-center": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "support-roller-head": {
+          "detailLevel": "low",
+          "count": 5
+        },
+        "girth-gear": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "drive_coupling_guard": {
+          "detailLevel": "low",
+          "ringCount": 3,
+          "spokeCount": 12
+        }
+      }
+    },
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    },
+    "preferredResolver": "profile-parts"
+  },
+  {
+    "id": "cement.grate_cooler",
+    "name": "篦冷机",
+    "aliases": [
+      "篦冷机",
+      "熟料篦冷机",
+      "grate cooler",
+      "clinker cooler",
+      "push grate cooler"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 7,
+      "width": 2,
+      "height": 2.4
+    },
+    "primarySemanticRole": "cooler_outer_casing",
+    "qualityRules": "quality.cement.grate_cooler",
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "cooler_outer_casing",
+        "required": true,
+        "length": 6.6,
+        "width": 1.8,
+        "height": 2.1,
+        "position": [
+          0,
+          1.15,
+          0
+        ],
+        "primaryColor": "#94a3b8",
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "cooler_support_base",
+        "required": true,
+        "length": 6.6,
+        "width": 1.8,
+        "height": 0.18,
+        "position": [
+          0,
+          0.09,
+          0
+        ],
+        "metalColor": "#6b7280"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "cooler_grate_bed",
+        "required": true,
+        "length": 5.8,
+        "height": 1.35,
+        "thickness": 0.045,
+        "position": [
+          0,
+          0.86,
+          0.04
+        ],
+        "rotation": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "color": "#475569"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "grate_plate_rows",
+        "required": true,
+        "length": 5.7,
+        "height": 0.18,
+        "thickness": 0.035,
+        "arrayAlong": "x",
+        "count": 8,
+        "position": [
+          0,
+          0.92,
+          0.05
+        ],
+        "rotation": [
+          -1.5707963267948966,
+          0,
+          0
+        ],
+        "color": "#334155"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "hot_clinker_inlet_transition",
+        "required": true,
+        "length": 1,
+        "width": 0.85,
+        "height": 0.95,
+        "topLengthScale": 1.3,
+        "topWidthScale": 1.2,
+        "position": [
+          -3.1,
+          1.65,
+          0
+        ],
+        "primaryColor": "#78716c",
+        "darkColor": "#44403c"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "cooler_air_inlet_plenum",
+        "axis": "x",
+        "length": 5.2,
+        "radius": 0.055,
+        "position": [
+          0,
+          0.36,
+          -0.72
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "cooler_top_walkway",
+        "length": 5,
+        "width": 0.32,
+        "height": 0.28,
+        "overallHeight": 0.18,
+        "position": [
+          0.5,
+          2.28,
+          0.76
+        ],
+        "metalColor": "#64748b",
+        "color": "#facc15"
+      },
+      {
+        "kind": "motor_gearbox_unit",
+        "semanticRole": "cooler_drive_unit",
+        "length": 0.65,
+        "height": 0.22,
+        "radius": 0.08,
+        "position": [
+          2.2,
+          0.38,
+          -0.72
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#475569"
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "cooler_discharge_chute",
+        "radius": 0.16,
+        "length": 0.3,
+        "axis": "x",
+        "position": [
+          3.4,
+          0.42,
+          0
+        ],
+        "metalColor": "#9ca3af"
+      }
+    ],
+    "visualCues": [
+      "large enclosed rectangular box-shaped cooler casing spanning the full length ? not a belt conveyor",
+      "flat internal grate plate bed made of short transverse grate rows inside the lower casing",
+      "hot clinker inlet transition hopper at the kiln end, elevated above the grate bed",
+      "under-grate cooling air plenum and fan connection ducting along the base",
+      "top maintenance walkway with guard rail along the casing edge",
+      "side hydraulic or gearbox push-drive unit for the grate lanes",
+      "right-end discharge chute outlet leading to clinker crusher or conveyor",
+      "reinforced side access panels and heavy industrial casing proportions"
+    ],
+    "layoutHints": {
+      "axis": "x",
+      "inletSide": "left",
+      "outletSide": "right",
+      "primaryOrientation": "horizontal"
+    },
+    "roleAliases": {
+      "cooler_outer_casing": [
+        "cooler_housing",
+        "cooler_casing",
+        "cooler_shell",
+        "cooler_body",
+        "generic_body"
+      ],
+      "cooler_support_base": [
+        "support_base",
+        "support_legs",
+        "cooler_frame",
+        "skid_base"
+      ],
+      "cooler_grate_bed": [
+        "grate_plates",
+        "grate_plate_rows",
+        "grate_sections",
+        "grate_bed_surface",
+        "roller_array"
+      ],
+      "hot_clinker_inlet_transition": [
+        "hot_clinker_inlet",
+        "inlet_hopper",
+        "kiln_discharge_transition",
+        "hopper_body"
+      ],
+      "cooler_air_inlet_plenum": [
+        "air_plenum",
+        "under_grate_air_box",
+        "cooling_air_header",
+        "pipe_manifold"
+      ],
+      "cooler_top_walkway": [
+        "top_walkway",
+        "maintenance_platform",
+        "service_platform"
+      ],
+      "cooler_drive_unit": [
+        "hydraulic_drive",
+        "push_drive",
+        "grate_drive",
+        "motor_gearbox_unit"
+      ],
+      "cooler_discharge_chute": [
+        "discharge_outlet",
+        "clinker_outlet",
+        "cooled_clinker_out",
+        "outlet_port"
+      ],
+      "grate_plate_rows": [
+        "grate_rows",
+        "transverse_grate_plates",
+        "grate_modules",
+        "generic_panel"
+      ]
+    },
+    "forbiddenRoles": [
+      "aircraft_wing",
+      "belt_surface",
+      "conveyor_frame",
+      "vehicle_cabin",
+      "vehicle_tire"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "熟料冷却用篦冷机 profile，大矩形壳体封装篦板床体、冷却风箱和顶部走道，左端高温熟料入口，右端出料。",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 70,
+      "parts": {
+        "cooler_grate_bed": {
+          "detailLevel": "low",
+          "count": 6
+        },
+        "cooler_top_walkway": {
+          "detailLevel": "low"
+        },
+        "grate_plate_rows": {
+          "detailLevel": "low",
+          "count": 8
+        }
+      }
+    },
+    "preferredResolver": "profile-parts"
+  },
+  {
+    "id": "cement.preheater_tower",
+    "name": "水泥预热器塔架",
+    "aliases": [
+      "预热器",
+      "预热器塔架",
+      "水泥预热器",
+      "旋风预热器",
+      "五级预热器",
+      "预热器钢架",
+      "preheater tower",
+      "cement preheater",
+      "cyclone preheater"
+    ],
+    "industry": "cement",
+    "family": "generic",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 2.78,
+      "width": 1.98,
+      "height": 8.1
+    },
+    "primarySemanticRole": "preheater_tower_body",
+    "processPorts": [
+      {
+        "id": "raw_meal_in",
+        "medium": "material",
+        "side": "left",
+        "height": 7.2,
+        "offset": -0.32
+      },
+      {
+        "id": "hot_meal_out",
+        "medium": "material",
+        "side": "right",
+        "height": 1.35,
+        "offset": 0.12
+      },
+      {
+        "id": "tertiary_air_in",
+        "medium": "gas",
+        "side": "left",
+        "height": 4.6,
+        "offset": 0.64
+      },
+      {
+        "id": "exhaust_gas_out",
+        "medium": "gas",
+        "side": "top",
+        "height": 8.1,
+        "offset": 0.24
+      }
+    ],
+    "qualityRules": "quality.cement.preheater_tower",
+    "parts": [
+      {
+        "kind": "structural_tower_frame",
+        "semanticRole": "preheater_tower_body",
+        "required": true,
+        "length": 2.58,
+        "width": 1.54,
+        "height": 7.75,
+        "levelCount": 7,
+        "bayCount": 2,
+        "stairFlights": 7,
+        "externalStairs": true,
+        "includeDiagonalBraces": true,
+        "thickness": 0.045,
+        "position": [
+          0,
+          3.88,
+          0
+        ],
+        "darkColor": "#111827",
+        "metalColor": "#64748b",
+        "accentColor": "#0f172a",
+        "stairPlacement": "inside",
+        "stairSide": "right"
+      },
+      {
+        "id": "cyclone-top-left",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.28,
+        "radius": 0.28,
+        "bodyHeight": 0.76,
+        "position": [
+          -0.66,
+          7.08,
+          0.08
+        ],
+        "side": "right",
+        "primaryColor": "#a7b0b7",
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "cyclone-top-right",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.28,
+        "radius": 0.28,
+        "bodyHeight": 0.76,
+        "position": [
+          0.12,
+          7.08,
+          0.08
+        ],
+        "side": "left",
+        "primaryColor": "#a7b0b7",
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "cyclone-mid-left",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.38,
+        "radius": 0.31,
+        "bodyHeight": 0.84,
+        "position": [
+          -0.68,
+          5.72,
+          0.1
+        ],
+        "side": "right",
+        "primaryColor": "#a3aab3",
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "cyclone-mid-right",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.38,
+        "radius": 0.31,
+        "bodyHeight": 0.84,
+        "position": [
+          0.14,
+          5.72,
+          0.1
+        ],
+        "side": "left",
+        "primaryColor": "#a3aab3",
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "cyclone-lower-left",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.46,
+        "radius": 0.34,
+        "bodyHeight": 0.9,
+        "position": [
+          -0.62,
+          4.3,
+          0.08
+        ],
+        "side": "right",
+        "primaryColor": "#a3aab3",
+        "metalColor": "#64748b"
+      },
+      {
+        "id": "cyclone-lower-right",
+        "kind": "cyclone_separator_unit",
+        "semanticRole": "preheater_cyclone",
+        "required": true,
+        "height": 1.46,
+        "radius": 0.34,
+        "bodyHeight": 0.9,
+        "position": [
+          0.2,
+          4.3,
+          0.08
+        ],
+        "side": "left",
+        "primaryColor": "#a3aab3",
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "central_meal_collection_hopper",
+        "required": true,
+        "length": 0.86,
+        "width": 0.62,
+        "height": 1.02,
+        "topLengthScale": 2.3,
+        "topWidthScale": 2.05,
+        "position": [
+          -0.22,
+          3.3,
+          0.06
+        ],
+        "primaryColor": "#9ca3af",
+        "darkColor": "#374151"
+      },
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "calciner_riser_body",
+        "axis": "y",
+        "height": 2.5,
+        "radius": 0.34,
+        "position": [
+          -0.22,
+          2.18,
+          0.04
+        ],
+        "primaryColor": "#9ca3af",
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "preheater_gas_duct",
+        "required": true,
+        "axis": "x",
+        "length": 1.02,
+        "radius": 0.07,
+        "position": [
+          -0.12,
+          7.66,
+          0.08
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "preheater_gas_duct",
+        "axis": "y",
+        "length": 0.62,
+        "radius": 0.065,
+        "position": [
+          -0.24,
+          7.35,
+          0.08
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "preheater_gas_duct",
+        "axis": "y",
+        "length": 0.62,
+        "radius": 0.065,
+        "position": [
+          0,
+          7.35,
+          0.08
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "preheater_gas_duct",
+        "axis": "x",
+        "length": 1.08,
+        "radius": 0.065,
+        "position": [
+          -0.12,
+          6.15,
+          0.08
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "meal_drop_pipe",
+        "axis": "y",
+        "length": 1.25,
+        "radius": 0.045,
+        "position": [
+          -0.48,
+          3.6,
+          0.08
+        ],
+        "metalColor": "#475569"
+      },
+      {
+        "kind": "pipe_run",
+        "semanticRole": "meal_drop_pipe",
+        "axis": "y",
+        "length": 1.25,
+        "radius": 0.045,
+        "position": [
+          0.13999999999999999,
+          3.6,
+          0.08
+        ],
+        "metalColor": "#475569"
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "bottom_meal_discharge_hopper",
+        "length": 0.5,
+        "width": 0.38,
+        "height": 0.74,
+        "topLengthScale": 1.75,
+        "topWidthScale": 1.55,
+        "position": [
+          -0.22,
+          0.72,
+          0.04
+        ],
+        "primaryColor": "#9ca3af",
+        "darkColor": "#374151"
+      }
+    ],
+    "visualCues": [
+      "tall narrow multi-floor steel frame tower with repeated decks and diagonal bracing",
+      "six cyclone separator vessels arranged as mirrored left/right stages near the upper tower",
+      "lower cyclone outlets feed a central flared meal collection hopper and vertical calciner riser",
+      "top and interstage gas ducts connect the cyclone stages while drop pipes remain visible",
+      "right-side zig-zag stair is inside the steel frame, with vessel columns shifted into the remaining equipment bay"
+    ],
+    "layoutHints": {
+      "levels": 7,
+      "cycloneColumns": 2,
+      "cycloneStages": 3,
+      "towerFrame": "multi_level_steel_frame_with_external_stairs",
+      "referenceImage": "cement cyclone preheater tower with side stair and central hopper",
+      "stairPlacement": "inside_right_bay",
+      "equipmentBayCenterX": -0.24
+    },
+    "roleAliases": {
+      "preheater_tower_body": [
+        "structural_tower_frame",
+        "tower_column",
+        "tower_beam",
+        "tower_diagonal_brace"
+      ],
+      "multi_level_platform": [
+        "platform_guard_rail",
+        "internal_stair_flight",
+        "internal_stair_landing",
+        "internal_stair_guard_rail",
+        "access_ladder",
+        "service_platform"
+      ],
+      "preheater_cyclone": [
+        "cyclone_separator_unit",
+        "cyclone_body",
+        "cyclone_cone"
+      ],
+      "preheater_gas_duct": [
+        "gas_duct_header",
+        "cyclone_connection_duct",
+        "pipe_run"
+      ],
+      "meal_drop_pipe": [
+        "drop_pipe",
+        "dipleg",
+        "material_drop_pipe"
+      ],
+      "central_meal_collection_hopper": [
+        "hopper_body",
+        "meal_collection_hopper",
+        "bottom_meal_discharge_hopper"
+      ]
+    },
+    "forbiddenRoles": [
+      "vehicle_tire",
+      "vehicle_cabin",
+      "aircraft_wing"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "水泥窑尾旋风预热器塔架 profile，表达多层钢结构、右侧外置折返楼梯、双列旋风筒、级间管道、中央汇料锥斗和下部煅烧/下料段。",
+    "editableSchemaRef": "tower_frame.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 180,
+      "parts": {
+        "preheater_tower_body": {
+          "detailLevel": "low"
+        },
+        "cyclone-top-left": {
+          "detailLevel": "low"
+        },
+        "cyclone-top-right": {
+          "detailLevel": "low"
+        },
+        "cyclone-mid-left": {
+          "detailLevel": "low"
+        },
+        "cyclone-mid-right": {
+          "detailLevel": "low"
+        },
+        "cyclone-lower-left": {
+          "detailLevel": "low"
+        },
+        "cyclone-lower-right": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    },
+    "preferredResolver": "profile-parts"
+  },
+  {
+    "id": "cement.cyclone_separator",
+    "name": "旋风筒",
+    "aliases": [
+      "旋风筒",
+      "旋风分离器",
+      "cyclone separator",
+      "preheater cyclone"
+    ],
+    "industry": "cement",
+    "family": "tank",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "process_vessel",
+    "defaultDimensions": {
+      "length": 1.8,
+      "width": 1.8,
+      "height": 3.2,
+      "diameter": 1.4
+    },
+    "primarySemanticRole": "cyclone_body",
+    "qualityRules": "quality.cement.cyclone_separator",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "cyclone_body",
+        "required": true
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "tangential_gas_inlet",
+        "required": true
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "gas_outlet",
+        "required": true
+      },
+      {
+        "kind": "hopper_body",
+        "semanticRole": "cone_discharge_hopper"
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_frame"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "预热器系统旋风分离器 profile，包含筒体、切向入口、出口和下部料斗。",
+    "editableSchemaRef": "tower_frame.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 180,
+      "parts": {
+        "cyclone_body": {
+          "detailLevel": "low"
+        },
+        "support_frame": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    },
+    "preferredResolver": "profile-parts"
+  }
+]

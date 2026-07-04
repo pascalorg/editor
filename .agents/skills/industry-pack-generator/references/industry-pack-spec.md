@@ -58,7 +58,7 @@ Use this JSON shape as input to `apps/editor/scripts/scaffold-industry-profile-p
       "id": "rotary_kiln",
       "name": "Rotary kiln",
       "aliases": ["rotary kiln", "cement kiln", "回转窑", "水泥回转窑"],
-      "nodeKind": "factory:tank",
+      "recipeId": "factory:storage-tank",
       "layoutFamily": "vessel_layout",
       "family": "tank",
       "defaultDimensions": { "length": 12, "width": 2.2, "height": 2.4 },
@@ -119,7 +119,7 @@ If the pack only provides equipment profiles, omit `factory_creation`; QA will c
 - `id`, `name`, `aliases`, `parts`, `primarySemanticRole` are required.
 - `layoutFamily` defaults to `generic_industrial_layout`.
 - `family` defaults to `generic`.
-- `nodeKind` may be `factory:pump` or `factory:tank`; otherwise the scaffold infers known equipment kinds from profile text.
+- `recipeId` may reference a registered semantic equipment recipe such as `factory:centrifugal-pump`, `factory:storage-tank`, `factory:distillation-unit`, `factory:refinery-reactor-unit`, or `factory:refinery-auxiliary-unit`; otherwise the scaffold infers known equipment kinds from profile text.
 - `defaultDimensions` should describe the whole equipment envelope.
 - `processPorts` declares device-level ports that v2 `portMap` must cover.
 - `equipmentDefaults` declares equipment-node parameters such as pump type, flow rate, motor power,
@@ -146,6 +146,7 @@ The scaffold writes:
 - `factory-architectures/generated.json` when `factoryArchitectures` is provided
 - `process-templates/generated.json` when `processTemplates` is provided
 - `quality-rules/generated-quality.json`
+- `<pack-id>-<version>.zip` beside the generated source directory, unless `--skip-zip` is used
 
 The generated `README.md` labels the pack as `factory-capable` or `device-only` and lists supported factory/process templates when factory creation is enabled.
 The generated `pack.json` uses schema v2, includes `dependsOnPlugins`, and writes inferred

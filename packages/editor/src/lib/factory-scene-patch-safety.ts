@@ -1,6 +1,8 @@
 import { AnyNode } from '@pascal-app/core/schema'
+import { nodeRegistry } from '@pascal-app/core/registry'
 
 type PatchRecord = Record<string, unknown>
+type ParsedPatchNode = { id: string; type: string; metadata?: unknown }
 
 export type FactoryScenePatchSafetyIssue = {
   code: string
@@ -31,6 +33,18 @@ function isRecord(value: unknown): value is PatchRecord {
 
 function nodeMetadata(node: PatchRecord) {
   return isRecord(node.metadata) ? node.metadata : {}
+}
+
+function parsePatchNode(node: PatchRecord): ParsedPatchNode | null {
+  const parsed = AnyNode.safeParse(node)
+  if (parsed.success) return parsed.data
+
+  const type = typeof node.type === 'string' ? node.type : undefined
+  const def = type ? nodeRegistry.get(type) : undefined
+  if (!def) return null
+
+  const registryParsed = def.schema.safeParse(node)
+  return registryParsed.success ? (registryParsed.data as ParsedPatchNode) : null
 }
 
 function explicitParentId(patch: PatchRecord, node: PatchRecord) {
@@ -93,13 +107,13 @@ export function validateFactoryScenePatches(
       }
 
       const node = patch.node
-      const parsed = AnyNode.safeParse(node)
-      if (!parsed.success) {
+      const parsed = parsePatchNode(node)
+      if (!parsed) {
         issue(issues, index, 'create_invalid_node', 'Create patch node failed schema validation.')
         return
       }
 
-      const nodeId = parsed.data.id
+      const nodeId = parsed.id
       if (knownIds.has(nodeId) || createdIds.has(nodeId)) {
         issue(
           issues,
@@ -111,7 +125,7 @@ export function validateFactoryScenePatches(
 
       const metadata = nodeMetadata(node)
       if (
-        parsed.data.type === 'item' &&
+        parsed.type === 'item' &&
         typeof metadata.processId === 'string' &&
         context.allowProcessLineCatalogItems !== true
       ) {
@@ -123,7 +137,7 @@ export function validateFactoryScenePatches(
         )
       }
       if (
-        parsed.data.type === 'item' &&
+        parsed.type === 'item' &&
         typeof metadata.processId === 'string' &&
         context.allowProcessLineCatalogItems === true &&
         metadata.processCatalogQualified !== true
@@ -163,7 +177,13 @@ export function validateFactoryScenePatches(
         return
       }
       if (context.existingNodeIds && !knownIds.has(patch.id)) {
-        issue(issues, index, 'update_missing_target', `Update target does not exist: ${patch.id}.`)
+        issue(
+          issues,
+          index,
+          'update_missing_target',
+          `Update target does not exist and will be skipped: ${patch.id}.`,
+          'warning',
+        )
       }
       if (!isRecord(patch.data) || Object.keys(patch.data).length === 0) {
         issue(issues, index, 'update_empty_data', 'Update patch must include non-empty data.')

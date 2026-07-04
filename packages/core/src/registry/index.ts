@@ -32,6 +32,29 @@ export {
   setPluginDiscovery,
 } from './registry'
 export {
+  assertSemanticRecipeComposeResult,
+  assertSemanticRecipeDefinition,
+  registerSemanticRecipe,
+  semanticRecipeRegistry,
+  validateSemanticRecipeComposeResult,
+  validateSemanticRecipeDefinition,
+} from './semantic-recipes'
+export type {
+  SemanticRecipeComposeInput,
+  SemanticRecipeComposeResult,
+  SemanticRecipeDefinition,
+  SemanticRecipeEditableParam,
+  SemanticRecipeEditableParamEffect,
+  SemanticRecipeEditableParamKind,
+  SemanticRecipeEnvelope,
+  SemanticRecipeId,
+  SemanticRecipePart,
+  SemanticRecipePort,
+  SemanticRecipePortSide,
+  SemanticRecipeRegistry,
+  SemanticRecipeValidationIssue,
+} from './semantic-recipes'
+export {
   type CascadeContext,
   type ChildQuery,
   cascadeDirty,

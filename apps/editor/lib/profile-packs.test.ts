@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { loadPlugin, nodeRegistry, semanticRecipeRegistry } from '@pascal-app/core'
 import { createDeviceProfileResolver } from '@pascal-app/core/lib/device-profile-registry'
+import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { loadDeviceProfiles } from './device-profiles'
 import { findRepoRoot } from './generated-assets/manifest'
 import {
@@ -26,18 +28,15 @@ const MACHINE_TOOLS_PACK_PATH = 'industry.machine-tools.basic@0.1.0'
 const FINE_CHEMICAL_BASIC_PACK_PATH = 'industry.fine-chemical.basic@0.1.0'
 const FINE_CHEMICAL_PHARMA_PACK_PATH = 'industry.fine-chemical.pharma-intermediate@0.1.0'
 const KNOWLEDGE_PACK_DIR = 'codex-knowledge-pack-test'
-const CEMENT_PROFILE_COUNT = 30
-const CEMENT_QUALITY_RULE_COUNT = 30
+const CEMENT_PROFILE_COUNT = 31
+const CEMENT_QUALITY_RULE_COUNT = 31
 
 async function cementZip() {
   const root = await findRepoRoot()
   return fs.readFile(
     path.join(
       root,
-      'apps',
-      'editor',
-      'data',
-      'profile-pack-cloud',
+      'cloud',
       'industry.cement.basic-0.1.0.zip',
     ),
   )
@@ -48,10 +47,7 @@ async function refineryZip() {
   return fs.readFile(
     path.join(
       root,
-      'apps',
-      'editor',
-      'data',
-      'profile-pack-cloud',
+      'cloud',
       'industry.refinery.basic-0.1.0.zip',
     ),
   )
@@ -92,8 +88,14 @@ async function cleanInstalledPack() {
 }
 
 describe('profile packs', () => {
+  beforeEach(async () => {
+    await loadPlugin(factoryEquipmentPlugin)
+  })
+
   afterEach(async () => {
     await cleanInstalledPack()
+    nodeRegistry._reset()
+    semanticRecipeRegistry._reset()
   })
 
   test('validates the simulated cement cloud package', async () => {
@@ -121,10 +123,7 @@ describe('profile packs', () => {
     const sourceValidation = await validateProfilePackDir(
       path.join(
         root,
-        'apps',
-        'editor',
-        'data',
-        'profile-pack-cloud',
+        'cloud',
         'industry.refinery.basic-0.1.0',
       ),
     )
@@ -144,7 +143,10 @@ describe('profile packs', () => {
         position: [1.6, 1.9, 0.6],
       })
       expect(roles.get('flare_stack')).toMatchObject({ height: 13.5, position: [0, 6.75, 0] })
-      expect(roles.get('boiler_stack')).toMatchObject({ height: 4.2, position: [0, 2.1, 0] })
+      expect(roles.get('boiler_stack')).toMatchObject({
+        height: 3.6,
+        position: [1.55, 1.8, -0.88],
+      })
 
       const flareSystem = validation.profiles.find(
         (profile) => profile.id === 'refinery.flare_system',
@@ -169,10 +171,7 @@ describe('profile packs', () => {
     const zip = await fs.readFile(
       path.join(
         root,
-        'apps',
-        'editor',
-        'data',
-        'profile-pack-cloud',
+        'cloud',
         'industry.robotics.basic-0.1.0.zip',
       ),
     )
@@ -252,10 +251,7 @@ describe('profile packs', () => {
     const zip = await fs.readFile(
       path.join(
         root,
-        'apps',
-        'editor',
-        'data',
-        'profile-pack-cloud',
+        'cloud',
         'industry.logistics.basic-0.1.0.zip',
       ),
     )
@@ -308,10 +304,7 @@ describe('profile packs', () => {
     const zip = await fs.readFile(
       path.join(
         root,
-        'apps',
-        'editor',
-        'data',
-        'profile-pack-cloud',
+        'cloud',
         'industry.machine-tools.basic-0.1.0.zip',
       ),
     )
@@ -346,10 +339,7 @@ describe('profile packs', () => {
     const extensionZip = await fs.readFile(
       path.join(
         root,
-        'apps',
-        'editor',
-        'data',
-        'profile-pack-cloud',
+        'cloud',
         'industry.fine-chemical.pharma-intermediate-0.1.0.zip',
       ),
     )

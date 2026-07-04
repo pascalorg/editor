@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { resolveProcessStationEquipment } from './process-equipment-resolver'
 import type { ProcessLinePlan, ProcessStationPlan, StationPlacement } from './process-line-types'
+import { installIndustryPacksForTests } from './test-industry-pack-setup'
 
 const plan: ProcessLinePlan = {
   processId: 'demo_process',
@@ -125,6 +126,21 @@ function resolve(station: ProcessStationPlan) {
 }
 
 describe('process equipment resolver', () => {
+  let restoreIndustryPacks: (() => Promise<void>) | undefined
+
+  beforeAll(async () => {
+    restoreIndustryPacks = await installIndustryPacksForTests([
+      { id: 'industry.cement.basic', version: '0.1.0' },
+      { id: 'industry.refinery.basic', version: '0.1.0' },
+      { id: 'industry.electrolytic-aluminum.basic', version: '0.1.0' },
+      { id: 'industry.thermal-power.basic', version: '0.1.0' },
+    ])
+  })
+
+  afterAll(async () => {
+    await restoreIndustryPacks?.()
+  })
+
   test('resolves electrical stations through qualified catalog item nodes before native boxes', () => {
     const result = resolve({
       id: 'dc_power_supply',
@@ -183,7 +199,7 @@ describe('process equipment resolver', () => {
     expect(result.patches[0]?.node.metadata?.resolver).toBe('native-pipe')
   })
 
-  test('resolves tank-like process stations to native editable tank nodes', () => {
+  test('resolves tank-like process stations to semantic assemblies', () => {
     const result = resolve({
       id: 'hydrogen_buffer',
       label: 'Hydrogen buffer tank',
@@ -192,9 +208,26 @@ describe('process equipment resolver', () => {
       footprintHint: 'large',
     })
 
-    expect(result.resolver).toBe('native-tank')
-    expect(result.patches[0]?.node.type).toBe('tank')
-    expect(result.patches[0]?.node.metadata?.resolver).toBe('native-tank')
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'generic.horizontal_storage_tank',
+        editableParams: expect.arrayContaining([
+          expect.objectContaining({ key: 'liquidLevel' }),
+          expect.objectContaining({ key: 'shellOpacity' }),
+          expect.objectContaining({ key: 'liquidOpacity' }),
+          expect.objectContaining({ key: 'liquidColor' }),
+        ]),
+      },
+    })
+    const semanticRoles = result.patches.map((patch) => patch.node.metadata?.semanticRole)
+    expect(semanticRoles).toContain('vessel_shell')
+    expect(semanticRoles).toContain('inlet_port')
+    expect(semanticRoles).toContain('outlet_port')
+    expect(semanticRoles).toContain('access_ladder')
   })
 
   test('falls back to primitive generation when catalog and native nodes do not match', () => {
@@ -476,7 +509,7 @@ describe('process equipment resolver', () => {
     })
   })
 
-  test('keeps refinery tank-farm profiles on native editable tank nodes', () => {
+  test('keeps refinery tank-farm profiles on semantic assemblies', () => {
     const station: ProcessStationPlan = {
       id: 'crude_storage_tank',
       label: 'Crude storage tank farm',
@@ -504,16 +537,218 @@ describe('process equipment resolver', () => {
       },
     })
 
-    expect(result.resolver).toBe('native-tank')
-    expect(result.patches[0]?.node.type).toBe('tank')
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.patches[0]?.node.type).toBe('assembly')
     expect(result.patches[0]?.node.metadata).toMatchObject({
-      resolver: 'native-tank',
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'refinery.crude_storage_tank',
+      },
       equipmentContract: {
         profileId: 'refinery.crude_storage_tank',
-        preferredResolver: 'native-tank',
+        preferredResolver: 'profile-parts',
       },
     })
+    const semanticRoles = result.patches.map((patch) => patch.node.metadata?.semanticRole)
+    expect(semanticRoles).toContain('vessel_shell')
+    expect(semanticRoles).toContain('inlet_port')
+    expect(semanticRoles).toContain('outlet_port')
+    expect(semanticRoles).toContain('access_ladder')
     expect(result.patches[0]?.node.metadata?.catalogItemId).toBeUndefined()
+  })
+
+  test('compiles refinery distillation profiles through semantic assembly recipes', () => {
+    const station: ProcessStationPlan = {
+      id: 'atmospheric_distillation_unit',
+      label: 'Atmospheric distillation unit',
+      role: 'atmospheric_distillation_unit',
+      equipmentHint:
+        'refinery.atmospheric_distillation_unit crude distillation unit with fired heater heat exchanger pipe manifold and platforms',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: refineryPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 10.5, width: 6 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: refineryPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'refinery.atmospheric_distillation_unit',
+        recipeId: 'factory:distillation-unit',
+        primarySemanticRole: 'distillation_column_shell',
+      },
+      equipmentContract: {
+        profileId: 'refinery.atmospheric_distillation_unit',
+        recipeId: 'factory:distillation-unit',
+        primarySemanticRole: 'distillation_column_shell',
+      },
+    })
+    const semanticRoles = result.patches.map((patch) => patch.node.metadata?.semanticRole)
+    expect(semanticRoles).toContain('distillation_column_shell')
+    expect(semanticRoles).toContain('heat_exchanger_shell')
+    expect(semanticRoles).toContain('fired_heater')
+    expect(semanticRoles).toContain('side_draw_manifold')
+    expect(semanticRoles).toContain('helical_ladder_tread')
+    expect(result.patches.map((patch) => patch.node.metadata?.sourcePartKind)).toContain(
+      'helical_ladder',
+    )
+    expect(
+      result.patches[0]?.node.metadata?.equipmentAssembly?.editableParams.map(
+        (param: { key: string }) => param.key,
+      ),
+    ).toEqual([
+      'columnColor',
+      'columnOpacity',
+      'heaterColor',
+      'exchangerColor',
+      'manifoldColor',
+    ])
+  })
+
+  test('compiles refinery FCC profile through reactor semantic assembly recipe', () => {
+    const station: ProcessStationPlan = {
+      id: 'fluid_catalytic_cracking_unit',
+      label: 'Fluid catalytic cracking unit',
+      role: 'fluid_catalytic_cracking_unit',
+      equipmentHint:
+        'refinery.fluid_catalytic_cracking_unit FCC reactor regenerator pair with riser cyclone separator and flue gas stack',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: refineryPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 7.2, width: 4.2 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: refineryPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'refinery.fluid_catalytic_cracking_unit',
+        recipeId: 'factory:refinery-reactor-unit',
+        primarySemanticRole: 'fcc_reactor',
+      },
+      equipmentContract: {
+        profileId: 'refinery.fluid_catalytic_cracking_unit',
+        recipeId: 'factory:refinery-reactor-unit',
+        primarySemanticRole: 'fcc_reactor',
+      },
+    })
+    const semanticRoles = result.patches.map((patch) => patch.node.metadata?.semanticRole)
+    expect(semanticRoles).toEqual(
+      expect.arrayContaining([
+        'fcc_reactor',
+        'catalyst_regenerator',
+        'main_fractionator',
+        'riser_pipe',
+        'cyclone_separator',
+        'flue_gas_stack',
+      ]),
+    )
+    expect(
+      result.patches[0]?.node.metadata?.equipmentAssembly?.editableParams.map(
+        (param: { key: string }) => param.key,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        'primaryVesselColor',
+        'secondaryVesselColor',
+        'pipeColor',
+        'stackColor',
+      ]),
+    )
+  })
+
+  test('compiles refinery flare profile through auxiliary semantic assembly recipe', () => {
+    const station: ProcessStationPlan = {
+      id: 'flare_system',
+      label: 'Flare system',
+      role: 'flare_system',
+      equipmentHint:
+        'refinery.flare_system tall flare stack with knockout drum and relief gas inlet',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: refineryPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 4.2, width: 2.6 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: refineryPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'semantic-assembly',
+      equipmentAssembly: {
+        kind: 'semantic-assembly',
+        profileId: 'refinery.flare_system',
+        recipeId: 'factory:refinery-auxiliary-unit',
+        primarySemanticRole: 'flare_stack',
+      },
+      equipmentContract: {
+        profileId: 'refinery.flare_system',
+        recipeId: 'factory:refinery-auxiliary-unit',
+        primarySemanticRole: 'flare_stack',
+      },
+    })
+    const semanticRoles = result.patches.map((patch) => patch.node.metadata?.semanticRole)
+    expect(semanticRoles).toEqual(
+      expect.arrayContaining(['flare_stack', 'knockout_drum', 'relief_gas_inlet']),
+    )
+    expect(
+      result.patches[0]?.node.metadata?.equipmentAssembly?.editableParams.map(
+        (param: { key: string }) => param.key,
+      ),
+    ).toEqual(expect.arrayContaining(['primaryColor', 'vesselColor', 'pipeColor']))
   })
 
   test('infers process ports from resource-pack profile parts', () => {

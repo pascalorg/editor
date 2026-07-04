@@ -573,7 +573,7 @@ const COMPOSE_PARTS_TOOL = {
         parts: {
           type: 'array',
               description:
-                'Reusable parts to procedurally expand into primitives. Complete family objects and family components are different intents: car steering wheel, car wheel, aircraft wing, pump impeller, and fan blade are single-component requests, not parent assemblies. For industrial families, prefer family:"pump", family:"conveyor", family:"electrical", or family:"pipe_system" with top-level length/width/height or diameter plus optional parts[].params; the registry fills required parts and clamps unsafe values. For kiosks, booths, ticket booths, vendor stalls, newsstands, small pavilions, and small sheds, use family:"kiosk" with kiosk_body, kiosk_roof, kiosk_opening, kiosk_counter, kiosk_sign, and kiosk_awning. If no dedicated part kind exists for a component, use family:"generic" with generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent before raw compose_primitive. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a complete bicycle use wheel_set semanticRole:bicycle_tire count:2 + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For a complete car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use family:"aircraft" with top-level length/primaryColor and optional aircraft_* parts with params; the registry fills fuselage, wings, engines, T-tail, windows, and landing gear. Do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
+                'Reusable parts to procedurally expand into primitives. Complete family objects and family components are different intents: car steering wheel, car wheel, aircraft wing, pump impeller, and fan blade are single-component requests, not parent assemblies. For industrial families, prefer family:"pump", family:"conveyor", family:"electrical", or family:"pipe_system" with top-level length/width/height or diameter plus optional parts[].params; the registry fills required parts and clamps unsafe values. For kiosks, booths, ticket booths, vendor stalls, newsstands, small pavilions, and small sheds, use family:"kiosk" with kiosk_body, kiosk_roof, kiosk_opening, kiosk_counter, kiosk_sign, and kiosk_awning. If no dedicated part kind exists for a component, use family:"generic" with generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent before raw compose_primitive. For a standing fan use circular_base + vertical_pole + support_bracket + motor_housing + radial_blades + protective_grill + optional control_knob. For shaft + hub + propeller/impeller/mud-mixer blades use cylinder-like support parts plus propeller_blade_set; do not create a new recipe. For chimneys/smokestacks use chimney_stack with height/radius and warningStripes:true for red-white bands. For desks with visible drawers use desk_top + leg_set + drawer_stack. For electrical/control cabinets use electrical_cabinet + cable_tray + nameplate/warning details. For pipe systems use pipe_run + pipe_elbow + flange_ring/valve_body. For a complete bicycle use wheel_set semanticRole:bicycle_tire count:2 + tube_frame semanticRole:bicycle_frame + fork semanticRole:bicycle_fork + handlebar + saddle + chain_loop; do not invent bicycle_crank/chainring/pedals part kinds. For a complete car use body_shell semanticRole:vehicle_body + wheel_set count:4 semanticRole:vehicle_tire + window_strip semanticRole:vehicle_window variant:vehicle_glasshouse + light_pair + bar_pair; legacy vehicle_* aliases remain accepted. For complete aircraft/airplanes/airliners, use family:"aircraft" with top-level length/primaryColor and optional aircraft_* parts with params; the registry fills fuselage, wings, engines, T-tail, windows, and landing gear. Do not hand-place generic airfoil_blade/streamlined_body/wheel_set parts for complete aircraft. For a water pump / centrifugal blower use skid_base + ribbed_motor_body or rounded_machine_body + volute_casing + inlet_port + outlet_port + flange_ring + optional impeller_blades + control_box. For conveyors use conveyor_frame + roller_array + belt_surface. For tanks use cylindrical_tank plus pipe/flange details. For valves use valve_body plus optional handwheel; set valveStyle/handleStyle for variants such as ball valves instead of inventing internal parts. For factory scenes use gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, helical_ladder, electrical_cabinet, cable_tray, pipe_run, and pipe_elbow.',
           items: {
             type: 'object',
             properties: {
@@ -635,6 +635,7 @@ const COMPOSE_PARTS_TOOL = {
                   'agitator_tank',
                   'pipe_rack',
                   'platform_ladder',
+                  'helical_ladder',
                   'desk_top',
                   'leg_set',
                   'drawer_stack',
@@ -666,7 +667,7 @@ const COMPOSE_PARTS_TOOL = {
                   'service_platform',
                 ],
                 description:
-                  'Reusable procedural part. kiosk_body/kiosk_roof/kiosk_opening/kiosk_counter/kiosk_sign/kiosk_awning build small kiosks, ticket booths, vendor stalls, newsstands, small pavilions, and sheds. generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent cover unknown long-tail equipment, simple objects, and devices while preserving semantic part roles. mobile_platform_chassis/lidar_sensor/status_light_strip/emergency_stop_button build AGV/AMR mobile platforms. operator_panel/guard_fence/pallet_table/bearing_block/coupling_guard/motor_gearbox_unit/pipe_manifold/hopper_body/service_platform are reusable industrial equipment accessories for workcells, conveyors, process machines, and packaged equipment. aircraft_fuselage/aircraft_wing/aircraft_engine/aircraft_vertical_stabilizer/aircraft_horizontal_stabilizer/aircraft_landing_gear are family-registry parts for complete aircraft; use parts[].params to tune length, span, engine count/radius, window count, colors, and landing gear. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, and platform_ladder cover common factory equipment.',
+                  'Reusable procedural part. kiosk_body/kiosk_roof/kiosk_opening/kiosk_counter/kiosk_sign/kiosk_awning build small kiosks, ticket booths, vendor stalls, newsstands, small pavilions, and sheds. generic_body/generic_base/generic_panel/generic_handle/generic_spout/generic_control_panel/generic_display/generic_foot_set/generic_opening/generic_detail_accent cover unknown long-tail equipment, simple objects, and devices while preserving semantic part roles. mobile_platform_chassis/lidar_sensor/status_light_strip/emergency_stop_button build AGV/AMR mobile platforms. operator_panel/guard_fence/pallet_table/bearing_block/coupling_guard/motor_gearbox_unit/pipe_manifold/hopper_body/service_platform are reusable industrial equipment accessories for workcells, conveyors, process machines, and packaged equipment. aircraft_fuselage/aircraft_wing/aircraft_engine/aircraft_vertical_stabilizer/aircraft_horizontal_stabilizer/aircraft_landing_gear are family-registry parts for complete aircraft; use parts[].params to tune length, span, engine count/radius, window count, colors, and landing gear. chimney_stack creates a tall tapered industrial chimney with base, rim, lift seams, access door, and optional red-white warning bands. pyramid creates a four-sided pyramid from length/width/height; set truncated:true or topScale/topRadius to make a flat-top truncated pyramid/frustum. vent_grill creates framed grille/louver panels; bolt_pattern creates screws/fasteners; leg_set creates support feet; nameplate creates rating plates; pipe_port/inlet_port/outlet_port create nozzles. propeller_blade_set creates count-based radial propeller/impeller/mixer paddle sets, including taiji-half circular-cropped blades with longitudinal curve; airfoil_blade creates continuous swept/tapered aircraft/turbine-like blades for local blade details, not complete aircraft layout; curved_lens_panel creates tinted non-rectangular lenses/visors; ergonomic_shell creates smooth mouse/controller/appliance shells; streamlined_body creates aerodynamic fuselage/car/train/appliance bodies; lofted_panel creates section-to-section transition fairings/panels. protective_grill creates a shallow domed fan cage; radial_blades creates airfoil-like fan blades; desk_top/leg_set/drawer_stack build office desks; electrical_cabinet/cable_tray build power/control cabinets and tray routes; pipe_run/pipe_elbow build process piping; wheel/wheel_set/window_panel/window_strip/body_shell/tube_frame/fork/light_pair/bar_pair are generic building blocks whose meaning comes from semanticRole; bicycle_* and vehicle_* aliases remain accepted but new calls should prefer generic parts; volute_casing creates pump/blower scroll casing; impeller_blades creates pump/turbine vanes; pipe/inlet/outlet/flange/bolt parts create industrial connection details; ribbed_motor_body, conveyor_frame, roller_array, belt_surface, cylindrical_tank, valve_body, handwheel, gearbox_body, filter_vessel, heat_exchanger, agitator_tank, pipe_rack, platform_ladder, and helical_ladder cover common factory equipment.',
               },
               partType: {
                 type: 'string',
@@ -2209,6 +2210,20 @@ const AI_GENERATION_MODES: Array<{
     description: '\u751f\u6210\u5e26 links/joints \u7684\u53ef\u52a8\u8d44\u4ea7\uff0c\u53ef\u67e5\u770b\u3001\u5bfc\u5165\u548c\u8c03\u59ff\u6001\u3002',
   },
 ]
+
+function shouldRouteAssetPromptToFactory(input: {
+  generationMode: AiGenerationMode
+  hasImageAttachment: boolean
+  text: string
+}) {
+  if (input.generationMode !== 'primitive' || input.hasImageAttachment) return false
+  const text = input.text.trim().toLowerCase()
+  if (!text) return false
+  return (
+    /\b(factory|plant|workshop|refinery|process\s+line|production\s+line)\b/i.test(text) ||
+    /(?:\u70bc\u6cb9\u5382|\u5de5\u5382|\u5382\u533a|\u8f66\u95f4|\u751f\u4ea7\u7ebf|\u5de5\u827a\u7ebf)/.test(text)
+  )
+}
 
 interface ArticraftResult {
   prompt: string
@@ -6163,14 +6178,31 @@ export function AiChatPanel() {
     [sendFactoryMessage],
   )
 
+  const handleAssetSubmit = useCallback(() => {
+    if (
+      shouldRouteAssetPromptToFactory({
+        generationMode,
+        hasImageAttachment: Boolean(imageAttachment),
+        text: input,
+      })
+    ) {
+      setConversationPurpose('factory')
+      setModeMenuOpen(false)
+      setImageAttachment(undefined)
+      void sendFactoryMessage()
+      return
+    }
+    void sendMessage()
+  }, [generationMode, imageAttachment, input, sendFactoryMessage, sendMessage])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
-        sendMessage()
+        handleAssetSubmit()
       }
     },
-    [sendMessage],
+    [handleAssetSubmit],
   )
 
   const currentMode = AI_GENERATION_MODES.find((mode) => mode.id === generationMode) ?? AI_GENERATION_MODES[0]!
@@ -6843,9 +6875,7 @@ export function AiChatPanel() {
                   : 'hover:bg-accent hover:text-[#a684ff]',
             )}
             disabled={!loading && !canSend}
-            onClick={loading ? handleStopGeneration : () => {
-              void sendMessage()
-            }}
+            onClick={loading ? handleStopGeneration : handleAssetSubmit}
             title={loading ? 'Stop generation' : 'Send'}
             type="button"
           >

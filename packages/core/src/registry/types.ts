@@ -4,6 +4,7 @@ import type { EquipmentNodeDescriptor, EquipmentPort } from '../equipment'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { SceneObjectRef } from '../types/scene-object'
 import type { HandleList } from './handles'
+import type { SemanticRecipeDefinition } from './semantic-recipes'
 
 // ─── GeometryContext ─────────────────────────────────────────────────
 //
@@ -596,6 +597,7 @@ export type Plugin = {
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
   panels?: PluginPanel[]
+  semanticRecipes?: SemanticRecipeDefinition[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────

@@ -52,6 +52,8 @@ const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
 const ROOM_CURVE_TOLERANCE = 0.04
 const MAX_CURVE_SUBDIVISION_DEPTH = 6
 const AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE = 0.08
+const WALL_ROOM_BOUNDARY_TOLERANCE = 0.08
+const WALL_JUNCTION_TOLERANCE = 0.08
 
 function pointFromTuple(point: [number, number]): Point2D {
   return { x: point[0], y: point[1] }
@@ -180,6 +182,43 @@ function bboxOverlapArea(a: ReturnType<typeof bboxOf>, b: ReturnType<typeof bbox
   return ix * iy
 }
 
+function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
+  let minDistance = Number.POSITIVE_INFINITY
+  for (let index = 0; index < polygon.length; index += 1) {
+    const start = polygon[index]
+    const end = polygon[(index + 1) % polygon.length]
+    if (!(start && end)) continue
+    minDistance = Math.min(
+      minDistance,
+      distanceToSegment(pointToTuple(point), pointToTuple(start), pointToTuple(end)),
+    )
+  }
+  return minDistance
+}
+
+function wallBoundsRoom(wall: WallNode, roomPolygon: Point2D[]) {
+  const sampled = sampleWallPointsForRoomDetection(wall)
+  if (sampled.length === 0) return false
+
+  const candidates =
+    sampled.length === 2
+      ? [
+          sampled[0]!,
+          {
+            x: (sampled[0]!.x + sampled[1]!.x) / 2,
+            y: (sampled[0]!.y + sampled[1]!.y) / 2,
+          },
+          sampled[1]!,
+        ]
+      : sampled
+
+  const matchingPoints = candidates.filter(
+    (point) => pointDistanceToPolygonBoundary(point, roomPolygon) <= WALL_ROOM_BOUNDARY_TOLERANCE,
+  )
+
+  return matchingPoints.length >= 2
+}
+
 function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
   const dx = wall.end[0] - wall.start[0]
   const dy = wall.end[1] - wall.start[1]
@@ -251,9 +290,44 @@ function sampleWallPointsForRoomDetection(
   return subdivide(0, start, 1, end, 0)
 }
 
-function getDirectedWallBoundaryPoints(wall: WallNode, forward: boolean) {
-  const points = sampleWallPointsForRoomDetection(wall)
-  return forward ? points : [...points].reverse()
+function segmentProjection(point: Point2D, start: Point2D, end: Point2D) {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSquared = dx * dx + dy * dy
+  if (lengthSquared < 1e-12) {
+    return { t: 0, distance: Math.hypot(point.x - start.x, point.y - start.y) }
+  }
+  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+  const clampedT = Math.max(0, Math.min(1, t))
+  const projX = start.x + clampedT * dx
+  const projY = start.y + clampedT * dy
+  return { t, distance: Math.hypot(point.x - projX, point.y - projY) }
+}
+
+function splitStraightWallAtVertices(start: Point2D, end: Point2D, vertices: Point2D[]) {
+  const length = Math.hypot(end.x - start.x, end.y - start.y)
+  if (length < 1e-9) return [start, end]
+
+  const interior: Array<{ point: Point2D; t: number }> = []
+  for (const vertex of vertices) {
+    const { t, distance } = segmentProjection(vertex, start, end)
+    if (distance > WALL_JUNCTION_TOLERANCE) continue
+    const along = t * length
+    if (along <= WALL_JUNCTION_TOLERANCE || along >= length - WALL_JUNCTION_TOLERANCE) continue
+    interior.push({ point: vertex, t })
+  }
+  interior.sort((a, b) => a.t - b.t)
+
+  const ordered: Point2D[] = [start]
+  let lastKey = pointKey(start)
+  for (const { point } of interior) {
+    const key = pointKey(point)
+    if (key === lastKey) continue
+    ordered.push(point)
+    lastKey = key
+  }
+  if (lastKey !== pointKey(end)) ordered.push(end)
+  return ordered
 }
 
 function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
@@ -280,38 +354,63 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
     return key
   }
 
+  const vertexByKey = new Map<string, Point2D>()
+  for (const wall of walls) {
+    for (const tuple of [wall.start, wall.end]) {
+      const point = pointFromTuple(tuple)
+      const key = pointKey(point)
+      if (!vertexByKey.has(key)) vertexByKey.set(key, point)
+    }
+  }
+  const vertices = [...vertexByKey.values()]
+
   for (const wall of walls) {
     const start = pointFromTuple(wall.start)
     const end = pointFromTuple(wall.end)
-    const startKey = upsertNode(start)
-    const endKey = upsertNode(end)
-    if (startKey === endKey) continue
+    if (samePointWithinTolerance(start, end)) continue
 
-    const forwardDirection = getWallDirection(wall)
-    const reverseDirection = getWallDirection({ start: wall.end, end: wall.start })
+    const subPolylines: Point2D[][] = isCurvedWall(wall)
+      ? [sampleWallPointsForRoomDetection(wall)]
+      : (() => {
+          const ordered = splitStraightWallAtVertices(start, end, vertices)
+          const parts: Point2D[][] = []
+          for (let index = 0; index < ordered.length - 1; index += 1) {
+            parts.push([ordered[index]!, ordered[index + 1]!])
+          }
+          return parts
+        })()
 
-    const forwardId = `${wall.id}:f`
-    const reverseId = `${wall.id}:r`
+    subPolylines.forEach((points, subIndex) => {
+      const from = points[0]!
+      const to = points[points.length - 1]!
+      const fromKey = upsertNode(from)
+      const toKey = upsertNode(to)
+      if (fromKey === toKey) return
 
-    halfEdges.set(forwardId, {
-      id: forwardId,
-      reverseId,
-      fromKey: startKey,
-      toKey: endKey,
-      angle: Math.atan2(forwardDirection.tangent.y, forwardDirection.tangent.x),
-      points: getDirectedWallBoundaryPoints(wall, true),
+      const reversePoints = [...points].reverse()
+      const forwardId = `${wall.id}#${subIndex}:f`
+      const reverseId = `${wall.id}#${subIndex}:r`
+
+      halfEdges.set(forwardId, {
+        id: forwardId,
+        reverseId,
+        fromKey,
+        toKey,
+        angle: Math.atan2(points[1]!.y - from.y, points[1]!.x - from.x),
+        points,
+      })
+      halfEdges.set(reverseId, {
+        id: reverseId,
+        reverseId: forwardId,
+        fromKey: toKey,
+        toKey: fromKey,
+        angle: Math.atan2(reversePoints[1]!.y - to.y, reversePoints[1]!.x - to.x),
+        points: reversePoints,
+      })
+
+      graph.get(fromKey)?.outgoing.push(forwardId)
+      graph.get(toKey)?.outgoing.push(reverseId)
     })
-    halfEdges.set(reverseId, {
-      id: reverseId,
-      reverseId: forwardId,
-      fromKey: endKey,
-      toKey: startKey,
-      angle: Math.atan2(reverseDirection.tangent.y, reverseDirection.tangent.x),
-      points: getDirectedWallBoundaryPoints(wall, false),
-    })
-
-    graph.get(startKey)?.outgoing.push(forwardId)
-    graph.get(endKey)?.outgoing.push(reverseId)
   }
 
   const sortedOutgoing = new Map<string, string[]>()
@@ -337,7 +436,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
 
   const visitedDirected = new Set<string>()
   const faces: Point2D[][] = []
-  const maxSteps = Math.min(500, walls.length * 8 + 20)
+  const maxSteps = Math.min(2000, halfEdges.size + 10)
 
   for (const edgeId of halfEdges.keys()) {
     if (visitedDirected.has(edgeId)) continue
@@ -389,6 +488,12 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
 
   faces.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)))
   return faces
+}
+
+export function wallClosesRoom(walls: WallNode[], wall: WallNode): boolean {
+  const roomPolygons = extractRoomPolygons(walls)
+  if (roomPolygons.length === 0) return false
+  return roomPolygons.some((polygon) => wallBoundsRoom(wall, polygon))
 }
 
 export function resolveWallSurfaceSides(

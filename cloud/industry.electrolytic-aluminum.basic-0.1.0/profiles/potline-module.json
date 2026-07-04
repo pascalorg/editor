@@ -1,0 +1,490 @@
+[
+  {
+    "id": "electrolytic_aluminum.potline_module",
+    "name": "Aluminum potline module",
+    "aliases": [
+      "potline",
+      "potroom module",
+      "aluminum potline",
+      "reduction cell line",
+      "electrolytic cell row",
+      "铝电解槽列",
+      "电解槽列",
+      "电解车间槽列",
+      "电解铝potline"
+    ],
+    "industry": "electrolytic-aluminum",
+    "layoutFamily": "generic_industrial_layout",
+    "archetypeFamily": "electrolysis_equipment",
+    "family": "generic",
+    "defaultDimensions": {
+      "length": 28,
+      "width": 7.2,
+      "height": 3.4
+    },
+    "processPorts": [
+      {
+        "id": "high_current_busbar",
+        "medium": "power",
+        "side": "left",
+        "height": 2.45,
+        "offset": -2.4
+      },
+      {
+        "id": "alumina_feed_manifold",
+        "medium": "material",
+        "side": "left",
+        "height": 2.15,
+        "offset": 1.6
+      },
+      {
+        "id": "pot_hood_panel",
+        "medium": "gas",
+        "side": "top",
+        "height": 3.05,
+        "offset": 0
+      },
+      {
+        "id": "metal_tap",
+        "medium": "molten_metal",
+        "side": "right",
+        "height": 1.1,
+        "offset": -1.8
+      },
+      {
+        "id": "anode_cover_row",
+        "medium": "material",
+        "side": "top",
+        "height": 2.3,
+        "offset": 0.6
+      }
+    ],
+    "parts": [
+      {
+        "kind": "generic_body",
+        "semanticRole": "potroom_floor_base",
+        "required": true,
+        "length": 28,
+        "width": 7.2,
+        "height": 0.18,
+        "position": [
+          0,
+          0.09,
+          0
+        ],
+        "primaryColor": "#334155"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -10.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -7.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -4.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -1.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          1.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          4.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          7.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          10.5,
+          0.72,
+          -1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -10.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -7.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -4.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          -1.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          1.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          4.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          7.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "cell_body",
+        "required": true,
+        "length": 3,
+        "width": 1.45,
+        "height": 0.95,
+        "position": [
+          10.5,
+          0.72,
+          1.8
+        ],
+        "primaryColor": "#64748b",
+        "secondaryColor": "#1f2937"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "anode_cover_row",
+        "required": true,
+        "length": 26,
+        "width": 1.1,
+        "height": 0.18,
+        "position": [
+          0,
+          1.38,
+          -1.8
+        ],
+        "color": "#475569"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "anode_cover_row",
+        "required": true,
+        "length": 26,
+        "width": 1.1,
+        "height": 0.18,
+        "position": [
+          0,
+          1.38,
+          1.8
+        ],
+        "color": "#475569"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "pot_hood_panel",
+        "required": true,
+        "length": 26.5,
+        "width": 0.22,
+        "height": 0.62,
+        "position": [
+          0,
+          1.78,
+          -2.68
+        ],
+        "color": "#94a3b8"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "pot_hood_panel",
+        "required": true,
+        "length": 26.5,
+        "width": 0.22,
+        "height": 0.62,
+        "position": [
+          0,
+          1.78,
+          2.68
+        ],
+        "color": "#94a3b8"
+      },
+      {
+        "kind": "bar_pair",
+        "semanticRole": "high_current_busbar",
+        "required": true,
+        "length": 27,
+        "width": 6.6,
+        "height": 0.16,
+        "position": [
+          0,
+          2.15,
+          0
+        ],
+        "color": "#b45309"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "alumina_feed_manifold",
+        "required": true,
+        "length": 25,
+        "radius": 0.07,
+        "count": 12,
+        "position": [
+          0,
+          2.05,
+          -0.65
+        ],
+        "metalColor": "#cbd5e1"
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "fume_collection_header",
+        "required": true,
+        "length": 26,
+        "radius": 0.15,
+        "count": 6,
+        "position": [
+          0,
+          2.75,
+          0
+        ],
+        "metalColor": "#64748b"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "potroom_service_platform",
+        "required": true,
+        "length": 27.5,
+        "width": 0.65,
+        "height": 1.25,
+        "position": [
+          0,
+          1.25,
+          -3.45
+        ],
+        "metalColor": "#475569",
+        "color": "#facc15"
+      },
+      {
+        "kind": "service_platform",
+        "semanticRole": "potroom_service_platform",
+        "required": true,
+        "length": 27.5,
+        "width": 0.65,
+        "height": 1.25,
+        "position": [
+          0,
+          1.25,
+          3.45
+        ],
+        "metalColor": "#475569",
+        "color": "#facc15"
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "metal_tap",
+        "required": true,
+        "length": 0.55,
+        "width": 5.6,
+        "height": 0.22,
+        "position": [
+          13.55,
+          1.03,
+          0
+        ],
+        "color": "#dc2626"
+      }
+    ],
+    "primarySemanticRole": "cell_body",
+    "qualityRules": "quality.electrolytic_aluminum.potline_module",
+    "visualCues": [
+      "two long rows of reduction pots",
+      "repeated covered cells",
+      "continuous copper busbar pair",
+      "fume collection header over the pots",
+      "alumina feed manifold",
+      "side service platforms"
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "anode_cover_row": {
+          "detailLevel": "low"
+        },
+        "pot_hood_panel": {
+          "detailLevel": "low"
+        },
+        "metal_tap": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "preferredResolver": "profile-parts"
+  }
+]

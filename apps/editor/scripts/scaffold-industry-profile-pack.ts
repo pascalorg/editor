@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, semanticRecipeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { findRepoRoot } from '../lib/generated-assets/manifest'
 import {
@@ -26,11 +26,12 @@ export type IndustryPackDeviceSpec = {
   family?: string
   layoutFamily?: string
   archetypeFamily?: string
-  nodeKind?: 'factory:pump' | 'factory:tank'
+  recipeId?: string
   preferredResolver?: 'catalog-item' | 'native-box' | 'native-tank' | 'primitive' | 'profile-parts'
   defaultDimensions?: Record<string, number>
   processPorts?: JsonRecord[]
   equipmentDefaults?: JsonRecord
+  recipeParams?: JsonRecord
   parts: Array<JsonRecord & { kind: string; semanticRole: string; required?: boolean }>
   primarySemanticRole: string
   visualCues?: string[]
@@ -69,6 +70,7 @@ export type ScaffoldIndustryPackOptions = {
   outputRoot?: string
   force?: boolean
   validate?: boolean
+  writeZip?: boolean
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -120,6 +122,126 @@ function preferredResolver(
     : undefined
 }
 
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let index = 0; index < table.length; index += 1) {
+    let current = index
+    for (let bit = 0; bit < 8; bit += 1) {
+      current = current & 1 ? 0xedb88320 ^ (current >>> 1) : current >>> 1
+    }
+    table[index] = current >>> 0
+  }
+  return table
+})()
+
+function crc32(bytes: Buffer) {
+  let crc = 0xffffffff
+  for (const byte of bytes) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear())
+  const dosTime =
+    (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2)
+  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate()
+  return { dosDate, dosTime }
+}
+
+function uint16(value: number) {
+  const buffer = Buffer.allocUnsafe(2)
+  buffer.writeUInt16LE(value, 0)
+  return buffer
+}
+
+function uint32(value: number) {
+  const buffer = Buffer.allocUnsafe(4)
+  buffer.writeUInt32LE(value >>> 0, 0)
+  return buffer
+}
+
+async function collectZipFiles(root: string, dir = root): Promise<string[]> {
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const file = path.join(dir, entry.name)
+      if (entry.isDirectory()) return collectZipFiles(root, file)
+      if (!entry.isFile()) return []
+      return [path.relative(root, file).replace(/\\/g, '/')]
+    }),
+  )
+  return files.flat().sort((left, right) => left.localeCompare(right))
+}
+
+async function writeProfilePackZipFromDir(packDir: string, zipPath: string) {
+  const fileNames = await collectZipFiles(packDir)
+  const localParts: Buffer[] = []
+  const centralParts: Buffer[] = []
+  let offset = 0
+  const { dosDate, dosTime } = dosDateTime()
+
+  for (const name of fileNames) {
+    const data = await fs.readFile(path.join(packDir, name))
+    const nameBytes = Buffer.from(name, 'utf8')
+    const checksum = crc32(data)
+    const localHeader = Buffer.concat([
+      uint32(0x04034b50),
+      uint16(20),
+      uint16(0x0800),
+      uint16(0),
+      uint16(dosTime),
+      uint16(dosDate),
+      uint32(checksum),
+      uint32(data.length),
+      uint32(data.length),
+      uint16(nameBytes.length),
+      uint16(0),
+      nameBytes,
+    ])
+    localParts.push(localHeader, data)
+    centralParts.push(
+      Buffer.concat([
+        uint32(0x02014b50),
+        uint16(20),
+        uint16(20),
+        uint16(0x0800),
+        uint16(0),
+        uint16(dosTime),
+        uint16(dosDate),
+        uint32(checksum),
+        uint32(data.length),
+        uint32(data.length),
+        uint16(nameBytes.length),
+        uint16(0),
+        uint16(0),
+        uint16(0),
+        uint16(0),
+        uint32(0),
+        uint32(offset),
+        nameBytes,
+      ]),
+    )
+    offset += localHeader.length + data.length
+  }
+
+  const localData = Buffer.concat(localParts)
+  const centralData = Buffer.concat(centralParts)
+  const endOfCentralDirectory = Buffer.concat([
+    uint32(0x06054b50),
+    uint16(0),
+    uint16(0),
+    uint16(fileNames.length),
+    uint16(fileNames.length),
+    uint32(centralData.length),
+    uint32(localData.length),
+    uint16(0),
+  ])
+
+  await fs.writeFile(zipPath, Buffer.concat([localData, centralData, endOfCentralDirectory]))
+}
+
 function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec {
   if (!isRecord(raw)) throw new Error('Each devices[] item must be an object.')
   const id = stringValue(raw.id)
@@ -148,6 +270,11 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
         ),
       )
     : undefined
+  const equipmentDefaults = isRecord(raw.equipmentDefaults)
+    ? raw.equipmentDefaults
+    : isRecord(raw.recipeParams)
+      ? raw.recipeParams
+      : undefined
   return {
     id: profileId(id, industry),
     name,
@@ -155,9 +282,7 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
     ...(stringValue(raw.description) ? { description: stringValue(raw.description) } : {}),
     family: stringValue(raw.family) ?? 'generic',
     layoutFamily: stringValue(raw.layoutFamily) ?? 'generic_industrial_layout',
-    ...(raw.nodeKind === 'factory:pump' || raw.nodeKind === 'factory:tank'
-      ? { nodeKind: raw.nodeKind }
-      : {}),
+    ...(stringValue(raw.recipeId) ? { recipeId: stringValue(raw.recipeId) } : {}),
     ...(stringValue(raw.archetypeFamily)
       ? { archetypeFamily: stringValue(raw.archetypeFamily) }
       : {}),
@@ -168,7 +293,7 @@ function normalizeDevice(raw: unknown, industry: string): IndustryPackDeviceSpec
     ...(recordArray(raw.processPorts, `Device ${id} processPorts`)?.length
       ? { processPorts: recordArray(raw.processPorts, `Device ${id} processPorts`) }
       : {}),
-    ...(isRecord(raw.equipmentDefaults) ? { equipmentDefaults: raw.equipmentDefaults } : {}),
+    ...(equipmentDefaults ? { equipmentDefaults, recipeParams: equipmentDefaults } : {}),
     parts,
     primarySemanticRole,
     ...(stringArray(raw.visualCues).length ? { visualCues: stringArray(raw.visualCues) } : {}),
@@ -395,11 +520,12 @@ function profileFromDevice(device: IndustryPackDeviceSpec, industry: string) {
     layoutFamily: device.layoutFamily ?? 'generic_industrial_layout',
     ...(device.archetypeFamily ? { archetypeFamily: device.archetypeFamily } : {}),
     ...(device.preferredResolver ? { preferredResolver: device.preferredResolver } : {}),
-    ...(device.nodeKind ? { nodeKind: device.nodeKind } : {}),
+    ...(device.recipeId ? { recipeId: device.recipeId } : {}),
     family: device.family ?? 'generic',
     ...(device.defaultDimensions ? { defaultDimensions: device.defaultDimensions } : {}),
     ...(device.processPorts?.length ? { processPorts: device.processPorts } : {}),
     ...(device.equipmentDefaults ? { equipmentDefaults: device.equipmentDefaults } : {}),
+    ...(device.recipeParams ? { recipeParams: device.recipeParams } : {}),
     parts: device.parts,
     primarySemanticRole: device.primarySemanticRole,
     qualityRules: ruleId,
@@ -533,6 +659,7 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
   const version = spec.version ?? '0.1.0'
   const outputRoot = options.outputRoot ?? simulatedProfilePackCloudRoot(repoRoot)
   const packDir = path.join(outputRoot, `${id}-${version}`)
+  const zipPath = path.join(outputRoot, `${id}-${version}.zip`)
   if (!options.force) {
     try {
       await fs.access(packDir)
@@ -540,8 +667,15 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
     } catch (error) {
       if (error instanceof Error && !('code' in error)) throw error
     }
+    try {
+      await fs.access(zipPath)
+      throw new Error(`Output zip already exists: ${zipPath}. Use --force to replace it.`)
+    } catch (error) {
+      if (error instanceof Error && !('code' in error)) throw error
+    }
   }
   await fs.rm(packDir, { recursive: true, force: true })
+  if (options.writeZip !== false) await fs.rm(zipPath, { force: true })
   await fs.mkdir(packDir, { recursive: true })
 
   const profileFile = 'profiles/generated.json'
@@ -552,6 +686,9 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
   const processTemplateFile = spec.processTemplates?.length
     ? 'process-templates/generated.json'
     : undefined
+  if (!semanticRecipeRegistry.has('factory:centrifugal-pump')) {
+    await loadPlugin(factoryEquipmentPlugin)
+  }
   const profiles = spec.devices.map((device) => profileFromDevice(device, spec.industry))
   const equipmentBindings = inferEquipmentBindingsForProfiles(profiles)
   const processTemplates = spec.processTemplates?.length
@@ -598,13 +735,16 @@ export async function scaffoldIndustryProfilePack(options: ScaffoldIndustryPackO
   await writeReadme(path.join(packDir, 'README.md'), spec, authoringWarnings)
 
   const validation = options.validate === false ? undefined : await validateProfilePackDir(packDir)
-  if (validation && !nodeRegistry.has('factory:pump')) await loadPlugin(factoryEquipmentPlugin)
   const audit = validation ? auditProfilePackValidation(validation) : undefined
   if (audit && !audit.ok) {
     throw new Error(`Generated pack failed audit: ${audit.issues.join('; ')}`)
   }
+  if (options.writeZip !== false) {
+    await writeProfilePackZipFromDir(packDir, zipPath)
+  }
   return {
     packDir,
+    zipPath: options.writeZip === false ? undefined : zipPath,
     manifest,
     audit,
     authoringWarnings,
@@ -621,7 +761,7 @@ async function main() {
   const specPath = readArgValue(args, '--spec')
   if (!specPath) {
     throw new Error(
-      'Usage: bun apps/editor/scripts/scaffold-industry-profile-pack.ts --spec <spec.json> [--out <dir>] [--force] [--skip-validate]',
+      'Usage: bun apps/editor/scripts/scaffold-industry-profile-pack.ts --spec <spec.json> [--out <dir>] [--force] [--skip-validate] [--skip-zip]',
     )
   }
   const result = await scaffoldIndustryProfilePack({
@@ -631,11 +771,13 @@ async function main() {
       : undefined,
     force: args.includes('--force'),
     validate: !args.includes('--skip-validate'),
+    writeZip: !args.includes('--skip-zip'),
   })
   console.log(
     JSON.stringify(
       {
         packDir: result.packDir,
+        zipPath: result.zipPath,
         id: result.manifest.id,
         version: result.manifest.version,
         audit: result.audit

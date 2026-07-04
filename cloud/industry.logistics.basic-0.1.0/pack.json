@@ -1,0 +1,24 @@
+{
+  "id": "industry.logistics.basic",
+  "name": "Logistics Basic Equipment Pack",
+  "industry": "logistics",
+  "version": "0.1.0",
+  "schemaVersion": "2.0",
+  "knowledgeSchemaVersion": "1.0",
+  "appCompatibility": ">=0.8.0",
+  "locale": [
+    "zh-CN",
+    "en-US"
+  ],
+  "description": "Basic intralogistics equipment profiles for AGV/AMR material-handling platforms.",
+  "profiles": [
+    "profiles/agv.json"
+  ],
+  "qualityRules": [
+    "quality-rules/agv-quality.json"
+  ],
+  "dependsOnPlugins": [
+    "pascal:factory-equipment"
+  ],
+  "equipmentBindings": []
+}

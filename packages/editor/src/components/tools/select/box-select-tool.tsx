@@ -8,9 +8,9 @@ import {
   emitter,
   type GridEvent,
   type ItemNode,
+  isRegistrySelectable,
   type LevelNode,
   type SlabNode,
-  isRegistrySelectable,
   sceneRegistry,
   useScene,
   type WallNode,
@@ -433,14 +433,17 @@ const BoxSelectToolInner: React.FC = () => {
     }
   }, [setPreviewSelectedIds])
 
-  const syncPreviewSelectedIds = useCallback((nextIds: string[]) => {
-    if (haveSameIds(previewSelectedIdsRef.current, nextIds)) {
-      return
-    }
+  const syncPreviewSelectedIds = useCallback(
+    (nextIds: string[]) => {
+      if (haveSameIds(previewSelectedIdsRef.current, nextIds)) {
+        return
+      }
 
-    previewSelectedIdsRef.current = nextIds
-    setPreviewSelectedIds(nextIds)
-  }, [setPreviewSelectedIds])
+      previewSelectedIdsRef.current = nextIds
+      setPreviewSelectedIds(nextIds)
+    },
+    [setPreviewSelectedIds],
+  )
 
   // Sync ground plane Y with the current level
   useEffect(() => {
@@ -459,16 +462,19 @@ const BoxSelectToolInner: React.FC = () => {
     return unsubscribe
   }, [])
 
-  const raycastToGround = useCallback((e: PointerEvent): Vector3 | null => {
-    const rect = gl.domElement.getBoundingClientRect()
-    pointerNDC.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-    pointerNDC.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
-    raycasterRef.current.setFromCamera(pointerNDC.current, camera)
-    if (raycasterRef.current.ray.intersectPlane(groundPlane.current, hitPoint.current)) {
-      return hitPoint.current
-    }
-    return null
-  }, [camera, gl])
+  const raycastToGround = useCallback(
+    (e: PointerEvent): Vector3 | null => {
+      const rect = gl.domElement.getBoundingClientRect()
+      pointerNDC.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      pointerNDC.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      raycasterRef.current.setFromCamera(pointerNDC.current, camera)
+      if (raycasterRef.current.ray.intersectPlane(groundPlane.current, hitPoint.current)) {
+        return hitPoint.current
+      }
+      return null
+    },
+    [camera, gl],
+  )
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -508,7 +514,7 @@ const BoxSelectToolInner: React.FC = () => {
 
         const ids = collectNodeIdsInBounds(bounds)
 
-        const shouldAppend = e.metaKey || e.ctrlKey
+        const shouldAppend = e.metaKey || e.ctrlKey || e.shiftKey
         const { phase, structureLayer } = useEditor.getState()
 
         if (phase === 'structure' && structureLayer === 'zones') {

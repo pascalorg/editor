@@ -2,7 +2,15 @@
 
 import { Icon } from '@iconify/react'
 import { type IconRef, panelRegistry, type PanelWorkspace, type PluginPanel } from '@pascal-app/core'
-import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
+import {
+  type ComponentType,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import useEditor from '../../../store/use-editor'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
@@ -47,6 +55,7 @@ function PluginPanelCrashed({ label }: { label: string }) {
 // stable identity across renders (otherwise switching panels remounts the tree
 // every time the sidebar re-renders). Cache the wrapped component by its loader.
 const wrappedPanelCache = new WeakMap<PluginPanel['component'], ComponentType>()
+const EMPTY_PLUGIN_PANELS: PluginPanel[] = []
 
 function resolvePanelComponent(panel: PluginPanel): ComponentType {
   const cached = wrappedPanelCache.get(panel.component)
@@ -76,16 +85,20 @@ function resolvePanelComponent(panel: PluginPanel): ComponentType {
  * authoring panel like Nature doesn't ride into the studio rail.
  */
 export function usePluginPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
+  const [isMounted, setIsMounted] = useState(false)
   const registered = useSyncExternalStore(
     panelRegistry.subscribe,
     panelRegistry.getSnapshot,
-    panelRegistry.getSnapshot,
+    () => EMPTY_PLUGIN_PANELS,
   )
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
   const workspaceMode = useEditor((s): PanelWorkspace =>
     s.isPreviewMode || s.isFirstPersonMode ? 'studio' : 'edit',
   )
   const hostIds = new Set(hostPanels?.map((p) => p.id))
-  const fromRegistry = registered
+  const fromRegistry = (isMounted ? registered : EMPTY_PLUGIN_PANELS)
     .filter((p) => !hostIds.has(p.id) && (p.workspaces ?? ['edit']).includes(workspaceMode))
     .map(
       (p): ExtraPanel => ({

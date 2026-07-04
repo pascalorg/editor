@@ -446,7 +446,12 @@
       "description": "炼油厂原油罐区储罐。",
       "family": "tank",
       "layoutFamily": "vessel_layout",
-      "preferredResolver": "catalog-item",
+      "preferredResolver": "profile-parts",
+      "recipeId": "factory:storage-tank",
+      "recipeParams": {
+        "orientation": "vertical",
+        "shellColor": "#cbd5e1"
+      },
       "defaultDimensions": {
         "length": 5.6,
         "width": 5.6,
@@ -475,6 +480,7 @@
         }
       ],
       "primarySemanticRole": "vessel_shell",
+      "editableSchemaRef": "vessel.common",
       "qualityRequiredRoles": [
         "vessel_shell",
         "feed_inlet",
@@ -493,7 +499,12 @@
       "description": "炼油厂汽油、柴油等成品油罐区储罐。",
       "family": "tank",
       "layoutFamily": "vessel_layout",
-      "preferredResolver": "catalog-item",
+      "preferredResolver": "profile-parts",
+      "recipeId": "factory:storage-tank",
+      "recipeParams": {
+        "orientation": "vertical",
+        "shellColor": "#e5e7eb"
+      },
       "defaultDimensions": {
         "length": 5.2,
         "width": 5.2,
@@ -522,6 +533,7 @@
         }
       ],
       "primarySemanticRole": "vessel_shell",
+      "editableSchemaRef": "vessel.common",
       "qualityRequiredRoles": [
         "vessel_shell",
         "feed_inlet",
@@ -586,6 +598,13 @@
       "family": "distillation_column",
       "layoutFamily": "distillation_column_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:distillation-unit",
+      "recipeParams": {
+        "columnRole": "distillation_column_shell",
+        "exchangerRole": "heat_exchanger_shell",
+        "heaterRole": "fired_heater",
+        "manifoldRole": "side_draw_manifold"
+      },
       "defaultDimensions": {
         "length": 6.4,
         "width": 3.4,
@@ -621,6 +640,28 @@
           "semanticRole": "service_platform"
         },
         {
+          "kind": "helical_ladder",
+          "semanticRole": "external_spiral_ladder",
+          "sourcePartKind": "helical_ladder",
+          "position": [
+            -1.7,
+            6.6,
+            0
+          ],
+          "height": 11.4,
+          "innerRadius": 0.92,
+          "outerRadius": 1.28,
+          "width": 0.36,
+          "depth": 0.22,
+          "sweepAngle": 15.08,
+          "startAngle": 0.31,
+          "stepCount": 36,
+          "ringCount": 28,
+          "railingHeight": 0.42,
+          "wireRadius": 0.018,
+          "metalColor": "#94a3b8"
+        },
+        {
           "kind": "inlet_port",
           "semanticRole": "crude_feed_inlet"
         },
@@ -650,6 +691,14 @@
       "family": "distillation_column",
       "layoutFamily": "distillation_column_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:distillation-unit",
+      "recipeParams": {
+        "columnKind": "vacuum",
+        "columnRole": "vacuum_column_shell",
+        "exchangerRole": "heat_exchanger_shell",
+        "heaterRole": "vacuum_heater",
+        "manifoldRole": "vacuum_line"
+      },
       "defaultDimensions": {
         "length": 5.8,
         "width": 3.2,
@@ -681,6 +730,28 @@
           "semanticRole": "service_platform"
         },
         {
+          "kind": "helical_ladder",
+          "semanticRole": "external_spiral_ladder",
+          "sourcePartKind": "helical_ladder",
+          "position": [
+            -1.35,
+            5.7,
+            0
+          ],
+          "height": 10.1,
+          "innerRadius": 1.24,
+          "outerRadius": 1.66,
+          "width": 0.42,
+          "depth": 0.25,
+          "sweepAngle": 13.19,
+          "startAngle": -0.47,
+          "stepCount": 30,
+          "ringCount": 24,
+          "railingHeight": 0.42,
+          "wireRadius": 0.02,
+          "metalColor": "#94a3b8"
+        },
+        {
           "kind": "inlet_port",
           "semanticRole": "atmospheric_residue_inlet"
         },
@@ -704,6 +775,16 @@
       "family": "reactor",
       "layoutFamily": "vessel_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-reactor-unit",
+      "recipeParams": {
+        "variant": "fcc",
+        "primaryRole": "fcc_reactor",
+        "secondaryRole": "catalyst_regenerator",
+        "separatorRole": "main_fractionator",
+        "pipeRole": "riser_pipe",
+        "stackRole": "flue_gas_stack",
+        "cycloneRole": "cyclone_separator"
+      },
       "defaultDimensions": {
         "length": 7.2,
         "width": 4.2,
@@ -779,6 +860,14 @@
       "family": "reactor",
       "layoutFamily": "vessel_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-reactor-unit",
+      "recipeParams": {
+        "variant": "hydrotreating",
+        "primaryRole": "hydrotreater_reactor",
+        "exchangerRole": "heat_exchanger_shell",
+        "separatorRole": "high_pressure_separator",
+        "pipeRole": "hydrogen_header"
+      },
       "defaultDimensions": {
         "length": 6.4,
         "width": 3.2,
@@ -832,6 +921,15 @@
       "family": "reactor",
       "layoutFamily": "vessel_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-reactor-unit",
+      "recipeParams": {
+        "variant": "reformer",
+        "primaryRole": "reformer_reactor_train",
+        "heaterRole": "reformer_fired_heater",
+        "exchangerRole": "heat_exchanger_shell",
+        "separatorRole": "reformer_separator",
+        "pipeRole": "hydrogen_rich_gas_header"
+      },
       "defaultDimensions": {
         "length": 7.2,
         "width": 3.4,
@@ -885,6 +983,13 @@
       "family": "reactor",
       "layoutFamily": "vessel_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-reactor-unit",
+      "recipeParams": {
+        "variant": "sulfur",
+        "primaryRole": "claus_reactor",
+        "exchangerRole": "heat_exchanger_shell",
+        "stackRole": "tail_gas_stack"
+      },
       "defaultDimensions": {
         "length": 5.4,
         "width": 2.8,
@@ -937,6 +1042,13 @@
       "family": "generic",
       "layoutFamily": "generic_industrial_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "recipeParams": {
+        "variant": "flare",
+        "primaryRole": "flare_stack",
+        "vesselRole": "knockout_drum",
+        "pipeRole": "relief_gas_inlet"
+      },
       "defaultDimensions": {
         "length": 4.2,
         "width": 2.6,
@@ -982,6 +1094,13 @@
       "family": "pipe_system",
       "layoutFamily": "linear_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "recipeParams": {
+        "variant": "pipe-rack",
+        "primaryRole": "main_pipe_header",
+        "pipeRole": "parallel_pipe_run",
+        "frameRole": "pipe_rack_support_frame"
+      },
       "defaultDimensions": {
         "length": 12,
         "width": 1.4,
@@ -1023,6 +1142,15 @@
       "family": "generic",
       "layoutFamily": "generic_industrial_layout",
       "preferredResolver": "profile-parts",
+      "recipeId": "factory:refinery-auxiliary-unit",
+      "recipeParams": {
+        "variant": "boiler",
+        "primaryRole": "boiler_body",
+        "vesselRole": "steam_drum",
+        "pipeRole": "steam_header",
+        "stackRole": "boiler_stack",
+        "controlRole": "boiler_control_box"
+      },
       "defaultDimensions": {
         "length": 4.6,
         "width": 2.6,

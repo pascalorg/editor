@@ -49,6 +49,16 @@ describe('LevelNode', () => {
     expect(AnyNode.safeParse(level).success).toBe(true)
   })
 
+  test('accepts registered plugin node children by id', () => {
+    const level = LevelNode.parse({
+      id: 'level_main',
+      children: ['factory-pump_generated'],
+    })
+
+    expect(level.children as string[]).toEqual(['factory-pump_generated'])
+    expect(AnyNode.safeParse(level).success).toBe(true)
+  })
+
   test('accepts data display children', () => {
     const chart = DataChartNode.parse({})
     const table = DataTableNode.parse({})

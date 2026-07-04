@@ -1,4 +1,4 @@
-import { loadPlugin, nodeRegistry } from '@pascal-app/core'
+import { loadPlugin, nodeRegistry, semanticRecipeRegistry } from '@pascal-app/core'
 import { factoryEquipmentPlugin } from '@pascal-app/plugin-factory-equipment'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
@@ -37,9 +37,9 @@ const manifest = normalizeIndustryPackV2Manifest({
   dependsOnPlugins: ['pascal:factory-equipment'],
   profiles: ['profiles/pumps.json'],
   equipmentBindings: [
-    {
-      profileId: 'chemical.centrifugal_pump',
-      nodeKind: 'factory:pump',
+      {
+        profileId: 'chemical.centrifugal_pump',
+        recipeId: 'factory:centrifugal-pump',
       paramMap: {
         'equipmentDefaults.pumpType': 'pumpType',
         'equipmentDefaults.flowRate': 'flowRate',
@@ -62,14 +62,16 @@ const manifest = normalizeIndustryPackV2Manifest({
 describe('equipment spec compiler', () => {
   beforeEach(async () => {
     nodeRegistry._reset()
+    semanticRecipeRegistry._reset()
     await loadPlugin(factoryEquipmentPlugin)
   })
 
   afterEach(() => {
     nodeRegistry._reset()
+    semanticRecipeRegistry._reset()
   })
 
-  test('compiles a Chinese centrifugal pump prompt into factory:pump instead of assembly', () => {
+  test('compiles a Chinese centrifugal pump prompt into semantic assembly', () => {
     const result = compileSingleEquipmentPrompt({
       manifest,
       profiles: [pumpProfile],
@@ -78,30 +80,35 @@ describe('equipment spec compiler', () => {
       position: [4, 0, 2],
     })
 
-    expect(result.kind).toBe('equipment-node')
-    if (result.kind !== 'equipment-node') throw new Error('expected equipment node')
-    expect(result.spec.nodeKind).toBe('factory:pump')
-    expect(result.patch).toMatchObject({
+    expect(result.kind).toBe('semantic-assembly')
+    if (result.kind !== 'semantic-assembly') throw new Error('expected semantic assembly')
+    expect(result.spec.recipeId).toBe('factory:centrifugal-pump')
+    expect(result.spec.params).toMatchObject({
+      pumpType: 'centrifugal',
+      length: 2.6,
+      width: 1.1,
+      height: 1.4,
+      flowRate: 120,
+      motorPower: 15,
+      inletDiameter: 0.18,
+      outletDiameter: 0.12,
+      skidMounted: true,
+    })
+    expect(result.patchPlan.patches[0]).toMatchObject({
       op: 'create',
       parentId: 'level_factory',
       node: {
-        type: 'factory:pump',
-        pumpType: 'centrifugal',
-        length: 2.6,
-        width: 1.1,
-        height: 1.4,
-        flowRate: 120,
-        motorPower: 15,
-        inletDiameter: 0.18,
-        outletDiameter: 0.12,
-        skidMounted: true,
+        type: 'assembly',
         position: [4, 0, 2],
+        metadata: {
+          resolver: 'semantic-assembly',
+          recipeId: 'factory:centrifugal-pump',
+        },
       },
     })
-    expect(result.patch.node.type).not.toBe('assembly')
   })
 
-  test('compiles a process station centrifugal pump into factory:pump', () => {
+  test('compiles a process station centrifugal pump into semantic assembly', () => {
     const result = compileProcessStationEquipment({
       manifest,
       profiles: [pumpProfile],
@@ -112,10 +119,10 @@ describe('equipment spec compiler', () => {
       },
     })
 
-    expect(result.kind).toBe('equipment-node')
-    if (result.kind !== 'equipment-node') throw new Error('expected equipment node')
+    expect(result.kind).toBe('semantic-assembly')
+    if (result.kind !== 'semantic-assembly') throw new Error('expected semantic assembly')
     expect(result.spec).toMatchObject({
-      nodeKind: 'factory:pump',
+      recipeId: 'factory:centrifugal-pump',
       profileId: 'chemical.centrifugal_pump',
       params: {
         pumpType: 'centrifugal',
@@ -138,10 +145,9 @@ describe('equipment spec compiler', () => {
       },
     })
 
-    expect(result.kind).toBe('equipment-node')
-    if (result.kind !== 'equipment-node') throw new Error('expected equipment node')
-    expect(result.patch.node).toMatchObject({
-      type: 'factory:pump',
+    expect(result.kind).toBe('semantic-assembly')
+    if (result.kind !== 'semantic-assembly') throw new Error('expected semantic assembly')
+    expect(result.spec.params).toMatchObject({
       flowRate: 80,
       motorPower: 11,
       inletDiameter: 0.18,

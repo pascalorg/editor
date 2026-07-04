@@ -1,0 +1,249 @@
+[
+  {
+    "id": "fine_chemical.shell_tube_condenser",
+    "name": "Shell-and-tube condenser",
+    "aliases": [
+      "shell tube condenser",
+      "condenser",
+      "heat exchanger",
+      "冷凝器",
+      "换热器"
+    ],
+    "industry": "fine-chemical",
+    "family": "heat_exchanger",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "length": 2.8,
+      "width": 0.7,
+      "height": 0.8,
+      "diameter": 0.55
+    },
+    "primarySemanticRole": "heat_exchanger_shell",
+    "qualityRules": "quality.fine_chemical.shell_tube_condenser",
+    "parts": [
+      {
+        "kind": "heat_exchanger",
+        "semanticRole": "heat_exchanger_shell",
+        "required": true,
+        "length": 2.6,
+        "radius": 0.28
+      },
+      {
+        "kind": "skid_base",
+        "semanticRole": "support_base",
+        "required": true,
+        "length": 2.7,
+        "width": 0.72,
+        "height": 0.12
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "cooling_water_manifold",
+        "length": 1.4,
+        "radius": 0.04
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Horizontal shell-and-tube condenser / exchanger with supports and utility manifold.",
+    "editableSchemaRef": "vessel.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56
+    },
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "horizontal",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    },
+    "preferredResolver": "profile-parts"
+  },
+  {
+    "id": "fine_chemical.distillation_column",
+    "name": "Fine chemical distillation column",
+    "aliases": [
+      "distillation column",
+      "rectification column",
+      "精馏塔",
+      "蒸馏塔"
+    ],
+    "industry": "fine-chemical",
+    "family": "distillation_tower",
+    "layoutFamily": "vessel_layout",
+    "archetypeFamily": "thermal_equipment",
+    "defaultDimensions": {
+      "diameter": 0.8,
+      "height": 5.2
+    },
+    "primarySemanticRole": "distillation_column_shell",
+    "qualityRules": "quality.fine_chemical.distillation_column",
+    "parts": [
+      {
+        "kind": "cylindrical_tank",
+        "semanticRole": "distillation_column_shell",
+        "required": true,
+        "axis": "y",
+        "height": 4.8,
+        "radius": 0.34
+      },
+      {
+        "kind": "flange_ring",
+        "semanticRole": "tray_level_rings",
+        "required": true,
+        "count": 6,
+        "radius": 0.34
+      },
+      {
+        "kind": "inlet_port",
+        "semanticRole": "feed_nozzle",
+        "required": true
+      },
+      {
+        "kind": "outlet_port",
+        "semanticRole": "overhead_vapor_nozzle",
+        "required": true
+      },
+      {
+        "kind": "platform_ladder",
+        "semanticRole": "access_platform",
+        "height": 3.8,
+        "length": 1,
+        "width": 0.55
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Tall distillation / rectification column with tray rings, feed and overhead nozzles, and access platform.",
+    "editableSchemaRef": "tower_frame.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 120,
+      "parts": {
+        "tray_level_rings": {
+          "detailLevel": "low",
+          "count": 6,
+          "boltCount": 6
+        },
+        "access_platform": {
+          "detailLevel": "low",
+          "count": 6,
+          "rungCount": 6
+        }
+      }
+    },
+    "processPorts": [
+      {
+        "id": "inlet",
+        "medium": "material",
+        "side": "top",
+        "diameter": 0.16
+      },
+      {
+        "id": "outlet",
+        "medium": "material",
+        "side": "front",
+        "diameter": 0.12
+      }
+    ],
+    "equipmentDefaults": {
+      "orientation": "vertical",
+      "capacity": 10,
+      "liquidLevel": 0.5
+    },
+    "preferredResolver": "profile-parts"
+  },
+  {
+    "id": "fine_chemical.vacuum_tray_dryer",
+    "name": "Vacuum tray dryer",
+    "aliases": [
+      "vacuum tray dryer",
+      "vacuum dryer",
+      "真空干燥箱",
+      "真空干燥机"
+    ],
+    "industry": "fine-chemical",
+    "family": "machine_tool",
+    "layoutFamily": "box_enclosure_layout",
+    "archetypeFamily": "enclosed_machine",
+    "defaultDimensions": {
+      "length": 1.8,
+      "width": 1,
+      "height": 1.6
+    },
+    "primarySemanticRole": "dryer_chamber",
+    "qualityRules": "quality.fine_chemical.vacuum_tray_dryer",
+    "parts": [
+      {
+        "kind": "generic_base",
+        "semanticRole": "dryer_base",
+        "required": true,
+        "length": 1.8,
+        "width": 1,
+        "height": 0.16
+      },
+      {
+        "kind": "generic_body",
+        "semanticRole": "dryer_chamber",
+        "required": true,
+        "length": 1.5,
+        "width": 0.82,
+        "height": 1.15
+      },
+      {
+        "kind": "generic_panel",
+        "semanticRole": "sealed_front_door",
+        "required": true,
+        "length": 1.3,
+        "width": 0.04,
+        "height": 0.95,
+        "position": [
+          0.02,
+          0.75,
+          0.44
+        ]
+      },
+      {
+        "kind": "pipe_manifold",
+        "semanticRole": "vacuum_manifold",
+        "length": 1.2,
+        "radius": 0.035
+      },
+      {
+        "kind": "operator_panel",
+        "semanticRole": "temperature_control_panel"
+      }
+    ],
+    "status": "stable",
+    "source": "imported_pack",
+    "description": "Box-style vacuum tray dryer with sealed chamber, front door, vacuum manifold, and controls.",
+    "editableSchemaRef": "enclosure.common",
+    "detailBudget": {
+      "detailLevel": "low",
+      "maxShapes": 56,
+      "parts": {
+        "sealed_front_door": {
+          "detailLevel": "low"
+        },
+        "temperature_control_panel": {
+          "detailLevel": "low"
+        }
+      }
+    },
+    "preferredResolver": "profile-parts"
+  }
+]

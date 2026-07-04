@@ -1,11 +1,20 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { EquipmentParamValue } from '@pascal-app/core'
 import type {
   ProcessEquipmentContract,
   ProcessEquipmentPort,
   ProcessLinePlan,
   ProcessStationPlan,
 } from './process-line-types'
+import {
+  CENTRIFUGAL_PUMP_EDITABLE_PART_ROLES,
+  CENTRIFUGAL_PUMP_PROFILE_ID,
+  CENTRIFUGAL_PUMP_RECIPE_ID,
+  STORAGE_TANK_EDITABLE_PART_ROLES,
+  STORAGE_TANK_RECIPE_ID,
+} from '@pascal-app/plugin-factory-equipment'
+import { enabledProfilePackDirsSync } from '../profile-packs'
 
 type EquipmentProfile = Omit<ProcessEquipmentContract, 'ports'> & {
   aliases: RegExp[]
@@ -115,6 +124,15 @@ function stringArray(value: unknown): string[] {
     : []
 }
 
+function isEquipmentParamValue(value: unknown): value is EquipmentParamValue {
+  if (value === null) return true
+  if (typeof value === 'string' || typeof value === 'boolean') return true
+  if (typeof value === 'number') return Number.isFinite(value)
+  if (Array.isArray(value)) return value.every(isEquipmentParamValue)
+  if (!isRecord(value)) return false
+  return Object.values(value).every(isEquipmentParamValue)
+}
+
 function positiveNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
@@ -122,7 +140,10 @@ function positiveNumber(value: unknown) {
 function findRepoRootSync(start = process.cwd()) {
   let current = path.resolve(start)
   for (;;) {
-    if (fs.existsSync(path.join(current, 'apps', 'editor', 'data', 'profile-pack-cloud'))) {
+    if (
+      fs.existsSync(path.join(current, 'package.json')) &&
+      fs.existsSync(path.join(current, 'apps', 'editor'))
+    ) {
       return current
     }
     const parent = path.dirname(current)
@@ -131,8 +152,9 @@ function findRepoRootSync(start = process.cwd()) {
   }
 }
 
-function profilePackCloudRoot() {
-  return path.join(findRepoRootSync(), 'apps', 'editor', 'data', 'profile-pack-cloud')
+function runtimeProfilePackDirs() {
+  findRepoRootSync()
+  return enabledProfilePackDirsSync()
 }
 
 function safeRelativePath(value: string) {
@@ -225,7 +247,12 @@ const WATER_ELECTROLYSIS_PROFILES: EquipmentProfile[] = [
       tolerance: 0.08,
     },
     aliases: [/separator|gas liquid|\u5206\u79bb\u5668/i],
-    preferredResolver: 'native-tank',
+    preferredResolver: 'profile-parts',
+    recipeId: STORAGE_TANK_RECIPE_ID,
+    recipeSource: 'builtin-contract',
+    recipeParams: { orientation: 'vertical', shellColor: '#bfdbfe' },
+    primarySemanticRole: 'vessel_shell',
+    requiredRoles: [...STORAGE_TANK_EDITABLE_PART_ROLES],
     ports: [
       { id: 'gas_in', medium: 'material', side: 'left', height: 1.15, offset: 0 },
       { id: 'gas_out', medium: 'material', side: 'top', height: 2.7, offset: 0 },
@@ -243,10 +270,15 @@ const WATER_ELECTROLYSIS_PROFILES: EquipmentProfile[] = [
       tolerance: 0.08,
     },
     aliases: [/drying|buffer|storage|\u5e72\u71e5|\u7f13\u51b2|\u50a8\u7f50/i],
-    preferredResolver: 'native-tank',
+    preferredResolver: 'profile-parts',
+    recipeId: STORAGE_TANK_RECIPE_ID,
+    recipeSource: 'builtin-contract',
+    recipeParams: { orientation: 'horizontal', shellColor: '#fde68a' },
+    primarySemanticRole: 'vessel_shell',
+    requiredRoles: [...STORAGE_TANK_EDITABLE_PART_ROLES],
     ports: [
-      { id: 'hydrogen_in', medium: 'hydrogen', side: 'left', height: 1.1, offset: 0 },
-      { id: 'hydrogen_out', medium: 'hydrogen', side: 'right', height: 1.1, offset: 0 },
+      { id: 'inlet', medium: 'hydrogen', side: 'left', height: 1.015, offset: 0 },
+      { id: 'outlet', medium: 'hydrogen', side: 'right', height: 0.665, offset: 0 },
     ],
   },
   {
@@ -280,16 +312,19 @@ const WATER_ELECTROLYSIS_PROFILES: EquipmentProfile[] = [
 
 const GENERIC_FACTORY_NODE_PROFILES: EquipmentProfile[] = [
   {
-    profileId: 'generic.centrifugal_pump',
+    profileId: CENTRIFUGAL_PUMP_PROFILE_ID,
     equipmentFamily: 'pump.centrifugal',
     scaleClass: 'conceptual_compact',
     envelope: { length: 2.6, width: 1.1, height: 1.4, origin: 'station_profile', tolerance: 0.08 },
     aliases: [/centrifugal[_\s-]?pump|transfer[_\s-]?pump|\bpump\b|\u79bb\u5fc3\u6cf5|\u6cf5/i],
-    preferredResolver: 'factory-node',
+    preferredResolver: 'profile-parts',
+    recipeId: CENTRIFUGAL_PUMP_RECIPE_ID,
+    recipeSource: 'builtin-contract',
     primarySemanticRole: 'pump',
+    requiredRoles: [...CENTRIFUGAL_PUMP_EDITABLE_PART_ROLES],
     ports: [
-      { id: 'inlet', medium: 'water', side: 'left', height: 0.58, offset: 0 },
-      { id: 'outlet', medium: 'water', side: 'right', height: 0.78, offset: 0 },
+      { id: 'inlet', medium: 'water', side: 'left', height: 0.7, offset: 0 },
+      { id: 'outlet', medium: 'water', side: 'right', height: 0.63, offset: 0 },
     ],
   },
 ]
@@ -832,6 +867,9 @@ function materializeProfile(profile: EquipmentProfile): ProcessEquipmentContract
     ...(profile.requiredRoles ? { requiredRoles: [...profile.requiredRoles] } : {}),
     ...(profile.preferredTool ? { preferredTool: profile.preferredTool } : {}),
     ...(profile.preferredResolver ? { preferredResolver: profile.preferredResolver } : {}),
+    ...(profile.recipeId ? { recipeId: profile.recipeId } : {}),
+    ...(profile.recipeParams ? { recipeParams: { ...profile.recipeParams } } : {}),
+    ...(profile.recipeSource ? { recipeSource: profile.recipeSource } : {}),
     ...(profile.profileParts
       ? { profileParts: profile.profileParts.map((part) => ({ ...part })) }
       : {}),
@@ -1103,6 +1141,20 @@ function normalizeProfilePackContract(
     ...inferredPorts.filter((port) => !ports.some((existing) => existing.id === port.id)),
   ]
   const primarySemanticRole = stringValue(raw.primarySemanticRole)
+  const recipeId =
+    stringValue(raw.recipeId) ??
+    stringValue(raw.equipmentRecipeId) ??
+    (stringValue(raw.preferredResolver) === 'profile-parts' && /tank|storage|vessel|separator/i.test(id)
+      ? STORAGE_TANK_RECIPE_ID
+      : undefined)
+  const recipeParams: Record<string, EquipmentParamValue> | undefined = isRecord(raw.recipeParams)
+    ? {}
+    : undefined
+  if (recipeParams && isRecord(raw.recipeParams)) {
+    for (const [key, value] of Object.entries(raw.recipeParams)) {
+      if (isEquipmentParamValue(value)) recipeParams[key] = value
+    }
+  }
   return {
     id,
     label: name,
@@ -1120,6 +1172,8 @@ function normalizeProfilePackContract(
     aliases: [id, id.split('.').pop() ?? id, name, ...stringArray(raw.aliases)].map(aliasPattern),
     preferredTool: raw.preferredTool === 'compose_assembly' ? 'compose_assembly' : 'compose_parts',
     preferredResolver: preferredProfilePackResolver(raw, id),
+    ...(recipeId ? { recipeId, recipeSource: 'industry-binding' as const } : {}),
+    ...(recipeParams ? { recipeParams } : {}),
     ...(requiredRoles?.length ? { requiredRoles } : {}),
     ...(profileParts?.length ? { profileParts } : {}),
     ...(primarySemanticRole ? { primarySemanticRole } : {}),
@@ -1160,38 +1214,35 @@ function loadProfilePackContractsFromDir(dir: string): ProfilePackContract[] {
 }
 
 function loadProfilePackContracts() {
-  const root = profilePackCloudRoot()
-  const signature = profilePackContractsSignature(root)
+  const dirs = runtimeProfilePackDirs()
+  const signature = profilePackContractsSignature(dirs)
   if (cachedProfilePackContracts && cachedProfilePackContractsSignature === signature) {
     return cachedProfilePackContracts
   }
-  if (!fs.existsSync(root)) {
+  if (!dirs.length) {
     cachedProfilePackContracts = []
     cachedProfilePackContractsSignature = signature
     return cachedProfilePackContracts
   }
-  cachedProfilePackContracts = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .flatMap((entry) => {
-      try {
-        return loadProfilePackContractsFromDir(path.join(root, entry.name))
-      } catch {
-        return []
-      }
-    })
+  cachedProfilePackContracts = dirs.flatMap((dir) => {
+    try {
+      return loadProfilePackContractsFromDir(dir)
+    } catch {
+      return []
+    }
+  })
   cachedProfilePackContractsSignature = signature
   return cachedProfilePackContracts
 }
 
-function profilePackContractsSignature(root: string) {
-  if (!fs.existsSync(root)) return 'missing'
+function profilePackContractsSignature(dirs: readonly string[]) {
+  if (!dirs.length) return 'no-enabled-packs'
   const entries: string[] = []
-  const visit = (dir: string) => {
+  const visit = (root: string, dir: string) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        visit(file)
+        visit(root, file)
       } else if (/\.json$/i.test(entry.name)) {
         try {
           const stat = fs.statSync(file)
@@ -1202,7 +1253,9 @@ function profilePackContractsSignature(root: string) {
       }
     }
   }
-  visit(root)
+  for (const dir of dirs) {
+    if (fs.existsSync(dir)) visit(dir, dir)
+  }
   return entries.sort().join('|')
 }
 

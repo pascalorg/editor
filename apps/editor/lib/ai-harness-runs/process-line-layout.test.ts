@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { fallbackFactoryPlan } from './factory-planner'
 import { composeProcessLine } from './process-line-composer'
 import {
@@ -7,6 +7,7 @@ import {
   validateProcessLineLayout,
 } from './process-line-layout'
 import type { ProcessLinePlan } from './process-line-types'
+import { installIndustryPacksForTests } from './test-industry-pack-setup'
 
 function waterElectrolysisPlan() {
   const plan = fallbackFactoryPlan('create a hydrogen electrolysis workshop')
@@ -15,6 +16,18 @@ function waterElectrolysisPlan() {
 }
 
 describe('process line layout diagnostics', () => {
+  let restoreIndustryPacks: (() => Promise<void>) | undefined
+
+  beforeAll(async () => {
+    restoreIndustryPacks = await installIndustryPacksForTests([
+      { id: 'industry.electrolytic-aluminum.basic', version: '0.1.0' },
+    ])
+  })
+
+  afterAll(async () => {
+    await restoreIndustryPacks?.()
+  })
+
   test('validates the default water electrolysis station layout', () => {
     const result = composeProcessLine({
       prompt: 'create a hydrogen electrolysis workshop',

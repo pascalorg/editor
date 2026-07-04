@@ -313,6 +313,14 @@ describe('part registry', () => {
         placementProperties: expect.arrayContaining(['startAngle']),
       }),
     )
+    expect(details.get('helical_ladder')).toEqual(
+      expect.objectContaining({
+        semanticRole: 'external_spiral_ladder',
+        dimensionProperties: expect.arrayContaining(['height', 'innerRadius', 'outerRadius']),
+        quantityProperties: expect.arrayContaining(['stepCount', 'ringCount']),
+        placementProperties: expect.arrayContaining(['startAngle']),
+      }),
+    )
   })
 
   test('normalizes vehicle part aliases and clamps unsafe parameters', () => {

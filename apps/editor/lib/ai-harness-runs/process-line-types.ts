@@ -1,4 +1,5 @@
 import type { Vec3 } from '@pascal-app/core/lib/primitive-compose'
+import type { EquipmentParamValue, SemanticRecipeEditableParam } from '@pascal-app/core'
 
 export type ProcessLineDomain =
   | 'chemical'
@@ -58,6 +59,10 @@ export type ProcessEquipmentContract = {
   envelope: ProcessEquipmentEnvelope
   ports: ProcessEquipmentPort[]
   requiredRoles?: string[]
+  recipeId?: string
+  recipeParams?: Record<string, EquipmentParamValue>
+  editableParams?: readonly SemanticRecipeEditableParam[]
+  recipeSource?: 'industry-binding' | 'plugin-recipe' | 'builtin-contract'
   preferredTool?: 'compose_parts' | 'compose_assembly'
   preferredResolver?:
     | 'catalog-item'
