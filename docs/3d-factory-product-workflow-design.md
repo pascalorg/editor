@@ -593,7 +593,8 @@ Phase 6 delivery status:
 - Done: AI harness runs expose a derived workflow graph from existing run/result/event data.
 - Done: recent runs expose compact workflow summaries for a run history panel.
 - Done: the AI panel includes a minimal Runs inspector that opens the workflow stages for a selected run.
-- Deferred: station-scoped re-run from a stage.
+- Done: station-scoped equipment compiler re-run can create a new focused run from a saved process plan.
+- Deferred: replacing the old station on the canvas with a station rerun result.
 - Deferred: save generation plan as reusable template.
 
 ### Phase 7: Image And Joint Asset Integration

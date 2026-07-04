@@ -3831,7 +3831,13 @@ type AiWorkflowGraph = {
   title: string
   summary: string
   stages: AiWorkflowStageSummary[]
-  rerunTargets?: { stageId: string; label: string; supported: boolean; reason: string }[]
+  rerunTargets?: {
+    stageId: string
+    label: string
+    supported: boolean
+    reason: string
+    stationId?: string
+  }[]
   templateCandidate?: { available: boolean; label: string; reason: string }
 }
 
@@ -5771,6 +5777,32 @@ export function AiChatPanel() {
     }
   }, [])
 
+  const triggerWorkflowRerun = useCallback(
+    async (sourceRunId: string, target: NonNullable<AiWorkflowGraph['rerunTargets']>[number]) => {
+      if (!(sourceRunId && target.supported && target.stationId)) return
+      try {
+        const response = await fetch(
+          `/api/ai-harness/runs/${encodeURIComponent(sourceRunId)}/rerun`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              stageId: target.stageId,
+              stationId: target.stationId,
+            }),
+          },
+        )
+        const data = await response.json().catch(() => ({}))
+        const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+        await refreshRunHistory()
+        if (runId) await inspectRunWorkflow(runId)
+      } catch {
+        await refreshRunHistory()
+      }
+    },
+    [inspectRunWorkflow, refreshRunHistory],
+  )
+
   useEffect(() => {
     if (!panelHydrated) return
     void refreshConversationHistory()
@@ -7148,6 +7180,27 @@ export function AiChatPanel() {
                               </div>
                             </div>
                           ))}
+                          {selectedWorkflowGraph.rerunTargets?.some((target) => target.supported) ? (
+                            <div className="grid gap-1 border-border/50 border-t pt-1.5">
+                              {selectedWorkflowGraph.rerunTargets
+                                .filter((target) => target.supported)
+                                .slice(0, 6)
+                                .map((target) => (
+                                  <button
+                                    className="inline-flex items-center justify-between gap-2 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-left text-[9px] text-sky-100 transition-colors hover:bg-sky-400/20"
+                                    data-testid={`ai-run-rerun-target-${target.stageId}-${target.stationId ?? 'station'}`}
+                                    key={`${target.stageId}-${target.stationId ?? target.label}`}
+                                    onClick={() =>
+                                      void triggerWorkflowRerun(selectedWorkflowGraph.runId, target)
+                                    }
+                                    type="button"
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                                    <Icon className="size-3 shrink-0" icon="mdi:replay" />
+                                  </button>
+                                ))}
+                            </div>
+                          ) : null}
                           {selectedWorkflowGraph.templateCandidate ? (
                             <div className="rounded border border-border/50 bg-accent/20 px-2 py-1 text-[9px] text-muted-foreground">
                               Template:{' '}

@@ -42,7 +42,13 @@ export type AiWorkflowGraph = {
   summary: string
   stages: AiWorkflowStage[]
   edges: AiWorkflowEdge[]
-  rerunTargets: { stageId: string; label: string; supported: boolean; reason: string }[]
+  rerunTargets: {
+    stageId: string
+    label: string
+    supported: boolean
+    reason: string
+    stationId?: string
+  }[]
   templateCandidate?: {
     available: boolean
     label: string
@@ -150,11 +156,20 @@ function latestEvent(events: readonly AiHarnessRunEvent[], type: AiHarnessRunEve
   return events.filter((event) => event.type === type).at(-1)
 }
 
+function workflowRerunSpec(run: AiHarnessRun) {
+  const rerun = recordValue(recordValue(run.params)?.workflowRerun)
+  const sourceRunId = stringValue(rerun?.sourceRunId)
+  const stageId = stringValue(rerun?.stageId)
+  const stationId = stringValue(rerun?.stationId)
+  return sourceRunId && stageId && stationId ? { sourceRunId, stageId, stationId } : null
+}
+
 function buildFactoryWorkflowGraph(
   run: AiHarnessRun,
   events: readonly AiHarnessRunEvent[],
 ): AiWorkflowGraph {
   const result = resultOf(run)
+  const rerunSpec = workflowRerunSpec(run)
   const plan = factoryPlan(run)
   const process = factoryProcess(run)
   const quality = factoryQuality(run)
@@ -274,7 +289,9 @@ function buildFactoryWorkflowGraph(
     runId: run.id,
     mode: run.mode,
     status: run.status,
-    title: stringValue(process?.processLabel) ?? 'Factory workflow',
+    title: rerunSpec
+      ? `Station rerun: ${rerunSpec.stationId}`
+      : (stringValue(process?.processLabel) ?? 'Factory workflow'),
     summary:
       stringValue(quality?.summary) ??
       (run.error ? `Failed: ${run.error}` : `${run.status} factory generation workflow`),
@@ -287,12 +304,19 @@ function buildFactoryWorkflowGraph(
         supported: false,
         reason: 'Phase 6 first slice exposes the graph before enabling partial re-run.',
       },
-      {
-        stageId: 'equipment-compiler',
-        label: 'Re-run selected station equipment',
-        supported: false,
-        reason: 'Requires station-scoped run request support.',
-      },
+      ...stations.filter(isRecord).map((station) => {
+        const stationId = stringValue(station.id)
+        const stationLabel = stringValue(station.label) ?? stationId ?? 'station'
+        return {
+          stageId: 'equipment-compiler',
+          label: `Re-run ${stationLabel} equipment`,
+          supported: Boolean(stationId),
+          reason: stationId
+            ? 'Creates a station-scoped factory run from the saved process plan.'
+            : 'Station id is missing.',
+          ...(stationId ? { stationId } : {}),
+        }
+      }),
     ],
     templateCandidate: {
       available: Boolean(plan),

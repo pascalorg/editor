@@ -99,6 +99,13 @@ describe('AI workflow graph summary', () => {
     })
     expect(graph.edges).toContainEqual({ from: 'route-composer', to: 'quality-report' })
     expect(graph.templateCandidate).toMatchObject({ available: true, label: 'Refinery' })
+    expect(graph.rerunTargets).toContainEqual({
+      stageId: 'equipment-compiler',
+      label: 'Re-run Atmospheric tower equipment',
+      supported: true,
+      reason: 'Creates a station-scoped factory run from the saved process plan.',
+      stationId: 'distillation',
+    })
   })
 
   test('marks the industry pack resolver blocked when the required pack is not installed', () => {
@@ -158,5 +165,31 @@ describe('AI workflow graph summary', () => {
       stageCount: 3,
       templateAvailable: false,
     })
+  })
+
+  test('labels station-scoped workflow reruns', () => {
+    const run = baseRun({
+      params: {
+        workflowRerun: {
+          sourceRunId: 'run_source',
+          stageId: 'equipment-compiler',
+          stationId: 'feed_pump',
+        },
+      },
+      result: {
+        plan: {
+          kind: 'process_line',
+          process: {
+            processLabel: 'Pump transfer / Feed pump',
+            stations: [{ id: 'feed_pump' }],
+            connections: [],
+          },
+        },
+        patches: [],
+        missingAssets: [],
+      },
+    })
+
+    expect(buildAiWorkflowGraph({ run }).title).toBe('Station rerun: feed_pump')
   })
 })

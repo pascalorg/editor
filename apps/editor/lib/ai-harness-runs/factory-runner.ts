@@ -20,7 +20,6 @@ import type {
 } from './primitive-generation-service'
 import { composeProcessLine } from './process-line-composer'
 import { stationDisplayLabel } from './process-line-localization'
-import { compileSingleEquipmentPrompt } from './single-equipment-compiler'
 import type {
   ProcessRouteObstacle,
   ProcessRoutePortEndpoint,
@@ -33,6 +32,8 @@ import type {
   ProcessPrimitiveRequest,
 } from './process-line-types'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
+import { compileSingleEquipmentPrompt } from './single-equipment-compiler'
+import { buildStationWorkflowRerunResult, parseWorkflowRerunSpec } from './workflow-rerun'
 
 const runningRuns = new Set<string>()
 const activeControllers = new Map<string, AbortController>()
@@ -1049,6 +1050,53 @@ async function runFactoryRun(runId: string) {
 
   try {
     const placement = buildFactoryPlacementSpec({ context: run.context, params: run.params })
+    const workflowRerunSpec = parseWorkflowRerunSpec(run.params)
+    if (workflowRerunSpec) {
+      const sourceRun = await loadRun(workflowRerunSpec.sourceRunId)
+      if (!sourceRun)
+        throw new Error(`Source workflow run not found: ${workflowRerunSpec.sourceRunId}`)
+      const rerunResult = buildStationWorkflowRerunResult({
+        run,
+        sourceRun,
+        spec: workflowRerunSpec,
+        placement,
+      })
+      const runStatus = failedFactoryRunStatus(
+        rerunResult,
+        rerunResult.missingAssets.some((asset) => asset.required),
+        rerunResult.missingAssets[0]?.reason ?? 'Station workflow rerun failed.',
+      )
+      await appendRunEvent(runId, {
+        type: 'message',
+        message: runStatus.failed
+          ? 'Station workflow rerun needs review.'
+          : 'Station workflow rerun generated; patches are ready.',
+        data: {
+          stage: 'workflow-rerun',
+          sourceRunId: workflowRerunSpec.sourceRunId,
+          rerunStageId: workflowRerunSpec.stageId,
+          stationId: workflowRerunSpec.stationId,
+          patchCount: rerunResult.patches.length,
+          nodeIds: rerunResult.nodeIds,
+          missingAssets: rerunResult.missingAssets,
+          qualityReport: rerunResult.qualityReport,
+        },
+      })
+      await appendRunEvent(runId, { type: 'result', data: rerunResult })
+      await updateRun(runId, {
+        status: runStatus.failed ? 'failed' : 'succeeded',
+        completedAt: new Date().toISOString(),
+        ...(runStatus.failed ? { error: runStatus.error } : {}),
+        result: rerunResult,
+      })
+      await appendRunEvent(runId, {
+        type: 'status',
+        message: runStatus.failed ? 'failed' : 'succeeded',
+        data: { status: runStatus.failed ? 'failed' : 'succeeded', error: runStatus.error },
+      })
+      return
+    }
+
     const selectionEditResult = buildFactoryRunResultFromSelectionEdit({
       prompt: run.prompt,
       context: run.context,
