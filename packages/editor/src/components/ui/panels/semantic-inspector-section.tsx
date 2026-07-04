@@ -199,15 +199,56 @@ function PortsTab({ ports }: { ports: ObjectPortSummary[] }) {
     <div className="grid gap-1.5" data-testid="semantic-inspector-ports">
       {ports.map((port) => (
         <div
-          className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded border border-border/45 bg-background/40 px-2 py-1.5 text-[11px]"
+          className="grid gap-1.5 rounded border border-border/45 bg-background/40 px-2 py-1.5 text-[11px]"
           data-testid={`semantic-inspector-port-${port.id}`}
           key={port.id}
         >
-          <div className="min-w-0 truncate text-foreground">{port.id}</div>
-          <div className="flex gap-1">
-            {port.medium && <SemanticChip tone="sky">{port.medium}</SemanticChip>}
-            {port.side && <SemanticChip tone="amber">{port.side}</SemanticChip>}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <div className="min-w-0 truncate text-foreground">{port.id}</div>
+            <div className="flex gap-1">
+              {port.medium && <SemanticChip tone="sky">{port.medium}</SemanticChip>}
+              {port.side && <SemanticChip tone="amber">{port.side}</SemanticChip>}
+              {port.dataKey && <SemanticChip tone="green">data</SemanticChip>}
+            </div>
           </div>
+          {port.connections.length > 0 ? (
+            <div className="grid gap-1" data-testid={`semantic-inspector-port-${port.id}-connections`}>
+              {port.connections.map((connection, index) => {
+                const target =
+                  connection.connectedNodeLabel ??
+                  connection.connectedStationId ??
+                  connection.connectedNodeId ??
+                  'Unknown target'
+                return (
+                  <div
+                    className="grid gap-0.5 rounded bg-muted/20 px-2 py-1 text-muted-foreground"
+                    data-testid={`semantic-inspector-port-${port.id}-connection-${index}`}
+                    key={`${connection.nodeId}-${connection.direction}-${connection.connectedPortId ?? index}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-foreground">
+                        {connection.direction === 'outgoing' ? 'To' : 'From'} {target}
+                      </span>
+                      {connection.connectedPortId && (
+                        <SemanticChip>{connection.connectedPortId}</SemanticChip>
+                      )}
+                    </div>
+                    <div className="truncate">
+                      via {connection.nodeType} {connection.nodeId}
+                      {connection.medium ? ` / ${connection.medium}` : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div
+              className="rounded bg-muted/15 px-2 py-1 text-muted-foreground"
+              data-testid={`semantic-inspector-port-${port.id}-unconnected`}
+            >
+              No connection
+            </div>
+          )}
         </div>
       ))}
     </div>

@@ -42,6 +42,19 @@ export type ObjectPortSummary = {
   id: string
   medium?: string
   side?: string
+  dataKey?: string
+  connections: ObjectPortConnectionSummary[]
+}
+
+export type ObjectPortConnectionSummary = {
+  nodeId: string
+  nodeType: string
+  direction: 'incoming' | 'outgoing'
+  connectedStationId?: string
+  connectedNodeId?: string
+  connectedNodeLabel?: string
+  connectedPortId?: string
+  medium?: string
 }
 
 export type ObjectCapabilityProfile = {
@@ -175,9 +188,86 @@ function portsFrom(metadata: AnyRecord): ObjectPortSummary[] {
       id,
       medium: stringValue(raw.medium),
       side: stringValue(raw.side),
+      dataKey: stringValue(raw.dataKey),
+      connections: [],
     })
   }
   return ports
+}
+
+function stationIdOf(node: AnyNode | undefined) {
+  return stringValue(metadataOf(node).stationId)
+}
+
+function nodeLabel(node: AnyNode | undefined) {
+  return typeof node?.name === 'string' && node.name.trim().length > 0
+    ? node.name.trim()
+    : undefined
+}
+
+function stationNodeIdMap(nodes: NodeMap) {
+  const byStation = new Map<string, string>()
+  for (const node of Object.values(nodes)) {
+    if (!node) continue
+    const stationId = stationIdOf(node)
+    if (stationId && !byStation.has(stationId)) byStation.set(stationId, String(node.id))
+  }
+  return byStation
+}
+
+function portConnectionsFor(input: {
+  node: AnyNode
+  nodes: NodeMap
+  portId: string
+}): ObjectPortConnectionSummary[] {
+  const selectedNodeId = String(input.node.id)
+  const selectedStationId = stationIdOf(input.node)
+  const byStation = stationNodeIdMap(input.nodes)
+  const connections: ObjectPortConnectionSummary[] = []
+  const seen = new Set<string>()
+
+  for (const routeNode of Object.values(input.nodes)) {
+    if (!routeNode || routeNode.id === input.node.id) continue
+    const route = metadataOf(routeNode)
+    const fromNodeId = stringValue(route.fromNodeId)
+    const toNodeId = stringValue(route.toNodeId)
+    const fromStationId = stringValue(route.fromStationId)
+    const toStationId = stringValue(route.toStationId)
+    const fromPortId = stringValue(route.fromPortId)
+    const toPortId = stringValue(route.toPortId)
+    const routeMedium = stringValue(route.medium)
+
+    const matchesOutgoing =
+      fromPortId === input.portId &&
+      ((selectedStationId && fromStationId === selectedStationId) || fromNodeId === selectedNodeId)
+    const matchesIncoming =
+      toPortId === input.portId &&
+      ((selectedStationId && toStationId === selectedStationId) || toNodeId === selectedNodeId)
+
+    if (!matchesOutgoing && !matchesIncoming) continue
+
+    const connectedStationId = matchesOutgoing ? toStationId : fromStationId
+    const connectedNodeId =
+      (matchesOutgoing ? toNodeId : fromNodeId) ??
+      (connectedStationId ? byStation.get(connectedStationId) : undefined)
+    const connectedNode = connectedNodeId ? input.nodes[connectedNodeId] : undefined
+    const connectedPortId = matchesOutgoing ? toPortId : fromPortId
+    const key = `${routeNode.id}:${matchesOutgoing ? 'out' : 'in'}:${input.portId}:${connectedPortId ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    connections.push({
+      nodeId: String(routeNode.id),
+      nodeType: String(routeNode.type),
+      direction: matchesOutgoing ? 'outgoing' : 'incoming',
+      connectedStationId,
+      connectedNodeId,
+      connectedNodeLabel: nodeLabel(connectedNode),
+      connectedPortId,
+      medium: routeMedium,
+    })
+  }
+
+  return connections
 }
 
 function hasLiveData(metadata: AnyRecord) {
@@ -220,7 +310,10 @@ export function resolveObjectCapabilities(
   const sources: ObjectSourceKind[] = []
   const capabilities: ObjectCapabilitySummary[] = []
   const editableParts: ObjectPartSummary[] = []
-  const ports = portsFrom(metadata)
+  const ports = portsFrom(metadata).map((port) => ({
+    ...port,
+    connections: portConnectionsFor({ node, nodes, portId: port.id }),
+  }))
   const nodeType = String(node.type)
 
   pushUnique(sources, 'manual')
@@ -389,7 +482,20 @@ function formatPart(part: ObjectPartSummary) {
 
 function formatPort(port: ObjectPortSummary) {
   const details = [port.medium, port.side].filter(Boolean).join('/')
-  return details ? `${port.id}(${details})` : port.id
+  const identity = details ? `${port.id}(${details})` : port.id
+  const portConnections = port.connections ?? []
+  if (!portConnections.length) return identity
+  const connections = portConnections
+    .map((connection) => {
+      const target =
+        connection.connectedNodeLabel ??
+        connection.connectedStationId ??
+        connection.connectedNodeId ??
+        'unknown'
+      return `${connection.direction}->${target}${connection.connectedPortId ? `:${connection.connectedPortId}` : ''}`
+    })
+    .join('|')
+  return `${identity}{${connections}}`
 }
 
 export function formatObjectCapabilityProfile(profile: ObjectCapabilityProfile) {

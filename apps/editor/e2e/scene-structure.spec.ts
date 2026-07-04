@@ -265,6 +265,12 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await page.getByTestId('semantic-inspector-tab-ports').click()
     await expect(page.getByTestId('semantic-inspector-port-inlet')).toContainText('crude')
     await expect(page.getByTestId('semantic-inspector-port-outlet')).toContainText('product')
+    await expect(page.getByTestId('semantic-inspector-port-outlet-connection-0')).toContainText(
+      'Product tank farm',
+    )
+    await expect(page.getByTestId('semantic-inspector-port-outlet-connection-0')).toContainText(
+      'pipe_transfer_e2e',
+    )
     await page.getByTestId('semantic-inspector-tab-data').click()
     await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
       'color: machine.temperature',

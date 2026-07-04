@@ -527,13 +527,13 @@ Foundation delivered:
 - Equipment tab separates instance edit affordance from read-only profile/industry-pack identity.
 - Parts tab lists semantic parts and can select exposed part nodes.
 - Ports tab lists declared connection anchors with medium/side metadata.
+- Ports tab resolves route/pipe metadata back into each port, showing connected equipment, connected port, route node, and unconnected state.
 - Data tab summarizes live-data and dynamic binding metadata without creating new binding state.
 - Source tab shows industry pack, process, role, generated source, and capability source tags.
 - Equipment tab now embeds semantic equipment instance parameters, so recipe/profile identity and editable device-level parameters live in one place.
 
 Next implementation slices:
 
-- Add port-focused selection/connection details when selecting a port anchor.
 - Add ladder/platform-specific part controls once refinery/cement recipes expose those part contracts.
 
 ### Phase 5: Data Binding Workflow

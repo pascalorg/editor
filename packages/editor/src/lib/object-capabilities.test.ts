@@ -26,6 +26,7 @@ function semanticTankNodes() {
     children: ['box_shell', 'box_liquid'],
     metadata: {
       processDomain: 'refinery',
+      stationId: 'crude_storage',
       equipmentAssembly: {
         kind: 'semantic-assembly',
         recipeId: 'factory:storage-tank',
@@ -59,11 +60,23 @@ function semanticTankNodes() {
       sourcePartKind: 'liquid_fill',
     },
   })
+  const feedRoute = {
+    id: 'pipe_feed',
+    type: 'pipe',
+    metadata: {
+      fromStationId: 'feed_pump',
+      fromPortId: 'outlet',
+      toStationId: 'crude_storage',
+      toPortId: 'inlet',
+      medium: 'crude',
+    },
+  } as AnyNode
 
   return {
     [assembly.id]: assembly,
     [shell.id]: shell,
     [liquid.id]: liquid,
+    [feedRoute.id]: feedRoute,
   } as Record<string, AnyNode>
 }
 
@@ -102,6 +115,15 @@ describe('object capabilities', () => {
       'vessel_shell',
     ])
     expect(profile?.ports.map((port) => port.id)).toEqual(['inlet', 'outlet'])
+    expect(profile?.ports.find((port) => port.id === 'inlet')?.connections).toMatchObject([
+      {
+        nodeId: 'pipe_feed',
+        direction: 'incoming',
+        connectedStationId: 'feed_pump',
+        connectedPortId: 'outlet',
+        medium: 'crude',
+      },
+    ])
   })
 
   test('uses the same resolver for AI selection snapshots', () => {
@@ -133,6 +155,7 @@ describe('object capabilities', () => {
     expect(context?.summary).toContain('vessel_shell#box_shell')
     expect(context?.summary).toContain('liquid_volume#box_liquid')
     expect(context?.summary).toContain('inlet(crude/west)')
+    expect(context?.summary).toContain('incoming->feed_pump:outlet')
     expect(context?.summary).toContain('Prefer editable semantic parts/params')
   })
 
