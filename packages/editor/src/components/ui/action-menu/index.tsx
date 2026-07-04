@@ -17,6 +17,7 @@ import {
 } from './../../../lib/material-paint'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
+import { CanvasLensToolbar } from './canvas-lens-toolbar'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
 import { StructureTools } from './structure-tools'
@@ -254,6 +255,9 @@ export function ActionMenu({ className }: { className?: string }) {
 
         {isMobile ? (
           <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
+            <div className="flex items-center justify-center border-border/50 border-b pb-1">
+              <CanvasLensToolbar />
+            </div>
             {/* Row 1: control modes only */}
             <div className="flex items-center justify-center gap-1">
               <ControlModes />
@@ -265,13 +269,16 @@ export function ActionMenu({ className }: { className?: string }) {
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-            <ControlModes />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <GridSnapControl />
-            <SecondaryToggles />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <CameraActions />
+          <div className="flex flex-col items-stretch">
+            <CanvasLensToolbar />
+            <div className="flex items-center justify-center gap-1 border-border/50 border-t px-2 py-1.5">
+              <ControlModes />
+              <div className="mx-1 h-5 w-px bg-border" />
+              <GridSnapControl />
+              <SecondaryToggles />
+              <div className="mx-1 h-5 w-px bg-border" />
+              <CameraActions />
+            </div>
           </div>
         )}
       </motion.div>

@@ -461,6 +461,8 @@ Deferred to later phases:
 
 ### Phase 3: Canvas Lenses
 
+Status: foundation in progress.
+
 Goal:
 
 - Let users switch what the canvas emphasizes without changing scene data.
@@ -476,6 +478,18 @@ Validation:
 - Process Lens shows ports and route arrows.
 - Data Lens shows bound/unbound status.
 - Maintenance Lens highlights platforms, ladders, access clearance.
+
+Foundation delivered:
+
+- Editor state now has a persisted `canvasLens` value with six lens modes: Layout, Process, Equipment, Data, Maintenance, and Elevation.
+- Bottom canvas toolbar exposes a Canvas Lens switcher without changing scene data, editor phase, build tool, or selection.
+- Scene Structure e2e verifies Lens switching can happen while Process structure and station selection remain stable.
+
+Next implementation slices:
+
+- Process Lens overlay: station labels, port markers, and lightweight route arrows.
+- Equipment Lens overlay: semantic assembly outlines and editable part affordances.
+- Data Lens overlay: bound/unbound equipment status and live-value label anchors.
 
 ### Phase 4: Semantic Inspector
 

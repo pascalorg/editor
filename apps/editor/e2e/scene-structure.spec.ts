@@ -195,6 +195,12 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
     await expect(page.getByText('Atmospheric distillation unit')).toBeVisible()
     await expect(page.getByText('Product tank farm')).toBeVisible()
+    await expect(page.getByTestId('canvas-lens-toolbar')).toBeVisible()
+    await expect(page.getByTestId('canvas-lens-layout')).toHaveAttribute('aria-pressed', 'true')
+
+    await page.getByTestId('canvas-lens-process').click()
+    await expect(page.getByTestId('canvas-lens-process')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
 
     await page.locator(`[data-scene-structure-node-id="${ids.tower}"]`).click()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
@@ -202,6 +208,13 @@ test('scene structure defaults factory scenes to process and preserves elevation
       'true',
     )
     await expect(page.getByRole('heading', { name: 'Atmospheric distillation unit' })).toBeVisible()
+
+    await page.getByTestId('canvas-lens-data').click()
+    await expect(page.getByTestId('canvas-lens-data')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
+      'data-scene-structure-selected',
+      'true',
+    )
 
     await page.getByTestId('scene-structure-mode-asset-source').click()
     await expect(page.getByTestId('scene-structure-summary')).toContainText('3 objects / 1 groups')
