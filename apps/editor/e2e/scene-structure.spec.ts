@@ -21,6 +21,8 @@ type FactoryE2eBridge = {
   sceneNodes: () => Record<string, SceneNode>
   selectNode: (nodeId: string) => void
   setPreviewMode: (enabled: boolean) => void
+  resetLiveDataSource: () => void
+  reseedFixedLiveDataSource: () => void
   liveDataValue: (path: string) => unknown
   nodeTransform: (nodeId: string) => {
     position: [number, number, number]
@@ -452,6 +454,85 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
         type: 'level',
         path: 'refinery.tank.level',
       })
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            return bridge?.liveDataValue('refinery.tank.level')
+          }),
+        { timeout: 10_000 },
+      )
+      .toBe(62)
+
+    await page.evaluate(() => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.resetLiveDataSource()
+    })
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            const nodes = (bridge?.sceneNodes() ?? {}) as Record<string, SceneNode>
+            const bindings = nodes[nodeId]?.metadata?.dynamicBindings as
+              | Array<Record<string, unknown>>
+              | undefined
+            return {
+              value: bridge?.liveDataValue('refinery.tank.level'),
+              bindingCount: bindings?.length ?? 0,
+              hasTankLevel: Boolean(
+                bindings?.some(
+                  (binding) =>
+                    binding.id === `semantic_live_${nodeId}_tank-level` &&
+                    binding.path === 'refinery.tank.level',
+                ),
+              ),
+            }
+          }, ids.tank),
+        { timeout: 10_000 },
+      )
+      .toEqual({
+        value: undefined,
+        bindingCount: 1,
+        hasTankLevel: true,
+      })
+
+    await page.evaluate(() => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.reseedFixedLiveDataSource()
+    })
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            return bridge?.liveDataValue('refinery.tank.level')
+          }),
+        { timeout: 10_000 },
+      )
+      .toBe(62)
 
     await page.getByTestId('sidebar-tab-site').click()
     await page.getByTestId('canvas-lens-data').click()

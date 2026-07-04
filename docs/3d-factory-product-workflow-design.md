@@ -546,10 +546,11 @@ Goal:
 
 Deliverables:
 
-- WebSocket source manager.
-- Message preview and field detector.
-- Drag/drop or assisted field-to-equipment binding.
+- Fixed/demo live data source for Phase 5 validation.
+- Message preview and semantic field detector.
+- Assisted field-to-equipment binding from Inspector and AI generation preview.
 - Data binding inspector and Data Lens overlays.
+- Dynamic preview runtime for semantic level, flow, and alarm pulse bindings.
 
 Validation:
 
@@ -557,6 +558,16 @@ Validation:
 - Bind `flow` to pipe or pump port label.
 - Bind `alarm` to color or pulse state.
 - Disconnect and reconnect source without losing binding config.
+
+Phase 5 delivery status:
+
+- Done: fixed factory live data source is seeded automatically for editor scenes.
+- Done: selected semantic equipment exposes binding targets in the AI context and Inspector Data tab.
+- Done: AI data-binding preview can write deterministic `dynamicBindings` to the selected node.
+- Done: Data Lens and Semantic Inspector read the same binding contract and show current values.
+- Done: browser coverage verifies tank level binding, alarm pulse binding, dynamic preview animation, and reset/reseed persistence.
+- Deferred: user-managed WebSocket source add/remove UI. For the current product phase, data sources remain fixed while the binding workflow is hardened.
+- Deferred: drag/drop field binding. Current assisted binding uses semantic target selection and AI/Inspector controls.
 
 ### Phase 6: Workflow Graph And Run History
 

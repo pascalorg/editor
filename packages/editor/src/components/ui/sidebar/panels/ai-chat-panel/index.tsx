@@ -40,6 +40,7 @@ import {
 } from '../../../../../lib/ai-generated-geometry'
 import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
 import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
+import { seedFixedFactoryLiveDataSource } from '../../../../../lib/fixed-live-data-source'
 import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../../../../lib/scene-bounds'
 import useViewer from '@pascal-app/viewer/store'
 import { Icon } from '@iconify/react'
@@ -3863,6 +3864,8 @@ type FactoryE2eBridge = {
     visible: boolean
   } | null
   selectNode: (nodeId: string) => void
+  resetLiveDataSource: () => void
+  reseedFixedLiveDataSource: () => void
   setSelectMode: () => void
   setPreviewMode: (enabled: boolean) => void
   selectedIds: () => string[]
@@ -4113,6 +4116,12 @@ export function AiChatPanel() {
         useEditor.getState().setPreviewMode(enabled)
       },
       liveDataValue: (path: string) => useLiveData.getState().values[path],
+      resetLiveDataSource: () => {
+        useLiveData.getState().resetLiveData()
+      },
+      reseedFixedLiveDataSource: () => {
+        seedFixedFactoryLiveDataSource()
+      },
       nodeTransform: (nodeId: string) => {
         const object = sceneRegistry.nodes.get(nodeId as AnyNodeId)
         if (!object) return null
