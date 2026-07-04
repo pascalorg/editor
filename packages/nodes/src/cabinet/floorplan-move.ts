@@ -3,12 +3,14 @@ import {
   type AnyNodeId,
   type CabinetModuleNode as CabinetModuleNodeType,
   type CabinetNode as CabinetNodeType,
+  createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   useScene,
 } from '@pascal-app/core'
 import { isMagneticSnapActive, useEditor } from '@pascal-app/editor'
 import { cabinetModuleParentFrame } from './move-frame'
+import { bumpCabinetRunLayoutRevision } from './run-ops'
 
 /**
  * 2D floor-plan move for a cabinet module — the parity twin of the 3D
@@ -37,17 +39,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
   const bumpRunLayoutRevision = (runId: AnyNodeId) => {
     const liveRun = useScene.getState().nodes[runId]
     if (liveRun?.type !== 'cabinet') return
-    const metadata =
-      liveRun.metadata && typeof liveRun.metadata === 'object' && !Array.isArray(liveRun.metadata)
-        ? (liveRun.metadata as Record<string, unknown>)
-        : {}
-    const revision =
-      typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-    useScene
-      .getState()
-      .updateNodes([
-        { id: runId, data: { metadata: { ...metadata, cabinetLayoutRevision: revision + 1 } } },
-      ])
+    bumpCabinetRunLayoutRevision(createSceneApi(useScene), liveRun)
   }
 
   const session: FloorplanMoveTargetSession = {

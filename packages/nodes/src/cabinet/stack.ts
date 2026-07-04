@@ -117,38 +117,63 @@ export function defaultDoorType(width: number): CabinetDoorType {
   return width > 0.5 ? 'double' : 'single-left'
 }
 
-export function newCabinetCompartment(type: CabinetCompartmentType): CabinetCompartment {
-  if (type === 'drawer') return { id: makeId(), type: 'drawer', drawerCount: 1 }
-  if (type === 'shelf') return { id: makeId(), type: 'shelf', shelfCount: 1 }
-  if (type === 'oven') return { id: makeId(), type: 'oven', height: OVEN_DEFAULT_HEIGHT }
-  if (type === 'microwave')
-    return { id: makeId(), type: 'microwave', height: MICROWAVE_DEFAULT_HEIGHT }
-  if (type === 'dishwasher')
-    return { id: makeId(), type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT }
-  if (isCooktopCompartmentType(type))
-    return {
-      id: makeId(),
-      type,
-      height: COOKTOP_DEFAULT_HEIGHT,
-      cooktopLayout:
-        type === 'cooktop-gas' ? COOKTOP_DEFAULT_GAS_LAYOUT : COOKTOP_DEFAULT_INDUCTION_LAYOUT,
-      cooktopBurnersOn: false,
-      cooktopActiveBurners: [],
-      cooktopKnobProgress: [],
-      cooktopShowGrate: true,
+export function newCabinetCompartment<T extends CabinetCompartmentType>(
+  type: T,
+): Extract<CabinetCompartment, { type: T }> {
+  const build = (): CabinetCompartment => {
+    if (type === 'drawer') return { id: makeId(), type: 'drawer', drawerCount: 1 }
+    if (type === 'shelf') return { id: makeId(), type: 'shelf', shelfCount: 1 }
+    if (type === 'oven') return { id: makeId(), type: 'oven', height: OVEN_DEFAULT_HEIGHT }
+    if (type === 'microwave')
+      return { id: makeId(), type: 'microwave', height: MICROWAVE_DEFAULT_HEIGHT }
+    if (type === 'dishwasher')
+      return { id: makeId(), type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT }
+    if (type === 'cooktop-gas')
+      return {
+        id: makeId(),
+        type: 'cooktop-gas',
+        height: COOKTOP_DEFAULT_HEIGHT,
+        cooktopLayout: COOKTOP_DEFAULT_GAS_LAYOUT as Extract<CooktopLayout, `gas-${string}`>,
+        cooktopBurnersOn: false,
+        cooktopActiveBurners: [],
+        cooktopKnobProgress: [],
+        cooktopShowGrate: true,
+      }
+    if (type === 'cooktop-induction')
+      return {
+        id: makeId(),
+        type: 'cooktop-induction',
+        height: COOKTOP_DEFAULT_HEIGHT,
+        cooktopLayout: COOKTOP_DEFAULT_INDUCTION_LAYOUT as Extract<
+          CooktopLayout,
+          `induction-${string}`
+        >,
+        cooktopBurnersOn: false,
+        cooktopActiveBurners: [],
+        cooktopKnobProgress: [],
+        cooktopShowGrate: true,
+      }
+    if (type === 'pull-out-pantry')
+      return {
+        id: makeId(),
+        type: 'pull-out-pantry',
+        height: TALL_CABINET_CARCASS_HEIGHT,
+        shelfCount: PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
+        pantryRackStyle: PULL_OUT_PANTRY_DEFAULT_RACK_STYLE,
+      }
+    if (isFridgeCompartmentType(type as CabinetCompartmentType))
+      return {
+        id: makeId(),
+        type: type as CabinetFridgeCompartmentType,
+        height: FRIDGE_COLUMN_HEIGHT,
+      }
+    if (isHoodCompartmentType(type as CabinetCompartmentType)) {
+      const hood = type as CabinetHoodCompartmentType
+      return { id: makeId(), type: hood, height: hoodCompartmentHeight(hood) }
     }
-  if (type === 'pull-out-pantry')
-    return {
-      id: makeId(),
-      type: 'pull-out-pantry',
-      height: TALL_CABINET_CARCASS_HEIGHT,
-      shelfCount: PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
-      pantryRackStyle: PULL_OUT_PANTRY_DEFAULT_RACK_STYLE,
-    }
-  if (isFridgeCompartmentType(type)) return { id: makeId(), type, height: FRIDGE_COLUMN_HEIGHT }
-  if (isHoodCompartmentType(type))
-    return { id: makeId(), type, height: hoodCompartmentHeight(type) }
-  return { id: makeId(), type: 'door' }
+    return { id: makeId(), type: 'door' }
+  }
+  return build() as Extract<CabinetCompartment, { type: T }>
 }
 
 export function fridgeCabinetStack(type: CabinetFridgeCompartmentType): CabinetCompartment[] {
@@ -157,6 +182,44 @@ export function fridgeCabinetStack(type: CabinetFridgeCompartmentType): CabinetC
 
 export function cooktopCabinetStack(type: CabinetCooktopCompartmentType): CabinetCompartment[] {
   return [{ ...newCabinetCompartment('drawer'), drawerCount: 2 }, newCabinetCompartment(type)]
+}
+
+/**
+ * Read an optional field off the compartment union without narrowing. The
+ * `compartment*` accessors below are deliberately defensive — they accept any
+ * compartment (saved scenes may carry stale fields from before the
+ * discriminated union) and validate what they find.
+ */
+function loose<T>(compartment: CabinetCompartment, key: string): T | undefined {
+  return (compartment as Record<string, unknown>)[key] as T | undefined
+}
+
+/** Union of every field any compartment variant can carry. */
+type AnyCompartmentFields = Partial<{
+  type: CabinetCompartmentType
+  height: number
+  doorType: CabinetDoorType
+  drawerCount: number
+  shelfCount: number
+  pantryRackStyle: PullOutPantryRackStyle
+  cooktopLayout: CooktopLayout
+  cooktopBurnersOn: boolean
+  cooktopShowGrate: boolean
+  cooktopActiveBurners: number[]
+  cooktopKnobProgress: number[]
+}>
+
+/**
+ * Spread-with-override for the compartment union. Callers patch fields that
+ * are valid for the compartment's actual variant (the UI only offers
+ * variant-appropriate controls); the cast is contained here so every call
+ * site stays clean under the discriminated union.
+ */
+export function patchCompartment(
+  compartment: CabinetCompartment,
+  patch: AnyCompartmentFields,
+): CabinetCompartment {
+  return { ...compartment, ...patch } as CabinetCompartment
 }
 
 export function defaultCabinetStack(node: Pick<CabinetStackOwner, 'width'>): CabinetCompartment[] {
@@ -178,22 +241,25 @@ export function stackForCabinet(
 }
 
 export function compartmentDrawerCount(compartment: CabinetCompartment): number {
-  return typeof compartment.drawerCount === 'number' && compartment.drawerCount > 0
-    ? Math.max(1, Math.min(6, Math.floor(compartment.drawerCount)))
+  const drawerCount = loose<number>(compartment, 'drawerCount')
+  return typeof drawerCount === 'number' && drawerCount > 0
+    ? Math.max(1, Math.min(6, Math.floor(drawerCount)))
     : 2
 }
 
 export function compartmentShelfCount(compartment: CabinetCompartment): number {
-  return typeof compartment.shelfCount === 'number'
-    ? Math.max(0, Math.min(8, Math.floor(compartment.shelfCount)))
+  const shelfCount = loose<number>(compartment, 'shelfCount')
+  return typeof shelfCount === 'number'
+    ? Math.max(0, Math.min(8, Math.floor(shelfCount)))
     : DEFAULT_SHELF_COUNT
 }
 
 export function compartmentPullOutPantryRackStyle(
   compartment: CabinetCompartment,
 ): PullOutPantryRackStyle {
-  return PULL_OUT_PANTRY_RACK_STYLES.includes(compartment.pantryRackStyle as PullOutPantryRackStyle)
-    ? (compartment.pantryRackStyle as PullOutPantryRackStyle)
+  const style = loose<PullOutPantryRackStyle>(compartment, 'pantryRackStyle')
+  return style && PULL_OUT_PANTRY_RACK_STYLES.includes(style)
+    ? style
     : PULL_OUT_PANTRY_DEFAULT_RACK_STYLE
 }
 
@@ -201,7 +267,7 @@ export function compartmentCooktopLayout(
   compartment: CabinetCompartment,
   type: CabinetCooktopCompartmentType,
 ): CooktopLayout {
-  const layout = compartment.cooktopLayout as CooktopLayout
+  const layout = loose<CooktopLayout>(compartment, 'cooktopLayout') as CooktopLayout
   const allowedPrefix = type === 'cooktop-gas' ? 'gas-' : 'induction-'
   return COOKTOP_LAYOUTS.includes(layout) && layout.startsWith(allowedPrefix)
     ? layout
@@ -232,10 +298,11 @@ export function compartmentCooktopElementCount(
 }
 
 export function compartmentCooktopBurnersOn(compartment: CabinetCompartment): boolean {
-  if (Array.isArray(compartment.cooktopActiveBurners)) {
-    return compartment.cooktopActiveBurners.length > 0
+  const activeBurners = loose<number[]>(compartment, 'cooktopActiveBurners')
+  if (Array.isArray(activeBurners)) {
+    return activeBurners.length > 0
   }
-  return compartment.cooktopBurnersOn === true
+  return loose<boolean>(compartment, 'cooktopBurnersOn') === true
 }
 
 export function compartmentCooktopActiveBurners(
@@ -243,16 +310,15 @@ export function compartmentCooktopActiveBurners(
   type: CabinetCooktopCompartmentType,
 ): number[] {
   const count = compartmentCooktopElementCount(compartment, type)
-  if (Array.isArray(compartment.cooktopActiveBurners)) {
+  const activeBurners = loose<number[]>(compartment, 'cooktopActiveBurners')
+  if (Array.isArray(activeBurners)) {
     return [
       ...new Set(
-        compartment.cooktopActiveBurners.filter(
-          (index) => Number.isInteger(index) && index >= 0 && index < count,
-        ),
+        activeBurners.filter((index) => Number.isInteger(index) && index >= 0 && index < count),
       ),
     ].sort((a, b) => a - b)
   }
-  return compartment.cooktopBurnersOn === true
+  return loose<boolean>(compartment, 'cooktopBurnersOn') === true
     ? Array.from({ length: count }, (_, index) => index)
     : []
 }
@@ -263,8 +329,9 @@ export function compartmentCooktopKnobProgress(
 ): number[] {
   const count = compartmentCooktopElementCount(compartment, type)
   const active = new Set(compartmentCooktopActiveBurners(compartment, type))
+  const knobProgress = loose<number[]>(compartment, 'cooktopKnobProgress')
   return Array.from({ length: count }, (_, index) => {
-    const value = compartment.cooktopKnobProgress?.[index]
+    const value = knobProgress?.[index]
     return typeof value === 'number' && Number.isFinite(value)
       ? Math.max(0, Math.min(1, value))
       : active.has(index)
@@ -274,14 +341,14 @@ export function compartmentCooktopKnobProgress(
 }
 
 export function compartmentCooktopShowGrate(compartment: CabinetCompartment): boolean {
-  return compartment.cooktopShowGrate !== false
+  return loose<boolean>(compartment, 'cooktopShowGrate') !== false
 }
 
 export function compartmentDoorType(
   compartment: CabinetCompartment,
   width: number,
 ): CabinetDoorType {
-  return compartment.doorType ?? defaultDoorType(width)
+  return loose<CabinetDoorType>(compartment, 'doorType') ?? defaultDoorType(width)
 }
 
 function explicitCompartmentHeight(compartment: CabinetCompartment): number | null {
@@ -453,28 +520,7 @@ export function resizeCabinetCompartmentStack(
   }))
 }
 
-export function reflowCabinetRunModules<
-  T extends Pick<CabinetModuleNode, 'id' | 'position' | 'width'>,
->(
-  modules: T[],
-  selectedId: CabinetModuleNode['id'],
-  selectedWidth: number,
-): Array<{ id: T['id']; position: T['position']; width: number }> {
-  const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  if (!sorted.some((module) => module.id === selectedId)) return []
-
-  let nextLeft = Math.min(...sorted.map((module) => module.position[0] - module.width / 2))
-  return sorted.map((module) => {
-    const width = module.id === selectedId ? selectedWidth : module.width
-    const position: T['position'] = [
-      nextLeft + width / 2,
-      module.position[1],
-      module.position[2],
-    ] as T['position']
-    nextLeft += width
-    return { id: module.id, position, width }
-  })
-}
+export { reflowRunModules as reflowCabinetRunModules } from './run-layout'
 
 export function backAnchoredModuleZ(currentZ: number, currentDepth: number, nextDepth: number) {
   return currentZ + (nextDepth - currentDepth) / 2

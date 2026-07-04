@@ -2,53 +2,77 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-const CabinetCompartment = z.object({
+const compartmentBase = {
   id: z.string(),
-  type: z.enum([
-    'shelf',
-    'drawer',
-    'door',
-    'oven',
-    'microwave',
-    'dishwasher',
-    'cooktop-gas',
-    'cooktop-induction',
-    'pull-out-pantry',
-    'fridge-single',
-    'fridge-double',
-    'fridge-top-freezer',
-    'fridge-bottom-freezer',
-    'hood-pyramid',
-    'hood-curved-glass',
-  ]),
   height: z.number().positive().max(2.5).optional(),
-  doorType: z.enum(['single-left', 'single-right', 'double', 'glass']).optional(),
-  drawerCount: z.number().int().min(1).max(6).optional(),
-  shelfCount: z.number().int().min(0).max(8).optional(),
-  pantryRackStyle: z.enum(['wire', 'tray', 'glass']).optional(),
+}
+
+const cooktopFields = {
   cooktopBurnersOn: z.boolean().optional(),
   cooktopActiveBurners: z.array(z.number().int().min(0).max(8)).optional(),
   cooktopKnobProgress: z.array(z.number().min(0).max(1)).optional(),
   cooktopShowGrate: z.boolean().optional(),
-  cooktopLayout: z
-    .enum([
-      'gas-2burner',
-      'gas-4burner',
-      'gas-5burner-wok',
-      'gas-6burner',
-      'induction-2zone',
-      'induction-4zone',
-    ])
-    .optional(),
-})
+}
 
-export const CabinetNode = BaseNode.extend({
-  id: objectId('cabinet'),
-  type: nodeType('cabinet'),
+// Discriminated on `type` so invalid field combinations (a drawer with a
+// pantry rack style, a fridge with burner state) are unrepresentable. New
+// compartment kinds add a variant here rather than widening a shared bag of
+// optionals.
+const CabinetCompartment = z.discriminatedUnion('type', [
+  z.object({
+    ...compartmentBase,
+    type: z.literal('shelf'),
+    shelfCount: z.number().int().min(0).max(8).optional(),
+  }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('drawer'),
+    drawerCount: z.number().int().min(1).max(6).optional(),
+  }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('door'),
+    doorType: z.enum(['single-left', 'single-right', 'double', 'glass']).optional(),
+    shelfCount: z.number().int().min(0).max(8).optional(),
+  }),
+  z.object({ ...compartmentBase, type: z.literal('oven') }),
+  z.object({ ...compartmentBase, type: z.literal('microwave') }),
+  z.object({ ...compartmentBase, type: z.literal('dishwasher') }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('cooktop-gas'),
+    ...cooktopFields,
+    cooktopLayout: z
+      .enum(['gas-2burner', 'gas-4burner', 'gas-5burner-wok', 'gas-6burner'])
+      .optional(),
+  }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('cooktop-induction'),
+    ...cooktopFields,
+    cooktopLayout: z.enum(['induction-2zone', 'induction-4zone']).optional(),
+  }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('pull-out-pantry'),
+    shelfCount: z.number().int().min(0).max(8).optional(),
+    pantryRackStyle: z.enum(['wire', 'tray', 'glass']).optional(),
+  }),
+  z.object({ ...compartmentBase, type: z.literal('fridge-single') }),
+  z.object({ ...compartmentBase, type: z.literal('fridge-double') }),
+  z.object({ ...compartmentBase, type: z.literal('fridge-top-freezer') }),
+  z.object({ ...compartmentBase, type: z.literal('fridge-bottom-freezer') }),
+  z.object({ ...compartmentBase, type: z.literal('hood-pyramid') }),
+  z.object({ ...compartmentBase, type: z.literal('hood-curved-glass') }),
+])
+
+export type CabinetCompartmentSchema = z.infer<typeof CabinetCompartment>
+
+// Box construction / hardware fields shared verbatim by the run and its
+// modules. One source of truth so the two schemas can't drift.
+const cabinetBoxFields = {
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
-  runTier: z.enum(['base', 'wall', 'tall']).default('base'),
-  children: z.array(objectId('cabinet-module')).default([]),
   width: z.number().min(0.3).max(3).default(0.6),
   depth: z.number().min(0.3).max(1.2).default(0.58),
   carcassHeight: z.number().min(0.4).max(2.4).default(0.72),
@@ -60,9 +84,8 @@ export const CabinetNode = BaseNode.extend({
   countertopOverhang: z.number().min(0).max(0.12).default(0.02),
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
-  doorStyle: z.enum(['single-left', 'single-right', 'double', 'glass']).default('double'),
   handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
-  handlePosition: z.enum(['auto', 'top', 'center', 'edge']).default('auto'),
+  handlePosition: z.enum(['auto', 'top', 'center']).default('auto'),
   frontOverlay: z.enum(['full', 'inset']).default('full'),
   withBottomPanel: z.boolean().default(true),
   showPlinth: z.boolean().default(true),
@@ -71,37 +94,26 @@ export const CabinetNode = BaseNode.extend({
   materialPreset: z.string().optional(),
   slots: z.record(z.string(), z.string()).optional(),
   stack: z.array(CabinetCompartment).optional(),
+}
+
+export const CabinetNode = BaseNode.extend({
+  id: objectId('cabinet'),
+  type: nodeType('cabinet'),
+  runTier: z.enum(['base', 'wall', 'tall']).default('base'),
+  children: z.array(objectId('cabinet-module')).default([]),
+  ...cabinetBoxFields,
 }).describe('Parametric modular cabinet run node')
 
 export const CabinetModuleNode = BaseNode.extend({
   id: objectId('cabinet-module'),
   type: nodeType('cabinet-module'),
-  position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  rotation: z.number().default(0),
   children: z.array(objectId('cabinet-module')).default([]),
   cabinetType: z.enum(['base', 'tall']).default('base'),
-  width: z.number().min(0.3).max(3).default(0.6),
-  depth: z.number().min(0.3).max(1.2).default(0.58),
-  carcassHeight: z.number().min(0.4).max(2.4).default(0.72),
-  operationState: z.number().min(0).max(1).default(0),
-  plinthHeight: z.number().min(0).max(0.3).default(0.1),
-  toeKickDepth: z.number().min(0).max(0.2).default(0.075),
-  boardThickness: z.number().min(0.01).max(0.08).default(0.018),
-  countertopThickness: z.number().min(0).max(0.08).default(0.02),
-  countertopOverhang: z.number().min(0).max(0.12).default(0.02),
-  frontThickness: z.number().min(0.01).max(0.05).default(0.018),
-  frontGap: z.number().min(0.001).max(0.02).default(0.003),
-  doorStyle: z.enum(['single-left', 'single-right', 'double', 'glass']).default('double'),
-  handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
-  handlePosition: z.enum(['auto', 'top', 'center', 'edge']).default('auto'),
-  frontOverlay: z.enum(['full', 'inset']).default('full'),
-  withBottomPanel: z.boolean().default(true),
-  showPlinth: z.boolean().default(true),
-  withCountertop: z.boolean().default(true),
-  material: MaterialSchema.optional(),
-  materialPreset: z.string().optional(),
-  slots: z.record(z.string(), z.string()).optional(),
-  stack: z.array(CabinetCompartment).optional(),
+  // Discriminator for specialty units (corner L-shape, sink base, appliance
+  // gap, open shelving). 'standard' modules use the compartment stack as-is;
+  // new kinds extend this enum instead of overloading the stack.
+  moduleKind: z.enum(['standard']).default('standard'),
+  ...cabinetBoxFields,
 }).describe('Parametric module inside a modular cabinet run')
 
 export type CabinetNode = z.infer<typeof CabinetNode>

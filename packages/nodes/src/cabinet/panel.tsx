@@ -5,7 +5,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { CabinetModuleNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { createSceneApi, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -18,8 +18,18 @@ import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Minus, Pause, Play, Plus, Trash } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { cabinetModuleDefinition } from './definition'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
+import {
+  addCabinetModuleSide,
+  addWallChildAbove,
+  backAlignZ,
+  bumpCabinetRunLayoutRevision,
+  resolveCabinetType,
+  runModuleBaseY,
+  switchCabinetToBase,
+  switchCabinetToTall,
+  wallChildOf,
+} from './run-ops'
 import {
   backAnchoredModuleZ,
   type CabinetCompartment,
@@ -56,6 +66,7 @@ import {
   normalizeCabinetStack,
   type PULL_OUT_PANTRY_RACK_STYLES,
   PULL_OUT_PANTRY_STANDARD_WIDTH,
+  patchCompartment,
   reflowCabinetRunModules,
   replaceCabinetCompartmentStack,
   resizeCabinetCompartmentStack,
@@ -153,39 +164,7 @@ const RUN_DEPTH_PATCH_KEY = 'depth'
 const BASE_MODULE_WIDTH = 0.6
 const BASE_CARCASS_HEIGHT = 0.72
 const WALL_CARCASS_HEIGHT = 0.72
-const WALL_DEPTH = 0.32
-const TALL_PLINTH_HEIGHT = 0.1
 const TALL_CARCASS_HEIGHT = TALL_CABINET_CARCASS_HEIGHT
-const TALL_DEPTH = 0.58
-
-function runModuleBaseY(node: Pick<CabinetNodeType, 'showPlinth' | 'plinthHeight'>) {
-  return node.showPlinth ? node.plinthHeight : 0
-}
-
-function totalCabinetHeight(
-  node: Pick<
-    CabinetEditableNode,
-    'showPlinth' | 'plinthHeight' | 'carcassHeight' | 'withCountertop' | 'countertopThickness'
-  >,
-) {
-  return (
-    (node.showPlinth ? node.plinthHeight : 0) +
-    node.carcassHeight +
-    (node.withCountertop ? node.countertopThickness : 0)
-  )
-}
-
-function wallBottomHeightForTallAlignment() {
-  return (
-    totalCabinetHeight({
-      showPlinth: true,
-      plinthHeight: TALL_PLINTH_HEIGHT,
-      carcassHeight: TALL_CARCASS_HEIGHT,
-      withCountertop: false,
-      countertopThickness: 0,
-    }) - WALL_CARCASS_HEIGHT
-  )
-}
 
 function moduleSummary(module: CabinetModuleNodeType) {
   if ((module.cabinetType ?? 'base') === 'tall') return 'Tall cabinet'
@@ -195,69 +174,12 @@ function moduleSummary(module: CabinetModuleNodeType) {
   return `${stack.length} compartments`
 }
 
-/** Local Z offset that makes a shallower wall cabinet's back flush with its deeper base. */
-function backAlignZ(baseDepth: number, wallDepth: number) {
-  return -(baseDepth - wallDepth) / 2
-}
-
-function wallChildOf(
-  module: CabinetModuleNodeType,
-  nodes: Record<string, CabinetEditableNode | undefined>,
-): CabinetModuleNodeType | undefined {
-  for (const childId of module.children ?? []) {
-    const child = nodes[childId as AnyNodeId]
-    if (child?.type === 'cabinet-module') return child
-  }
-  return undefined
-}
-
-function stackForTallModule() {
-  return [{ ...newCabinetCompartment('door'), shelfCount: 3 }]
-}
-
-function resolveCabinetType(
-  module: CabinetModuleNodeType,
-  parentRun?: CabinetNodeType,
-): 'base' | 'tall' {
-  if (module.cabinetType) return module.cabinetType
-  return parentRun?.runTier === 'tall' ? 'tall' : 'base'
-}
-
-function bumpCabinetRunsLayoutRevisionOnLevel(
-  scene: ReturnType<typeof useScene.getState>,
-  levelId: AnyNodeId,
-) {
-  for (const candidate of Object.values(scene.nodes)) {
-    if (candidate.type === 'cabinet' && candidate.parentId === levelId) {
-      const metadata = cabinetMetadataRecord(candidate.metadata)
-      const currentRevision =
-        typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-      scene.updateNode(candidate.id as AnyNodeId, {
-        metadata: {
-          ...metadata,
-          cabinetLayoutRevision: currentRevision + 1,
-        },
-      })
-    }
-  }
-}
-
-function bumpCabinetRunLayoutRevision(
+function bumpRunLayoutRevisionViaStore(
   scene: ReturnType<typeof useScene.getState>,
   run: CabinetNodeType,
 ) {
-  const metadata = cabinetMetadataRecord(run.metadata)
-  const currentRevision =
-    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-  scene.updateNode(run.id as AnyNodeId, {
-    metadata: {
-      ...metadata,
-      cabinetLayoutRevision: currentRevision + 1,
-    },
-  })
-  if (run.parentId) {
-    bumpCabinetRunsLayoutRevisionOnLevel(scene, run.parentId as AnyNodeId)
-  }
+  bumpCabinetRunLayoutRevision(createSceneApi(useScene), run)
+  scene.dirtyNodes.add(run.id as AnyNodeId)
 }
 
 const ICON_BUTTON_CLASS =
@@ -348,12 +270,6 @@ function CompartmentTypeControl({
   )
 }
 
-function cabinetMetadataRecord(metadata: CabinetEditableNode['metadata']): Record<string, unknown> {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>)
-    : {}
-}
-
 function reflowRunModules({
   modules,
   parentRun,
@@ -416,7 +332,7 @@ function reflowRunModules({
     }
   }
 
-  bumpCabinetRunLayoutRevision(scene, parentRun)
+  bumpRunLayoutRevisionViaStore(scene, parentRun)
 }
 
 function CompartmentCard({
@@ -535,7 +451,7 @@ function CompartmentCard({
           label="Shelves"
           max={8}
           min={0}
-          onChange={(value) => onReplace({ ...compartment, shelfCount: value })}
+          onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
           value={compartmentShelfCount(compartment)}
         />
       )}
@@ -545,7 +461,7 @@ function CompartmentCard({
           label="Drawers"
           max={6}
           min={1}
-          onChange={(value) => onReplace({ ...compartment, drawerCount: value })}
+          onChange={(value) => onReplace(patchCompartment(compartment, { drawerCount: value }))}
           value={compartmentDrawerCount(compartment)}
         />
       )}
@@ -557,7 +473,7 @@ function CompartmentCard({
               Style
             </div>
             <SegmentedControl
-              onChange={(value) => onReplace({ ...compartment, doorType: value })}
+              onChange={(value) => onReplace(patchCompartment(compartment, { doorType: value }))}
               options={DOOR_TYPE_OPTIONS.map((option) => ({
                 value: option.value,
                 label: option.label,
@@ -569,7 +485,7 @@ function CompartmentCard({
             label="Shelves inside"
             max={8}
             min={0}
-            onChange={(value) => onReplace({ ...compartment, shelfCount: value })}
+            onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
             value={compartmentShelfCount(compartment)}
           />
         </div>
@@ -582,11 +498,12 @@ function CompartmentCard({
           </div>
           <SegmentedControl
             onChange={(value) =>
-              onReplace({
-                ...compartment,
-                type: value as CabinetFridgeCompartmentType,
-                height: compartment.height ?? FRIDGE_COLUMN_HEIGHT,
-              })
+              onReplace(
+                patchCompartment(compartment, {
+                  type: value as CabinetFridgeCompartmentType,
+                  height: compartment.height ?? FRIDGE_COLUMN_HEIGHT,
+                }),
+              )
             }
             options={FRIDGE_STYLE_OPTIONS.map((option) => ({
               value: option.value,
@@ -610,17 +527,18 @@ function CompartmentCard({
           </div>
           <SegmentedControl
             onChange={(value) =>
-              onReplace({
-                ...compartment,
-                type: value as CabinetCooktopCompartmentType,
-                cooktopLayout:
-                  value === 'cooktop-gas'
-                    ? COOKTOP_DEFAULT_GAS_LAYOUT
-                    : COOKTOP_DEFAULT_INDUCTION_LAYOUT,
-                height: compartment.height ?? 0.08,
-                cooktopBurnersOn: compartment.cooktopBurnersOn ?? false,
-                cooktopShowGrate: compartment.cooktopShowGrate ?? true,
-              })
+              onReplace(
+                patchCompartment(compartment, {
+                  type: value as CabinetCooktopCompartmentType,
+                  cooktopLayout:
+                    value === 'cooktop-gas'
+                      ? COOKTOP_DEFAULT_GAS_LAYOUT
+                      : COOKTOP_DEFAULT_INDUCTION_LAYOUT,
+                  height: compartment.height ?? 0.08,
+                  cooktopBurnersOn: compartmentCooktopBurnersOn(compartment),
+                  cooktopShowGrate: compartmentCooktopShowGrate(compartment),
+                }),
+              )
             }
             options={COOKTOP_STYLE_OPTIONS.map((option) => ({
               value: option.value,
@@ -634,10 +552,7 @@ function CompartmentCard({
             </div>
             <SegmentedControl
               onChange={(value) =>
-                onReplace({
-                  ...compartment,
-                  cooktopLayout: value,
-                })
+                onReplace(patchCompartment(compartment, { cooktopLayout: value }))
               }
               options={(type === 'cooktop-gas'
                 ? GAS_COOKTOP_LAYOUT_OPTIONS
@@ -657,21 +572,24 @@ function CompartmentCard({
                 compartment,
                 type as CabinetCooktopCompartmentType,
               )
-              onReplace({
-                ...compartment,
-                cooktopBurnersOn: checked,
-                cooktopActiveBurners: checked
-                  ? Array.from({ length: count }, (_, index) => index)
-                  : [],
-                cooktopKnobProgress: Array.from({ length: count }, () => (checked ? 1 : 0)),
-              })
+              onReplace(
+                patchCompartment(compartment, {
+                  cooktopBurnersOn: checked,
+                  cooktopActiveBurners: checked
+                    ? Array.from({ length: count }, (_, index) => index)
+                    : [],
+                  cooktopKnobProgress: Array.from({ length: count }, () => (checked ? 1 : 0)),
+                }),
+              )
             }}
           />
           {type === 'cooktop-gas' && (
             <ToggleControl
               checked={compartmentCooktopShowGrate(compartment)}
               label="Top grate"
-              onChange={(checked) => onReplace({ ...compartment, cooktopShowGrate: checked })}
+              onChange={(checked) =>
+                onReplace(patchCompartment(compartment, { cooktopShowGrate: checked }))
+              }
             />
           )}
         </div>
@@ -683,7 +601,7 @@ function CompartmentCard({
             label="Baskets"
             max={8}
             min={2}
-            onChange={(value) => onReplace({ ...compartment, shelfCount: value })}
+            onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
             value={compartmentShelfCount(compartment)}
           />
           <div>
@@ -691,7 +609,9 @@ function CompartmentCard({
               Rack
             </div>
             <SegmentedControl
-              onChange={(value) => onReplace({ ...compartment, pantryRackStyle: value })}
+              onChange={(value) =>
+                onReplace(patchCompartment(compartment, { pantryRackStyle: value }))
+              }
               options={PULL_OUT_PANTRY_RACK_STYLE_OPTIONS.map((option) => ({
                 value: option.value,
                 label: option.label,
@@ -763,36 +683,15 @@ function CabinetRunPanel({
 
   const addModule = useCallback(
     (side: 'left' | 'right') => {
-      const defaults = cabinetModuleDefinition.defaults()
-      const width = defaults.width
-      const leftEdge =
-        modules.length > 0
-          ? Math.min(...modules.map((module) => module.position[0] - module.width / 2))
-          : 0
-      const rightEdge =
-        modules.length > 0
-          ? Math.max(...modules.map((module) => module.position[0] + module.width / 2))
-          : 0
-      const x = side === 'left' ? leftEdge - width / 2 : rightEdge + width / 2
-      const module = CabinetModuleNode.parse({
-        ...defaults,
-        name: `Base Cabinet ${modules.length + 1}`,
-        parentId: node.id,
-        position: [x, runModuleBaseY(node), 0],
-        depth: node.depth,
-        carcassHeight: node.carcassHeight,
-        plinthHeight: node.plinthHeight,
-        toeKickDepth: node.toeKickDepth,
-        countertopThickness: node.countertopThickness,
-        countertopOverhang: node.countertopOverhang,
+      const id = addCabinetModuleSide({
+        anchorModule: null,
+        run: node,
+        sceneApi: createSceneApi(useScene),
+        side,
       })
-      const scene = useScene.getState()
-      scene.createNode(module, node.id as AnyNodeId)
-      scene.dirtyNodes.add(node.id as AnyNodeId)
-      bumpCabinetRunLayoutRevision(scene, node)
-      setSelection({ selectedIds: [module.id] })
+      if (id) setSelection({ selectedIds: [id] })
     },
-    [modules, node, setSelection],
+    [node, setSelection],
   )
 
   const deleteModule = useCallback(
@@ -1049,7 +948,7 @@ export default function CabinetPanel() {
           'depth' in nextPatch ||
           'width' in nextPatch
         if (parent?.type === 'cabinet' && affectsRunLayout) {
-          bumpCabinetRunLayoutRevision(scene, parent)
+          bumpRunLayoutRevisionViaStore(scene, parent)
         }
       }
       // Keep a nested wall cabinet's back flush with its base when the base depth changes.
@@ -1309,131 +1208,41 @@ export default function CabinetPanel() {
     commitStack(next)
   }
 
-  const addWallChildAbove = (kind: 'cabinet' | 'hood') => {
-    if (
-      node?.type !== 'cabinet-module' ||
-      parentRun?.type !== 'cabinet' ||
-      resolveCabinetType(node, parentRun) !== 'base'
-    )
-      return
-    if (wallChild) return
+  // Structural run mutations live in run-ops.ts, shared with the quick-action
+  // menu so the two surfaces can't drift.
+  const runOpsApi = () => createSceneApi(useScene)
 
-    const isHoodChild = kind === 'hood'
-    const carcassHeight = isHoodChild
-      ? Math.max(0.4, hoodCompartmentHeight('hood-pyramid'))
-      : WALL_CARCASS_HEIGHT
-    const wall = CabinetModuleNode.parse({
-      ...cabinetModuleDefinition.defaults(),
-      name: isHoodChild ? 'Chimney' : 'Wall Cabinet',
-      parentId: node.id,
-      // Keep the wall cabinet top aligned with the default tall cabinet top.
-      position: [
-        0,
-        wallBottomHeightForTallAlignment() - node.position[1],
-        backAlignZ(node.depth, WALL_DEPTH),
-      ],
-      width: node.width,
-      depth: WALL_DEPTH,
-      carcassHeight,
-      plinthHeight: 0,
-      toeKickDepth: 0,
-      countertopThickness: 0,
-      countertopOverhang: 0,
-      showPlinth: false,
-      withCountertop: false,
-      stack: isHoodChild
-        ? [newCabinetCompartment('hood-pyramid')]
-        : [{ ...newCabinetCompartment('door'), shelfCount: 1 }],
-    })
-    useScene.getState().createNode(wall, node.id as AnyNodeId)
-    useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
-    setSelection({ selectedIds: [wall.id] })
+  const addWallCabinetOrHoodAbove = (kind: 'cabinet' | 'hood') => {
+    if (node?.type !== 'cabinet-module' || parentRun?.type !== 'cabinet') return
+    const id = addWallChildAbove({ kind, module: node, run: parentRun, sceneApi: runOpsApi() })
+    if (id) setSelection({ selectedIds: [id] })
   }
 
-  const addWallCabinetAbove = () => addWallChildAbove('cabinet')
-  const addHoodAbove = () => addWallChildAbove('hood')
+  const addWallCabinetAbove = () => addWallCabinetOrHoodAbove('cabinet')
+  const addHoodAbove = () => addWallCabinetOrHoodAbove('hood')
 
   const removeWallCabinet = () => {
     if (node?.type !== 'cabinet-module') return
     const scene = useScene.getState()
-    const wall = wallChildOf(node, scene.nodes as Record<string, CabinetEditableNode | undefined>)
+    const wall = wallChildOf(node, scene.nodes)
     if (!wall) return
-    useScene.getState().deleteNode(wall.id as AnyNodeId)
-    useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+    scene.deleteNode(wall.id as AnyNodeId)
+    scene.dirtyNodes.add(node.id as AnyNodeId)
     setSelection({ selectedIds: [node.id] })
   }
 
-  const switchCabinetToTall = () => {
-    if (
-      node?.type !== 'cabinet-module' ||
-      parentRun?.type !== 'cabinet' ||
-      resolveCabinetType(node, parentRun) !== 'base'
-    )
-      return
-    const scene = useScene.getState()
-    const wallChild = wallChildOf(
-      node,
-      scene.nodes as Record<string, CabinetEditableNode | undefined>,
-    )
-    if (wallChild) {
-      scene.deleteNode(wallChild.id as AnyNodeId)
+  const switchToTall = () => {
+    if (node?.type !== 'cabinet-module' || parentRun?.type !== 'cabinet') return
+    if (switchCabinetToTall({ module: node, run: parentRun, sceneApi: runOpsApi() })) {
+      setSelection({ selectedIds: [node.id] })
     }
-    scene.updateNode(node.id as AnyNodeId, {
-      name: 'Tall Cabinet',
-      cabinetType: 'tall',
-      depth: TALL_DEPTH,
-      position: [
-        node.position[0],
-        runModuleBaseY(parentRun),
-        backAnchoredModuleZ(node.position[2], node.depth, TALL_DEPTH),
-      ],
-      carcassHeight: TALL_CARCASS_HEIGHT,
-      plinthHeight: TALL_PLINTH_HEIGHT,
-      toeKickDepth: 0.075,
-      showPlinth: false,
-      countertopThickness: 0,
-      countertopOverhang: parentRun.countertopOverhang,
-      withCountertop: false,
-      stack: stackForTallModule(),
-    })
-    scene.dirtyNodes.add(parentRun.id as AnyNodeId)
-    if (parentRun.parentId) {
-      bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
-    }
-    setSelection({ selectedIds: [node.id] })
   }
 
-  const switchTallToBase = () => {
-    if (
-      node?.type !== 'cabinet-module' ||
-      parentRun?.type !== 'cabinet' ||
-      resolveCabinetType(node, parentRun) !== 'tall'
-    )
-      return
-    const scene = useScene.getState()
-    scene.updateNode(node.id as AnyNodeId, {
-      name: 'Base Cabinet',
-      cabinetType: 'base',
-      depth: parentRun.depth,
-      position: [
-        node.position[0],
-        runModuleBaseY(parentRun),
-        backAnchoredModuleZ(node.position[2], node.depth, parentRun.depth),
-      ],
-      carcassHeight: parentRun.carcassHeight,
-      plinthHeight: parentRun.plinthHeight,
-      toeKickDepth: parentRun.toeKickDepth,
-      showPlinth: false,
-      countertopThickness: 0,
-      countertopOverhang: parentRun.countertopOverhang,
-      withCountertop: false,
-      stack: [{ ...newCabinetCompartment('door'), shelfCount: 1 }],
-    })
-    scene.dirtyNodes.add(parentRun.id as AnyNodeId)
-    if (parentRun.parentId) {
-      bumpCabinetRunsLayoutRevisionOnLevel(scene, parentRun.parentId as AnyNodeId)
+  const switchToBase = () => {
+    if (node?.type !== 'cabinet-module' || parentRun?.type !== 'cabinet') return
+    if (switchCabinetToBase({ module: node, run: parentRun, sceneApi: runOpsApi() })) {
+      setSelection({ selectedIds: [node.id] })
     }
-    setSelection({ selectedIds: [node.id] })
   }
 
   const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
@@ -1560,10 +1369,10 @@ export default function CabinetPanel() {
             <SegmentedControl
               onChange={(value) => {
                 if (value === 'tall') {
-                  switchCabinetToTall()
+                  switchToTall()
                   return
                 }
-                switchTallToBase()
+                switchToBase()
               }}
               options={CABINET_TIER_OPTIONS.map((option) => ({
                 value: option.value,

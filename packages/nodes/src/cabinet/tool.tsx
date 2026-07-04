@@ -55,7 +55,6 @@ type CabinetPlacement = {
   conflictIds: string[]
   guide?: CabinetWallSnapPlacement['guide']
   snapReason?: CabinetWallSnapPlacement['snapReason']
-  wallLocalX?: number
 }
 
 function runModuleBaseY(plinthHeight: number, showPlinth: boolean) {
@@ -256,7 +255,6 @@ const CabinetTool = () => {
         valid: true,
         yaw: wallPlacement.yaw,
         snappedToWall: true,
-        wallLocalX: wallPlacement.localX,
       }
     }
 

@@ -5,6 +5,7 @@ import type {
   CabinetNode as CabinetNodeType,
   MovableParentFrame,
 } from '@pascal-app/core'
+import { planToRunLocal, runLocalToPlan } from './run-layout'
 
 /** Matches the generic move tool's Figma-alignment pull (8 cm). */
 const MAGNETIC_THRESHOLD_M = 0.08
@@ -22,15 +23,7 @@ function localToPlan(
   parent: AnyNode,
   local: readonly [number, number, number],
 ): [number, number, number] {
-  const run = parent as CabinetNodeType
-  const cos = Math.cos(run.rotation)
-  const sin = Math.sin(run.rotation)
-  const [lx, ly, lz] = local
-  return [
-    run.position[0] + lx * cos + lz * sin,
-    run.position[1] + ly,
-    run.position[2] - lx * sin + lz * cos,
-  ]
+  return runLocalToPlan(parent as CabinetNodeType, local)
 }
 
 function planToLocal(
@@ -39,12 +32,7 @@ function planToLocal(
   localY: number,
   planZ: number,
 ): [number, number, number] {
-  const run = parent as CabinetNodeType
-  const dx = planX - run.position[0]
-  const dz = planZ - run.position[2]
-  const cos = Math.cos(run.rotation)
-  const sin = Math.sin(run.rotation)
-  return [dx * cos - dz * sin, localY, dx * sin + dz * cos]
+  return planToRunLocal(parent as CabinetNodeType, planX, localY, planZ)
 }
 
 /**

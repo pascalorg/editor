@@ -14,6 +14,17 @@ import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
 import { cabinetQuickActions } from './quick-actions'
+import { moduleSideOpen } from './run-layout'
+import {
+  backAlignZ,
+  bumpCabinetRunLayoutRevision,
+  cabinetMetadataRecord,
+  cabinetModulesForRun,
+  totalCabinetHeight as cabinetTotalHeight,
+  resolveCabinetType,
+  runModuleBaseY,
+  wallChildOf,
+} from './run-ops'
 import { cabinetSceneAction } from './scene-action'
 import { CabinetModuleNode, CabinetNode } from './schema'
 import { cabinetSlots } from './slots'
@@ -54,33 +65,7 @@ function isCabinetRun(node: AnyNode | undefined): node is CabinetNodeType {
 }
 
 function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>).cabinetLayoutRevision
-    : null
-}
-
-function cabinetMetadataRecord(metadata: CabinetNodeType['metadata']): Record<string, unknown> {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>)
-    : {}
-}
-
-function bumpCabinetRunLayoutRevision(sceneApi: SceneApi, run: CabinetNodeType) {
-  const metadataRecord = cabinetMetadataRecord(run.metadata)
-  const currentRevision =
-    typeof metadataRecord.cabinetLayoutRevision === 'number'
-      ? metadataRecord.cabinetLayoutRevision
-      : 0
-  sceneApi.update(
-    run.id as AnyNodeId,
-    {
-      metadata: {
-        ...metadataRecord,
-        cabinetLayoutRevision: currentRevision + 1,
-      },
-    } as Partial<AnyNode>,
-  )
-  sceneApi.markDirty(run.id as AnyNodeId)
+  return cabinetMetadataRecord(metadata).cabinetLayoutRevision ?? null
 }
 
 function cabinetAdjacencyRevision(metadata: CabinetNodeType['metadata']): unknown {
@@ -195,48 +180,6 @@ export function cabinetRunNeighborSignature(run: CabinetNodeType): string {
   ])
 }
 
-function cabinetTotalHeight(node: CabinetEditableNode) {
-  return (
-    (node.showPlinth ? node.plinthHeight : 0) +
-    node.carcassHeight +
-    (node.withCountertop ? node.countertopThickness : 0)
-  )
-}
-
-function runModuleBaseY(node: Pick<CabinetNodeType, 'showPlinth' | 'plinthHeight'>) {
-  return node.showPlinth ? node.plinthHeight : 0
-}
-
-function backAlignZ(baseDepth: number, wallDepth: number) {
-  return -(baseDepth - wallDepth) / 2
-}
-
-function wallChildOf(
-  module: CabinetModuleNodeType,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): CabinetModuleNodeType | undefined {
-  for (const childId of module.children ?? []) {
-    const child = nodes[childId as AnyNodeId]
-    if (isCabinetModule(child)) return child
-  }
-  return undefined
-}
-
-function resolveCabinetType(
-  module: CabinetModuleNodeType,
-  parentRun?: CabinetNodeType,
-): 'base' | 'tall' {
-  if (module.cabinetType) return module.cabinetType
-  return parentRun?.runTier === 'tall' ? 'tall' : 'base'
-}
-
-function cabinetModulesForRun(
-  run: CabinetNodeType,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): CabinetModuleNodeType[] {
-  return (run.children ?? []).map((childId) => nodes[childId as AnyNodeId]).filter(isCabinetModule)
-}
-
 function includeCabinetModuleBounds(
   module: CabinetModuleNodeType,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
@@ -334,10 +277,6 @@ function cabinetPlanBoundsAabb(
   return { minX, maxX, minZ, maxZ }
 }
 
-function sortedCabinetModules(modules: CabinetModuleNodeType[]) {
-  return [...modules].sort((a, b) => a.position[0] - b.position[0])
-}
-
 function cabinetModuleSideOpen(
   module: CabinetModuleNodeType,
   side: 'left' | 'right',
@@ -345,18 +284,12 @@ function cabinetModuleSideOpen(
 ) {
   const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
   if (!isCabinetRun(parent)) return true
-  const sorted = sortedCabinetModules(cabinetModulesForRun(parent, sceneApi.nodes()))
-  const index = sorted.findIndex((entry) => entry.id === module.id)
-  if (index < 0) return true
-  const neighbor = side === 'left' ? sorted[index - 1] : sorted[index + 1]
-  if (!neighbor) return true
-  const edge =
-    side === 'left' ? module.position[0] - module.width / 2 : module.position[0] + module.width / 2
-  const neighborEdge =
-    side === 'left'
-      ? neighbor.position[0] + neighbor.width / 2
-      : neighbor.position[0] - neighbor.width / 2
-  return Math.abs(edge - neighborEdge) > CABINET_ADJACENCY_EPSILON
+  return moduleSideOpen(
+    cabinetModulesForRun(parent, sceneApi.nodes()),
+    module.id,
+    side,
+    CABINET_ADJACENCY_EPSILON,
+  )
 }
 
 function commitRunResize(
@@ -656,7 +589,7 @@ function cabinetModuleHandles(
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -683,7 +616,6 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     countertopOverhang: 0.02,
     frontThickness: 0.018,
     frontGap: 0.003,
-    doorStyle: 'double',
     handleStyle: 'bar',
     handlePosition: 'auto',
     frontOverlay: 'full',
@@ -758,7 +690,6 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       n.countertopOverhang,
       n.frontThickness,
       n.frontGap,
-      n.doorStyle,
       n.handleStyle,
       n.handlePosition,
       n.frontOverlay,
@@ -801,7 +732,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
 export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> = {
   kind: 'cabinet-module',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: CabinetModuleNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -828,7 +759,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     countertopOverhang: 0.02,
     frontThickness: 0.018,
     frontGap: 0.003,
-    doorStyle: 'double',
+    moduleKind: 'standard' as const,
     handleStyle: 'bar',
     handlePosition: 'auto',
     frontOverlay: 'full',
@@ -872,6 +803,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   geometryKey: (n) =>
     JSON.stringify([
       n.cabinetType,
+      n.moduleKind,
       n.width,
       n.depth,
       n.carcassHeight,
@@ -882,7 +814,6 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.countertopOverhang,
       n.frontThickness,
       n.frontGap,
-      n.doorStyle,
       n.handleStyle,
       n.handlePosition,
       n.frontOverlay,

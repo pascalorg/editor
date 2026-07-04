@@ -5,6 +5,7 @@ import {
   compartmentCooktopActiveBurners,
   compartmentCooktopElementCount,
   compartmentCooktopKnobProgress,
+  patchCompartment,
 } from './stack'
 
 export type CabinetCooktopKnobTarget = {
@@ -56,7 +57,7 @@ function withCooktopBurnerProgress(
   const { stack, compartment } = resolved
 
   const nextProgress = compartmentCooktopKnobProgress(
-    { ...compartment, cooktopActiveBurners: [...nextActiveBurners] },
+    patchCompartment(compartment, { cooktopActiveBurners: [...nextActiveBurners] }),
     'cooktop-gas',
   )
   nextProgress[target.burnerIndex] = Math.max(0, Math.min(1, progress))
@@ -64,12 +65,11 @@ function withCooktopBurnerProgress(
   return {
     stack: stack.map((entry, index) =>
       index === target.compartmentIndex
-        ? {
-            ...entry,
+        ? patchCompartment(entry, {
             cooktopBurnersOn: nextActiveBurners.length > 0,
             cooktopActiveBurners: [...nextActiveBurners],
             cooktopKnobProgress: nextProgress,
-          }
+          })
         : entry,
     ),
   } as Partial<AnyNode>
