@@ -648,8 +648,8 @@ describe('factory runner helpers', () => {
       result.patches.some(
         (patch) =>
           patch.op === 'create' &&
-          patch.node.type === 'assembly' &&
-          patch.node.metadata?.equipmentAssembly &&
+          patch.node.type === 'tank' &&
+          patch.node.metadata?.resolver === 'native-tank' &&
           patch.node.metadata?.stationId === 'hydrogen_separator',
       ),
     ).toBe(true)

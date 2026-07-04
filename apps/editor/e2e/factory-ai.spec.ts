@@ -56,6 +56,30 @@ async function submitFactoryPrompt(page: Page, prompt: string) {
   await factoryInput.fill(prompt)
   await expect(sendButton).toBeEnabled({ timeout: 30_000 })
   await sendButton.click()
+  await applyLatestGenerationPreviewIfPresent(page)
+}
+
+async function applyLatestGenerationPreviewIfPresent(page: Page) {
+  const hasApplyButton = await page
+    .waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll('button')).some(
+          (button) => !button.disabled && button.textContent?.includes('Apply'),
+        ),
+      undefined,
+      { timeout: 10_000 },
+    )
+    .then(() => true)
+    .catch(() => false)
+
+  if (!hasApplyButton) return
+
+  await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button')).filter(
+      (button) => !button.disabled && button.textContent?.includes('Apply'),
+    )
+    buttons.at(-1)?.click()
+  })
 }
 
 async function expectFactoryBridge(page: Page) {

@@ -283,7 +283,46 @@ describe('process equipment resolver', () => {
     expect(result.primitiveRequest?.prompt).toContain('Fit inside envelope 4.8m x 1.55m x 2.1m')
   })
 
-  test('attaches cement clinker primitive equipment contracts from process stations', () => {
+  test('uses native tank nodes for water electrolysis buffer vessels', () => {
+    const station: ProcessStationPlan = {
+      id: 'hydrogen_buffer',
+      label: 'Hydrogen drying and buffer tank',
+      role: 'hydrogen_buffer',
+      equipmentHint: 'hydrogen drying skid and buffer storage tank',
+      footprintHint: 'large',
+    }
+    const result = resolveProcessStationEquipment({
+      plan: waterElectrolysisPlan,
+      station,
+      stationPlacement: {
+        ...placement,
+        stationId: station.id,
+        role: station.role,
+        label: station.label,
+        footprint: { length: 2.6, width: 1.25 },
+      },
+      placement: { parentId: 'level_factory', generatedBy: 'factory-agent' },
+      metadata: {
+        generatedBy: 'factory-agent',
+        processId: waterElectrolysisPlan.processId,
+        stationId: station.id,
+        stationRole: station.role,
+      },
+    })
+
+    expect(result.resolver).toBe('native-tank')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('tank')
+    expect(result.patches[0]?.node.metadata).toMatchObject({
+      resolver: 'native-tank',
+      equipmentContract: {
+        profileId: 'hydrogen_electrolysis.dryer_buffer.compact',
+        preferredResolver: 'native-tank',
+      },
+    })
+  })
+
+  test('compiles cement clinker kiln contracts to semantic assemblies from industry packs', () => {
     const station: ProcessStationPlan = {
       id: 'rotary_kiln',
       label: 'Rotary kiln',
@@ -310,20 +349,24 @@ describe('process equipment resolver', () => {
       },
     })
 
-    expect(result.resolver).toBe('primitive')
-    expect(result.primitiveRequest?.equipmentContract).toMatchObject({
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
       profileId: 'cement.rotary_kiln',
       equipmentFamily: 'thermal_equipment',
-      preferredResolver: 'primitive',
+      preferredResolver: 'profile-parts',
       envelope: { length: 6.4, width: 0.8, height: 0.9 },
     })
-    expect(result.primitiveRequest?.equipmentContract?.ports.map((port) => port.id)).toEqual(
+    const contract = result.patches[0]?.node.metadata?.equipmentContract as
+      | { ports?: Array<{ id: string }>; requiredRoles?: string[] }
+      | undefined
+    expect(contract?.ports?.map((port) => port.id)).toEqual(
       expect.arrayContaining(['hot_meal_in', 'clinker_out', 'kiln_exhaust_out', 'power_in']),
     )
-    expect(result.primitiveRequest?.equipmentContract?.requiredRoles).toEqual(
+    expect(contract?.requiredRoles).toEqual(
       expect.arrayContaining(['vessel_shell', 'kiln_support_base', 'kiln_drive_unit']),
     )
-    expect(result.primitiveRequest?.prompt).toContain('Equipment family: thermal_equipment.')
   })
 
   test('keeps raw meal feed elevator on the bucket elevator contract', () => {
@@ -393,7 +436,7 @@ describe('process equipment resolver', () => {
     )
   })
 
-  test('attaches full cement plant primitive contracts for newly added industry equipment', () => {
+  test('compiles full cement plant ESP contracts to semantic assemblies from industry packs', () => {
     const station: ProcessStationPlan = {
       id: 'kiln_tail_esp',
       label: 'Kiln tail ESP',
@@ -420,22 +463,27 @@ describe('process equipment resolver', () => {
       },
     })
 
-    expect(result.resolver).toBe('primitive')
-    expect(result.primitiveRequest?.equipmentContract).toMatchObject({
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
       profileId: 'cement.esp_dust_collector',
       equipmentFamily: 'generic_industrial',
-      preferredResolver: 'primitive',
+      preferredResolver: 'profile-parts',
       envelope: { length: 5.2, width: 2.2, height: 3.2 },
     })
-    expect(result.primitiveRequest?.equipmentContract?.ports.map((port) => port.id)).toEqual(
+    const contract = result.patches[0]?.node.metadata?.equipmentContract as
+      | { ports?: Array<{ id: string }>; requiredRoles?: string[] }
+      | undefined
+    expect(contract?.ports?.map((port) => port.id)).toEqual(
       expect.arrayContaining(['dust_gas_in', 'clean_air_out']),
     )
-    expect(result.primitiveRequest?.equipmentContract?.requiredRoles).toEqual(
+    expect(contract?.requiredRoles).toEqual(
       expect.arrayContaining(['esp_collector_chambers', 'dust_hopper_bank']),
     )
   })
 
-  test('keeps kiln hood stations on the kiln hood primitive profile', () => {
+  test('keeps kiln hood stations on the kiln hood semantic profile', () => {
     const station: ProcessStationPlan = {
       id: 'kiln_hood',
       label: 'Kiln hood',
@@ -463,13 +511,18 @@ describe('process equipment resolver', () => {
       },
     })
 
-    expect(result.resolver).toBe('primitive')
-    expect(result.primitiveRequest?.equipmentContract).toMatchObject({
+    expect(result.resolver).toBe('profile-parts')
+    expect(result.primitiveRequest).toBeNull()
+    expect(result.patches[0]?.node.type).toBe('assembly')
+    expect(result.patches[0]?.node.metadata?.equipmentContract).toMatchObject({
       profileId: 'cement.kiln_hood',
       equipmentFamily: 'thermal_equipment',
-      preferredResolver: 'primitive',
+      preferredResolver: 'profile-parts',
     })
-    expect(result.primitiveRequest?.equipmentContract?.ports.map((port) => port.id)).toEqual(
+    const contract = result.patches[0]?.node.metadata?.equipmentContract as
+      | { ports?: Array<{ id: string }> }
+      | undefined
+    expect(contract?.ports?.map((port) => port.id)).toEqual(
       expect.arrayContaining(['kiln_head_in', 'burner_opening', 'hot_clinker_out']),
     )
   })

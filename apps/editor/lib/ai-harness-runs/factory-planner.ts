@@ -15,6 +15,7 @@ import {
   buildProcessLinePlanFromTemplate,
   matchUnavailableProcessTemplate,
   matchProcessTemplate,
+  matchProcessTemplateBySourcePack,
 } from './process-template-registry'
 
 export type FactoryPlan =
@@ -452,8 +453,27 @@ function inferLayoutStoryMetadata(
   }
 }
 
-export function fallbackFactoryPlan(prompt: string): FactoryPlan {
+type RequiredSourcePack = {
+  id: string
+  version?: string
+}
+
+export function fallbackFactoryPlan(
+  prompt: string,
+  options: { requiredSourcePack?: RequiredSourcePack } = {},
+): FactoryPlan {
   const normalized = prompt.trim()
+  const requiredPackTemplate = options.requiredSourcePack
+    ? matchProcessTemplateBySourcePack({ ...options.requiredSourcePack, prompt: normalized })
+    : undefined
+  if (requiredPackTemplate) {
+    return {
+      kind: 'process_line',
+      reason:
+        'Request was routed through an installed industry pack; compose its bound process template.',
+      process: buildProcessLinePlanFromTemplate(requiredPackTemplate, normalized),
+    }
+  }
   const processTemplate = matchProcessTemplate(normalized)
   if (processTemplate) {
     return {
@@ -595,13 +615,18 @@ export async function planFactoryRequest(input: {
   prompt: string
   params?: Record<string, unknown>
   signal?: AbortSignal
+  requiredSourcePack?: RequiredSourcePack
 }): Promise<{ plan: FactoryPlan; source: 'llm' | 'fallback'; plannerText?: string }> {
+  const fallbackPlan = fallbackFactoryPlan(input.prompt, {
+    requiredSourcePack: input.requiredSourcePack,
+  })
+  if (input.requiredSourcePack) return { plan: fallbackPlan, source: 'fallback' }
   if (
     process.env.FACTORY_E2E_SMOKE === '1' ||
     input.params?.e2eSmoke === true ||
     input.params?.forceFallbackFactoryPlan === true
   ) {
-    return { plan: fallbackFactoryPlan(input.prompt), source: 'fallback' }
+    return { plan: fallbackPlan, source: 'fallback' }
   }
 
   try {
@@ -625,7 +650,6 @@ export async function planFactoryRequest(input: {
       typeof data.choices?.[0]?.message?.content === 'string' ? data.choices[0].message.content : ''
     const plan = parseFactoryPlan(content, input.prompt)
     if (plan) {
-      const fallbackPlan = fallbackFactoryPlan(input.prompt)
       if (shouldPreferFallbackFactoryPlan(plan, fallbackPlan)) {
         return { plan: fallbackPlan, source: 'fallback', plannerText: content }
       }
@@ -634,5 +658,5 @@ export async function planFactoryRequest(input: {
   } catch {
     // Fall back below. The runner still records deterministic decisions.
   }
-  return { plan: fallbackFactoryPlan(input.prompt), source: 'fallback' }
+  return { plan: fallbackPlan, source: 'fallback' }
 }

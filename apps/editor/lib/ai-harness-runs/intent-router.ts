@@ -69,6 +69,8 @@ const createIntentPattern = /生成|创建|新建|放置|添加|\bgenerate\b|\bc
 const editIntentPattern =
   /修改|调整|设置|改成|透明|颜色|液位|功率|流量|尺寸|高度|宽度|长度|\bedit\b|\bset\b|\bchange\b|\bopacity\b|\bcolor\b|\blevel\b|\bpower\b|\bflow\b|\bheight\b|\bwidth\b|\blength\b/iu
 const factoryIntentPattern = /工厂|产线|装置区|车间|\bfactory\b|\bplant\b|\bprocess line\b/iu
+const selectedNaturalEditPattern =
+  /\bmake\b|\bturn\b|\bhorizontal\b|\bvertical\b|\bspherical\b|\bred\b|\bblue\b|\bgreen\b|\byellow\b|\borange\b|\bpurple\b|\bpink\b|\bblack\b|\bwhite\b|\bgr[ae]y\b|\bsilver\b/iu
 const knownEquipmentPattern =
   /离心泵|泵|储罐|罐|塔器|蒸馏塔|换热器|压缩机|\bpump\b|\btank\b|\bcolumn\b|\bheat exchanger\b|\bcompressor\b/iu
 const imageIntentPattern = /图生|图片|照片|参考图|\bimage\b|\bphoto\b|\bpicture\b/iu
@@ -132,7 +134,10 @@ export function routeAiIntent(input: AiIntentRouterInput): AiIntentRoute {
     })
   }
 
-  if (selection?.nodeIds.length && editIntentPattern.test(prompt)) {
+  if (
+    selection?.nodeIds.length &&
+    (editIntentPattern.test(prompt) || selectedNaturalEditPattern.test(prompt))
+  ) {
     const partScoped = Boolean(selection.semanticRole || selection.sourcePartKind)
     return route({
       kind: partScoped ? 'edit-selected-part' : 'edit-selected-equipment',

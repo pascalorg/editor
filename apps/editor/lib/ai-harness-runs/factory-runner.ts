@@ -1092,6 +1092,12 @@ async function runFactoryRun(runId: string) {
       prompt: run.prompt,
       params: run.params,
       signal: controller.signal,
+      requiredSourcePack: run.intentRoute?.requiredPack
+        ? {
+            id: run.intentRoute.requiredPack.id,
+            version: run.intentRoute.requiredPack.version,
+          }
+        : undefined,
     })
 
     await appendRunEvent(runId, {

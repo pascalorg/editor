@@ -777,27 +777,13 @@ export function resolveProcessStationEquipment(input: {
       stationPlacement: input.stationPlacement,
       equipmentContract,
     })
-    const profileParts = createProfilePartsPatch({
-      ...input,
-      equipmentContract: tankContract,
-    })
-    if (profileParts?.patches.length) {
-      return {
-        patches: profileParts.patches,
-        primitiveRequest: null,
-        routeObstacle: profileParts.routeObstacle,
-        resolved: true,
-        resolver: 'profile-parts',
-        reason: 'native tank contract compiled to semantic assembly',
-      }
-    }
     const routeObstacle = routeObstacleForStation({
       stationPlacement: input.stationPlacement,
-      equipmentContract,
+      equipmentContract: tankContract,
       source: 'native',
     })
     return {
-      patches: [createNativeTankPatch(withContract)],
+      patches: [createNativeTankPatch({ ...input, equipmentContract: tankContract })],
       primitiveRequest: null,
       routeObstacle,
       resolved: true,

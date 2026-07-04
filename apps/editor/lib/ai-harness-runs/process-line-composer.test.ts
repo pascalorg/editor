@@ -85,8 +85,8 @@ describe('process line composer', () => {
     expect(
       result.patches.some(
         (patch) =>
-          patch.node.type === 'assembly' &&
-          patch.node.metadata?.equipmentAssembly &&
+          patch.node.type === 'tank' &&
+          patch.node.metadata?.resolver === 'native-tank' &&
           patch.node.metadata?.stationId === 'hydrogen_separator',
       ),
     ).toBe(true)
@@ -148,7 +148,7 @@ describe('process line composer', () => {
     )
     const hydrogenTank = result.patches.find(
       (patch) =>
-        patch.node.type === 'assembly' && patch.node.metadata?.stationId === 'hydrogen_separator',
+        patch.node.type === 'tank' && patch.node.metadata?.stationId === 'hydrogen_separator',
     )
 
     expect(shellZone?.node.name).toBe('\u7535\u89e3\u6c34\u5236\u6c22\u8f66\u95f4')

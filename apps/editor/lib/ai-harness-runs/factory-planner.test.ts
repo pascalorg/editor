@@ -65,6 +65,24 @@ describe('factory planner', () => {
     })
   })
 
+  test('uses required industry pack evidence to select a whole-factory process template', () => {
+    const plan = fallbackFactoryPlan('generate a refinery', {
+      requiredSourcePack: { id: 'industry.refinery.basic', version: '0.1.0' },
+    })
+
+    expect(plan).toMatchObject({
+      kind: 'process_line',
+      process: {
+        processId: 'refinery_basic_complex',
+        sourcePack: {
+          id: 'industry.refinery.basic',
+          version: '0.1.0',
+          industry: 'refinery',
+        },
+      },
+    })
+  })
+
   test('routes custom equipment to geometry', () => {
     const plan = fallbackFactoryPlan('\u751f\u6210\u4e00\u53f0\u8f93\u9001\u673a')
 

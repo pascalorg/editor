@@ -186,6 +186,31 @@ export function matchProcessTemplate(prompt: string): ProcessTemplate | undefine
   return matches[0]
 }
 
+export function matchProcessTemplateBySourcePack(input: {
+  id: string
+  version?: string
+  prompt?: string
+}): ProcessTemplate | undefined {
+  const matches = allProcessTemplates().filter(
+    (template) =>
+      template.sourcePack?.id === input.id &&
+      (input.version == null || template.sourcePack.version === input.version),
+  )
+  if (!matches.length) return undefined
+  const prompt = input.prompt?.trim()
+  if (prompt) {
+    const aliasMatch = matches.filter((template) =>
+      template.aliases.some((pattern) => pattern.test(prompt)),
+    )
+    if (aliasMatch.length) {
+      return isFactoryScopePrompt(prompt)
+        ? (aliasMatch.find(isWholeFactoryTemplate) ?? aliasMatch[0])
+        : aliasMatch[0]
+    }
+  }
+  return matches.find(isWholeFactoryTemplate) ?? matches[0]
+}
+
 export function matchUnavailableProcessTemplate(prompt: string): ProcessTemplate | undefined {
   const availableKeys = new Set(
     allProcessTemplates().map(

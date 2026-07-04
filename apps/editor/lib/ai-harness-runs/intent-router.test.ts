@@ -51,6 +51,38 @@ describe('AI intent router', () => {
     })
   })
 
+  test('routes selected natural color edits to factory selection editing', () => {
+    const route = routeAiIntent({
+      prompt: 'make the selected object green',
+      selection: {
+        nodeIds: ['assembly_1'],
+        nodeType: 'assembly',
+      },
+    })
+
+    expect(route).toMatchObject({
+      kind: 'edit-selected-equipment',
+      execution: 'factory',
+      requiresPreview: false,
+    })
+  })
+
+  test('routes selected tank shape wording to factory selection editing', () => {
+    const route = routeAiIntent({
+      prompt: 'make the selected tank horizontal',
+      selection: {
+        nodeIds: ['tank_1'],
+        nodeType: 'tank',
+      },
+    })
+
+    expect(route).toMatchObject({
+      kind: 'edit-selected-equipment',
+      execution: 'factory',
+      requiresPreview: false,
+    })
+  })
+
   test('routes known equipment creation to factory recipe execution', () => {
     const route = routeAiIntent({
       prompt: '生成一个储罐，液位 60%',
