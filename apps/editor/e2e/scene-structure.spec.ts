@@ -254,7 +254,8 @@ test('scene structure defaults factory scenes to process and preserves elevation
       'true',
     )
     await expect(page.getByRole('heading', { name: 'Atmospheric distillation unit' })).toBeVisible()
-    if (!(await page.getByTestId('semantic-inspector').isVisible())) {
+    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
+    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
       await page.getByRole('button', { name: 'Semantic Inspector' }).click()
     }
     await expect(page.getByTestId('semantic-inspector-equipment')).toBeVisible()

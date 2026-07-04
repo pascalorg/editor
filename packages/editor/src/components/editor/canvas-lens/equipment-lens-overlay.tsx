@@ -119,7 +119,7 @@ export const EquipmentLensOverlay = memo(function EquipmentLensOverlay() {
                 wireframe
               />
             </mesh>
-            <Html center distanceFactor={18} position={item.position} zIndexRange={[38, 0]}>
+            <Html center distanceFactor={18} position={item.position} zIndexRange={[12, 0]}>
               <button
                 className={cn(
                   'pointer-events-auto min-w-40 max-w-60 rounded-lg border px-2.5 py-2 text-left text-white shadow-xl backdrop-blur-md transition-colors',

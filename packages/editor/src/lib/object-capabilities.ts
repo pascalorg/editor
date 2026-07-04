@@ -1,4 +1,4 @@
-import type { AnyNode } from '@pascal-app/core'
+import { type AnyNode, type DynamicType, isDynamicBinding } from '@pascal-app/core'
 
 export type ObjectSourceKind =
   | 'builtin-node'
@@ -57,6 +57,13 @@ export type ObjectPortConnectionSummary = {
   medium?: string
 }
 
+export type ObjectDataBindingSummary = {
+  id: string
+  type: DynamicType | string
+  path: string
+  target?: string
+}
+
 export type ObjectCapabilityProfile = {
   nodeId: string
   nodeType: string
@@ -65,6 +72,7 @@ export type ObjectCapabilityProfile = {
   capabilities: ObjectCapabilitySummary[]
   editableParts: ObjectPartSummary[]
   ports: ObjectPortSummary[]
+  dataBindings: ObjectDataBindingSummary[]
   profileId?: string
   recipeId?: string
   equipmentFamily?: string
@@ -273,11 +281,38 @@ function portConnectionsFor(input: {
 function hasLiveData(metadata: AnyRecord) {
   return Boolean(
     metadata.liveDataBinding ||
+      metadata.dynamicBindings ||
       metadata.liveDataBindings ||
       metadata.dataBinding ||
       metadata.dataBindings ||
       metadata.telemetry,
   )
+}
+
+function dataBindingsFrom(metadata: AnyRecord): ObjectDataBindingSummary[] {
+  const bindings: ObjectDataBindingSummary[] = []
+  if (Array.isArray(metadata.dynamicBindings)) {
+    for (const binding of metadata.dynamicBindings.filter(isDynamicBinding)) {
+      bindings.push({
+        id: binding.id,
+        type: binding.type,
+        path: binding.path,
+        target: `${binding.type}:${binding.path}`,
+      })
+    }
+  }
+  const legacyBinding = recordValue(metadata.liveDataBinding)
+  const dataKey = stringValue(legacyBinding?.dataKey)
+  const effect = stringValue(legacyBinding?.effect)
+  if (dataKey && effect && legacyBinding?.enabled !== false) {
+    bindings.push({
+      id: 'legacy-live-data-binding',
+      type: effect,
+      path: dataKey,
+      target: `${effect}:${dataKey}`,
+    })
+  }
+  return bindings
 }
 
 function childNodes(node: AnyNode, nodes: NodeMap): AnyNode[] {
@@ -314,6 +349,7 @@ export function resolveObjectCapabilities(
     ...port,
     connections: portConnectionsFor({ node, nodes, portId: port.id }),
   }))
+  const dataBindings = dataBindingsFrom(metadata)
   const nodeType = String(node.type)
 
   pushUnique(sources, 'manual')
@@ -448,6 +484,7 @@ export function resolveObjectCapabilities(
     capabilities,
     editableParts,
     ports,
+    dataBindings,
     profileId: stringValue(assembly?.profileId) ?? stringValue(contract?.profileId),
     recipeId: stringValue(assembly?.recipeId) ?? stringValue(contract?.recipeId),
     equipmentFamily:
@@ -511,12 +548,16 @@ export function formatObjectCapabilityProfile(profile: ObjectCapabilityProfile) 
   const capabilities = profile.capabilities.map(formatCapability)
   const parts = profile.editableParts.map(formatPart)
   const ports = profile.ports.map(formatPort)
+  const dataBindings = profile.dataBindings.map(
+    (binding) => `${binding.type}<-${binding.path}${binding.target ? `(${binding.target})` : ''}`,
+  )
   return [
     `- ${title}`,
     identity ? `  identity: ${identity}` : undefined,
     capabilities.length ? `  capabilities: ${compactList(capabilities, 12)}` : undefined,
     parts.length ? `  semanticParts: ${compactList(parts, 12)}` : undefined,
     ports.length ? `  ports: ${compactList(ports, 12)}` : undefined,
+    dataBindings.length ? `  dataBindings: ${compactList(dataBindings, 12)}` : undefined,
   ]
     .filter(Boolean)
     .join('\n')

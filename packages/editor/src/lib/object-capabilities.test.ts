@@ -39,6 +39,13 @@ function semanticTankNodes() {
           { id: 'outlet', medium: 'crude', side: 'east' },
         ],
       },
+      dynamicBindings: [
+        {
+          id: 'semantic_live_assembly_storage_tank_tank-level',
+          type: 'level',
+          path: 'refinery.tank.level',
+        },
+      ],
     },
   })
   const shell = BoxNode.parse({
@@ -110,6 +117,14 @@ describe('object capabilities', () => {
     expect(capabilitiesOf(profile!).has('semantic.parts')).toBe(true)
     expect(capabilitiesOf(profile!).has('semantic.params')).toBe(true)
     expect(capabilitiesOf(profile!).has('ports')).toBe(true)
+    expect(capabilitiesOf(profile!).has('data-binding')).toBe(true)
+    expect(profile?.dataBindings).toMatchObject([
+      {
+        id: 'semantic_live_assembly_storage_tank_tank-level',
+        type: 'level',
+        path: 'refinery.tank.level',
+      },
+    ])
     expect(profile?.editableParts.map((part) => part.semanticRole).sort()).toEqual([
       'liquid_volume',
       'vessel_shell',
@@ -156,6 +171,7 @@ describe('object capabilities', () => {
     expect(context?.summary).toContain('liquid_volume#box_liquid')
     expect(context?.summary).toContain('inlet(crude/west)')
     expect(context?.summary).toContain('incoming->feed_pump:outlet')
+    expect(context?.summary).toContain('level<-refinery.tank.level')
     expect(context?.summary).toContain('Prefer editable semantic parts/params')
   })
 

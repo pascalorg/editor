@@ -23,6 +23,13 @@ import {
   resolveObjectCapabilities,
 } from '../../../lib/object-capabilities'
 import {
+  buildSemanticLiveDataBinding,
+  defaultSemanticLiveDataPath,
+  semanticLiveDataBindingTargets,
+  type SemanticLiveDataBindingTarget,
+  upsertSemanticLiveDataBinding,
+} from '../../../lib/semantic-live-data-bindings'
+import {
   DEFAULT_CUSTOM_MATERIAL_PROPERTIES,
   withMaterialProperties,
 } from '../../../lib/material-appearance'
@@ -113,6 +120,18 @@ function liveDataValueText(
   path: string,
 ) {
   return formatLiveDataValue(values[path], liveDataPathMeta(paths, path)?.unit)
+}
+
+function existingDynamicBindingPath(
+  metadata: AnyRecord,
+  profile: ObjectCapabilityProfile,
+  target: SemanticLiveDataBindingTarget,
+) {
+  const id = buildSemanticLiveDataBinding({ profile, target, path: '' }).id
+  const bindings = Array.isArray(metadata.dynamicBindings)
+    ? metadata.dynamicBindings.filter(isDynamicBinding)
+    : []
+  return bindings.find((binding) => binding.id === id)?.path
 }
 
 function SemanticChip({
@@ -405,6 +424,80 @@ function PortsTab({ ports }: { ports: ObjectPortSummary[] }) {
   )
 }
 
+function SemanticLiveDataBindingControl({
+  metadata,
+  profile,
+  target,
+}: {
+  metadata: AnyRecord
+  profile: ObjectCapabilityProfile
+  target: SemanticLiveDataBindingTarget
+}) {
+  const node = useScene((state) => state.nodes[profile.nodeId as AnyNodeId])
+  const updateNode = useScene((state) => state.updateNode)
+  const markDirty = useScene((state) => state.markDirty)
+  const paths = useLiveData((state) => state.paths)
+  const values = useLiveData((state) => state.values)
+  const fallbackPath = defaultSemanticLiveDataPath(target, paths)
+  const currentPath = existingDynamicBindingPath(metadata, profile, target)
+  const [selectedPath, setSelectedPath] = useState(currentPath ?? fallbackPath)
+  const pathOptions = selectedPath && !paths.some((path) => path.path === selectedPath)
+    ? [{ path: selectedPath, label: selectedPath, valueType: 'string' as const }, ...paths]
+    : paths
+  const selectedMeta = liveDataPathMeta(paths, selectedPath)
+
+  return (
+    <div
+      className="grid gap-1.5 rounded border border-border/45 bg-background/40 p-2 text-[11px]"
+      data-testid={`semantic-inspector-data-target-${target.id}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-foreground">{target.label}</div>
+          <div className="truncate text-muted-foreground">{target.description}</div>
+        </div>
+        <SemanticChip tone={currentPath ? 'green' : 'sky'}>
+          {currentPath ? 'bound' : target.type}
+        </SemanticChip>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+        <select
+          className="h-7 min-w-0 rounded border border-border/50 bg-background/70 px-2 text-[11px] text-foreground"
+          data-testid={`semantic-inspector-data-path-${target.id}`}
+          disabled={pathOptions.length === 0}
+          onChange={(event) => setSelectedPath(event.target.value)}
+          value={selectedPath}
+        >
+          {pathOptions.map((path) => (
+            <option key={path.path} value={path.path}>
+              {path.label} / {formatLiveDataValue(values[path.path], path.unit)}
+            </option>
+          ))}
+        </select>
+        <button
+          className="h-7 rounded border border-emerald-300/30 bg-emerald-300/10 px-2 font-medium text-[11px] text-emerald-100 transition hover:bg-emerald-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+          data-testid={`semantic-inspector-data-bind-${target.id}`}
+          disabled={!node || !selectedPath}
+          onClick={() => {
+            if (!(node && selectedPath)) return
+            updateNode(
+              profile.nodeId as AnyNodeId,
+              upsertSemanticLiveDataBinding({ node, profile, target, path: selectedPath }),
+            )
+            markDirty(profile.nodeId as AnyNodeId)
+          }}
+          type="button"
+        >
+          Apply
+        </button>
+      </div>
+      <div className="truncate text-muted-foreground">
+        {selectedPath} = {formatLiveDataValue(values[selectedPath], selectedMeta?.unit)}
+      </div>
+    </div>
+  )
+}
+
 function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCapabilityProfile }) {
   const endpoint = useLiveData((state) => state.endpoint)
   const status = useLiveData((state) => state.status)
@@ -413,6 +506,7 @@ function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCa
   const values = useLiveData((state) => state.values)
   const labels = [...liveDataBindingLabels(metadata), ...dynamicBindingLabels(metadata)]
   const fields = liveDataBindingFields(metadata)
+  const targets = semanticLiveDataBindingTargets(profile)
   const timestamp = snapshot?.timestamp ? new Date(snapshot.timestamp).toLocaleTimeString() : null
   return (
     <div className="space-y-2" data-testid="semantic-inspector-data">
@@ -479,6 +573,16 @@ function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCa
           ))}
         </div>
       ) : null}
+      <div className="grid gap-1.5" data-testid="semantic-inspector-data-targets">
+        {targets.map((target) => (
+          <SemanticLiveDataBindingControl
+            key={target.id}
+            metadata={metadata}
+            profile={profile}
+            target={target}
+          />
+        ))}
+      </div>
     </div>
   )
 }
