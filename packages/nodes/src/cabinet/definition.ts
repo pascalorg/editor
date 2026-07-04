@@ -8,6 +8,7 @@ import type {
   SceneApi,
 } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
+import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { buildCabinetGeometry } from './geometry'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
@@ -80,6 +81,118 @@ function bumpCabinetRunLayoutRevision(sceneApi: SceneApi, run: CabinetNodeType) 
     } as Partial<AnyNode>,
   )
   sceneApi.markDirty(run.id as AnyNodeId)
+}
+
+function cabinetAdjacencyRevision(metadata: CabinetNodeType['metadata']): unknown {
+  return cabinetMetadataRecord(metadata).cabinetAdjacencyRevision ?? null
+}
+
+// Margin added to each run's reach when deciding whether two sibling runs can
+// influence each other's countertop join — generous relative to any plausible
+// `countertopOverhang` so a run sliding away still re-keys the neighbor it
+// just un-joined from.
+const CABINET_NEIGHBOR_JOIN_MARGIN = 0.5
+
+export type CabinetRunFootprint = {
+  parentId: AnyNodeId | null
+  x: number
+  z: number
+  reach: number
+}
+
+export function cabinetRunFootprint(
+  run: CabinetNodeType,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+): CabinetRunFootprint {
+  const bounds = cabinetLocalBounds(run, nodes)
+  return {
+    parentId: (run.parentId ?? null) as AnyNodeId | null,
+    x: run.position[0],
+    z: run.position[2],
+    reach:
+      Math.hypot(bounds.size[0], bounds.size[2]) / 2 +
+      Math.hypot(bounds.center[0], bounds.center[2]) +
+      CABINET_NEIGHBOR_JOIN_MARGIN,
+  }
+}
+
+/**
+ * Re-key sibling cabinet runs whose countertop join could be affected by a
+ * run that moved / resized / re-flowed. A run's overhang trims against
+ * adjacent sibling runs (`siblingCabinetSpansInRunLocal`), but a neighbor's
+ * own `geometryKey` doesn't change when THIS run moves — marking it dirty
+ * alone would be swallowed by the geometry system's key-skip cache. Bumping
+ * `cabinetAdjacencyRevision` (folded into the run geometryKey) both dirties
+ * and re-keys it. History is paused: the counter is derived presentation
+ * state, and an undo of the triggering move re-fires the watcher anyway.
+ */
+export function bumpCabinetRunsNear(
+  sceneApi: SceneApi,
+  footprints: readonly CabinetRunFootprint[],
+  moverIds: ReadonlySet<string>,
+) {
+  const nodes = sceneApi.nodes()
+  const targets = new Set<AnyNodeId>()
+  for (const footprint of footprints) {
+    if (!footprint.parentId) continue
+    const parent = nodes[footprint.parentId]
+    const childIds = (parent as unknown as { children?: AnyNodeId[] } | undefined)?.children
+    if (!Array.isArray(childIds)) continue
+    for (const childId of childIds) {
+      if (moverIds.has(childId) || targets.has(childId)) continue
+      const sibling = nodes[childId]
+      if (!isCabinetRun(sibling)) continue
+      const siblingFootprint = cabinetRunFootprint(sibling, nodes)
+      const distance = Math.hypot(
+        siblingFootprint.x - footprint.x,
+        siblingFootprint.z - footprint.z,
+      )
+      if (distance <= siblingFootprint.reach + footprint.reach) targets.add(childId)
+    }
+  }
+  if (targets.size === 0) return
+  // A mover's own trim also depends on its offset to those neighbors, and
+  // `position` is not in its geometryKey — re-key it alongside them. Movers
+  // with no neighbors in range never reach here, keeping lone-cabinet moves
+  // rebuild-free.
+  for (const id of moverIds) {
+    if (isCabinetRun(nodes[id as AnyNodeId])) targets.add(id as AnyNodeId)
+  }
+
+  sceneApi.pauseHistory()
+  try {
+    for (const id of targets) {
+      const run = sceneApi.get(id)
+      if (!isCabinetRun(run)) continue
+      const metadataRecord = cabinetMetadataRecord(run.metadata)
+      const currentRevision =
+        typeof metadataRecord.cabinetAdjacencyRevision === 'number'
+          ? metadataRecord.cabinetAdjacencyRevision
+          : 0
+      sceneApi.update(id, {
+        metadata: { ...metadataRecord, cabinetAdjacencyRevision: currentRevision + 1 },
+      } as Partial<AnyNode>)
+      sceneApi.markDirty(id)
+    }
+  } finally {
+    sceneApi.resumeHistory()
+  }
+}
+
+/** Inputs of a run that can change a NEIGHBOR's countertop join. */
+export function cabinetRunNeighborSignature(run: CabinetNodeType): string {
+  return JSON.stringify([
+    run.position[0],
+    run.position[2],
+    run.rotation,
+    run.width,
+    run.depth,
+    run.carcassHeight,
+    run.runTier,
+    run.countertopOverhang,
+    run.children ?? [],
+    cabinetLayoutRevision(run.metadata),
+  ])
 }
 
 function cabinetTotalHeight(node: CabinetEditableNode) {
@@ -656,6 +769,10 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),
       JSON.stringify(cabinetLayoutRevision(n.metadata)),
+      // Bumped when a sibling run moves/resizes nearby, so the countertop
+      // overhang re-trims against the neighbor's new spans (the neighbor's
+      // own fields never appear in this key).
+      JSON.stringify(cabinetAdjacencyRevision(n.metadata)),
       JSON.stringify(n.children ?? []),
       JSON.stringify(n.stack ?? null),
     ]),
@@ -779,6 +896,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetModuleFloorplan,
+  // 2D ↔ 3D parity: module position is run-local, so the generic overlay's
+  // plan-space translate would corrupt it on any rotated / offset run.
+  floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
   quickActions: cabinetQuickActions,
 
   presentation: {

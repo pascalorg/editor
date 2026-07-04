@@ -1414,6 +1414,53 @@ const ovenHeatElementMaterial = new MeshStandardMaterial({
   metalness: 0.35,
   roughness: 0.42,
 })
+const ovenStatusLightMaterials = ['#f97316', '#22c55e', '#38bdf8'].map(
+  (color) =>
+    new MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.42,
+      roughness: 0.28,
+    }),
+)
+
+// These module-level materials are shared by every cabinet instance in the
+// scene. Without the cached flag, the geometry system's disposeChildren would
+// dispose them on each rebuild, breaking every other cabinet still using them
+// and forcing scene-wide shader recompiles.
+for (const material of [
+  applianceDisplayMaterial,
+  applianceLampMaterial,
+  microwaveScreenMaterial,
+  microwaveButtonMaterial,
+  microwaveStartButtonMaterial,
+  microwaveCancelButtonMaterial,
+  microwavePanelMaterial,
+  cooktopGlassMaterial,
+  cooktopBurnerMaterial,
+  cooktopTrimMaterial,
+  cooktopGrateMaterial,
+  cooktopInductionZoneMaterial,
+  cooktopInductionActiveZoneMaterial,
+  cooktopKnobOnMaterial,
+  cooktopKnobHitMaterial,
+  refrigeratorSilverMaterial,
+  refrigeratorBrassAccentMaterial,
+  refrigeratorDarkTrimMaterial,
+  refrigeratorSealMaterial,
+  refrigeratorLinerMaterial,
+  refrigeratorLinerAccentMaterial,
+  refrigeratorDrawerMaterial,
+  refrigeratorBinMaterial,
+  refrigeratorLightMaterial,
+  refrigeratorWaterMaterial,
+  ovenDialMaterial,
+  ovenIndicatorMaterial,
+  ovenHeatElementMaterial,
+  ...ovenStatusLightMaterials,
+]) {
+  material.userData.__pascalCachedMaterial = true
+}
 
 function addApplianceHandle(
   group: Object3D,
@@ -1730,14 +1777,7 @@ function addOvenStatusLights(
   gap: number,
   name: string,
 ) {
-  const colors = ['#f97316', '#22c55e', '#38bdf8']
-  colors.forEach((color, index) => {
-    const material = new MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.42,
-      roughness: 0.28,
-    })
+  ovenStatusLightMaterials.forEach((material, index) => {
     const light = stampSlot(
       new Mesh(new CylinderGeometry(radius, radius, 0.003, 16), material),
       'appliance',

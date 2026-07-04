@@ -5,7 +5,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { CabinetModuleNode, useScene } from '@pascal-app/core'
+import { CabinetModuleNode, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -17,6 +17,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { ArrowDown, ArrowUp, Minus, Pause, Play, Plus, Trash } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { cabinetModuleDefinition } from './definition'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
@@ -934,7 +935,6 @@ export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const animationFrameRef = useRef<number | null>(null)
-  const animationTargetRef = useRef<0 | 1 | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined) : undefined,
@@ -958,16 +958,31 @@ export default function CabinetPanel() {
     if (parent?.type !== 'cabinet') return EMPTY_MODULE_IDS
     return (parent.children ?? EMPTY_MODULE_IDS) as AnyNodeId[]
   })
-  const nodes = useScene((s) => s.nodes)
-  const modules = useMemo(
-    () =>
-      moduleIds.length === 0
-        ? EMPTY_MODULES
-        : moduleIds
-            .map((id) => nodes[id as AnyNodeId] as CabinetModuleNodeType | undefined)
-            .filter((child): child is CabinetModuleNodeType => child?.type === 'cabinet-module'),
-    [moduleIds, nodes],
+  // Select just the run's modules — subscribing to the whole `s.nodes` record
+  // re-rendered the panel on every scene mutation anywhere in the scene.
+  const modules = useScene(
+    useShallow((s) => {
+      if (moduleIds.length === 0) return EMPTY_MODULES
+      const found = moduleIds
+        .map((id) => s.nodes[id as AnyNodeId] as CabinetModuleNodeType | undefined)
+        .filter((child): child is CabinetModuleNodeType => child?.type === 'cabinet-module')
+      return found.length === 0 ? EMPTY_MODULES : found
+    }),
   )
+  const wallChild = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    return selected?.type === 'cabinet-module'
+      ? wallChildOf(selected, s.nodes as Record<string, CabinetEditableNode | undefined>)
+      : undefined
+  })
+  const parentIsModule = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    return (
+      selected?.type === 'cabinet-module' &&
+      selected.parentId != null &&
+      s.nodes[selected.parentId as AnyNodeId]?.type === 'cabinet-module'
+    )
+  })
 
   const updateNode = useCallback(
     (patch: Partial<CabinetEditableNode>) => {
@@ -1071,14 +1086,25 @@ export default function CabinetPanel() {
     }
   }, [node, setSelection])
 
+  // Mid-flight frames publish through useLiveNodeOverrides rather than
+  // scene.updateNode: the temporal (undo) store records every updateNode, so
+  // per-rAF commits burned ~20 undo entries per play and could evict real
+  // history. Stop/finish commits once.
   const stopAnimation = useCallback(() => {
     if (animationFrameRef.current != null) {
       window.cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    animationTargetRef.current = null
+    if (selectedId) {
+      const overrides = useLiveNodeOverrides.getState()
+      const liveValue = overrides.get(selectedId)?.operationState
+      if (typeof liveValue === 'number') {
+        updateNode({ operationState: liveValue })
+        overrides.clearFields(selectedId, ['operationState'])
+      }
+    }
     setIsAnimating(false)
-  }, [])
+  }, [selectedId, updateNode])
 
   const animateOperationState = useCallback(
     (target: 0 | 1) => {
@@ -1094,12 +1120,10 @@ export default function CabinetPanel() {
       const start = liveNode.operationState ?? 0
       if (Math.abs(start - target) < 1e-4) {
         updateNode({ operationState: target })
-        animationTargetRef.current = null
         setIsAnimating(false)
         return
       }
 
-      animationTargetRef.current = target
       setIsAnimating(true)
       const startTime = window.performance.now()
       const hasFridge = stackForCabinet(liveNode).some((compartment) =>
@@ -1111,16 +1135,16 @@ export default function CabinetPanel() {
         const t = Math.min(1, (time - startTime) / duration)
         const eased = 1 - (1 - t) ** 3
         const nextValue = start + (target - start) * eased
-        updateNode({ operationState: nextValue })
 
         if (t < 1) {
+          useLiveNodeOverrides.getState().set(selectedId, { operationState: nextValue })
           animationFrameRef.current = window.requestAnimationFrame(step)
           return
         }
 
         updateNode({ operationState: target })
+        useLiveNodeOverrides.getState().clearFields(selectedId, ['operationState'])
         animationFrameRef.current = null
-        animationTargetRef.current = null
         setIsAnimating(false)
       }
 
@@ -1292,7 +1316,7 @@ export default function CabinetPanel() {
       resolveCabinetType(node, parentRun) !== 'base'
     )
       return
-    if (wallChildOf(node, nodes as Record<string, CabinetEditableNode | undefined>)) return
+    if (wallChild) return
 
     const isHoodChild = kind === 'hood'
     const carcassHeight = isHoodChild
@@ -1331,7 +1355,8 @@ export default function CabinetPanel() {
 
   const removeWallCabinet = () => {
     if (node?.type !== 'cabinet-module') return
-    const wall = wallChildOf(node, nodes as Record<string, CabinetEditableNode | undefined>)
+    const scene = useScene.getState()
+    const wall = wallChildOf(node, scene.nodes as Record<string, CabinetEditableNode | undefined>)
     if (!wall) return
     useScene.getState().deleteNode(wall.id as AnyNodeId)
     useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
@@ -1411,15 +1436,9 @@ export default function CabinetPanel() {
     setSelection({ selectedIds: [node.id] })
   }
 
-  const hasWallCabinet =
-    node?.type === 'cabinet-module'
-      ? Boolean(wallChildOf(node, nodes as Record<string, CabinetEditableNode | undefined>))
-      : false
+  const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
 
-  const isWallChildModule =
-    node?.type === 'cabinet-module' &&
-    node.parentId != null &&
-    nodes[node.parentId as AnyNodeId]?.type === 'cabinet-module'
+  const isWallChildModule = node?.type === 'cabinet-module' && parentIsModule
 
   const applyPreset = (presetId: CabinetPresetId) => {
     if (node?.type !== 'cabinet-module') return
