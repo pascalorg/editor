@@ -201,8 +201,10 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await page.getByTestId('canvas-lens-process').click()
     await expect(page.getByTestId('canvas-lens-process')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
+    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeVisible()
+    await expect(page.getByTestId(`process-lens-port-${ids.tower}-inlet`)).toBeVisible()
 
-    await page.locator(`[data-scene-structure-node-id="${ids.tower}"]`).click()
+    await page.getByTestId(`process-lens-station-${ids.tower}`).click()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',
@@ -211,6 +213,7 @@ test('scene structure defaults factory scenes to process and preserves elevation
 
     await page.getByTestId('canvas-lens-data').click()
     await expect(page.getByTestId('canvas-lens-data')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',

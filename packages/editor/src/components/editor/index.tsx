@@ -74,6 +74,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { usePluginPanels } from '../ui/sidebar/use-plugin-panels'
+import { ProcessLensOverlay } from './canvas-lens/process-lens-overlay'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
@@ -699,6 +700,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <LiveDataBindingRuntime />
       <DynamicPreviewRuntime />
       {!(isPreviewMode || isFirstPersonMode) && <SiteEdgeLabels />}
+      {!(isLoading || isFirstPersonMode || isPreviewMode || isCaptureMode) && (
+        <ProcessLensOverlay />
+      )}
       {!(isLoading || isFirstPersonMode || isPreviewMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}

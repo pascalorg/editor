@@ -484,10 +484,11 @@ Foundation delivered:
 - Editor state now has a persisted `canvasLens` value with six lens modes: Layout, Process, Equipment, Data, Maintenance, and Elevation.
 - Bottom canvas toolbar exposes a Canvas Lens switcher without changing scene data, editor phase, build tool, or selection.
 - Scene Structure e2e verifies Lens switching can happen while Process structure and station selection remain stable.
+- Process Lens MVP renders station labels and exposed port chips on the canvas; clicking a Process Lens station selects the same assembly used by Scene Structure.
 
 Next implementation slices:
 
-- Process Lens overlay: station labels, port markers, and lightweight route arrows.
+- Process Lens overlay: lightweight route arrows between resolved station ports.
 - Equipment Lens overlay: semantic assembly outlines and editable part affordances.
 - Data Lens overlay: bound/unbound equipment status and live-value label anchors.
 
