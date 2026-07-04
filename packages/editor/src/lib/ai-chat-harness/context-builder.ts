@@ -1,4 +1,5 @@
 import type { GeneratedGeometryArtifact } from '../ai-generated-geometry-core'
+import { formatSelectionCapabilities, type ObjectCapabilityProfile } from '../object-capabilities'
 import { planGeometryCapabilities } from './capability-planner'
 import { buildPrimitiveRevisionMemory, formatPrimitiveRevisionMemory } from './revision-memory'
 
@@ -263,12 +264,14 @@ export function buildGeometryHarnessContext({
   userRequest,
   policy = DEFAULT_AI_CHAT_HARNESS_CONTEXT_POLICY,
   contextDecision,
+  selectionCapabilities,
 }: {
   messages: readonly AiChatHarnessMessage[]
   latestArtifact: GeneratedGeometryArtifact | null
   userRequest: string
   policy?: AiChatHarnessContextPolicy
   contextDecision?: GeometryContextDecision | null
+  selectionCapabilities?: readonly ObjectCapabilityProfile[]
 }) {
   return buildGeometryHarnessContextInternal({
     messages,
@@ -277,6 +280,7 @@ export function buildGeometryHarnessContext({
     policy,
     includeRevisionArtifactJson: true,
     contextDecision,
+    selectionCapabilities,
   })
 }
 
@@ -286,12 +290,14 @@ export function buildGeometryAnalysisContext({
   userRequest,
   policy = DEFAULT_AI_CHAT_HARNESS_CONTEXT_POLICY,
   contextDecision,
+  selectionCapabilities,
 }: {
   messages: readonly AiChatHarnessMessage[]
   latestArtifact: GeneratedGeometryArtifact | null
   userRequest: string
   policy?: AiChatHarnessContextPolicy
   contextDecision?: GeometryContextDecision | null
+  selectionCapabilities?: readonly ObjectCapabilityProfile[]
 }) {
   return buildGeometryHarnessContextInternal({
     messages,
@@ -300,6 +306,7 @@ export function buildGeometryAnalysisContext({
     policy,
     includeRevisionArtifactJson: false,
     contextDecision,
+    selectionCapabilities,
   })
 }
 
@@ -310,6 +317,7 @@ function buildGeometryHarnessContextInternal({
   policy,
   includeRevisionArtifactJson,
   contextDecision,
+  selectionCapabilities,
 }: {
   messages: readonly AiChatHarnessMessage[]
   latestArtifact: GeneratedGeometryArtifact | null
@@ -317,6 +325,7 @@ function buildGeometryHarnessContextInternal({
   policy: AiChatHarnessContextPolicy
   includeRevisionArtifactJson: boolean
   contextDecision?: GeometryContextDecision | null
+  selectionCapabilities?: readonly ObjectCapabilityProfile[]
 }) {
   const capabilityPlan = planGeometryCapabilities(userRequest)
   const contextPolicy = contextDecision?.contextPolicy
@@ -334,6 +343,11 @@ function buildGeometryHarnessContextInternal({
     '',
     'Capability planner:',
     JSON.stringify(capabilityPlan),
+    '',
+    'Canvas selection capability context:',
+    selectionCapabilities?.length
+      ? formatSelectionCapabilities(selectionCapabilities)
+      : 'No canvas object is selected.',
     '',
     'Conversation mode hint:',
     revisionArtifact

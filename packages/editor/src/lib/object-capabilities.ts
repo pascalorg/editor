@@ -57,6 +57,12 @@ export type ObjectCapabilityProfile = {
   equipmentFamily?: string
 }
 
+export type ObjectSelectionCapabilityContext = {
+  selectedIds: string[]
+  profiles: ObjectCapabilityProfile[]
+  summary: string
+}
+
 type NodeMap = Record<string, AnyNode | undefined>
 type AnyRecord = Record<string, unknown>
 
@@ -363,4 +369,74 @@ export function resolveSelectionCapabilities(input: {
   return input.selectedIds
     .map((id) => resolveObjectCapabilities(input.nodes[id], input.nodes))
     .filter((profile): profile is ObjectCapabilityProfile => Boolean(profile))
+}
+
+function compactList(values: readonly string[], limit = 8) {
+  const unique = values.filter((value, index) => values.indexOf(value) === index)
+  if (unique.length <= limit) return unique.join(', ')
+  return `${unique.slice(0, limit).join(', ')} +${unique.length - limit} more`
+}
+
+function formatCapability(capability: ObjectCapabilitySummary) {
+  return `${capability.id}${capability.editable ? ':editable' : ':read-only'}@${capability.target}`
+}
+
+function formatPart(part: ObjectPartSummary) {
+  const role = part.semanticRole ?? part.sourcePartKind ?? 'part'
+  const id = part.nodeId ? `#${part.nodeId}` : ''
+  return `${role}${id}${part.editable ? '' : ':locked'}`
+}
+
+function formatPort(port: ObjectPortSummary) {
+  const details = [port.medium, port.side].filter(Boolean).join('/')
+  return details ? `${port.id}(${details})` : port.id
+}
+
+export function formatObjectCapabilityProfile(profile: ObjectCapabilityProfile) {
+  const title = `${profile.label ?? profile.nodeId} [${profile.nodeType}] id=${profile.nodeId}`
+  const identity = [
+    profile.equipmentFamily ? `family=${profile.equipmentFamily}` : undefined,
+    profile.recipeId ? `recipe=${profile.recipeId}` : undefined,
+    profile.profileId ? `profile=${profile.profileId}` : undefined,
+    profile.sources.length ? `sources=${compactList(profile.sources)}` : undefined,
+  ]
+    .filter(Boolean)
+    .join('; ')
+  const capabilities = profile.capabilities.map(formatCapability)
+  const parts = profile.editableParts.map(formatPart)
+  const ports = profile.ports.map(formatPort)
+  return [
+    `- ${title}`,
+    identity ? `  identity: ${identity}` : undefined,
+    capabilities.length ? `  capabilities: ${compactList(capabilities, 12)}` : undefined,
+    parts.length ? `  semanticParts: ${compactList(parts, 12)}` : undefined,
+    ports.length ? `  ports: ${compactList(ports, 12)}` : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export function formatSelectionCapabilities(profiles: readonly ObjectCapabilityProfile[]) {
+  if (!profiles.length) return 'No selected object capability profile.'
+  return [
+    'Selected object capability profiles:',
+    ...profiles.map((profile) => formatObjectCapabilityProfile(profile)),
+    '',
+    'Use these profiles to choose safe edit targets. Prefer editable semantic parts/params over regenerating an entire object. Treat read-only ports as connection anchors unless an explicit connection edit is requested.',
+  ].join('\n')
+}
+
+export function buildSelectionCapabilityContext(input: {
+  nodes: NodeMap
+  selectedIds: readonly string[]
+}): ObjectSelectionCapabilityContext | null {
+  const selectedIds = input.selectedIds.map(String).filter(Boolean)
+  if (!selectedIds.length) return null
+  const profiles = resolveSelectionCapabilities({ nodes: input.nodes, selectedIds })
+  if (!profiles.length) return null
+  return {
+    selectedIds,
+    profiles,
+    summary: formatSelectionCapabilities(profiles),
+  }
 }

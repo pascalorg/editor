@@ -55,7 +55,7 @@ import {
   parseArticraftPose,
   type ArticraftJointMetadata,
 } from '../../../../../lib/articraft-joints'
-import { resolveSelectionCapabilities } from '../../../../../lib/object-capabilities'
+import { buildSelectionCapabilityContext } from '../../../../../lib/object-capabilities'
 import { cn } from '../../../../../lib/utils'
 import useEditor from '../../../../../store/use-editor'
 
@@ -1845,6 +1845,7 @@ function buildFactorySelectionSnapshot() {
   const scene = useScene.getState()
   const selectedIds = useViewer.getState().selection.selectedIds.map(String).filter(Boolean)
   if (!selectedIds.length) return undefined
+  const capabilityContext = buildSelectionCapabilityContext({ nodes: scene.nodes, selectedIds })
 
   const nodes: Array<Record<string, unknown>> = []
   const seen = new Set<string>()
@@ -1890,9 +1891,16 @@ function buildFactorySelectionSnapshot() {
     ? {
         selectedIds,
         nodes,
-        capabilities: resolveSelectionCapabilities({ nodes: scene.nodes, selectedIds }),
+        capabilities: capabilityContext?.profiles ?? [],
+        capabilitySummary: capabilityContext?.summary,
       }
     : undefined
+}
+
+function buildCurrentSelectionCapabilityProfiles() {
+  const scene = useScene.getState()
+  const selectedIds = useViewer.getState().selection.selectedIds.map(String).filter(Boolean)
+  return buildSelectionCapabilityContext({ nodes: scene.nodes, selectedIds })?.profiles
 }
 
 function finiteSitePoint(value: unknown): [number, number] | null {
@@ -6272,6 +6280,7 @@ export function AiChatPanel() {
     if (latestGeometryArtifactCandidate) {
       latestGeometryArtifactRef.current = latestGeometryArtifactCandidate
     }
+    const selectionCapabilities = buildCurrentSelectionCapabilityProfiles()
     const preliminaryContextDecision: GeometryContextDecision | null = latestGeometryArtifactCandidate
       ? {
           relationshipToLatestArtifact: 'ambiguous',
@@ -6286,12 +6295,14 @@ export function AiChatPanel() {
       latestArtifact: latestGeometryArtifactCandidate,
       userRequest: userContent,
       contextDecision: preliminaryContextDecision,
+      selectionCapabilities,
     })
     const analysisContext = buildGeometryAnalysisContext({
       messages,
       latestArtifact: latestGeometryArtifactCandidate,
       userRequest: userContent,
       contextDecision: preliminaryContextDecision,
+      selectionCapabilities,
     })
     const userMsg: ChatMessage = { role: 'user', content: userContent }
     const progressMsg: ChatMessage = {

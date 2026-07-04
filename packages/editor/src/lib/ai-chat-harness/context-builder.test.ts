@@ -205,6 +205,47 @@ describe('ai chat harness context builder', () => {
     expect(context).toContain('Do not make the cabin detached again.')
   })
 
+  test('includes selected object capabilities for semantic edit targeting', () => {
+    const context = buildGeometryHarnessContext({
+      messages: [],
+      latestArtifact: null,
+      userRequest: 'set the selected tank liquid level to 60%',
+      selectionCapabilities: [
+        {
+          nodeId: 'assembly_storage_tank',
+          nodeType: 'assembly',
+          label: 'Crude tank A',
+          sources: ['semantic-assembly', 'industry-pack'],
+          capabilities: [
+            {
+              id: 'semantic.params',
+              label: 'Equipment parameters',
+              target: 'assembly',
+              editable: true,
+            },
+            { id: 'ports', label: 'Ports', target: 'assembly', editable: false },
+          ],
+          editableParts: [
+            { nodeId: 'box_shell', semanticRole: 'vessel_shell', editable: true },
+            { nodeId: 'box_liquid', semanticRole: 'liquid_volume', editable: true },
+          ],
+          ports: [{ id: 'inlet', medium: 'crude', side: 'west' }],
+          profileId: 'refinery.crude_storage_tank',
+          recipeId: 'factory:storage-tank',
+          equipmentFamily: 'tank',
+        },
+      ],
+    })
+
+    expect(context).toContain('Canvas selection capability context:')
+    expect(context).toContain('Crude tank A [assembly] id=assembly_storage_tank')
+    expect(context).toContain('semantic.params:editable@assembly')
+    expect(context).toContain('ports:read-only@assembly')
+    expect(context).toContain('liquid_volume#box_liquid')
+    expect(context).toContain('inlet(crude/west)')
+    expect(context).toContain('Prefer editable semantic parts/params')
+  })
+
   test('classifies obvious follow-up feedback separately from new-object requests', () => {
     expect(isLikelyGeometryRevisionRequest('窗户和车顶分开了，比例不对', carArtifact)).toBe(true)
     expect(isLikelyGeometryRevisionRequest('make it wider and smoother', carArtifact)).toBe(true)

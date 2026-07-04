@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { AssemblyNode, BoxNode, TankNode } from '@pascal-app/core/schema'
-import { resolveObjectCapabilities, resolveSelectionCapabilities } from './object-capabilities'
+import {
+  buildSelectionCapabilityContext,
+  formatSelectionCapabilities,
+  resolveObjectCapabilities,
+  resolveSelectionCapabilities,
+} from './object-capabilities'
 
 const ASSEMBLY_ID = 'assembly_storage_tank' as AnyNodeId
 
@@ -112,5 +117,26 @@ describe('object capabilities', () => {
     )
     expect(sourceSet(profiles[1]!).has('ai-geometry')).toBe(true)
     expect(profiles[1]?.editableParts[0]?.semanticRole).toBe('vessel_shell')
+  })
+
+  test('formats selected capabilities for AI-safe edit context', () => {
+    const nodes = semanticTankNodes()
+    const context = buildSelectionCapabilityContext({
+      nodes,
+      selectedIds: [ASSEMBLY_ID],
+    })
+
+    expect(context?.profiles).toHaveLength(1)
+    expect(context?.summary).toContain('Selected object capability profiles:')
+    expect(context?.summary).toContain('Crude tank A [assembly] id=assembly_storage_tank')
+    expect(context?.summary).toContain('semantic.params:editable@assembly')
+    expect(context?.summary).toContain('vessel_shell#box_shell')
+    expect(context?.summary).toContain('liquid_volume#box_liquid')
+    expect(context?.summary).toContain('inlet(crude/west)')
+    expect(context?.summary).toContain('Prefer editable semantic parts/params')
+  })
+
+  test('empty selected capability formatting is explicit', () => {
+    expect(formatSelectionCapabilities([])).toBe('No selected object capability profile.')
   })
 })
