@@ -55,9 +55,9 @@ import { SemanticInspectorSection } from './semantic-inspector-section'
  *
  * Generic Actions section appends Move / Delete based on `capabilities`.
  *
- * Phase 4 will expand this with per-field `customEditor` support and a
- * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
- * can't be auto-generated (topology editors etc.).
+ * Kinds with topology editors can still use `parametrics.customPanel`;
+ * semantic equipment capability editing is composed separately by
+ * `SemanticInspectorSection`.
  */
 export function ParametricInspector() {
   const selectedId = useViewer(

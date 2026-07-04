@@ -499,7 +499,7 @@ Post-MVP polish:
 
 ### Phase 4: Semantic Inspector
 
-Status: MVP in progress.
+Status: Complete.
 
 Goal:
 
@@ -514,13 +514,14 @@ Deliverables:
 - Source tab.
 - Instance edit versus profile edit affordance.
 
-Validation:
+Validation completed:
 
-- Selecting a tank shows liquid and shell controls.
-- Selecting a helical ladder exposes ladder part controls.
-- Selecting a port shows connection and data binding status.
+- Selecting equipment shows recipe/profile identity and instance parameters in the Equipment tab.
+- Selecting semantic parts shows part selection plus generic material and opacity controls.
+- Selecting Ports shows connection, target equipment, target port, route node, and unconnected state.
+- Selecting Data shows live data and dynamic binding status.
 
-Foundation delivered:
+Delivered:
 
 - Basic Inspector now includes a Semantic Inspector section backed by the shared object capability resolver.
 - Semantic Inspector MVP exposes Equipment, Parts, Ports, Data, and Source tabs for the selected object or parent semantic assembly.
@@ -533,7 +534,7 @@ Foundation delivered:
 - Equipment tab now embeds semantic equipment instance parameters, so recipe/profile identity and editable device-level parameters live in one place.
 - Parts tab now acts as a semantic part editor entry: editable parts expose material and opacity controls in place while still supporting part selection.
 
-Next implementation slices:
+Deferred extension:
 
 - Add ladder/platform-specific part controls once refinery/cement recipes expose those part contracts beyond generic material controls.
 

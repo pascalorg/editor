@@ -120,10 +120,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { SemanticInspectorSection } from './components/ui/panels/semantic-inspector-section'
-export {
-  SemanticEquipmentAssemblySection,
-  SemanticEquipmentParamControls,
-} from './components/ui/panels/semantic-equipment-params'
+export { SemanticEquipmentParamControls } from './components/ui/panels/semantic-equipment-params'
 // Presets popover — used by kind-owned door / window panels for their
 // hardware / type / opening presets.
 export { PresetsPopover } from './components/ui/panels/presets/presets-popover'

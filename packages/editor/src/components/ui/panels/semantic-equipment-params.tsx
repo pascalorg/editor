@@ -12,7 +12,6 @@ import {
 import { useMemo } from 'react'
 import { buildSemanticEquipmentEditableParamUpdates } from '../../../lib/semantic-equipment-editing'
 import { MaterialSwatchField } from '../controls/material-swatch-field'
-import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
@@ -370,13 +369,5 @@ export function SemanticEquipmentParamControls({ nodeId }: { nodeId: AnyNodeId }
         </div>
       ))}
     </div>
-  )
-}
-
-export function SemanticEquipmentAssemblySection({ nodeId }: { nodeId: AnyNodeId }) {
-  return (
-    <PanelSection title="\u8bbe\u5907\u53c2\u6570">
-      <SemanticEquipmentParamControls nodeId={nodeId} />
-    </PanelSection>
   )
 }
