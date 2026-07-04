@@ -461,7 +461,7 @@ Deferred to later phases:
 
 ### Phase 3: Canvas Lenses
 
-Status: foundation in progress.
+Status: MVP closed.
 
 Goal:
 
@@ -470,14 +470,15 @@ Goal:
 Deliverables:
 
 - Lens toolbar.
-- Overlay registry for ports, process arrows, footprints, data labels, maintenance access.
+- Overlay registry foundation for ports, process arrows, equipment footprints, and data labels.
 - Lens-specific selection priorities.
 
 Validation:
 
 - Process Lens shows ports and route arrows.
+- Equipment Lens shows semantic equipment affordances and preserves selection.
 - Data Lens shows bound/unbound status.
-- Maintenance Lens highlights platforms, ladders, access clearance.
+- Maintenance Lens highlights platforms, ladders, access clearance. Deferred to later polish.
 
 Foundation delivered:
 
@@ -487,12 +488,14 @@ Foundation delivered:
 - Process Lens MVP renders station labels, exposed port chips, and explicit route arrows on the canvas; clicking a Process Lens station selects the same assembly used by Scene Structure.
 - Equipment Lens MVP renders semantic equipment cards, footprint outlines, editable part chips, and port counts from the shared object capability resolver; clicking an Equipment Lens card selects the same assembly used by Scene Structure and Inspector.
 - Data Lens MVP renders bound and ready-to-bind equipment cards from live-data and dynamic binding metadata; bound cards show binding summaries and sample values while preserving normal selection behavior.
+- Canvas Lens helpers now centralize safe metadata parsing, equipment identity detection, base positioning, station/process ids, and rough equipment height estimates so future overlays do not fork the same rules.
 
-Next implementation slices:
+Post-MVP polish:
 
 - Process Lens polish: route decluttering, port-side anchors, and branch labels for dense process plants.
 - Equipment Lens polish: true assembly bounds, part-side anchors, and direct affordances for editable semantic parts.
 - Data Lens polish: live websocket freshness, alarm severity colors, and direct binding entry points.
+- Maintenance and Elevation overlays: access clearance, ladder/platform emphasis, and floor/elevation visual simplification.
 
 ### Phase 4: Semantic Inspector
 

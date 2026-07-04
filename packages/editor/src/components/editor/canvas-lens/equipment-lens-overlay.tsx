@@ -11,6 +11,17 @@ import {
 } from '../../../lib/object-capabilities'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import {
+  type AnyRecord,
+  compactId,
+  estimateEquipmentHeight,
+  isEquipmentProfile,
+  type LensNodeMap,
+  metadataOf,
+  nodeBasePosition,
+  numberValue,
+  uniqueStrings,
+} from './canvas-lens-helpers'
 
 type EquipmentLensItem = {
   nodeId: string
@@ -22,54 +33,6 @@ type EquipmentLensItem = {
   editableParts: string[]
   editableCapabilityLabels: string[]
   portCount: number
-}
-
-type AnyRecord = Record<string, unknown>
-
-function isRecord(value: unknown): value is AnyRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function vector3(value: unknown): [number, number, number] | undefined {
-  if (
-    Array.isArray(value) &&
-    value.length >= 3 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number' &&
-    typeof value[2] === 'number'
-  ) {
-    return [value[0], value[1], value[2]]
-  }
-  return undefined
-}
-
-function numberValue(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function compactId(value: string | undefined) {
-  if (!value) return undefined
-  const parts = value.split(':')
-  return parts[parts.length - 1] || value
-}
-
-function metadataOf(node: AnyNode | undefined) {
-  const metadata = (node as unknown as { metadata?: unknown })?.metadata
-  return isRecord(metadata) ? metadata : {}
-}
-
-function nodeBasePosition(node: AnyNode | undefined): [number, number, number] {
-  if (!node) return [0, 0, 0]
-  return vector3((node as unknown as AnyRecord).position) ?? [0, 0, 0]
-}
-
-function estimateEquipmentHeight(node: AnyNode | undefined, profile: ObjectCapabilityProfile) {
-  if (!node) return 2.2
-  const record = node as unknown as AnyRecord
-  if (profile.equipmentFamily === 'column') return 7.5
-  if (profile.equipmentFamily === 'tank') return 3.2
-  if (profile.equipmentFamily === 'pump') return 1.6
-  return numberValue(record.height) ?? 2.4
 }
 
 function estimateFootprint(node: AnyNode | undefined, profile: ObjectCapabilityProfile) {
@@ -88,25 +51,22 @@ function roleLabel(role: string | undefined) {
   return role?.trim() || 'part'
 }
 
-function equipmentLensItems(nodes: Record<string, AnyNode | undefined>) {
+function equipmentLensItems(nodes: LensNodeMap) {
   const items: EquipmentLensItem[] = []
   for (const node of Object.values(nodes)) {
     const profile = resolveObjectCapabilities(node, nodes)
     if (!profile) continue
-    const isEquipment =
-      profile.sources.includes('semantic-assembly') ||
-      profile.sources.includes('factory-equipment') ||
-      Boolean(profile.recipeId || profile.equipmentFamily)
-    if (!isEquipment) continue
+    if (!isEquipmentProfile(profile)) continue
 
     const metadata = metadataOf(node)
     const base = nodeBasePosition(node)
-    const height = estimateEquipmentHeight(node, profile)
-    const editableParts = profile.editableParts
-      .filter((part) => part.editable)
-      .map((part) => roleLabel(part.semanticRole ?? part.sourcePartKind))
-      .filter((value, index, values) => values.indexOf(value) === index)
-      .slice(0, 5)
+    const height = estimateEquipmentHeight(node, profile, 2.2)
+    const editableParts = uniqueStrings(
+      profile.editableParts
+        .filter((part) => part.editable)
+        .map((part) => roleLabel(part.semanticRole ?? part.sourcePartKind)),
+      5,
+    )
     const editableCapabilityLabels = profile.capabilities
       .filter((capability) => capability.editable)
       .map((capability) => capability.label)

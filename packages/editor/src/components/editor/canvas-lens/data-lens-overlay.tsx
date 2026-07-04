@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  type AnyNode,
   type AnyNodeId,
   formatStaticLiveDataValue,
   getLiveDataPathLabel,
@@ -14,12 +13,18 @@ import useViewer from '@pascal-app/viewer/store'
 import { Html } from '@react-three/drei'
 import { Database, Radio, RadioTower } from 'lucide-react'
 import { memo, useMemo } from 'react'
-import {
-  type ObjectCapabilityProfile,
-  resolveObjectCapabilities,
-} from '../../../lib/object-capabilities'
+import { resolveObjectCapabilities } from '../../../lib/object-capabilities'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import {
+  type AnyRecord,
+  estimateEquipmentHeight,
+  isEquipmentProfile,
+  type LensNodeMap,
+  metadataOf,
+  nodeBasePosition,
+  stringValue,
+} from './canvas-lens-helpers'
 
 type DataLensStatus = 'bound' | 'ready'
 
@@ -31,60 +36,6 @@ type DataLensItem = {
   sourceLabel: string
   bindingLabels: string[]
   valueLabels: string[]
-}
-
-type AnyRecord = Record<string, unknown>
-
-function isRecord(value: unknown): value is AnyRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function vector3(value: unknown): [number, number, number] | undefined {
-  if (
-    Array.isArray(value) &&
-    value.length >= 3 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number' &&
-    typeof value[2] === 'number'
-  ) {
-    return [value[0], value[1], value[2]]
-  }
-  return undefined
-}
-
-function numberValue(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
-}
-
-function metadataOf(node: AnyNode | undefined) {
-  const metadata = (node as unknown as { metadata?: unknown })?.metadata
-  return isRecord(metadata) ? metadata : {}
-}
-
-function nodeBasePosition(node: AnyNode | undefined): [number, number, number] {
-  if (!node) return [0, 0, 0]
-  return vector3((node as unknown as AnyRecord).position) ?? [0, 0, 0]
-}
-
-function estimateLabelHeight(node: AnyNode | undefined, profile: ObjectCapabilityProfile) {
-  if (!node) return 2.6
-  const record = node as unknown as AnyRecord
-  if (profile.equipmentFamily === 'column') return 8.8
-  if (profile.equipmentFamily === 'tank') return 4.4
-  if (profile.equipmentFamily === 'pump') return 2.2
-  return (numberValue(record.height) ?? 2.4) + 1
-}
-
-function isEquipmentProfile(profile: ObjectCapabilityProfile) {
-  return (
-    profile.sources.includes('semantic-assembly') ||
-    profile.sources.includes('factory-equipment') ||
-    Boolean(profile.recipeId || profile.equipmentFamily)
-  )
 }
 
 function dynamicBindingsFrom(metadata: AnyRecord) {
@@ -111,7 +62,7 @@ function compactBindingLabel(label: string) {
   return label.length > 40 ? `${label.slice(0, 37)}...` : label
 }
 
-function dataLensItems(nodes: Record<string, AnyNode | undefined>) {
+function dataLensItems(nodes: LensNodeMap) {
   const items: DataLensItem[] = []
   for (const node of Object.values(nodes)) {
     const profile = resolveObjectCapabilities(node, nodes)
@@ -149,7 +100,7 @@ function dataLensItems(nodes: Record<string, AnyNode | undefined>) {
       nodeId: profile.nodeId,
       label: profile.label ?? String(node?.id ?? 'Equipment'),
       status: bound ? 'bound' : 'ready',
-      position: [base[0], base[1] + estimateLabelHeight(node, profile), base[2]],
+      position: [base[0], base[1] + estimateEquipmentHeight(node, profile, 2.6) + 1.2, base[2]],
       sourceLabel: bound
         ? `${bindingLabels.length} binding${bindingLabels.length === 1 ? '' : 's'}`
         : 'Ready to bind',

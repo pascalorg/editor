@@ -9,6 +9,16 @@ import { resolveObjectCapabilities } from '../../../lib/object-capabilities'
 import { buildSceneStructure } from '../../../lib/scene-structure'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import {
+  type AnyRecord,
+  type LensNodeMap,
+  metadataOf,
+  numberValue,
+  processIdOf,
+  stationIdOf,
+  stringValue,
+  vector3,
+} from './canvas-lens-helpers'
 
 type ProcessLensStation = {
   nodeId: string
@@ -31,53 +41,6 @@ type ProcessLensRoute = {
   visualKind?: string
   points: [[number, number, number], [number, number, number]]
   midpoint: [number, number, number]
-}
-
-type AnyRecord = Record<string, unknown>
-
-function isRecord(value: unknown): value is AnyRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function vector3(value: unknown): [number, number, number] | undefined {
-  if (
-    Array.isArray(value) &&
-    value.length >= 3 &&
-    typeof value[0] === 'number' &&
-    typeof value[1] === 'number' &&
-    typeof value[2] === 'number'
-  ) {
-    return [value[0], value[1], value[2]]
-  }
-  return undefined
-}
-
-function numberValue(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-function stringValue(value: unknown) {
-  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
-}
-
-function metadataOf(node: AnyNode | undefined) {
-  const metadata = (node as unknown as { metadata?: unknown })?.metadata
-  return isRecord(metadata) ? metadata : {}
-}
-
-function equipmentAssemblyOf(metadata: AnyRecord) {
-  return isRecord(metadata.equipmentAssembly) ? metadata.equipmentAssembly : undefined
-}
-
-function stationIdOf(node: AnyNode | undefined) {
-  const metadata = metadataOf(node)
-  const assembly = equipmentAssemblyOf(metadata)
-  return stringValue(metadata.stationId) ?? stringValue(assembly?.stationId)
-}
-
-function processIdOf(node: AnyNode | undefined) {
-  const metadata = metadataOf(node)
-  return stringValue(metadata.processId)
 }
 
 function estimateNodeLabelHeight(node: AnyNode | undefined) {
@@ -112,10 +75,7 @@ function nodeWorldPosition(node: AnyNode | undefined): [number, number, number] 
   return [0, estimateNodeLabelHeight(node), 0]
 }
 
-function processLensStations(
-  nodes: Record<string, AnyNode | undefined>,
-  rootNodeIds: readonly string[],
-) {
+function processLensStations(nodes: LensNodeMap, rootNodeIds: readonly string[]) {
   const tree = buildSceneStructure({ nodes, rootNodeIds, mode: 'process' })
   return tree.groups.flatMap((group) =>
     group.items.slice(0, 32).map((item): ProcessLensStation => {
@@ -142,10 +102,7 @@ function routeEndpoint(metadata: AnyRecord, primaryKey: string, alternateKeys: s
   )
 }
 
-function processLensRoutes(
-  nodes: Record<string, AnyNode | undefined>,
-  stations: ProcessLensStation[],
-) {
+function processLensRoutes(nodes: LensNodeMap, stations: ProcessLensStation[]) {
   const stationByStationId = new Map<string, ProcessLensStation>()
   for (const station of stations) {
     if (station.stationId && !stationByStationId.has(station.stationId)) {
