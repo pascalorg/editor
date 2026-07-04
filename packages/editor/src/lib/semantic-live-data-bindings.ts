@@ -11,6 +11,15 @@ export type SemanticLiveDataBindingTarget = {
   binding: Omit<DynamicBinding, 'id' | 'path' | 'type'>
 }
 
+export type SemanticLiveDataBindingPlan = {
+  nodeId: string
+  label: string
+  target: SemanticLiveDataBindingTarget
+  path: string
+  patch: Partial<AnyNode>
+  reason: string
+}
+
 function hasPath(paths: readonly LiveDataPath[], path: string) {
   return paths.some((entry) => entry.path === path)
 }
@@ -184,6 +193,25 @@ export function defaultSemanticLiveDataPath(
   return preferredPath(paths, target.preferredPaths)
 }
 
+export function formatSemanticLiveDataBindingTargets(input: {
+  profiles: readonly ObjectCapabilityProfile[]
+  paths: readonly LiveDataPath[]
+}) {
+  const lines = input.profiles.flatMap((profile) =>
+    semanticLiveDataBindingTargets(profile).map((target) => {
+      const path = defaultSemanticLiveDataPath(target, input.paths)
+      const available = path ? `defaultPath=${path}` : 'defaultPath=none'
+      return `- ${profile.label ?? profile.nodeId} id=${profile.nodeId}: ${target.id} (${target.label}, type=${target.type}, ${available})`
+    }),
+  )
+  if (!lines.length) return 'No semantic live data binding targets for current selection.'
+  return [
+    'Semantic live data binding targets:',
+    ...lines,
+    'Use these targets when the user asks to bind fixed/demo/live data to selected equipment.',
+  ].join('\n')
+}
+
 export function buildSemanticLiveDataBinding(input: {
   profile: ObjectCapabilityProfile
   target: SemanticLiveDataBindingTarget
@@ -234,4 +262,119 @@ export function upsertSemanticLiveDataBinding(input: {
       liveDataBindingSource: 'fixed-factory-demo',
     },
   } as Partial<AnyNode>
+}
+
+function lowerPrompt(prompt: string) {
+  return prompt.toLocaleLowerCase()
+}
+
+function textIncludesAny(text: string, words: readonly string[]) {
+  return words.some((word) => text.includes(word))
+}
+
+function scoreTarget(prompt: string, target: SemanticLiveDataBindingTarget) {
+  const text = lowerPrompt(prompt)
+  let score = 0
+  if (textIncludesAny(text, [target.id.toLocaleLowerCase(), target.label.toLocaleLowerCase()])) {
+    score += 6
+  }
+  if (
+    target.type === 'level' &&
+    textIncludesAny(text, ['level', 'liquid', 'fill', '液位', '水位', '料位', '罐'])
+  ) {
+    score += 5
+  }
+  if (target.type === 'flow' && textIncludesAny(text, ['flow', '流量', '流动', '管线', '管道'])) {
+    score += 5
+  }
+  if (
+    target.type === 'running' &&
+    textIncludesAny(text, ['running', 'status', 'run', '运行', '状态', '启停'])
+  ) {
+    score += 5
+  }
+  if (target.type === 'speed' && textIncludesAny(text, ['speed', 'rpm', '转速', '速度'])) {
+    score += 5
+  }
+  if (
+    target.type === 'color' &&
+    textIncludesAny(text, ['color', 'temperature', 'temp', '颜色', '变色', '温度'])
+  ) {
+    score += 5
+  }
+  if (
+    textIncludesAny(
+      text,
+      target.preferredPaths.map((path) => path.toLocaleLowerCase()),
+    )
+  ) {
+    score += 4
+  }
+  return score
+}
+
+function scorePath(prompt: string, path: string, target: SemanticLiveDataBindingTarget) {
+  const text = lowerPrompt(prompt)
+  let score = target.preferredPaths.includes(path) ? 4 : 0
+  if (text.includes(path.toLocaleLowerCase())) score += 8
+  for (const segment of path.toLocaleLowerCase().split('.')) {
+    if (segment && text.includes(segment)) score += 1
+  }
+  if (target.type === 'level' && /level|液位|水位|料位/.test(path)) score += 2
+  if (target.type === 'flow' && /flow|流量/.test(path)) score += 2
+  if (target.type === 'speed' && /speed|速度|转速/.test(path)) score += 2
+  if (target.type === 'color' && /temperature|temp|温度/.test(path)) score += 2
+  return score
+}
+
+function bestPathForPrompt(
+  prompt: string,
+  target: SemanticLiveDataBindingTarget,
+  paths: readonly LiveDataPath[],
+) {
+  if (!paths.length) return ''
+  const ranked = paths
+    .map((path) => ({ path: path.path, score: scorePath(prompt, path.path, target) }))
+    .sort((a, b) => b.score - a.score)
+  const best = ranked[0]
+  if (best && best.score > 0) return best.path
+  return defaultSemanticLiveDataPath(target, paths)
+}
+
+export function planSemanticLiveDataBinding(input: {
+  prompt: string
+  profiles: readonly ObjectCapabilityProfile[]
+  nodes: Record<string, AnyNode | undefined>
+  paths: readonly LiveDataPath[]
+}): SemanticLiveDataBindingPlan | null {
+  const candidates = input.profiles.flatMap((profile, profileIndex) =>
+    semanticLiveDataBindingTargets(profile).map((target, targetIndex) => ({
+      profile,
+      target,
+      score: scoreTarget(input.prompt, target),
+      order: profileIndex * 100 + targetIndex,
+    })),
+  )
+  if (!candidates.length) return null
+  candidates.sort((a, b) => b.score - a.score || a.order - b.order)
+  const selected = candidates[0]!
+  const path = bestPathForPrompt(input.prompt, selected.target, input.paths)
+  const node = input.nodes[selected.profile.nodeId]
+  if (!(node && path)) return null
+  return {
+    nodeId: selected.profile.nodeId,
+    label: selected.profile.label ?? selected.profile.nodeId,
+    target: selected.target,
+    path,
+    patch: upsertSemanticLiveDataBinding({
+      node,
+      profile: selected.profile,
+      target: selected.target,
+      path,
+    }),
+    reason:
+      selected.score > 0
+        ? `Matched request to ${selected.target.label}.`
+        : `Used default binding target ${selected.target.label}.`,
+  }
 }

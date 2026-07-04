@@ -6,6 +6,8 @@ import type { ObjectCapabilityProfile } from './object-capabilities'
 import {
   buildSemanticLiveDataBinding,
   defaultSemanticLiveDataPath,
+  formatSemanticLiveDataBindingTargets,
+  planSemanticLiveDataBinding,
   semanticLiveDataBindingTargets,
   upsertSemanticLiveDataBinding,
 } from './semantic-live-data-bindings'
@@ -53,6 +55,43 @@ describe('semantic live data bindings', () => {
       inputRange: [0, 100],
       outputRange: [0, 1],
     })
+  })
+
+  test('formats AI-readable binding targets with default paths', () => {
+    const summary = formatSemanticLiveDataBindingTargets({
+      profiles: [tankProfile],
+      paths: FIXED_FACTORY_LIVE_DATA_PATHS,
+    })
+
+    expect(summary).toContain('Semantic live data binding targets:')
+    expect(summary).toContain('assembly_tank: tank-level')
+    expect(summary).toContain('defaultPath=refinery.tank.level')
+  })
+
+  test('plans a tank level binding from a natural language request', () => {
+    const node = AssemblyNode.parse({
+      id: 'assembly_tank',
+      type: 'assembly',
+    }) as AnyNode
+    const plan = planSemanticLiveDataBinding({
+      prompt: '把选中储罐的液位绑定到炼油厂 tank level 数据',
+      profiles: [tankProfile],
+      nodes: { assembly_tank: node },
+      paths: FIXED_FACTORY_LIVE_DATA_PATHS,
+    })
+
+    expect(plan).toMatchObject({
+      nodeId: 'assembly_tank',
+      path: 'refinery.tank.level',
+      target: { id: 'tank-level' },
+    })
+    expect((plan?.patch.metadata as Record<string, unknown>).dynamicBindings).toMatchObject([
+      {
+        id: 'semantic_live_assembly_tank_tank-level',
+        type: 'level',
+        path: 'refinery.tank.level',
+      },
+    ])
   })
 
   test('upserts metadata dynamic bindings without duplicating the semantic target', () => {

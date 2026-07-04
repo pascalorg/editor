@@ -56,6 +56,7 @@ import {
   type ArticraftJointMetadata,
 } from '../../../../../lib/articraft-joints'
 import { buildSelectionCapabilityContext } from '../../../../../lib/object-capabilities'
+import { planSemanticLiveDataBinding } from '../../../../../lib/semantic-live-data-bindings'
 import { cn } from '../../../../../lib/utils'
 import useEditor from '../../../../../store/use-editor'
 
@@ -6604,6 +6605,31 @@ export function AiChatPanel() {
         await sendArticraftMessage(preview.prompt, preview.image, intentRoute)
         return
       }
+      if (preview.execution === 'data-binding') {
+        const scene = useScene.getState()
+        const plan = planSemanticLiveDataBinding({
+          prompt: preview.prompt,
+          profiles: buildCurrentSelectionCapabilityProfiles() ?? [],
+          nodes: scene.nodes,
+          paths: useLiveData.getState().paths,
+        })
+        if (plan) {
+          scene.updateNodes([{ id: plan.nodeId as AnyNodeId, data: plan.patch }])
+          scene.markDirty(plan.nodeId as AnyNodeId)
+          useViewer.getState().setSelection({ selectedIds: [plan.nodeId as AnyNodeId] })
+          setMessages((prev) => {
+            const result: ChatMessage = {
+              role: 'assistant',
+              content: `Bound ${plan.label} ${plan.target.label} to ${plan.path}.`,
+            }
+            if (messageIndex == null) return [...prev, result]
+            const updated = [...prev]
+            updated[messageIndex] = result
+            return updated
+          })
+          return
+        }
+      }
       setMessages((prev) => {
         const result: ChatMessage = {
           role: 'assistant',
@@ -6618,7 +6644,13 @@ export function AiChatPanel() {
         return updated
       })
     },
-    [sendArticraftMessage, sendFactoryMessage, sendImageTo3DMessage, sendMessage],
+    [
+      buildCurrentSelectionCapabilityProfiles,
+      sendArticraftMessage,
+      sendFactoryMessage,
+      sendImageTo3DMessage,
+      sendMessage,
+    ],
   )
 
   const installGenerationPlanPreviewPack = useCallback(

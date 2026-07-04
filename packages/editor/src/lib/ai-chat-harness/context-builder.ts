@@ -1,5 +1,7 @@
 import type { GeneratedGeometryArtifact } from '../ai-generated-geometry-core'
+import { FIXED_FACTORY_LIVE_DATA_PATHS } from '../fixed-live-data-source'
 import { formatSelectionCapabilities, type ObjectCapabilityProfile } from '../object-capabilities'
+import { formatSemanticLiveDataBindingTargets } from '../semantic-live-data-bindings'
 import { planGeometryCapabilities } from './capability-planner'
 import { buildPrimitiveRevisionMemory, formatPrimitiveRevisionMemory } from './revision-memory'
 
@@ -348,6 +350,12 @@ function buildGeometryHarnessContextInternal({
     selectionCapabilities?.length
       ? formatSelectionCapabilities(selectionCapabilities)
       : 'No canvas object is selected.',
+    selectionCapabilities?.length
+      ? formatSemanticLiveDataBindingTargets({
+          profiles: selectionCapabilities,
+          paths: FIXED_FACTORY_LIVE_DATA_PATHS,
+        })
+      : '',
     '',
     'Conversation mode hint:',
     revisionArtifact

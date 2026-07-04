@@ -230,6 +230,7 @@ describe('ai chat harness context builder', () => {
             { nodeId: 'box_liquid', semanticRole: 'liquid_volume', editable: true },
           ],
           ports: [{ id: 'inlet', medium: 'crude', side: 'west' }],
+          dataBindings: [],
           profileId: 'refinery.crude_storage_tank',
           recipeId: 'factory:storage-tank',
           equipmentFamily: 'tank',
@@ -243,6 +244,9 @@ describe('ai chat harness context builder', () => {
     expect(context).toContain('ports:read-only@assembly')
     expect(context).toContain('liquid_volume#box_liquid')
     expect(context).toContain('inlet(crude/west)')
+    expect(context).toContain('Semantic live data binding targets:')
+    expect(context).toContain('tank-level (Tank liquid level')
+    expect(context).toContain('defaultPath=refinery.tank.level')
     expect(context).toContain('Prefer editable semantic parts/params')
   })
 
