@@ -55,6 +55,7 @@ import {
   parseArticraftPose,
   type ArticraftJointMetadata,
 } from '../../../../../lib/articraft-joints'
+import { resolveSelectionCapabilities } from '../../../../../lib/object-capabilities'
 import { cn } from '../../../../../lib/utils'
 import useEditor from '../../../../../store/use-editor'
 
@@ -1885,7 +1886,13 @@ function buildFactorySelectionSnapshot() {
   }
 
   for (const id of selectedIds) collect(id)
-  return nodes.length ? { selectedIds, nodes } : undefined
+  return nodes.length
+    ? {
+        selectedIds,
+        nodes,
+        capabilities: resolveSelectionCapabilities({ nodes: scene.nodes, selectedIds }),
+      }
+    : undefined
 }
 
 function finiteSitePoint(value: unknown): [number, number] | null {
