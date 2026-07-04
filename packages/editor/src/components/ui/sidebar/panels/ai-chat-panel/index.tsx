@@ -5800,13 +5800,24 @@ export function AiChatPanel() {
         )
         const data = await response.json().catch(() => ({}))
         const runId = isRecord(data) && typeof data.runId === 'string' ? data.runId : ''
+        const run = isRecord(data) && isRecord(data.run) ? data.run : null
+        if (runId) {
+          subscribeFactoryRun({
+            id: runId,
+            prompt:
+              run && typeof run.prompt === 'string'
+                ? run.prompt
+                : `Re-run ${target.stageId} for station ${target.stationId}`,
+            status: run && typeof run.status === 'string' ? run.status : 'queued',
+          })
+        }
         await refreshRunHistory()
         if (runId) await inspectRunWorkflow(runId)
       } catch {
         await refreshRunHistory()
       }
     },
-    [inspectRunWorkflow, refreshRunHistory],
+    [inspectRunWorkflow, refreshRunHistory, subscribeFactoryRun],
   )
 
   useEffect(() => {

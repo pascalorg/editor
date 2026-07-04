@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 type SceneNode = {
   object?: 'node'
@@ -19,6 +19,7 @@ type SceneNode = {
 
 type FactoryE2eBridge = {
   sceneNodes: () => Record<string, SceneNode>
+  applyFactoryRun: (data: unknown) => string[]
   selectNode: (nodeId: string) => void
   setPreviewMode: (enabled: boolean) => void
   resetLiveDataSource: () => void
@@ -30,6 +31,25 @@ type FactoryE2eBridge = {
     scale: [number, number, number]
     visible: boolean
   } | null
+}
+
+async function expectFactoryBridge(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const bridge = (
+            window as Window & {
+              __pascalFactoryE2e?: Partial<FactoryE2eBridge>
+            }
+          ).__pascalFactoryE2e
+          return (
+            typeof bridge?.sceneNodes === 'function' && typeof bridge.applyFactoryRun === 'function'
+          )
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true)
 }
 
 const ids = {
@@ -557,6 +577,157 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
       'refinery.tank.level',
     )
     await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('62')
+  } finally {
+    await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
+  }
+})
+
+test('station rerun result replaces the semantic assembly on the canvas', async ({
+  page,
+  request,
+}) => {
+  const sceneId = `scene-structure-station-rerun-${Date.now()}-${test.info().parallelIndex}`
+  const createResponse = await request.post('/api/scenes', {
+    data: {
+      id: sceneId,
+      name: 'Scene Station Rerun E2E',
+      graph: refineryStructureGraph(),
+    },
+  })
+  expect(createResponse.status()).toBe(201)
+
+  try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
+    await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000,
+    })
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+    await expectFactoryBridge(page)
+
+    const rerunShellId = 'box_product_tank_shell_rerun_e2e'
+    const appliedIds = await page.evaluate(
+      ({ tankId, rerunShellId }) => {
+        const bridge = (
+          window as Window & {
+            __pascalFactoryE2e?: FactoryE2eBridge
+          }
+        ).__pascalFactoryE2e
+        return (
+          bridge?.applyFactoryRun({
+            workflowRerun: {
+              sourceRunId: 'run_source_e2e',
+              stageId: 'equipment-compiler',
+              stationId: 'product_storage_tank',
+            },
+            qualityReport: { passed: true },
+            patches: [
+              {
+                op: 'create',
+                parentId: 'level_from_source_run',
+                node: {
+                  object: 'node',
+                  id: tankId,
+                  type: 'assembly',
+                  name: 'Product tank farm rerun',
+                  parentId: 'level_from_source_run',
+                  children: [rerunShellId],
+                  position: [5, 0, 0],
+                  rotation: [0, 0, 0],
+                  visible: true,
+                  metadata: {
+                    processId: 'refinery_basic_complex',
+                    processDisplayLabel: 'Refinery',
+                    stationId: 'product_storage_tank',
+                    equipmentRole: 'storage',
+                    sourcePack: { id: 'industry.refinery.basic', version: '0.2.0' },
+                    equipmentAssembly: {
+                      kind: 'semantic-assembly',
+                      recipeId: 'factory:storage-tank',
+                      profileId: 'refinery.product_storage_tank',
+                      equipmentFamily: 'tank',
+                      editablePartRoles: ['vessel_shell', 'liquid_volume'],
+                      ports: [{ id: 'inlet', medium: 'product', side: 'west' }],
+                    },
+                  },
+                },
+              },
+              {
+                op: 'create',
+                parentId: tankId,
+                node: {
+                  object: 'node',
+                  id: rerunShellId,
+                  type: 'box',
+                  name: 'Tank shell rerun',
+                  parentId: tankId,
+                  position: [0, 1.2, 0],
+                  rotation: [0, 0, 0],
+                  visible: true,
+                  metadata: {
+                    processId: 'refinery_basic_complex',
+                    stationId: 'product_storage_tank',
+                    semanticRole: 'vessel_shell',
+                  },
+                },
+              },
+            ],
+          }) ?? []
+        )
+      },
+      { tankId: ids.tank, rerunShellId },
+    )
+
+    expect(appliedIds).toEqual(expect.arrayContaining([ids.tank, rerunShellId]))
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            ({ levelId, tankId, oldShellId, rerunShellId }) => {
+              const bridge = (
+                window as Window & {
+                  __pascalFactoryE2e?: FactoryE2eBridge
+                }
+              ).__pascalFactoryE2e
+              const nodes = (bridge?.sceneNodes() ?? {}) as Record<string, SceneNode>
+              const level = nodes[levelId]
+              const tank = nodes[tankId]
+              const rerunShell = nodes[rerunShellId]
+              const stationRoots = Object.values(nodes).filter(
+                (node) =>
+                  node.metadata?.stationId === 'product_storage_tank' &&
+                  nodes[String(node.parentId)]?.metadata?.stationId !== 'product_storage_tank',
+              )
+              return {
+                levelChildren: level?.children ?? [],
+                tankName: tank?.name,
+                tankParentId: tank?.parentId,
+                tankChildren: tank?.children ?? [],
+                oldShellExists: Boolean(nodes[oldShellId]),
+                rerunShellParentId: rerunShell?.parentId,
+                stationRootIds: stationRoots.map((node) => node.id).sort(),
+              }
+            },
+            {
+              levelId: ids.level,
+              tankId: ids.tank,
+              oldShellId: ids.tankShell,
+              rerunShellId,
+            },
+          ),
+        { timeout: 30_000 },
+      )
+      .toEqual({
+        levelChildren: expect.arrayContaining([ids.tower, ids.pipe, ids.tank]),
+        tankName: 'Product tank farm rerun',
+        tankParentId: ids.level,
+        tankChildren: [rerunShellId],
+        oldShellExists: false,
+        rerunShellParentId: ids.tank,
+        stationRootIds: [ids.tank],
+      })
   } finally {
     await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
   }
