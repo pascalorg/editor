@@ -225,11 +225,31 @@ test('scene structure defaults factory scenes to process and preserves elevation
     )
     await expect(page.getByRole('heading', { name: 'Atmospheric distillation unit' })).toBeVisible()
 
+    await page.getByTestId('canvas-lens-equipment').click()
+    await expect(page.getByTestId('canvas-lens-equipment')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tower}`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-part-${ids.tower}-vessel_shell`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-ports-${ids.tank}`)).toContainText('2 ports')
+
+    await page.getByTestId(`equipment-lens-card-${ids.tank}`).click()
+    await expect(page.locator(`[data-scene-structure-node-id="${ids.tank}"]`)).toHaveAttribute(
+      'data-scene-structure-selected',
+      'true',
+    )
+    await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
+
     await page.getByTestId('canvas-lens-data').click()
     await expect(page.getByTestId('canvas-lens-data')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
     await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeHidden()
-    await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeHidden()
+    await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).not.toHaveAttribute(
+      'data-scene-structure-selected',
+      'true',
+    )
+    await expect(page.locator(`[data-scene-structure-node-id="${ids.tank}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',
     )
