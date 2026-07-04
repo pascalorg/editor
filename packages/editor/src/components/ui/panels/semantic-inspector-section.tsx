@@ -12,6 +12,7 @@ import {
 } from '../../../lib/object-capabilities'
 import { cn } from '../../../lib/utils'
 import { PanelSection } from '../controls/panel-section'
+import { SemanticEquipmentParamControls } from './semantic-equipment-params'
 
 type SemanticInspectorTab = 'equipment' | 'parts' | 'ports' | 'data' | 'source'
 type AnyRecord = Record<string, unknown>
@@ -144,6 +145,7 @@ function EquipmentTab({
           Profile edits are read-only in this MVP and belong to industry pack tooling.
         </div>
       </div>
+      <SemanticEquipmentParamControls nodeId={profile.nodeId as AnyNodeId} />
       <CapabilityList profile={profile} />
     </div>
   )

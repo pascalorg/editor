@@ -13,7 +13,6 @@ import {
   ActionGroup,
   PanelSection,
   PanelWrapper,
-  SemanticEquipmentAssemblySection,
   SemanticInspectorSection,
   SliderControl,
   triggerSFX,
@@ -163,7 +162,6 @@ export default function AssemblyPanel() {
           />
         </ActionGroup>
       </PanelSection>
-      <SemanticEquipmentAssemblySection nodeId={selectedId as AnyNodeId} />
       <PanelSection title={'\u7f29\u653e'}>
         <div className="space-y-2">
           <SliderControl

@@ -88,6 +88,27 @@ function refineryStructureGraph() {
           recipeId: 'factory:distillation-column',
           profileId: 'refinery.atmospheric_distillation_unit',
           equipmentFamily: 'column',
+          params: { shellOpacity: 0.65 },
+          editableParams: [
+            {
+              key: 'shellOpacity',
+              label: 'Shell opacity',
+              kind: 'number',
+              min: 0.1,
+              max: 1,
+              step: 0.01,
+              precision: 2,
+              effects: [
+                { kind: 'set-param' },
+                {
+                  kind: 'set-part-material',
+                  partRole: 'vessel_shell',
+                  property: 'opacity',
+                  transparentWhenBelowOne: true,
+                },
+              ],
+            },
+          ],
           editablePartRoles: ['vessel_shell'],
           ports: [
             { id: 'inlet', medium: 'crude', side: 'west' },
@@ -235,6 +256,10 @@ test('scene structure defaults factory scenes to process and preserves elevation
     }
     await expect(page.getByTestId('semantic-inspector-equipment')).toBeVisible()
     await expect(page.getByTestId('semantic-inspector-equipment')).toContainText('column')
+    await expect(page.getByTestId('semantic-inspector-equipment-params')).toContainText(
+      'Shell opacity',
+    )
+    await expect(page.getByTestId('semantic-inspector-equipment-param-shellOpacity')).toBeVisible()
     await page.getByTestId('semantic-inspector-tab-parts').click()
     await expect(page.getByTestId(`semantic-inspector-part-vessel_shell`)).toBeVisible()
     await page.getByTestId('semantic-inspector-tab-ports').click()
