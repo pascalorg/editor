@@ -221,6 +221,9 @@ test('scene structure defaults factory scenes to process and preserves elevation
   expect(createResponse.status()).toBe(201)
 
   try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
     await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
       waitUntil: 'domcontentloaded',
       timeout: 120_000,
@@ -281,6 +284,13 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
       'color: machine.temperature',
     )
+    await expect(page.getByTestId('semantic-inspector-data-source')).toContainText(
+      'fixed:factory-demo',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText(
+      'machine.temperature',
+    )
+    await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('28')
     await page.getByTestId('semantic-inspector-tab-source').click()
     await expect(page.getByTestId('semantic-inspector-source')).toContainText(
       'industry.refinery.basic@0.2.0',

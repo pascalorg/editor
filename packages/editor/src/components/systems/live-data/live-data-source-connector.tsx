@@ -3,11 +3,9 @@
 import { type LiveDataPath, type LiveDataSnapshot, useLiveData } from '@pascal-app/core'
 import { useEffect } from 'react'
 
-const DEFAULT_HTTP_ENDPOINT = 'http://localhost:3102'
-
-function normalizeHttpEndpoint(endpoint: string | undefined): string {
+function normalizeHttpEndpoint(endpoint: string | null | undefined): string | null {
   const trimmed = endpoint?.trim()
-  if (!trimmed) return DEFAULT_HTTP_ENDPOINT
+  if (!trimmed) return null
   return trimmed.replace(/\/+$/, '')
 }
 
@@ -51,23 +49,29 @@ export function LiveDataSourceConnector() {
 
   useEffect(() => {
     void reconnectToken
-    const httpEndpoint = normalizeHttpEndpoint(
-      configuredHttpEndpoint ?? process.env.NEXT_PUBLIC_PASCAL_LIVE_DATA_HTTP,
-    )
+    const envHttpEndpoint = process.env.NEXT_PUBLIC_PASCAL_LIVE_DATA_HTTP?.trim() || null
+    const envWsEndpoint = process.env.NEXT_PUBLIC_PASCAL_LIVE_DATA_WS?.trim() || null
+    const httpEndpoint = normalizeHttpEndpoint(configuredHttpEndpoint ?? envHttpEndpoint)
     const wsEndpoint =
       configuredWsEndpoint?.trim() ||
-      process.env.NEXT_PUBLIC_PASCAL_LIVE_DATA_WS?.trim() ||
-      websocketEndpointFromHttp(httpEndpoint)
+      envWsEndpoint ||
+      (httpEndpoint ? websocketEndpointFromHttp(httpEndpoint) : null)
+
+    if (!httpEndpoint && !wsEndpoint) return
+    if (!wsEndpoint) return
+    const resolvedWsEndpoint = wsEndpoint
+
     const liveData = useLiveData.getState()
     const controller = new AbortController()
     let socket: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
 
-    liveData.setEndpoint(wsEndpoint)
+    liveData.setEndpoint(resolvedWsEndpoint)
     liveData.setStatus('connecting')
 
     async function loadPathsAndSnapshot() {
+      if (!httpEndpoint) return
       try {
         const [pathsResponse, snapshotResponse] = await Promise.all([
           fetch(`${httpEndpoint}/paths`, { signal: controller.signal }),
@@ -92,7 +96,7 @@ export function LiveDataSourceConnector() {
     function connect() {
       if (disposed) return
       try {
-        socket = new WebSocket(wsEndpoint)
+        socket = new WebSocket(resolvedWsEndpoint)
       } catch (error) {
         useLiveData
           .getState()

@@ -2,11 +2,12 @@
 
 import {
   type AnyNodeId,
-  formatStaticLiveDataValue,
-  getLiveDataPathLabel,
-  getStaticLiveDataValue,
+  formatLiveDataValue,
   isDynamicBinding,
   isLiveDataBindingConfig,
+  type LiveDataPath,
+  type LiveDataValue,
+  useLiveData,
   useScene,
 } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
@@ -38,6 +39,11 @@ type DataLensItem = {
   valueLabels: string[]
 }
 
+type LiveDataLensContext = {
+  paths: LiveDataPath[]
+  values: Record<string, LiveDataValue>
+}
+
 function dynamicBindingsFrom(metadata: AnyRecord) {
   return Array.isArray(metadata.dynamicBindings)
     ? metadata.dynamicBindings.filter(isDynamicBinding)
@@ -62,7 +68,21 @@ function compactBindingLabel(label: string) {
   return label.length > 40 ? `${label.slice(0, 37)}...` : label
 }
 
-function dataLensItems(nodes: LensNodeMap) {
+function livePathMeta(context: LiveDataLensContext, path: string | null | undefined) {
+  if (!path) return undefined
+  return context.paths.find((entry) => entry.path === path)
+}
+
+function liveValueLabel(context: LiveDataLensContext, path: string | null | undefined) {
+  if (!path) return undefined
+  const meta = livePathMeta(context, path)
+  const value = context.values[path]
+  const formatted = formatLiveDataValue(value, meta?.unit)
+  const label = meta?.label ?? stringValue(path) ?? path
+  return `${label}: ${formatted}`
+}
+
+function dataLensItems(nodes: LensNodeMap, context: LiveDataLensContext) {
   const items: DataLensItem[] = []
   for (const node of Object.values(nodes)) {
     const profile = resolveObjectCapabilities(node, nodes)
@@ -85,13 +105,9 @@ function dataLensItems(nodes: LensNodeMap) {
       .map(compactBindingLabel)
       .slice(0, 4)
     const valueLabels = [
-      legacyBinding
-        ? `${formatStaticLiveDataValue(legacyBinding.dataKey)} ${
-            getStaticLiveDataValue(legacyBinding.dataKey) == null ? 'offline' : 'sample'
-          }`
-        : undefined,
+      legacyBinding ? liveValueLabel(context, legacyBinding.dataKey) : undefined,
       ...dynamicBindings
-        .map((binding) => getLiveDataPathLabel(binding.path) || stringValue(binding.path))
+        .map((binding) => liveValueLabel(context, binding.path) ?? stringValue(binding.path))
         .filter((value): value is string => Boolean(value))
         .slice(0, 2),
     ].filter((value): value is string => Boolean(value))
@@ -115,11 +131,13 @@ function dataLensItems(nodes: LensNodeMap) {
 export const DataLensOverlay = memo(function DataLensOverlay() {
   const canvasLens = useEditor((state) => state.canvasLens)
   const nodes = useScene((state) => state.nodes)
+  const paths = useLiveData((state) => state.paths)
+  const values = useLiveData((state) => state.values)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const items = useMemo(
-    () => (canvasLens === 'data' ? dataLensItems(nodes) : []),
-    [canvasLens, nodes],
+    () => (canvasLens === 'data' ? dataLensItems(nodes, { paths, values }) : []),
+    [canvasLens, nodes, paths, values],
   )
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds])
 

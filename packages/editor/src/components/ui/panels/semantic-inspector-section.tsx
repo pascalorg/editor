@@ -3,11 +3,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  formatLiveDataValue,
   getMaterialPresetByRef,
   isDynamicBinding,
   isLiveDataBindingConfig,
+  type LiveDataPath,
+  type LiveDataValue,
   type MaterialSchema,
   useScene,
+  useLiveData,
 } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import { Box, Database, GitBranch, Plug, Tag, Wrench } from 'lucide-react'
@@ -83,6 +87,32 @@ function liveDataBindingLabels(metadata: AnyRecord) {
   if (metadata.dataBindings) labels.push('dataBindings')
   if (metadata.telemetry) labels.push('telemetry')
   return labels
+}
+
+function liveDataBindingFields(metadata: AnyRecord) {
+  const fields: { label: string; path: string }[] = []
+  const binding = metadata.liveDataBinding
+  if (isLiveDataBindingConfig(binding) && binding.enabled !== false) {
+    fields.push({ label: binding.effect, path: binding.dataKey })
+  }
+  if (Array.isArray(metadata.dynamicBindings)) {
+    for (const binding of metadata.dynamicBindings.filter(isDynamicBinding)) {
+      fields.push({ label: binding.type, path: binding.path })
+    }
+  }
+  return fields
+}
+
+function liveDataPathMeta(paths: LiveDataPath[], path: string) {
+  return paths.find((entry) => entry.path === path)
+}
+
+function liveDataValueText(
+  values: Record<string, LiveDataValue>,
+  paths: LiveDataPath[],
+  path: string,
+) {
+  return formatLiveDataValue(values[path], liveDataPathMeta(paths, path)?.unit)
 }
 
 function SemanticChip({
@@ -376,7 +406,14 @@ function PortsTab({ ports }: { ports: ObjectPortSummary[] }) {
 }
 
 function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCapabilityProfile }) {
+  const endpoint = useLiveData((state) => state.endpoint)
+  const status = useLiveData((state) => state.status)
+  const paths = useLiveData((state) => state.paths)
+  const snapshot = useLiveData((state) => state.snapshot)
+  const values = useLiveData((state) => state.values)
   const labels = [...liveDataBindingLabels(metadata), ...dynamicBindingLabels(metadata)]
+  const fields = liveDataBindingFields(metadata)
+  const timestamp = snapshot?.timestamp ? new Date(snapshot.timestamp).toLocaleTimeString() : null
   return (
     <div className="space-y-2" data-testid="semantic-inspector-data">
       <div className="flex flex-wrap gap-1">
@@ -388,6 +425,26 @@ function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCa
         {profile.capabilities.some((capability) => capability.id === 'data-binding') && (
           <SemanticChip tone="sky">data-binding editable</SemanticChip>
         )}
+      </div>
+      <div
+        className="grid gap-1 rounded border border-border/45 bg-background/35 px-2 py-1.5 text-[11px]"
+        data-testid="semantic-inspector-data-source"
+      >
+        <div className="flex min-w-0 justify-between gap-2">
+          <span className="text-muted-foreground">Source</span>
+          <span className="min-w-0 truncate text-foreground">{endpoint ?? 'none'}</span>
+        </div>
+        <div className="flex min-w-0 justify-between gap-2">
+          <span className="text-muted-foreground">Status</span>
+          <span className="min-w-0 truncate text-foreground">
+            {status}
+            {timestamp ? ` / ${timestamp}` : ''}
+          </span>
+        </div>
+        <div className="flex min-w-0 justify-between gap-2">
+          <span className="text-muted-foreground">Fields</span>
+          <span className="min-w-0 truncate text-foreground">{paths.length}</span>
+        </div>
       </div>
       {labels.length > 0 ? (
         <div className="grid gap-1">
@@ -406,6 +463,22 @@ function DataTab({ metadata, profile }: { metadata: AnyRecord; profile: ObjectCa
           No live data mapping on this instance.
         </div>
       )}
+      {fields.length > 0 ? (
+        <div className="grid gap-1">
+          {fields.map((field) => (
+            <div
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded border border-sky-300/20 bg-sky-300/10 px-2 py-1.5 text-[11px]"
+              data-testid="semantic-inspector-data-value"
+              key={`${field.label}-${field.path}`}
+            >
+              <span className="min-w-0 truncate text-sky-50">
+                {field.label}: {field.path}
+              </span>
+              <span className="shrink-0 text-sky-100">{liveDataValueText(values, paths, field.path)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

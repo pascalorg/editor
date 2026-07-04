@@ -42,6 +42,7 @@ import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { DynamicPreviewRuntime } from '../systems/live-data/dynamic-preview-runtime'
+import { FixedLiveDataSource } from '../systems/live-data/fixed-live-data-source'
 import { LiveDataBindingRuntime } from '../systems/live-data/live-data-binding-runtime'
 import { LiveDataSourceConnector } from '../systems/live-data/live-data-source-connector'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -1290,6 +1291,7 @@ export default function Editor({
 
     return (
       <PresetsProvider adapter={presetsAdapter}>
+        <FixedLiveDataSource />
         <LiveDataSourceConnector />
         <DeleteSelectionConfirmDialog
           onCancel={handleCancelDeleteSelection}
@@ -1357,6 +1359,7 @@ export default function Editor({
 
   return (
     <PresetsProvider adapter={presetsAdapter}>
+      <FixedLiveDataSource />
       <LiveDataSourceConnector />
       <div
         className={`dark flex h-full w-full bg-neutral-100 text-foreground ${
