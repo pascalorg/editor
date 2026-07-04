@@ -1,5 +1,5 @@
-import { AnyNode } from '@pascal-app/core/schema'
 import { nodeRegistry } from '@pascal-app/core/registry'
+import { AnyNode } from '@pascal-app/core/schema'
 
 type PatchRecord = Record<string, unknown>
 type ParsedPatchNode = { id: string; type: string; metadata?: unknown }
@@ -53,7 +53,11 @@ function explicitParentId(patch: PatchRecord, node: PatchRecord) {
   return undefined
 }
 
-function parentExists(parentId: string | undefined, knownIds: Set<string>, createdIds: Set<string>) {
+function parentExists(
+  parentId: string | undefined,
+  knownIds: Set<string>,
+  createdIds: Set<string>,
+) {
   return Boolean(parentId && (knownIds.has(parentId) || createdIds.has(parentId)))
 }
 
@@ -68,7 +72,7 @@ function resolvedParentId(input: {
   if (!explicit) return input.fallbackParentId || undefined
   if (parentExists(explicit, input.knownIds, input.createdIds)) return explicit
   return parentExists(input.fallbackParentId ?? undefined, input.knownIds, input.createdIds)
-    ? input.fallbackParentId ?? undefined
+    ? (input.fallbackParentId ?? undefined)
     : explicit
 }
 
@@ -88,6 +92,12 @@ export function validateFactoryScenePatches(
 ): FactoryScenePatchSafetyResult {
   const issues: FactoryScenePatchSafetyIssue[] = []
   const knownIds = new Set(context.existingNodeIds ?? [])
+  const deletedIds = new Set(
+    patches
+      .filter((patch): patch is PatchRecord => isRecord(patch))
+      .filter((patch) => patch.op === 'delete' && typeof patch.id === 'string' && patch.id)
+      .map((patch) => String(patch.id)),
+  )
   const createdIds = new Set<string>()
   let createCount = 0
   let deleteCount = 0
@@ -114,7 +124,7 @@ export function validateFactoryScenePatches(
       }
 
       const nodeId = parsed.id
-      if (knownIds.has(nodeId) || createdIds.has(nodeId)) {
+      if ((knownIds.has(nodeId) && !deletedIds.has(nodeId)) || createdIds.has(nodeId)) {
         issue(
           issues,
           index,

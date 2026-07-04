@@ -191,4 +191,47 @@ describe('factory scene patch apply', () => {
       parentId: roof.id,
     })
   })
+
+  test('applies replacement batches by deleting before recreating matching ids', () => {
+    const level = LevelNode.parse({ id: 'level_factory', children: ['assembly_station'] })
+    const oldAssembly = AssemblyNode.parse({
+      id: 'assembly_station',
+      parentId: level.id,
+      children: ['box_old_child'],
+      metadata: { stationId: 'feed_pump' },
+    })
+    const oldChild = BoxNode.parse({
+      id: 'box_old_child',
+      parentId: oldAssembly.id,
+      metadata: { stationId: 'feed_pump' },
+    })
+    const newAssembly = AssemblyNode.parse({
+      id: 'assembly_station',
+      parentId: level.id,
+      children: [],
+      metadata: { stationId: 'feed_pump', replacement: true },
+    })
+
+    const graph = applyFactoryScenePatchesToGraph(
+      {
+        nodes: {
+          [level.id]: level,
+          [oldAssembly.id]: oldAssembly,
+          [oldChild.id]: oldChild,
+        },
+        rootNodeIds: [level.id],
+      },
+      [
+        { op: 'delete', id: oldAssembly.id },
+        { op: 'create', parentId: level.id, node: newAssembly },
+      ],
+    )
+
+    expect(graph.nodes[oldChild.id]).toBeUndefined()
+    expect(graph.nodes[newAssembly.id]).toMatchObject({
+      metadata: { stationId: 'feed_pump', replacement: true },
+      parentId: level.id,
+    })
+    expect(graph.nodes[level.id]).toMatchObject({ children: [newAssembly.id] })
+  })
 })

@@ -104,6 +104,11 @@ export function buildStationWorkflowRerunResult(input: {
     layoutDiagnostics: composed.layoutDiagnostics,
     layoutStrategy: composed.layoutStrategy,
     placement: input.placement,
+    workflowRerun: {
+      sourceRunId: input.spec.sourceRunId,
+      stageId: input.spec.stageId,
+      stationId: input.spec.stationId,
+    },
     editSummary: [
       `Re-ran equipment compiler for ${station.label} (${station.id}) from ${input.sourceRun.id}.`,
     ],

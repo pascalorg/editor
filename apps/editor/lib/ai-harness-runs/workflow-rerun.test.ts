@@ -115,6 +115,11 @@ describe('workflow rerun', () => {
     })
 
     expect(result.plan?.kind).toBe('process_line')
+    expect(result.workflowRerun).toEqual({
+      sourceRunId: 'run_source',
+      stageId: 'equipment-compiler',
+      stationId: 'feed_pump',
+    })
     if (result.plan?.kind !== 'process_line') throw new Error('expected process line rerun')
     expect(result.plan.process.stations.map((station) => station.id)).toEqual(['feed_pump'])
     expect(result.plan.process.connections).toEqual([])

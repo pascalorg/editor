@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { registerNode, nodeRegistry } from '@pascal-app/core/registry'
+import { nodeRegistry, registerNode } from '@pascal-app/core/registry'
 import { BoxNode, ItemNode, LevelNode, ZoneNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import { validateFactoryScenePatches } from './factory-scene-patch-safety'
@@ -106,6 +106,23 @@ describe('factory scene patch safety', () => {
 
     expect(result.safe).toBe(false)
     expect(result.issues.map((item) => item.code)).toContain('create_missing_parent')
+  })
+
+  test('allows replacement batches that delete and recreate the same node id', () => {
+    const box = BoxNode.parse({ id: 'box_station', name: 'Replacement station' })
+
+    const result = validateFactoryScenePatches(
+      [
+        { op: 'delete', id: box.id },
+        { op: 'create', parentId: 'level_1', node: box },
+      ],
+      {
+        existingNodeIds: ['level_1', box.id],
+      },
+    )
+
+    expect(result.safe).toBe(true)
+    expect(result.issues).toEqual([])
   })
 
   test('allows missing generated parents when a known fallback parent is available', () => {

@@ -40,6 +40,7 @@ import {
 } from '../../../../../lib/ai-generated-geometry'
 import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
 import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
+import { prepareStationRerunPatches } from '../../../../../lib/factory-station-rerun-apply'
 import { seedFixedFactoryLiveDataSource } from '../../../../../lib/fixed-live-data-source'
 import { computeSceneBoundsXZ, pickSceneCameraFocusBounds } from '../../../../../lib/scene-bounds'
 import useViewer from '@pascal-app/viewer/store'
@@ -2050,10 +2051,15 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
     console.warn('[factory-agent] Refused factory patches that failed quality gate', qualityReport)
     return []
   }
-  const patches = Array.isArray(result.patches) ? result.patches : []
+  const scene = useScene.getState()
+  const rawPatches = Array.isArray(result.patches) ? result.patches : []
+  const patches = prepareStationRerunPatches({
+    result,
+    nodes: scene.nodes as Record<string, AnyNode | undefined>,
+    patches: rawPatches,
+  })
   if (patches.length === 0) return []
 
-  const scene = useScene.getState()
   const selectedLevelId = useViewer.getState().selection.levelId
   const safety = validateFactoryScenePatches(patches, {
     allowProcessLineCatalogItems: true,
@@ -2077,14 +2083,14 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
 
   pauseSpaceDetection()
   try {
+    if (deleteIds.length > 0) {
+      scene.deleteNodes(deleteIds)
+    }
     if (createOps.length > 0) {
       scene.createNodes(createOps)
     }
     if (updateOps.length > 0) {
       scene.updateNodes(updateOps)
-    }
-    if (deleteIds.length > 0) {
-      scene.deleteNodes(deleteIds)
     }
   } finally {
     resumeSpaceDetection()

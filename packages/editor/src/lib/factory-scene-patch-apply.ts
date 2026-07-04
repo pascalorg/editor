@@ -147,6 +147,35 @@ export function applyFactoryScenePatchesToGraph(
     if (index >= 0) rootNodeIds.splice(index, 1)
   }
 
+  const idsToDelete = new Set<AnyNodeId>()
+  const collectDelete = (id: AnyNodeId) => {
+    if (idsToDelete.has(id)) return
+    idsToDelete.add(id)
+    const current = nodes[id]
+    if (current && 'children' in current) {
+      const children = (current as { children?: unknown }).children
+      if (Array.isArray(children)) {
+        for (const childId of children) {
+          const child = nodes[childId as AnyNodeId]
+          if (child?.parentId === id) collectDelete(childId as AnyNodeId)
+        }
+      }
+    }
+  }
+  for (const id of operations.deleteIds) collectDelete(id)
+
+  for (const id of idsToDelete) {
+    const current = nodes[id]
+    if (!current) continue
+    const parentId =
+      typeof current.parentId === 'string' ? (current.parentId as AnyNodeId) : undefined
+    if (parentId && nodes[parentId]) {
+      nodes[parentId] = removeChild(nodes[parentId], id) ?? nodes[parentId]
+    }
+    removeRoot(id)
+    delete nodes[id]
+  }
+
   for (const { node, parentId } of operations.createOps) {
     const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
     const newNode = {
@@ -167,18 +196,6 @@ export function applyFactoryScenePatchesToGraph(
     const current = nodes[id]
     if (!current) continue
     nodes[id] = { ...current, ...data } as AnyNode
-  }
-
-  for (const id of operations.deleteIds) {
-    const current = nodes[id]
-    if (!current) continue
-    const parentId =
-      typeof current.parentId === 'string' ? (current.parentId as AnyNodeId) : undefined
-    if (parentId && nodes[parentId]) {
-      nodes[parentId] = removeChild(nodes[parentId], id) ?? nodes[parentId]
-    }
-    removeRoot(id)
-    delete nodes[id]
   }
 
   return { nodes, rootNodeIds }

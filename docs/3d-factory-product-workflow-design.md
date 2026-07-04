@@ -594,7 +594,7 @@ Phase 6 delivery status:
 - Done: recent runs expose compact workflow summaries for a run history panel.
 - Done: the AI panel includes a minimal Runs inspector that opens the workflow stages for a selected run.
 - Done: station-scoped equipment compiler re-run can create a new focused run from a saved process plan.
-- Deferred: replacing the old station on the canvas with a station rerun result.
+- Done: station rerun results replace the old matching station nodes on the canvas during apply.
 - Deferred: save generation plan as reusable template.
 
 ### Phase 7: Image And Joint Asset Integration

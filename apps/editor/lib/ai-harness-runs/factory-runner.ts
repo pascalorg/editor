@@ -73,6 +73,11 @@ export type FactoryRunResult = {
   geometryStatus?: PrimitiveGeometryGenerationResult['status']
   placement: GeneratedGeometryPlacementSpec
   editSummary?: string[]
+  workflowRerun?: {
+    sourceRunId: string
+    stageId: string
+    stationId: string
+  }
 }
 
 type PrimitiveGeometryDraftGenerator = (
