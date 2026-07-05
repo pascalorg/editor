@@ -14,6 +14,7 @@
     "factory:render-qa:full": "FACTORY_RENDER_QA_MODE=full playwright test e2e/factory-render-quality.spec.ts",
     "factory:full-run-qa": "bun scripts/factory-full-run-qa.ts",
     "factory:release-qa": "bun scripts/factory-release-readiness.ts",
+    "factory:release-candidate": "bun scripts/factory-release-candidate.ts",
     "lint": "biome lint",
     "profile-pack:scaffold": "bun scripts/scaffold-industry-profile-pack.ts",
     "profile-pack:qa": "bun scripts/profile-pack-qa.ts",

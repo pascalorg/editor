@@ -59,6 +59,7 @@ og-test
 /apps/editor/public/items/generated-assets.json
 /apps/editor/.generated/
 /apps/editor/.local/
+/apps/editor/qa-artifacts/
 
 # Worktrees
 .worktrees
