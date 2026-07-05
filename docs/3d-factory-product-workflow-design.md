@@ -642,6 +642,7 @@ Phase 8 delivery status:
 - Done: factory run results now share a tested experience summary for quality, fallback warnings, missing pack guidance, apply state, and debug details.
 - Done: factory run apply results include a before/after change preview with node counts and created/updated/deleted samples.
 - Done: factory run canvas application now writes one scene state change so undo/redo treats the whole run as a single step.
+- Done: live data snapshots now sanitize bad WebSocket values before they reach rendering, Data Lens, or Inspector consumers.
 
 Validation:
 

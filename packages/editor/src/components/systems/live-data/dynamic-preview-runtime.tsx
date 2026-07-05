@@ -271,17 +271,19 @@ function axisIndex(axis: DynamicAxis | undefined): 0 | 1 | 2 {
   return 1
 }
 
-function numericValue(value: LiveDataValue | undefined): number {
-  if (typeof value === 'number') return value
+function numericValue(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
   if (typeof value === 'boolean') return value ? 1 : 0
+  if (typeof value !== 'string') return 0
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : 0
 }
 
-function truthyValue(value: LiveDataValue | undefined): boolean {
+function truthyValue(value: unknown): boolean {
   if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value > 0
-  return Boolean(value)
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0
+  if (typeof value === 'string') return value.length > 0
+  return false
 }
 
 function equalsConditionValue(value: LiveDataValue | undefined, expected: DynamicBinding['value']) {
