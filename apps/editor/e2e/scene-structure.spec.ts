@@ -241,6 +241,124 @@ function refineryStructureGraph() {
   }
 }
 
+const articraftIds = {
+  site: 'site_articraft_joint_e2e',
+  building: 'building_articraft_joint_e2e',
+  level: 'level_articraft_joint_e2e',
+  root: 'assembly_articraft_crane_e2e',
+  slewing: 'box_articraft_slewing_e2e',
+  trolley: 'box_articraft_trolley_e2e',
+} as const
+
+function articraftJointGraph() {
+  const nodes: Record<string, SceneNode> = {
+    [articraftIds.site]: {
+      object: 'node',
+      id: articraftIds.site,
+      type: 'site',
+      name: 'Articraft site',
+      parentId: null,
+      children: [articraftIds.building],
+      visible: true,
+      metadata: {},
+    },
+    [articraftIds.building]: {
+      object: 'node',
+      id: articraftIds.building,
+      type: 'building',
+      name: 'Articraft plot',
+      parentId: articraftIds.site,
+      children: [articraftIds.level],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      visible: true,
+      metadata: {},
+    },
+    [articraftIds.level]: {
+      object: 'node',
+      id: articraftIds.level,
+      type: 'level',
+      name: 'Ground',
+      parentId: articraftIds.building,
+      children: [articraftIds.root],
+      visible: true,
+      metadata: {},
+    },
+    [articraftIds.root]: {
+      object: 'node',
+      id: articraftIds.root,
+      type: 'assembly',
+      name: 'Joint crane root',
+      parentId: articraftIds.level,
+      children: [articraftIds.slewing, articraftIds.trolley],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      visible: true,
+      metadata: {
+        assetSource: {
+          kind: 'articraft',
+          assetId: 'articraft-rec_crane',
+          recordId: 'rec_crane',
+        },
+        articraft: {
+          recordId: 'rec_crane',
+          recordPath: 'articraft/records/rec_crane',
+          prompt: 'joint crane',
+        },
+      },
+    },
+    [articraftIds.slewing]: {
+      object: 'node',
+      id: articraftIds.slewing,
+      type: 'box',
+      name: 'Slewing unit',
+      parentId: articraftIds.root,
+      position: [0, 1, 0],
+      rotation: [0, 0.4, 0],
+      visible: true,
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'slewing_unit',
+          jointType: 'revolute',
+          axis: [0, 1, 0],
+          limits: { lower: -1, upper: 1 },
+          currentValue: 0.4,
+          restRotation: [0, 0, 0],
+          restPosition: [0, 1, 0],
+        },
+      },
+    },
+    [articraftIds.trolley]: {
+      object: 'node',
+      id: articraftIds.trolley,
+      type: 'box',
+      name: 'Trolley',
+      parentId: articraftIds.root,
+      position: [1, 1, 0],
+      rotation: [0, 0, 0],
+      visible: true,
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'upperworks_trolley_travel',
+          jointType: 'prismatic',
+          axis: [1, 0, 0],
+          limits: { lower: 0, upper: 4 },
+          currentValue: 1,
+          restRotation: [0, 0, 0],
+          restPosition: [0, 1, 0],
+        },
+      },
+    },
+  }
+
+  return {
+    nodes,
+    rootNodeIds: [articraftIds.site],
+  }
+}
+
 test('scene structure defaults factory scenes to process and preserves elevation/source modes', async ({
   page,
   request,
@@ -577,6 +695,115 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
       'refinery.tank.level',
     )
     await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('62')
+  } finally {
+    await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
+  }
+})
+
+test('Articraft joint assets expose asset-level joint controls in Inspector', async ({
+  page,
+  request,
+}) => {
+  const sceneId = `scene-structure-articraft-joints-${Date.now()}-${test.info().parallelIndex}`
+  const createResponse = await request.post('/api/scenes', {
+    data: {
+      id: sceneId,
+      name: 'Scene Articraft Joints E2E',
+      graph: articraftJointGraph(),
+    },
+  })
+  expect(createResponse.status()).toBe(201)
+
+  try {
+    await page.addInitScript(() => {
+      window.localStorage.clear()
+    })
+    await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 120_000,
+    })
+    await expect(page.locator('canvas').first()).toBeVisible({ timeout: 60_000 })
+    await expectFactoryBridge(page)
+
+    await page.evaluate((nodeId) => {
+      const bridge = (
+        window as Window & {
+          __pascalFactoryE2e?: FactoryE2eBridge
+        }
+      ).__pascalFactoryE2e
+      bridge?.selectNode(nodeId)
+    }, articraftIds.root)
+
+    await expect(page.getByRole('heading', { name: 'Joint crane root' })).toBeVisible({
+      timeout: 30_000,
+    })
+    await expect
+      .poll(
+        () =>
+          page.evaluate((ids) => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            const nodes = (bridge?.sceneNodes() ?? {}) as Record<string, SceneNode>
+            return {
+              rootRecordId: (nodes[ids.root]?.metadata?.articraft as { recordId?: string })
+                ?.recordId,
+              slewingRecordId: (nodes[ids.slewing]?.metadata?.articraft as { recordId?: string })
+                ?.recordId,
+              slewingJointName: (
+                nodes[ids.slewing]?.metadata?.articraftJoint as { jointName?: string }
+              )?.jointName,
+              trolleyJointName: (
+                nodes[ids.trolley]?.metadata?.articraftJoint as { jointName?: string }
+              )?.jointName,
+            }
+          }, articraftIds),
+        { timeout: 10_000 },
+      )
+      .toEqual({
+        rootRecordId: 'rec_crane',
+        slewingRecordId: 'rec_crane',
+        slewingJointName: 'slewing_unit',
+        trolleyJointName: 'upperworks_trolley_travel',
+      })
+    const jointSection = page.getByRole('button', { name: 'Articraft 关节控制' })
+    await expect(jointSection).toHaveCount(1, { timeout: 10_000 })
+    await jointSection.scrollIntoViewIfNeeded()
+    await jointSection.click()
+    await expect(page.getByTestId('articraft-joint-list')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId(`articraft-joint-control-${articraftIds.slewing}`)).toContainText(
+      'slewing_unit',
+    )
+    await expect(page.getByTestId(`articraft-joint-control-${articraftIds.trolley}`)).toContainText(
+      'upperworks_trolley_travel',
+    )
+
+    await page.getByTestId(`articraft-joint-reset-${articraftIds.slewing}`).click()
+    await expect
+      .poll(
+        () =>
+          page.evaluate((nodeId) => {
+            const bridge = (
+              window as Window & {
+                __pascalFactoryE2e?: FactoryE2eBridge
+              }
+            ).__pascalFactoryE2e
+            const nodes = (bridge?.sceneNodes() ?? {}) as Record<string, SceneNode>
+            const node = nodes[nodeId]
+            const joint = node?.metadata?.articraftJoint as { currentValue?: number } | undefined
+            return {
+              currentValue: joint?.currentValue,
+              rotationY: node?.rotation?.[1],
+            }
+          }, articraftIds.slewing),
+        { timeout: 10_000 },
+      )
+      .toEqual({
+        currentValue: 0,
+        rotationY: 0,
+      })
   } finally {
     await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
   }

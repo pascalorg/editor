@@ -20,6 +20,11 @@ import { Icon } from '@iconify/react'
 import { ExternalLink, Move, Pause, Play, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
+  getArticraftJointControlsForSelection,
+  getArticraftRecordIdForSelection,
+  translateArticraftJointName,
+} from '../../../lib/articraft-dynamic-channels'
+import {
   applyArticraftJointValue,
   buildArticraftJointPatch,
   formatJointUnit,
@@ -130,6 +135,7 @@ export function ParametricInspector() {
         width={320}
       >
         <SemanticInspectorSection nodeId={semanticEquipmentAssemblyId} />
+        <ArticraftInspectorSections nodeId={selectedId} />
       </PanelWrapper>
     )
   }
@@ -182,8 +188,7 @@ export function ParametricInspector() {
         <AssemblyPartTransformSection nodeId={selectedId} onUpdate={handleUpdate} />
       )}
       <NodeMaterialSection nodeId={selectedId} />
-      <ArticraftModelSection nodeId={selectedId} />
-      <ArticraftJointSection nodeId={selectedId} />
+      <ArticraftInspectorSections nodeId={selectedId} />
       {(canMove || canDelete) && (
         <PanelSection title="操作">
           <ActionGroup>
@@ -537,6 +542,16 @@ function inferArticraftLinkName(nodeName: string | undefined, fallback: string):
   return (nodeName ?? fallback).replace(/_v\d+$/, '')
 }
 
+export function ArticraftInspectorSections({ nodeId }: { nodeId: AnyNodeId }) {
+  return (
+    <>
+      <ArticraftModelSection nodeId={nodeId} />
+      <ArticraftJointListSection nodeId={nodeId} />
+      <ArticraftJointSection nodeId={nodeId} />
+    </>
+  )
+}
+
 function ArticraftModelSection({ nodeId }: { nodeId: AnyNodeId }) {
   const node = useScene((s) => s.nodes[nodeId])
   const metadata = useMemo(() => readArticraftModelMetadata(node), [node])
@@ -701,16 +716,210 @@ function ArticraftModelSection({ nodeId }: { nodeId: AnyNodeId }) {
   )
 }
 
+function ArticraftJointListSection({ nodeId }: { nodeId: AnyNodeId }) {
+  const sceneNodes = useScene((s) => s.nodes)
+  const recordId = useMemo(
+    () =>
+      getArticraftRecordIdForSelection(
+        sceneNodes[nodeId],
+        sceneNodes as Record<string, AnyNode>,
+      ),
+    [nodeId, sceneNodes],
+  )
+  const controls = useMemo(
+    () =>
+      getArticraftJointControlsForSelection(
+        sceneNodes[nodeId],
+        sceneNodes as Record<string, AnyNode>,
+      ),
+    [nodeId, sceneNodes],
+  )
+  const selectedJoint = useMemo(() => getArticraftJointMetadata(sceneNodes[nodeId]), [
+    nodeId,
+    sceneNodes,
+  ])
+  const [previewing, setPreviewing] = useState(false)
+
+  const visibleControls =
+    controls.length === 1 && controls[0]?.nodeId === String(nodeId) && selectedJoint
+      ? []
+      : controls
+
+  const updateJoint = useCallback((targetNodeId: string, value: number) => {
+    const scene = useScene.getState()
+    const target = scene.nodes[targetNodeId as AnyNodeId]
+    const joint = getArticraftJointMetadata(target)
+    if (!target || !joint) return
+    scene.updateNode(
+      targetNodeId as AnyNodeId,
+      applyArticraftJointValue(target, joint, value) as Partial<AnyNode>,
+    )
+  }, [])
+
+  const resetAll = useCallback(() => {
+    const scene = useScene.getState()
+    const selected = scene.nodes[nodeId]
+    const nextControls = getArticraftJointControlsForSelection(
+      selected,
+      scene.nodes as Record<string, AnyNode>,
+    )
+    const updates = nextControls.flatMap((control) => {
+      const target = scene.nodes[control.nodeId as AnyNodeId]
+      const joint = getArticraftJointMetadata(target)
+      if (!target || !joint) return []
+      return [
+        {
+          id: control.nodeId as AnyNodeId,
+          data: applyArticraftJointValue(target, joint, 0) as Partial<AnyNode>,
+        },
+      ]
+    })
+    if (updates.length > 0) scene.updateNodes(updates)
+  }, [nodeId])
+
+  useEffect(() => {
+    if (!previewing || !recordId) return
+    const startedAt = performance.now()
+    const interval = window.setInterval(() => {
+      const scene = useScene.getState()
+      const selected = scene.nodes[nodeId]
+      const nextControls = getArticraftJointControlsForSelection(
+        selected,
+        scene.nodes as Record<string, AnyNode>,
+      )
+      const updates = nextControls.flatMap((control, index) => {
+        const target = scene.nodes[control.nodeId as AnyNodeId]
+        const joint = getArticraftJointMetadata(target)
+        if (!target || !joint || joint.jointType === 'fixed') return []
+        const [min, max] = jointRange(joint)
+        const span = max - min
+        const midpoint = min + span / 2
+        const phase = (performance.now() - startedAt) / 750 + index * 0.6
+        const value = midpoint + Math.sin(phase) * (span / 2)
+        return [
+          {
+            id: control.nodeId as AnyNodeId,
+            data: applyArticraftJointValue(target, joint, Math.round(value * 1000) / 1000),
+          },
+        ]
+      })
+      if (updates.length > 0) scene.updateNodes(updates)
+    }, 100)
+    return () => window.clearInterval(interval)
+  }, [nodeId, previewing, recordId])
+
+  useEffect(() => {
+    if (!recordId || controls.length === 0) setPreviewing(false)
+  }, [controls.length, recordId])
+
+  if (!recordId || visibleControls.length === 0) return null
+
+  return (
+    <PanelSection title="Articraft 关节控制">
+      <div className="space-y-2 px-3 py-1 text-xs" data-testid="articraft-joint-list">
+        <div className="flex items-center justify-between gap-2 text-muted-foreground">
+          <span>record</span>
+          <span className="truncate font-mono text-foreground">{recordId}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-muted-foreground">
+          <span>可动关节</span>
+          <span className="font-mono text-foreground">{controls.length}</span>
+        </div>
+        {visibleControls.map((control) => {
+          const [min, max] = jointRange(control.joint)
+          const value =
+            typeof control.joint.currentValue === 'number' ? control.joint.currentValue : 0
+          const movable = control.joint.jointType !== 'fixed'
+          return (
+            <div
+              className="space-y-1.5 rounded-lg border border-border/45 bg-[#252527] p-2"
+              data-testid={`articraft-joint-control-${control.nodeId}`}
+              key={`${control.nodeId}:${control.joint.jointName}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">
+                    {control.label || translateArticraftJointName(control.joint.jointName)}
+                  </div>
+                  <div className="truncate font-mono text-[10px] text-muted-foreground">
+                    {control.joint.jointName}
+                  </div>
+                </div>
+                <span className="rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  {control.joint.jointType ?? 'joint'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-muted-foreground">
+                <span>
+                  range [{min.toFixed(2)}, {max.toFixed(2)}]
+                </span>
+                <span className="text-right">
+                  value {value.toFixed(3)} {formatJointUnit(control.joint)}
+                </span>
+              </div>
+              {movable ? (
+                <SliderControl
+                  label="当前值"
+                  max={max}
+                  min={min}
+                  onChange={(next) => updateJoint(control.nodeId, next)}
+                  precision={3}
+                  step={0.01}
+                  unit={formatJointUnit(control.joint)}
+                  value={value}
+                />
+              ) : null}
+              <ActionGroup>
+                <ActionButton
+                  data-testid={`articraft-joint-reset-${control.nodeId}`}
+                  icon={<RotateCcw className="h-4 w-4" />}
+                  label="重置"
+                  onClick={() => updateJoint(control.nodeId, 0)}
+                />
+                <ActionButton
+                  data-testid={`articraft-joint-select-${control.nodeId}`}
+                  icon={<Icon className="h-4 w-4" icon="mdi:target" />}
+                  label="选中"
+                  onClick={() =>
+                    useViewer.getState().setSelection({
+                      selectedIds: [control.nodeId as AnyNodeId],
+                    })
+                  }
+                />
+              </ActionGroup>
+            </div>
+          )
+        })}
+      </div>
+      <ActionGroup>
+        <ActionButton
+          data-testid="articraft-joint-reset-all"
+          icon={<RotateCcw className="h-4 w-4" />}
+          label="全部重置"
+          onClick={resetAll}
+        />
+        <ActionButton
+          data-testid="articraft-joint-preview-toggle"
+          icon={previewing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          label={previewing ? '停止预览' : '预览动作'}
+          onClick={() => setPreviewing((next) => !next)}
+        />
+      </ActionGroup>
+    </PanelSection>
+  )
+}
+
 function ArticraftJointSection({ nodeId }: { nodeId: AnyNodeId }) {
-  const joint = useScene((s) => getArticraftJointMetadata(s.nodes[nodeId]))
-  const recordId = useScene((s) => {
-    const metadata = s.nodes[nodeId]?.metadata
+  const node = useScene((s) => s.nodes[nodeId])
+  const joint = useMemo(() => getArticraftJointMetadata(node), [node])
+  const recordId = useMemo(() => {
+    const metadata = node?.metadata
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
     const articraft = (metadata as Record<string, unknown>).articraft
     if (!articraft || typeof articraft !== 'object' || Array.isArray(articraft)) return null
     const value = (articraft as Record<string, unknown>).recordId
     return typeof value === 'string' ? value : null
-  })
+  }, [node])
   const [previewing, setPreviewing] = useState(false)
   const [min, max] = useMemo(() => (joint ? jointRange(joint) : [0, 0] as [number, number]), [joint])
 

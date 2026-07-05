@@ -11,6 +11,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  ArticraftInspectorSections,
   PanelSection,
   PanelWrapper,
   SemanticInspectorSection,
@@ -139,6 +140,7 @@ export default function AssemblyPanel() {
       width={300}
     >
       <SemanticInspectorSection nodeId={selectedId as AnyNodeId} />
+      <ArticraftInspectorSections nodeId={selectedId as AnyNodeId} />
       <PanelSection title={'\u7ec4\u5408'}>
         <div className="rounded-lg border border-border/50 bg-[#2C2C2E] px-3 py-2 text-muted-foreground text-xs leading-5">
           {'\u5df2\u7ec4\u5408'} {childCount}{' '}

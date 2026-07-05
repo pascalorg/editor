@@ -118,6 +118,7 @@ export { CollectionsPopover } from './components/ui/panels/collections/collectio
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
+export { ArticraftInspectorSections } from './components/ui/panels/parametric-inspector'
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { SemanticInspectorSection } from './components/ui/panels/semantic-inspector-section'
 export { SemanticEquipmentParamControls } from './components/ui/panels/semantic-equipment-params'

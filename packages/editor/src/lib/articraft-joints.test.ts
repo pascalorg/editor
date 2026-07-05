@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core'
 import {
   getArticraftJointChannelsForSelection,
+  getArticraftJointControlsForSelection,
   translateArticraftJointName,
 } from './articraft-dynamic-channels'
 import {
@@ -122,6 +123,78 @@ describe('articraft joint helpers', () => {
       outputRange: [0, 4],
       targetNodeId: 'trolley_node',
     })
+  })
+
+  test('builds inspector controls for all joints in the selected Articraft record', () => {
+    const root = {
+      id: 'crane_root',
+      type: 'group',
+      metadata: { articraft: { recordId: 'rec_crane' } },
+    } as unknown as AnyNode
+    const slewing = {
+      id: 'slewing_node',
+      type: 'box',
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'slewing_unit',
+          jointType: 'revolute',
+          axis: [0, 1, 0],
+        },
+      },
+    } as unknown as AnyNode
+    const otherRecord = {
+      id: 'other_node',
+      type: 'box',
+      metadata: {
+        articraft: { recordId: 'rec_other' },
+        articraftJoint: {
+          jointName: 'ignored',
+          jointType: 'revolute',
+        },
+      },
+    } as unknown as AnyNode
+
+    const controls = getArticraftJointControlsForSelection(root, {
+      crane_root: root,
+      slewing_node: slewing,
+      other_node: otherRecord,
+    })
+
+    expect(controls).toHaveLength(1)
+    expect(controls[0]).toMatchObject({
+      nodeId: 'slewing_node',
+      label: '\u56de\u8f6c\u5355\u5143',
+      joint: { jointName: 'slewing_unit' },
+    })
+  })
+
+  test('resolves Articraft controls from assembly children when the root has no record metadata', () => {
+    const root = {
+      id: 'crane_root',
+      type: 'assembly',
+      children: ['slewing_node'],
+    } as unknown as AnyNode
+    const slewing = {
+      id: 'slewing_node',
+      type: 'box',
+      parentId: 'crane_root',
+      metadata: {
+        articraft: { recordId: 'rec_crane' },
+        articraftJoint: {
+          jointName: 'slewing_unit',
+          jointType: 'revolute',
+          axis: [0, 1, 0],
+        },
+      },
+    } as unknown as AnyNode
+
+    expect(
+      getArticraftJointControlsForSelection(root, {
+        crane_root: root,
+        slewing_node: slewing,
+      }),
+    ).toHaveLength(1)
   })
 
   test('translates common joint names for the dynamic panel', () => {

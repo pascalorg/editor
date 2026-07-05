@@ -78,10 +78,31 @@ export function translateArticraftJointName(value: string | undefined | null): s
 
 function recordIdOf(node: AnyNode | undefined): string | null {
   if (!node) return null
-  const articraft = getNodeMetadata(node).articraft
-  if (!isRecord(articraft)) return null
-  const recordId = articraft.recordId
-  return typeof recordId === 'string' && recordId.trim() ? recordId : null
+  const metadata = getNodeMetadata(node)
+  const articraft = metadata.articraft
+  if (isRecord(articraft)) {
+    const recordId = articraft.recordId
+    if (typeof recordId === 'string' && recordId.trim()) return recordId
+  }
+
+  const assetSource = metadata.assetSource
+  if (!isRecord(assetSource) || assetSource.kind !== 'articraft') return null
+  const sourceRecordId = assetSource.recordId
+  return typeof sourceRecordId === 'string' && sourceRecordId.trim() ? sourceRecordId : null
+}
+
+function childRecordIdOf(
+  selectedNode: AnyNode | undefined,
+  nodes: Record<string, AnyNode>,
+): string | null {
+  const children = (selectedNode as { children?: unknown } | undefined)?.children
+  if (!Array.isArray(children)) return null
+  for (const childId of children) {
+    if (typeof childId !== 'string') continue
+    const recordId = recordIdOf(nodes[childId])
+    if (recordId) return recordId
+  }
+  return null
 }
 
 function axisFromJoint(joint: ArticraftJointMetadata): DynamicAxis {
@@ -139,9 +160,10 @@ export function getArticraftRecordIdForSelection(
 
   const selectedParentId = (selectedNode as { parentId?: unknown } | undefined)?.parentId
   if (typeof selectedParentId === 'string') {
-    return recordIdOf(nodes[selectedParentId])
+    const parent = recordIdOf(nodes[selectedParentId])
+    if (parent) return parent
   }
-  return null
+  return childRecordIdOf(selectedNode, nodes)
 }
 
 export function getArticraftJointChannelsForSelection(
@@ -161,4 +183,34 @@ export function getArticraftJointChannelsForSelection(
 
   channels.sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
   return channels
+}
+
+export type ArticraftJointControl = {
+  nodeId: string
+  label: string
+  joint: ArticraftJointMetadata
+}
+
+export function getArticraftJointControlsForSelection(
+  selectedNode: AnyNode | undefined,
+  nodes: Record<string, AnyNode>,
+): ArticraftJointControl[] {
+  const recordId = getArticraftRecordIdForSelection(selectedNode, nodes)
+  if (!recordId) return []
+
+  const controls = Object.values(nodes).flatMap((node) => {
+    if (recordIdOf(node) !== recordId) return []
+    const joint = getArticraftJointMetadata(node)
+    if (!joint) return []
+    return [
+      {
+        nodeId: String(node.id),
+        label: channelLabel(joint),
+        joint,
+      },
+    ]
+  })
+
+  controls.sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
+  return controls
 }
