@@ -7,8 +7,6 @@ import {
   type BuildingNode,
   emitter,
   ItemNode,
-  pauseSpaceDetection,
-  resumeSpaceDetection,
   sceneRegistry,
   type LevelNode,
   type Vec3,
@@ -38,7 +36,6 @@ import {
   type GeneratedGeometryArtifact,
   type GeneratedGeometryShapeSpec as ShapeSpec,
 } from '../../../../../lib/ai-generated-geometry'
-import { buildFactoryScenePatchOperations } from '../../../../../lib/factory-scene-patch-apply'
 import { validateFactoryScenePatches } from '../../../../../lib/factory-scene-patch-safety'
 import { prepareStationRerunPatches } from '../../../../../lib/factory-station-rerun-apply'
 import { seedFixedFactoryLiveDataSource } from '../../../../../lib/fixed-live-data-source'
@@ -65,6 +62,7 @@ import {
   buildFactoryRunChangePreview,
   type FactoryRunChangePreview,
 } from '../../../../../lib/factory-run-change-preview'
+import { applyFactoryScenePatchesAsUndoGroup } from '../../../../../lib/factory-scene-patch-undo-group'
 import {
   summarizeFactoryRunExperience,
   type FactoryRunExperienceAlert,
@@ -2016,30 +2014,17 @@ function applyFactoryRunPatchesToCanvas(data: unknown): {
     console.warn('[factory-agent] Refused factory patches that failed quality gate', qualityReport)
     return { changePreview, nodeIds: [] }
   }
-  const { createOps, createdIds, deleteIds, updateOps, updatedIds } =
-    buildFactoryScenePatchOperations(patches, {
-      existingNodeIds: Object.keys(scene.nodes),
-      fallbackParentId: selectedLevelId,
-    })
+  const applyResult = applyFactoryScenePatchesAsUndoGroup({
+    fallbackParentId: selectedLevelId,
+    patches,
+  })
+  if (!applyResult.applied) return { changePreview, nodeIds: [] }
+
+  const { createOps, createdIds, deleteIds, updatedIds } = applyResult.operations
   const createdLevelNodes = createOps
     .map(({ node }) => node)
     .filter((node): node is LevelNode => node.type === 'level')
     .sort((a, b) => a.level - b.level)
-
-  pauseSpaceDetection()
-  try {
-    if (deleteIds.length > 0) {
-      scene.deleteNodes(deleteIds)
-    }
-    if (createOps.length > 0) {
-      scene.createNodes(createOps)
-    }
-    if (updateOps.length > 0) {
-      scene.updateNodes(updateOps)
-    }
-  } finally {
-    resumeSpaceDetection()
-  }
 
   if (createdLevelNodes.length > 0) {
     const topLevel = createdLevelNodes[createdLevelNodes.length - 1]!
