@@ -229,7 +229,7 @@ describe('ai chat harness context builder', () => {
             { nodeId: 'box_shell', semanticRole: 'vessel_shell', editable: true },
             { nodeId: 'box_liquid', semanticRole: 'liquid_volume', editable: true },
           ],
-          ports: [{ id: 'inlet', medium: 'crude', side: 'west' }],
+          ports: [{ id: 'inlet', medium: 'crude', side: 'west', connections: [] }],
           dataBindings: [],
           profileId: 'refinery.crude_storage_tank',
           recipeId: 'factory:storage-tank',

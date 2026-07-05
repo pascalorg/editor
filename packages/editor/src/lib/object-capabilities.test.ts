@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
-import { AssemblyNode, BoxNode, TankNode } from '@pascal-app/core/schema'
+import { AssemblyNode, BoxNode, PipeNode, TankNode } from '@pascal-app/core/schema'
 import {
   buildSelectionCapabilityContext,
   formatSelectionCapabilities,
@@ -77,9 +77,11 @@ function semanticTankNodes() {
       sourcePartKind: 'liquid_fill',
     },
   })
-  const feedRoute = {
+  const feedRoute = PipeNode.parse({
     id: 'pipe_feed',
     type: 'pipe',
+    start: [0, 0],
+    end: [1, 0],
     metadata: {
       fromStationId: 'feed_pump',
       fromPortId: 'outlet',
@@ -87,7 +89,7 @@ function semanticTankNodes() {
       toPortId: 'inlet',
       medium: 'crude',
     },
-  } as AnyNode
+  })
 
   return {
     [assembly.id]: assembly,
