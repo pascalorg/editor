@@ -23,7 +23,13 @@ type SceneNode = {
 
 type FactoryE2eBridge = {
   sceneNodes: () => Record<string, SceneNode>
-  applyFactoryRun: (data: unknown) => string[]
+  applyFactoryRun: (data: unknown) => {
+    changePreview?: {
+      beforeNodeCount: number
+      afterNodeCount: number
+    }
+    nodeIds: string[]
+  }
   cameraView: (view: 'isometric' | 'top' | 'side') => void
   selectNode: (nodeId: string) => void
   selectedIds: () => string[]
@@ -255,7 +261,7 @@ async function applyFactoryRunToCanvas(page: Page, data: unknown) {
         __pascalFactoryE2e?: FactoryE2eBridge
       }
     ).__pascalFactoryE2e
-    return bridge?.applyFactoryRun(payload) ?? []
+    return bridge?.applyFactoryRun(payload) ?? { nodeIds: [] }
   }, data)
 }
 
@@ -721,8 +727,11 @@ test('factory render QA scores generated cement plant after canvas render', asyn
       )
       .toBe('succeeded')
 
-    const appliedNodeIds = await applyFactoryRunToCanvas(page, run?.result)
-    expect(appliedNodeIds.length).toBeGreaterThanOrEqual(25)
+    const applyResult = await applyFactoryRunToCanvas(page, run?.result)
+    expect(applyResult.nodeIds.length).toBeGreaterThanOrEqual(25)
+    expect(applyResult.changePreview?.afterNodeCount).toBeGreaterThan(
+      applyResult.changePreview?.beforeNodeCount ?? 0,
+    )
     const canvasNodeCount = await expect
       .poll(async () => (await readCanvasNodes(page)).length, { timeout: 30_000 })
       .toBeGreaterThanOrEqual(25)

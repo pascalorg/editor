@@ -72,4 +72,28 @@ describe('factory run experience summary', () => {
     })
     expect(summary.details).toContain('Required pack: industry.refinery.basic@0.1.0 is not installed')
   })
+
+  test('includes before and after change preview lines', () => {
+    const summary = summarizeFactoryRunExperience({
+      applied: true,
+      patches: [{ op: 'create', node: { id: 'box_new' } }],
+      changePreview: {
+        beforeNodeCount: 2,
+        afterNodeCount: 3,
+        created: [{ id: 'box_new', label: 'New box', type: 'box' }],
+        updated: [],
+        deleted: [],
+        lines: ['Before: 2 nodes', 'After: 3 nodes', 'Create: New box'],
+      },
+    })
+
+    expect(summary.changePreview).toMatchObject({
+      beforeNodeCount: 2,
+      afterNodeCount: 3,
+      createdCount: 1,
+    })
+    expect(summary.alerts.map((alert) => alert.label)).toContain('Preview 2 -> 3 nodes')
+    expect(summary.details).toContain('Before / after preview')
+    expect(summary.details).toContain('Create: New box')
+  })
 })

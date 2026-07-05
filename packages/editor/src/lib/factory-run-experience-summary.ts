@@ -34,6 +34,14 @@ export type FactoryRunExperienceSummary = {
     diagnosticCount: number
     style?: string
   }
+  changePreview?: {
+    beforeNodeCount: number
+    afterNodeCount: number
+    createdCount: number
+    updatedCount: number
+    deletedCount: number
+    lines: string[]
+  }
   installGuidance?: {
     id: string
     version?: string
@@ -145,6 +153,34 @@ function readLayout(result: AnyRecord): FactoryRunExperienceSummary['layout'] {
   }
 }
 
+function readChangePreview(result: AnyRecord): FactoryRunExperienceSummary['changePreview'] {
+  const preview = isRecord(result.changePreview) ? result.changePreview : undefined
+  if (!preview) return undefined
+  const beforeNodeCount =
+    typeof preview.beforeNodeCount === 'number' && Number.isFinite(preview.beforeNodeCount)
+      ? preview.beforeNodeCount
+      : undefined
+  const afterNodeCount =
+    typeof preview.afterNodeCount === 'number' && Number.isFinite(preview.afterNodeCount)
+      ? preview.afterNodeCount
+      : undefined
+  if (beforeNodeCount == null || afterNodeCount == null) return undefined
+  const created = Array.isArray(preview.created) ? preview.created : []
+  const updated = Array.isArray(preview.updated) ? preview.updated : []
+  const deleted = Array.isArray(preview.deleted) ? preview.deleted : []
+  const lines = Array.isArray(preview.lines)
+    ? preview.lines.map(String).filter(Boolean).slice(0, 8)
+    : []
+  return {
+    beforeNodeCount,
+    afterNodeCount,
+    createdCount: created.length,
+    updatedCount: updated.length,
+    deletedCount: deleted.length,
+    lines,
+  }
+}
+
 function detailsFor(summary: Omit<FactoryRunExperienceSummary, 'details'>, result: AnyRecord) {
   const artifact = isRecord(result.artifact) ? result.artifact : undefined
   const artifactTitle = stringValue(artifact?.title) ?? stringValue(artifact?.id)
@@ -180,6 +216,9 @@ function detailsFor(summary: Omit<FactoryRunExperienceSummary, 'details'>, resul
     summary.missingAssets.length
       ? `\n**Missing assets / fallbacks:**\n${summary.missingAssets.map((item) => `- ${item.name}: ${item.reason}`).join('\n')}`
       : undefined,
+    summary.changePreview?.lines.length
+      ? `\n**Before / after preview:**\n${summary.changePreview.lines.map((line) => `- ${line}`).join('\n')}`
+      : undefined,
     summary.quality?.issueLines.length
       ? `\n**Quality issues:**\n${summary.quality.issueLines.map((line) => `- ${line}`).join('\n')}`
       : undefined,
@@ -211,6 +250,7 @@ export function summarizeFactoryRunExperience(data: unknown): FactoryRunExperien
     .map((item) => `${item.name}: ${item.reason}`)
   const quality = readQuality(result)
   const layout = readLayout(result)
+  const changePreview = readChangePreview(result)
   const installGuidance = readRequiredPack(result)
 
   const alerts: FactoryRunExperienceAlert[] = []
@@ -249,6 +289,19 @@ export function summarizeFactoryRunExperience(data: unknown): FactoryRunExperien
       tone: 'info',
     })
   }
+  if (changePreview) {
+    alerts.push({
+      label: `Preview ${changePreview.beforeNodeCount} -> ${changePreview.afterNodeCount} nodes`,
+      detail: [
+        changePreview.createdCount ? `${changePreview.createdCount} create` : undefined,
+        changePreview.updatedCount ? `${changePreview.updatedCount} update` : undefined,
+        changePreview.deletedCount ? `${changePreview.deletedCount} delete` : undefined,
+      ]
+        .filter(Boolean)
+        .join(', '),
+      tone: 'info',
+    })
+  }
 
   const summaryWithoutDetails = {
     applied,
@@ -260,6 +313,7 @@ export function summarizeFactoryRunExperience(data: unknown): FactoryRunExperien
     fallbackWarnings,
     quality,
     layout,
+    changePreview,
     installGuidance,
     alerts,
   } satisfies Omit<FactoryRunExperienceSummary, 'details'>

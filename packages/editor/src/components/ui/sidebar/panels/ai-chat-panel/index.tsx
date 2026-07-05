@@ -62,6 +62,10 @@ import {
   imageTo3DAssetSource,
 } from '../../../../../lib/asset-source-contract'
 import {
+  buildFactoryRunChangePreview,
+  type FactoryRunChangePreview,
+} from '../../../../../lib/factory-run-change-preview'
+import {
   summarizeFactoryRunExperience,
   type FactoryRunExperienceAlert,
 } from '../../../../../lib/factory-run-experience-summary'
@@ -1976,14 +1980,12 @@ function buildFactoryPlacementContextSnapshot() {
   }
 }
 
-function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
+function applyFactoryRunPatchesToCanvas(data: unknown): {
+  changePreview?: FactoryRunChangePreview
+  nodeIds: string[]
+} {
   const result = isRecord(data) ? data : {}
-  if (result.applied === true) return []
-  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
-  if (qualityReport?.passed === false) {
-    console.warn('[factory-agent] Refused factory patches that failed quality gate', qualityReport)
-    return []
-  }
+  if (result.applied === true) return { nodeIds: [] }
   const scene = useScene.getState()
   const rawPatches = Array.isArray(result.patches) ? result.patches : []
   const patches = prepareStationRerunPatches({
@@ -1991,7 +1993,7 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
     nodes: scene.nodes as Record<string, AnyNode | undefined>,
     patches: rawPatches,
   })
-  if (patches.length === 0) return []
+  if (patches.length === 0) return { nodeIds: [] }
 
   const selectedLevelId = useViewer.getState().selection.levelId
   const safety = validateFactoryScenePatches(patches, {
@@ -2001,9 +2003,19 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
   })
   if (!safety.safe) {
     console.warn('[factory-agent] Refused unsafe scene patches', safety.issues)
-    return []
+    return { nodeIds: [] }
   }
 
+  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
+  const changePreview = buildFactoryRunChangePreview({
+    nodes: scene.nodes as Record<string, AnyNode | undefined>,
+    patches,
+    fallbackParentId: selectedLevelId,
+  })
+  if (qualityReport?.passed === false) {
+    console.warn('[factory-agent] Refused factory patches that failed quality gate', qualityReport)
+    return { changePreview, nodeIds: [] }
+  }
   const { createOps, createdIds, deleteIds, updateOps, updatedIds } =
     buildFactoryScenePatchOperations(patches, {
       existingNodeIds: Object.keys(scene.nodes),
@@ -2053,7 +2065,10 @@ function applyFactoryRunPatchesToCanvas(data: unknown): string[] {
       .filter((id) => !deleted.has(id))
     useViewer.getState().setSelection({ selectedIds: remainingSelectedIds as AnyNodeId[] })
   }
-  return [...createdIds, ...updatedIds, ...deleteIds.map(String)]
+  return {
+    changePreview,
+    nodeIds: [...createdIds, ...updatedIds, ...deleteIds.map(String)],
+  }
 }
 
 interface ChatMessage {
@@ -3889,7 +3904,10 @@ const aiChatPanelState: AiChatPanelStateSnapshot = {
 
 type FactoryE2eBridge = {
   sceneNodes: () => Record<string, unknown>
-  applyFactoryRun: (data: unknown) => string[]
+  applyFactoryRun: (data: unknown) => {
+    changePreview?: FactoryRunChangePreview
+    nodeIds: string[]
+  }
   cameraView: (view: 'isometric' | 'top' | 'side') => void
   clearSelection: () => void
   liveDataValue: (path: string) => unknown
@@ -5398,17 +5416,18 @@ export function AiChatPanel() {
 
   const completeFactoryRun = useCallback((runId: string, data: unknown) => {
     const alreadyApplied = appliedFactoryRunIdsRef.current.has(runId)
-    const appliedNodeIds = alreadyApplied ? [] : applyFactoryRunPatchesToCanvas(data)
-    if (appliedNodeIds.length > 0) appliedFactoryRunIdsRef.current.add(runId)
+    const applyResult = alreadyApplied ? { nodeIds: [] } : applyFactoryRunPatchesToCanvas(data)
+    if (applyResult.nodeIds.length > 0) appliedFactoryRunIdsRef.current.add(runId)
     const displayData =
-      isRecord(data) && (alreadyApplied || appliedNodeIds.length > 0)
+      isRecord(data) && (alreadyApplied || applyResult.nodeIds.length > 0 || applyResult.changePreview)
         ? {
             ...data,
-            applied: true,
+            applied: alreadyApplied || applyResult.nodeIds.length > 0,
+            ...(applyResult.changePreview ? { changePreview: applyResult.changePreview } : {}),
             nodeIds: Array.from(
               new Set([
                 ...(Array.isArray(data.nodeIds) ? data.nodeIds.map(String) : []),
-                ...appliedNodeIds,
+                ...applyResult.nodeIds,
               ]),
             ),
           }
@@ -5422,11 +5441,16 @@ export function AiChatPanel() {
               (item) => isRecord(item) && item.required === true,
             )
           : false
+      const qualityFailed =
+        isRecord(displayData) &&
+        isRecord(displayData.qualityReport) &&
+        displayData.qualityReport.passed === false
       const succeeded =
         isRecord(displayData) &&
         isRecord(displayData.intent) &&
         displayData.intent.action !== 'missing' &&
-        !requiredMissingAssets
+        !requiredMissingAssets &&
+        !qualityFailed
       const resultMessage: ChatMessage = {
         role: 'assistant',
         content: '',

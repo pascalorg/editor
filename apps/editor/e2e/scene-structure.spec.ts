@@ -19,7 +19,13 @@ type SceneNode = {
 
 type FactoryE2eBridge = {
   sceneNodes: () => Record<string, SceneNode>
-  applyFactoryRun: (data: unknown) => string[]
+  applyFactoryRun: (data: unknown) => {
+    changePreview?: {
+      beforeNodeCount: number
+      afterNodeCount: number
+    }
+    nodeIds: string[]
+  }
   selectNode: (nodeId: string) => void
   setPreviewMode: (enabled: boolean) => void
   resetLiveDataSource: () => void
@@ -901,13 +907,16 @@ test('station rerun result replaces the semantic assembly on the canvas', async 
                 },
               },
             ],
-          }) ?? []
+          }) ?? { nodeIds: [] }
         )
       },
       { tankId: ids.tank, rerunShellId },
     )
 
-    expect(appliedIds).toEqual(expect.arrayContaining([ids.tank, rerunShellId]))
+    expect(appliedIds.nodeIds).toEqual(expect.arrayContaining([ids.tank, rerunShellId]))
+    expect(appliedIds.changePreview?.afterNodeCount).toBeGreaterThanOrEqual(
+      appliedIds.changePreview?.beforeNodeCount ?? 0,
+    )
     await expect
       .poll(
         () =>
