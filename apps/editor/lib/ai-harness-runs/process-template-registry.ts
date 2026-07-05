@@ -191,7 +191,8 @@ export function matchProcessTemplateBySourcePack(input: {
   version?: string
   prompt?: string
 }): ProcessTemplate | undefined {
-  const matches = allProcessTemplates().filter(
+  const candidates = [...allProcessTemplates(), ...loadCloudIndustryProcessTemplates()]
+  const matches = candidates.filter(
     (template) =>
       template.sourcePack?.id === input.id &&
       (input.version == null || template.sourcePack.version === input.version),

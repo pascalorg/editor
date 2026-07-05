@@ -234,7 +234,8 @@ function findRepoRootSync(start = process.cwd()) {
   for (;;) {
     if (
       fs.existsSync(path.join(current, 'package.json')) &&
-      fs.existsSync(path.join(current, 'apps', 'editor'))
+      fs.existsSync(path.join(current, 'apps', 'editor', 'public')) &&
+      fs.existsSync(path.join(current, 'packages', 'core', 'package.json'))
     ) {
       return current
     }

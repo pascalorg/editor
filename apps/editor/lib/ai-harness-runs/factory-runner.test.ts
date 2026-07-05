@@ -13,6 +13,7 @@ import {
   buildFactoryRunResultFromSelectionEdit,
   buildFactoryRunResultFromSingleEquipmentPrompt,
   failedFactoryRunStatus,
+  requiredSourcePackFromIntentRoute,
 } from './factory-runner'
 import {
   generatePrimitiveGeometryDraft,
@@ -150,6 +151,42 @@ describe('factory runner helpers', () => {
 
   afterAll(async () => {
     await restoreIndustryPacks?.()
+  })
+
+  test('uses only installed create-factory intent routes as required source packs', () => {
+    expect(
+      requiredSourcePackFromIntentRoute({
+        kind: 'create-factory',
+        confidence: 0.9,
+        reason: 'Prompt matches refinery.',
+        requiredPack: {
+          id: 'industry.refinery.basic',
+          version: '0.1.0',
+          installed: true,
+        },
+      }),
+    ).toEqual({ id: 'industry.refinery.basic', version: '0.1.0' })
+
+    expect(
+      requiredSourcePackFromIntentRoute({
+        kind: 'create-factory',
+        confidence: 0.9,
+        reason: 'Prompt matches refinery.',
+        requiredPack: {
+          id: 'industry.refinery.basic',
+          version: '0.1.0',
+          installed: false,
+        },
+      }),
+    ).toBeUndefined()
+
+    expect(
+      requiredSourcePackFromIntentRoute({
+        kind: 'create-asset',
+        confidence: 0.9,
+        reason: 'Asset prompt.',
+      }),
+    ).toBeUndefined()
   })
 
   test('builds an equipment-focused geometry prompt', () => {

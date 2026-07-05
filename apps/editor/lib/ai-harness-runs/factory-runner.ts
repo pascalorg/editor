@@ -33,6 +33,7 @@ import type {
 } from './process-line-types'
 import { appendRunEvent, isTerminalStatus, loadRun, updateRun } from './run-store'
 import { compileSingleEquipmentPrompt } from './single-equipment-compiler'
+import type { AiHarnessRunIntentRouteEvidence } from './types'
 import { buildStationWorkflowRerunResult, parseWorkflowRerunSpec } from './workflow-rerun'
 
 const runningRuns = new Set<string>()
@@ -85,6 +86,18 @@ type PrimitiveGeometryDraftGenerator = (
 ) => Promise<PrimitiveGeometryGenerationResult>
 
 const PROCESS_PRIMITIVE_MAX_ATTEMPTS = 2
+
+export function requiredSourcePackFromIntentRoute(
+  intentRoute: AiHarnessRunIntentRouteEvidence | undefined,
+): { id: string; version?: string } | undefined {
+  if (intentRoute?.kind !== 'create-factory') return undefined
+  const requiredPack = intentRoute.requiredPack
+  if (!requiredPack?.id || requiredPack.installed !== true) return undefined
+  return {
+    id: requiredPack.id,
+    ...(requiredPack.version ? { version: requiredPack.version } : {}),
+  }
+}
 
 function withFactoryQuality(result: FactoryRunResult): FactoryRunResult {
   return { ...result, qualityReport: evaluateFactoryQuality(result) }
@@ -1141,16 +1154,12 @@ async function runFactoryRun(runId: string) {
       return
     }
 
+    const requiredSourcePack = requiredSourcePackFromIntentRoute(run.intentRoute)
     const planned = await planFactoryRequest({
       prompt: run.prompt,
       params: run.params,
       signal: controller.signal,
-      requiredSourcePack: run.intentRoute?.requiredPack
-        ? {
-            id: run.intentRoute.requiredPack.id,
-            version: run.intentRoute.requiredPack.version,
-          }
-        : undefined,
+      requiredSourcePack,
     })
 
     await appendRunEvent(runId, {
