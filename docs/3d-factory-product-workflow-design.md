@@ -670,6 +670,7 @@ Phase 9 delivery status:
 - Done: factory release QA script verifies installed intent-routed packs resolve process templates from the editor server cwd.
 - Done: factory release QA can write JSON readiness evidence and product-facing v2 release notes with `--out-dir`.
 - Done: factory release-candidate command sequences readiness, core tests, typecheck, and Biome into one local RC gate.
+- Done: product-facing Factory V2 release notes describe the user experience, V1-to-V2 changes, current boundaries, and RC commands.
 
 Validation:
 
@@ -677,6 +678,7 @@ Validation:
 - `bun run --cwd apps/editor factory:release-qa -- --out-dir apps/editor/qa-artifacts/factory-release-readiness/latest`
 - `bun run --cwd apps/editor factory:release-candidate`
 - `bun test apps/editor/scripts/factory-release-readiness.test.ts`
+- `docs/factory-v2-release-notes.md`
 - At least one refinery smoke run still reaches quality 100 before marking the release candidate.
 
 ## Implementation Priority

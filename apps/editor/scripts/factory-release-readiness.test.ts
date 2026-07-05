@@ -39,10 +39,13 @@ describe('factory release readiness script', () => {
   test('builds product-facing release notes from the readiness report', () => {
     const notes = buildFactoryReleaseNotesMarkdown(baseReport)
 
-    expect(notes).toContain('Status: Ready')
-    expect(notes).toContain('One-sentence factory prompts route through installed industry packs')
+    expect(notes).toContain('Release readiness: Ready')
+    expect(notes).toContain('## User Experience')
+    expect(notes).toContain('Users can ask for a factory in one sentence')
+    expect(notes).toContain('## Current Boundaries')
+    expect(notes).toContain('semantic profile-parts remain a valid high-quality path')
     expect(notes).toContain('industry.refinery.basic@0.1.0: refinery_basic_complex')
-    expect(notes).toContain('Refinery smoke visual QA reaches quality 100')
+    expect(notes).toContain('factory:release-candidate -- --with-visual-smoke')
   })
 
   test('verifies installed intent packs resolve templates from editor server cwd', async () => {
