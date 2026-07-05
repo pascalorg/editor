@@ -18,6 +18,7 @@ const sceneId = sceneIdArg
 const outputDir = path.resolve(outputDirArg)
 const views = JSON.parse(viewsArg)
 const resultPath = path.join(outputDir, 'screenshot-result.json')
+const screenshotTimeoutMs = 120_000
 
 async function launchBrowser() {
   let lastError
@@ -74,6 +75,7 @@ try {
   await fs.mkdir(outputDir, { recursive: true })
   browser = await launchBrowser()
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 })
+  page.setDefaultTimeout(screenshotTimeoutMs)
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text())
   })
@@ -101,6 +103,7 @@ try {
       if (!box) throw new Error('Unable to locate canvas bounds')
       const buffer = await page.screenshot({
         path: screenshotPath,
+        timeout: screenshotTimeoutMs,
         clip: {
           x: Math.max(0, box.x),
           y: Math.max(0, box.y),
@@ -116,7 +119,11 @@ try {
     }
   }
 
-  await page.screenshot({ path: path.join(outputDir, 'page.png'), fullPage: true })
+  await page.screenshot({
+    path: path.join(outputDir, 'page.png'),
+    fullPage: true,
+    timeout: screenshotTimeoutMs,
+  })
   await fs.writeFile(
     resultPath,
     `${JSON.stringify({ canvasCount, shots, consoleErrors, pageErrors, requestFailures }, null, 2)}\n`,

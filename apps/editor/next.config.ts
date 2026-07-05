@@ -1,4 +1,9 @@
 import type { NextConfig } from 'next'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const appDir = path.dirname(fileURLToPath(import.meta.url))
+const localIconifyReact = path.resolve(appDir, './lib/local-iconify-react.tsx')
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
@@ -23,7 +28,15 @@ const nextConfig: NextConfig = {
       three: './node_modules/three',
       '@react-three/fiber': './node_modules/@react-three/fiber',
       '@react-three/drei': './node_modules/@react-three/drei',
+      '@iconify/react': './lib/local-iconify-react.tsx',
     },
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      '@iconify/react': localIconifyReact,
+    }
+    return config
   },
   experimental: {
     serverActions: {
