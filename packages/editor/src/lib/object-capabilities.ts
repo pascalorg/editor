@@ -384,7 +384,9 @@ export function resolveObjectCapabilities(
   if (metadata.processId || metadata.stationId || metadata.processDomain) {
     pushUnique(sources, 'industry-pack')
   }
-  if (equipmentAssembly(metadata)) pushUnique(sources, 'semantic-assembly')
+  if (equipmentAssembly(metadata) || equipmentContract(metadata)) {
+    pushUnique(sources, 'semantic-assembly')
+  }
   if (nodeType.startsWith('factory:')) pushUnique(sources, 'factory-equipment')
   if (metadata.articraft) pushUnique(sources, 'articraft')
   if (hasLiveData(metadata)) pushUnique(sources, 'live-data')

@@ -185,14 +185,28 @@ describe('object capabilities', () => {
           provider: 'fal',
           prompt: 'make a pump from this image',
         },
+        semanticType: 'pump',
+        equipmentContract: {
+          profileId: 'generated-model.pump',
+          equipmentFamily: 'pump',
+          primarySemanticRole: 'pump_body',
+          ports: [
+            { id: 'inlet', medium: 'fluid', side: 'west' },
+            { id: 'outlet', medium: 'fluid', side: 'east' },
+          ],
+        },
       },
     })
 
     const profile = resolveObjectCapabilities(item)
 
     expect(sourceSet(profile!).has('image-to-3d')).toBe(true)
+    expect(sourceSet(profile!).has('semantic-assembly')).toBe(true)
     expect(sourceSet(profile!).has('catalog-item')).toBe(true)
     expect(capabilitiesOf(profile!).has('catalog.asset')).toBe(true)
+    expect(capabilitiesOf(profile!).has('ports')).toBe(true)
+    expect(profile?.equipmentFamily).toBe('pump')
+    expect(profile?.profileId).toBe('generated-model.pump')
   })
 
   test('formats selected capabilities for AI-safe edit context', () => {

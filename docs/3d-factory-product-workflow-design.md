@@ -621,6 +621,7 @@ Phase 7 delivery status:
 - Done: object capability reads and Scene Structure Source grouping recognize the standard asset source contract.
 - Done: Articraft joint assets expose asset-level Inspector controls for record-wide joint preview, reset, selection, and per-joint edits.
 - Done: AI geometry placement and revision replacement preserve standard asset source metadata on the new root assembly.
+- Done: recognizable image-to-3D and Articraft model assets receive semantic equipment contracts during placement.
 
 ### Phase 8: Product Polish And Safety
 

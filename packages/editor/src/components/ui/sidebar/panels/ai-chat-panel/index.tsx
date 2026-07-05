@@ -63,6 +63,7 @@ import {
 } from '../../../../../lib/asset-source-contract'
 import { buildSelectionCapabilityContext } from '../../../../../lib/object-capabilities'
 import { planSemanticLiveDataBinding } from '../../../../../lib/semantic-live-data-bindings'
+import { recognizeGeneratedModelEquipment } from '../../../../../lib/generated-model-equipment-contract'
 import { cn } from '../../../../../lib/utils'
 import useEditor from '../../../../../store/use-editor'
 
@@ -4465,6 +4466,10 @@ export function AiChatPanel() {
     const fallbackY = !hasExplicitOffset && assetTags.includes('image-to-3d')
       ? (artifact.asset.dimensions?.[1] ?? 1) / 2
       : 0
+    const semanticEquipment = recognizeGeneratedModelEquipment({
+      asset: artifact.asset,
+      prompt: artifact.userPrompt,
+    })
 
     const node = ItemNode.parse({
       name: artifact.asset.name,
@@ -4492,6 +4497,7 @@ export function AiChatPanel() {
                 prompt: artifact.userPrompt,
                 runId: artifact.runId,
               }),
+        ...(semanticEquipment ?? {}),
       },
     })
 
