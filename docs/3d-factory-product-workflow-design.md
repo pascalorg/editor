@@ -398,6 +398,8 @@ type SceneDataBinding = {
 
 ### Phase 1: Intent Router And Plan Preview
 
+Status: complete for the v2 first release.
+
 Goal:
 
 - One command entry can route to factory generation, single equipment generation, selected edit, image generation, joint asset, or data binding.
@@ -415,6 +417,25 @@ Validation:
 - `生成一个离心泵` routes to equipment generation.
 - With selected tank, `液位 60%` routes to selected edit.
 - Missing industry pack shows install gate instead of generic generation.
+
+Phase 1 delivery status:
+
+- Done: factory intent preview builds a blocked preview when a known prompt requires a missing industry pack.
+- Done: installed industry-pack factory requests produce a confirmable preview instead of a generic fallback.
+- Done: single-equipment prompts route through semantic equipment compilation before primitive fallback.
+- Done: selected-object edits produce scoped update patches instead of regenerating whole equipment.
+- Done: factory run summaries include route, fallback, apply, and missing-pack evidence for the user-facing preview/result surface.
+
+Verification:
+
+- `bun test apps/editor/lib/ai-harness-runs/intent-preview-service.test.ts`
+- `bun test apps/editor/lib/ai-harness-runs/single-equipment-compiler.test.ts`
+- `bun test apps/editor/lib/ai-harness-runs/factory-runner.test.ts`
+- `bun test apps/editor/lib/ai-harness-runs/workflow-summary.test.ts`
+
+Deferred to later polish:
+
+- Rich editable plan UI before apply. The first release has preview/apply evidence and install blocking, while deeper plan editing belongs with later workflow-template work.
 
 ### Phase 2: Scene Structure Panel
 
