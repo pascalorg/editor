@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { findRepoRoot } from '../lib/generated-assets/manifest'
 import { knownIndustryPackRequirements } from '../lib/ai-harness-runs/industry-pack-intent-resolver'
@@ -37,6 +38,40 @@ export type FactoryReleaseReadinessReport = {
     warning: number
   }
   issues: FactoryReleaseReadinessIssue[]
+}
+
+export type FactoryReleaseReadinessCliOptions = {
+  outputDir?: string
+}
+
+export function parseFactoryReleaseReadinessArgs(
+  argv: string[],
+): FactoryReleaseReadinessCliOptions {
+  const options: FactoryReleaseReadinessCliOptions = {}
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    if (!arg) continue
+    if (arg === '--out-dir') {
+      const value = argv[++index]
+      if (!value) throw new Error('--out-dir requires a path')
+      options.outputDir = value
+      continue
+    }
+    if (arg === '--help' || arg === '-h') {
+      console.log(
+        [
+          'Usage: bun apps/editor/scripts/factory-release-readiness.ts [options]',
+          '',
+          'Options:',
+          '  --out-dir <path>   Write factory-release-readiness.json and factory-v2-release-notes.md.',
+          '  --help            Show this help.',
+        ].join('\n'),
+      )
+      process.exit(0)
+    }
+    throw new Error(`Unknown option ${arg}`)
+  }
+  return options
 }
 
 function withCwd<T>(cwd: string, task: () => T): T {
@@ -186,8 +221,77 @@ export async function buildFactoryReleaseReadinessReport(): Promise<FactoryRelea
   }
 }
 
+export function buildFactoryReleaseNotesMarkdown(report: FactoryReleaseReadinessReport) {
+  const status = report.ok ? 'Ready' : 'Blocked'
+  const lines = [
+    '# Factory V2 Release Readiness',
+    '',
+    `Status: ${status}`,
+    `Generated: ${report.generatedAt}`,
+    `Repository: ${report.repoRoot}`,
+    '',
+    '## What Users Can Trust',
+    '',
+    '- One-sentence factory prompts route through installed industry packs instead of generic geometry fallback.',
+    '- Installed industry packs resolve process templates from both repository root and editor server working directories.',
+    '- Known factory templates plan through the process-line path before heavier browser visual QA runs.',
+    '- Missing or disabled industry packs remain gateable before generation.',
+    '',
+    '## Pack Coverage',
+    '',
+    `- Installed intent-routed packs: ${report.installedIntentPackCount}`,
+    `- Simulated cloud intent-routed packs: ${report.cloudIntentPackCount}`,
+    '',
+    '## Working Directory Checks',
+    '',
+    ...report.cwdChecks.map(
+      (check) => `- ${check.cwd}: ${check.enabledPackDirCount} enabled pack directories`,
+    ),
+    '',
+    '## Template Checks',
+    '',
+    ...report.templateChecks.map(
+      (check) =>
+        `- ${check.id}@${check.version}: ${check.processId ?? 'missing template'} (${check.plannerKind ?? 'unknown planner'})`,
+    ),
+    '',
+    '## Issues',
+    '',
+    ...(report.issues.length
+      ? report.issues.map((item) => `- ${item.severity}: ${item.code} - ${item.message}`)
+      : ['- None']),
+    '',
+    '## Required Validation',
+    '',
+    '- `bun run --cwd apps/editor factory:release-qa`',
+    '- `bun test apps/editor/scripts/factory-release-readiness.test.ts`',
+    '- Refinery smoke visual QA reaches quality 100 before release-candidate signoff.',
+    '',
+  ]
+  return `${lines.join('\n')}\n`
+}
+
+async function writeReleaseReadinessArtifacts(
+  report: FactoryReleaseReadinessReport,
+  outputDir: string,
+) {
+  const resolved = path.isAbsolute(outputDir)
+    ? path.resolve(outputDir)
+    : path.resolve(report.repoRoot, outputDir)
+  await fs.mkdir(resolved, { recursive: true })
+  const reportPath = path.join(resolved, 'factory-release-readiness.json')
+  const notesPath = path.join(resolved, 'factory-v2-release-notes.md')
+  await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+  await fs.writeFile(notesPath, buildFactoryReleaseNotesMarkdown(report), 'utf8')
+  return { reportPath, notesPath }
+}
+
 if (import.meta.main) {
+  const options = parseFactoryReleaseReadinessArgs(process.argv.slice(2))
   const report = await buildFactoryReleaseReadinessReport()
-  console.log(JSON.stringify(report, null, 2))
+  const artifacts = options.outputDir
+    ? await writeReleaseReadinessArtifacts(report, options.outputDir)
+    : undefined
+  console.log(JSON.stringify({ ...report, ...(artifacts ? { artifacts } : {}) }, null, 2))
   if (!report.ok) process.exitCode = 1
 }

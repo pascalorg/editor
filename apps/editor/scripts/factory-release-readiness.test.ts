@@ -1,7 +1,50 @@
 import { describe, expect, test } from 'bun:test'
-import { buildFactoryReleaseReadinessReport } from './factory-release-readiness'
+import {
+  buildFactoryReleaseNotesMarkdown,
+  buildFactoryReleaseReadinessReport,
+  parseFactoryReleaseReadinessArgs,
+  type FactoryReleaseReadinessReport,
+} from './factory-release-readiness'
+
+const baseReport: FactoryReleaseReadinessReport = {
+  ok: true,
+  generatedAt: '2026-07-05T00:00:00.000Z',
+  repoRoot: '/repo',
+  installedIntentPackCount: 1,
+  cloudIntentPackCount: 1,
+  cwdChecks: [
+    { cwd: '/repo', enabledPackDirCount: 1 },
+    { cwd: '/repo/apps/editor', enabledPackDirCount: 1 },
+  ],
+  templateChecks: [
+    {
+      id: 'industry.refinery.basic',
+      version: '0.1.0',
+      label: 'Refinery',
+      processId: 'refinery_basic_complex',
+      plannerKind: 'process_line',
+    },
+  ],
+  issueCount: { error: 0, warning: 0 },
+  issues: [],
+}
 
 describe('factory release readiness script', () => {
+  test('parses artifact output options', () => {
+    expect(parseFactoryReleaseReadinessArgs(['--out-dir', 'qa/release'])).toEqual({
+      outputDir: 'qa/release',
+    })
+  })
+
+  test('builds product-facing release notes from the readiness report', () => {
+    const notes = buildFactoryReleaseNotesMarkdown(baseReport)
+
+    expect(notes).toContain('Status: Ready')
+    expect(notes).toContain('One-sentence factory prompts route through installed industry packs')
+    expect(notes).toContain('industry.refinery.basic@0.1.0: refinery_basic_complex')
+    expect(notes).toContain('Refinery smoke visual QA reaches quality 100')
+  })
+
   test('verifies installed intent packs resolve templates from editor server cwd', async () => {
     const report = await buildFactoryReleaseReadinessReport()
 
