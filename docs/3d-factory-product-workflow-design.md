@@ -651,6 +651,30 @@ Validation:
 - User sees why a fallback happened.
 - Bad WebSocket data does not break scene rendering.
 
+### Phase 9: Release Readiness And Pack Operations
+
+Goal:
+
+- Turn the v2 factory workflow into a repeatable release candidate, not a set of manually verified demos.
+
+Deliverables:
+
+- Factory release-readiness gate for installed/cloud industry packs.
+- Server-cwd-safe pack and template resolution checks.
+- Repeatable smoke evidence for one-sentence factory generation.
+- Clear separation between fast release checks and heavier browser visual QA.
+- Product-facing release notes for what a user can trust in v2.
+
+Phase 9 delivery status:
+
+- Done: factory release QA script verifies installed intent-routed packs resolve process templates from the editor server cwd.
+
+Validation:
+
+- `bun run --cwd apps/editor factory:release-qa`
+- `bun test apps/editor/scripts/factory-release-readiness.test.ts`
+- At least one refinery smoke run still reaches quality 100 before marking the release candidate.
+
 ## Implementation Priority
 
 Recommended first slice:
