@@ -61,6 +61,10 @@ import {
   articraftAssetSource,
   imageTo3DAssetSource,
 } from '../../../../../lib/asset-source-contract'
+import {
+  summarizeFactoryRunExperience,
+  type FactoryRunExperienceAlert,
+} from '../../../../../lib/factory-run-experience-summary'
 import { buildSelectionCapabilityContext } from '../../../../../lib/object-capabilities'
 import { planSemanticLiveDataBinding } from '../../../../../lib/semantic-live-data-bindings'
 import { recognizeGeneratedModelEquipment } from '../../../../../lib/generated-model-equipment-contract'
@@ -1365,88 +1369,7 @@ function formatPrimitiveRunMessage(analysis: string | undefined, generate: strin
 }
 
 function formatFactoryRunResult(data: unknown) {
-  const result = isRecord(data) ? data : {}
-  const patches = Array.isArray(result.patches) ? result.patches : []
-  const createPatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'create').length
-  const updatePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'update').length
-  const deletePatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'delete').length
-  const nodeIds = Array.isArray(result.nodeIds)
-    ? result.nodeIds.map((id) => String(id)).filter(Boolean)
-    : []
-  const missingAssets = Array.isArray(result.missingAssets) ? result.missingAssets : []
-  const editSummary = Array.isArray(result.editSummary)
-    ? result.editSummary.map(String).filter(Boolean).slice(0, 6)
-    : []
-  const geometryRunId =
-    typeof result.geometryRunId === 'string' ? result.geometryRunId : undefined
-  const applied = result.applied === true
-  const artifact = isRecord(result.artifact) ? result.artifact : undefined
-  const artifactTitle =
-    typeof artifact?.title === 'string'
-      ? artifact.title
-      : typeof artifact?.id === 'string'
-        ? artifact.id
-        : undefined
-  const missingLines = missingAssets
-    .map((item) => {
-      if (!isRecord(item)) return null
-      const name = typeof item.name === 'string' ? item.name : 'unknown'
-      const reason = typeof item.reason === 'string' ? item.reason : 'not resolved'
-      return `- ${name}: ${reason}`
-    })
-    .filter(Boolean)
-  const layoutDiagnostics = isRecord(result.layoutDiagnostics)
-    ? result.layoutDiagnostics
-    : undefined
-  const layoutDiagnosticCount = Array.isArray(layoutDiagnostics?.diagnostics)
-    ? layoutDiagnostics.diagnostics.length
-    : 0
-  const layoutStrategy = isRecord(result.layoutStrategy) ? result.layoutStrategy : undefined
-  const layoutStyle =
-    typeof layoutStrategy?.style === 'string' ? ` via ${layoutStrategy.style}` : ''
-  const layoutLine = layoutDiagnostics
-    ? `- Layout: ${layoutDiagnostics.fits === true ? 'fits' : 'needs review'}${layoutStyle} (${layoutDiagnosticCount} diagnostics)`
-    : undefined
-  const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
-  const qualityScore =
-    typeof qualityReport?.score === 'number' ? Math.round(qualityReport.score) : undefined
-  const qualityPassed =
-    typeof qualityReport?.passed === 'boolean' ? qualityReport.passed : undefined
-  const qualityIssues = Array.isArray(qualityReport?.issues) ? qualityReport.issues : []
-  const qualityIssueLines = qualityIssues
-    .slice(0, 3)
-    .map((item) => {
-      if (!isRecord(item)) return null
-      const severity = typeof item.severity === 'string' ? item.severity : 'issue'
-      const message = typeof item.message === 'string' ? item.message : undefined
-      return message ? `- ${severity}: ${message}` : null
-    })
-    .filter(Boolean)
-  const qualityLine =
-    qualityScore == null
-      ? undefined
-      : `- Quality: ${qualityPassed ? 'passed' : 'needs review'} (${qualityScore}/100, ${qualityIssues.length} issues)`
-
-  return [
-    '**Factory draft:**',
-    artifactTitle ? `- Geometry artifact: ${artifactTitle}` : '- Geometry artifact: none',
-    updatePatchCount > 0 || deletePatchCount > 0
-      ? `- Scene patches: ${patches.length} (${createPatchCount} create, ${updatePatchCount} update, ${deletePatchCount} delete)`
-      : `- Create patches: ${createPatchCount}`,
-    layoutLine,
-    qualityLine,
-    nodeIds.length ? `- Node ids: ${nodeIds.join(', ')}` : '- Node ids: none',
-    geometryRunId ? `- Geometry run: ${geometryRunId}` : undefined,
-    `- Applied to canvas: ${applied ? 'yes' : 'no'}`,
-    editSummary.length ? `\n**Edits:**\n${editSummary.map((line) => `- ${line}`).join('\n')}` : undefined,
-    missingLines.length ? `\n**Missing assets:**\n${missingLines.join('\n')}` : undefined,
-    qualityIssueLines.length ? `\n**Quality issues:**\n${qualityIssueLines.join('\n')}` : undefined,
-    applied
-      ? '\nPatches were applied to the current canvas.'
-      : '\nPatches are prepared for review only. Nothing was applied to the canvas.',
-  ]
-    .filter(Boolean)
-    .join('\n')
+  return summarizeFactoryRunExperience(data).details
 }
 
 type FactoryRunSummary = {
@@ -1456,6 +1379,7 @@ type FactoryRunSummary = {
   description: string
   steps: Array<{ label: string; status: 'done' | 'running' | 'pending' | 'failed' }>
   metrics: Array<{ label: string; value: string }>
+  alerts?: FactoryRunExperienceAlert[]
   resourceOptions?: Array<{
     id: string
     label: string
@@ -1755,6 +1679,7 @@ function buildFactoryProgressSummary(input: {
 }
 
 function buildFactoryResultSummary(data: unknown): FactoryRunSummary {
+  const experience = summarizeFactoryRunExperience(data)
   const result = isRecord(data) ? data : {}
   const patches = Array.isArray(result.patches) ? result.patches : []
   const createPatchCount = patches.filter((patch) => isRecord(patch) && patch.op === 'create').length
@@ -1767,7 +1692,9 @@ function buildFactoryResultSummary(data: unknown): FactoryRunSummary {
     ? result.created.map((item) => String(item)).filter(Boolean)
     : []
   const missingAssets = Array.isArray(result.missingAssets) ? result.missingAssets : []
-  const requiredMissingAssets = missingAssets.some((item) => isRecord(item) && item.required === true)
+  const requiredMissingAssets =
+    missingAssets.some((item) => isRecord(item) && item.required === true) ||
+    Boolean(experience.installGuidance)
   const qualityReport = isRecord(result.qualityReport) ? result.qualityReport : undefined
   const qualityScore =
     typeof qualityReport?.score === 'number' ? Math.round(qualityReport.score) : undefined
@@ -1787,9 +1714,9 @@ function buildFactoryResultSummary(data: unknown): FactoryRunSummary {
         : undefined
   const intent = isRecord(result.intent) ? result.intent : undefined
   const action = typeof intent?.action === 'string' ? intent.action : undefined
-  const succeeded = action !== 'missing' && !requiredMissingAssets
-  const applied = result.applied === true
-  const details = formatFactoryRunResult(result)
+  const succeeded = action !== 'missing' && !requiredMissingAssets && experience.quality?.passed !== false
+  const applied = experience.applied
+  const details = experience.details
 
   const readableCreated = created.slice(0, 4).join('、')
   const description = succeeded
@@ -1845,6 +1772,7 @@ function buildFactoryResultSummary(data: unknown): FactoryRunSummary {
         : []),
     ],
     metrics,
+    alerts: experience.alerts,
     details,
   }
 }
@@ -3393,6 +3321,36 @@ function FactoryRunSummaryCard({
           )
         })}
       </div>
+
+      {summary.alerts?.length ? (
+        <div className="space-y-1">
+          {summary.alerts.map((alert, index) => {
+            const alertClass =
+              alert.tone === 'danger'
+                ? 'border-red-400/35 bg-red-400/10 text-red-100'
+                : alert.tone === 'warning'
+                  ? 'border-amber-400/35 bg-amber-400/10 text-amber-100'
+                  : 'border-sky-400/35 bg-sky-400/10 text-sky-100'
+            const alertIcon =
+              alert.tone === 'danger'
+                ? 'mdi:alert-octagon-outline'
+                : alert.tone === 'warning'
+                  ? 'mdi:alert-outline'
+                  : 'mdi:information-outline'
+            return (
+              <div className={cn('rounded-lg border px-2 py-1.5 text-[10px]', alertClass)} key={`${alert.label}-${index}`}>
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Icon className="size-3.5 shrink-0" icon={alertIcon} />
+                  <span className="min-w-0 flex-1 truncate">{alert.label}</span>
+                </div>
+                {alert.detail ? (
+                  <div className="mt-1 whitespace-pre-wrap leading-snug opacity-80">{alert.detail}</div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
 
       {summary.metrics.length > 0 ? (
         <div className="grid grid-cols-2 gap-1.5">

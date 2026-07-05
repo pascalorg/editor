@@ -637,6 +637,10 @@ Deliverables:
 - Missing industry pack install guidance.
 - Quality report summary.
 
+Phase 8 delivery status:
+
+- Done: factory run results now share a tested experience summary for quality, fallback warnings, missing pack guidance, apply state, and debug details.
+
 Validation:
 
 - Large generation can be undone in one step.
