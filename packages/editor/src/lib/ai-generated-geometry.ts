@@ -1,6 +1,7 @@
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
 import useViewer from '@pascal-app/viewer/store'
 import useEditor from '../store/use-editor'
+import { readAssetSourceContract, type AssetSourceContract } from './asset-source-contract'
 import type { GeneratedGeometryArtifact } from './ai-generated-geometry-core'
 import {
   buildGeneratedGeometryCreatePatches,
@@ -74,14 +75,24 @@ export function removeGeneratedGeometryArtifactFromLocalLibrary(artifactId: stri
   writeSavedGeneratedGeometryArtifacts(next)
 }
 
+function replacementAssetSourceFromScene(nodeIds: string[]): AssetSourceContract | undefined {
+  const nodes = useScene.getState().nodes
+  for (const id of nodeIds) {
+    const source = readAssetSourceContract(nodes[id as AnyNodeId]?.metadata)
+    if (source && source.kind !== 'ai-geometry') return source
+  }
+  return undefined
+}
+
 export function replaceGeneratedGeometryArtifactOnCanvas(artifact: GeneratedGeometryArtifact) {
   const scene = useScene.getState()
   const idsToReplace = (artifact.replaceNodeIds ?? [])
     .filter((id) => Boolean(scene.nodes[id as AnyNodeId]))
     .map((id) => id as AnyNodeId)
+  const assetSource = replacementAssetSourceFromScene(idsToReplace)
 
   if (idsToReplace.length > 0) scene.deleteNodes(idsToReplace)
-  return placeGeneratedGeometryArtifact(artifact)
+  return placeGeneratedGeometryArtifact(artifact, { assetSource })
 }
 
 export function shouldUseRevisionContext(text: string, artifact: GeneratedGeometryArtifact | null) {
@@ -263,6 +274,7 @@ function beginGeneratedGeometryPlacement(root: AnyNode) {
 
 type PlaceGeneratedGeometryOptions = {
   startPlacement?: boolean
+  assetSource?: AssetSourceContract
 }
 
 export function placeGeneratedGeometryArtifact(
@@ -273,6 +285,7 @@ export function placeGeneratedGeometryArtifact(
   const plan = buildGeneratedGeometryCreatePatches(artifact, {
     parentId: levelId ?? undefined,
     generatedBy: 'ai-chat',
+    assetSource: options.assetSource,
   })
   if (!plan.patches.length || !plan.rootNode) return { nodeIds: [] as string[], created: plan.created }
 

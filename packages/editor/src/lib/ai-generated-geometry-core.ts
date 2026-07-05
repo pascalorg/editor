@@ -9,6 +9,7 @@ import type {
   Vec3,
 } from '@pascal-app/core'
 import { normalizePrimitiveKindFromRegistry } from '@pascal-app/core/lib/primitive-registry'
+import type { AssetSourceContract } from './asset-source-contract'
 
 export interface GeneratedGeometryShapeSpec {
   kind: string
@@ -98,6 +99,7 @@ export type GeneratedGeometryArtifact = {
   semanticSummary?: string
   visualQualitySummary?: string
   profileQuality?: DeviceProfileQualityScore
+  assetSource?: AssetSourceContract
   editHistory?: GeneratedGeometryEdit[]
   placedNodeIds?: string[]
   placedAt?: string

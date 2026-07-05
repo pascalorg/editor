@@ -24,6 +24,7 @@ import type {
   GeneratedGeometryArtifact,
   GeneratedGeometryShapeSpec,
 } from './ai-generated-geometry-core'
+import type { AssetSourceContract } from './asset-source-contract'
 
 type ShapeSpec = GeneratedGeometryShapeSpec
 
@@ -630,6 +631,7 @@ export type GeneratedGeometryPlacementSpec = {
   position?: Vec3
   rotation?: Vec3
   generatedBy?: string
+  assetSource?: AssetSourceContract
   metadata?: Record<string, unknown>
 }
 
@@ -665,12 +667,21 @@ function generatedRootMetadata(
   partCount: number,
 ) {
   const dynamicLevelGeometry = generatedTankLevelGeometry(artifact)
+  const assetSource =
+    options.assetSource ??
+    artifact.assetSource ??
+    {
+      kind: 'ai-geometry',
+      artifactId: artifact.id,
+      prompt: artifact.userPrompt,
+    }
   return {
     generatedBy: options.generatedBy ?? 'ai-chat',
     sourceTool: artifact.sourceTool,
     sourceArgs: artifact.sourceArgs,
     sourcePrompt: artifact.userPrompt,
     artifactId: artifact.id,
+    assetSource,
     partCount,
     ...(dynamicLevelGeometry
       ? {

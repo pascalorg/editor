@@ -59,6 +59,11 @@ describe('ai generated geometry nodes', () => {
       generatedBy: 'factory-agent',
       sourceTool: 'compose_assembly',
       artifactId: 'ai_geometry_patch_test',
+      assetSource: {
+        kind: 'ai-geometry',
+        artifactId: 'ai_geometry_patch_test',
+        prompt: 'generate a conveyor',
+      },
       partCount: 2,
       lineId: 'line_a',
     })
@@ -66,6 +71,27 @@ describe('ai generated geometry nodes', () => {
     expect(plan.patches[1]?.parentId).toBe(plan.rootNode?.id)
     expect(plan.patches[2]?.parentId).toBe(plan.rootNode?.id)
     expect(plan.nodeIds).toEqual(plan.patches.map((patch) => patch.node.id))
+  })
+
+  test('preserves explicit generated asset source metadata on the root assembly', () => {
+    const plan = buildGeneratedGeometryCreatePatches(artifact(), {
+      assetSource: {
+        kind: 'image-to-3d',
+        assetId: 'image_asset_01',
+        provider: 'tripo',
+        prompt: 'image pump',
+      },
+    })
+
+    expect(plan.rootNode?.metadata).toMatchObject({
+      artifactId: 'ai_geometry_patch_test',
+      assetSource: {
+        kind: 'image-to-3d',
+        assetId: 'image_asset_01',
+        provider: 'tripo',
+        prompt: 'image pump',
+      },
+    })
   })
 
   test('keeps assembly child nodes local to the artifact assembly position', () => {

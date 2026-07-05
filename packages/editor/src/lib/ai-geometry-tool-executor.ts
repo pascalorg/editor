@@ -64,6 +64,7 @@ import {
 import { isOpenAssemblyCapabilityRequest } from './ai-chat-harness/capability-planner'
 import { parseGeometryIntent } from './ai-chat-harness/geometry-intent'
 import { planGeometryIntent } from './ai-chat-harness/geometry-intent-planner'
+import type { AssetSourceContract } from './asset-source-contract'
 import {
   computeGeneratedAssemblyPosition,
   createGeneratedGeometryId,
@@ -98,6 +99,19 @@ export type GeometryToolExecutorOptions = {
     unknownTool?: (name: string) => string
     noShapes?: string
     tooComplex?: (actual: number, max: number) => string
+  }
+}
+
+function revisionAssetSourceForGeneratedArtifact(
+  context: GeometryToolExecutionContext,
+  artifactId: string,
+): AssetSourceContract {
+  const previous = context.revisionTarget?.assetSource
+  if (previous && previous.kind !== 'ai-geometry') return previous
+  return {
+    kind: 'ai-geometry',
+    artifactId,
+    prompt: context.prompt,
   }
 }
 
@@ -6663,12 +6677,14 @@ export function executeGeometryToolCall(
   const semanticSummary = formatSemanticValidationSummary(semanticValidation)
   const visualQualitySummary = formatVisualQualitySummary(visualQuality)
   const profileQualitySummary = formatProfileQualitySummary(profileQuality)
+  const artifactId = createGeneratedGeometryId()
   const artifact: GeneratedGeometryArtifact = {
-    id: createGeneratedGeometryId(),
+    id: artifactId,
     title,
     sourceTool: name,
     sourceArgs: publicSourceArgs(args),
     userPrompt: context.prompt,
+    assetSource: revisionAssetSourceForGeneratedArtifact(context, artifactId),
     revisionOf: context.revisionOf,
     version:
       context.revisionVersion != null ? context.revisionVersion + 1 : context.revisionOf ? 2 : 1,
