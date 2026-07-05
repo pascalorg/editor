@@ -22,6 +22,8 @@ import {
   MICROWAVE_STANDARD_WIDTH,
   PULL_OUT_PANTRY_STANDARD_WIDTH,
   replaceCabinetCompartmentStack,
+  SINK_STANDARD_WIDTH,
+  sinkCabinetStack,
   stackForCabinet,
   TALL_CABINET_CARCASS_HEIGHT,
 } from './stack'
@@ -47,6 +49,7 @@ export function resolveCompartmentTransition({
   const leavingFridge = current ? isFridgeCompartmentType(current.type) : false
   const enteringFridge = isFridgeCompartmentType(next.type)
   const enteringCooktop = isCooktopCompartmentType(next.type)
+  const enteringSink = next.type === 'sink'
   const leavingPullOutPantry = current?.type === 'pull-out-pantry'
   const enteringPullOutPantry = next.type === 'pull-out-pantry'
   const leavingHood = current ? isHoodCompartmentType(current.type) : false
@@ -127,18 +130,20 @@ export function resolveCompartmentTransition({
       ? fridgeCabinetStack(next.type as CabinetFridgeCompartmentType)
       : enteringCooktop && stack.length === 1
         ? cooktopCabinetStack(next.type as CabinetCooktopCompartmentType)
-        : enteringPullOutPantry
-          ? [{ ...next, height: TALL_CARCASS_HEIGHT }]
-          : enteringHood
-            ? [next]
-            : replaceCabinetCompartmentStack(
-                node,
-                index,
-                next,
-                node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
-                  ? 'drawer'
-                  : 'door',
-              ),
+        : enteringSink && stack.length === 1
+          ? sinkCabinetStack()
+          : enteringPullOutPantry
+            ? [{ ...next, height: TALL_CARCASS_HEIGHT }]
+            : enteringHood
+              ? [next]
+              : replaceCabinetCompartmentStack(
+                  node,
+                  index,
+                  next,
+                  node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'base'
+                    ? 'drawer'
+                    : 'door',
+                ),
     modulePatch: {
       ...tallApplianceModulePatch,
       ...standardModulePatch,
@@ -147,6 +152,7 @@ export function resolveCompartmentTransition({
       ...(next.type === 'microwave' ? { width: MICROWAVE_STANDARD_WIDTH } : {}),
       ...(next.type === 'dishwasher' ? { width: DISHWASHER_STANDARD_WIDTH } : {}),
       ...(enteringCooktop ? { width: COOKTOP_STANDARD_WIDTH } : {}),
+      ...(enteringSink ? { width: SINK_STANDARD_WIDTH } : {}),
       ...(enteringPullOutPantry ? { width: PULL_OUT_PANTRY_STANDARD_WIDTH } : {}),
       ...(isFridgeCompartmentType(next.type) && next.type !== 'fridge-double'
         ? { width: FRIDGE_COLUMN_WIDTH }

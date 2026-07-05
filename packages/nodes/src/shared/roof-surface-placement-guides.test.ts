@@ -11,21 +11,13 @@ mock.module('@pascal-app/editor', () => ({
   },
 }))
 
+// bun's mock.module is process-global: it replaces '@pascal-app/viewer' for
+// every test file that runs after this one in the same `bun test` invocation.
+// Spread the real module so only the fields this test needs are stubbed —
+// a bare stub (Brush: class {}) breaks unrelated suites (cabinet sink CSG).
+const actualViewer = await import('@pascal-app/viewer')
 mock.module('@pascal-app/viewer', () => ({
-  Brush: class {},
-  SUBTRACTION: 0,
-  csgEvaluator: {
-    evaluate: () => ({ geometry: { dispose: () => undefined } }),
-  },
-  csgGeometry: () => ({
-    clone: () => ({
-      addGroup: () => undefined,
-      clearGroups: () => undefined,
-      getIndex: () => null,
-      translate: () => undefined,
-    }),
-  }),
-  prepareBrushForCSG: () => undefined,
+  ...actualViewer,
   useViewer: {
     getState: () => ({
       selection: {},

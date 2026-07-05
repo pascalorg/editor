@@ -1,8 +1,10 @@
 import type { AnyNode, CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
-import { Group } from 'three'
+import { Group, type Mesh } from 'three'
 import { getRunSpans } from '../run-layout'
+import { compartmentSinkLayout, stackForCabinet } from '../stack'
 import { addBox, getCabinetSlotMaterials } from './shared'
+import { cutSinkIntoCountertop, type SinkBowlSpec, sinkBowls } from './sink'
 
 const ADJACENT_RUN_EPSILON = 1e-4
 const ADJACENT_RUN_Z_TOLERANCE = 0.03
@@ -151,7 +153,7 @@ export function buildCabinetRunGeometry(
     }
 
     if (node.withCountertop && span.hasCountertop && node.countertopThickness > 0) {
-      addBox(
+      const countertop = addBox(
         group,
         [
           span.width + leftOverhang + rightOverhang,
@@ -167,6 +169,42 @@ export function buildCabinetRunGeometry(
         'cabinet-run-countertop',
         'countertop',
       )
+
+      // Undermount sink modules cut their bowl openings out of the run's
+      // slab (modules inside a run never own a countertop themselves).
+      const sinkCuts: Array<{ bowls: SinkBowlSpec[]; x: number; z: number }> = []
+      for (const module of modules) {
+        if (module.position[0] < span.minX - 1e-4 || module.position[0] > span.maxX + 1e-4) {
+          continue
+        }
+        const sink = stackForCabinet(module).find((compartment) => compartment.type === 'sink')
+        if (!sink) continue
+        sinkCuts.push({
+          bowls: sinkBowls(
+            compartmentSinkLayout(sink),
+            Math.max(0.01, module.width - 2 * module.boardThickness),
+            module.depth,
+          ),
+          x: module.position[0],
+          z: module.position[2],
+        })
+      }
+      if (sinkCuts.length > 0) {
+        group.remove(countertop)
+        let cut: Mesh = countertop
+        for (const sinkCut of sinkCuts) {
+          const next = cutSinkIntoCountertop(
+            cut,
+            sinkCut.bowls,
+            sinkCut.x,
+            sinkCut.z,
+            node.countertopThickness,
+          )
+          cut.geometry.dispose()
+          cut = next
+        }
+        group.add(cut)
+      }
     }
   }
 

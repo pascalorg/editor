@@ -24,6 +24,7 @@ import {
   MICROWAVE_STANDARD_HEIGHT,
   PULL_OUT_PANTRY_DEFAULT_SHELF_COUNT,
   PULL_OUT_PANTRY_STANDARD_WIDTH,
+  SINK_STANDARD_WIDTH,
   TALL_CABINET_CARCASS_HEIGHT,
 } from '../stack'
 
@@ -1378,5 +1379,152 @@ describe('buildCabinetGeometry — range hood compartments', () => {
     const visorBounds = worldBounds(visor)
     expect(visorBounds.max.x - visorBounds.min.x).toBeCloseTo(node.width)
     expect(visorBounds.max.y).toBeCloseTo(HOOD_CURVED_TOTAL_HEIGHT)
+  })
+})
+
+describe('buildCabinetGeometry — sink compartments', () => {
+  const sinkStack = [
+    { id: 'door', type: 'door' as const, doorType: 'double' as const },
+    { id: 'sink', type: 'sink' as const, sinkLayout: 'single' as const },
+  ]
+
+  function sinkModule(overrides: Record<string, unknown> = {}) {
+    return CabinetModuleNode.parse({
+      width: SINK_STANDARD_WIDTH,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      withCountertop: true,
+      countertopThickness: 0.02,
+      stack: sinkStack,
+      ...overrides,
+    })
+  }
+
+  test('sink module emits basin walls, drain, and faucet', () => {
+    const group = buildCabinetGeometry(sinkModule(), undefined, 'rendered', false)
+
+    expect(findMeshByName(group, 'cabinet-sink-1-0-basin-bottom')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-0-basin-left')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-0-basin-front')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-0-drain')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-faucet-base')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-faucet-gooseneck')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-cap')).toBeDefined()
+    expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')).toBeDefined()
+  })
+
+  test('faucet handle uses a horizontal mixer barrel with an upright pin lever', () => {
+    const group = buildCabinetGeometry(sinkModule(), undefined, 'rendered', false)
+    const barrel = findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel')
+    const pin = findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')
+    const cap = findMeshByName(group, 'cabinet-sink-1-faucet-handle-cap')
+
+    const barrelBounds = worldBounds(barrel)
+    const pinBounds = worldBounds(pin)
+    const capBounds = worldBounds(cap)
+
+    expect(barrel.rotation.z).toBeCloseTo(Math.PI / 2)
+    expect(barrelBounds.max.x - barrelBounds.min.x).toBeGreaterThan(
+      barrelBounds.max.y - barrelBounds.min.y,
+    )
+    expect(pinBounds.max.y - pinBounds.min.y).toBeGreaterThan(pinBounds.max.x - pinBounds.min.x)
+    expect(pinBounds.min.y).toBeGreaterThan(barrelBounds.min.y)
+    expect(capBounds.min.x).toBeGreaterThan(barrelBounds.max.x - 0.012)
+  })
+
+  test('double layout emits two basins, single emits one', () => {
+    const single = buildCabinetGeometry(sinkModule(), undefined, 'rendered', false)
+    expect(() => findMeshByName(single, 'cabinet-sink-1-1-basin-bottom')).toThrow()
+
+    const double = buildCabinetGeometry(
+      sinkModule({
+        stack: [sinkStack[0], { id: 'sink', type: 'sink', sinkLayout: 'double' }],
+      }),
+      undefined,
+      'rendered',
+      false,
+    )
+    expect(findMeshByName(double, 'cabinet-sink-1-0-basin-bottom')).toBeDefined()
+    expect(findMeshByName(double, 'cabinet-sink-1-1-basin-bottom')).toBeDefined()
+  })
+
+  test('sink module skips the carcass top panel and the deck under the sink row', () => {
+    const group = buildCabinetGeometry(sinkModule(), undefined, 'rendered', false)
+    const names: string[] = []
+    group.traverse((object) => names.push(object.name))
+    expect(names).not.toContain('cabinet-top')
+    expect(names).not.toContain('cabinet-deck-0')
+  })
+
+  test('module countertop is CSG-cut with a bowl opening', () => {
+    const node = sinkModule()
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const countertop = findMeshByName(group, 'cabinet-countertop')
+
+    // A plain box has 24 vertices; the cut slab has the bowl ring baked in.
+    const position = countertop.geometry.getAttribute('position') as BufferAttribute
+    expect(position.count).toBeGreaterThan(24)
+
+    // No countertop surface remains across the bowl center.
+    const topY = (node.showPlinth ? node.plinthHeight : 0) + node.carcassHeight
+    const hasSurfaceAtBowlCenter = hasVertex(
+      countertop,
+      (point) => Math.abs(point.x) < 0.05 && Math.abs(point.z) < 0.05 && point.y > topY - 0.001,
+    )
+    expect(hasSurfaceAtBowlCenter).toBe(false)
+  })
+
+  test('run countertop is cut above a sink module', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_sink-run',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_plain',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [-0.6, 0.1, 0],
+        width: 0.6,
+        depth: 0.58,
+        carcassHeight: 0.72,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_sink',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [0.1, 0.1, 0],
+        width: SINK_STANDARD_WIDTH,
+        depth: 0.58,
+        carcassHeight: 0.72,
+        stack: sinkStack,
+      }),
+    ]
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+    const countertop = findMeshByName(group, 'cabinet-run-countertop')
+    const position = countertop.geometry.getAttribute('position') as BufferAttribute
+    expect(position.count).toBeGreaterThan(24)
+
+    const topY = 0.1 + 0.72 + 0.02
+    // Open above the sink module center, intact above the plain module.
+    expect(
+      hasVertex(
+        countertop,
+        (point) =>
+          Math.abs(point.x - 0.1) < 0.05 && Math.abs(point.z) < 0.05 && point.y > topY - 0.001,
+      ),
+    ).toBe(false)
+    const bounds = worldBounds(countertop)
+    expect(bounds.min.x).toBeLessThan(-0.85)
+    expect(bounds.max.x).toBeGreaterThan(0.45)
   })
 })

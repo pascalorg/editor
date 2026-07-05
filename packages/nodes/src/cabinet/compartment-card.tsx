@@ -18,6 +18,7 @@ import {
   compartmentDrawerCount,
   compartmentPullOutPantryRackStyle,
   compartmentShelfCount,
+  compartmentSinkLayout,
   FRIDGE_COLUMN_HEIGHT,
   isCooktopCompartmentType,
   isFridgeCompartmentType,
@@ -25,6 +26,7 @@ import {
   newCabinetCompartment,
   type PULL_OUT_PANTRY_RACK_STYLES,
   patchCompartment,
+  type SinkLayout,
 } from './stack'
 
 const COMPARTMENT_TYPE_OPTIONS = [
@@ -35,6 +37,7 @@ const COMPARTMENT_TYPE_OPTIONS = [
   { value: 'microwave', label: 'Micro' },
   { value: 'dishwasher', label: 'Washer' },
   { value: 'cooktop', label: 'Hob' },
+  { value: 'sink', label: 'Sink' },
   { value: 'pull-out-pantry', label: 'Pullout' },
 ] as const
 
@@ -71,6 +74,12 @@ const INDUCTION_COOKTOP_LAYOUT_OPTIONS = [
   { value: 'induction-2zone', label: '2' },
   { value: 'induction-4zone', label: '4' },
 ] as const satisfies Array<{ value: CooktopLayout; label: string }>
+
+const SINK_LAYOUT_OPTIONS = [
+  { value: 'single', label: 'Single' },
+  { value: 'double', label: 'Double' },
+  { value: 'double-offset', label: '60/40' },
+] as const satisfies Array<{ value: SinkLayout; label: string }>
 
 const PULL_OUT_PANTRY_RACK_STYLE_OPTIONS = [
   { value: 'wire', label: 'Wire' },
@@ -266,7 +275,7 @@ export function CompartmentCard({
         />
       </div>
 
-      {!isHood && !isCooktop && (
+      {!isHood && !isCooktop && type !== 'sink' && (
         <div className="pb-2">
           <SliderControl
             label="Height"
@@ -427,6 +436,22 @@ export function CompartmentCard({
               }
             />
           )}
+        </div>
+      )}
+
+      {type === 'sink' && (
+        <div>
+          <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Bowls
+          </div>
+          <SegmentedControl
+            onChange={(value) => onReplace(patchCompartment(compartment, { sinkLayout: value }))}
+            options={SINK_LAYOUT_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+            }))}
+            value={compartmentSinkLayout(compartment)}
+          />
         </div>
       )}
 

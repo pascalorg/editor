@@ -8,6 +8,8 @@ import {
   fridgeCabinetStack,
   MICROWAVE_STANDARD_WIDTH,
   newCabinetCompartment,
+  SINK_STANDARD_WIDTH,
+  sinkCabinetStack,
   TALL_CABINET_CARCASS_HEIGHT,
 } from './stack'
 
@@ -17,6 +19,7 @@ export type CabinetPresetId =
   | 'dishwasher'
   | 'cooktop-gas'
   | 'cooktop-induction'
+  | 'sink-base'
   | 'tall-pantry'
   | 'oven-tower'
   | 'fridge-single'
@@ -109,6 +112,19 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       handlePosition: 'top',
       frontOverlay: 'full',
       stack: cooktopCabinetStack('cooktop-induction'),
+    }),
+  },
+  {
+    id: 'sink-base',
+    label: 'Sink',
+    createPatch: (run) => ({
+      ...baseShared(run),
+      name: 'Sink Base',
+      width: SINK_STANDARD_WIDTH,
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      frontOverlay: 'full',
+      stack: sinkCabinetStack(),
     }),
   },
   {

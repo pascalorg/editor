@@ -9,6 +9,7 @@ export const CABINET_COMPARTMENT_TYPES = [
   'oven',
   'microwave',
   'dishwasher',
+  'sink',
   'cooktop-gas',
   'cooktop-induction',
   'pull-out-pantry',
@@ -32,6 +33,8 @@ export type CabinetCooktopCompartmentType = Extract<
   CabinetCompartmentType,
   'cooktop-gas' | 'cooktop-induction'
 >
+export const SINK_LAYOUTS = ['single', 'double', 'double-offset'] as const
+export type SinkLayout = (typeof SINK_LAYOUTS)[number]
 export const COOKTOP_LAYOUTS = [
   'gas-2burner',
   'gas-4burner',
@@ -60,6 +63,8 @@ export const MICROWAVE_DEFAULT_HEIGHT = MICROWAVE_STANDARD_HEIGHT
 export const DISHWASHER_STANDARD_WIDTH = 0.6
 export const DISHWASHER_STANDARD_HEIGHT = 0.72
 export const COOKTOP_STANDARD_WIDTH = 0.75
+export const SINK_STANDARD_WIDTH = 0.8
+export const SINK_DEFAULT_LAYOUT: SinkLayout = 'single'
 export const COOKTOP_DEFAULT_HEIGHT = 0.08
 export const COOKTOP_DEFAULT_GAS_LAYOUT: CooktopLayout = 'gas-5burner-wok'
 export const COOKTOP_DEFAULT_INDUCTION_LAYOUT: CooktopLayout = 'induction-4zone'
@@ -128,6 +133,7 @@ export function newCabinetCompartment<T extends CabinetCompartmentType>(
       return { id: makeId(), type: 'microwave', height: MICROWAVE_DEFAULT_HEIGHT }
     if (type === 'dishwasher')
       return { id: makeId(), type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT }
+    if (type === 'sink') return { id: makeId(), type: 'sink', sinkLayout: SINK_DEFAULT_LAYOUT }
     if (type === 'cooktop-gas')
       return {
         id: makeId(),
@@ -184,6 +190,10 @@ export function cooktopCabinetStack(type: CabinetCooktopCompartmentType): Cabine
   return [{ ...newCabinetCompartment('drawer'), drawerCount: 2 }, newCabinetCompartment(type)]
 }
 
+export function sinkCabinetStack(): CabinetCompartment[] {
+  return [{ ...newCabinetCompartment('door'), doorType: 'double' }, newCabinetCompartment('sink')]
+}
+
 /**
  * Read an optional field off the compartment union without narrowing. The
  * `compartment*` accessors below are deliberately defensive — they accept any
@@ -203,6 +213,7 @@ type AnyCompartmentFields = Partial<{
   shelfCount: number
   pantryRackStyle: PullOutPantryRackStyle
   cooktopLayout: CooktopLayout
+  sinkLayout: SinkLayout
   cooktopBurnersOn: boolean
   cooktopShowGrate: boolean
   cooktopActiveBurners: number[]
@@ -344,6 +355,11 @@ export function compartmentCooktopShowGrate(compartment: CabinetCompartment): bo
   return loose<boolean>(compartment, 'cooktopShowGrate') !== false
 }
 
+export function compartmentSinkLayout(compartment: CabinetCompartment): SinkLayout {
+  const layout = loose<SinkLayout>(compartment, 'sinkLayout')
+  return layout && SINK_LAYOUTS.includes(layout) ? layout : SINK_DEFAULT_LAYOUT
+}
+
 export function compartmentDoorType(
   compartment: CabinetCompartment,
   width: number,
@@ -352,7 +368,8 @@ export function compartmentDoorType(
 }
 
 function explicitCompartmentHeight(compartment: CabinetCompartment): number | null {
-  if (isCooktopCompartmentType(compartment.type)) return 0
+  // Cooktops and sinks live in/on the countertop plane — zero stack height.
+  if (isCooktopCompartmentType(compartment.type) || compartment.type === 'sink') return 0
   return typeof compartment.height === 'number' && compartment.height > 0
     ? compartment.height
     : null
@@ -363,6 +380,7 @@ function lockedApplianceHeight(compartment: CabinetCompartment): number | null {
     compartment.type !== 'oven' &&
     compartment.type !== 'microwave' &&
     compartment.type !== 'dishwasher' &&
+    compartment.type !== 'sink' &&
     !isCooktopCompartmentType(compartment.type) &&
     compartment.type !== 'pull-out-pantry' &&
     !isFridgeCompartmentType(compartment.type) &&

@@ -35,6 +35,11 @@ const CabinetCompartment = z.discriminatedUnion('type', [
     doorType: z.enum(['single-left', 'single-right', 'double', 'glass']).optional(),
     shelfCount: z.number().int().min(0).max(8).optional(),
   }),
+  z.object({
+    ...compartmentBase,
+    type: z.literal('sink'),
+    sinkLayout: z.enum(['single', 'double', 'double-offset']).optional(),
+  }),
   z.object({ ...compartmentBase, type: z.literal('oven') }),
   z.object({ ...compartmentBase, type: z.literal('microwave') }),
   z.object({ ...compartmentBase, type: z.literal('dishwasher') }),

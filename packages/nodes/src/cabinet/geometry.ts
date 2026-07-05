@@ -10,11 +10,13 @@ import { addApplianceCompartment } from './geometry/oven-microwave'
 import { addPullOutPantryCompartment } from './geometry/pantry'
 import { buildCabinetRunGeometry } from './geometry/run'
 import { addBox, type CabinetGeometryNode, getCabinetSlotMaterials } from './geometry/shared'
+import { addSinkCompartment, cutSinkIntoCountertop, sinkBowls } from './geometry/sink'
 import {
   type CabinetHoodCompartmentType,
   compartmentDoorType,
   compartmentDrawerCount,
   compartmentShelfCount,
+  compartmentSinkLayout,
   isHoodCompartmentType,
   normalizeCabinetStack,
 } from './stack'
@@ -82,6 +84,12 @@ export function buildCabinetGeometry(
   const drawerBoxFrontZ = frontZ - frontThickness / 2 - 0.001
   const drawerBoxDepth = Math.max(0.05, drawerBoxFrontZ - drawerBoxBackZ)
 
+  const rows = normalizeCabinetStack(node)
+  const sinkRow = rows.find((row) => row.compartment.type === 'sink')
+  const sinkBowlSpecs = sinkRow
+    ? sinkBowls(compartmentSinkLayout(sinkRow.compartment), innerWidth, depth)
+    : null
+
   addBox(
     group,
     [board, carcassHeight, depth],
@@ -108,14 +116,17 @@ export function buildCabinetGeometry(
       'carcass',
     )
   }
-  addBox(
-    group,
-    [innerWidth, board, depth],
-    [0, topY - board / 2, 0],
-    materials.carcass,
-    'cabinet-top',
-    'carcass',
-  )
+  // Sink bases skip the top panel — the basin hangs through that plane.
+  if (!sinkRow) {
+    addBox(
+      group,
+      [innerWidth, board, depth],
+      [0, topY - board / 2, 0],
+      materials.carcass,
+      'cabinet-top',
+      'carcass',
+    )
+  }
   if (node.showPlinth && plinth > 0) {
     addBox(
       group,
@@ -128,7 +139,7 @@ export function buildCabinetGeometry(
   }
 
   if (node.withCountertop && countertopThickness > 0) {
-    addBox(
+    const countertop = addBox(
       group,
       [width + countertopOverhang * 2, countertopThickness, depth + countertopOverhang],
       [0, topY + countertopThickness / 2, 0.01],
@@ -136,9 +147,29 @@ export function buildCabinetGeometry(
       'cabinet-countertop',
       'countertop',
     )
+    if (sinkBowlSpecs) {
+      group.remove(countertop)
+      const cut = cutSinkIntoCountertop(countertop, sinkBowlSpecs, 0, 0, countertopThickness)
+      countertop.geometry.dispose()
+      group.add(cut)
+    }
   }
-  const rows = normalizeCabinetStack(node)
+  if (sinkBowlSpecs && sinkRow) {
+    // Modules inside a run don't own a countertop (the run draws and cuts
+    // it), so the faucet rises above the run's slab thickness instead.
+    const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetGeometryNode) : null
+    const slabThickness =
+      countertopThickness > 0
+        ? countertopThickness
+        : parentRun?.withCountertop
+          ? parentRun.countertopThickness
+          : 0.02
+    addSinkCompartment(group, sinkBowlSpecs, 0, 0, topY, slabThickness, sinkRow.index)
+  }
   rows.forEach((row, index) => {
+    // Sink rows are zero-height; the basin/faucet render against the
+    // countertop plane above, so the row contributes no carcass geometry.
+    if (row.compartment.type === 'sink') return
     if (row.compartment.type === 'cooktop-gas' || row.compartment.type === 'cooktop-induction') {
       const countertopClearance = 0.001
       const effectiveCountertopThickness = Math.max(countertopThickness, 0.02)
@@ -171,7 +202,8 @@ export function buildCabinetGeometry(
       'carcass',
     )
 
-    if (index < rows.length - 1) {
+    // No deck below a sink row — the basin hangs through that plane.
+    if (index < rows.length - 1 && rows[index + 1]!.compartment.type !== 'sink') {
       const deckY = plinth + row.y1
       addBox(
         group,
