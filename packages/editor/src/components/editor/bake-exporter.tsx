@@ -41,6 +41,10 @@ export function BakeExporter({
         const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
         onComplete(buffer)
       } catch (err) {
+        // The bake worker relays page console output into the job's error
+        // trail; the message alone rarely localises an exporter crash, so
+        // surface the full stack here.
+        console.error('[bake-exporter]', err instanceof Error ? (err.stack ?? err.message) : err)
         onError(err instanceof Error ? err.message : String(err))
       } finally {
         useViewer.getState().setExporting(false)
