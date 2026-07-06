@@ -63,6 +63,7 @@ export type PartComposeKind =
   | 'roller_array'
   | 'belt_surface'
   | 'cylindrical_tank'
+  | 'storage_tank_shell'
   | 'cooling_tower_shell'
   | 'cooling_tower_rim'
   | 'chimney_stack'
@@ -1352,6 +1353,11 @@ function normalizePartKind(kind: unknown): PartComposeKind | null {
     case 'belt_surface':
     case 'conveyor_belt':
       return 'belt_surface'
+    case 'storage_tank_shell':
+    case 'atmospheric_storage_tank':
+    case 'flat_roof_tank':
+    case 'floating_roof_tank':
+      return 'storage_tank_shell'
     case 'tank':
     case 'vessel':
     case 'cylindrical_tank':
@@ -5578,6 +5584,128 @@ function composeCylindricalTank(
   return applyPartRotation(shapes, center, part.rotation)
 }
 
+function composeStorageTankShell(
+  input: PartComposeInput,
+  part: PartComposePartInput,
+  origin: Vec3,
+): PrimitiveShapeInput[] {
+  const axis = partAxis(part.axis, 'y')
+  if (axis !== 'y') return composeCylindricalTank(input, part, origin)
+
+  const center = add(origin, part.position ?? [0, 1.2, 0])
+  const radius = clamp(
+    part.radius ?? (part.diameter != null ? part.diameter / 2 : undefined),
+    0.8,
+    0.12,
+    6,
+  )
+  const height = clamp(part.height ?? part.length, 2.4, 0.6, 24)
+  const wallThickness = clamp(
+    part.thickness ?? part.shellThickness,
+    radius * 0.045,
+    radius * 0.012,
+    radius * 0.12,
+  )
+  const roofThickness = clamp(
+    part.domeDepth ?? part.thickness,
+    Math.max(0.035, radius * 0.035),
+    0.015,
+    0.24,
+  )
+  const foundationHeight = clamp(part.baseRadius, Math.max(0.06, radius * 0.12), 0.03, 0.8)
+  const topY = center[1] + height / 2
+  const bottomY = center[1] - height / 2
+  const mat = partMaterial(part, material(input.primaryColor ?? '#cbd5e1', 0.42, 0.48))
+  const roofMat = material(part.primaryColor ?? input.primaryColor ?? '#cbd5e1', 0.36, 0.58, 0.88)
+  const metal = material(input.metalColor ?? '#cbd5e1', 0.28, 0.76)
+  const foundationMat = material(input.darkColor ?? '#475569', 0.62, 0.22)
+
+  const shapes: PrimitiveShapeInput[] = [
+    {
+      kind: 'hollow-cylinder',
+      name: `${part.name ?? input.name ?? 'object'} straight storage tank shell`,
+      semanticRole: part.semanticRole ?? 'vessel_shell',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: center,
+      axis: 'y',
+      radius,
+      height,
+      wallThickness,
+      radialSegments: ringSegments(input.detail),
+      duct: {
+        crossSection: 'round',
+        radius,
+        wallThickness,
+      },
+      material: mat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} flat storage tank roof`,
+      semanticRole: 'vessel_roof',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: [center[0], topY + roofThickness / 2, center[2]],
+      axis: 'y',
+      radius: radius * 1.01,
+      height: roofThickness,
+      radialSegments: ringSegments(input.detail),
+      material: roofMat,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} storage tank bottom plate`,
+      semanticRole: 'tank_bottom',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: [center[0], bottomY + roofThickness / 2, center[2]],
+      axis: 'y',
+      radius: radius * 0.99,
+      height: roofThickness,
+      radialSegments: ringSegments(input.detail),
+      material: roofMat,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} storage tank top rim`,
+      semanticRole: 'top_rim',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: [center[0], topY + roofThickness * 0.9, center[2]],
+      axis: 'y',
+      majorRadius: radius * 1.015,
+      tubeRadius: Math.max(0.012, wallThickness * 0.58),
+      radialSegments: 10,
+      tubularSegments: Math.max(28, Math.round(ringSegments(input.detail) * 0.75)),
+      material: metal,
+    },
+    {
+      kind: 'torus',
+      name: `${part.name ?? input.name ?? 'object'} storage tank bottom rim`,
+      semanticRole: 'bottom_rim',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: [center[0], bottomY + roofThickness * 0.45, center[2]],
+      axis: 'y',
+      majorRadius: radius * 1.015,
+      tubeRadius: Math.max(0.012, wallThickness * 0.52),
+      radialSegments: 10,
+      tubularSegments: Math.max(28, Math.round(ringSegments(input.detail) * 0.75)),
+      material: metal,
+    },
+    {
+      kind: 'cylinder',
+      name: `${part.name ?? input.name ?? 'object'} storage tank ring foundation`,
+      semanticRole: 'foundation_ring',
+      sourcePartKind: part.sourcePartKind ?? 'storage_tank_shell',
+      position: [center[0], bottomY - foundationHeight / 2, center[2]],
+      axis: 'y',
+      radius: radius * 1.13,
+      height: foundationHeight,
+      radialSegments: ringSegments(input.detail),
+      material: foundationMat,
+    },
+  ]
+
+  return applyPartRotation(shapes, center, part.rotation)
+}
+
 function composeLiquidVolume(
   input: PartComposeInput,
   part: PartComposePartInput,
@@ -5623,7 +5751,10 @@ function composeCoolingTowerShell(
   const waistRadius = clamp(part.waistRadius, baseRadius * 0.62, 0.16, baseRadius * 0.96)
   const topRadius = clamp(part.topRadius, baseRadius * 0.94, waistRadius * 1.05, baseRadius * 1.35)
   const center = add(origin, part.position ?? [0, height / 2, 0])
-  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#f8fafc', 0.54, 0.12))
+  const mat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#f8fafc', 0.54, 0.12),
+  )
   const profile: Array<[number, number]> = [
     [baseRadius, -height / 2],
     [baseRadius * 0.9, -height * 0.4],
@@ -5658,7 +5789,10 @@ function composeCoolingTowerRim(
   const radius = clamp(part.radius ?? part.majorRadius, 1.1, 0.16, 7)
   const tubeRadius = clamp(part.tubeRadius, Math.max(radius * 0.045, 0.025), 0.006, 0.28)
   const center = add(origin, part.position ?? [0, 7.2, 0])
-  const mat = partMaterial(part, material(part.primaryColor ?? input.primaryColor ?? '#ffffff', 0.5, 0.14))
+  const mat = partMaterial(
+    part,
+    material(part.primaryColor ?? input.primaryColor ?? '#ffffff', 0.5, 0.14),
+  )
   return applyPartRotation(
     [
       {
@@ -8393,10 +8527,7 @@ function composeHelicalStair(
 
   const railPathPointCount = clampInt(
     part.ringCount,
-    Math.max(
-      detail === 'high' ? 32 : detail === 'medium' ? 24 : 18,
-      Math.ceil(stepCount / 2),
-    ),
+    Math.max(detail === 'high' ? 32 : detail === 'medium' ? 24 : 18, Math.ceil(stepCount / 2)),
     8,
     72,
   )
@@ -8425,9 +8556,7 @@ function composeHelicalStair(
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} continuous outer mid rail`,
       semanticRole:
-        sourcePartKind === 'helical_ladder'
-          ? 'helical_ladder_mid_rail'
-          : 'helical_stair_mid_rail',
+        sourcePartKind === 'helical_ladder' ? 'helical_ladder_mid_rail' : 'helical_stair_mid_rail',
       sourcePartKind,
       position: [center[0], center[1] + railHeight * 0.55, center[2]],
       path: helixPath,
@@ -8440,9 +8569,7 @@ function composeHelicalStair(
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} outer tread stringer`,
       semanticRole:
-        sourcePartKind === 'helical_ladder'
-          ? 'helical_ladder_stringer'
-          : 'helical_stair_stringer',
+        sourcePartKind === 'helical_ladder' ? 'helical_ladder_stringer' : 'helical_stair_stringer',
       sourcePartKind,
       position: [center[0], center[1] - treadThickness * 0.4, center[2]],
       path: helixPath,
@@ -8455,9 +8582,7 @@ function composeHelicalStair(
       kind: 'sweep',
       name: `${part.name ?? input.name ?? 'tower'} inner tread stringer`,
       semanticRole:
-        sourcePartKind === 'helical_ladder'
-          ? 'helical_ladder_stringer'
-          : 'helical_stair_stringer',
+        sourcePartKind === 'helical_ladder' ? 'helical_ladder_stringer' : 'helical_stair_stringer',
       sourcePartKind,
       position: [center[0], center[1] - treadThickness * 0.4, center[2]],
       path: innerHelixPath,
@@ -8476,9 +8601,7 @@ function composeHelicalStair(
       kind: 'box',
       name: `${part.name ?? input.name ?? 'tower'} ${accessLabel} ${index === 0 ? 'bottom' : 'top'} landing`,
       semanticRole:
-        sourcePartKind === 'helical_ladder'
-          ? 'helical_ladder_landing'
-          : 'helical_stair_landing',
+        sourcePartKind === 'helical_ladder' ? 'helical_ladder_landing' : 'helical_stair_landing',
       sourcePartKind,
       position: pointAt(centerRadius, angle, y),
       rotation: [0, -angle, 0],
@@ -13405,6 +13528,9 @@ export function composePartPrimitives(input: PartComposeInput = {}): PrimitiveSh
         break
       case 'cylindrical_tank':
         shapes.push(...composeCylindricalTank(input, part, origin))
+        break
+      case 'storage_tank_shell':
+        shapes.push(...composeStorageTankShell(input, part, origin))
         break
       case 'liquid_volume':
         shapes.push(...composeLiquidVolume(input, part, origin))

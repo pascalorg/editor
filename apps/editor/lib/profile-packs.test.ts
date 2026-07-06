@@ -33,24 +33,12 @@ const CEMENT_QUALITY_RULE_COUNT = 31
 
 async function cementZip() {
   const root = await findRepoRoot()
-  return fs.readFile(
-    path.join(
-      root,
-      'cloud',
-      'industry.cement.basic-0.1.0.zip',
-    ),
-  )
+  return fs.readFile(path.join(root, 'cloud', 'industry.cement.basic-0.1.0.zip'))
 }
 
 async function refineryZip() {
   const root = await findRepoRoot()
-  return fs.readFile(
-    path.join(
-      root,
-      'cloud',
-      'industry.refinery.basic-0.1.0.zip',
-    ),
-  )
+  return fs.readFile(path.join(root, 'cloud', 'industry.refinery.basic-0.1.0.zip'))
 }
 
 async function cleanInstalledPack() {
@@ -121,11 +109,7 @@ describe('profile packs', () => {
   test('keeps refinery chimney-stack parts anchored above the ground in source and cloud zip', async () => {
     const root = await findRepoRoot()
     const sourceValidation = await validateProfilePackDir(
-      path.join(
-        root,
-        'cloud',
-        'industry.refinery.basic-0.1.0',
-      ),
+      path.join(root, 'cloud', 'industry.refinery.basic-0.1.0'),
     )
     const zipValidation = validateProfilePackZip(await refineryZip())
 
@@ -168,13 +152,7 @@ describe('profile packs', () => {
   test('validates and installs the robotics knowledge package', async () => {
     await cleanInstalledPack()
     const root = await findRepoRoot()
-    const zip = await fs.readFile(
-      path.join(
-        root,
-        'cloud',
-        'industry.robotics.basic-0.1.0.zip',
-      ),
-    )
+    const zip = await fs.readFile(path.join(root, 'cloud', 'industry.robotics.basic-0.1.0.zip'))
     const validation = validateProfilePackZip(zip)
 
     expect(validation.manifest).toMatchObject({
@@ -248,13 +226,7 @@ describe('profile packs', () => {
   test('validates logistics AGV pack and loads AGV only from the resource pack', async () => {
     await cleanInstalledPack()
     const root = await findRepoRoot()
-    const zip = await fs.readFile(
-      path.join(
-        root,
-        'cloud',
-        'industry.logistics.basic-0.1.0.zip',
-      ),
-    )
+    const zip = await fs.readFile(path.join(root, 'cloud', 'industry.logistics.basic-0.1.0.zip'))
     const validation = validateProfilePackZip(zip)
 
     expect(validation.manifest).toMatchObject({
@@ -302,11 +274,7 @@ describe('profile packs', () => {
     await cleanInstalledPack()
     const root = await findRepoRoot()
     const zip = await fs.readFile(
-      path.join(
-        root,
-        'cloud',
-        'industry.machine-tools.basic-0.1.0.zip',
-      ),
+      path.join(root, 'cloud', 'industry.machine-tools.basic-0.1.0.zip'),
     )
     const validation = validateProfilePackZip(zip)
 
@@ -337,11 +305,7 @@ describe('profile packs', () => {
     await cleanInstalledPack()
     const root = await findRepoRoot()
     const extensionZip = await fs.readFile(
-      path.join(
-        root,
-        'cloud',
-        'industry.fine-chemical.pharma-intermediate-0.1.0.zip',
-      ),
+      path.join(root, 'cloud', 'industry.fine-chemical.pharma-intermediate-0.1.0.zip'),
     )
     const validation = validateProfilePackZip(extensionZip)
 
@@ -771,5 +735,48 @@ describe('profile packs', () => {
     )
     expect(catalog.packs.every((pack) => pack.auditScore > 0)).toBe(true)
     expect(catalog.issues).toEqual([])
+  })
+
+  test('keeps refinery storage tanks tall enough for vertical tank farms', async () => {
+    const root = await findRepoRoot()
+    const sourceValidation = await validateProfilePackDir(
+      path.join(root, 'cloud', 'industry.refinery.basic-0.1.0'),
+    )
+    const zipValidation = validateProfilePackZip(await refineryZip())
+
+    for (const validation of [sourceValidation, zipValidation]) {
+      const profiles = new Map(validation.profiles.map((profile) => [profile.id, profile]))
+
+      expect(profiles.get('refinery.crude_storage_tank')?.defaultDimensions).toMatchObject({
+        length: 5.6,
+        width: 5.6,
+        height: 6.4,
+      })
+      expect(profiles.get('refinery.crude_storage_tank')?.parts?.[0]).toMatchObject({
+        kind: 'storage_tank_shell',
+        semanticRole: 'vessel_shell',
+        height: 6.4,
+      })
+      expect(profiles.get('refinery.product_storage_tank')?.defaultDimensions).toMatchObject({
+        length: 5.2,
+        width: 5.2,
+        height: 5.8,
+      })
+      expect(profiles.get('refinery.product_storage_tank')?.parts?.[0]).toMatchObject({
+        kind: 'storage_tank_shell',
+        semanticRole: 'vessel_shell',
+        height: 5.8,
+      })
+      expect(profiles.get('refinery.intermediate_storage_tank')?.defaultDimensions).toMatchObject({
+        length: 4.8,
+        width: 4.8,
+        height: 5.4,
+      })
+      expect(profiles.get('refinery.intermediate_storage_tank')?.parts?.[0]).toMatchObject({
+        kind: 'storage_tank_shell',
+        semanticRole: 'vessel_shell',
+        height: 5.4,
+      })
+    }
   })
 })

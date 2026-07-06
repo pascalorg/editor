@@ -25,6 +25,7 @@ interface PanelWrapperProps {
   onBack?: () => void
   children: React.ReactNode
   className?: string
+  defaultSectionsExpanded?: boolean
   showDynamicTab?: boolean
   width?: number | string
 }
@@ -37,6 +38,7 @@ export function PanelWrapper({
   onBack,
   children,
   className,
+  defaultSectionsExpanded = false,
   showDynamicTab = true,
   width = 320, // default width
 }: PanelWrapperProps) {
@@ -203,7 +205,8 @@ export function PanelWrapper({
       {/* Content */}
       <PanelSectionExpansionContext.Provider
         value={{
-          pinned: inspectorTab === 'dynamic' ? true : inspectorSectionsPinned,
+          pinned:
+            inspectorTab === 'dynamic' ? true : inspectorSectionsPinned || defaultSectionsExpanded,
           resetKey: String(resetKey),
         }}
       >

@@ -13,7 +13,7 @@ function node(input: Record<string, unknown>): AnyNode {
 }
 
 describe('scene structure', () => {
-  test('suggests process mode for industry pack generated factories', () => {
+  test('suggests system mode for industry pack generated factories', () => {
     const nodes = {
       site_1: node({ id: 'site_1', type: 'site', children: ['building_1'] }),
       building_1: node({
@@ -95,18 +95,18 @@ describe('scene structure', () => {
 
     const tree = buildSceneStructure({ nodes, rootNodeIds: ['site_1'] })
 
-    expect(suggestSceneStructureMode(nodes)).toBe('process')
-    expect(tree.mode).toBe('process')
-    expect(tree.groups).toHaveLength(1)
-    expect(tree.groups[0]?.label).toBe('Refinery')
-    expect(tree.groups[0]?.detail).toBe('industry.refinery.basic@0.1.0')
-    expect(tree.groups[0]?.items).toHaveLength(1)
-    expect(tree.groups[0]?.items[0]).toMatchObject({
-      nodeId: 'assembly_tower',
-      label: 'Atmospheric distillation unit',
-      detail: 'station: atmospheric_distillation',
-      badge: 'distillation',
-    })
+    expect(suggestSceneStructureMode(nodes)).toBe('system')
+    expect(tree.mode).toBe('system')
+    expect(tree.groups.map((group) => group.label)).toEqual(
+      expect.arrayContaining(['column equipment', 'Piping', 'Civil and access']),
+    )
+    expect(tree.groups.find((group) => group.label === 'column equipment')?.items[0]).toMatchObject(
+      {
+        nodeId: 'assembly_tower',
+        label: 'Atmospheric distillation unit',
+        badge: 'assembly',
+      },
+    )
   })
 
   test('keeps building projects available as elevation groups', () => {

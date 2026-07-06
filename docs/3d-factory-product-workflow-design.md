@@ -114,7 +114,6 @@ Floors should become one kind of scene organization, not the main mental model.
 Introduce a `Scene Structure` panel with switchable grouping modes:
 
 - Spatial: `Site > Zone > Area > Equipment`
-- Process: `Process Line > Station > Equipment > Ports`
 - System: `Mechanical / Piping / Electrical / Instrument / Building / Safety`
 - Data: `Bound / Unbound / Alarm / Offline`
 - Asset Source: `Built-in / Industry pack / AI generated / Image generated / Imported`
@@ -122,47 +121,50 @@ Introduce a `Scene Structure` panel with switchable grouping modes:
 
 For building design, the old floor tree still exists as an `Elevation/Floor` structure mode.
 
-For factories, the default should be `Spatial` or `Process`, not `Floor`.
+For factories, the default should be `System` or `Spatial`, not `Floor`.
 
-### 4. Canvas Lenses
+### 4. Canvas Display Annotations
 
-Add canvas lenses. A lens is a view mode that changes overlays, selection priority, and inspector defaults without changing scene data.
+The canvas should stay in one normal editing mode. Display settings decide which annotations are visible without changing scene data or editing behavior.
 
-Recommended lenses:
+Main user-facing annotations:
 
-- Layout Lens: footprints, bounding boxes, spacing, zones.
-- Process Lens: process flow arrows, ports, upstream/downstream connections.
-- Equipment Lens: assemblies, semantic parts, editable subparts.
-- Data Lens: live values, alarms, bound fields, unbound equipment.
-- Maintenance Lens: ladders, platforms, clearance, access paths.
-- Elevation Lens: floors, platforms, pipe rack levels, height slices.
+- 区名: spatial zone names.
+- 设备标注: semantic equipment names, footprints, editable parts, and port counts.
+- 数据绑定标注: bound/unbound data status, binding fields, sample/current cached values, and drag/drop binding targets.
 
-The user should not have to manually turn on ten checkboxes. Choosing a lens should set the right overlays.
+Removed from the main toolbar after product review:
 
-### 5. Semantic Inspector
+- Layout: normal canvas editing is already the default.
+- Equipment View: folded into Display settings as equipment annotations.
+- Data View: renamed to data binding annotations because real-time movement belongs to Preview/Run mode.
+- Process: dense factory-wide route overlays were confusing and duplicated Data-driven flow visuals.
+- Maintenance: deferred until there is real work-order, alarm, or inspection-route data.
+- Elevation: still exists in Scene Structure for building/floor projects, but is not a factory canvas view.
 
-The right inspector should be selected-object aware.
+### 5. Capability-Driven Inspector
 
-For an equipment assembly, show:
+The right inspector should be generated from the selected object's capability profile.
 
-- Equipment: type, profile, recipe, dimensions, device-level params.
-- Parts: shell, liquid, ladder, platform, ports, motor, guard, frame.
-- Ports: inlet, outlet, medium, side, diameter, connection state.
-- Data: bound field, live value, unit, threshold, animation mapping.
-- Source: built-in, pack id, profile id, recipe id, generated run id.
+Object routing:
 
-For a subpart, show:
+- Plain geometry shows the generic node property panel.
+- Plain user-created assemblies show a lightweight group panel.
+- Semantic equipment assemblies show an equipment panel.
+- Semantic equipment parts route back to the parent equipment panel and expose part-specific controls.
+- Image, AI, and joint assets show their asset-specific controls.
 
-- Part semantic role.
-- Source part kind.
-- Editable parameters.
-- Material and visibility.
-- Whether edit is instance-only or profile-level.
+For semantic equipment, use task-based sections instead of many peer tabs:
+
+- Equipment settings: identity, profile, recipe, device-level params.
+- Appearance and parts: exposed semantic parts, material, color, opacity.
+- Data and dynamics: binding target, current value, visual effect such as level, flow, color, pulse, or visibility.
+- Connections and source: ports, route links, industry pack, AI/source metadata.
 
 Default behavior:
 
-- If assembly selected, edit equipment-level params first.
-- If part selected, edit only the selected semantic part.
+- If semantic equipment is selected, edit equipment-level params first.
+- If a semantic equipment part is selected, keep the parent equipment context visible.
 - If user says "all ladders" or "all tanks", expand scope intentionally.
 
 ### 6. Data Binding Flow
@@ -226,8 +228,8 @@ This should feel like "explain and tune the automation", not like forced visual 
 5. If installed, resolve factory template.
 6. Show generation plan preview.
 7. User applies.
-8. Canvas opens in Process Lens.
-9. Scene Structure shows `Process Line > Station > Equipment`.
+8. Canvas opens in Layout with Equipment/Data available as focused views.
+9. Scene Structure defaults to System for factory scenes.
 10. Quality report lists recipe-backed and profile-parts equipment.
 
 Success criteria:
@@ -290,7 +292,7 @@ Success criteria:
 
 ### Flow F: Bind Real-Time Data
 
-1. User opens Data Lens.
+1. User opens Display and enables data binding annotations.
 2. User connects a WebSocket source.
 3. System previews fields.
 4. User drags `tank_01.level` to a tank.
@@ -301,7 +303,7 @@ Success criteria:
 Success criteria:
 
 - Binding is visual and reversible.
-- Bound fields are visible in Data Lens and inspector.
+- Bound fields are visible in data binding annotations and the equipment inspector.
 
 ## Data And Domain Model Additions
 
@@ -310,7 +312,6 @@ Success criteria:
 ```ts
 type SceneStructureMode =
   | 'spatial'
-  | 'process'
   | 'system'
   | 'data'
   | 'asset-source'
@@ -333,25 +334,19 @@ type SceneOrganizationMetadata = {
 }
 ```
 
-### Canvas Lens
+### Canvas Display Annotations
 
 ```ts
-type CanvasLens =
-  | 'layout'
-  | 'process'
-  | 'equipment'
-  | 'data'
-  | 'maintenance'
-  | 'elevation'
+type CanvasAnnotationOverlay = 'equipment' | 'data-binding'
 ```
 
-Each lens defines:
+Each annotation overlay defines:
 
 - visible overlays
 - selectable targets
-- default inspector tab
+- default inspector focus
 - label density
-- route and port visibility
+- equipment or data emphasis
 
 ### Semantic Target
 
@@ -448,20 +443,20 @@ Goal:
 Deliverables:
 
 - Scene Structure panel.
-- Group by spatial, process, system, data, asset source, elevation.
+- Group by spatial, system, data, asset source, elevation.
 - Preserve existing floor/elevation behavior as one mode.
 
 Validation:
 
-- Refinery defaults to process/spatial grouping.
+- Refinery defaults to system/spatial grouping.
 - Building/floor projects can still use floor grouping.
-- Selecting a station in Process mode selects the correct assembly on canvas.
+- Selecting a station row selects the correct assembly on canvas.
 
 Delivered:
 
 - Site panel now opens with Scene Structure as the primary structure view.
-- Auto mode chooses Process for industry/factory scenes, Elevation for building/floor scenes, and Spatial for general scenes.
-- Process mode collapses refinery/factory stations to representative assemblies instead of listing every primitive, pipe, and detail part.
+- Auto mode chooses System for industry/factory scenes, Elevation for building/floor scenes, and Spatial for general scenes.
+- System mode collapses refinery/factory stations to representative assemblies instead of listing every primitive, pipe, and detail part.
 - Spatial, System, Data, Asset Source, and Elevation modes are available from the same panel.
 - Elevation mode preserves the previous floor/level content instead of deleting the old building workflow.
 - Structure rows synchronize selection with canvas/inspector and scroll selected rows into view.
@@ -476,49 +471,49 @@ Verification:
 
 Deferred to later phases:
 
-- Canvas overlays, port arrows, process arrows, footprints, data labels, and maintenance access highlights belong to Phase 3 Canvas Lenses.
-- Full Equipment/Parts/Ports/Data/Source inspector tabs belong to Phase 4 Semantic Inspector.
+- Equipment footprints and data labels belong to Phase 3 Canvas Display Annotations.
+- Capability-driven equipment configuration belongs to Phase 4 Inspector.
 - Scene Structure search, large-scene virtualization, and saved per-project structure preferences are product polish items after the v2 foundation is stable.
 
-### Phase 3: Canvas Lenses
+### Phase 3: Canvas Display Annotations
 
-Status: MVP closed.
+Status: MVP closed and product scope tightened after product review.
 
 Goal:
 
-- Let users switch what the canvas emphasizes without changing scene data.
+- Let users turn helpful annotations on/off without switching the canvas into confusing modes.
 
 Deliverables:
 
-- Lens toolbar.
-- Overlay registry foundation for ports, process arrows, equipment footprints, and data labels.
-- Lens-specific selection priorities.
+- Display menu entries.
+- Equipment footprints and part affordances.
+- Data binding labels and binding affordances.
+- Annotation-specific selection targets.
 
 Validation:
 
-- Process Lens shows ports and route arrows.
-- Equipment Lens shows semantic equipment affordances and preserves selection.
-- Data Lens shows bound/unbound status.
-- Maintenance Lens highlights platforms, ladders, access clearance. Deferred to later polish.
+- Default canvas keeps normal editing uncluttered.
+- Equipment annotations show semantic equipment affordances and preserve selection.
+- Data binding annotations show bound/unbound status, cached/sample values, and binding drop targets.
+- Process, Maintenance, and Elevation are not factory canvas views.
 
 Foundation delivered:
 
-- Editor state now has a persisted `canvasLens` value with six lens modes: Layout, Process, Equipment, Data, Maintenance, and Elevation.
-- Bottom canvas toolbar exposes a Canvas Lens switcher without changing scene data, editor phase, build tool, or selection.
-- Scene Structure e2e verifies Lens switching can happen while Process structure and station selection remain stable.
-- Process Lens MVP renders station labels, exposed port chips, and explicit route arrows on the canvas; clicking a Process Lens station selects the same assembly used by Scene Structure.
-- Equipment Lens MVP renders semantic equipment cards, footprint outlines, editable part chips, and port counts from the shared object capability resolver; clicking an Equipment Lens card selects the same assembly used by Scene Structure and Inspector.
-- Data Lens MVP renders bound and ready-to-bind equipment cards from live-data and dynamic binding metadata; bound cards show binding summaries and sample values while preserving normal selection behavior.
-- Canvas Lens helpers now centralize safe metadata parsing, equipment identity detection, base positioning, station/process ids, and rough equipment height estimates so future overlays do not fork the same rules.
+- Editor state now has persisted `showEquipmentOverlay` and `showDataBindingOverlay` values.
+- The bottom canvas toolbar no longer exposes Layout/Equipment/Data view modes.
+- The top-right Display menu owns 区名, 设备标注, and 数据绑定标注 so all canvas labels live in one place.
+- Scene Structure e2e verifies annotation toggles can happen while station selection remains stable.
+- Equipment annotations render semantic equipment cards, footprint outlines, editable part chips, and port counts from the shared object capability resolver; clicking an equipment card selects the same assembly used by Scene Structure and Inspector.
+- Data binding annotations render bound and ready-to-bind equipment cards from live-data and dynamic binding metadata; bound cards show binding summaries and sample/cached values while preserving normal selection behavior.
+- Canvas annotation helpers now centralize safe metadata parsing, equipment identity detection, base positioning, station ids, and rough equipment height estimates so future overlays do not fork the same rules.
 
 Post-MVP polish:
 
-- Process Lens polish: route decluttering, port-side anchors, and branch labels for dense process plants.
-- Equipment Lens polish: true assembly bounds, part-side anchors, and direct affordances for editable semantic parts.
-- Data Lens polish: live websocket freshness, alarm severity colors, and direct binding entry points.
-- Maintenance and Elevation overlays: access clearance, ladder/platform emphasis, and floor/elevation visual simplification.
+- Equipment annotation polish: true assembly bounds, part-side anchors, and direct affordances for editable semantic parts.
+- Data binding annotation polish: freshness, alarm severity colors, and direct binding entry points. Real motion remains a Preview/Run-mode concern.
+- Maintenance/elevation-specific overlays should only return when backed by real inspection or building workflows, not as always-on factory modes.
 
-### Phase 4: Semantic Inspector
+### Phase 4: Capability-Driven Inspector
 
 Status: Complete.
 
@@ -528,32 +523,30 @@ Goal:
 
 Deliverables:
 
-- Equipment tab.
-- Parts tab.
-- Ports tab.
-- Data tab.
-- Source tab.
+- Equipment settings section.
+- Appearance and parts section.
+- Data and dynamics section.
+- Connections and source section.
 - Instance edit versus profile edit affordance.
 
 Validation completed:
 
-- Selecting equipment shows recipe/profile identity and instance parameters in the Equipment tab.
+- Selecting equipment shows recipe/profile identity and instance parameters in the equipment settings section.
 - Selecting semantic parts shows part selection plus generic material and opacity controls.
-- Selecting Ports shows connection, target equipment, target port, route node, and unconnected state.
-- Selecting Data shows live data and dynamic binding status.
+- Connections and source shows port connection, target equipment, target port, route node, source pack, and unconnected state.
+- Data and dynamics shows live data and dynamic binding status.
 
 Delivered:
 
-- Basic Inspector now includes a Semantic Inspector section backed by the shared object capability resolver.
-- Semantic Inspector MVP exposes Equipment, Parts, Ports, Data, and Source tabs for the selected object or parent semantic assembly.
-- Equipment tab separates instance edit affordance from read-only profile/industry-pack identity.
-- Parts tab lists semantic parts and can select exposed part nodes.
-- Ports tab lists declared connection anchors with medium/side metadata.
-- Ports tab resolves route/pipe metadata back into each port, showing connected equipment, connected port, route node, and unconnected state.
-- Data tab summarizes live-data and dynamic binding metadata without creating new binding state.
-- Source tab shows industry pack, process, role, generated source, and capability source tags.
-- Equipment tab now embeds semantic equipment instance parameters, so recipe/profile identity and editable device-level parameters live in one place.
-- Parts tab now acts as a semantic part editor entry: editable parts expose material and opacity controls in place while still supporting part selection.
+- Basic Inspector now routes by object capability profile.
+- Plain geometry keeps the generic node panel.
+- Plain user-created assemblies show a lightweight group panel instead of fake equipment settings.
+- Semantic equipment assemblies show equipment settings, appearance/parts, data/dynamics, and connections/source sections.
+- Semantic equipment parts route back to the parent equipment panel and expose part-specific controls without duplicating the generic material panel.
+- Equipment settings separates instance edit affordance from read-only profile/industry-pack identity.
+- Appearance and parts lists semantic parts and can select exposed part nodes; editable parts expose material and opacity controls in place.
+- Connections and source lists declared connection anchors with medium/side metadata and resolves route/pipe metadata back into each port.
+- Data and dynamics summarizes live-data and dynamic binding metadata and can bind fixed data fields to semantic targets.
 
 Deferred extension:
 
@@ -570,7 +563,7 @@ Deliverables:
 - Fixed/demo live data source for Phase 5 validation.
 - Message preview and semantic field detector.
 - Assisted field-to-equipment binding from Inspector, AI generation preview, and fixed-field drag/drop.
-- Data binding inspector and Data Lens overlays.
+- Data binding inspector and data binding annotation cards.
 - Dynamic preview runtime for semantic level, flow, and alarm pulse bindings.
 
 Validation:
@@ -583,13 +576,13 @@ Validation:
 Phase 5 delivery status:
 
 - Done: fixed factory live data source is seeded automatically for editor scenes.
-- Done: selected semantic equipment exposes binding targets in the AI context and Inspector Data tab.
+- Done: selected semantic equipment exposes binding targets in the AI context and Inspector data/dynamics section.
 - Done: AI data-binding preview can write deterministic `dynamicBindings` to the selected node.
-- Done: fixed live data fields can be dragged onto Data Lens equipment cards to create semantic bindings.
-- Done: Data Lens and Semantic Inspector read the same binding contract and show current values.
+- Done: fixed live data fields can be dragged onto data binding annotation cards to create semantic bindings.
+- Done: data binding annotations and the equipment inspector read the same binding contract and show current cached/sample values.
 - Done: browser coverage verifies tank level binding, alarm pulse binding, dynamic preview animation, and reset/reseed persistence.
 - Deferred: user-managed WebSocket source add/remove UI. For the current product phase, data sources remain fixed while the binding workflow is hardened.
-- Deferred: freeform drop-to-raw-3D-surface targeting and multi-source field browsing. Current drag/drop is scoped to fixed fields and Data Lens equipment cards.
+- Deferred: freeform drop-to-raw-3D-surface targeting and multi-source field browsing. Current drag/drop is scoped to fixed fields and data binding annotation cards.
 
 ### Phase 6: Workflow Graph And Run History
 
@@ -663,7 +656,7 @@ Phase 8 delivery status:
 - Done: factory run results now share a tested experience summary for quality, fallback warnings, missing pack guidance, apply state, and debug details.
 - Done: factory run apply results include a before/after change preview with node counts and created/updated/deleted samples.
 - Done: factory run canvas application now writes one scene state change so undo/redo treats the whole run as a single step.
-- Done: live data snapshots now sanitize bad WebSocket values before they reach rendering, Data Lens, or Inspector consumers.
+- Done: live data snapshots now sanitize bad WebSocket values before they reach rendering, data binding annotations, or Inspector consumers.
 - Done: Phase 8 QA verifies installed industry-pack factory runs resolve templates from the editor server cwd and render refinery smoke screenshots.
 
 Validation:
@@ -710,12 +703,12 @@ Recommended first slice:
 
 1. Intent Router And Plan Preview.
 2. Scene Structure Panel.
-3. Semantic Inspector.
+3. Capability-Driven Inspector.
 4. Data Binding Workflow.
 
 These four create the biggest product jump because they make existing capabilities feel unified.
 
-Canvas lenses should follow immediately after because they turn the factory scene from a static model into an understandable operating workspace.
+Canvas views should follow immediately after because they turn the factory scene from a static model into an understandable operating workspace.
 
 ## Non-Goals For The First Release
 
@@ -734,7 +727,7 @@ The first release should keep semantic profile-parts as a valid high-quality pat
 
 Risk:
 
-- Lenses, structure modes, inspector tabs, and workflow graph can become overwhelming.
+- Canvas views, structure modes, inspector sections, and workflow graph can become overwhelming.
 
 Mitigation:
 
@@ -799,5 +792,5 @@ This product redesign is successful when:
 - A technical user can see exactly which pack, profile, recipe, or fallback was used.
 - A user can select equipment or a subpart and edit it without regenerating everything.
 - A user can bind live data to semantic equipment without writing code.
-- A factory scene can be viewed as layout, process, equipment, data, maintenance, or elevation.
+- A factory scene can be viewed as layout, equipment, or data without exposing confusing route clutter.
 - Floor-based interaction remains available but is no longer the default for non-building factories.

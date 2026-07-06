@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon as IconifyIcon } from '@iconify/react'
+import { useSidebarStore } from '@pascal-app/editor/components/sidebar/store'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@pascal-app/editor/components/ui/dropdown-menu'
-import { useSidebarStore } from '@pascal-app/editor/components/sidebar/store'
 import useEditor, { type ViewMode } from '@pascal-app/editor/store'
 import type { EdgeMode } from '@pascal-app/viewer/edge-style'
 import type { RenderShading } from '@pascal-app/viewer/materials'
@@ -24,6 +24,7 @@ import {
   ChevronsRight,
   Columns2,
   Contrast,
+  Database,
   Eye,
   Footprints,
   Grid2X2,
@@ -382,6 +383,10 @@ function DisplayMenu() {
   const setSceneTheme = useViewer((state) => state.setSceneTheme)
   const magneticSnap = useEditor((state) => state.magneticSnap)
   const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+  const showEquipmentOverlay = useEditor((state) => state.showEquipmentOverlay)
+  const setShowEquipmentOverlay = useEditor((state) => state.setShowEquipmentOverlay)
+  const showDataBindingOverlay = useEditor((state) => state.showDataBindingOverlay)
+  const setShowDataBindingOverlay = useEditor((state) => state.setShowDataBindingOverlay)
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -401,6 +406,7 @@ function DisplayMenu() {
           <button
             aria-label={t('toolbar.displaySettings', 'Display settings')}
             className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5 text-foreground/90')}
+            data-testid="viewer-display-menu"
             type="button"
           >
             <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
@@ -428,6 +434,27 @@ function DisplayMenu() {
             {showZoneLabels ? t('common.on', 'On') : t('common.off', 'Off')}
           </span>
         </DropdownMenuItem>
+        <DropdownMenuItem
+          data-testid="viewer-display-equipment-overlay"
+          onSelect={(e) => keepOpen(e, () => setShowEquipmentOverlay(!showEquipmentOverlay))}
+        >
+          <Box className="h-4 w-4" />
+          <span>{t('toolbar.equipmentLabels', '设备标注')}</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {showEquipmentOverlay ? t('common.on', 'On') : t('common.off', 'Off')}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          data-testid="viewer-display-data-binding-overlay"
+          onSelect={(e) => keepOpen(e, () => setShowDataBindingOverlay(!showDataBindingOverlay))}
+        >
+          <Database className="h-4 w-4" />
+          <span>{t('toolbar.dataBindingLabels', '数据绑定标注')}</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {showDataBindingOverlay ? t('common.on', 'On') : t('common.off', 'Off')}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
           <Magnet className="h-4 w-4" />
           <span>{t('toolbar.magneticSnap', 'Magnetic snap')}</span>

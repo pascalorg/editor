@@ -134,7 +134,7 @@ function dataLensItems(nodes: LensNodeMap, context: LiveDataLensContext) {
 }
 
 export const DataLensOverlay = memo(function DataLensOverlay() {
-  const canvasLens = useEditor((state) => state.canvasLens)
+  const showDataBindingOverlay = useEditor((state) => state.showDataBindingOverlay)
   const nodes = useScene((state) => state.nodes)
   const updateNode = useScene((state) => state.updateNode)
   const markDirty = useScene((state) => state.markDirty)
@@ -143,12 +143,12 @@ export const DataLensOverlay = memo(function DataLensOverlay() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const items = useMemo(
-    () => (canvasLens === 'data' ? dataLensItems(nodes, { paths, values }) : []),
-    [canvasLens, nodes, paths, values],
+    () => (showDataBindingOverlay ? dataLensItems(nodes, { paths, values }) : []),
+    [showDataBindingOverlay, nodes, paths, values],
   )
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds])
 
-  if (canvasLens !== 'data' || items.length === 0) return null
+  if (!showDataBindingOverlay || items.length === 0) return null
 
   return (
     <group name="data-lens-overlay">

@@ -3,11 +3,11 @@ import {
   validateSemanticRecipeComposeResult,
   validateSemanticRecipeDefinition,
 } from '@pascal-app/core'
-import { centrifugalPumpRecipe } from './pump-recipe'
-import { storageTankRecipe } from './tank-recipe'
 import { distillationUnitRecipe } from './distillation-recipe'
+import { centrifugalPumpRecipe } from './pump-recipe'
 import { refineryAuxiliaryUnitRecipe } from './refinery-auxiliary-recipe'
 import { refineryReactorUnitRecipe } from './refinery-reactor-recipe'
+import { storageTankRecipe } from './tank-recipe'
 
 describe('factory equipment semantic recipes', () => {
   test('storage tank recipe exposes valid editable params', () => {
@@ -24,6 +24,28 @@ describe('factory equipment semantic recipes', () => {
       'liquidOpacity',
       'liquidColor',
     ])
+    expect(result.parts.find((part) => part.semanticRole === 'vessel_shell')).toMatchObject({
+      kind: 'storage_tank_shell',
+      sourcePartKind: 'storage_tank_shell',
+    })
+    expect(result.parts.find((part) => part.semanticRole === 'access_ladder')).toMatchObject({
+      kind: 'helical_ladder',
+    })
+  })
+
+  test('storage tank recipe keeps horizontal tanks as process vessels', () => {
+    const result = storageTankRecipe.compose({
+      envelope: { length: 4, width: 1.4, height: 1.4 },
+      params: { orientation: 'horizontal' },
+    })
+
+    expect(result.parts.find((part) => part.semanticRole === 'vessel_shell')).toMatchObject({
+      kind: 'cylindrical_tank',
+      sourcePartKind: 'cylindrical_tank',
+    })
+    expect(result.parts.find((part) => part.semanticRole === 'access_ladder')).toMatchObject({
+      kind: 'platform_ladder',
+    })
   })
 
   test('centrifugal pump recipe exposes valid editable params', () => {
@@ -98,11 +120,7 @@ describe('factory equipment semantic recipes', () => {
   })
 
   test('refinery auxiliary recipe covers flare, pipe rack, and boiler profiles', () => {
-    const profiles = [
-      'refinery.flare_system',
-      'refinery.pipe_rack',
-      'refinery.utility_boiler',
-    ]
+    const profiles = ['refinery.flare_system', 'refinery.pipe_rack', 'refinery.utility_boiler']
 
     expect(validateSemanticRecipeDefinition(refineryAuxiliaryUnitRecipe)).toEqual([])
     for (const profileId of profiles) {

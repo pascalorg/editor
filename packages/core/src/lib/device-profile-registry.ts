@@ -325,7 +325,7 @@ export const DEVICE_PROFILE_DEFINITIONS = [
     family: 'tank',
     defaultDimensions: { diameter: 1.4, height: 3.2 },
     parts: [
-      { kind: 'cylindrical_tank', semanticRole: 'vessel_shell' },
+      { kind: 'storage_tank_shell', semanticRole: 'vessel_shell' },
       { kind: 'skid_base', semanticRole: 'support_base' },
       { kind: 'inlet_port', semanticRole: 'inlet_port' },
       { kind: 'outlet_port', semanticRole: 'outlet_port' },

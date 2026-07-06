@@ -77,7 +77,6 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { usePluginPanels } from '../ui/sidebar/use-plugin-panels'
 import { DataLensOverlay } from './canvas-lens/data-lens-overlay'
 import { EquipmentLensOverlay } from './canvas-lens/equipment-lens-overlay'
-import { ProcessLensOverlay } from './canvas-lens/process-lens-overlay'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
@@ -705,7 +704,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isPreviewMode || isFirstPersonMode) && <SiteEdgeLabels />}
       {!(isLoading || isFirstPersonMode || isPreviewMode || isCaptureMode) && (
         <>
-          <ProcessLensOverlay />
           <EquipmentLensOverlay />
           <DataLensOverlay />
         </>

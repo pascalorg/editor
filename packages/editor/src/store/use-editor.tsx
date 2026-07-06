@@ -64,7 +64,6 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
-export type CanvasLens = 'layout' | 'process' | 'equipment' | 'data' | 'maintenance' | 'elevation'
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
@@ -347,9 +346,11 @@ type EditorState = {
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
-  // Canvas lens (what the canvas emphasizes without changing scene data)
-  canvasLens: CanvasLens
-  setCanvasLens: (lens: CanvasLens) => void
+  // Canvas annotation overlays controlled from Display settings.
+  showEquipmentOverlay: boolean
+  setShowEquipmentOverlay: (show: boolean) => void
+  showDataBindingOverlay: boolean
+  setShowDataBindingOverlay: (show: boolean) => void
   splitOrientation: SplitOrientation
   setSplitOrientation: (orientation: SplitOrientation) => void
   // Toggleable 2D floorplan overlay (backward compat — derived from viewMode)
@@ -401,12 +402,13 @@ export type PersistedEditorUiState = Pick<
 type PersistedEditorLayoutState = Pick<
   EditorState,
   | 'activeSidebarPanel'
-  | 'canvasLens'
   | 'floorplanPaneRatio'
   | 'splitOrientation'
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
   | 'magneticSnap'
+  | 'showEquipmentOverlay'
+  | 'showDataBindingOverlay'
   | 'showReferenceFloor'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
@@ -425,26 +427,19 @@ export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
 
 export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState = {
   activeSidebarPanel: DEFAULT_ACTIVE_SIDEBAR_PANEL,
-  canvasLens: 'layout',
   floorplanPaneRatio: DEFAULT_FLOORPLAN_PANE_RATIO,
   splitOrientation: 'horizontal',
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
   magneticSnap: true,
+  showEquipmentOverlay: false,
+  showDataBindingOverlay: false,
   showReferenceFloor: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
 }
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05, 0.01]
-const CANVAS_LENSES: CanvasLens[] = [
-  'layout',
-  'process',
-  'equipment',
-  'data',
-  'maintenance',
-  'elevation',
-]
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
   return 'select'
@@ -588,9 +583,6 @@ function normalizePersistedEditorLayoutState(
       typeof state?.activeSidebarPanel === 'string' && state.activeSidebarPanel.trim()
         ? state.activeSidebarPanel
         : DEFAULT_ACTIVE_SIDEBAR_PANEL,
-    canvasLens: CANVAS_LENSES.includes(state?.canvasLens as CanvasLens)
-      ? (state?.canvasLens as CanvasLens)
-      : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.canvasLens,
     floorplanPaneRatio: normalizeFloorplanPaneRatio(state?.floorplanPaneRatio),
     splitOrientation: state?.splitOrientation === 'vertical' ? 'vertical' : 'horizontal',
     floorplanSelectionTool: state?.floorplanSelectionTool === 'marquee' ? 'marquee' : 'click',
@@ -598,6 +590,8 @@ function normalizePersistedEditorLayoutState(
       ? (state?.gridSnapStep as GridSnapStep)
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
     magneticSnap: state?.magneticSnap !== false,
+    showEquipmentOverlay: state?.showEquipmentOverlay === true,
+    showDataBindingOverlay: state?.showDataBindingOverlay === true,
     showReferenceFloor: state?.showReferenceFloor === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
@@ -996,8 +990,10 @@ const useEditor = create<EditorState>()(
         }),
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
-      canvasLens: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.canvasLens,
-      setCanvasLens: (lens) => set({ canvasLens: lens }),
+      showEquipmentOverlay: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showEquipmentOverlay,
+      setShowEquipmentOverlay: (show) => set({ showEquipmentOverlay: show }),
+      showDataBindingOverlay: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showDataBindingOverlay,
+      setShowDataBindingOverlay: (show) => set({ showDataBindingOverlay: show }),
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
       setSplitOrientation: (orientation) => set({ splitOrientation: orientation }),
       isFloorplanOpen: DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen,
@@ -1110,12 +1106,13 @@ const useEditor = create<EditorState>()(
         isFloorplanOpen: state.isFloorplanOpen,
         viewMode: state.viewMode,
         activeSidebarPanel: state.activeSidebarPanel,
-        canvasLens: state.canvasLens,
         floorplanPaneRatio: state.floorplanPaneRatio,
         splitOrientation: state.splitOrientation,
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
+        showEquipmentOverlay: state.showEquipmentOverlay,
+        showDataBindingOverlay: state.showDataBindingOverlay,
         showReferenceFloor: state.showReferenceFloor,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,

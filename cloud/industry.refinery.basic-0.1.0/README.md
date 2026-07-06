@@ -2,6 +2,8 @@
 
 面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区。
 
+生成后的炼油厂以 Equipment、Data 和 Source 视角为主：用户查看设备能力、编辑语义化部件、绑定实时数据并观察动态变化。内部工艺模板只用于 AI 编排整厂生成，不再在画布上展示全量流程连线。
+
 ## Devices
 
 - Crude storage tank (refinery.crude_storage_tank)
@@ -21,11 +23,11 @@
 
 ## Pack Type
 
-Factory-capable pack: supports factory/process creation through process templates and factory architectures.
+Factory-capable pack: supports one-prompt refinery creation through equipment bindings, internal generation templates, and factory architectures.
 
 ## Factory Creation
 
-Supported whole-factory/process templates:
+Supported whole-factory generation templates:
 
 - Basic oil refinery complex (refinery_basic_complex)
 
@@ -37,7 +39,7 @@ Supported factory scopes/modules:
 
 - 炼油厂基础架构
 
-## Process Templates
+## Internal Generation Templates
 
 - Basic oil refinery complex
 

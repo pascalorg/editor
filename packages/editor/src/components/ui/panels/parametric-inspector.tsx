@@ -81,8 +81,19 @@ export function ParametricInspector() {
     if (readSemanticEquipmentAssembly(node)) return selectedId
     const parentId = node.parentId as AnyNodeId | null | undefined
     if (parentId && readSemanticEquipmentAssembly(s.nodes[parentId])) return parentId
-    if (parentId && s.nodes[parentId]?.type === 'assembly') return parentId
-    return node.type === 'assembly' ? selectedId : null
+    return null
+  })
+  const isSemanticEquipmentPart = useScene((s) => {
+    if (!selectedId) return false
+    const node = s.nodes[selectedId]
+    if (!node) return false
+    const parentId = node.parentId as AnyNodeId | null | undefined
+    if (!(parentId && readSemanticEquipmentAssembly(s.nodes[parentId]))) return false
+    const metadata =
+      node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+        ? (node.metadata as Record<string, unknown>)
+        : {}
+    return typeof metadata.semanticRole === 'string' || typeof metadata.sourcePartKind === 'string'
   })
   const isAssemblyChild = useScene((s) => {
     if (!selectedId) return false
@@ -124,10 +135,26 @@ export function ParametricInspector() {
   }, [selectedId, setSelection])
 
   if (!selectedId) return null
-  if (!def && semanticEquipmentAssemblyId) {
+  if (semanticEquipmentAssemblyId === selectedId) {
+    return (
+      <PanelWrapper
+        defaultSectionsExpanded
+        icon={null}
+        onClose={handleClose}
+        showDynamicTab={false}
+        title={node?.name ?? 'Equipment'}
+        width={320}
+      >
+        <SemanticInspectorSection nodeId={selectedId} />
+        <ArticraftInspectorSections nodeId={selectedId} />
+      </PanelWrapper>
+    )
+  }
+  if (semanticEquipmentAssemblyId && isSemanticEquipmentPart) {
     const assembly = useScene.getState().nodes[semanticEquipmentAssemblyId]
     return (
       <PanelWrapper
+        defaultSectionsExpanded
         icon={null}
         onClose={handleClose}
         showDynamicTab={false}
@@ -135,6 +162,58 @@ export function ParametricInspector() {
         width={320}
       >
         <SemanticInspectorSection nodeId={semanticEquipmentAssemblyId} />
+        {isAssemblyChild && (
+          <AssemblyPartTransformSection nodeId={selectedId} onUpdate={handleUpdate} />
+        )}
+        <ArticraftInspectorSections nodeId={selectedId} />
+      </PanelWrapper>
+    )
+  }
+  if (!def && semanticEquipmentAssemblyId) {
+    const assembly = useScene.getState().nodes[semanticEquipmentAssemblyId]
+    return (
+      <PanelWrapper
+        defaultSectionsExpanded
+        icon={null}
+        onClose={handleClose}
+        showDynamicTab={false}
+        title={assembly?.name ?? node?.name ?? 'Equipment'}
+        width={320}
+      >
+        <SemanticInspectorSection nodeId={semanticEquipmentAssemblyId} />
+        <ArticraftInspectorSections nodeId={selectedId} />
+      </PanelWrapper>
+    )
+  }
+  if (!def && node?.type === 'assembly') {
+    const children = Array.isArray((node as { children?: unknown }).children)
+      ? ((node as { children?: unknown[] }).children ?? [])
+      : []
+    return (
+      <PanelWrapper
+        icon={null}
+        onClose={handleClose}
+        showDynamicTab={false}
+        title={node.name ?? 'Assembly'}
+        width={320}
+      >
+        <PanelSection title="组合设置">
+          <div className="grid gap-1.5 text-[11px]">
+            <div className="rounded border border-border/45 bg-background/40 px-2 py-1.5">
+              <div className="text-foreground">普通组合</div>
+              <div className="text-muted-foreground">
+                这是空间组合容器，不是行业设备；不会显示设备参数、端口或数据能力。
+              </div>
+            </div>
+            <div className="flex justify-between rounded border border-border/40 bg-muted/15 px-2 py-1.5">
+              <span className="text-muted-foreground">子对象</span>
+              <span className="text-foreground">{children.length}</span>
+            </div>
+            <div className="rounded border border-border/40 bg-muted/15 px-2 py-1.5 text-muted-foreground">
+              后续可从这里进入“转换为设备”，为组合补充设备类型、语义部件、端口和数据动态。
+            </div>
+          </div>
+        </PanelSection>
         <ArticraftInspectorSections nodeId={selectedId} />
       </PanelWrapper>
     )
@@ -187,7 +266,7 @@ export function ParametricInspector() {
       {isAssemblyChild && (
         <AssemblyPartTransformSection nodeId={selectedId} onUpdate={handleUpdate} />
       )}
-      <NodeMaterialSection nodeId={selectedId} />
+      {!isSemanticEquipmentPart && <NodeMaterialSection nodeId={selectedId} />}
       <ArticraftInspectorSections nodeId={selectedId} />
       {(canMove || canDelete) && (
         <PanelSection title="操作">

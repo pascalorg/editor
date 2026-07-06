@@ -621,6 +621,37 @@ describe('composePartPrimitives', () => {
     expect(shell?.height).toBe(13.2)
   })
 
+  test('composes vertical storage tank shells as straight atmospheric tanks', () => {
+    const shapes = composePartPrimitives({
+      name: 'Crude storage tank',
+      parts: [
+        {
+          kind: 'storage_tank_shell',
+          semanticRole: 'vessel_shell',
+          height: 3.4,
+          radius: 0.9,
+          axis: 'y',
+          position: [0, 1.9, 0],
+          material: { properties: { color: '#cbd5e1', opacity: 0.34, transparent: true } },
+        },
+      ],
+    })
+
+    const shell = shapes.find((shape) => shape.semanticRole === 'vessel_shell')
+    const roof = shapes.find((shape) => shape.semanticRole === 'vessel_roof')
+    expect(shell?.kind).toBe('hollow-cylinder')
+    expect(shell?.height).toBe(3.4)
+    expect(shell?.radius).toBe(0.9)
+    expect(roof?.kind).toBe('cylinder')
+    expect(roof?.material?.properties?.opacity).toBeGreaterThan(
+      shell?.material?.properties?.opacity ?? 1,
+    )
+    expect(shapes.some((shape) => shape.semanticRole === 'foundation_ring')).toBe(true)
+    expect(shapes.filter((shape) => shape.semanticRole === 'vessel_head')).toHaveLength(0)
+    expect(shapes.filter((shape) => shape.semanticRole === 'support_leg')).toHaveLength(0)
+    expect(shapes.every((shape) => shape.sourcePartKind === 'storage_tank_shell')).toBe(true)
+  })
+
   test('composes tank liquid volume as an editable transparent cylinder', () => {
     const shapes = composePartPrimitives({
       name: 'Storage tank liquid preview',
@@ -799,9 +830,7 @@ describe('composePartPrimitives', () => {
     expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_stringer')).toHaveLength(
       2,
     )
-    expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_landing')).toHaveLength(
-      2,
-    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_stair_landing')).toHaveLength(2)
     expect(shapes.some((shape) => shape.semanticRole === 'helical_stair_post')).toBe(true)
     expect(shapes.every((shape) => shape.sourcePartKind === 'helical_stair')).toBe(true)
   })
@@ -823,10 +852,18 @@ describe('composePartPrimitives', () => {
       ],
     })
 
-    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_tread').length).toBeGreaterThan(14)
-    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_guard_rail')).toHaveLength(1)
-    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_stringer')).toHaveLength(2)
-    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_landing')).toHaveLength(2)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'helical_ladder_tread').length,
+    ).toBeGreaterThan(14)
+    expect(
+      shapes.filter((shape) => shape.semanticRole === 'helical_ladder_guard_rail'),
+    ).toHaveLength(1)
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_stringer')).toHaveLength(
+      2,
+    )
+    expect(shapes.filter((shape) => shape.semanticRole === 'helical_ladder_landing')).toHaveLength(
+      2,
+    )
     expect(shapes.some((shape) => shape.semanticRole === 'helical_ladder_post')).toBe(true)
     expect(shapes.every((shape) => shape.sourcePartKind === 'helical_ladder')).toBe(true)
   })

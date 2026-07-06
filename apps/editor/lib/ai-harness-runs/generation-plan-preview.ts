@@ -177,7 +177,7 @@ function stepsForRoute(route: AiIntentRoute): readonly GenerationPlanStep[] {
         label: 'Apply semantic binding',
         status: route.selectionScope?.nodeIds.length ? 'ready' : 'blocked',
         detail:
-          'Write a dynamic binding to the selected equipment so Data Lens and preview runtime can read the same contract.',
+          'Write a dynamic binding to the selected equipment so data binding labels and preview runtime can read the same contract.',
       },
     ]
   }

@@ -91,17 +91,17 @@ function equipmentLensItems(nodes: LensNodeMap) {
 }
 
 export const EquipmentLensOverlay = memo(function EquipmentLensOverlay() {
-  const canvasLens = useEditor((state) => state.canvasLens)
+  const showEquipmentOverlay = useEditor((state) => state.showEquipmentOverlay)
   const nodes = useScene((state) => state.nodes)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
   const items = useMemo(
-    () => (canvasLens === 'equipment' ? equipmentLensItems(nodes) : []),
-    [canvasLens, nodes],
+    () => (showEquipmentOverlay ? equipmentLensItems(nodes) : []),
+    [showEquipmentOverlay, nodes],
   )
   const selectedIdSet = useMemo(() => new Set(selectedIds.map(String)), [selectedIds])
 
-  if (canvasLens !== 'equipment' || items.length === 0) return null
+  if (!showEquipmentOverlay || items.length === 0) return null
 
   return (
     <group name="equipment-lens-overlay">

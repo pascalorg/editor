@@ -10,7 +10,7 @@
     "zh-CN",
     "en-US"
   ],
-  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区。",
+  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区；生成结果面向 Equipment/Data/Source 视角使用，工艺模板仅作为 AI 生成编排依据。",
   "profiles": [
     "profiles/generated.json"
   ],

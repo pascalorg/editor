@@ -2,13 +2,7 @@ import type { AnyNode } from '@pascal-app/core'
 import { assetSourceLabel, readAssetSourceContract } from './asset-source-contract'
 import { resolveObjectCapabilities } from './object-capabilities'
 
-export type SceneStructureMode =
-  | 'process'
-  | 'spatial'
-  | 'system'
-  | 'data'
-  | 'asset-source'
-  | 'elevation'
+export type SceneStructureMode = 'spatial' | 'system' | 'data' | 'asset-source' | 'elevation'
 
 export type SceneStructureItem = {
   id: string
@@ -197,82 +191,6 @@ function sourcePackLabel(metadata: AnyRecord) {
   return id ? `${id}${version ? `@${version}` : ''}` : undefined
 }
 
-function buildProcessGroups(nodes: NodeMap): SceneStructureGroup[] {
-  const groups = new Map<string, SceneStructureGroup>()
-  const stations = new Map<
-    string,
-    {
-      node: AnyNode
-      processId?: string
-      stationId?: string
-      label: string
-      detail?: string
-      badge?: string
-      rank: number
-    }
-  >()
-  for (const node of structureCandidates(nodes)) {
-    const metadata = metadataOf(node)
-    const assembly = equipmentAssembly(metadata)
-    const processId = stringValue(metadata.processId)
-    const stationId = stringValue(metadata.stationId) ?? stringValue(assembly?.stationId)
-    if (!stationId && !assembly) continue
-    const stationKey = stationId ? `${processId ?? 'process'}:${stationId}` : String(node.id)
-    const rank = processStationRank(node)
-    const current = stations.get(stationKey)
-    if (current && current.rank > rank) continue
-    if (current && current.rank === rank && String(current.node.id) < String(node.id)) continue
-    const badge =
-      stringValue(metadata.equipmentRole) ??
-      stringValue(assembly?.equipmentFamily) ??
-      stringValue(equipmentContract(metadata)?.equipmentFamily)
-    stations.set(stationKey, {
-      node,
-      processId,
-      stationId,
-      label:
-        stringValue(metadata.processDisplayLabel) ??
-        stringValue(metadata.processLabel) ??
-        (processId ? processId.replaceAll('_', ' ') : 'Single equipment'),
-      detail: sourcePackLabel(metadata),
-      badge: badge === stationId ? undefined : badge,
-      rank,
-    })
-  }
-
-  for (const station of stations.values()) {
-    const assembly = equipmentAssembly(metadataOf(station.node))
-    const groupId = station.processId ?? 'process:single-equipment'
-    addItem(
-      groups,
-      {
-        id: groupId,
-        label: station.label,
-        detail: station.detail,
-      },
-      createItem(
-        station.node,
-        station.stationId ? `station: ${station.stationId}` : stringValue(assembly?.profileId),
-        station.badge,
-      ),
-    )
-  }
-  return sortedGroups(groups)
-}
-
-function processStationRank(node: AnyNode) {
-  const type = nodeType(node)
-  const metadata = metadataOf(node)
-  if (equipmentAssembly(metadata) || equipmentContract(metadata)) return 50
-  if (type === 'assembly') return 40
-  if (type === 'tank' || type.startsWith('factory:')) return 35
-  if (type === 'item') return 30
-  if (type === 'zone') return 20
-  if (CIVIL_TYPES.has(type)) return 10
-  if (PIPE_TYPES.has(type)) return 5
-  return 15
-}
-
 function nearestLevel(node: AnyNode, nodes: NodeMap): AnyNode | undefined {
   return parentChain(node, nodes).find((parent) => nodeType(parent) === 'level')
 }
@@ -436,17 +354,17 @@ function buildAssetSourceGroups(nodes: NodeMap): SceneStructureGroup[] {
 }
 
 export function suggestSceneStructureMode(nodes: NodeMap): SceneStructureMode {
-  let hasProcess = false
   let hasFactorySource = false
   let hasLevels = false
   for (const node of Object.values(nodes)) {
     if (!node) continue
     const metadata = metadataOf(node)
-    if (metadata.processId || metadata.stationId) hasProcess = true
-    if (metadata.processDomain || sourcePackLabel(metadata)) hasFactorySource = true
+    if (metadata.processDomain || sourcePackLabel(metadata) || equipmentAssembly(metadata)) {
+      hasFactorySource = true
+    }
     if (nodeType(node) === 'level') hasLevels = true
   }
-  if (hasProcess || hasFactorySource) return 'process'
+  if (hasFactorySource) return 'system'
   if (hasLevels) return 'elevation'
   return 'spatial'
 }
@@ -460,17 +378,15 @@ export function buildSceneStructure(input: {
   const mode = input.mode ?? suggestedMode
   const rootNodeIds = input.rootNodeIds ?? []
   const groups =
-    mode === 'process'
-      ? buildProcessGroups(input.nodes)
-      : mode === 'spatial'
-        ? buildSpatialGroups(input.nodes, rootNodeIds)
-        : mode === 'system'
-          ? buildSystemGroups(input.nodes)
-          : mode === 'data'
-            ? buildDataGroups(input.nodes)
-            : mode === 'asset-source'
-              ? buildAssetSourceGroups(input.nodes)
-              : buildElevationGroups(input.nodes, rootNodeIds)
+    mode === 'spatial'
+      ? buildSpatialGroups(input.nodes, rootNodeIds)
+      : mode === 'system'
+        ? buildSystemGroups(input.nodes)
+        : mode === 'data'
+          ? buildDataGroups(input.nodes)
+          : mode === 'asset-source'
+            ? buildAssetSourceGroups(input.nodes)
+            : buildElevationGroups(input.nodes, rootNodeIds)
   return {
     mode,
     groups,

@@ -6,7 +6,6 @@ import {
   Cable,
   CircleDot,
   Database,
-  Factory,
   Layers,
   Map,
   Package,
@@ -34,7 +33,6 @@ const STRUCTURE_MODES: Array<{
   label: string
   icon: ComponentType<{ className?: string }>
 }> = [
-  { id: 'process', label: 'Process', icon: Factory },
   { id: 'spatial', label: 'Spatial', icon: Map },
   { id: 'system', label: 'System', icon: Cable },
   { id: 'data', label: 'Data', icon: Database },

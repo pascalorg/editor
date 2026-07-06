@@ -44,10 +44,6 @@ export function stationIdOf(node: AnyNode | undefined) {
   return stringValue(metadata.stationId) ?? stringValue(assembly?.stationId)
 }
 
-export function processIdOf(node: AnyNode | undefined) {
-  return stringValue(metadataOf(node).processId)
-}
-
 export function nodeBasePosition(node: AnyNode | undefined): [number, number, number] {
   if (!node) return [0, 0, 0]
   return vector3((node as unknown as AnyRecord).position) ?? [0, 0, 0]

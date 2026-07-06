@@ -4,14 +4,19 @@ import type {
   SemanticRecipeEditableParam,
   SemanticRecipePort,
 } from '@pascal-app/core'
-import { numberParam, stringParam, type FactorySemanticRecipePart } from './common'
+import { type FactorySemanticRecipePart, numberParam, stringParam } from './common'
 
 export const STORAGE_TANK_RECIPE_ID = 'factory:storage-tank'
 
 export const STORAGE_TANK_EDITABLE_PART_ROLES = [
   'vessel_shell',
+  'vessel_roof',
+  'tank_bottom',
   'vessel_head',
   'liquid_volume',
+  'foundation_ring',
+  'top_rim',
+  'bottom_rim',
   'inlet_port',
   'outlet_port',
   'top_nozzle',
@@ -109,7 +114,8 @@ export function buildStorageTankProfileParts(input: {
   metalColor?: string
 }): FactorySemanticRecipePart[] {
   const orientation =
-    input.orientation ?? (input.height >= Math.max(input.length, input.width) ? 'vertical' : 'horizontal')
+    input.orientation ??
+    (input.height >= Math.max(input.length, input.width) ? 'vertical' : 'horizontal')
   const radius =
     orientation === 'vertical'
       ? Math.max(0.18, Math.min(input.length, input.width) / 2)
@@ -123,17 +129,20 @@ export function buildStorageTankProfileParts(input: {
   const liquidLevel = Math.max(0, Math.min(1, numberParam(input.params, 'liquidLevel', 0.55)))
   const liquidHeight = Math.max(0.02, vesselLength * liquidLevel)
   const liquidColor = stringParam(input.params, 'liquidColor', '#38bdf8')
-  const liquidOpacity = Math.max(0.08, Math.min(0.92, numberParam(input.params, 'liquidOpacity', 0.58)))
+  const liquidOpacity = Math.max(
+    0.08,
+    Math.min(0.92, numberParam(input.params, 'liquidOpacity', 0.58)),
+  )
+  const bottomLift = orientation === 'vertical' ? radius * 0.22 : radius * 1.18
   return [
     {
       id: 'shell',
-      kind: 'cylindrical_tank',
+      kind: orientation === 'vertical' ? 'storage_tank_shell' : 'cylindrical_tank',
       semanticRole: 'vessel_shell',
+      sourcePartKind: orientation === 'vertical' ? 'storage_tank_shell' : 'cylindrical_tank',
       axis: orientation === 'vertical' ? 'y' : 'x',
       position:
-        orientation === 'vertical'
-          ? [0, vesselLength / 2 + radius * 0.28, 0]
-          : [0, radius * 1.18, 0],
+        orientation === 'vertical' ? [0, vesselLength / 2 + bottomLift, 0] : [0, bottomLift, 0],
       length: vesselLength,
       height: vesselLength,
       radius,
@@ -156,8 +165,8 @@ export function buildStorageTankProfileParts(input: {
       axis: orientation === 'vertical' ? 'y' : 'x',
       position:
         orientation === 'vertical'
-          ? [0, liquidHeight / 2 + radius * 0.28, 0]
-          : [-(vesselLength - liquidHeight) / 2, radius * 1.18, 0],
+          ? [0, liquidHeight / 2 + bottomLift, 0]
+          : [-(vesselLength - liquidHeight) / 2, bottomLift, 0],
       height: liquidHeight,
       radius: radius * 0.9,
       color: liquidColor,
@@ -183,15 +192,24 @@ export function buildStorageTankProfileParts(input: {
     },
     {
       id: 'access_ladder',
-      kind: 'platform_ladder',
+      kind: orientation === 'vertical' ? 'helical_ladder' : 'platform_ladder',
       semanticRole: 'access_ladder',
+      sourcePartKind: orientation === 'vertical' ? 'helical_ladder' : 'platform_ladder',
       position:
         orientation === 'vertical'
-          ? [radius * 0.92, Math.max(0.85, input.height * 0.46), radius * 0.18]
+          ? [0, bottomLift + vesselLength * 0.5, 0]
           : [0, Math.max(0.65, input.height * 0.62), radius * 1.08],
       length: Math.max(0.6, radius * 0.72),
       width: Math.max(0.34, radius * 0.38),
       height: Math.max(0.9, input.height * 0.76),
+      innerRadius: radius * 1.04,
+      outerRadius: radius * 1.26,
+      sweepAngle: Math.PI * 2.25,
+      startAngle: -Math.PI * 0.2,
+      stepCount: 18,
+      ringCount: 16,
+      railingHeight: 0.34,
+      wireRadius: Math.max(0.012, radius * 0.018),
       metalColor,
     },
     {
@@ -217,16 +235,20 @@ export function buildStorageTankProfileParts(input: {
 }
 
 export function buildStorageTankPorts(
-  input: {
-    height?: number
-    medium?: string
-  } = {},
+  input: { height?: number; medium?: string } = {},
 ): SemanticRecipePort[] {
   const height = input.height ?? 2.4
   const medium = input.medium ?? 'material'
   return [
     { id: 'inlet', role: 'process-inlet', medium, side: 'left', height: height * 0.58, offset: 0 },
-    { id: 'outlet', role: 'process-outlet', medium, side: 'right', height: height * 0.38, offset: 0 },
+    {
+      id: 'outlet',
+      role: 'process-outlet',
+      medium,
+      side: 'right',
+      height: height * 0.38,
+      offset: 0,
+    },
   ]
 }
 

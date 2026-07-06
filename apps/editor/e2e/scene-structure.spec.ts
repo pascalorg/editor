@@ -365,7 +365,7 @@ function articraftJointGraph() {
   }
 }
 
-test('scene structure defaults factory scenes to process and preserves elevation/source modes', async ({
+test('scene structure defaults factory scenes to system and preserves equipment/data/source modes', async ({
   page,
   request,
 }) => {
@@ -382,6 +382,10 @@ test('scene structure defaults factory scenes to process and preserves elevation
   try {
     await page.addInitScript(() => {
       window.localStorage.clear()
+      window.localStorage.setItem(
+        'pascal-editor-ui-preferences',
+        JSON.stringify({ state: { activeSidebarPanel: 'site' }, version: 0 }),
+      )
     })
     await page.goto(`/scene/${sceneId}?factoryE2e=1`, {
       waitUntil: 'domcontentloaded',
@@ -391,39 +395,33 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await page.getByTestId('sidebar-tab-site').click()
     await expect(page.getByTestId('sidebar-tab-site')).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('scene-structure-panel')).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: Process')
-    await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
+    await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: System')
+    await expect(page.getByTestId('scene-structure-summary')).toContainText('3 objects / 3 groups')
     await expect(page.getByText('Atmospheric distillation unit')).toBeVisible()
     await expect(page.getByText('Product tank farm')).toBeVisible()
-    await expect(page.getByTestId('canvas-lens-toolbar')).toBeVisible()
-    await expect(page.getByTestId('canvas-lens-layout')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('canvas-lens-toolbar')).toHaveCount(0)
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tower}`)).toHaveCount(0)
 
-    await page.getByTestId('canvas-lens-process').click()
-    await expect(page.getByTestId('canvas-lens-process')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
-    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeVisible()
-    await expect(page.getByTestId(`process-lens-port-${ids.tower}-inlet`)).toBeVisible()
-    await expect(page.getByTestId(`process-lens-port-${ids.tower}-outlet`)).toBeVisible()
-    await expect(page.getByTestId(`process-lens-port-${ids.tank}-inlet`)).toBeVisible()
-    await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeVisible()
+    await page.getByTestId('viewer-display-menu').click()
+    await page.getByTestId('viewer-display-equipment-overlay').click()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tower}`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-part-${ids.tower}-vessel_shell`)).toBeVisible()
+    await expect(page.getByTestId(`equipment-lens-ports-${ids.tank}`)).toContainText('2 ports')
 
-    await page.getByTestId(`process-lens-station-${ids.tower}`).click()
+    await page.locator(`[data-scene-structure-node-id="${ids.tower}"]`).click()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',
     )
     await expect(page.getByRole('heading', { name: 'Atmospheric distillation unit' })).toBeVisible()
-    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
-      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    }
     await expect(page.getByTestId('semantic-inspector-equipment')).toBeVisible()
     await expect(page.getByTestId('semantic-inspector-equipment')).toContainText('column')
     await expect(page.getByTestId('semantic-inspector-equipment-params')).toContainText(
       'Shell opacity',
     )
     await expect(page.getByTestId('semantic-inspector-equipment-param-shellOpacity')).toBeVisible()
-    await page.getByTestId('semantic-inspector-tab-parts').click()
     await expect(page.getByTestId(`semantic-inspector-part-vessel_shell`)).toBeVisible()
     await expect(page.getByTestId('semantic-inspector-part-vessel_shell-controls')).toContainText(
       'Part material',
@@ -431,7 +429,7 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('semantic-inspector-part-vessel_shell-opacity')).toContainText(
       'Opacity',
     )
-    await page.getByTestId('semantic-inspector-tab-ports').click()
+    await page.getByRole('button', { name: '连接与来源' }).click()
     await expect(page.getByTestId('semantic-inspector-port-inlet')).toContainText('crude')
     await expect(page.getByTestId('semantic-inspector-port-outlet')).toContainText('product')
     await expect(page.getByTestId('semantic-inspector-port-outlet-connection-0')).toContainText(
@@ -440,7 +438,6 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByTestId('semantic-inspector-port-outlet-connection-0')).toContainText(
       'pipe_transfer_e2e',
     )
-    await page.getByTestId('semantic-inspector-tab-data').click()
     await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
       'color: machine.temperature',
     )
@@ -451,31 +448,20 @@ test('scene structure defaults factory scenes to process and preserves elevation
       'machine.temperature',
     )
     await expect(page.getByTestId('semantic-inspector-data-value')).toContainText('28')
-    await page.getByTestId('semantic-inspector-tab-source').click()
     await expect(page.getByTestId('semantic-inspector-source')).toContainText(
       'industry.refinery.basic@0.2.0',
     )
 
-    await page.getByTestId('canvas-lens-equipment').click()
-    await expect(page.getByTestId('canvas-lens-equipment')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
-    await expect(page.getByTestId(`equipment-lens-card-${ids.tower}`)).toBeVisible()
-    await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeVisible()
-    await expect(page.getByTestId(`equipment-lens-part-${ids.tower}-vessel_shell`)).toBeVisible()
-    await expect(page.getByTestId(`equipment-lens-ports-${ids.tank}`)).toContainText('2 ports')
-
-    await page.getByTestId(`equipment-lens-card-${ids.tank}`).click()
+    await page.locator(`[data-scene-structure-node-id="${ids.tank}"]`).click()
     await expect(page.locator(`[data-scene-structure-node-id="${ids.tank}"]`)).toHaveAttribute(
       'data-scene-structure-selected',
       'true',
     )
     await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
 
-    await page.getByTestId('canvas-lens-data').click()
-    await expect(page.getByTestId('canvas-lens-data')).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByTestId(`process-lens-station-${ids.tower}`)).toBeHidden()
-    await expect(page.getByTestId(`process-lens-route-${ids.tower}-${ids.tank}`)).toBeHidden()
-    await expect(page.getByTestId(`equipment-lens-card-${ids.tank}`)).toBeHidden()
+    await page.getByTestId('viewer-display-menu').click()
+    await page.getByTestId('viewer-display-data-binding-overlay').click()
+    await page.keyboard.press('Escape')
     await expect(page.getByTestId(`data-lens-card-${ids.tower}`)).toBeVisible()
     await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible()
     await expect(page.getByTestId(`data-lens-status-${ids.tower}`)).toContainText('1 binding')
@@ -484,14 +470,6 @@ test('scene structure defaults factory scenes to process and preserves elevation
     )
     await expect(page.getByTestId(`data-lens-value-${ids.tower}`)).toContainText('28')
     await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('Ready to bind')
-    await expect(page.locator(`[data-scene-structure-node-id="${ids.tower}"]`)).not.toHaveAttribute(
-      'data-scene-structure-selected',
-      'true',
-    )
-    await expect(page.locator(`[data-scene-structure-node-id="${ids.tank}"]`)).toHaveAttribute(
-      'data-scene-structure-selected',
-      'true',
-    )
 
     await page.getByTestId('scene-structure-mode-asset-source').click()
     await expect(page.getByTestId('scene-structure-summary')).toContainText('3 objects / 1 groups')
@@ -502,14 +480,14 @@ test('scene structure defaults factory scenes to process and preserves elevation
     await expect(page.getByText('Ground').first()).toBeVisible()
 
     await page.getByTestId('scene-structure-mode-auto').click()
-    await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: Process')
-    await expect(page.getByTestId('scene-structure-summary')).toContainText('2 objects / 1 groups')
+    await expect(page.getByTestId('scene-structure-mode-auto')).toContainText('Auto: System')
+    await expect(page.getByTestId('scene-structure-summary')).toContainText('3 objects / 3 groups')
   } finally {
     await request.delete(`/api/scenes/${sceneId}`).catch(() => undefined)
   }
 })
 
-test('AI data binding applies semantic tank level and appears in Data Lens and Inspector', async ({
+test('AI data binding applies semantic tank level and appears in binding labels and Inspector', async ({
   page,
   request,
 }) => {
@@ -679,7 +657,9 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
       .toBe(62)
 
     await page.getByTestId('sidebar-tab-site').click()
-    await page.getByTestId('canvas-lens-data').click()
+    await page.getByTestId('viewer-display-menu').click()
+    await page.getByTestId('viewer-display-data-binding-overlay').click()
+    await page.keyboard.press('Escape')
     await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible({ timeout: 30_000 })
     await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('1 binding')
     await expect(page.getByTestId(`data-lens-binding-${ids.tank}`)).toContainText(
@@ -689,11 +669,6 @@ test('AI data binding applies semantic tank level and appears in Data Lens and I
 
     await page.getByTestId(`data-lens-card-${ids.tank}`).click()
     await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
-    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
-      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    }
-    await page.getByTestId('semantic-inspector-tab-data').click()
     await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
       'level: refinery.tank.level',
     )
@@ -969,7 +944,7 @@ test('station rerun result replaces the semantic assembly on the canvas', async 
   }
 })
 
-test('dragging a fixed live data field onto a Data Lens card binds semantic equipment', async ({
+test('dragging a fixed live data field onto a data binding label binds semantic equipment', async ({
   page,
   request,
 }) => {
@@ -1008,7 +983,9 @@ test('dragging a fixed live data field onto a Data Lens card binds semantic equi
       .toBe(true)
 
     await page.getByTestId('sidebar-tab-site').click()
-    await page.getByTestId('canvas-lens-data').click()
+    await page.getByTestId('viewer-display-menu').click()
+    await page.getByTestId('viewer-display-data-binding-overlay').click()
+    await page.keyboard.press('Escape')
     await expect(page.getByTestId(`data-lens-card-${ids.tank}`)).toBeVisible({ timeout: 30_000 })
     await expect(page.getByTestId(`data-lens-status-${ids.tank}`)).toContainText('Ready to bind')
 
@@ -1048,11 +1025,6 @@ test('dragging a fixed live data field onto a Data Lens card binds semantic equi
 
     await page.getByTestId(`data-lens-card-${ids.tank}`).click()
     await expect(page.getByRole('heading', { name: 'Product tank farm' })).toBeVisible()
-    await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    if (!(await page.getByTestId('semantic-inspector-tab-data').isVisible())) {
-      await page.getByRole('button', { name: 'Semantic Inspector' }).click()
-    }
-    await page.getByTestId('semantic-inspector-tab-data').click()
     await expect(page.getByTestId('semantic-inspector-data-binding')).toContainText(
       'level: refinery.tank.level',
     )

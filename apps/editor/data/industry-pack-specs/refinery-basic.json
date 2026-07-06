@@ -3,7 +3,7 @@
   "id": "industry.refinery.basic",
   "name": "炼油厂基础行业包",
   "version": "0.1.0",
-  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区。",
+  "description": "面向一句话创建炼油厂的基础行业包，覆盖原油罐区、常减压、转化/加氢、硫回收、火炬、公用工程和产品罐区；生成结果面向 Equipment/Data/Source 视角使用，工艺模板仅作为 AI 生成编排依据。",
   "capabilities": [
     "factory_creation"
   ],
@@ -455,13 +455,13 @@
       "defaultDimensions": {
         "length": 5.6,
         "width": 5.6,
-        "height": 4.2
+        "height": 6.4
       },
       "parts": [
         {
-          "kind": "cylindrical_tank",
+          "kind": "storage_tank_shell",
           "semanticRole": "vessel_shell",
-          "height": 4.2,
+          "height": 6.4,
           "radius": 2.4,
           "axis": "y",
           "primaryColor": "#cbd5e1"
@@ -508,13 +508,13 @@
       "defaultDimensions": {
         "length": 5.2,
         "width": 5.2,
-        "height": 3.8
+        "height": 5.8
       },
       "parts": [
         {
-          "kind": "cylindrical_tank",
+          "kind": "storage_tank_shell",
           "semanticRole": "vessel_shell",
-          "height": 3.8,
+          "height": 5.8,
           "radius": 2.2,
           "axis": "y",
           "primaryColor": "#e5e7eb"

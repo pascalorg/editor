@@ -1738,6 +1738,29 @@ export const PIPE_SYSTEM_PART_DEFINITIONS: readonly PartDefinition[] = [
 
 export const TANK_PART_DEFINITIONS: readonly PartDefinition[] = [
   {
+    id: 'tank.storage_tank_shell',
+    family: 'tank',
+    kind: 'storage_tank_shell',
+    semanticRole: 'vessel_shell',
+    aliases: [
+      'atmospheric_storage_tank',
+      'flat_roof_tank',
+      'floating_roof_tank',
+      'storage_tank_shell',
+      'tank_farm_tank',
+    ],
+    required: true,
+    layoutRole: 'vessel_shell',
+    description:
+      'Flat-roof atmospheric storage tank shell with visible roof, bottom, rims, and foundation.',
+    params: {
+      height: { type: 'number', min: 0.6, max: 24, default: 3.2 },
+      radius: { type: 'number', min: 0.12, max: 6, default: 0.8 },
+      axis: { type: 'enum', values: ['y'], default: 'y' },
+      primaryColor: { type: 'color', default: '#cbd5e1' },
+    },
+  },
+  {
     id: 'tank.cylindrical_tank',
     family: 'tank',
     kind: 'cylindrical_tank',
