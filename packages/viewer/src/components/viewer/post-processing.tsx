@@ -598,6 +598,12 @@ const PostProcessingPasses = ({
       }
     } catch (error) {
       hasPipelineErrorRef.current = true
+      // A mid-pass exception (e.g. thrown inside a PassNode's scene render)
+      // leaves the pass's MRT render target bound on the renderer. Every
+      // pipeline compiled afterwards then validates against that 3-attachment
+      // framebuffer and fails, poisoning the rebuilt pipeline and the fallback
+      // path alike. Restore the default target before retrying.
+      ;(renderer as any).setRenderTarget?.(null)
       console.error('[viewer/post-processing] Render pass failed.', {
         retryCount: retryCountRef.current,
         rendererCtor: (renderer as any).constructor?.name,

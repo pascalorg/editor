@@ -122,7 +122,14 @@ function splitSlabFacesByFacing(geometry: BufferGeometry): {
   const build = (data: { pos: number[]; uv: number[] }) => {
     const geo = new BufferGeometry()
     geo.setAttribute('position', new Float32BufferAttribute(data.pos, 3))
-    if (data.uv.length > 0) geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
+    if (data.uv.length > 0) {
+      geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
+      // Slot finishes with an aoMap (e.g. the default woodplank) sample uv2;
+      // a referenced-but-missing attribute crashes the WebGPU renderer mid
+      // scene pass, which leaks the MRT render target and poisons every
+      // pipeline built afterwards.
+      geo.setAttribute('uv2', new Float32BufferAttribute(data.uv.slice(), 2))
+    }
     geo.computeVertexNormals()
     return geo
   }

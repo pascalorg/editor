@@ -497,8 +497,10 @@ function updateMergedRoofGeometry(
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
-    // Keep a valid position attribute so Drei's BVH can index safely.
-    mergedMesh.geometry = new THREE.BoxGeometry(0, 0, 0)
+    // Keep a valid position attribute so Drei's BVH can index safely. Must
+    // also carry uv2 — the roof finish's aoMap samples it, and a missing
+    // attribute crashes the WebGPU renderer (BoxGeometry has no uv2).
+    mergedMesh.geometry = ensureRenderableGeometryAttributes(new THREE.BufferGeometry())
     return
   }
 
