@@ -150,11 +150,13 @@ function RightColumn({
   toolbarRight,
   children,
   overlays,
+  stageOverlay,
 }: {
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
   children: ReactNode
   overlays?: ReactNode
+  stageOverlay?: ReactNode
 }) {
   return (
     <div
@@ -174,6 +176,10 @@ function RightColumn({
       )}
       {/* Canvas area */}
       <div className="relative flex-1 overflow-hidden">{children}</div>
+      {/* Stage overlay — replaces the canvas visually (e.g. studio gallery)
+          while keeping it mounted. Sits below the viewer toolbar (z-20) so
+          the stage switch stays reachable. */}
+      {stageOverlay && <div className="absolute inset-0 z-10">{stageOverlay}</div>}
       {/* Overlays scoped to the viewer column. `data-viewer-bounds` marks the
           draggable region the floating inspector clamps itself to. */}
       {overlays && (
@@ -200,6 +206,7 @@ export interface EditorLayoutV2Props {
   viewerToolbarRight?: ReactNode
   viewerContent: ReactNode
   overlays?: ReactNode
+  stageOverlay?: ReactNode
 }
 
 export function EditorLayoutV2({
@@ -211,6 +218,7 @@ export function EditorLayoutV2({
   viewerToolbarRight,
   viewerContent,
   overlays,
+  stageOverlay,
 }: EditorLayoutV2Props) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
@@ -246,6 +254,7 @@ export function EditorLayoutV2({
         )}
         <RightColumn
           overlays={overlays}
+          stageOverlay={stageOverlay}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
         >

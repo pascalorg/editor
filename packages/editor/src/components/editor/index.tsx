@@ -138,6 +138,12 @@ export interface EditorProps {
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
+   * Full-bleed surface swapped in over the 3D canvas (v2) — e.g. the studio
+   * gallery. The canvas stays mounted underneath (no WebGL re-init) and the
+   * viewer toolbar stays on top so the host's stage switch remains reachable.
+   */
+  stageOverlay?: ReactNode
+  /**
    * Docked below the node inspector (v2). Hosts mount the "save as preset"
    * affordance here so it reads as part of the inspector surface and shows
    * only while a node is selected.
@@ -1077,6 +1083,7 @@ export default function Editor({
   sidebarTabs,
   viewerToolbarLeft,
   viewerToolbarRight,
+  stageOverlay,
   inspectorFooter,
   projectId,
   onLoad,
@@ -1364,7 +1371,7 @@ export default function Editor({
               navbarSlot={navbarSlot}
               overlays={
                 <>
-                  {!isCaptureMode && <FloatingLevelSelector />}
+                  {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
                   {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
@@ -1392,6 +1399,7 @@ export default function Editor({
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
               sidebarTabs={tabBarTabs}
+              stageOverlay={stageOverlay}
               viewerContent={viewerCanvas}
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}

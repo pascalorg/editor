@@ -157,6 +157,11 @@ export interface ThumbnailGenerateEvent {
   captureMode?: 'standard' | 'viewport' | 'area'
   cropRegion?: { x: number; y: number; width: number; height: number }
   /**
+   * Output size for `standard` captures (center-crop target). Defaults to
+   * 1920×1080; the capture overlay passes other aspect presets (9:16, 4:3…).
+   */
+  standardSize?: { w: number; h: number }
+  /**
    * When true, snap levels to their true positions before capturing (for a
    * consistent auto-thumbnail angle) and defer the capture if the tab is
    * hidden — the background auto-save path. Omit for user-driven captures
