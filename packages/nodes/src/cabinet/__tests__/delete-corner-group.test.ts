@@ -174,6 +174,7 @@ describe('cabinet corner member deletion', () => {
 
     const nodes = useScene.getState().nodes
     expect(nodes[moduleId]).toBeUndefined()
+    // The run still hosts the derived leg runs, so it must survive.
     expect(nodes[runId]).toBeDefined()
     for (const legId of legIds) {
       expect(nodes[legId]).toBeDefined()
@@ -193,6 +194,77 @@ describe('cabinet corner member deletion', () => {
 
     const metadata = cornerMetadata(useScene.getState().nodes[moduleId])
     expect('cabinetCornerSourceLink' in metadata).toBe(false)
+  })
+
+  test('deleting the only module of a run deletes the emptied run group', () => {
+    const { levelId, runId, moduleId } = seedCornerScene('empty-run-single')
+
+    useScene.getState().deleteNode(moduleId)
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[moduleId]).toBeUndefined()
+    expect(nodes[runId]).toBeUndefined()
+    const level = nodes[levelId] as { children?: AnyNodeId[] }
+    expect(level.children ?? []).not.toContain(runId)
+  })
+
+  test('deleting one of several modules keeps the run', () => {
+    const { levelId, runId, moduleId } = seedCornerScene('keep-run-sibling')
+    const secondModuleId = 'cabinet-module_keep-run-sibling-2' as AnyNodeId
+    const second = CabinetModuleNode.parse({
+      id: secondModuleId,
+      parentId: runId,
+      position: [0.9, 0.1, 0],
+      width: 0.9,
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [secondModuleId]: second as AnyNode,
+        [runId]: {
+          ...state.nodes[runId],
+          children: [moduleId, secondModuleId],
+        } as AnyNode,
+      },
+    }))
+
+    useScene.getState().deleteNode(moduleId)
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[moduleId]).toBeUndefined()
+    expect(nodes[runId]).toBeDefined()
+    expect(nodes[secondModuleId]).toBeDefined()
+    expect(nodes[levelId]).toBeDefined()
+  })
+
+  test('multi-select deleting every module of a run deletes the emptied run group', () => {
+    const { levelId, runId, moduleId } = seedCornerScene('empty-run-multiselect')
+    const secondModuleId = 'cabinet-module_empty-run-multiselect-2' as AnyNodeId
+    const second = CabinetModuleNode.parse({
+      id: secondModuleId,
+      parentId: runId,
+      position: [0.9, 0.1, 0],
+      width: 0.9,
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [secondModuleId]: second as AnyNode,
+        [runId]: {
+          ...state.nodes[runId],
+          children: [moduleId, secondModuleId],
+        } as AnyNode,
+      },
+    }))
+
+    useScene.getState().deleteNodes([moduleId, secondModuleId])
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[moduleId]).toBeUndefined()
+    expect(nodes[secondModuleId]).toBeUndefined()
+    expect(nodes[runId]).toBeUndefined()
+    const level = nodes[levelId] as { children?: AnyNodeId[] }
+    expect(level.children ?? []).not.toContain(runId)
   })
 
   test('deleting the whole source run removes the run subtree including the legs', () => {

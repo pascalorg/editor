@@ -1886,12 +1886,18 @@ export type ParametricDescriptor<N> = {
   ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Companion deletes that should be folded into the same user-intent delete
-   * gesture — e.g. deleting any member of an auto-generated cabinet corner
-   * group should remove the whole generated cluster. Called against the live
-   * scene BEFORE deletion; returned ids are recursively expanded through the
-   * normal descendant cascade.
+   * gesture — e.g. deleting the last module of a cabinet run should remove
+   * the now-empty run node too. Called against the live scene BEFORE
+   * deletion; returned ids are recursively expanded through the normal
+   * descendant cascade. `pendingDeleteIds` holds every id already part of
+   * the gesture so "would my parent become empty?" checks see sibling
+   * deletes from the same multi-select.
    */
-  onDeleteCascade?: (node: N, nodes: Record<AnyNodeId, AnyNode>) => AnyNodeId[]
+  onDeleteCascade?: (
+    node: N,
+    nodes: Record<AnyNodeId, AnyNode>,
+    pendingDeleteIds: ReadonlySet<AnyNodeId>,
+  ) => AnyNodeId[]
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**
    * Extra buttons rendered in the inspector's Actions section

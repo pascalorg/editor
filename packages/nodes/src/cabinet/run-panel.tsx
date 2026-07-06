@@ -199,8 +199,14 @@ export function CabinetRunPanel({
   const deleteModule = useCallback(
     (module: CabinetModuleNodeType) => {
       useScene.getState().deleteNode(module.id as AnyNodeId)
-      useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
-      setSelection({ selectedIds: [node.id] })
+      // Deleting the last module cascades the empty run away too — only
+      // keep it selected/dirty if it survived.
+      if (useScene.getState().nodes[node.id as AnyNodeId]) {
+        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+        setSelection({ selectedIds: [node.id] })
+      } else {
+        setSelection({ selectedIds: [] })
+      }
     },
     [node.id, setSelection],
   )

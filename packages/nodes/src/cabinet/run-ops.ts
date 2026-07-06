@@ -173,6 +173,29 @@ export function cabinetCornerUnlinkPatchesOnDelete(
 }
 
 /**
+ * A cabinet run is a grouping container — once its last child is deleted
+ * the empty run must go too, so no orphan group lingers in the scene graph
+ * or the persisted data. Children may be modules or derived corner leg
+ * runs (which position themselves relative to the run), so ANY survivor
+ * keeps the run alive. `pendingDeleteIds` covers multi-select deletes:
+ * siblings already part of the same gesture count as gone.
+ */
+export function cabinetEmptyRunCascadeDeleteIds(
+  node: CabinetEditableNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  pendingDeleteIds: ReadonlySet<AnyNodeId>,
+): AnyNodeId[] {
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  if (parent?.type !== 'cabinet') return []
+  const hasSurvivingChild = (parent.children ?? []).some((childId) => {
+    const id = childId as AnyNodeId
+    if (id === node.id || pendingDeleteIds.has(id)) return false
+    return nodes[id] != null
+  })
+  return hasSurvivingChild ? [] : [parent.id as AnyNodeId]
+}
+
+/**
  * Bump the run's layout revision — the geometryKey input that forces its
  * composite geometry (spans, countertop, plinth) to re-flow when a child
  * module changes in a way the run's own fields don't capture. Sibling runs

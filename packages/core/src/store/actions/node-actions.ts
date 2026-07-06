@@ -1073,7 +1073,7 @@ export const deleteNodesAction = (
       allIds.add(id)
       const node = nextNodes[id]
       const cascadeDeletes = node
-        ? nodeRegistry.get(node.type)?.parametrics?.onDeleteCascade?.(node, nextNodes)
+        ? nodeRegistry.get(node.type)?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds)
         : null
       if (cascadeDeletes) {
         for (const companionId of cascadeDeletes) collect(companionId)
