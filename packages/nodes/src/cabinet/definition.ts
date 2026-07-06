@@ -10,6 +10,7 @@ import type {
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { buildCabinetGeometry } from './geometry'
+import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
@@ -709,6 +710,13 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     ]),
   floorplan: buildCabinetFloorplan,
   quickActions: cabinetQuickActions,
+  // E operates the run: every child module's doors/drawers swing together.
+  keyboardActions: {
+    e: {
+      appliesTo: (node: AnyNode) => node.type === 'cabinet',
+      run: (node: AnyNode) => toggleCabinetOperationState(node.id as AnyNodeId),
+    },
+  },
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
@@ -831,6 +839,15 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   // plan-space translate would corrupt it on any rotated / offset run.
   floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
   quickActions: cabinetQuickActions,
+  // E animates this module's doors/drawers open ↔ closed (hood-only
+  // modules have nothing to operate).
+  keyboardActions: {
+    e: {
+      appliesTo: (node: AnyNode) =>
+        node.type === 'cabinet-module' && !isHoodOnlyCabinet(node as CabinetModuleNodeType),
+      run: (node: AnyNode) => toggleCabinetOperationState(node.id as AnyNodeId),
+    },
+  },
 
   presentation: {
     label: 'Cabinet Module',

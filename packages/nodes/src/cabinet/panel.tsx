@@ -5,7 +5,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { createSceneApi, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { createSceneApi, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -15,9 +15,15 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Pause, Play, Plus } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { CompartmentCard } from './compartment-card'
+import {
+  animateCabinetOperationState,
+  isCabinetAnimationRunning,
+  onCabinetAnimationChange,
+  stopCabinetAnimation,
+} from './interaction'
 import { CABINET_PRESETS, type CabinetPresetId } from './presets'
 import {
   addWallChildAbove,
@@ -37,7 +43,6 @@ import {
 import {
   backAnchoredModuleZ,
   type CabinetCompartment,
-  isFridgeCompartmentType,
   isHoodCompartmentType,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -80,7 +85,6 @@ const PRESET_BUTTON_CLASS =
 export default function CabinetPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
-  const animationFrameRef = useRef<number | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined) : undefined,
@@ -232,74 +236,25 @@ export default function CabinetPanel() {
     }
   }, [node, setSelection])
 
-  // Mid-flight frames publish through useLiveNodeOverrides rather than
-  // scene.updateNode: the temporal (undo) store records every updateNode, so
-  // per-rAF commits burned ~20 undo entries per play and could evict real
-  // history. Stop/finish commits once.
+  // Animation lives in ./interaction.ts, shared with the registry E-key
+  // action; the panel only mirrors its running state for the Play button.
   const stopAnimation = useCallback(() => {
-    if (animationFrameRef.current != null) {
-      window.cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
-    if (selectedId) {
-      const overrides = useLiveNodeOverrides.getState()
-      const liveValue = overrides.get(selectedId)?.operationState
-      if (typeof liveValue === 'number') {
-        updateNode({ operationState: liveValue })
-        overrides.clearFields(selectedId, ['operationState'])
-      }
-    }
-    setIsAnimating(false)
-  }, [selectedId, updateNode])
+    if (selectedId) stopCabinetAnimation(selectedId as AnyNodeId)
+  }, [selectedId])
 
   const animateOperationState = useCallback(
     (target: 0 | 1) => {
-      if (!selectedId) return
-      if (animationFrameRef.current != null) {
-        window.cancelAnimationFrame(animationFrameRef.current)
-        animationFrameRef.current = null
-      }
-
-      const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
-      if (liveNode?.type !== 'cabinet' && liveNode?.type !== 'cabinet-module') return
-
-      const start = liveNode.operationState ?? 0
-      if (Math.abs(start - target) < 1e-4) {
-        updateNode({ operationState: target })
-        setIsAnimating(false)
-        return
-      }
-
-      setIsAnimating(true)
-      const startTime = window.performance.now()
-      const hasFridge = stackForCabinet(liveNode).some((compartment) =>
-        isFridgeCompartmentType(compartment.type),
-      )
-      const duration = hasFridge ? 450 : 320
-
-      const step = (time: number) => {
-        const t = Math.min(1, (time - startTime) / duration)
-        const eased = 1 - (1 - t) ** 3
-        const nextValue = start + (target - start) * eased
-
-        if (t < 1) {
-          useLiveNodeOverrides.getState().set(selectedId, { operationState: nextValue })
-          animationFrameRef.current = window.requestAnimationFrame(step)
-          return
-        }
-
-        updateNode({ operationState: target })
-        useLiveNodeOverrides.getState().clearFields(selectedId, ['operationState'])
-        animationFrameRef.current = null
-        setIsAnimating(false)
-      }
-
-      animationFrameRef.current = window.requestAnimationFrame(step)
+      if (selectedId) animateCabinetOperationState(selectedId as AnyNodeId, target)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
-  useEffect(() => () => stopAnimation(), [stopAnimation])
+  useEffect(() => {
+    setIsAnimating(selectedId ? isCabinetAnimationRunning(selectedId as AnyNodeId) : false)
+    return onCabinetAnimationChange((nodeId, running) => {
+      if (nodeId === selectedId) setIsAnimating(running)
+    })
+  }, [selectedId])
 
   if (!node || (node.type !== 'cabinet' && node.type !== 'cabinet-module')) return null
 

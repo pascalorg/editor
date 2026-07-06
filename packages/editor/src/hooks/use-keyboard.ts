@@ -398,7 +398,13 @@ export const useKeyboard = ({
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
-          if (node?.type === 'door' && node.openingKind !== 'opening') {
+          const registryE = node && nodeRegistry.get(node.type)?.keyboardActions?.e
+          if (node && registryE?.appliesTo(node)) {
+            // Registry-driven E interaction. Same shape as the R/T arms.
+            e.preventDefault()
+            registryE.run(node)
+            sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'door' && node.openingKind !== 'opening') {
             e.preventDefault()
             toggleDoorOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')

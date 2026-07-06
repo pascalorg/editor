@@ -1120,6 +1120,8 @@ export type KeyboardActions = {
   r?: KeyboardAction
   /** T / Shift+T secondary action. */
   t?: KeyboardAction
+  /** E interaction action — operate the node (doors, drawers, appliances). */
+  e?: KeyboardAction
   /**
    * Set for kinds whose R/T rotation turns around a user-cyclable world
    * axis (Alt cycles Y → X → Z) — duct / pipe fittings with full 3D
