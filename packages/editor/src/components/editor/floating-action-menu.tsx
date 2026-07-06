@@ -39,7 +39,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { ArrowLeft, ArrowRight, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -152,22 +152,36 @@ function getAttributeVersion(
     : 0
 }
 
+// Single merged "add in this direction" glyph: an arrow with a small plus on
+// its tail, so it reads as one symbol instead of two unrelated icons.
+function AddDirectionIcon({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`h-4 w-4 ${direction === 'left' ? '-scale-x-100' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      {/* plus on the tail */}
+      <path d="M2 12h7" />
+      <path d="M5.5 8.5v7" />
+      {/* arrow pointing outward */}
+      <path d="M12 12h9" />
+      <path d="m16.5 7.5 4.5 4.5-4.5 4.5" />
+    </svg>
+  )
+}
+
 function QuickActionIcon({ icon }: { icon: NodeQuickActionIcon | undefined }) {
   switch (icon) {
     case 'add-left':
-      return (
-        <>
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <Plus className="h-3.5 w-3.5" />
-        </>
-      )
+      return <AddDirectionIcon direction="left" />
     case 'add-right':
-      return (
-        <>
-          <Plus className="h-3.5 w-3.5" />
-          <ArrowRight className="h-3.5 w-3.5" />
-        </>
-      )
+      return <AddDirectionIcon direction="right" />
     case 'add':
       return <Plus className="h-3.5 w-3.5" />
     default:
