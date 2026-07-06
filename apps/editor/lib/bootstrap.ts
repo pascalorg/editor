@@ -1,10 +1,10 @@
 import {
   type AnyNodeDefinition,
   discoverPlugins,
+  extendPluginDiscovery,
   loadPlugin,
   nodeRegistry,
   registerNode,
-  setPluginDiscovery,
 } from '@pascal-app/core'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { treesPlugin } from '@pascal-app/plugin-trees'
@@ -80,9 +80,8 @@ export async function loadExternalPlugins(): Promise<void> {
 }
 
 // Register the first-party example plugin (trees node + presets rail panel)
-// through the same discovery hook a third-party pack would use. Must be set
-// before `loadExternalPlugins()` reads it below.
-setPluginDiscovery(async () => [treesPlugin])
+// alongside any host-provided discovery source instead of replacing it.
+extendPluginDiscovery(async () => [treesPlugin])
 
 loadBuiltinsSync()
 void loadExternalPlugins()
