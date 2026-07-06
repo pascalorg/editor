@@ -42,8 +42,8 @@ import {
   stampSlot,
 } from './shared'
 
-const GAS_HOB_BURNER_RADIUS = 0.052
-type CooktopBurnerSpec = { x: number; z: number; size: number }
+export const GAS_HOB_BURNER_RADIUS = 0.052
+export type CooktopBurnerSpec = { x: number; z: number; size: number }
 const GAS_HOB_BURNER_LAYOUTS: Record<
   Extract<CooktopLayout, 'gas-2burner' | 'gas-4burner' | 'gas-5burner-wok' | 'gas-6burner'>,
   CooktopBurnerSpec[]
@@ -74,7 +74,7 @@ const GAS_HOB_BURNER_LAYOUTS: Record<
     { x: 0.3, z: 0.11, size: 0.85 },
   ],
 }
-type InductionZoneSpec = { x: number; z: number; radius: number; w?: number; d?: number }
+export type InductionZoneSpec = { x: number; z: number; radius: number; w?: number; d?: number }
 const INDUCTION_ZONE_LAYOUTS: Record<
   Extract<CooktopLayout, 'induction-2zone' | 'induction-4zone'>,
   InductionZoneSpec[]
@@ -90,7 +90,7 @@ const INDUCTION_ZONE_LAYOUTS: Record<
     { x: 0.18, z: -0.108, radius: 0.066 },
   ],
 }
-function gasHobBurners(layout: CooktopLayout): CooktopBurnerSpec[] {
+export function gasHobBurners(layout: CooktopLayout): CooktopBurnerSpec[] {
   return layout in GAS_HOB_BURNER_LAYOUTS
     ? GAS_HOB_BURNER_LAYOUTS[
         layout as Extract<
@@ -101,7 +101,7 @@ function gasHobBurners(layout: CooktopLayout): CooktopBurnerSpec[] {
     : GAS_HOB_BURNER_LAYOUTS['gas-5burner-wok']
 }
 
-function inductionZones(layout: CooktopLayout): InductionZoneSpec[] {
+export function inductionZones(layout: CooktopLayout): InductionZoneSpec[] {
   return layout in INDUCTION_ZONE_LAYOUTS
     ? INDUCTION_ZONE_LAYOUTS[
         layout as Extract<CooktopLayout, 'induction-2zone' | 'induction-4zone'>
