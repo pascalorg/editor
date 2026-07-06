@@ -232,6 +232,19 @@ function cabinetLocalBounds(
         includeCabinetModuleBounds(module, nodes, [0, 0, 0], bounds)
       }
       bounds.maxY += node.withCountertop ? node.countertopThickness : 0
+      // A seating back overhang (unlike the small front/side overhang) is
+      // deep enough to matter for selection and collision.
+      if (node.withCountertop && node.barLedge?.edge !== 'back') {
+        bounds.minZ -= node.countertopBackOverhang
+      }
+      if (node.withFinishedBack) bounds.minZ -= node.boardThickness
+      if (node.barLedge) {
+        const edge = node.barLedge.edge
+        if (edge === 'back') bounds.minZ -= node.barLedge.depth
+        if (edge === 'left') bounds.minX -= node.barLedge.depth
+        if (edge === 'right') bounds.maxX += node.barLedge.depth
+        bounds.maxY = Math.max(bounds.maxY, node.barLedge.height)
+      }
     }
   }
 
@@ -590,7 +603,7 @@ function cabinetModuleHandles(
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 3,
+  schemaVersion: 6,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -615,6 +628,9 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     boardThickness: 0.018,
     countertopThickness: 0.02,
     countertopOverhang: 0.02,
+    countertopBackOverhang: 0,
+    withFinishedBack: false,
+    withWaterfall: false,
     frontThickness: 0.018,
     frontGap: 0.003,
     handleStyle: 'bar',
@@ -689,6 +705,10 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       n.boardThickness,
       n.countertopThickness,
       n.countertopOverhang,
+      n.countertopBackOverhang,
+      n.withFinishedBack,
+      n.withWaterfall,
+      JSON.stringify(n.barLedge ?? null),
       n.frontThickness,
       n.frontGap,
       n.handleStyle,
@@ -721,6 +741,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
     { key: 'R / T', label: 'Rotate ±45°' },
+    { key: 'I', label: 'Island mode' },
     { key: 'Esc', label: 'Exit' },
   ],
 
@@ -765,6 +786,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     boardThickness: 0.018,
     countertopThickness: 0,
     countertopOverhang: 0.02,
+    countertopBackOverhang: 0,
+    withFinishedBack: false,
     frontThickness: 0.018,
     frontGap: 0.003,
     moduleKind: 'standard' as const,

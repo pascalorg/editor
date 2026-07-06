@@ -46,6 +46,7 @@ import {
 const PREVIEW_OPACITY = 0.55
 const ROTATE_STEP_RAD = Math.PI / 4
 const DEFAULT_PLACEMENT_PRESET = cabinetPresetById('base-door')
+const ISLAND_SEATING_OVERHANG = 0.3
 
 type CabinetPlacement = {
   position: [number, number, number]
@@ -151,7 +152,9 @@ const CabinetTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [yaw, setYaw] = useState(0)
+  const [islandMode, setIslandMode] = useState(false)
   const yawRef = useRef(0)
+  const islandModeRef = useRef(false)
   const placementRef = useRef<CabinetPlacement | null>(null)
   const previousSnapRef = useRef<[number, number] | null>(null)
   const previousWasWallSnapRef = useRef(false)
@@ -171,9 +174,9 @@ const CabinetTool = () => {
       (defaults.showPlinth ? defaults.plinthHeight : 0) +
         previewNode.carcassHeight +
         (defaults.withCountertop ? defaults.countertopThickness : 0),
-      previewNode.depth,
+      previewNode.depth + (islandMode ? ISLAND_SEATING_OVERHANG : 0),
     ] as [number, number, number]
-  }, [previewNode])
+  }, [previewNode, islandMode])
   const ghost = useMemo(() => {
     const group = buildCabinetGeometry(previewNode)
     group.traverse((child) => {
@@ -269,7 +272,8 @@ const CabinetTool = () => {
     const resolvePlacement = (event: FloorPlacementClickTriggerEvent): CabinetPlacement => {
       const raw = resolveRawPosition(event)
       const freePlacement = isFreePlacementEvent(event)
-      const wallPlacement = freePlacement ? null : resolveWallPlacement(raw)
+      const wallPlacement =
+        freePlacement || islandModeRef.current ? null : resolveWallPlacement(raw)
       if (wallPlacement) return withPlacementValidity(wallPlacement, freePlacement)
       return withPlacementValidity(
         {
@@ -306,7 +310,7 @@ const CabinetTool = () => {
     const onWallMove = (event: WallEvent) => {
       lastWallEventTime = event.nativeEvent?.timeStamp ?? -1
       if (event.node.parentId !== activeLevelId) return
-      const hit = wallHitFromWallEvent(event)
+      const hit = islandModeRef.current ? null : wallHitFromWallEvent(event)
       const next = hit ? resolveWallHitPlacement(hit) : null
       if (next) {
         publishPlacement(withPlacementValidity(next, false))
@@ -325,13 +329,18 @@ const CabinetTool = () => {
         return
       }
       const patch = DEFAULT_PLACEMENT_PRESET.createPatch()
+      const island = islandModeRef.current
       const cabinet = CabinetNode.parse({
         ...cabinetDefinition.defaults(),
-        name: 'Modular Cabinet',
+        name: island ? 'Kitchen Island' : 'Modular Cabinet',
         position: next.position,
         rotation: next.yaw,
         depth: patch.depth ?? cabinetDefinition.defaults().depth,
         carcassHeight: patch.carcassHeight ?? cabinetDefinition.defaults().carcassHeight,
+        ...(island && {
+          countertopBackOverhang: ISLAND_SEATING_OVERHANG,
+          withFinishedBack: true,
+        }),
       })
       const module = CabinetModuleNode.parse({
         ...cabinetModuleDefinition.defaults(),
@@ -358,6 +367,19 @@ const CabinetTool = () => {
     const onKeyDown = (event: KeyboardEvent) => {
       const tag = (event.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (event.key === 'i' || event.key === 'I') {
+        event.preventDefault()
+        event.stopPropagation()
+        islandModeRef.current = !islandModeRef.current
+        setIslandMode(islandModeRef.current)
+        // Drop a stale wall-snapped preview so the next move re-resolves free.
+        if (islandModeRef.current && placementRef.current?.snappedToWall) {
+          placementRef.current = null
+          setPlacement(null)
+        }
+        triggerSFX('sfx:item-rotate')
+        return
+      }
       if (event.key !== 'r' && event.key !== 'R' && event.key !== 't' && event.key !== 'T') return
       event.preventDefault()
       event.stopPropagation()
@@ -393,7 +415,9 @@ const CabinetTool = () => {
         : placement.snapReason === 'corner'
           ? 'Corner snap'
           : 'Wall snap'
-      : 'R/T rotate'
+      : islandMode
+        ? 'Island · R/T rotate'
+        : 'R/T rotate'
 
   return (
     <LevelOffsetGroup>

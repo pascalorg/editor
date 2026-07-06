@@ -45,25 +45,64 @@ export function buildCabinetFloorplan(
 
   const spans = getRunSpans(modules)
   const overhang = node.withCountertop ? node.countertopOverhang : 0
+  const barEdge = node.barLedge?.edge
+  const backOverhang = node.withCountertop && barEdge !== 'back' ? node.countertopBackOverhang : 0
   const children: FloorplanGeometry[] = []
 
   for (const span of spans) {
+    const spanIndex = spans.indexOf(span)
     // Countertop slab outline — the heavier line a kitchen plan reads first.
     // Tall spans (no countertop) fall back to their carcass footprint.
     const front = span.maxZ + (span.hasCountertop ? overhang : 0)
-    const left = span.minX - (span.hasCountertop ? overhang : 0)
-    const right = span.maxX + (span.hasCountertop ? overhang : 0)
+    const back = span.minZ - (span.hasCountertop ? backOverhang : 0)
+    const left = span.minX - (span.hasCountertop && barEdge !== 'left' ? overhang : 0)
+    const right = span.maxX + (span.hasCountertop && barEdge !== 'right' ? overhang : 0)
     children.push({
       kind: 'rect',
       x: left,
-      y: span.minZ,
+      y: back,
       width: Math.max(0.01, right - left),
-      height: Math.max(0.01, front - span.minZ),
+      height: Math.max(0.01, front - back),
       fill: BODY_FILL,
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.022,
       opacity: 0.95,
     })
+
+    // Raised bar slab reads as its own counter band along the chosen edge
+    // (bar height sits below the ~1.2m cut plane, so it draws solid). Side
+    // bars apply only to the end span on that side.
+    const spanHasBar =
+      node.barLedge &&
+      span.hasCountertop &&
+      (barEdge === 'back' ||
+        (barEdge === 'left' && spanIndex === 0) ||
+        (barEdge === 'right' && spanIndex === spans.length - 1))
+    if (node.barLedge && spanHasBar) {
+      const bar =
+        barEdge === 'back'
+          ? {
+              x: left,
+              y:
+                span.minZ - (node.withFinishedBack ? node.boardThickness : 0) - node.barLedge.depth,
+              width: Math.max(0.01, right - left),
+              height: node.barLedge.depth,
+            }
+          : {
+              x: barEdge === 'left' ? span.minX - node.barLedge.depth : span.maxX,
+              y: back,
+              width: node.barLedge.depth,
+              height: Math.max(0.01, front - back),
+            }
+      children.push({
+        kind: 'rect',
+        ...bar,
+        fill: BODY_FILL,
+        stroke,
+        strokeWidth: showSelectedChrome ? 0.03 : 0.022,
+        opacity: 0.95,
+      })
+    }
   }
 
   return withWorldChrome(node.position, node.rotation, children, ctx, showSelectedChrome)

@@ -108,6 +108,10 @@ export function buildCabinetRunGeometry(
   const group = new Group()
   const materials = getCabinetSlotMaterials(node, ctx, shading, textures, colorPreset, sceneTheme)
   const plinth = node.showPlinth ? node.plinthHeight : 0
+  // A back-edge bar ledge occupies the back edge, superseding the seating
+  // overhang; side-edge bars leave it alone.
+  const backOverhang =
+    node.withCountertop && node.barLedge?.edge !== 'back' ? node.countertopBackOverhang : 0
   const spans = getRunSpans(modules)
   const siblingSpans = siblingCabinetSpansInRunLocal(node, ctx)
 
@@ -133,10 +137,16 @@ export function buildCabinetRunGeometry(
       side: 'right',
       siblingSpans,
     })
+    const barEdge = node.barLedge?.edge
+    // A side bar's knee wall sits flush on that end — no slab overhang there.
     const leftOverhang =
-      hasInternalLeftNeighbor || hasExternalLeftNeighbor ? 0 : node.countertopOverhang
+      hasInternalLeftNeighbor || hasExternalLeftNeighbor || barEdge === 'left'
+        ? 0
+        : node.countertopOverhang
     const rightOverhang =
-      hasInternalRightNeighbor || hasExternalRightNeighbor ? 0 : node.countertopOverhang
+      hasInternalRightNeighbor || hasExternalRightNeighbor || barEdge === 'right'
+        ? 0
+        : node.countertopOverhang
     const toeKickDepth = node.showPlinth
       ? Math.min(node.toeKickDepth, span.depth - node.boardThickness * 2)
       : 0
@@ -152,18 +162,125 @@ export function buildCabinetRunGeometry(
       )
     }
 
+    // Finished decorative back panel (island backs are visible) — floor to
+    // countertop plane, flush against the carcass back face.
+    if (node.withFinishedBack) {
+      addBox(
+        group,
+        [span.width, span.topY, node.boardThickness],
+        [span.centerX, span.topY / 2, span.minZ - node.boardThickness / 2],
+        materials.front,
+        'cabinet-run-back-panel',
+        'front',
+      )
+    }
+
+    // Raised bar counter: knee wall against one run face topped by a slab at
+    // bar height, cantilevered outward as knee space for stools. Side bars
+    // apply only to the run's end span on that side.
+    const spanHasBar =
+      node.barLedge &&
+      span.hasCountertop &&
+      (barEdge === 'back' ||
+        (barEdge === 'left' && spanIndex === 0) ||
+        (barEdge === 'right' && spanIndex === spans.length - 1))
+    if (node.barLedge && spanHasBar) {
+      const slabThickness = Math.max(node.countertopThickness, 0.02)
+      const supportHeight = Math.max(0.1, node.barLedge.height - slabThickness)
+      // Knee wall spans the slab's full footprint on the shared axis so the
+      // two faces stay flush — a carcass-sized wall reads as a seam under
+      // the wider slab.
+      if (barEdge === 'back') {
+        const backZ = span.minZ - (node.withFinishedBack ? node.boardThickness : 0)
+        const barWidth = span.width + leftOverhang + rightOverhang
+        const barCenterX = span.centerX + (rightOverhang - leftOverhang) / 2
+        addBox(
+          group,
+          [barWidth, supportHeight, node.boardThickness],
+          [barCenterX, supportHeight / 2, backZ - node.boardThickness / 2],
+          materials.front,
+          'cabinet-run-bar-support',
+          'front',
+        )
+        addBox(
+          group,
+          [barWidth, slabThickness, node.barLedge.depth],
+          [barCenterX, supportHeight + slabThickness / 2, backZ - node.barLedge.depth / 2],
+          materials.countertop,
+          'cabinet-run-bar-slab',
+          'countertop',
+        )
+      } else {
+        const sign = barEdge === 'left' ? -1 : 1
+        const edgeX = barEdge === 'left' ? span.minX : span.maxX
+        const slabDepth = span.depth + node.countertopOverhang + backOverhang
+        const slabCenterZ = span.centerZ + (node.countertopOverhang - backOverhang) / 2
+        addBox(
+          group,
+          [node.boardThickness, supportHeight, slabDepth],
+          [edgeX + sign * (node.boardThickness / 2), supportHeight / 2, slabCenterZ],
+          materials.front,
+          'cabinet-run-bar-support',
+          'front',
+        )
+        addBox(
+          group,
+          [node.barLedge.depth, slabThickness, slabDepth],
+          [
+            edgeX + sign * (node.barLedge.depth / 2),
+            supportHeight + slabThickness / 2,
+            slabCenterZ,
+          ],
+          materials.countertop,
+          'cabinet-run-bar-slab',
+          'countertop',
+        )
+      }
+    }
+
+    // Waterfall ends: the slab material drops to the floor on exposed run
+    // ends (skipped where a neighbor abuts or a side bar occupies the end).
+    if (node.withWaterfall && span.hasCountertop && node.countertopThickness > 0) {
+      const slabDepth = span.depth + node.countertopOverhang + backOverhang
+      const slabCenterZ = span.centerZ + (node.countertopOverhang - backOverhang) / 2
+      const exposedLeft =
+        spanIndex === 0 &&
+        !hasExternalLeftNeighbor &&
+        !hasInternalLeftNeighbor &&
+        barEdge !== 'left'
+      const exposedRight =
+        spanIndex === spans.length - 1 &&
+        !hasExternalRightNeighbor &&
+        !hasInternalRightNeighbor &&
+        barEdge !== 'right'
+      for (const side of ['left', 'right'] as const) {
+        if (side === 'left' ? !exposedLeft : !exposedRight) continue
+        const sign = side === 'left' ? -1 : 1
+        const outerX = side === 'left' ? span.minX - leftOverhang : span.maxX + rightOverhang
+        // Outer face flush with the slab edge; the slab covers the panel top.
+        addBox(
+          group,
+          [node.countertopThickness, span.topY, slabDepth],
+          [outerX - sign * (node.countertopThickness / 2), span.topY / 2, slabCenterZ],
+          materials.countertop,
+          `cabinet-run-waterfall-${side}`,
+          'countertop',
+        )
+      }
+    }
+
     if (node.withCountertop && span.hasCountertop && node.countertopThickness > 0) {
       const countertop = addBox(
         group,
         [
           span.width + leftOverhang + rightOverhang,
           node.countertopThickness,
-          span.depth + node.countertopOverhang,
+          span.depth + node.countertopOverhang + backOverhang,
         ],
         [
           span.centerX + (rightOverhang - leftOverhang) / 2,
           span.topY + node.countertopThickness / 2,
-          span.centerZ + node.countertopOverhang / 2,
+          span.centerZ + (node.countertopOverhang - backOverhang) / 2,
         ],
         materials.countertop,
         'cabinet-run-countertop',

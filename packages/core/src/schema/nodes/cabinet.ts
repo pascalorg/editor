@@ -87,6 +87,10 @@ const cabinetBoxFields = {
   boardThickness: z.number().min(0.01).max(0.08).default(0.018),
   countertopThickness: z.number().min(0).max(0.08).default(0.02),
   countertopOverhang: z.number().min(0).max(0.12).default(0.02),
+  // Extra slab reach off the back edge (island seating side) — up to a
+  // 45 cm knee-space overhang, unlike the small uniform front/side overhang.
+  countertopBackOverhang: z.number().min(0).max(0.45).default(0),
+  withFinishedBack: z.boolean().default(false),
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
   handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
@@ -106,6 +110,17 @@ export const CabinetNode = BaseNode.extend({
   type: nodeType('cabinet'),
   runTier: z.enum(['base', 'wall', 'tall']).default('base'),
   children: z.array(objectId('cabinet-module')).default([]),
+  // Raised bar counter along one run edge: a knee wall topped by a slab at
+  // bar height. Run-level because it spans modules like the countertop.
+  barLedge: z
+    .object({
+      edge: z.enum(['back', 'left', 'right']).default('back'),
+      height: z.number().min(0.9).max(1.3).default(1.06),
+      depth: z.number().min(0.15).max(0.5).default(0.35),
+    })
+    .optional(),
+  // Countertop material dropping to the floor on exposed run ends.
+  withWaterfall: z.boolean().default(false),
   ...cabinetBoxFields,
 }).describe('Parametric modular cabinet run node')
 

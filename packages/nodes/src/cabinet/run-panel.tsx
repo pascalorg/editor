@@ -10,6 +10,7 @@ import {
   ActionButton,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   ToggleControl,
 } from '@pascal-app/editor'
@@ -311,6 +312,81 @@ export function CabinetRunPanel({
                 step={0.005}
                 unit="m"
                 value={node.countertopOverhang}
+              />
+            </>
+          )}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Island & Bar">
+        <div className="space-y-2 px-1 pb-2">
+          {node.withCountertop && node.barLedge?.edge !== 'back' && (
+            <SliderControl
+              label="Seating overhang"
+              max={0.45}
+              min={0}
+              onChange={(value) => updateRun({ countertopBackOverhang: value })}
+              precision={2}
+              step={0.05}
+              unit="m"
+              value={node.countertopBackOverhang}
+            />
+          )}
+          <ToggleControl
+            checked={node.withFinishedBack}
+            label="Finished back"
+            onChange={(checked) => updateRun({ withFinishedBack: checked })}
+          />
+          {node.withCountertop && (
+            <ToggleControl
+              checked={node.withWaterfall}
+              label="Waterfall ends"
+              onChange={(checked) => updateRun({ withWaterfall: checked })}
+            />
+          )}
+          <ToggleControl
+            checked={Boolean(node.barLedge)}
+            label="Bar counter"
+            onChange={(checked) =>
+              updateRun({
+                barLedge: checked ? { edge: 'back', height: 1.06, depth: 0.35 } : undefined,
+              })
+            }
+          />
+          {node.barLedge && (
+            <>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateRun({
+                    barLedge: { ...node.barLedge!, edge: value as 'back' | 'left' | 'right' },
+                  })
+                }
+                options={[
+                  { value: 'back', label: 'Back' },
+                  { value: 'left', label: 'Left' },
+                  { value: 'right', label: 'Right' },
+                ]}
+                value={node.barLedge.edge}
+              />
+              <SliderControl
+                label="Bar height"
+                max={1.3}
+                min={0.9}
+                onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, height: value } })}
+                precision={2}
+                step={0.01}
+                unit="m"
+                value={node.barLedge.height}
+              />
+              <SliderControl
+                label="Bar depth"
+                max={0.5}
+                min={0.15}
+                onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, depth: value } })}
+                precision={2}
+                step={0.01}
+                unit="m"
+                value={node.barLedge.depth}
               />
             </>
           )}

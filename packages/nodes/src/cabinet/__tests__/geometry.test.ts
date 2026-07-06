@@ -978,6 +978,170 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertop!.maxZ).toBeCloseTo(shiftedZ + nextDepth / 2 + run.countertopOverhang)
   })
 
+  test('island back overhang extends the slab backward and adds a finished back panel', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_island-run',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      countertopBackOverhang: 0.3,
+      withFinishedBack: true,
+      boardThickness: 0.018,
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_island-base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module] }),
+      'rendered',
+      false,
+    )
+
+    const [countertop] = countertopBounds(group)
+    expect(countertop).toBeDefined()
+    expect(countertop!.minZ).toBeCloseTo(-0.58 / 2 - run.countertopBackOverhang)
+    expect(countertop!.maxZ).toBeCloseTo(0.58 / 2 + run.countertopOverhang)
+
+    const backPanel = worldBounds(findMeshByName(group, 'cabinet-run-back-panel'))
+    expect(backPanel.max.z).toBeCloseTo(-0.58 / 2)
+    expect(backPanel.min.z).toBeCloseTo(-0.58 / 2 - run.boardThickness)
+    expect(backPanel.min.y).toBeCloseTo(0)
+    expect(backPanel.max.y).toBeCloseTo(0.1 + 0.72)
+  })
+
+  test('bar ledge adds a knee wall and raised slab behind the run', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_bar-run',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      countertopBackOverhang: 0.3,
+      barLedge: { height: 1.06, depth: 0.35 },
+      boardThickness: 0.018,
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_bar-base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module] }),
+      'rendered',
+      false,
+    )
+
+    // The bar supersedes the seating overhang: the base slab stays at the
+    // carcass back edge.
+    const slabs = countertopBounds(group)
+    expect(slabs).toHaveLength(2)
+    const baseSlab = slabs.find(
+      (slab) => Math.abs(slab.maxZ - (0.58 / 2 + run.countertopOverhang)) < 1e-6,
+    )
+    expect(baseSlab).toBeDefined()
+    expect(baseSlab!.minZ).toBeCloseTo(-0.58 / 2)
+
+    const support = worldBounds(findMeshByName(group, 'cabinet-run-bar-support'))
+    expect(support.max.z).toBeCloseTo(-0.58 / 2)
+    expect(support.max.y).toBeCloseTo(1.06 - run.countertopThickness)
+
+    const barSlab = worldBounds(findMeshByName(group, 'cabinet-run-bar-slab'))
+    expect(barSlab.max.y).toBeCloseTo(1.06)
+    expect(barSlab.max.z).toBeCloseTo(-0.58 / 2)
+    expect(barSlab.min.z).toBeCloseTo(-0.58 / 2 - 0.35)
+  })
+
+  test('right-edge bar ledge hangs off the run end and keeps the seating overhang', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_side-bar-run',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      countertopBackOverhang: 0.3,
+      barLedge: { edge: 'right', height: 1.06, depth: 0.35 },
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_side-bar-base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module] }),
+      'rendered',
+      false,
+    )
+
+    // Side bar leaves the back seating overhang intact.
+    const slabs = countertopBounds(group)
+    const baseSlab = slabs.find((slab) => Math.abs(slab.minX - (-0.3 - 0.02)) < 1e-6)
+    expect(baseSlab).toBeDefined()
+    expect(baseSlab!.minZ).toBeCloseTo(-0.58 / 2 - 0.3)
+    // No side overhang on the bar edge — slab ends at the carcass.
+    expect(baseSlab!.maxX).toBeCloseTo(0.3)
+
+    const support = worldBounds(findMeshByName(group, 'cabinet-run-bar-support'))
+    expect(support.min.x).toBeCloseTo(0.3)
+    expect(support.max.y).toBeCloseTo(1.06 - run.countertopThickness)
+
+    const barSlab = worldBounds(findMeshByName(group, 'cabinet-run-bar-slab'))
+    expect(barSlab.min.x).toBeCloseTo(0.3)
+    expect(barSlab.max.x).toBeCloseTo(0.3 + 0.35)
+    expect(barSlab.max.y).toBeCloseTo(1.06)
+  })
+
+  test('waterfall ends drop slab panels to the floor on exposed run ends', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_waterfall-run',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      withWaterfall: true,
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_waterfall-base',
+      parentId: run.id,
+      cabinetType: 'base',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module] }),
+      'rendered',
+      false,
+    )
+
+    const left = worldBounds(findMeshByName(group, 'cabinet-run-waterfall-left'))
+    const right = worldBounds(findMeshByName(group, 'cabinet-run-waterfall-right'))
+    // Outer faces flush with the slab overhang edges, floor to slab underside.
+    expect(left.min.x).toBeCloseTo(-0.3 - run.countertopOverhang)
+    expect(right.max.x).toBeCloseTo(0.3 + run.countertopOverhang)
+    expect(left.min.y).toBeCloseTo(0)
+    expect(left.max.y).toBeCloseTo(0.1 + 0.72)
+  })
+
   test('countertop UVs stay world-scaled when cabinet dimensions change', () => {
     const module = CabinetModuleNode.parse({
       id: 'cabinet-module_uv-countertop',
