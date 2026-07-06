@@ -8,7 +8,10 @@
     { "action": "confirm" }
   ],
   "expectedFacts": {
+    "bedroom_count": 1,
     "requiredRoomTypes": ["卧室"]
   },
-  "notes": "只有一个房间，动线连通性检查在这个用例上没有意义（没有其他房间可达）"
+  "expectedRoomCounts": { "卧室": 1 },
+  "totalArea": { "target": 12, "tolerance": 0.15 },
+  "notes": "当前只自动检查房间和面积；床、衣柜、书桌及摆放质量等家具库完整后再纳入硬断言。只有一个房间，可达性检查没有意义"
 }

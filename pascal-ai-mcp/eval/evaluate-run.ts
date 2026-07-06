@@ -6,10 +6,14 @@
 import type { SceneResult, WorkflowPhase } from '../src/types'
 
 export const ROOM_TYPE_PATTERNS: Record<string, RegExp> = {
-  卧室: /卧室|bedroom/i,
+  // Bedrooms are commonly named 主卧/次卧/客卧, which don't literally contain
+  // "卧室" — match those too so bedroom counting isn't silently under-counted.
+  卧室: /卧室|卧房|主卧|次卧|客卧|bedroom/i,
   客厅: /客厅|起居室|living/i,
-  卫生间: /卫生间|浴室|洗手间|bathroom/i,
+  卫生间: /卫生间|浴室|洗手间|卫浴|bathroom/i,
   厨房: /厨房|kitchen/i,
+  书房: /书房|书斋|study|office/i,
+  餐厅: /餐厅|饭厅|dining/i,
 }
 
 export type SuccessDetermination = { ok: boolean; error?: string }
@@ -219,18 +223,57 @@ export function resolveDependencySceneId(
 
 export type CaseTurn = { role: 'user'; message: string } | { action: 'confirm' | 'cancel' }
 
+export type AdjacencyRelation = 'ensuite' | 'connected' | 'adjacent'
+
 export type EvalCase = {
   id: string
   category: string
   difficulty: string
   description?: string
   basedOn?: string
+  // A fixed, human-prepared baseline scene to modify. Takes priority over
+  // `basedOn` when non-empty; leave empty to fall back to the basedOn scene.
+  // The harness never modifies this scene directly — it copies it per repeat.
+  baseSceneId?: string
   turns: CaseTurn[]
   expectedFacts?: {
     bedroom_count?: number
     requiredRoomTypes?: string[]
   }
   forbiddenRoomTypes?: string[]
+  // --- Config-driven, data-based assertions (evaluated against the real
+  // scene read back from MCP; see assertions.ts). All optional/additive. ---
+  /** Exact room count per room type, e.g. {"卧室":2,"客厅":1}. */
+  expectedRoomCounts?: Record<string, number>
+  /** Total floor area target with fractional tolerance, e.g. {target:70,tolerance:0.1}. */
+  totalArea?: { target: number; tolerance: number }
+  /** Room types that must each have a valid exterior window, e.g. ["卧室"]. */
+  windowsRequiredFor?: string[]
+  /** Require every room reachable from an entry/public space (open rooms count). */
+  requireAllRoomsReachable?: boolean
+  /** Required adjacency relationships between room types (e.g. ensuite). */
+  requiredAdjacency?: Array<{ a: string; b: string; relation: AdjacencyRelation }>
+  /** Overall footprint width×depth with tolerance, e.g. {width:5,depth:18,tolerance:0.12}. */
+  expectedBounds?: { width: number; depth: number; tolerance: number }
+  /** Modification (basedOn/baseSceneId) checks comparing before/after snapshots. */
+  modificationChecks?: {
+    addedRoomType?: string
+    adjacentTo?: string
+    preserveRoomCounts?: boolean
+    preserveFurniture?: boolean
+    /** Fail if more than this many original walls were deleted. */
+    maxDeletedOriginalWalls?: number
+    /** Fail if more than this many original walls were modified. */
+    maxModifiedOriginalWalls?: number
+    /** Fail if any original door/window was deleted. */
+    preserveOriginalOpenings?: boolean
+    /** Require the newly added room to fall within this area range in m². */
+    addedRoomArea?: { type: string; min: number; max: number }
+    /** Require the overall zone footprint bounds to remain unchanged. */
+    preserveExteriorBounds?: boolean
+    /** Require a matching existing room to meet an area range after modification. */
+    targetRoomArea?: { type: string; min: number; max?: number; nameIncludes?: string[] }
+  }
   notes?: string
 }
 
@@ -258,7 +301,8 @@ export function validateCaseStructure(testCase: EvalCase, allCaseIds: Set<string
   const hasConfirm = testCase.turns.some(t => 'action' in t && t.action === 'confirm')
   if (!hasConfirm) problems.push('turns 里没有 confirm 动作，用例永远不会真正触发生成/修改')
 
-  if (!testCase.basedOn) {
+  const hasFixedBase = Boolean((testCase.baseSceneId ?? '').trim())
+  if (!testCase.basedOn && !hasFixedBase) {
     const messageText = testCase.turns
       .filter((t): t is { role: 'user'; message: string } => 'message' in t)
       .map(t => t.message)
@@ -279,6 +323,85 @@ export function validateCaseStructure(testCase: EvalCase, allCaseIds: Set<string
     }
   }
 
+  problems.push(...validateAssertionConfig(testCase))
+
+  return problems
+}
+
+// Structural validation of the config-driven assertion fields (dry-run only —
+// catches an unknown room type, an out-of-range tolerance, a bad relation, or a
+// modificationChecks block on a non-modify case before any tokens are spent).
+function validateAssertionConfig(testCase: EvalCase): string[] {
+  const problems: string[] = []
+  const knownType = (type: string) => Boolean(ROOM_TYPE_PATTERNS[type])
+  const checkTolerance = (label: string, t: unknown) => {
+    if (typeof t !== 'number' || !(t > 0 && t < 1)) problems.push(`${label} 的 tolerance 必须是 (0,1) 之间的小数`)
+  }
+
+  if (testCase.expectedRoomCounts) {
+    for (const [type, count] of Object.entries(testCase.expectedRoomCounts)) {
+      if (!knownType(type)) problems.push(`expectedRoomCounts 里有未知房间类型 "${type}"`)
+      if (!Number.isInteger(count) || count < 0) problems.push(`expectedRoomCounts["${type}"] 必须是非负整数`)
+    }
+  }
+  if (testCase.totalArea) {
+    if (!(testCase.totalArea.target > 0)) problems.push('totalArea.target 必须为正数')
+    checkTolerance('totalArea', testCase.totalArea.tolerance)
+  }
+  if (testCase.windowsRequiredFor) {
+    for (const type of testCase.windowsRequiredFor) {
+      if (!knownType(type)) problems.push(`windowsRequiredFor 里有未知房间类型 "${type}"`)
+    }
+  }
+  if (testCase.requiredAdjacency) {
+    for (const spec of testCase.requiredAdjacency) {
+      if (!knownType(spec.a) || !knownType(spec.b)) problems.push(`requiredAdjacency 里有未知房间类型（${spec.a} 或 ${spec.b}）`)
+      if (!['ensuite', 'connected', 'adjacent'].includes(spec.relation)) {
+        problems.push(`requiredAdjacency.relation "${spec.relation}" 不合法，应为 ensuite/connected/adjacent`)
+      }
+    }
+  }
+  if (testCase.expectedBounds) {
+    if (!(testCase.expectedBounds.width > 0) || !(testCase.expectedBounds.depth > 0)) {
+      problems.push('expectedBounds 的 width/depth 必须为正数')
+    }
+    checkTolerance('expectedBounds', testCase.expectedBounds.tolerance)
+  }
+  if (testCase.modificationChecks) {
+    const hasFixedBase = Boolean((testCase.baseSceneId ?? '').trim())
+    if (!testCase.basedOn && !hasFixedBase) {
+      problems.push('modificationChecks 是修改类断言，用例必须提供 baseSceneId 或 basedOn 之一')
+    }
+    const mc = testCase.modificationChecks
+    if (mc.addedRoomType && !knownType(mc.addedRoomType)) problems.push(`modificationChecks.addedRoomType "${mc.addedRoomType}" 是未知房间类型`)
+    if (mc.adjacentTo && !knownType(mc.adjacentTo)) problems.push(`modificationChecks.adjacentTo "${mc.adjacentTo}" 是未知房间类型`)
+    if (mc.maxDeletedOriginalWalls !== undefined && (!Number.isInteger(mc.maxDeletedOriginalWalls) || mc.maxDeletedOriginalWalls < 0)) {
+      problems.push('modificationChecks.maxDeletedOriginalWalls 必须是非负整数')
+    }
+    if (mc.maxModifiedOriginalWalls !== undefined && (!Number.isInteger(mc.maxModifiedOriginalWalls) || mc.maxModifiedOriginalWalls < 0)) {
+      problems.push('modificationChecks.maxModifiedOriginalWalls 必须是非负整数')
+    }
+    if (mc.addedRoomArea) {
+      if (!knownType(mc.addedRoomArea.type)) {
+        problems.push(`modificationChecks.addedRoomArea.type "${mc.addedRoomArea.type}" 是未知房间类型`)
+      }
+      if (!(mc.addedRoomArea.min > 0) || !(mc.addedRoomArea.max >= mc.addedRoomArea.min)) {
+        problems.push('modificationChecks.addedRoomArea 必须满足 0 < min <= max')
+      }
+    }
+    if (mc.targetRoomArea) {
+      if (!knownType(mc.targetRoomArea.type)) {
+        problems.push(`modificationChecks.targetRoomArea.type "${mc.targetRoomArea.type}" 是未知房间类型`)
+      }
+      if (!(mc.targetRoomArea.min > 0) ||
+        (mc.targetRoomArea.max !== undefined && mc.targetRoomArea.max < mc.targetRoomArea.min)) {
+        problems.push('modificationChecks.targetRoomArea 必须满足 0 < min <= max')
+      }
+      if (mc.targetRoomArea.nameIncludes?.some(value => typeof value !== 'string' || value.trim() === '')) {
+        problems.push('modificationChecks.targetRoomArea.nameIncludes 只能包含非空字符串')
+      }
+    }
+  }
   return problems
 }
 

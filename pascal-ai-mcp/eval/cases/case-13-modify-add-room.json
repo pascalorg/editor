@@ -3,10 +3,22 @@
   "category": "修改已有场景：新增房间",
   "difficulty": "modify",
   "basedOn": "case-03-two-bed-standard",
+  "baseSceneId": "8c23d9809a41",
   "turns": [
-    { "role": "user", "message": "在客厅旁边再加一个书房" },
+    { "role": "user", "message": "保持建筑外轮廓和其他房间不变，在客厅内部靠右侧划分一个约 6–8㎡的独立书房，为书房增加一扇通往客厅的门。除必要的新隔墙和房门外，不修改其他墙体、门窗。" },
     { "action": "confirm" }
   ],
   "expectedFacts": {},
-  "notes": "依赖 case-03 先成功生成一个场景，harness 会把 case-03 跑出的 sceneId 注入这个用例的请求里。用于验证增量修改路径（modify()）不会破坏已有结构，也用于观察这次修的 converged 检查 / retry 路径在真实链路里的行为"
+  "modificationChecks": {
+    "addedRoomType": "书房",
+    "adjacentTo": "客厅",
+    "preserveRoomCounts": true,
+    "preserveFurniture": false,
+    "maxDeletedOriginalWalls": 0,
+    "maxModifiedOriginalWalls": 0,
+    "preserveOriginalOpenings": true,
+    "addedRoomArea": { "type": "书房", "min": 6, "max": 8 },
+    "preserveExteriorBounds": true
+  },
+  "notes": "固定基准场景为 8c23d9809a41；harness 每个 repeat 用 get_scene+save_scene(graph) 创建工作副本，只修改副本。断言：(1) 新增1个6–8㎡书房；(2) 书房与客厅门/开口直连；(3) 原有房间数量不减少；(4) 不删除或修改原墙；(5) 原门窗不删除；(6) 整体外轮廓不变。书房位于客厅右侧暂由人工审核。preserveFurniture 暂设 false（当前基准不放家具）"
 }

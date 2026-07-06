@@ -43,6 +43,18 @@ import {
   type FurnitureIssueBreakdown,
 } from './evaluate-run'
 import { scaffoldReviews } from './review'
+import {
+  assertModification,
+  rollupAssertions,
+  runSceneAssertions,
+  type AssertionConfig,
+  type AssertionResult,
+  type AssertionRollup,
+  type SceneInputs,
+  type SceneSnapshot,
+  type WallInfo,
+  type ZoneInfo,
+} from './assertions'
 
 type CaseRunResult = {
   caseId: string
@@ -69,10 +81,18 @@ type CaseRunResult = {
   modelAttempts?: number
   // Furniture placement outcome breakdown (overlap / out-of-bounds / other).
   furniture?: FurnitureIssueBreakdown
+  // Config-driven, data-based assertion results (room counts, area, windows,
+  // reachability, adjacency, bounds, modification snapshot diff).
+  assertions?: AssertionResult[]
+  assertionRollup?: AssertionRollup
   elapsedMs: number
   finalPhase?: string
   sceneId?: string | null
   editorUrl?: string | null
+  // For modification cases: the fixed/basedOn baseline scene and the disposable
+  // per-repeat working copy that was actually modified (base is never touched).
+  baseSceneId?: string | null
+  workingSceneId?: string | null
   sceneResult?: SceneResult
   zoneNames?: string[]
   // Set when a case declares a zone-dependent assertion but the scene's
@@ -154,6 +174,116 @@ function runDryRun(cases: EvalCase[], allCases: EvalCase[]): void {
   process.exit(problemCount > 0 ? 1 : 0)
 }
 
+function parseZones(payload: Record<string, unknown>): ZoneInfo[] {
+  const zones = Array.isArray(payload.zones) ? payload.zones : []
+  const out: ZoneInfo[] = []
+  for (const z of zones) {
+    if (!z || typeof z !== 'object') continue
+    const o = z as Record<string, unknown>
+    const polygon = Array.isArray(o.polygon)
+      ? o.polygon.filter(
+          (p): p is [number, number] => Array.isArray(p) && p.length === 2 && p.every(n => typeof n === 'number'),
+        )
+      : []
+    if (typeof o.id !== 'string' || polygon.length < 3) continue
+    out.push({
+      id: o.id,
+      name: typeof o.name === 'string' ? o.name : '',
+      polygon,
+      areaSqMeters: typeof o.areaSqMeters === 'number' ? o.areaSqMeters : 0,
+      bounds:
+        o.bounds && typeof o.bounds === 'object'
+          ? {
+              width: Number((o.bounds as Record<string, unknown>).width) || 0,
+              depth: Number((o.bounds as Record<string, unknown>).depth) || 0,
+            }
+          : undefined,
+    })
+  }
+  return out
+}
+
+function parseWalls(payload: Record<string, unknown>): WallInfo[] {
+  const walls = Array.isArray(payload.walls) ? payload.walls : []
+  const out: WallInfo[] = []
+  for (const w of walls) {
+    if (!w || typeof w !== 'object') continue
+    const o = w as Record<string, unknown>
+    const start = o.start as unknown
+    const end = o.end as unknown
+    const isPair = (v: unknown): v is [number, number] =>
+      Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number')
+    if (typeof o.id !== 'string' || !isPair(start) || !isPair(end)) continue
+    const openings = Array.isArray(o.openings)
+      ? o.openings.flatMap(op =>
+          op && typeof op === 'object' && typeof (op as { type?: unknown }).type === 'string'
+            ? [{ type: (op as { type: string }).type }]
+            : [],
+        )
+      : []
+    out.push({ id: o.id, start, end, openings })
+  }
+  return out
+}
+
+function parseSceneSnapshot(payload: Record<string, unknown>): SceneSnapshot {
+  const nodes = payload.nodes
+  if (!nodes || typeof nodes !== 'object') return {}
+  return nodes as SceneSnapshot
+}
+
+/**
+ * Make a disposable working copy of a baseline scene so the modification runs
+ * on the copy and NEVER mutates the original baseline. MCP does support this:
+ * `get_scene` returns the full graph and `save_scene({ includeCurrentScene:
+ * false, graph })` persists it as a brand-new scene (omitting `id` yields a new
+ * scene id). Returns the new working sceneId and the copy's initial snapshot
+ * (identical to the base graph) for before/after diffing.
+ */
+async function prepareWorkingScene(
+  mcp: PascalMcpClient,
+  baseSceneId: string,
+  label: string,
+): Promise<{ workingSceneId: string; beforeSnapshot: SceneSnapshot }> {
+  await mcp.callTool('load_scene', { id: baseSceneId })
+  const graphPayload = toolPayload(await mcp.callTool('get_scene', {}))
+  const graph: Record<string, unknown> = {
+    nodes: graphPayload.nodes,
+    rootNodeIds: graphPayload.rootNodeIds,
+    ...(graphPayload.collections ? { collections: graphPayload.collections } : {}),
+  }
+  const saved = toolPayload(
+    await mcp.callTool('save_scene', {
+      name: `eval-copy-${label}`,
+      includeCurrentScene: false,
+      graph,
+      saveMode: 'draft',
+    }),
+  )
+  const workingSceneId =
+    (typeof saved.id === 'string' && saved.id) ||
+    (typeof saved.projectId === 'string' && saved.projectId) ||
+    ''
+  if (!workingSceneId) throw new Error('save_scene 未返回新的 sceneId，复制基准场景失败')
+  return { workingSceneId, beforeSnapshot: parseSceneSnapshot(graphPayload) }
+}
+
+function extractAssertionConfig(testCase: EvalCase): AssertionConfig {
+  return {
+    ...(testCase.expectedRoomCounts ? { expectedRoomCounts: testCase.expectedRoomCounts } : {}),
+    ...(testCase.totalArea ? { totalArea: testCase.totalArea } : {}),
+    ...(testCase.windowsRequiredFor ? { windowsRequiredFor: testCase.windowsRequiredFor } : {}),
+    ...(testCase.requireAllRoomsReachable ? { requireAllRoomsReachable: true } : {}),
+    ...(testCase.requiredAdjacency ? { requiredAdjacency: testCase.requiredAdjacency } : {}),
+    ...(testCase.expectedBounds ? { expectedBounds: testCase.expectedBounds } : {}),
+  }
+}
+
+function hasConfigAssertions(testCase: EvalCase): boolean {
+  const c = extractAssertionConfig(testCase)
+  return Object.keys(c).length > 0 || Boolean(testCase.modificationChecks)
+}
+
 async function runCase(
   agent: PascalAiAgent,
   mcp: PascalMcpClient,
@@ -163,23 +293,54 @@ async function runCase(
 ): Promise<CaseRunResult> {
   const sessionId = `eval-${testCase.id}-r${repeatIndex}-${Date.now()}`
   const started = Date.now()
-  const baseSceneId = testCase.basedOn
-    ? resolveDependencySceneId(sceneIdByCaseRepeat, testCase.basedOn, repeatIndex)
-    : undefined
-  if (testCase.basedOn && !baseSceneId) {
+  // A fixed, human-prepared baseline takes priority; only fall back to the
+  // basedOn dependency scene when no fixed baseSceneId is configured. With a
+  // fixed base, `--only=case-13` runs standalone without needing case-03.
+  const fixedBase = (testCase.baseSceneId ?? '').trim()
+  const baseSceneId =
+    fixedBase ||
+    (testCase.basedOn
+      ? resolveDependencySceneId(sceneIdByCaseRepeat, testCase.basedOn, repeatIndex)
+      : undefined)
+  if (!fixedBase && testCase.basedOn && !baseSceneId) {
     return {
       caseId: testCase.id,
       repeatIndex,
       ok: false,
       workflowCompleted: false,
       assertionsPassed: false,
-      error: `依赖用例 ${testCase.basedOn} 第 ${repeatIndex} 次运行没有成功的 sceneId，已跳过（不会回退用其他次运行的场景）`,
+      error: `依赖用例 ${testCase.basedOn} 第 ${repeatIndex} 次运行没有成功的 sceneId，且未配置固定 baseSceneId，已跳过`,
       elapsedMs: 0,
       checks: {},
     }
   }
 
   try {
+    // When there's a baseline (fixed or basedOn), work on a fresh disposable
+    // COPY of it — never modify the baseline itself. Each repeat gets its own
+    // copy, so repeats and dependent cases (13/14) never contaminate each other
+    // or the baseline. The copy's initial graph is the before-snapshot.
+    let beforeSnapshot: SceneSnapshot | undefined
+    let workingSceneId: string | undefined
+    if (baseSceneId) {
+      try {
+        const prepared = await prepareWorkingScene(mcp, baseSceneId, `${testCase.id}-r${repeatIndex}`)
+        workingSceneId = prepared.workingSceneId
+        beforeSnapshot = prepared.beforeSnapshot
+      } catch (error) {
+        return {
+          caseId: testCase.id,
+          repeatIndex,
+          ok: false,
+          workflowCompleted: false,
+          assertionsPassed: false,
+          error: `准备评测副本失败（不会修改原基准场景）：${error instanceof Error ? error.message : String(error)}`,
+          baseSceneId,
+          elapsedMs: Date.now() - started,
+          checks: {},
+        }
+      }
+    }
     let lastResult: ChatResult | undefined
     for (let i = 0; i < testCase.turns.length; i++) {
       const turn = testCase.turns[i]!
@@ -210,7 +371,7 @@ async function runCase(
         }
       }
       const input: ChatInput = { sessionId }
-      if (i === 0 && baseSceneId) input.sceneId = baseSceneId
+      if (i === 0 && workingSceneId) input.sceneId = workingSceneId
       if ('message' in turn) input.message = turn.message
       if ('action' in turn) input.action = turn.action
       lastResult = await agent.chat(input)
@@ -229,21 +390,20 @@ async function runCase(
       testCase.expectedFacts?.bedroom_count !== undefined ||
         testCase.expectedFacts?.requiredRoomTypes ||
         testCase.forbiddenRoomTypes,
-    )
+    ) || hasConfigAssertions(testCase)
 
     let zoneNames: string[] | undefined
     let zoneInspectionError: string | undefined
+    let zones: ZoneInfo[] = []
+    let walls: WallInfo[] = []
     if (sceneId) {
       try {
         await mcp.callTool('load_scene', { id: sceneId })
-        const zonesRaw = await mcp.callTool('get_zones', {})
-        const payload = toolPayload(zonesRaw)
-        const zones = Array.isArray(payload.zones) ? payload.zones : []
-        zoneNames = zones
-          .map(z => (z && typeof z === 'object' && 'name' in z ? String((z as { name: unknown }).name) : ''))
-          .filter(Boolean)
+        zones = parseZones(toolPayload(await mcp.callTool('get_zones', {})))
+        walls = parseWalls(toolPayload(await mcp.callTool('get_walls', {})))
+        zoneNames = zones.map(z => z.name).filter(Boolean)
       } catch (error) {
-        zoneInspectionError = `读取场景 zones 失败：${error instanceof Error ? error.message : String(error)}`
+        zoneInspectionError = `读取场景 zones/walls 失败：${error instanceof Error ? error.message : String(error)}`
       }
     } else if (needsZoneChecks) {
       zoneInspectionError = '没有 sceneId，无法读取场景 zones'
@@ -284,6 +444,40 @@ async function runCase(
       assertionsPassed = false
     }
 
+    // Config-driven, data-based assertions against the real scene.
+    let assertions: AssertionResult[] | undefined
+    let assertionRollup: AssertionRollup | undefined
+    if (sceneId && !zoneInspectionError && hasConfigAssertions(testCase)) {
+      const scene: SceneInputs = { zones, walls }
+      const results = runSceneAssertions(extractAssertionConfig(testCase), scene)
+      if (testCase.modificationChecks) {
+        if (beforeSnapshot) {
+          try {
+            const afterSnapshot = parseSceneSnapshot(toolPayload(await mcp.callTool('get_scene', {})))
+            results.push(...assertModification(beforeSnapshot, afterSnapshot, scene, testCase.modificationChecks))
+          } catch (error) {
+            results.push({
+              name: 'modification',
+              status: 'unsupported',
+              reason: `读取修改后场景失败：${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        } else {
+          results.push({
+            name: 'modification',
+            status: 'unsupported',
+            reason: '未能获取修改前基准快照，无法做前后比较（见 run-eval 中的隔离阻塞点说明）',
+          })
+        }
+      }
+      assertions = results
+      assertionRollup = rollupAssertions(results)
+      // unsupported is NOT a pass — any fail or unsupported blocks assertions.
+      if (!assertionRollup.allPassed) assertionsPassed = false
+    } else if (needsZoneChecks && zoneInspectionError && hasConfigAssertions(testCase)) {
+      assertionsPassed = false
+    }
+
     const errorParts: string[] = []
     if (workflow.error) errorParts.push(workflow.error)
     if (zoneInspectionError && needsZoneChecks) errorParts.push(zoneInspectionError)
@@ -296,6 +490,12 @@ async function runCase(
     }
     if (checks.forbiddenRoomTypesFound?.length) {
       errorParts.push(`建出了不该建的房间类型：${checks.forbiddenRoomTypesFound.join(', ')}`)
+    }
+    if (assertions) {
+      for (const a of assertions) {
+        if (a.status === 'fail') errorParts.push(`[断言失败] ${a.name}：${a.reason ?? ''}`)
+        else if (a.status === 'unsupported') errorParts.push(`[断言无法判定] ${a.name}：${a.reason ?? ''}`)
+      }
     }
 
     const failure = classifyFailure(session.phase, lastResult!.reply)
@@ -311,10 +511,14 @@ async function runCase(
       failureMessage: failure?.message,
       modelAttempts: session.modelCallsTotal,
       furniture: classifyFurnitureIssues(sceneResult?.furnitureIssues ?? []),
+      assertions,
+      assertionRollup,
       elapsedMs,
       finalPhase: session.phase,
       sceneId,
       editorUrl: sceneResult?.editorUrl ?? null,
+      baseSceneId: baseSceneId ?? null,
+      workingSceneId: workingSceneId ?? null,
       sceneResult,
       zoneNames,
       zoneInspectionError,
@@ -462,6 +666,7 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
       `- 状态：${result.ok ? '成功' : '失败'}（工作流完成=${result.workflowCompleted ? '是' : '否'}，断言通过=${result.assertionsPassed ? '是' : '否'}）${result.error ? `（${result.error}）` : ''}`,
     )
     lines.push(`- 耗时：${result.elapsedMs}ms`)
+    if (result.baseSceneId) lines.push(`- 基准场景：${result.baseSceneId}（工作副本：${result.workingSceneId ?? '—'}；原基准未被修改）`)
     if (result.editorUrl) lines.push(`- 场景：${result.editorUrl}`)
     if (result.sceneResult) {
       lines.push(
@@ -472,6 +677,21 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
       lines.push(
         `- 家具问题：共 ${result.furniture.total}（重叠 ${result.furniture.overlapCount}，越界 ${result.furniture.outOfBoundsCount}，其他 ${result.furniture.otherCount}）`,
       )
+    }
+    if (result.assertionRollup) {
+      const r = result.assertionRollup
+      lines.push(`- 断言：pass ${r.passed} / fail ${r.failed} / unsupported ${r.unsupported}（全过=${r.allPassed ? '是' : '否'}）`)
+    }
+    if (result.assertions) {
+      for (const a of result.assertions) {
+        const mark = a.status === 'pass' ? '✓' : a.status === 'fail' ? '✗' : '?'
+        const detail = [
+          a.expected !== undefined ? `expected=${JSON.stringify(a.expected)}` : '',
+          a.actual !== undefined ? `actual=${JSON.stringify(a.actual)}` : '',
+          a.reason ? `原因=${a.reason}` : '',
+        ].filter(Boolean).join('，')
+        lines.push(`  - ${mark} ${a.name}${detail ? `：${detail}` : ''}`)
+      }
     }
     if (!result.ok && result.failureCode) {
       lines.push(`- 失败：stage=${result.failureStage}，code=${result.failureCode}，模型请求数=${result.modelAttempts ?? '未知'}`)

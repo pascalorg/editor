@@ -4,12 +4,16 @@
   "difficulty": "hard",
   "description": "5米x18米狭长地块，两室一厅一卫",
   "turns": [
-    { "role": "user", "message": "地块是长条形的，宽5米长18米，做一个两室一厅一卫的户型" },
+    { "role": "user", "message": "地块为长方形，宽 5 米、长 18 米。设计两室一厅一厨一卫，所有房间均位于地块范围内，并保证卧室能够正常采光。" },
     { "action": "confirm" }
   ],
   "expectedFacts": {
     "bedroom_count": 2,
     "requiredRoomTypes": ["卧室", "客厅", "卫生间"]
   },
-  "notes": "狭长地块下走廊/过道类空间占比可能偏高，重点观察是否出现过窄畸形房间，以及走廊是否被正确识别为可穿行空间而不是被 isolatedBedrooms 判定阻断"
+  "expectedRoomCounts": { "卧室": 2, "客厅": 1, "厨房": 1, "卫生间": 1 },
+  "expectedBounds": { "width": 5, "depth": 18, "tolerance": 0.12 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "notes": "expectedBounds 检查整体轮廓约 5×18m（允许长宽互换）；zones 的并集即外轮廓，房间天然在其内，因此“不得越界”主要体现为整体尺寸符合 5×18 而没有房间把包围盒撑大。狭长地块下重点观察是否出现过窄畸形房间，以及走廊是否被正确识别为可穿行空间"
 }

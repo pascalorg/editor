@@ -11,5 +11,9 @@
     "bedroom_count": 2,
     "requiredRoomTypes": ["卧室", "客厅", "卫生间", "厨房"]
   },
-  "notes": "两间卧室都需要接触外墙（采光要求），可用于观察 strayWindows 维度；也是 case-13/14 的依赖用例"
+  "expectedRoomCounts": { "卧室": 2, "客厅": 1, "卫生间": 1, "厨房": 1 },
+  "totalArea": { "target": 70, "tolerance": 0.12 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "notes": "两间卧室都需要有有效外窗（windowsRequiredFor 逐间检查每间卧室都有朝外的窗，而不仅是场景里存在窗）；也是 case-13/14 的依赖用例"
 }

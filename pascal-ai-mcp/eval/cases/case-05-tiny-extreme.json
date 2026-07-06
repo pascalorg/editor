@@ -11,5 +11,9 @@
     "bedroom_count": 1,
     "requiredRoomTypes": ["卧室", "卫生间", "厨房", "客厅"]
   },
-  "notes": "重点观察长宽比违规和面积不合理的畸形房间——这类用例过去出现过问题"
+  "expectedRoomCounts": { "卧室": 1, "卫生间": 1, "厨房": 1, "客厅": 1 },
+  "totalArea": { "target": 28, "tolerance": 0.12 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "notes": "自动检查房间、总面积、卧室采光和可达性；房间最小宽度、异常长宽比和实际舒适度暂由人工审核"
 }

@@ -4,12 +4,16 @@
   "difficulty": "standard",
   "description": "轮椅使用者一居室，无障碍通行要求",
   "turns": [
-    { "role": "user", "message": "给轮椅使用者设计一个约40平米的一居室，卫生间和主要通道要预留轮椅回转空间，门口不能有台阶" },
+    { "role": "user", "message": "给轮椅使用者设计一个约40平米的一室一厅一厨一卫户型，卧室要有窗，卫生间和主要通道要预留轮椅回转空间，入口不能有台阶。" },
     { "action": "confirm" }
   ],
   "expectedFacts": {
     "bedroom_count": 1,
-    "requiredRoomTypes": ["卧室", "卫生间"]
+    "requiredRoomTypes": ["卧室", "客厅", "厨房", "卫生间"]
   },
-  "notes": "无障碍相关的尺寸/回转空间要求目前没有任何确定性检查覆盖，这个用例主要是记录现状，不代表能自动判定通过或不通过"
+  "expectedRoomCounts": { "卧室": 1, "客厅": 1, "厨房": 1, "卫生间": 1 },
+  "totalArea": { "target": 40, "tolerance": 0.15 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "notes": "基础房间、面积、采光和可达性自动检查；门净宽、通道宽度、轮椅回转直径及无高差仍需人工审核，不能因基础断言通过就认定无障碍合格"
 }

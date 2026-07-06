@@ -4,12 +4,16 @@
   "difficulty": "hard",
   "description": "五室两厅三卫，180平米，压力测试房间数量多时的收敛性和墙体拓扑复杂度",
   "turns": [
-    { "role": "user", "message": "五室两厅三卫，面积约180平米，需要一个家政间和一个储物间" },
+    { "role": "user", "message": "设计一个约180平米的五室一客厅一餐厅一厨三卫户型，另设一个家政间和一个储物间，五间卧室都要有窗。" },
     { "action": "confirm" }
   ],
   "expectedFacts": {
     "bedroom_count": 5,
-    "requiredRoomTypes": ["卧室", "客厅", "卫生间"]
+    "requiredRoomTypes": ["卧室", "客厅", "餐厅", "厨房", "卫生间"]
   },
-  "notes": "房间数量多、墙体拓扑复杂，是最容易触发 maxToolRounds 用尽、converged=false 的场景，也是观察 T 型墙去重在大量房间下是否稳定的重点用例"
+  "expectedRoomCounts": { "卧室": 5, "客厅": 1, "餐厅": 1, "厨房": 1, "卫生间": 3 },
+  "totalArea": { "target": 180, "tolerance": 0.12 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "notes": "基础房间、面积、采光和可达性自动检查；家政间和储物间在房间类型扩展前由人工审核。该用例重点观察 maxToolRounds、收敛性和复杂墙体拓扑"
 }

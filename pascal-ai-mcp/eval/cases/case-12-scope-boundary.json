@@ -10,6 +10,8 @@
   "expectedFacts": {
     "bedroom_count": 2
   },
+  "expectedRoomCounts": { "卧室": 2 },
+  "totalArea": { "target": 50, "tolerance": 0.12 },
   "forbiddenRoomTypes": ["厨房", "卫生间", "客厅"],
   "notes": "回归用例：这次会话修的 Blocker1（compareRoomsToRequirements 的 isFullHome 卧室数量推断）就是这个场景。验收标准是实际生成的房间（get_zones 拿到的 zoneNames）里不应出现厨房/客厅/卫生间——只检查 requirementMismatches 文本不够，因为它检测不到模型自己多建了房间但没有被诊断标记为不符需求的情况，runner 直接对 zoneNames 做 forbiddenRoomTypes 检查"
 }

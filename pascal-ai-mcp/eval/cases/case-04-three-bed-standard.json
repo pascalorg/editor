@@ -11,5 +11,10 @@
     "bedroom_count": 3,
     "requiredRoomTypes": ["卧室", "客厅", "卫生间", "厨房"]
   },
-  "notes": "主卧独卫意味着至少一间卧室与卫生间直接相邻——注意跟 isolatedBedrooms 检查区分：直接相邻不等于必须穿过，只要这间卧室自己还有一扇通向公共动线的门就不算违规；也是 case-14 的依赖用例"
+  "expectedRoomCounts": { "卧室": 3, "客厅": 1, "餐厅": 1, "卫生间": 2, "厨房": 1 },
+  "totalArea": { "target": 110, "tolerance": 0.12 },
+  "windowsRequiredFor": ["卧室"],
+  "requireAllRoomsReachable": true,
+  "requiredAdjacency": [{ "a": "卧室", "b": "卫生间", "relation": "ensuite" }],
+  "notes": "“两厅”= 客厅 + 餐厅（各 1），而不是 2 个客厅——餐厅有独立房型模式（餐厅/饭厅/dining）。主卧独卫 = 至少一间卫生间只与单个卧室有门相连（ensuite 断言）；若门结构无法可靠确认套卫（仅共享墙无可确认门），输出 unsupported 而非静默通过；也是 case-14 的依赖用例"
 }

@@ -3,10 +3,20 @@
   "category": "修改已有场景：调整尺寸",
   "difficulty": "modify",
   "basedOn": "case-04-three-bed-standard",
+  "baseSceneId": "8c23d9809a41",
   "turns": [
-    { "role": "user", "message": "主卧太小了，帮我扩大到至少16平米" },
+    { "role": "user", "message": "保持建筑外轮廓和其他房间功能不变，把主卧扩大到至少16平米。只允许调整主卧与相邻空间之间必要的内部隔墙，不删除原有门窗。" },
     { "action": "confirm" }
   ],
   "expectedFacts": {},
-  "notes": "依赖 case-04。用于验证增量修改路径在调整已有房间尺寸时不会引入新的重复墙/封闭房间问题"
+  "modificationChecks": {
+    "preserveRoomCounts": true,
+    "preserveFurniture": false,
+    "maxDeletedOriginalWalls": 2,
+    "maxModifiedOriginalWalls": 2,
+    "preserveOriginalOpenings": true,
+    "preserveExteriorBounds": true,
+    "targetRoomArea": { "type": "卧室", "min": 16, "nameIncludes": ["主卧", "master"] }
+  },
+  "notes": "依赖 case-04 并在独立工作副本上修改；自动检查主卧面积、房间数量、外轮廓、原门窗和墙体改动范围。非目标房间面积是否仍合理由人工审核"
 }

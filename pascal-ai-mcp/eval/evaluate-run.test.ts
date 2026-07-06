@@ -34,6 +34,78 @@ function sceneResult(overrides: Partial<SceneResult> = {}): SceneResult {
   }
 }
 
+describe('dry-run validation of assertion config', () => {
+  const base: EvalCase = {
+    id: 'c',
+    category: 'x',
+    difficulty: 'easy',
+    turns: [{ role: 'user', message: '70平米两室一厅' }, { action: 'confirm' }],
+  }
+  const ids = new Set(['c', 'case-03-two-bed-standard'])
+
+  test('valid assertion config produces no problems', () => {
+    const problems = validateCaseStructure(
+      {
+        ...base,
+        expectedRoomCounts: { 卧室: 2, 客厅: 1 },
+        totalArea: { target: 70, tolerance: 0.1 },
+        windowsRequiredFor: ['卧室'],
+        requiredAdjacency: [{ a: '卧室', b: '卫生间', relation: 'ensuite' }],
+        expectedBounds: { width: 5, depth: 18, tolerance: 0.1 },
+      },
+      ids,
+    )
+    expect(problems).toEqual([])
+  })
+
+  test('flags unknown room type, bad tolerance and bad relation', () => {
+    const problems = validateCaseStructure(
+      {
+        ...base,
+        expectedRoomCounts: { 地下室: 1 },
+        totalArea: { target: 70, tolerance: 2 },
+        requiredAdjacency: [{ a: '卧室', b: '卫生间', relation: 'nextto' as 'ensuite' }],
+      },
+      ids,
+    )
+    expect(problems.some(p => p.includes('expectedRoomCounts'))).toBe(true)
+    expect(problems.some(p => p.includes('tolerance'))).toBe(true)
+    expect(problems.some(p => p.includes('relation'))).toBe(true)
+  })
+
+  test('flags modificationChecks without basedOn', () => {
+    const problems = validateCaseStructure(
+      { ...base, modificationChecks: { addedRoomType: '书房' } },
+      ids,
+    )
+    expect(problems.some(p => p.includes('modificationChecks'))).toBe(true)
+  })
+
+  test('flags an invalid added-room area range', () => {
+    const problems = validateCaseStructure(
+      {
+        ...base,
+        basedOn: 'case-03-two-bed-standard',
+        modificationChecks: { addedRoomArea: { type: '书房', min: 8, max: 6 } },
+      },
+      ids,
+    )
+    expect(problems.some(p => p.includes('addedRoomArea'))).toBe(true)
+  })
+
+  test('flags an invalid target-room area range', () => {
+    const problems = validateCaseStructure(
+      {
+        ...base,
+        basedOn: 'case-03-two-bed-standard',
+        modificationChecks: { targetRoomArea: { type: '卧室', min: 16, max: 12 } },
+      },
+      ids,
+    )
+    expect(problems.some(p => p.includes('targetRoomArea'))).toBe(true)
+  })
+})
+
 describe('classifyFailure', () => {
   test('completed runs are not classified as failures', () => {
     expect(classifyFailure('completed', '户型已生成并通过自动检查。')).toBeUndefined()
