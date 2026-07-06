@@ -4,9 +4,32 @@ import { emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
+import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, prepareSceneForExport } from '../../lib/glb-export'
+
+// prepareSceneForExport neutralises container meshes (door/window hitbox roots,
+// material-less renderables) with an attribute-less geometry — GLTFExporter
+// emits those as plain transform nodes, but STL/OBJExporter read
+// `position.count` unconditionally and crash. Swap in a geometry with an empty
+// (count-0) position so they iterate zero vertices instead. Shared: the export
+// scene is a throwaway clone, only its geometry *ref* is swapped.
+const EMPTY_POSITION_GEOMETRY = new THREE.BufferGeometry()
+EMPTY_POSITION_GEOMETRY.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute(new Float32Array(0), 3),
+)
+
+function ensurePositionAttributes(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const renderable = object as THREE.Mesh & { isLine?: boolean; isPoints?: boolean }
+    if (!(renderable.isMesh || renderable.isLine || renderable.isPoints)) return
+    if (!renderable.geometry?.getAttribute('position')) {
+      renderable.geometry = EMPTY_POSITION_GEOMETRY
+    }
+  })
+}
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
@@ -41,7 +64,8 @@ export function ExportManager() {
       } finally {
         emitter.emit('thumbnail:after-capture', undefined)
       }
-      const { scene: exportScene, animations } = prepared
+      const { scene: exportScene } = prepared
+      ensurePositionAttributes(exportScene)
 
       if (format === 'stl') {
         const exporter = new STLExporter()

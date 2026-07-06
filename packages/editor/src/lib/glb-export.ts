@@ -130,6 +130,7 @@ export function prepareSceneForExport(
   }
 
   pruneNonRenderableMeshes(scene, identityNodes)
+  sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene)
 
   const { clips, clipNamesByNode } = bakeAnimationClips(cloneByOriginal, nodes)
@@ -223,6 +224,68 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
     } else {
       toRemove.push(mesh)
     }
+  })
+  for (const object of toRemove) {
+    object.removeFromParent()
+  }
+}
+
+/**
+ * Repair meshes whose geometry groups don't line up with their material array —
+ * GLTFExporter reads `materials[group.materialIndex]` per group and crashes on
+ * undefined (`reading 'isShaderMaterial'`). The known producer is a roof
+ * placeholder (BoxGeometry's 6 groups vs the 4 roof materials), but any
+ * system/CSG output can end up here, so repair generically:
+ *  - groups indexing past the array (or drawing zero triangles) are dropped;
+ *  - null slots referenced by surviving groups get the hidden placeholder;
+ *  - a mesh left with no drawable group — including an array-material mesh
+ *    with no groups at all (three draws nothing for those, e.g. the roof
+ *    system's degenerate placeholder) — is neutralised like other
+ *    non-renderables (kept as a bare transform node, or removed if a leaf
+ *    that carries no node identity).
+ * Geometry/material refs are shared with the live scene (`clone(true)` is
+ * shallow for both), so repairs swap refs instead of mutating in place.
+ */
+function sanitizeMaterialGroups(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
+  const toRemove: THREE.Object3D[] = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !Array.isArray(mesh.material)) return
+    const materials = mesh.material
+    const groups = mesh.geometry.groups
+    const broken =
+      groups.length === 0 ||
+      groups.some((g) => (g.materialIndex ?? 0) >= materials.length || g.count === 0) ||
+      materials.some((m) => m == null)
+    if (!broken) return
+
+    const validGroups = groups.filter(
+      (g) => (g.materialIndex ?? 0) < materials.length && g.count !== 0,
+    )
+    if (validGroups.length === 0) {
+      if (mesh.children.length > 0 || identityNodes.has(mesh)) {
+        mesh.geometry = EMPTY_GEOMETRY
+        mesh.material = PLACEHOLDER_MATERIAL
+      } else {
+        toRemove.push(mesh)
+      }
+      return
+    }
+    // Only the group list needs repair — share the attribute/index refs
+    // instead of geometry.clone(), which deep-copies every vertex buffer.
+    if (validGroups.length !== groups.length) {
+      const geometry = new THREE.BufferGeometry()
+      geometry.index = mesh.geometry.index
+      for (const [name, attribute] of Object.entries(mesh.geometry.attributes)) {
+        geometry.setAttribute(name, attribute)
+      }
+      geometry.morphAttributes = mesh.geometry.morphAttributes
+      geometry.morphTargetsRelative = mesh.geometry.morphTargetsRelative
+      geometry.setDrawRange(mesh.geometry.drawRange.start, mesh.geometry.drawRange.count)
+      geometry.groups = validGroups.map((g) => ({ ...g }))
+      mesh.geometry = geometry
+    }
+    mesh.material = materials.map((m) => m ?? PLACEHOLDER_MATERIAL)
   })
   for (const object of toRemove) {
     object.removeFromParent()

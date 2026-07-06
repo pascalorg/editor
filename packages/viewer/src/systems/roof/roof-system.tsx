@@ -125,6 +125,28 @@ const _surfaceV1 = new THREE.Vector3()
 const _surfaceV2 = new THREE.Vector3()
 const _surfaceFaceNormal = new THREE.Vector3()
 
+/**
+ * Degenerate placeholder for a roof mesh with nothing to draw (initial
+ * BoxGeometry swap-out, or a roof whose segments were all deleted/painted).
+ * Three zero-vertices (one invisible triangle), not an empty attribute: an
+ * empty position (count 0) leaves WebGPU vertex buffer slot 0 unbound if the
+ * mesh is ever drawn, and computeBoundsTree needs a real position buffer to
+ * index. Deliberately NO groups: count-0 groups crash MeshBVH's packed-tree
+ * build (it partitions roots by group), and a BoxGeometry's 6 groups against
+ * the 4 roof materials crash raycasts and GLTFExporter. Group-less + a
+ * zero-area triangle is safe everywhere — it draws nothing under an array
+ * material and can never be ray-hit.
+ */
+function createDegenerateRoofPlaceholder(): THREE.BufferGeometry {
+  const placeholder = new THREE.BufferGeometry()
+  placeholder.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+  placeholder.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+  placeholder.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+  placeholder.setAttribute('uv2', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+  computeGeometryBoundsTree(placeholder)
+  return placeholder
+}
+
 // Pending merged-roof updates carried across frames (for throttling)
 const pendingRoofUpdates = new Set<AnyNodeId>()
 const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
@@ -219,29 +241,7 @@ export const RoofSystem = () => {
             // so MeshBVH hits groups[4].materialIndex → undefined.side → crash.
             if (mesh.geometry.type === 'BoxGeometry') {
               mesh.geometry.dispose()
-              const placeholder = new THREE.BufferGeometry()
-              // Three zero-vertices (one degenerate, invisible triangle), not an
-              // empty attribute: an empty position (count 0) leaves WebGPU vertex
-              // buffer slot 0 unbound if the mesh is ever drawn, and computeBoundsTree
-              // needs a real position buffer to index.
-              placeholder.setAttribute(
-                'position',
-                new THREE.Float32BufferAttribute(new Float32Array(9), 3),
-              )
-              placeholder.setAttribute(
-                'normal',
-                new THREE.Float32BufferAttribute(new Float32Array(9), 3),
-              )
-              placeholder.setAttribute(
-                'uv',
-                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
-              )
-              placeholder.setAttribute(
-                'uv2',
-                new THREE.Float32BufferAttribute(new Float32Array(6), 2),
-              )
-              computeGeometryBoundsTree(placeholder)
-              mesh.geometry = placeholder
+              mesh.geometry = createDegenerateRoofPlaceholder()
             }
             mesh.position.set(
               effectiveSegment.position[0],
@@ -497,8 +497,9 @@ function updateMergedRoofGeometry(
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()
-    // Keep a valid position attribute so Drei's BVH can index safely.
-    mergedMesh.geometry = new THREE.BoxGeometry(0, 0, 0)
+    // Not BoxGeometry: its 6 groups against the merged mesh's 4-material array
+    // crash GLTFExporter (materials[4] → undefined) when the roof bakes.
+    mergedMesh.geometry = createDegenerateRoofPlaceholder()
     return
   }
 
