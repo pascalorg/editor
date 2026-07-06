@@ -75,9 +75,13 @@ export function getRunSpans(
     CabinetModuleNode,
     'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
   >[],
+  opts: {
+    runTier?: CabinetNode['runTier']
+  } = {},
 ): RunSpan[] {
   const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
   const spans: RunSpan[] = []
+  const runTier = opts.runTier ?? 'base'
 
   for (const module of sorted) {
     const minX = module.position[0] - module.width / 2
@@ -85,7 +89,7 @@ export function getRunSpans(
     const minZ = module.position[2] - module.depth / 2
     const maxZ = module.position[2] + module.depth / 2
     const topY = module.position[1] + module.carcassHeight
-    const hasCountertop = (module.cabinetType ?? 'base') !== 'tall'
+    const hasCountertop = runTier === 'base' && (module.cabinetType ?? 'base') !== 'tall'
     const current = spans.at(-1)
     if (
       !current ||

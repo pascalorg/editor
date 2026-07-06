@@ -119,6 +119,17 @@ export function FloorplanRegistryMoveOverlay() {
       pauseSceneHistory(useScene)
       let historyPaused = true
 
+      const clearLivePreviews = () => {
+        const liveTransforms = useLiveTransforms.getState()
+        const liveOverrides = useLiveNodeOverrides.getState()
+        const scene = useScene.getState()
+        for (const id of session.affectedIds) {
+          liveTransforms.clear(id)
+          liveOverrides.clear(id)
+          scene.markDirty(id)
+        }
+      }
+
       // The registry action menu's Move button portals to `document.body`,
       // so the trigger click's pointer-up happens OUTSIDE the floor-plan
       // scene and never reaches `onPointerUp` here. That means: the very
@@ -354,12 +365,7 @@ export function FloorplanRegistryMoveOverlay() {
             resumeSceneHistory(useScene)
             historyPaused = false
           }
-          const liveTransforms = useLiveTransforms.getState()
-          const liveOverrides = useLiveNodeOverrides.getState()
-          for (const id of session.affectedIds) {
-            liveTransforms.clear(id)
-            liveOverrides.clear(id)
-          }
+          clearLivePreviews()
           useAlignmentGuides.getState().clear()
           setMovingNode(null)
           return
@@ -376,12 +382,7 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveNodeOverrides`. Either way, leaving them in place
         // after Esc would freeze the 2D / 3D view at the cancelled
         // position.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
         // Restore selection cleared by the action menu's Move click.
         useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
         setMovingNode(null)
@@ -429,12 +430,7 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveTransforms`; wall sessions write to
         // `useLiveNodeOverrides`. In pure 2D view the corresponding 3D
         // tool's cleanup isn't there to clear them for us.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
         // Sessions that publish Figma-style alignment guides during `apply`
         // (item / shelf / column) leave them in the store; this cleanup runs
         // after every terminal path (commit + Esc both unmount via
@@ -593,6 +589,27 @@ export function FloorplanRegistryMoveOverlay() {
         useAlignmentGuides.getState().set(result.guides)
       } else {
         useAlignmentGuides.getState().clear()
+      }
+
+      // 3) Kind-owned attachment snap (cabinet → wall) — 2D parity with the
+      // 3D move tool's `groupMoveSnap` pass. An attach behavior, not an
+      // alignment guide, so it runs in every snapping mode except Off.
+      const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      if (groupMoveSnap && (isGridSnapActive() || isMagneticSnapActive())) {
+        const snappedPosition = groupMoveSnap({
+          node: movingNode,
+          candidatePosition: [finalX, originalPosition[1], finalZ],
+          movingIds: [movingNode.id as AnyNodeId],
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          levelId:
+            (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+            ((movingNode.parentId as AnyNodeId | undefined) ?? null),
+        })
+        if (snappedPosition) {
+          finalX = snappedPosition[0]
+          finalZ = snappedPosition[2]
+          useAlignmentGuides.getState().clear()
+        }
       }
 
       const dx = finalX - originalPosition[0]

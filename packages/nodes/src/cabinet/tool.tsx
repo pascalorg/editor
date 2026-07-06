@@ -20,6 +20,7 @@ import {
   isValidWallSideFace,
   triggerSFX,
   useEditor,
+  usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -62,6 +63,36 @@ function runModuleBaseY(plinthHeight: number, showPlinth: boolean) {
   return showPlinth ? plinthHeight : 0
 }
 
+function buildCabinetPlacementPreviewNode({
+  island,
+  position,
+  previewModule,
+  yaw,
+}: {
+  island: boolean
+  position: [number, number, number]
+  previewModule: Pick<
+    ReturnType<typeof CabinetModuleNode.parse>,
+    'width' | 'depth' | 'carcassHeight'
+  >
+  yaw: number
+}) {
+  const defaults = cabinetDefinition.defaults()
+  return CabinetNode.parse({
+    ...defaults,
+    name: island ? 'Kitchen Island Preview' : 'Modular Cabinet Preview',
+    position,
+    rotation: yaw,
+    width: previewModule.width,
+    depth: previewModule.depth,
+    carcassHeight: previewModule.carcassHeight,
+    ...(island && {
+      countertopBackOverhang: ISLAND_SEATING_OVERHANG,
+      withFinishedBack: true,
+    }),
+  })
+}
+
 function snap(value: number, step: number): number {
   if (step <= 0) return value
   return Math.round(value / step) * step
@@ -70,6 +101,12 @@ function snap(value: number, step: number): number {
 function isFreePlacementEvent(event: FloorPlacementClickTriggerEvent): boolean {
   const native = (event as { nativeEvent?: { altKey?: boolean } }).nativeEvent
   return Boolean(native?.altKey)
+}
+
+// Wall snap is an attachment behavior (like door/window wall placement), not a
+// magnetic alignment guide — active in every snapping mode except Off.
+function isWallSnapEligible(): boolean {
+  return isGridSnapActive() || isMagneticSnapActive()
 }
 
 function WallSnapGuide({
@@ -190,6 +227,17 @@ const CabinetTool = () => {
     return group
   }, [previewNode])
 
+  const publishFloorplanPreview = (next: CabinetPlacement, island = islandModeRef.current) => {
+    usePlacementPreview.getState().set(
+      buildCabinetPlacementPreviewNode({
+        island,
+        position: next.position,
+        previewModule: previewNode,
+        yaw: next.yaw,
+      }),
+    )
+  }
+
   useEffect(() => {
     if (!activeLevelId) return
     placementRef.current = null
@@ -226,7 +274,7 @@ const CabinetTool = () => {
     }
 
     const resolveWallHitPlacement = (hit: WallHit): CabinetPlacement | null => {
-      if (!isMagneticSnapActive()) return null
+      if (!isWallSnapEligible()) return null
       const nodes = useScene.getState().nodes
       const neighbors = collectCabinetWallSnapNeighbors({
         hit,
@@ -262,7 +310,7 @@ const CabinetTool = () => {
     }
 
     const resolveWallPlacement = (raw: [number, number, number]): CabinetPlacement | null => {
-      if (!isMagneticSnapActive()) return null
+      if (!isWallSnapEligible()) return null
       const nodes = useScene.getState().nodes
       const hit = findClosestWallInPlan([raw[0], raw[2]], nodes, activeLevelId as AnyNodeId)
       if (!hit) return null
@@ -288,6 +336,7 @@ const CabinetTool = () => {
     const publishPlacement = (next: CabinetPlacement) => {
       placementRef.current = next
       setPlacement(next)
+      publishFloorplanPreview(next)
       const prev = previousSnapRef.current
       const wasWallSnap = previousWasWallSnapRef.current
       if (!prev || prev[0] !== next.position[0] || prev[1] !== next.position[2]) {
@@ -361,6 +410,7 @@ const CabinetTool = () => {
       bumpCabinetRunsLayoutRevisionOnLevel(activeLevelId as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [module.id] })
       triggerSFX('sfx:item-place')
+      usePlacementPreview.getState().clear()
       stopPlacementCommitPropagation(event)
     }
 
@@ -376,6 +426,9 @@ const CabinetTool = () => {
         if (islandModeRef.current && placementRef.current?.snappedToWall) {
           placementRef.current = null
           setPlacement(null)
+          usePlacementPreview.getState().clear()
+        } else if (placementRef.current) {
+          publishFloorplanPreview(placementRef.current, islandModeRef.current)
         }
         triggerSFX('sfx:item-rotate')
         return
@@ -390,6 +443,7 @@ const CabinetTool = () => {
         const next = { ...placementRef.current, yaw: yawRef.current }
         placementRef.current = next
         setPlacement(next)
+        publishFloorplanPreview(next)
       }
       triggerSFX('sfx:item-rotate')
     }
@@ -403,6 +457,7 @@ const CabinetTool = () => {
       emitter.off('wall:move', onWallMove)
       unsubscribePlacementClicks()
       window.removeEventListener('keydown', onKeyDown, true)
+      usePlacementPreview.getState().clear()
     }
   }, [activeLevelId, placementDimensions, previewNode])
 

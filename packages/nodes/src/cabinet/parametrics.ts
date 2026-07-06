@@ -1,4 +1,5 @@
 import type { CabinetModuleNode, CabinetNode, ParametricDescriptor } from '@pascal-app/core'
+import { cabinetCornerUnlinkPatchesOnDelete } from './run-ops'
 
 export const cabinetParametrics: ParametricDescriptor<CabinetNode> = {
   groups: [
@@ -15,6 +16,9 @@ export const cabinetParametrics: ParametricDescriptor<CabinetNode> = {
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],
+  // Deleting one L-corner member removes only it; these patches keep the
+  // corner-link metadata on the survivors consistent.
+  onDelete: (node, nodes) => cabinetCornerUnlinkPatchesOnDelete(node, nodes),
   customPanel: () => import('./panel'),
 }
 
@@ -33,5 +37,8 @@ export const cabinetModuleParametrics: ParametricDescriptor<CabinetModuleNode> =
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],
+  // Deleting one L-corner member removes only it; these patches keep the
+  // corner-link metadata on the survivors consistent.
+  onDelete: (node, nodes) => cabinetCornerUnlinkPatchesOnDelete(node, nodes),
   customPanel: () => import('./panel'),
 }

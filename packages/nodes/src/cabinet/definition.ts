@@ -22,8 +22,10 @@ import {
   cabinetMetadataRecord,
   cabinetModulesForRun,
   totalCabinetHeight as cabinetTotalHeight,
+  cornerLinkedSourceModuleForRun,
   resolveCabinetType,
   runModuleBaseY,
+  syncCornerRunsFromSourceModule,
   wallChildOf,
 } from './run-ops'
 import { cabinetSceneAction } from './scene-action'
@@ -35,6 +37,7 @@ import {
   minCabinetCarcassHeightForStack,
   stackForCabinet,
 } from './stack'
+import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 type CabinetLocalBounds = {
@@ -63,6 +66,64 @@ function isCabinetModule(node: AnyNode | undefined): node is CabinetModuleNodeTy
 
 function isCabinetRun(node: AnyNode | undefined): node is CabinetNodeType {
   return node?.type === 'cabinet'
+}
+
+function resolveCabinetGroupMoveSnap({
+  candidatePosition,
+  levelId,
+  movingIds,
+  node,
+  nodes,
+}: {
+  candidatePosition: [number, number, number]
+  levelId: AnyNodeId | null
+  movingIds: readonly AnyNodeId[]
+  node: AnyNode
+  nodes: Readonly<Record<string, AnyNode>>
+}): [number, number, number] | null {
+  if (node.type !== 'cabinet' || !levelId) return null
+  return resolveCabinetRunWallSnap({
+    cabinet: node,
+    candidatePosition,
+    excludeIds: movingIds,
+    gridStep: 0,
+    nodes: nodes as Record<AnyNodeId, AnyNode>,
+    parentLevelId: levelId,
+  })
+}
+
+/**
+ * Wall snap for a single dragged module. `parentFrame` kinds exchange
+ * `candidatePosition` in the run's LOCAL frame with the move tool (it
+ * converts through `planToLocal` before and `localToPlan` after), so this
+ * resolver works local-in / local-out.
+ */
+function resolveCabinetModuleGroupMoveSnap({
+  candidatePosition,
+  levelId,
+  movingIds,
+  node,
+  nodes,
+}: {
+  candidatePosition: [number, number, number]
+  levelId: AnyNodeId | null
+  movingIds: readonly AnyNodeId[]
+  node: AnyNode
+  nodes: Readonly<Record<string, AnyNode>>
+}): [number, number, number] | null {
+  if (node.type !== 'cabinet-module' || !node.parentId) return null
+  const run = nodes[node.parentId]
+  if (!isCabinetRun(run)) return null
+  const parentLevelId = (levelId ?? run.parentId ?? null) as AnyNodeId | null
+  if (!parentLevelId) return null
+  return resolveCabinetModuleWallSnapLocal({
+    candidateLocal: candidatePosition,
+    excludeIds: movingIds,
+    module: node,
+    nodes: nodes as Record<AnyNodeId, AnyNode>,
+    parentLevelId,
+    run,
+  })
 }
 
 function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {
@@ -206,6 +267,36 @@ function includeCabinetModuleBounds(
   }
 }
 
+/**
+ * Fold a child cabinet run (an L-corner leg parented to this run) into the
+ * parent's local bounds: take the child's own local bounds, rotate its XZ
+ * corners by the child's local rotation, and offset by its local position.
+ */
+function includeChildRunBounds(
+  child: CabinetNodeType,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  bounds: Pick<CabinetLocalBounds, 'minX' | 'maxX' | 'minY' | 'maxY' | 'minZ' | 'maxZ'>,
+) {
+  const childBounds = cabinetLocalBounds(child, nodes)
+  const cos = Math.cos(child.rotation)
+  const sin = Math.sin(child.rotation)
+  for (const [lx, lz] of [
+    [childBounds.minX, childBounds.minZ],
+    [childBounds.maxX, childBounds.minZ],
+    [childBounds.maxX, childBounds.maxZ],
+    [childBounds.minX, childBounds.maxZ],
+  ] as const) {
+    const x = child.position[0] + lx * cos + lz * sin
+    const z = child.position[2] - lx * sin + lz * cos
+    bounds.minX = Math.min(bounds.minX, x)
+    bounds.maxX = Math.max(bounds.maxX, x)
+    bounds.minZ = Math.min(bounds.minZ, z)
+    bounds.maxZ = Math.max(bounds.maxZ, z)
+  }
+  bounds.minY = Math.min(bounds.minY, child.position[1] + childBounds.minY)
+  bounds.maxY = Math.max(bounds.maxY, child.position[1] + childBounds.maxY)
+}
+
 function cabinetLocalBounds(
   node: CabinetEditableNode,
   nodes?: Readonly<Record<AnyNodeId, AnyNode>>,
@@ -245,6 +336,12 @@ function cabinetLocalBounds(
         if (edge === 'right') bounds.maxX += node.barLedge.depth
         bounds.maxY = Math.max(bounds.maxY, node.barLedge.height)
       }
+    }
+    // L-corner leg runs are cabinet children of the source run — fold them in
+    // so the run's rotate ring / pivot / drag box covers the whole L.
+    for (const childId of node.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (isCabinetRun(child)) includeChildRunBounds(child, nodes, bounds)
     }
   }
 
@@ -362,6 +459,14 @@ function commitRunResize(
 
   if (syncDepth || syncHeight || syncPosition) {
     bumpCabinetRunLayoutRevision(sceneApi, nextRun)
+    const cornerSource = cornerLinkedSourceModuleForRun(nextRun, sceneApi.nodes())
+    if (cornerSource) {
+      syncCornerRunsFromSourceModule({
+        module: cornerSource,
+        run: nextRun,
+        sceneApi,
+      })
+    }
   }
 }
 
@@ -398,6 +503,11 @@ function commitModuleResize(
       )
     }
     bumpCabinetRunLayoutRevision(sceneApi, parentRun)
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+      run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
+      sceneApi,
+    })
     return
   }
 
@@ -426,6 +536,12 @@ function commitModuleResize(
   } else {
     bumpCabinetRunLayoutRevision(sceneApi, parentRun)
   }
+
+  syncCornerRunsFromSourceModule({
+    module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+    run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
+    sceneApi,
+  })
 
   const wallChild = wallChildOf(module, sceneApi.nodes())
   if (wallChild && typeof modulePatch.depth === 'number') {
@@ -644,7 +760,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'z'], gridSnap: true },
+    movable: { axes: ['x', 'z'], gridSnap: true, groupMoveSnap: resolveCabinetGroupMoveSnap },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
@@ -791,6 +907,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     frontThickness: 0.018,
     frontGap: 0.003,
     moduleKind: 'standard' as const,
+    openSide: undefined,
+    cornerShelf: false,
     handleStyle: 'bar',
     handlePosition: 'auto',
     frontOverlay: 'full',
@@ -802,7 +920,12 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'z'], gridSnap: true, parentFrame: cabinetModuleParentFrame },
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+      parentFrame: cabinetModuleParentFrame,
+      groupMoveSnap: resolveCabinetModuleGroupMoveSnap,
+    },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
@@ -851,6 +974,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.withBottomPanel,
       n.showPlinth,
       n.withCountertop,
+      n.openSide ?? null,
+      n.cornerShelf ?? false,
       JSON.stringify(n.material ?? null),
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),

@@ -6,6 +6,7 @@ import type {
   MovableParentFrame,
 } from '@pascal-app/core'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
+import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './run-ops'
 
 /** Matches the generic move tool's Figma-alignment pull (8 cm). */
 const MAGNETIC_THRESHOLD_M = 0.08
@@ -118,6 +119,18 @@ export const cabinetModuleParentFrame: MovableParentFrame = {
   localToPlan,
   planToLocal,
   magneticSnap,
+  // Module position isn't in the run's geometryKey, so a committed move must
+  // bump the layout revision to re-flow spans/countertop — and re-anchor any
+  // linked L-corner runs to the module's new edge.
+  onCommit: (node, parent, sceneApi) => {
+    if (node.type !== 'cabinet-module' || parent.type !== 'cabinet') return
+    bumpCabinetRunLayoutRevision(sceneApi, parent as CabinetNodeType)
+    syncCornerRunsFromSourceModule({
+      module: node as CabinetModuleNodeType,
+      run: sceneApi.get<CabinetNodeType>(parent.id as AnyNodeId) ?? (parent as CabinetNodeType),
+      sceneApi,
+    })
+  },
   floorplanLiveTransform: ({ node, live }) => {
     const rotation = (node as { rotation?: unknown }).rotation
     return {

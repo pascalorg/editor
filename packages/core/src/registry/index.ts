@@ -18,6 +18,7 @@ export type {
 export {
   bakePolicyOf,
   discoverPlugins,
+  extendPluginDiscovery,
   getHostRefFields,
   getSelectableKinds,
   hasRegistry3DMoveTool,

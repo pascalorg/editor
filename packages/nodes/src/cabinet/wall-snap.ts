@@ -7,8 +7,10 @@ import {
   getWallThickness,
   type WallNode,
 } from '@pascal-app/core'
+import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import type { WallHit } from '../shared/wall-attach-target'
 import { projectWallLocalPointToPlan } from '../shared/wall-attach-target'
+import { planToRunLocal, runLocalToPlan } from './run-layout'
 
 const EDGE_SNAP_THRESHOLD = 0.08
 const FACE_MATCH_THRESHOLD = 0.12
@@ -163,9 +165,11 @@ export function resolveCabinetWallFaceOffset({
 export function collectCabinetWallSnapNeighbors({
   hit,
   nodes,
+  excludeIds = [],
   parentLevelId,
   width,
 }: {
+  excludeIds?: readonly AnyNodeId[]
   hit: WallHit
   nodes: Record<AnyNodeId, AnyNode>
   parentLevelId: AnyNodeId
@@ -176,9 +180,11 @@ export function collectCabinetWallSnapNeighbors({
   const yaw = Math.atan2(frontNormal[0] * normalScale, frontNormal[1] * normalScale)
   const wallFaceOffset = getWallThickness(hit.wall) / 2
   const neighbors: CabinetWallSnapNeighbor[] = []
+  const excluded = new Set(excludeIds)
 
   for (const node of Object.values(nodes)) {
     if (node?.type !== 'cabinet') continue
+    if (excluded.has(node.id as AnyNodeId)) continue
     if (node.parentId !== parentLevelId) continue
     if (Math.abs(angleDelta(node.rotation, yaw)) > YAW_MATCH_THRESHOLD) continue
 
@@ -265,4 +271,115 @@ export function resolveCabinetWallSnapPlacement({
       end: [guideEnd[0], 0.025, guideEnd[1]],
     },
   }
+}
+
+/**
+ * Wall snap for a single dragged module, in its run's LOCAL frame — the
+ * frame `movable.parentFrame` kinds store `position` in. Converts the
+ * candidate to plan space, resolves the same flush-to-wall placement a run
+ * drag gets, and converts back. Snaps only when the module's world yaw
+ * already faces the wall (a module drag cannot rotate its run).
+ */
+export function resolveCabinetModuleWallSnapLocal({
+  candidateLocal,
+  excludeIds = [],
+  gridStep = 0,
+  module,
+  nodes,
+  parentLevelId,
+  run,
+}: {
+  candidateLocal: [number, number, number]
+  excludeIds?: readonly AnyNodeId[]
+  gridStep?: number
+  module: CabinetModuleNode
+  nodes: Record<AnyNodeId, AnyNode>
+  parentLevelId: AnyNodeId
+  run: Extract<AnyNode, { type: 'cabinet' }>
+}): [number, number, number] | null {
+  const planCenter = runLocalToPlan(run, candidateLocal)
+  const hit = findClosestWallInPlan([planCenter[0], planCenter[2]], nodes, parentLevelId)
+  if (!hit) return null
+  if (excludeIds.includes(hit.wall.id as AnyNodeId)) return null
+
+  const faceOffset = resolveCabinetWallFaceOffset({ hit, nodes, parentLevelId })
+  const placement = resolveCabinetWallSnapPlacement({
+    depth: module.depth,
+    faceOffset,
+    gridStep,
+    hit,
+    neighbors: collectCabinetWallSnapNeighbors({
+      hit,
+      nodes,
+      // The moving module's own run must not offer edge stops — its span
+      // still includes the module's pre-drag position.
+      excludeIds: [...excludeIds, run.id as AnyNodeId],
+      parentLevelId,
+      width: module.width,
+    }),
+    width: module.width,
+  })
+  if (!placement) return null
+
+  const worldYaw = run.rotation + module.rotation
+  if (Math.abs(angleDelta(worldYaw, placement.yaw)) > YAW_MATCH_THRESHOLD) return null
+
+  return planToRunLocal(run, placement.position[0], candidateLocal[1], placement.position[2])
+}
+
+export function resolveCabinetRunWallSnap({
+  cabinet,
+  candidatePosition,
+  excludeIds = [],
+  gridStep = 0,
+  nodes,
+  parentLevelId,
+}: {
+  cabinet: Extract<AnyNode, { type: 'cabinet' }>
+  candidatePosition: [number, number, number]
+  excludeIds?: readonly AnyNodeId[]
+  gridStep?: number
+  nodes: Record<AnyNodeId, AnyNode>
+  parentLevelId: AnyNodeId
+}): [number, number, number] | null {
+  const run = cabinetRunWidthAndCenterOffset(cabinet, nodes)
+  const axisX = Math.cos(cabinet.rotation)
+  const axisZ = -Math.sin(cabinet.rotation)
+  const footprintCenter: [number, number] = [
+    candidatePosition[0] + axisX * run.centerOffset,
+    candidatePosition[2] + axisZ * run.centerOffset,
+  ]
+  const hit = findClosestWallInPlan(footprintCenter, nodes, parentLevelId)
+  if (!hit) return null
+  // A wall moving with the same group (whole-room drag) still sits at its
+  // pre-drag position in `nodes` — snapping to it would tear the group apart.
+  if (excludeIds.includes(hit.wall.id as AnyNodeId)) return null
+
+  const faceOffset = resolveCabinetWallFaceOffset({
+    hit,
+    nodes,
+    parentLevelId,
+  })
+  const placement = resolveCabinetWallSnapPlacement({
+    depth: cabinet.depth,
+    faceOffset,
+    gridStep,
+    hit,
+    neighbors: collectCabinetWallSnapNeighbors({
+      hit,
+      nodes,
+      excludeIds,
+      parentLevelId,
+      width: run.width,
+    }),
+    width: run.width,
+  })
+  if (!placement) return null
+  if (Math.abs(angleDelta(cabinet.rotation, placement.yaw)) > YAW_MATCH_THRESHOLD) return null
+
+  return [
+    placement.position[0] - Math.cos(placement.yaw) * run.centerOffset,
+    candidatePosition[1],
+    placement.position[2] + Math.sin(placement.yaw) * run.centerOffset,
+  ]
 }

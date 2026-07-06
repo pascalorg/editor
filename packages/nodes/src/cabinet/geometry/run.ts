@@ -39,7 +39,7 @@ function siblingCabinetSpansInRunLocal(node: CabinetNode, ctx?: GeometryContext)
     const siblingModules = modulesForRun(sibling, ctx)
     const siblingSpans =
       siblingModules.length > 0
-        ? getRunSpans(siblingModules)
+        ? getRunSpans(siblingModules, { runTier: sibling.runTier })
         : [
             {
               minX: -sibling.width / 2,
@@ -112,7 +112,7 @@ export function buildCabinetRunGeometry(
   // overhang; side-edge bars leave it alone.
   const backOverhang =
     node.withCountertop && node.barLedge?.edge !== 'back' ? node.countertopBackOverhang : 0
-  const spans = getRunSpans(modules)
+  const spans = getRunSpans(modules, { runTier: node.runTier })
   const siblingSpans = siblingCabinetSpansInRunLocal(node, ctx)
 
   for (const span of spans) {

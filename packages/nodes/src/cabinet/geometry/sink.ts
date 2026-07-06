@@ -42,7 +42,7 @@ const BASIN_DEPTH = 0.19
 const BASIN_CORNER_MARGIN = 0.06
 // Centers the faucet base in the strip between the bowl's back edge and the
 // countertop's back edge (BASIN_CORNER_MARGIN wide).
-const FAUCET_SETBACK = 0.03
+export const FAUCET_SETBACK = 0.03
 
 export type SinkBowlSpec = { centerX: number; width: number; depth: number }
 

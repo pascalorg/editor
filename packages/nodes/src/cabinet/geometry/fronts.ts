@@ -482,6 +482,7 @@ export function addShelfBoards(
   y0: number,
   height: number,
   count: number,
+  centerX = 0,
 ) {
   if (count <= 0) return
   for (let i = 0; i < count; i++) {
@@ -489,7 +490,7 @@ export function addShelfBoards(
     addBox(
       group,
       [openingWidth, board, openingDepth],
-      [0, y, board / 2],
+      [centerX, y, board / 2],
       materials.carcass,
       `cabinet-shelf-${y.toFixed(3)}-${i}`,
       'carcass',

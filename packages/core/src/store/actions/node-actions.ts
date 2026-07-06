@@ -1072,6 +1072,12 @@ export const deleteNodesAction = (
       if (allIds.has(id)) return
       allIds.add(id)
       const node = nextNodes[id]
+      const cascadeDeletes = node
+        ? nodeRegistry.get(node.type)?.parametrics?.onDeleteCascade?.(node, nextNodes)
+        : null
+      if (cascadeDeletes) {
+        for (const companionId of cascadeDeletes) collect(companionId)
+      }
       if (node && 'children' in node) {
         for (const cid of node.children as AnyNodeId[]) collect(cid)
       }

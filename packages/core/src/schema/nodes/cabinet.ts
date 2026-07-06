@@ -78,7 +78,7 @@ export type CabinetCompartmentSchema = z.infer<typeof CabinetCompartment>
 const cabinetBoxFields = {
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
-  width: z.number().min(0.3).max(3).default(0.6),
+  width: z.number().min(0.05).max(3).default(0.6),
   depth: z.number().min(0.3).max(1.2).default(0.58),
   carcassHeight: z.number().min(0.4).max(2.4).default(0.72),
   operationState: z.number().min(0).max(1).default(0),
@@ -127,12 +127,18 @@ export const CabinetNode = BaseNode.extend({
 export const CabinetModuleNode = BaseNode.extend({
   id: objectId('cabinet-module'),
   type: nodeType('cabinet-module'),
-  children: z.array(objectId('cabinet-module')).default([]),
+  children: z.array(z.union([objectId('cabinet-module'), objectId('cabinet')])).default([]),
   cabinetType: z.enum(['base', 'tall']).default('base'),
   // Discriminator for specialty units (corner L-shape, sink base, appliance
   // gap, open shelving). 'standard' modules use the compartment stack as-is;
   // new kinds extend this enum instead of overloading the stack.
-  moduleKind: z.enum(['standard']).default('standard'),
+  moduleKind: z.enum(['standard', 'corner-filler']).default('standard'),
+  // Shared-boundary opening for inside-corner pockets: drops the side panel on
+  // that side and lets interior shelves / decks run through to the neighbour.
+  openSide: z.enum(['left', 'right']).optional(),
+  // Corner-pocket fillers carry a small internal shelf so the dead corner reads
+  // as reachable storage instead of an empty boxed void.
+  cornerShelf: z.boolean().optional(),
   ...cabinetBoxFields,
 }).describe('Parametric module inside a modular cabinet run')
 

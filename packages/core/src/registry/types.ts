@@ -648,8 +648,15 @@ export type FloorplanMoveTargetSession = {
   /** Node IDs the move may mutate. Used by the dispatcher for snapshot capture. */
   affectedIds: AnyNodeId[]
   /**
-   * Single move-preview tick. Implementations call `scene.updateNodes`
-   * directly to drive the live preview (no separate draft state).
+   * Single move-preview tick. Two patterns are supported:
+   *  - **Scene-write preview**: implementation calls `scene.updateNodes`
+   *    each tick; the dispatcher captures a pre-drag snapshot and runs
+   *    a single-undo dance on commit (revert → resume → re-apply diff).
+   *  - **Live-override preview**: implementation publishes per-frame
+   *    overrides to `useLiveNodeOverrides` / `useLiveTransforms`; the
+   *    scene store stays untouched during the drag. Sessions using this
+   *    path should also provide `commit()` below so the final scene write
+   *    happens once at the end.
    */
   apply(args: {
     planPoint: FloorplanAffordancePoint
@@ -1640,6 +1647,13 @@ export type MovableConfig = {
    * geometry re-flows), and skips the world-frame floor-collision box.
    */
   parentFrame?: MovableParentFrame
+  /**
+   * Optional group-move snap for the generic multi-selection translate gizmo.
+   * Returns an adjusted candidate position for this node when the moving group
+   * should magnetically settle onto a nearby feature (for example, a cabinet
+   * run snapping flush to a wall while the whole selected kitchen moves as one).
+   */
+  groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
   override?: (ctx: CapabilityCtx) => MovableConfig | null
 }
 
@@ -1675,6 +1689,21 @@ export type MovableParentFrame = {
     local: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
   ) => [number, number, number]
+  /**
+   * Called after a move of the child commits, with the LIVE (post-commit)
+   * child and parent. Lets the kind run derived-state maintenance the
+   * generic tool can't know about (a cabinet run re-flowing its layout and
+   * re-anchoring linked corner runs to the moved module's new edge).
+   */
+  onCommit?: (node: AnyNode, parent: AnyNode, sceneApi: SceneApi) => void
+}
+
+export type GroupMoveSnapArgs = {
+  node: AnyNode
+  candidatePosition: [number, number, number]
+  movingIds: readonly AnyNodeId[]
+  nodes: Readonly<Record<string, AnyNode>>
+  levelId: AnyNodeId | null
 }
 
 export type LiveTransformLike = {
@@ -1855,6 +1884,14 @@ export type ParametricDescriptor<N> = {
     node: N,
     nodes: Record<AnyNodeId, AnyNode>,
   ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
+  /**
+   * Companion deletes that should be folded into the same user-intent delete
+   * gesture — e.g. deleting any member of an auto-generated cabinet corner
+   * group should remove the whole generated cluster. Called against the live
+   * scene BEFORE deletion; returned ids are recursively expanded through the
+   * normal descendant cascade.
+   */
+  onDeleteCascade?: (node: N, nodes: Record<AnyNodeId, AnyNode>) => AnyNodeId[]
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**
    * Extra buttons rendered in the inspector's Actions section

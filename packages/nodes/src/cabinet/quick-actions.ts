@@ -5,8 +5,9 @@ import type {
   CabinetNode,
   NodeQuickAction,
 } from '@pascal-app/core'
-import { sideInsertX } from './run-layout'
+import { moduleSideOpen, sideInsertX } from './run-layout'
 import {
+  addCornerRun,
   addCabinetModuleSide,
   addWallChildAbove,
   CABINET_BASE_WIDTH,
@@ -47,8 +48,9 @@ export function cabinetQuickActions({
   const selectedCabinetType = context.module
     ? resolveCabinetType(context.module, context.run)
     : null
+  const standardModule = context.module == null || context.module.moduleKind === 'standard'
   const hasWallCabinet =
-    context.module && selectedCabinetType === 'base'
+    context.module && standardModule && selectedCabinetType === 'base'
       ? Boolean(wallChildOf(context.module, nodes))
       : false
   const runModules = cabinetModulesForRun(context.run, nodes)
@@ -68,6 +70,18 @@ export function cabinetQuickActions({
       width: CABINET_BASE_WIDTH,
       epsilon: CABINET_EDGE_EPSILON,
     }) != null
+  const canAddCornerLeft =
+    context.module != null &&
+    standardModule &&
+    context.run.runTier === 'base' &&
+    selectedCabinetType === 'base' &&
+    moduleSideOpen(runModules, context.module.id, 'left', CABINET_EDGE_EPSILON)
+  const canAddCornerRight =
+    context.module != null &&
+    standardModule &&
+    context.run.runTier === 'base' &&
+    selectedCabinetType === 'base' &&
+    moduleSideOpen(runModules, context.module.id, 'right', CABINET_EDGE_EPSILON)
 
   const actions: NodeQuickAction[] = []
 
@@ -89,8 +103,26 @@ export function cabinetQuickActions({
     })
   }
 
+  if (canAddCornerLeft) {
+    actions.push({
+      id: 'cabinet:add-corner-left',
+      label: 'L Left',
+      title: 'Turn an L corner to the left',
+      icon: 'add-left',
+      run: ({ sceneApi }) => {
+        const id = addCornerRun({
+          module: context.module!,
+          run: context.run,
+          sceneApi,
+          side: 'left',
+        })
+        return id ? { selectedIds: [id] } : undefined
+      },
+    })
+  }
+
   if (context.module) {
-    if (selectedCabinetType === 'base') {
+    if (standardModule && selectedCabinetType === 'base') {
       actions.push({
         id: 'cabinet:add-wall',
         label: 'Wall',
@@ -122,7 +154,7 @@ export function cabinetQuickActions({
             ? { selectedIds: [context.module!.id] }
             : undefined,
       })
-    } else {
+    } else if (standardModule) {
       actions.push({
         id: 'cabinet:to-base',
         label: 'Base',
@@ -138,6 +170,24 @@ export function cabinetQuickActions({
             : undefined,
       })
     }
+  }
+
+  if (canAddCornerRight) {
+    actions.push({
+      id: 'cabinet:add-corner-right',
+      label: 'L Right',
+      title: 'Turn an L corner to the right',
+      icon: 'add-right',
+      run: ({ sceneApi }) => {
+        const id = addCornerRun({
+          module: context.module!,
+          run: context.run,
+          sceneApi,
+          side: 'right',
+        })
+        return id ? { selectedIds: [id] } : undefined
+      },
+    })
   }
 
   if (rightAvailable) {

@@ -4,6 +4,8 @@ import type { WallHit } from '../../shared/wall-attach-target'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 import {
   collectCabinetWallSnapNeighbors,
+  resolveCabinetModuleWallSnapLocal,
+  resolveCabinetRunWallSnap,
   resolveCabinetWallFaceOffset,
   resolveCabinetWallSnapPlacement,
 } from '../wall-snap'
@@ -399,5 +401,211 @@ describe('collectCabinetWallSnapNeighbors', () => {
     expect(neighbors).toHaveLength(1)
     expect(neighbors[0]!.minX).toBeCloseTo(0.5)
     expect(neighbors[0]!.maxX).toBeCloseTo(1.7)
+  })
+})
+
+describe('resolveCabinetRunWallSnap', () => {
+  test('snaps a moved cabinet run flush to the nearest wall while ignoring moving peers', () => {
+    const level = LevelNode.parse({
+      id: 'level_group-wall-snap',
+      children: ['wall_group-snap' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_group-snap',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const movingCabinet = CabinetNode.parse({
+      id: 'cabinet_group-snap',
+      parentId: level.id,
+      position: [1.2, 0, 0.82],
+      rotation: 0,
+      depth: 0.58,
+      children: ['cabinet-module_group-snap'],
+    })
+    const movingModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_group-snap',
+      parentId: movingCabinet.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const peerMovingCabinet = CabinetNode.parse({
+      id: 'cabinet_peer-moving',
+      parentId: level.id,
+      position: [2.4, 0, 0.82],
+      rotation: 0,
+      depth: 0.58,
+      children: ['cabinet-module_peer-moving'],
+    })
+    const peerMovingModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_peer-moving',
+      parentId: peerMovingCabinet.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [movingCabinet.id]: movingCabinet,
+      [movingModule.id]: movingModule,
+      [peerMovingCabinet.id]: peerMovingCabinet,
+      [peerMovingModule.id]: peerMovingModule,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet: movingCabinet,
+      candidatePosition: [1.2, 0, 0.32],
+      excludeIds: [movingCabinet.id as AnyNodeId, peerMovingCabinet.id as AnyNodeId],
+      gridStep: 0.5,
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).not.toBeNull()
+    expect(snapped![0]).toBeCloseTo(1)
+    expect(snapped![2]).toBeCloseTo(0.39)
+  })
+
+  test('does not snap to a wall that is moving with the same group', () => {
+    const level = LevelNode.parse({
+      id: 'level_group-wall-moving',
+      children: ['wall_group-moving' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_group-moving',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const cabinet = CabinetNode.parse({
+      id: 'cabinet_group-moving',
+      parentId: level.id,
+      position: [1.2, 0, 0.82],
+      rotation: 0,
+      depth: 0.58,
+      children: ['cabinet-module_group-moving'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_group-moving',
+      parentId: cabinet.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [cabinet.id]: cabinet,
+      [module.id]: module,
+    } as Record<AnyNodeId, AnyNode>
+
+    const snapped = resolveCabinetRunWallSnap({
+      cabinet,
+      candidatePosition: [1.2, 0, 0.32],
+      excludeIds: [cabinet.id as AnyNodeId, wall.id as AnyNodeId],
+      nodes,
+      parentLevelId: level.id,
+    })
+
+    expect(snapped).toBeNull()
+  })
+})
+
+describe('resolveCabinetModuleWallSnapLocal', () => {
+  function moduleDragFixture(runOverrides: { position?: [number, number, number] } = {}) {
+    const level = LevelNode.parse({
+      id: 'level_module-drag',
+      children: ['wall_module-drag' as AnyNodeId],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_module-drag',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_module-drag',
+      parentId: level.id,
+      position: runOverrides.position ?? [1, 0, 0.39],
+      rotation: 0,
+      depth: 0.58,
+      children: ['cabinet-module_dragged'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_dragged',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+    const nodes = {
+      [level.id]: level,
+      [wall.id]: wall,
+      [run.id]: run,
+      [module.id]: module,
+    } as Record<AnyNodeId, AnyNode>
+    return { level, wall, run, module, nodes }
+  }
+
+  test('pulls a dragged module flush to the wall in run-local coordinates', () => {
+    const { level, run, module, nodes } = moduleDragFixture()
+
+    // Cursor drifted 10 cm toward the wall (run-local z = plan z - 0.39,
+    // so plan z = 0.29 — within the 0.4 m wall-snap range).
+    const snapped = resolveCabinetModuleWallSnapLocal({
+      candidateLocal: [0.5, 0.1, -0.1],
+      module,
+      nodes,
+      parentLevelId: level.id,
+      run,
+    })
+
+    expect(snapped).not.toBeNull()
+    // Local x preserved (no neighbor stops), local z back to flush = 0.
+    expect(snapped![0]).toBeCloseTo(0.5)
+    expect(snapped![1]).toBeCloseTo(0.1)
+    expect(snapped![2]).toBeCloseTo(0)
+  })
+
+  test('returns null when the module faces away from the closest wall', () => {
+    const { level, module, nodes } = moduleDragFixture()
+    const rotatedRun = CabinetNode.parse({
+      id: 'cabinet_module-drag',
+      parentId: level.id,
+      position: [1, 0, 0.39],
+      rotation: Math.PI / 2,
+      depth: 0.58,
+      children: ['cabinet-module_dragged'],
+    })
+
+    const snapped = resolveCabinetModuleWallSnapLocal({
+      candidateLocal: [0.5, 0.1, 0.2],
+      module,
+      nodes: { ...nodes, [rotatedRun.id]: rotatedRun } as Record<AnyNodeId, AnyNode>,
+      parentLevelId: level.id,
+      run: rotatedRun,
+    })
+
+    expect(snapped).toBeNull()
+  })
+
+  test('returns null when the closest wall is out of snap range', () => {
+    const { level, run, module, nodes } = moduleDragFixture()
+
+    const snapped = resolveCabinetModuleWallSnapLocal({
+      candidateLocal: [0.5, 0.1, 2],
+      module,
+      nodes,
+      parentLevelId: level.id,
+      run,
+    })
+
+    expect(snapped).toBeNull()
   })
 })

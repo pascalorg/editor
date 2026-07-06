@@ -39,7 +39,6 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { Plus } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -152,40 +151,149 @@ function getAttributeVersion(
     : 0
 }
 
-// Single merged "add in this direction" glyph: an arrow with a small plus on
-// its tail, so it reads as one symbol instead of two unrelated icons.
-function AddDirectionIcon({ direction }: { direction: 'left' | 'right' }) {
+function CabinetGlyph({
+  kind,
+}: {
+  kind: 'base' | 'tall' | 'wall'
+}) {
   return (
     <svg
       aria-hidden="true"
-      className={`h-4 w-4 ${direction === 'left' ? '-scale-x-100' : ''}`}
+      className="h-3.5 w-3.5"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2"
+      strokeWidth="1.7"
       viewBox="0 0 24 24"
     >
-      {/* plus on the tail */}
-      <path d="M2 12h7" />
-      <path d="M5.5 8.5v7" />
-      {/* arrow pointing outward */}
-      <path d="M12 12h9" />
-      <path d="m16.5 7.5 4.5 4.5-4.5 4.5" />
+      {kind === 'base' ? (
+        <>
+          <rect x="5" y="8" width="14" height="10" rx="1.75" />
+          <path d="M12 8v10" />
+        </>
+      ) : null}
+      {kind === 'tall' ? (
+        <>
+          <rect x="7" y="4" width="10" height="16" rx="1.75" />
+          <path d="M12 4v16" />
+        </>
+      ) : null}
+      {kind === 'wall' ? (
+        <>
+          <rect x="5" y="5" width="14" height="9" rx="1.75" />
+          <path d="M12 5v9" />
+          <path d="M3.5 18.5h17" />
+        </>
+      ) : null}
     </svg>
   )
 }
 
-function QuickActionIcon({ icon }: { icon: NodeQuickActionIcon | undefined }) {
-  switch (icon) {
-    case 'add-left':
-      return <AddDirectionIcon direction="left" />
-    case 'add-right':
-      return <AddDirectionIcon direction="right" />
-    case 'add':
-      return <Plus className="h-3.5 w-3.5" />
+function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      <rect x="8" y="7" width="9" height="10" rx="1.75" />
+      <path d="M12.5 7v10" />
+      {direction === 'left' ? (
+        <>
+          <path d="M6.5 12H2.75" />
+          <path d="m5.5 9.75-2.75 2.25 2.75 2.25" />
+        </>
+      ) : (
+        <>
+          <path d="M17.5 12h3.75" />
+          <path d="m18.5 9.75 2.75 2.25-2.75 2.25" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function CornerTurnGlyph({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      {direction === 'left' ? (
+        <>
+          <path d="M18.5 6.5H10a4 4 0 0 0-4 4V18" />
+          <path d="m4.5 14.5-.5 4 4-.5" />
+          <path d="M8.5 18H18" />
+        </>
+      ) : (
+        <>
+          <path d="M5.5 6.5H14a4 4 0 0 1 4 4V18" />
+          <path d="m19.5 14.5.5 4-4-.5" />
+          <path d="M6 18h9.5" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function QuickActionIcon({ action }: { action: NodeQuickAction }) {
+  switch (action.id) {
+    case 'cabinet:add-wall':
+      return <CabinetGlyph kind="wall" />
+    case 'cabinet:to-tall':
+      return <CabinetGlyph kind="tall" />
+    case 'cabinet:to-base':
+      return <CabinetGlyph kind="base" />
+    case 'cabinet:add-left':
+      return <SideAddGlyph direction="left" />
+    case 'cabinet:add-right':
+      return <SideAddGlyph direction="right" />
+    case 'cabinet:add-corner-left':
+      return <CornerTurnGlyph direction="left" />
+    case 'cabinet:add-corner-right':
+      return <CornerTurnGlyph direction="right" />
     default:
-      return null
+      switch (action.icon) {
+        case 'add-left':
+          return <SideAddGlyph direction="left" />
+        case 'add-right':
+          return <SideAddGlyph direction="right" />
+        default:
+          return null
+      }
+  }
+}
+
+function quickActionLabel(action: NodeQuickAction) {
+  switch (action.id) {
+    case 'cabinet:add-corner-left':
+      return 'L Left'
+    case 'cabinet:add-corner-right':
+      return 'L Right'
+    case 'cabinet:add-wall':
+      return 'Wall'
+    case 'cabinet:to-tall':
+      return 'Tall'
+    case 'cabinet:to-base':
+      return 'Base'
+    case 'cabinet:add-left':
+      return 'Left'
+    case 'cabinet:add-right':
+      return 'Right'
+    default:
+      return action.label
   }
 }
 
@@ -818,22 +926,24 @@ export function FloatingActionMenu() {
             />
             {quickActions.length > 0 ? (
               <div
-                className="pointer-events-auto mt-1 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xl backdrop-blur-md"
+                className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
               >
                 {quickActions.map((action) => (
                   <button
                     aria-label={action.title ?? action.label}
-                    className="tooltip-trigger flex items-center gap-1 rounded-md px-2 py-1.5 text-muted-foreground text-xs transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                     disabled={action.disabled}
                     key={action.id}
                     onClick={handleQuickAction(action)}
                     title={action.title ?? action.label}
                     type="button"
                   >
-                    <QuickActionIcon icon={action.icon} />
-                    <span>{action.label}</span>
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                      <QuickActionIcon action={action} />
+                    </span>
+                    <span className="whitespace-nowrap leading-none">{quickActionLabel(action)}</span>
                   </button>
                 ))}
               </div>

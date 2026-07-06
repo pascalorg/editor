@@ -19,6 +19,7 @@ import {
   compartmentSinkLayout,
   isHoodCompartmentType,
   normalizeCabinetStack,
+  stackForCabinet,
 } from './stack'
 
 export function buildCabinetGeometry(
@@ -68,7 +69,6 @@ export function buildCabinetGeometry(
   const countertopOverhang = node.withCountertop ? node.countertopOverhang : 0
   const bodyCenterY = plinth + carcassHeight / 2
   const topY = plinth + carcassHeight
-  const innerWidth = Math.max(0.01, width - 2 * board)
   const bottomLift = node.withBottomPanel ? board : 0
   const backThickness = Math.min(0.006, board / 2)
   const backInset = Math.min(0.012, depth * 0.08)
@@ -78,11 +78,102 @@ export function buildCabinetGeometry(
   const frontZ = inset
     ? depth / 2 - frontThickness / 2 - frontRecess
     : depth / 2 + frontThickness / 2 - frontRecess
-  const openingWidth = Math.max(0.01, width - 2 * board)
+  const openLeft = node.openSide === 'left'
+  const openRight = node.openSide === 'right'
+  const innerLeft = -width / 2 + (openLeft ? 0 : board)
+  const innerRight = width / 2 - (openRight ? 0 : board)
+  const innerWidth = Math.max(0.01, innerRight - innerLeft)
+  const innerCenterX = (innerLeft + innerRight) / 2
+  const openingWidth = innerWidth
   const openingDepth = Math.max(0.01, depth - backInset - 0.02)
   const drawerBoxBackZ = -depth / 2 + backInset + 0.02
   const drawerBoxFrontZ = frontZ - frontThickness / 2 - 0.001
   const drawerBoxDepth = Math.max(0.05, drawerBoxFrontZ - drawerBoxBackZ)
+
+  if (node.moduleKind === 'corner-filler') {
+    const filler = new Group()
+    const shelfDepth = Math.max(0.01, depth - backInset - 0.02)
+    const shelfCount = Math.max(
+      1,
+      stackForCabinet(node)
+        .filter((compartment) => compartment.type === 'door')
+        .reduce(
+          (best, compartment) => Math.max(best, compartmentShelfCount(compartment)),
+          0,
+        ),
+    )
+    if (!openLeft) {
+      addBox(
+        filler,
+        [board, carcassHeight, depth],
+        [-width / 2 + board / 2, bodyCenterY, 0],
+        materials.carcass,
+        'cabinet-corner-filler-side-left',
+        'carcass',
+      )
+    }
+    if (!openRight) {
+      addBox(
+        filler,
+        [board, carcassHeight, depth],
+        [width / 2 - board / 2, bodyCenterY, 0],
+        materials.carcass,
+        'cabinet-corner-filler-side-right',
+        'carcass',
+      )
+    }
+    if (node.withBottomPanel) {
+      addBox(
+        filler,
+        [innerWidth, board, depth - backInset],
+        [innerCenterX, plinth + board / 2, backInset / 2],
+        materials.carcass,
+        'cabinet-corner-filler-bottom',
+        'carcass',
+      )
+    }
+    addBox(
+      filler,
+      [innerWidth, board, depth],
+      [innerCenterX, topY - board / 2, 0],
+      materials.carcass,
+      'cabinet-corner-filler-top',
+      'carcass',
+    )
+    addBox(
+      filler,
+      [innerWidth, Math.max(0.001, carcassHeight - board), backThickness],
+      [innerCenterX, plinth + carcassHeight / 2, -depth / 2 + backInset + backThickness / 2],
+      materials.carcass,
+      'cabinet-corner-filler-back',
+      'carcass',
+    )
+    const frontExtension = board / 2 + frontGap
+    const frontLeft = -width / 2 - (openLeft ? frontExtension : 0)
+    const frontRight = width / 2 + (openRight ? frontExtension : 0)
+    addBox(
+      filler,
+      [Math.max(0.01, frontRight - frontLeft), carcassHeight, frontThickness],
+      [(frontLeft + frontRight) / 2, bodyCenterY, frontZ],
+      materials.front,
+      'cabinet-corner-filler-front',
+      'front',
+    )
+    if (node.cornerShelf) {
+      addShelfBoards(
+        filler,
+        materials,
+        innerWidth,
+        shelfDepth,
+        board,
+        plinth + board,
+        Math.max(0.01, carcassHeight - board * 2),
+        shelfCount,
+        innerCenterX,
+      )
+    }
+    return filler
+  }
 
   const rows = normalizeCabinetStack(node)
   const sinkRow = rows.find((row) => row.compartment.type === 'sink')
@@ -90,27 +181,31 @@ export function buildCabinetGeometry(
     ? sinkBowls(compartmentSinkLayout(sinkRow.compartment), innerWidth, depth)
     : null
 
-  addBox(
-    group,
-    [board, carcassHeight, depth],
-    [-width / 2 + board / 2, bodyCenterY, 0],
-    materials.carcass,
-    'cabinet-side-left',
-    'carcass',
-  )
-  addBox(
-    group,
-    [board, carcassHeight, depth],
-    [width / 2 - board / 2, bodyCenterY, 0],
-    materials.carcass,
-    'cabinet-side-right',
-    'carcass',
-  )
+  if (!openLeft) {
+    addBox(
+      group,
+      [board, carcassHeight, depth],
+      [-width / 2 + board / 2, bodyCenterY, 0],
+      materials.carcass,
+      'cabinet-side-left',
+      'carcass',
+    )
+  }
+  if (!openRight) {
+    addBox(
+      group,
+      [board, carcassHeight, depth],
+      [width / 2 - board / 2, bodyCenterY, 0],
+      materials.carcass,
+      'cabinet-side-right',
+      'carcass',
+    )
+  }
   if (node.withBottomPanel) {
     addBox(
       group,
       [innerWidth, board, depth - backInset],
-      [0, plinth + board / 2, backInset / 2],
+      [innerCenterX, plinth + board / 2, backInset / 2],
       materials.carcass,
       'cabinet-bottom',
       'carcass',
@@ -121,7 +216,7 @@ export function buildCabinetGeometry(
     addBox(
       group,
       [innerWidth, board, depth],
-      [0, topY - board / 2, 0],
+      [innerCenterX, topY - board / 2, 0],
       materials.carcass,
       'cabinet-top',
       'carcass',
@@ -196,7 +291,11 @@ export function buildCabinetGeometry(
     addBox(
       group,
       [openingWidth, Math.max(0.001, row.height - board), backThickness],
-      [0, subCellBottomY + row.height / 2, -depth / 2 + backInset + backThickness / 2],
+      [
+        innerCenterX,
+        subCellBottomY + row.height / 2,
+        -depth / 2 + backInset + backThickness / 2,
+      ],
       materials.carcass,
       `cabinet-back-${index}`,
       'carcass',
@@ -208,7 +307,7 @@ export function buildCabinetGeometry(
       addBox(
         group,
         [openingWidth, board, openingDepth],
-        [0, deckY, board / 2],
+        [innerCenterX, deckY, board / 2],
         materials.carcass,
         `cabinet-deck-${index}`,
         'carcass',
@@ -241,6 +340,7 @@ export function buildCabinetGeometry(
           openingBottomY,
           openingHeight,
           row.compartment.shelfCount ?? 0,
+          innerCenterX,
         )
       }
       return
@@ -256,6 +356,7 @@ export function buildCabinetGeometry(
         openingBottomY,
         openingHeight,
         compartmentShelfCount(row.compartment),
+        innerCenterX,
       )
       return
     }

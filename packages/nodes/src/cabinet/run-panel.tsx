@@ -21,7 +21,9 @@ import {
   addCabinetModuleSide,
   backAlignZ,
   bumpCabinetRunLayoutRevision,
+  cornerLinkedSourceModuleForRun,
   runModuleBaseY,
+  syncCornerRunsFromSourceModule,
   wallChildOf,
 } from './run-ops'
 import {
@@ -167,6 +169,15 @@ export function CabinetRunPanel({
           modulePatch.position = [module.position[0], runModuleBaseY(nextNode), module.position[2]]
         }
         scene.updateNode(module.id, modulePatch)
+      }
+
+      const cornerSource = cornerLinkedSourceModuleForRun(nextNode, scene.nodes)
+      if (cornerSource) {
+        syncCornerRunsFromSourceModule({
+          module: cornerSource,
+          run: nextNode,
+          sceneApi: createSceneApi(useScene),
+        })
       }
     },
     [modules, node],

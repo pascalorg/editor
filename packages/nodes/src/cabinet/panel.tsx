@@ -30,6 +30,7 @@ import {
   backAlignZ,
   resolveCabinetType,
   runModuleBaseY,
+  syncCornerRunsFromSourceModule,
   switchCabinetToBase,
   switchCabinetToTall,
   wallChildOf,
@@ -200,6 +201,13 @@ export default function CabinetPanel() {
           'width' in nextPatch
         if (parent?.type === 'cabinet' && affectsRunLayout) {
           bumpRunLayoutRevisionViaStore(scene, parent)
+          if (liveNode?.type === 'cabinet-module') {
+            syncCornerRunsFromSourceModule({
+              module: liveNode,
+              run: parent,
+              sceneApi: createSceneApi(useScene),
+            })
+          }
         }
       }
       // Keep a nested wall cabinet's back flush with its base when the base depth changes.

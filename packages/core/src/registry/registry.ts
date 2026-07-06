@@ -363,6 +363,19 @@ export function setPluginDiscovery(fn: PluginDiscovery): void {
 }
 
 /**
+ * Extend the current plugin discovery instead of replacing it. Useful for app-
+ * bundled example or first-party plugins that should load alongside any host-
+ * provided discovery source, not clobber it.
+ */
+export function extendPluginDiscovery(fn: PluginDiscovery): void {
+  const previous = pluginDiscovery
+  pluginDiscovery = async () => {
+    const [base, extra] = await Promise.all([previous(), fn()])
+    return [...base, ...extra]
+  }
+}
+
+/**
  * Run the active plugin discovery and return the discovered plugins.
  * Bootstrap code is expected to call this after `loadPlugin(builtinPlugin)`
  * and then `await loadPlugin(...)` each result in order.

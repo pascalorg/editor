@@ -8,6 +8,7 @@ import {
   analyzePortConnectivity,
   bboxCornerAnchors,
   collectAlignmentAnchors,
+  createSceneApi,
   type EventSuffix,
   emitter,
   footprintAABBFrom,
@@ -38,6 +39,7 @@ import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   getActiveSnappingMode,
   isAlignmentGuideActive,
+  isGridSnapActive,
   isMagneticSnapActive,
 } from '../../../store/use-editor'
 
@@ -359,6 +361,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // a register collar drops onto a duct run end. Reads `def.ports` through
   // the core registry, so it stays layer-clean (no @pascal-app/nodes import).
   const portSnapConfig = nodeRegistry.get(node.type)?.capabilities?.movable?.portSnap ?? null
+  // Kind-owned magnetic snap for the generic 3D move path. Cabinets use this
+  // to settle a dragged run flush against a wall without forking the move tool.
+  const groupMoveSnapConfig =
+    nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnap ?? null
   // Mirrors of `valid` / Alt for the event handlers inside the effect, which
   // can't read React state without stale closures.
   const validRef = useRef(true)
@@ -579,6 +585,25 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         useAlignmentGuides.getState().clear()
       }
 
+      // Kind-owned attachment snap (cabinet → wall): an attach behavior like
+      // door/window wall placement, not an alignment guide — active in every
+      // snapping mode except Off.
+      if ((magnetic || isGridSnapActive()) && groupMoveSnapConfig) {
+        const snappedPosition = groupMoveSnapConfig({
+          node,
+          candidatePosition: canonicalPositionFromPlan(x, originalPosition[1], z),
+          movingIds: [node.id as AnyNodeId],
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          levelId: (useViewer.getState().selection.levelId as AnyNodeId | null) ?? null,
+        })
+        if (snappedPosition) {
+          const snappedPlanPosition = getVisualPosition(snappedPosition)
+          x = snappedPlanPosition[0]
+          z = snappedPlanPosition[2]
+          useAlignmentGuides.getState().clear()
+        }
+      }
+
       // Magnetic port snap (duct terminals): mate a collar onto a nearby
       // duct run end. Takes precedence over grid / alignment snap; Alt
       // bypasses. Only kinds that opted in via `movable.portSnap`.
@@ -718,6 +743,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           useScene
             .getState()
             .updateNodes([{ id: node.id as AnyNodeId, data }, ...connectivityUpdates])
+          // Kind-owned derived-state maintenance after a parent-frame move
+          // (cabinet run re-flow + linked corner-run re-anchor). Runs in the
+          // resumed window so its writes are undoable alongside the move.
+          if (parentFrame?.onCommit && frameParent) {
+            const liveNode = useScene.getState().nodes[node.id as AnyNodeId]
+            const liveParent = useScene.getState().nodes[frameParent.id as AnyNodeId]
+            if (liveNode && liveParent) {
+              parentFrame.onCommit(liveNode, liveParent, createSceneApi(useScene))
+            }
+          }
           useScene.temporal.getState().pause()
           committed = true
         }
@@ -895,6 +930,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     frameParent,
     cursorAttached,
     portSnapConfig,
+    groupMoveSnapConfig,
     exitMoveMode,
     isFreshPlacement,
     node,

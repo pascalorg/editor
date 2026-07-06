@@ -7,7 +7,7 @@ import type {
   GeometryContext,
 } from '@pascal-app/core'
 import { GAS_HOB_BURNER_RADIUS, gasHobBurners, inductionZones } from './geometry/cooktop'
-import { sinkBowls } from './geometry/sink'
+import { FAUCET_SETBACK, sinkBowls } from './geometry/sink'
 import { getRunSpans } from './run-layout'
 import {
   type CabinetCompartment,
@@ -35,7 +35,6 @@ export function buildCabinetFloorplan(
   const modules = ctx.children.filter(
     (child): child is CabinetModuleNode => child.type === 'cabinet-module',
   )
-  if (modules.length === 0) return null
 
   const showSelectedChrome = (ctx.viewState?.selected || ctx.viewState?.highlighted) ?? false
   const stroke =
@@ -43,7 +42,23 @@ export function buildCabinetFloorplan(
       ? ctx.viewState.palette.selectedStroke
       : BODY_STROKE
 
-  const spans = getRunSpans(modules)
+  const spans =
+    modules.length > 0
+      ? getRunSpans(modules, { runTier: node.runTier })
+      : [
+          {
+            minX: -node.width / 2,
+            maxX: node.width / 2,
+            centerX: 0,
+            centerZ: 0,
+            width: node.width,
+            depth: node.depth,
+            minZ: -node.depth / 2,
+            maxZ: node.depth / 2,
+            topY: node.carcassHeight,
+            hasCountertop: node.runTier === 'base' && node.withCountertop,
+          },
+        ]
   const overhang = node.withCountertop ? node.countertopOverhang : 0
   const barEdge = node.barLedge?.edge
   const backOverhang = node.withCountertop && barEdge !== 'back' ? node.countertopBackOverhang : 0
@@ -63,9 +78,10 @@ export function buildCabinetFloorplan(
       y: back,
       width: Math.max(0.01, right - left),
       height: Math.max(0.01, front - back),
-      fill: BODY_FILL,
+      fill: node.runTier === 'wall' ? 'none' : BODY_FILL,
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.022,
+      strokeDasharray: node.runTier === 'wall' ? ABOVE_CUT_DASH : undefined,
       opacity: 0.95,
     })
 
@@ -105,40 +121,27 @@ export function buildCabinetFloorplan(
     }
   }
 
-  return withWorldChrome(node.position, node.rotation, children, ctx, showSelectedChrome)
+  const world = resolveCabinetWorldPose(node, ctx)
+  return withWorldChrome(world.position, world.rotation, children, ctx, showSelectedChrome)
 }
 
 export function buildCabinetModuleFloorplan(
   node: CabinetModuleNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  if (ctx.parent?.type === 'cabinet') {
-    const parent = ctx.parent as CabinetNode
-    const world = composeChild(parent.position, parent.rotation, node.position)
-    return buildModuleSymbol(node, world.position, parent.rotation + node.rotation, ctx, {
-      aboveCutPlane: false,
-    })
-  }
-  // A nested wall cabinet: parent is a base cabinet-module, whose own parent is the run.
-  if (ctx.parent?.type === 'cabinet-module') {
-    const baseModule = ctx.parent as CabinetModuleNode
-    const run = ctx.resolve<CabinetNode>(baseModule.parentId as AnyNodeId)
-    if (run?.type === 'cabinet') {
-      const base = composeChild(run.position, run.rotation, baseModule.position)
-      const world = composeChild(base.position, run.rotation, node.position)
-      return buildModuleSymbol(node, world.position, run.rotation + node.rotation, ctx, {
-        aboveCutPlane: true,
-      })
-    }
-  }
-  return buildModuleSymbol(node, node.position, node.rotation, ctx, { aboveCutPlane: false })
+  const world = resolveCabinetWorldPose(node, ctx)
+  const parent = resolveCabinetParent(node.parentId as AnyNodeId | undefined, ctx)
+  return buildModuleSymbol(node, world.position, world.rotation, ctx, {
+    aboveCutPlane: parent?.type === 'cabinet-module' ? true : parent?.type === 'cabinet' && parent.runTier === 'wall',
+  })
 }
 
 function composeChild(
   parentPosition: readonly [number, number, number],
   parentRotation: number,
   childPosition: readonly [number, number, number],
-): { position: [number, number, number] } {
+  childRotation = 0,
+): { position: [number, number, number]; rotation: number } {
   const cos = Math.cos(parentRotation)
   const sin = Math.sin(parentRotation)
   const [lx, ly, lz] = childPosition
@@ -148,6 +151,34 @@ function composeChild(
       parentPosition[1] + ly,
       parentPosition[2] - lx * sin + lz * cos,
     ],
+    rotation: parentRotation + childRotation,
+  }
+}
+
+function resolveCabinetParent(
+  id: AnyNodeId | undefined,
+  ctx: GeometryContext,
+): CabinetNode | CabinetModuleNode | null {
+  if (!id) return null
+  if (ctx.parent?.id === id && (ctx.parent.type === 'cabinet' || ctx.parent.type === 'cabinet-module')) {
+    return ctx.parent
+  }
+  const resolved = ctx.resolve(id)
+  return resolved?.type === 'cabinet' || resolved?.type === 'cabinet-module' ? resolved : null
+}
+
+function resolveCabinetWorldPose(
+  node: Pick<CabinetNode | CabinetModuleNode, 'position' | 'rotation' | 'parentId'>,
+  ctx: GeometryContext,
+): { position: [number, number, number]; rotation: number } {
+  const parent = resolveCabinetParent(node.parentId as AnyNodeId | undefined, ctx)
+  if (parent) {
+    const worldParent = resolveCabinetWorldPose(parent, ctx)
+    return composeChild(worldParent.position, worldParent.rotation, node.position, node.rotation)
+  }
+  return {
+    position: [...node.position] as [number, number, number],
+    rotation: node.rotation,
   }
 }
 
@@ -193,6 +224,7 @@ function buildModuleSymbol(
       : BODY_STROKE
 
   const stack = stackForCabinet(node)
+  const showCompartments = node.moduleKind !== 'corner-filler'
   const hoodOnly = stack.length > 0 && stack.every((c) => isHoodCompartmentType(c.type))
   const dashed = opts.aboveCutPlane || hoodOnly
 
@@ -215,7 +247,7 @@ function buildModuleSymbol(
     },
   ]
 
-  if (!dashed) {
+  if (!dashed && showCompartments) {
     // Cabinet front edge, inset from the countertop line the run draws.
     children.push({
       kind: 'line',
@@ -235,7 +267,7 @@ function buildModuleSymbol(
   // Appliance labels live in world space with `upright` so they read
   // horizontally regardless of run rotation and plan-view rotation.
   const worldChildren: FloorplanGeometry[] = []
-  const label = dashed ? null : moduleLabel(stack)
+  const label = dashed || !showCompartments ? null : moduleLabel(stack)
   if (label) {
     worldChildren.push({
       kind: 'text',
@@ -276,12 +308,13 @@ function compartmentSymbol(
       strokeWidth: SYMBOL_STROKE_WIDTH,
       opacity: 0.9,
     }))
-    // Faucet dot behind the bowls (back = -y).
+    // Faucet dot behind the bowls (back = -y), aligned with the 3D faucet
+    // setback so the plan symbol stays centered in the rear strip.
     children.push({
       kind: 'circle',
       cx: 0,
-      cy: -(bowls[0]?.depth ?? node.depth * 0.6) / 2 - 0.045,
-      r: 0.026,
+      cy: -(bowls[0]?.depth ?? node.depth * 0.6) / 2 - FAUCET_SETBACK,
+      r: 0.02,
       fill: 'none',
       stroke: SYMBOL_STROKE,
       strokeWidth: SYMBOL_STROKE_WIDTH,
