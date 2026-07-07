@@ -1,5 +1,6 @@
 import { useThree } from '@react-three/fiber'
 import { useLayoutEffect } from 'react'
+import useViewer from '../../store/use-viewer'
 
 type FrameLimiterProps = {
   fps?: number
@@ -8,8 +9,11 @@ type FrameLimiterProps = {
 const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
   const { advance, set, frameloop: initFrameloop, scene, clock } = useThree()
   const renderer = useThree((state) => state.gl)
+  // Fully covered canvas (e.g. studio gallery) → stop advancing frames
+  const renderPaused = useViewer((s) => s.renderPaused)
 
   useLayoutEffect(() => {
+    if (renderPaused) return
     let elapsed = 0
     let then = 0
     let i = 0
@@ -35,7 +39,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       }
       set({ frameloop: initFrameloop })
     }
-  }, [fps, advance, set, initFrameloop])
+  }, [fps, advance, set, initFrameloop, renderPaused])
 
   return null
 }
