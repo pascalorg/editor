@@ -1128,6 +1128,11 @@ export default function Editor({
   }, [])
 
   useEffect(() => {
+    void useEditor.persist.rehydrate()
+    void useSidebarStore.persist.rehydrate()
+  }, [])
+
+  useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
 
     return () => {

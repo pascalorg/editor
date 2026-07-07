@@ -2,29 +2,13 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import { type AnyNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
 import { getRoofSurfaceFaceBoundsAt } from './roof-surface'
 
-mock.module('@pascal-app/editor', () => ({
-  useOpeningGuides: {
-    getState: () => ({
-      clear: () => undefined,
-      set: () => undefined,
-    }),
-  },
-}))
-
-// bun's mock.module is process-global: it replaces '@pascal-app/viewer' for
+// bun's mock.module is process-global: it replaces the mocked module for
 // every test file that runs after this one in the same `bun test` invocation.
-// Spread the real module so only the fields this test needs are stubbed —
-// a bare stub (Brush: class {}) breaks unrelated suites (cabinet sink CSG).
-const actualViewer = await import('@pascal-app/viewer')
-mock.module('@pascal-app/viewer', () => ({
-  ...actualViewer,
-  useViewer: {
-    getState: () => ({
-      selection: {},
-    }),
-  },
-}))
-
+// Do NOT stub the '@pascal-app/editor' / '@pascal-app/viewer' stores here —
+// the real ones work for this test (guides publish into the real
+// useOpeningGuides store; `useViewer.getState().selection.buildingId` reads
+// the store default), while a stubbed `getState` blinds every later suite
+// (select-candidates, wall-drafting) to its own `setState` calls.
 mock.module('../skylight/frame-csg', () => ({
   buildFrameGeometry: () => null,
 }))

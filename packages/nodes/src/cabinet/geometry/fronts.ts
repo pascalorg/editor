@@ -34,7 +34,30 @@ const HANDLE_SLOT_LONG = 0.09
 const HANDLE_SLOT_SHORT = 0.016
 const HANDLE_CUTOUT_WIDTH = 0.13
 const HANDLE_CUTOUT_DIP = 0.014
+const SHAKER_FRAME_MIN = 0.045
+const SHAKER_FRAME_MAX = 0.085
+const SHAKER_RECESS_MIN = 0.004
+const RAISED_ARCH_FRAME_MIN = 0.048
+const RAISED_ARCH_FRAME_MAX = 0.09
+const RAISED_ARCH_RECESS_MIN = 0.004
 const holeDummyMaterial = new MeshBasicMaterial()
+
+function resolveShakerFrameSize(width: number, height: number): number {
+  return Math.min(
+    SHAKER_FRAME_MAX,
+    Math.max(SHAKER_FRAME_MIN, Math.min(width, height) * (height >= 0.22 ? 0.16 : 0.2)),
+  )
+}
+
+function resolveRaisedArchFrameSize(width: number, height: number): number {
+  return Math.min(
+    RAISED_ARCH_FRAME_MAX,
+    Math.max(
+      RAISED_ARCH_FRAME_MIN,
+      Math.min(width, height) * (height >= 0.22 ? 0.17 : 0.21),
+    ),
+  )
+}
 
 function prepareCsgGeometry(geometry: BufferGeometry) {
   const indexCount = geometry.getIndex()?.count ?? 0
@@ -158,6 +181,145 @@ function buildCutoutFrontGeometry(
   return geometry
 }
 
+function buildBaseFrontGeometry(
+  node: CabinetGeometryNode,
+  width: number,
+  height: number,
+  drawer: boolean,
+  hinge: 'left' | 'right' | null,
+): BufferGeometry {
+  if (node.handleStyle === 'cutout')
+    return buildCutoutFrontGeometry(node, width, height, drawer, hinge)
+  if (node.handleStyle === 'hole') return buildHoleFrontGeometry(node, width, height, drawer, hinge)
+  return createWorldScaleBoxGeometry(width, height, node.frontThickness)
+}
+
+function applyShakerFrontProfile(
+  node: CabinetGeometryNode,
+  base: BufferGeometry,
+  width: number,
+  height: number,
+): BufferGeometry {
+  const frame = resolveShakerFrameSize(width, height)
+  const panelWidth = width - frame * 2
+  const panelHeight = height - frame * 2
+  if (panelWidth <= 0.01 || panelHeight <= 0.01) return base
+
+  const recessDepth = Math.min(
+    Math.max(SHAKER_RECESS_MIN, node.frontThickness * 0.4),
+    Math.max(SHAKER_RECESS_MIN, node.frontThickness - 0.004),
+  )
+  const cutter = new BoxGeometry(panelWidth, panelHeight, recessDepth + 0.012)
+  cutter.translate(0, 0, node.frontThickness / 2 - recessDepth / 2 + 0.006)
+  return subtractFrontCutters(base, [cutter], 'shaker panel recess')
+}
+
+function buildRaisedArchPanelShape(panelWidth: number, panelHeight: number): Shape {
+  const halfWidth = panelWidth / 2
+  const halfHeight = panelHeight / 2
+  const targetArchRise = Math.min(0.07, Math.max(0.03, panelWidth * 0.22))
+  const archRise = Math.min(targetArchRise, Math.max(0.02, panelHeight * 0.26))
+  const springY = halfHeight - archRise
+  const archShoulderControlY = springY + archRise * 0.72
+  const archCenterControlX = halfWidth * 0.56
+
+  const shape = new Shape()
+  shape.moveTo(-halfWidth, -halfHeight)
+  shape.lineTo(halfWidth, -halfHeight)
+  shape.lineTo(halfWidth, springY)
+  shape.bezierCurveTo(
+    halfWidth,
+    archShoulderControlY,
+    archCenterControlX,
+    halfHeight,
+    0,
+    halfHeight,
+  )
+  shape.bezierCurveTo(
+    -archCenterControlX,
+    halfHeight,
+    -halfWidth,
+    archShoulderControlY,
+    -halfWidth,
+    springY,
+  )
+  shape.lineTo(-halfWidth, -halfHeight)
+  return shape
+}
+
+function buildRectangleShape(width: number, height: number): Shape {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const shape = new Shape()
+  shape.moveTo(-halfWidth, -halfHeight)
+  shape.lineTo(halfWidth, -halfHeight)
+  shape.lineTo(halfWidth, halfHeight)
+  shape.lineTo(-halfWidth, halfHeight)
+  shape.lineTo(-halfWidth, -halfHeight)
+  return shape
+}
+
+function buildRaisedArchGlassDoorGeometry(
+  node: CabinetGeometryNode,
+  width: number,
+  height: number,
+): { frame: BufferGeometry; glass: BufferGeometry; frameWidth: number; glassDepth: number } {
+  const frameWidth = resolveRaisedArchFrameSize(width, height)
+  const glassWidth = Math.max(0.01, width - frameWidth * 2)
+  const glassHeight = Math.max(0.01, height - frameWidth * 2)
+  const glassDepth = Math.max(0.003, node.frontThickness * 0.25)
+
+  const frameShape = buildRectangleShape(width, height)
+  frameShape.holes.push(buildRaisedArchPanelShape(glassWidth, glassHeight))
+
+  const frame = new ExtrudeGeometry(frameShape, {
+    depth: node.frontThickness,
+    bevelEnabled: false,
+    curveSegments: 32,
+    steps: 1,
+  })
+  frame.translate(0, 0, -node.frontThickness / 2)
+  frame.computeVertexNormals()
+
+  const glass = new ExtrudeGeometry(buildRaisedArchPanelShape(glassWidth, glassHeight), {
+    depth: glassDepth,
+    bevelEnabled: false,
+    curveSegments: 32,
+    steps: 1,
+  })
+  glass.translate(0, 0, -glassDepth / 2)
+  glass.computeVertexNormals()
+
+  return { frame, glass, frameWidth, glassDepth }
+}
+
+function applyRaisedArchFrontProfile(
+  node: CabinetGeometryNode,
+  base: BufferGeometry,
+  width: number,
+  height: number,
+): BufferGeometry {
+  const frame = resolveRaisedArchFrameSize(width, height)
+  const panelWidth = width - frame * 2
+  const panelHeight = height - frame * 2
+  if (panelWidth <= 0.01 || panelHeight <= 0.01) return base
+
+  const recessDepth = Math.min(
+    Math.max(RAISED_ARCH_RECESS_MIN, node.frontThickness * 0.42),
+    Math.max(RAISED_ARCH_RECESS_MIN, node.frontThickness - 0.004),
+  )
+  const cutter = new ExtrudeGeometry(buildRaisedArchPanelShape(panelWidth, panelHeight), {
+    depth: recessDepth + 0.012,
+    bevelEnabled: false,
+    curveSegments: 32,
+    steps: 1,
+  })
+  const cutterCenterZ = node.frontThickness / 2 - recessDepth / 2 + 0.006
+  cutter.translate(0, 0, cutterCenterZ - (recessDepth + 0.012) / 2)
+  cutter.computeVertexNormals()
+  return subtractFrontCutters(base, [cutter], 'raised arch panel recess')
+}
+
 export function buildFrontGeometry(
   node: CabinetGeometryNode,
   width: number,
@@ -165,10 +327,15 @@ export function buildFrontGeometry(
   drawer: boolean,
   hinge: 'left' | 'right' | null = null,
 ): BufferGeometry {
-  if (node.handleStyle === 'cutout')
-    return buildCutoutFrontGeometry(node, width, height, drawer, hinge)
-  if (node.handleStyle === 'hole') return buildHoleFrontGeometry(node, width, height, drawer, hinge)
-  return createWorldScaleBoxGeometry(width, height, node.frontThickness)
+  const base = buildBaseFrontGeometry(node, width, height, drawer, hinge)
+  switch (node.frontStyle ?? 'slab') {
+    case 'shaker':
+      return applyShakerFrontProfile(node, base, width, height)
+    case 'raised-arch':
+      return applyRaisedArchFrontProfile(node, base, width, height)
+    default:
+      return base
+  }
 }
 
 function buildHoleFrontGeometry(
@@ -180,13 +347,7 @@ function buildHoleFrontGeometry(
 ): BufferGeometry {
   const base = createWorldScaleBoxGeometry(width, height, node.frontThickness)
   const radius = drawer ? 0.011 : 0.01
-  const x =
-    hinge == null
-      ? 0
-      : (hinge === 'right' ? -1 : 1) * (width / 2 - HANDLE_EDGE_INSET - HANDLE_SLOT_SHORT / 2)
-  const y = drawer
-    ? height / 2 - HANDLE_TOP_INSET
-    : height / 2 - HANDLE_TOP_INSET - HANDLE_SLOT_LONG / 2
+  const { x, y } = resolveHandlePlacement(node, width, height, drawer, hinge)
   const holeOffsets = drawer ? [-0.022, 0.022] : [0]
   const cutters = holeOffsets.map((offset) => {
     const cutter = new CylinderGeometry(radius, radius, node.frontThickness + 0.012, 24)
@@ -267,6 +428,42 @@ function resolveHandleY(node: CabinetGeometryNode, height: number, drawer: boole
   return drawer ? topY : 0
 }
 
+function resolveHandlePlacement(
+  node: CabinetGeometryNode,
+  width: number,
+  height: number,
+  drawer: boolean,
+  hinge: 'left' | 'right' | null,
+): { x: number; y: number } {
+  const defaultX =
+    hinge == null
+      ? 0
+      : (hinge === 'right' ? -1 : 1) * (width / 2 - HANDLE_EDGE_INSET - HANDLE_SLOT_SHORT / 2)
+  const defaultY = resolveHandleY(node, height, drawer)
+  const frontStyle = node.frontStyle ?? 'slab'
+  const frame =
+    frontStyle === 'shaker'
+      ? resolveShakerFrameSize(width, height)
+      : frontStyle === 'raised-arch'
+        ? resolveRaisedArchFrameSize(width, height)
+        : 0
+  if (frame <= 0) return { x: defaultX, y: defaultY }
+
+  if (hinge != null) {
+    return {
+      x: (hinge === 'right' ? -1 : 1) * (width / 2 - frame / 2),
+      y: defaultY,
+    }
+  }
+
+  const position = node.handlePosition ?? 'auto'
+  const frameY = height / 2 - frame / 2
+  return {
+    x: defaultX,
+    y: drawer ? (position === 'center' ? 0 : frameY) : position === 'center' ? 0 : defaultY,
+  }
+}
+
 function addHandleFeature(
   group: Object3D,
   node: CabinetGeometryNode,
@@ -281,23 +478,19 @@ function addHandleFeature(
 ) {
   const style = node.handleStyle ?? 'bar'
   if (style === 'none') return
-
-  const edgeX =
-    hinge == null
-      ? 0
-      : (hinge === 'right' ? -1 : 1) * (width / 2 - HANDLE_EDGE_INSET - HANDLE_SLOT_SHORT / 2)
+  const resolvedPlacement = resolveHandlePlacement(node, width, height, drawer, hinge)
 
   if (style === 'bar') {
-    const x = placement?.x ?? edgeX
-    const y = placement?.y ?? resolveHandleY(node, height, drawer)
+    const x = placement?.x ?? resolvedPlacement.x
+    const y = placement?.y ?? resolvedPlacement.y
     const z = node.frontThickness / 2
     addBarHandle(group, [x, y, z], drawer ? 0.12 : 0.18, vertical, name, materials.hardware)
     return
   }
 
   if (style === 'knob') {
-    const x = placement?.x ?? edgeX
-    const y = placement?.y ?? resolveHandleY(node, height, drawer)
+    const x = placement?.x ?? resolvedPlacement.x
+    const y = placement?.y ?? resolvedPlacement.y
     const z = node.frontThickness / 2
     addKnobHandle(group, [x, y, z], name, materials.hardware)
     return
@@ -341,6 +534,42 @@ function addDoorLeaf(
     leafGroup.position.set(hinge === 'left' ? width / 2 : -width / 2, 0, 0)
     hingeGroup.add(leafGroup)
 
+    if ((node.frontStyle ?? 'slab') === 'raised-arch') {
+      const { frame, glass, frameWidth, glassDepth } = buildRaisedArchGlassDoorGeometry(
+        node,
+        width,
+        height,
+      )
+      const frameMesh = stampSlot(new Mesh(frame, materials.front), 'front')
+      frameMesh.name = `${name}-frame`
+      frameMesh.castShadow = true
+      frameMesh.receiveShadow = true
+      leafGroup.add(frameMesh)
+
+      const glassMesh = stampSlot(new Mesh(glass, materials.glass), 'glass')
+      glassMesh.name = `${name}-glass`
+      glassMesh.position.set(0, 0, node.frontThickness / 2 - glassDepth / 2 - 0.001)
+      glassMesh.renderOrder = 2
+      leafGroup.add(glassMesh)
+
+      addHandleFeature(
+        leafGroup,
+        { ...node, handleStyle: 'bar' },
+        materials,
+        width,
+        height,
+        hinge,
+        true,
+        false,
+        `${name}-handle`,
+        {
+          x: (hinge === 'right' ? -1 : 1) * (width / 2 - frameWidth / 2),
+          y: 0,
+        },
+      )
+      return
+    }
+
     const frame = Math.max(0.03, Math.min(width, height) * 0.12)
     const glassWidth = Math.max(0.01, width - frame * 2)
     const glassHeight = Math.max(0.01, height - frame * 2)
@@ -378,7 +607,7 @@ function addDoorLeaf(
       'front',
     )
     const glassMesh = stampSlot(
-      new Mesh(new BoxGeometry(glassWidth, glassHeight, glassDepth), materials.glass),
+      new Mesh(createWorldScaleBoxGeometry(glassWidth, glassHeight, glassDepth), materials.glass),
       'glass',
     )
     glassMesh.name = `${name}-glass`

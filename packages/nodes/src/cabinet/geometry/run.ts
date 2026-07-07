@@ -19,6 +19,33 @@ function angleDelta(a: number, b: number): number {
   return Math.atan2(Math.sin(a - b), Math.cos(a - b))
 }
 
+function derivedCornerRole(
+  metadata: unknown,
+): { role: 'base-leg' | 'wall-leg' | 'bridge'; side: 'left' | 'right' } | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+  const value = (metadata as Record<string, unknown>).cabinetCornerDerivedRun
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const role = (value as { role?: unknown }).role
+  const side = (value as { side?: unknown }).side
+  if (
+    (role !== 'base-leg' && role !== 'wall-leg' && role !== 'bridge') ||
+    (side !== 'left' && side !== 'right')
+  ) {
+    return null
+  }
+  return { role, side }
+}
+
+function childDerivedBaseLegSides(ctx?: GeometryContext): Set<'left' | 'right'> {
+  const sides = new Set<'left' | 'right'>()
+  for (const child of ctx?.children ?? []) {
+    if (child.type !== 'cabinet') continue
+    const link = derivedCornerRole(child.metadata)
+    if (link?.role === 'base-leg') sides.add(link.side)
+  }
+  return sides
+}
+
 function modulesForRun(node: CabinetNode, ctx?: GeometryContext): CabinetModuleNode[] {
   return (node.children ?? [])
     .map((id) => ctx?.resolve<AnyNode>(id))
@@ -114,6 +141,8 @@ export function buildCabinetRunGeometry(
     node.withCountertop && node.barLedge?.edge !== 'back' ? node.countertopBackOverhang : 0
   const spans = getRunSpans(modules, { runTier: node.runTier })
   const siblingSpans = siblingCabinetSpansInRunLocal(node, ctx)
+  const cornerLink = derivedCornerRole(node.metadata)
+  const childBaseLegSides = childDerivedBaseLegSides(ctx)
 
   for (const span of spans) {
     const spanIndex = spans.indexOf(span)
@@ -139,14 +168,25 @@ export function buildCabinetRunGeometry(
     })
     const barEdge = node.barLedge?.edge
     // A side bar's knee wall sits flush on that end — no slab overhang there.
-    const leftOverhang =
+    let leftOverhang =
       hasInternalLeftNeighbor || hasExternalLeftNeighbor || barEdge === 'left'
         ? 0
         : node.countertopOverhang
-    const rightOverhang =
+    let rightOverhang =
       hasInternalRightNeighbor || hasExternalRightNeighbor || barEdge === 'right'
         ? 0
         : node.countertopOverhang
+    // A derived base leg mates back into the source run on its inner corner
+    // edge, so that edge should be flush instead of carrying the usual exposed
+    // countertop overhang.
+    if (cornerLink?.role === 'base-leg') {
+      if (cornerLink.side === 'right' && spanIndex === 0) leftOverhang = 0
+      if (cornerLink.side === 'left' && spanIndex === spans.length - 1) rightOverhang = 0
+    }
+    // The source run that spawned an L leg should also stay flush on the side
+    // where that derived base leg joins back in.
+    if (childBaseLegSides.has('left') && spanIndex === 0) leftOverhang = 0
+    if (childBaseLegSides.has('right') && spanIndex === spans.length - 1) rightOverhang = 0
     const toeKickDepth = node.showPlinth
       ? Math.min(node.toeKickDepth, span.depth - node.boardThickness * 2)
       : 0

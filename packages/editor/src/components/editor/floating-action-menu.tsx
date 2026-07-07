@@ -22,7 +22,6 @@ import {
   isRegistrySelectable,
   isSplineFence,
   type NodeQuickAction,
-  type NodeQuickActionIcon,
   nodeRegistry,
   RoofSegmentNode,
   type SlabNode,
@@ -53,6 +52,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
 } from '../../store/use-interaction-scope'
+import { IconRefGlyph } from '../ui/icon-ref'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -151,45 +151,6 @@ function getAttributeVersion(
     : 0
 }
 
-function CabinetGlyph({
-  kind,
-}: {
-  kind: 'base' | 'tall' | 'wall'
-}) {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      {kind === 'base' ? (
-        <>
-          <rect x="5" y="8" width="14" height="10" rx="1.75" />
-          <path d="M12 8v10" />
-        </>
-      ) : null}
-      {kind === 'tall' ? (
-        <>
-          <rect x="7" y="4" width="10" height="16" rx="1.75" />
-          <path d="M12 4v16" />
-        </>
-      ) : null}
-      {kind === 'wall' ? (
-        <>
-          <rect x="5" y="5" width="14" height="9" rx="1.75" />
-          <path d="M12 5v9" />
-          <path d="M3.5 18.5h17" />
-        </>
-      ) : null}
-    </svg>
-  )
-}
-
 function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
   return (
     <svg
@@ -219,81 +180,19 @@ function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
   )
 }
 
-function CornerTurnGlyph({ direction }: { direction: 'left' | 'right' }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      {direction === 'left' ? (
-        <>
-          <path d="M18.5 6.5H10a4 4 0 0 0-4 4V18" />
-          <path d="m4.5 14.5-.5 4 4-.5" />
-          <path d="M8.5 18H18" />
-        </>
-      ) : (
-        <>
-          <path d="M5.5 6.5H14a4 4 0 0 1 4 4V18" />
-          <path d="m19.5 14.5.5 4-4-.5" />
-          <path d="M6 18h9.5" />
-        </>
-      )}
-    </svg>
-  )
-}
-
+// Builtin string tokens map to the generic glyphs above; kind-owned marks
+// arrive as IconRef objects and render through the shared IconRefGlyph.
 function QuickActionIcon({ action }: { action: NodeQuickAction }) {
-  switch (action.id) {
-    case 'cabinet:add-wall':
-      return <CabinetGlyph kind="wall" />
-    case 'cabinet:to-tall':
-      return <CabinetGlyph kind="tall" />
-    case 'cabinet:to-base':
-      return <CabinetGlyph kind="base" />
-    case 'cabinet:add-left':
+  const icon = action.icon
+  if (!icon) return null
+  if (typeof icon === 'object') return <IconRefGlyph icon={icon} size={14} />
+  switch (icon) {
+    case 'add-left':
       return <SideAddGlyph direction="left" />
-    case 'cabinet:add-right':
+    case 'add-right':
       return <SideAddGlyph direction="right" />
-    case 'cabinet:add-corner-left':
-      return <CornerTurnGlyph direction="left" />
-    case 'cabinet:add-corner-right':
-      return <CornerTurnGlyph direction="right" />
     default:
-      switch (action.icon) {
-        case 'add-left':
-          return <SideAddGlyph direction="left" />
-        case 'add-right':
-          return <SideAddGlyph direction="right" />
-        default:
-          return null
-      }
-  }
-}
-
-function quickActionLabel(action: NodeQuickAction) {
-  switch (action.id) {
-    case 'cabinet:add-corner-left':
-      return 'L Left'
-    case 'cabinet:add-corner-right':
-      return 'L Right'
-    case 'cabinet:add-wall':
-      return 'Wall'
-    case 'cabinet:to-tall':
-      return 'Tall'
-    case 'cabinet:to-base':
-      return 'Base'
-    case 'cabinet:add-left':
-      return 'Left'
-    case 'cabinet:add-right':
-      return 'Right'
-    default:
-      return action.label
+      return null
   }
 }
 
@@ -853,7 +752,7 @@ export function FloatingActionMenu() {
   const handleFind = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (node) emitter.emit('selection:find-node' as never, node as never)
+      if (node) emitter.emit('selection:find-node', node)
     },
     [node],
   )
@@ -943,7 +842,7 @@ export function FloatingActionMenu() {
                     <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
                       <QuickActionIcon action={action} />
                     </span>
-                    <span className="whitespace-nowrap leading-none">{quickActionLabel(action)}</span>
+                    <span className="whitespace-nowrap leading-none">{action.label}</span>
                   </button>
                 ))}
               </div>

@@ -9,7 +9,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { type BufferGeometry, type InstancedMesh, type Material, Matrix4, Object3D } from 'three'
 import { toStaticMaterial } from './wind-node'
 
@@ -171,9 +172,15 @@ function InstancedSubMesh<N extends Placeable>({
   // (cached) geometry/material alive across any recreation.
   const capacity = Math.max(16, Math.ceil(nodes.length / 32) * 32)
 
-  useLayoutEffect(() => {
+  // Snapshot of each referenced parent level's matrixWorld at the last matrix
+  // write — the per-frame staleness check below compares against it so a level
+  // move (explode, elevation edit) refreshes instances without a node change.
+  const parentWorlds = useRef(new Map<string, number[]>())
+
+  const writeMatrices = useCallback(() => {
     const mesh = ref.current
     if (!mesh) return
+    parentWorlds.current.clear()
     for (let i = 0; i < nodes.length; i += 1) {
       const node = nodes[i]
       if (!node) continue
@@ -187,8 +194,11 @@ function InstancedSubMesh<N extends Placeable>({
       // scene root, so fold in the parent level's world matrix.
       const parent =
         !localSpace && node.parentId ? sceneRegistry.nodes.get(node.parentId) : undefined
-      if (parent) {
+      if (parent && node.parentId) {
         parent.updateWorldMatrix(true, false)
+        if (!parentWorlds.current.has(node.parentId)) {
+          parentWorlds.current.set(node.parentId, parent.matrixWorld.toArray())
+        }
         INSTANCE_MATRIX.multiplyMatrices(parent.matrixWorld, DUMMY.matrix)
         mesh.setMatrixAt(i, INSTANCE_MATRIX)
       } else {
@@ -199,6 +209,30 @@ function InstancedSubMesh<N extends Placeable>({
     mesh.instanceMatrix.needsUpdate = true
     mesh.computeBoundingSphere()
   }, [nodes, naturalHeight, localSpace])
+
+  useLayoutEffect(() => {
+    writeMatrices()
+  }, [writeMatrices])
+
+  // A parent level can move without any node of this kind changing (level
+  // explode, elevation edits), which would leave the baked-in world transform
+  // stale. Compare each referenced level's matrixWorld against the snapshot —
+  // a handful of levels × 16 floats per frame — and rewrite only on change.
+  useFrame(() => {
+    if (localSpace || !ref.current) return
+    for (const [id, cached] of parentWorlds.current) {
+      const parent = sceneRegistry.nodes.get(id)
+      if (!parent) continue
+      parent.updateWorldMatrix(true, false)
+      const elements = parent.matrixWorld.elements
+      for (let i = 0; i < 16; i += 1) {
+        if (elements[i] !== cached[i]) {
+          writeMatrices()
+          return
+        }
+      }
+    }
+  })
 
   return (
     <instancedMesh

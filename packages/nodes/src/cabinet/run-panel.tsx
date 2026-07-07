@@ -24,6 +24,7 @@ import {
   cornerLinkedSourceModuleForRun,
   runModuleBaseY,
   syncCornerRunsFromSourceModule,
+  syncCornerStyleGroupFromRun,
   wallChildOf,
 } from './run-ops'
 import {
@@ -35,7 +36,38 @@ import {
 
 export type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 const RUN_POSITION_PATCH_KEYS = new Set<keyof CabinetNodeType>(['showPlinth', 'plinthHeight'])
+const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
+  'frontStyle',
+  'frontOverlay',
+  'handleStyle',
+  'handlePosition',
+])
 const RUN_DEPTH_PATCH_KEY = 'depth'
+
+const FRONT_STYLE_OPTIONS = [
+  { value: 'slab', label: 'Slab' },
+  { value: 'shaker', label: 'Shaker' },
+  { value: 'raised-arch', label: 'Raised Arch' },
+] as const
+
+const FRONT_OVERLAY_OPTIONS = [
+  { value: 'full', label: 'Overlay' },
+  { value: 'inset', label: 'Inset' },
+] as const
+
+const HANDLE_STYLE_OPTIONS = [
+  { value: 'bar', label: 'Bar' },
+  { value: 'knob', label: 'Knob' },
+  { value: 'cutout', label: 'Cutout' },
+  { value: 'hole', label: 'Hole' },
+  { value: 'none', label: 'None' },
+] as const
+
+const HANDLE_POSITION_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'top', label: 'Top' },
+  { value: 'center', label: 'Center' },
+] as const
 
 function moduleSummary(module: CabinetModuleNodeType) {
   if ((module.cabinetType ?? 'base') === 'tall') return 'Tall cabinet'
@@ -50,7 +82,7 @@ export function bumpRunLayoutRevisionViaStore(
   run: CabinetNodeType,
 ) {
   bumpCabinetRunLayoutRevision(createSceneApi(useScene), run)
-  scene.dirtyNodes.add(run.id as AnyNodeId)
+  scene.markDirty(run.id as AnyNodeId)
 }
 
 export function reflowRunModules({
@@ -111,7 +143,7 @@ export function reflowRunModules({
         ],
         width: reflow.width,
       })
-      scene.dirtyNodes.add(module.id as AnyNodeId)
+      scene.markDirty(module.id as AnyNodeId)
     }
   }
 
@@ -136,6 +168,7 @@ export function CabinetRunPanel({
   const updateRun = useCallback(
     (patch: Partial<CabinetNodeType>) => {
       const scene = useScene.getState()
+      const sceneApi = createSceneApi(useScene)
       const nextPatch = { ...patch }
       if (typeof nextPatch.carcassHeight === 'number') {
         const minModuleHeight = Math.max(
@@ -152,7 +185,16 @@ export function CabinetRunPanel({
       const shouldSyncPosition = Object.keys(nextPatch).some((key) =>
         RUN_POSITION_PATCH_KEYS.has(key as keyof CabinetNodeType),
       )
-      if (!shouldSyncDepth && !shouldSyncHeight && !shouldSyncPosition) return
+      const shouldSyncModules = Object.keys(nextPatch).some((key) =>
+        RUN_MODULE_SYNC_PATCH_KEYS.has(key as keyof CabinetNodeType),
+      )
+      if (!shouldSyncDepth && !shouldSyncHeight && !shouldSyncPosition && !shouldSyncModules) return
+
+      const stylePatch: Partial<CabinetNodeType> = {}
+      if ('frontStyle' in nextPatch) stylePatch.frontStyle = nextNode.frontStyle
+      if ('frontOverlay' in nextPatch) stylePatch.frontOverlay = nextNode.frontOverlay
+      if ('handleStyle' in nextPatch) stylePatch.handleStyle = nextNode.handleStyle
+      if ('handlePosition' in nextPatch) stylePatch.handlePosition = nextNode.handlePosition
 
       for (const module of modules) {
         const modulePatch: Partial<CabinetModuleNodeType> = {}
@@ -168,15 +210,42 @@ export function CabinetRunPanel({
         if (shouldSyncPosition) {
           modulePatch.position = [module.position[0], runModuleBaseY(nextNode), module.position[2]]
         }
+        if (shouldSyncModules) {
+          if ('frontStyle' in nextPatch) modulePatch.frontStyle = nextNode.frontStyle
+          if ('frontOverlay' in nextPatch) modulePatch.frontOverlay = nextNode.frontOverlay
+          if ('handleStyle' in nextPatch) modulePatch.handleStyle = nextNode.handleStyle
+          if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
+        }
         scene.updateNode(module.id, modulePatch)
+
+        if (shouldSyncModules) {
+          const wallChild = wallChildOf(
+            module,
+            scene.nodes as Record<string, CabinetEditableNode | undefined>,
+          )
+          if (wallChild) {
+            scene.updateNode(wallChild.id, {
+              frontStyle: nextNode.frontStyle,
+              frontOverlay: nextNode.frontOverlay,
+              handleStyle: nextNode.handleStyle,
+              handlePosition: nextNode.handlePosition,
+            })
+          }
+        }
       }
 
       const cornerSource = cornerLinkedSourceModuleForRun(nextNode, scene.nodes)
-      if (cornerSource) {
+      if (shouldSyncModules) {
+        syncCornerStyleGroupFromRun({
+          run: nextNode,
+          patch: stylePatch,
+          sceneApi,
+        })
+      } else if (cornerSource) {
         syncCornerRunsFromSourceModule({
           module: cornerSource,
           run: nextNode,
-          sceneApi: createSceneApi(useScene),
+          sceneApi,
         })
       }
     },
@@ -202,7 +271,7 @@ export function CabinetRunPanel({
       // Deleting the last module cascades the empty run away too — only
       // keep it selected/dirty if it survived.
       if (useScene.getState().nodes[node.id as AnyNodeId]) {
-        useScene.getState().dirtyNodes.add(node.id as AnyNodeId)
+        useScene.getState().markDirty(node.id as AnyNodeId)
         setSelection({ selectedIds: [node.id] })
       } else {
         setSelection({ selectedIds: [] })
@@ -406,6 +475,78 @@ export function CabinetRunPanel({
                 value={node.barLedge.depth}
               />
             </>
+          )}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Fronts">
+        <div className="space-y-2 px-1 pb-2">
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Style
+            </div>
+            <SegmentedControl
+              onChange={(value) =>
+                updateRun({ frontStyle: value as CabinetNodeType['frontStyle'] })
+              }
+              options={FRONT_STYLE_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              value={node.frontStyle ?? 'slab'}
+            />
+          </div>
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Mounting
+            </div>
+            <SegmentedControl
+              onChange={(value) =>
+                updateRun({ frontOverlay: value as CabinetNodeType['frontOverlay'] })
+              }
+              options={FRONT_OVERLAY_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              value={node.frontOverlay ?? 'full'}
+            />
+          </div>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Handles">
+        <div className="space-y-2 px-1 pb-2">
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Style
+            </div>
+            <SegmentedControl
+              onChange={(value) =>
+                updateRun({ handleStyle: value as CabinetNodeType['handleStyle'] })
+              }
+              options={HANDLE_STYLE_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              value={node.handleStyle}
+            />
+          </div>
+          {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Position
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  updateRun({ handlePosition: value as CabinetNodeType['handlePosition'] })
+                }
+                options={HANDLE_POSITION_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+                value={node.handlePosition ?? 'auto'}
+              />
+            </div>
           )}
         </div>
       </PanelSection>

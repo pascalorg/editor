@@ -5,6 +5,7 @@ import {
   type CabinetNode,
   calculateLevelMiters,
   getWallPlanFootprint,
+  resolveLevelId,
   type SceneApi,
   selectionProxyIdFromMetadata,
   type WallNode,
@@ -588,17 +589,12 @@ function adjustedCornerSourceModule(
   }
 }
 
-function resolveCabinetHostParentId(
+function resolveCabinetHostLevelId(
   node: CabinetNode | CabinetModuleNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
 ): AnyNodeId | null {
-  let current: CabinetNode | CabinetModuleNode = node
-  while (current.parentId) {
-    const parent = nodes[current.parentId as AnyNodeId]
-    if (parent?.type !== 'cabinet' && parent?.type !== 'cabinet-module') break
-    current = parent
-  }
-  return (current.parentId ?? null) as AnyNodeId | null
+  const levelId = resolveLevelId(node as AnyNode, nodes as Record<string, AnyNode>)
+  return levelId ? (levelId as AnyNodeId) : null
 }
 
 function overlappingPolygonXRangeWithinStrip(
@@ -633,28 +629,32 @@ function overlappingPolygonXRangeWithinStrip(
   }
 }
 
-function resolveCornerConnectedWidth({
+function resolveWallLimitedWidth({
   backLeft,
-  connectedWidth,
+  desiredWidth,
   depth,
+  leadingOffset,
   nodes,
   rotation,
   sourceNode,
 }: {
   backLeft: readonly [number, number]
-  connectedWidth: number
+  desiredWidth: number
   depth: number
+  leadingOffset: number
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
   rotation: number
   sourceNode: CabinetNode | CabinetModuleNode
 }): number {
-  const hostParentId = resolveCabinetHostParentId(sourceNode, nodes)
-  if (!hostParentId) return connectedWidth
+  const hostLevelId = resolveCabinetHostLevelId(sourceNode, nodes)
+  if (!hostLevelId) return desiredWidth
 
   const walls = Object.values(nodes).filter(
-    (node): node is WallNode => node?.type === 'wall' && node.parentId === hostParentId,
+    (node): node is WallNode =>
+      node?.type === 'wall' &&
+      resolveLevelId(node, nodes as Record<string, AnyNode>) === hostLevelId,
   )
-  if (walls.length === 0) return connectedWidth
+  if (walls.length === 0) return desiredWidth
 
   const candidateRun = {
     position: [backLeft[0], 0, backLeft[1]] as [number, number, number],
@@ -667,21 +667,90 @@ function resolveCornerConnectedWidth({
     const footprint = getWallPlanFootprint(wall, miterData)
     if (footprint.length < 3) continue
 
-    const overlap = overlappingPolygonXRangeWithinStrip(
-      footprint.map((point) => {
-        const local = planToRunLocal(candidateRun, point.x, 0, point.y)
-        return { x: local[0], z: local[2] }
-      }),
-      0,
-      depth,
-    )
-    if (!overlap || overlap.maxX <= WALL_CLEARANCE_EPSILON) continue
-    blockingDistance = Math.min(blockingDistance, Math.max(0, overlap.minX))
+    const localFootprint = footprint.map((point) => {
+      const local = planToRunLocal(candidateRun, point.x, 0, point.y)
+      return { x: local[0], z: local[2] }
+    })
+    const overlaps = [
+      overlappingPolygonXRangeWithinStrip(localFootprint, 0, depth),
+      overlappingPolygonXRangeWithinStrip(localFootprint, -depth, 0),
+    ].filter((overlap): overlap is { minX: number; maxX: number } => overlap != null)
+    if (overlaps.length === 0) continue
+
+    for (const overlap of overlaps) {
+      if (overlap.maxX <= WALL_CLEARANCE_EPSILON) continue
+      blockingDistance = Math.min(blockingDistance, Math.max(0, overlap.minX))
+    }
   }
 
-  if (!Number.isFinite(blockingDistance)) return connectedWidth
-  const cappedWidth = Math.min(connectedWidth, blockingDistance - depth)
+  if (!Number.isFinite(blockingDistance)) return desiredWidth
+  const cappedWidth = Math.min(desiredWidth, blockingDistance - leadingOffset)
   return Math.max(0, cappedWidth)
+}
+
+function resolveSideAddedModuleWidth({
+  centerX,
+  centerZ,
+  depth,
+  desiredWidth,
+  nodes,
+  run,
+  side,
+  sourceNode,
+}: {
+  centerX: number
+  centerZ: number
+  depth: number
+  desiredWidth: number
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+  run: CabinetNode
+  side: 'left' | 'right'
+  sourceNode: CabinetNode | CabinetModuleNode
+}): number {
+  const hostLevelId = resolveCabinetHostLevelId(sourceNode, nodes)
+  if (!hostLevelId) {
+    return desiredWidth
+  }
+
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode =>
+      node?.type === 'wall' &&
+      resolveLevelId(node, nodes as Record<string, AnyNode>) === hostLevelId,
+  )
+  if (walls.length === 0) return desiredWidth
+
+  const runWorld = resolveCabinetWorldTransform(run, nodes)
+  const miterData = calculateLevelMiters(walls)
+  const minZ = centerZ - depth / 2
+  const maxZ = centerZ + depth / 2
+  const anchorEdge = side === 'right' ? centerX - desiredWidth / 2 : centerX + desiredWidth / 2
+  let cappedWidth = desiredWidth
+
+  for (const wall of walls) {
+    const footprint = getWallPlanFootprint(wall, miterData)
+    if (footprint.length < 3) continue
+
+    const overlap = overlappingPolygonXRangeWithinStrip(
+      footprint.map((point) => {
+        const local = planToRunLocal(runWorld, point.x, 0, point.y)
+        return { x: local[0], z: local[2] }
+      }),
+      minZ,
+      maxZ,
+    )
+    if (!overlap) continue
+
+    if (side === 'right') {
+      if (overlap.minX <= anchorEdge + WALL_CLEARANCE_EPSILON) continue
+      cappedWidth = Math.min(cappedWidth, Math.max(0, overlap.minX - anchorEdge))
+      continue
+    }
+
+    if (overlap.maxX >= anchorEdge - WALL_CLEARANCE_EPSILON) continue
+    cappedWidth = Math.min(cappedWidth, Math.max(0, anchorEdge - overlap.maxX))
+  }
+
+  return cappedWidth
 }
 
 function computeCornerRunLayout({
@@ -717,7 +786,7 @@ function computeCornerRunLayout({
   const legRotation =
     side === 'right' ? runWorld.rotation - Math.PI / 2 : runWorld.rotation + Math.PI / 2
   const legAxis: [number, number] = [Math.cos(legRotation), -Math.sin(legRotation)]
-  const connectedWidth = resolveCornerConnectedWidth({
+  const connectedWidth = resolveWallLimitedWidth({
     backLeft:
       side === 'right'
         ? shiftedCorner
@@ -725,8 +794,9 @@ function computeCornerRunLayout({
             shiftedCorner[0] - legAxis[0] * (run.depth + sourceModule.width),
             shiftedCorner[1] - legAxis[1] * (run.depth + sourceModule.width),
           ],
-    connectedWidth: sourceModule.width,
+    desiredWidth: sourceModule.width,
     depth: run.depth,
+    leadingOffset: run.depth,
     nodes,
     rotation: legRotation,
     sourceNode: sourceModule,
@@ -1137,17 +1207,16 @@ function syncDerivedCornerRun({
   const sourceWallTop = wallChildOf(sourceModule, sceneApi.nodes())
   const isStandaloneBridgeFillerRun =
     role === 'bridge' && modules.length === 1 && modules[0]?.name === 'Wall Bridge Filler'
-  const bridgeAnchorPosition =
-    isStandaloneBridgeFillerRun
-      ? anchoredBridgeRunWorldPosition({
-          sourceWallTop,
-          sourceRun,
-          bridgeWidth: layout.bridgeWidth,
-          side,
-          fallbackPosition: layout.bridgeFillerRunPosition,
-          nodes: sceneApi.nodes(),
-        })
-      : null
+  const bridgeAnchorPosition = isStandaloneBridgeFillerRun
+    ? anchoredBridgeRunWorldPosition({
+        sourceWallTop,
+        sourceRun,
+        bridgeWidth: layout.bridgeWidth,
+        side,
+        fallbackPosition: layout.bridgeFillerRunPosition,
+        nodes: sceneApi.nodes(),
+      })
+    : null
 
   const anchorPosition =
     role === 'base-leg'
@@ -1285,11 +1354,12 @@ export function addCabinetModuleSide({
   side: 'left' | 'right'
 }): AnyNodeId | null {
   const modules = cabinetModulesForRun(run, sceneApi.nodes())
+  const desiredWidth = CABINET_BASE_WIDTH
   const x = sideInsertX({
     anchorModule,
     modules,
     side,
-    width: CABINET_BASE_WIDTH,
+    width: desiredWidth,
     epsilon: CABINET_EDGE_EPSILON,
   })
   if (x == null) return null
@@ -1297,11 +1367,26 @@ export function addCabinetModuleSide({
   const z = anchorModule
     ? backAnchoredModuleZ(anchorModule.position[2], anchorModule.depth, depth)
     : 0
+  const width = resolveSideAddedModuleWidth({
+    centerX: x,
+    centerZ: z,
+    depth,
+    desiredWidth,
+    nodes: sceneApi.nodes(),
+    run,
+    side,
+    sourceNode: anchorModule ?? run,
+  })
+  if (width < MIN_CORNER_CONNECTED_WIDTH - WALL_CLEARANCE_EPSILON) return null
   const module = CabinetModuleNodeSchema.parse({
     name: `Base Cabinet ${modules.length + 1}`,
     parentId: run.id,
-    position: [x, runModuleBaseY(run), z],
-    width: CABINET_BASE_WIDTH,
+    position: [
+      side === 'left' ? x + (desiredWidth - width) / 2 : x - (desiredWidth - width) / 2,
+      runModuleBaseY(run),
+      z,
+    ],
+    width,
     depth,
     carcassHeight: run.carcassHeight,
     plinthHeight: run.plinthHeight,

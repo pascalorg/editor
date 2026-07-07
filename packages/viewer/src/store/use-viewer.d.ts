@@ -21,6 +21,8 @@ type ViewerState = {
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
+  isExporting: boolean
+  setExporting: (value: boolean) => void
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
   wallMode: 'up' | 'cutaway' | 'down'

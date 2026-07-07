@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, type SceneApi, WallNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type SceneApi, WallNode, ZoneNode } from '@pascal-app/core'
 import { runLocalToPlan } from '../run-layout'
 import {
+  addCabinetModuleSide,
   addCornerRun,
   syncCornerRunsFromSourceModule,
   syncCornerStyleGroupFromRun,
@@ -70,6 +71,143 @@ function resolveCabinetWorldTransform(
     rotation: node.rotation,
   }
 }
+
+describe('addCabinetModuleSide', () => {
+  test('shrinks a newly added corner-end base cabinet to the remaining wall clearance', () => {
+    const levelId = 'level_add-side-wall-clearance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-add-side-wall-clearance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_anchor_add-side-wall-clearance'],
+    })
+    const anchor = CabinetModuleNode.parse({
+      id: 'cabinet-module_anchor_add-side-wall-clearance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_add-side-blocking' as AnyNodeId,
+      parentId: levelId,
+      start: [1.1, -1],
+      end: [1.1, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, anchor as AnyNode, blockingWall as AnyNode])
+
+    const id = addCabinetModuleSide({
+      anchorModule: anchor,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    expect(id).toBeTruthy()
+    const added = sceneApi.get<CabinetModuleNode>(id!)
+    expect(added?.width).toBeCloseTo(0.55)
+    expect(added?.position[0]).toBeCloseTo(0.725)
+    expect(sceneApi.get<CabinetModuleNode>(anchor.id)?.width).toBeCloseTo(0.9)
+  })
+
+  test('does not add a corner-end base cabinet when remaining wall clearance falls below minimum width', () => {
+    const levelId = 'level_add-side-wall-too-tight' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-add-side-wall-too-tight',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_anchor_add-side-wall-too-tight'],
+    })
+    const anchor = CabinetModuleNode.parse({
+      id: 'cabinet-module_anchor_add-side-wall-too-tight',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_add-side-too-tight' as AnyNodeId,
+      parentId: levelId,
+      start: [0.8, -1],
+      end: [0.8, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, anchor as AnyNode, blockingWall as AnyNode])
+
+    const id = addCabinetModuleSide({
+      anchorModule: anchor,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    expect(id).toBeNull()
+    const modulesOut = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode => node.type === 'cabinet-module',
+    )
+    expect(modulesOut).toHaveLength(1)
+  })
+
+  test('shrinks a newly added side cabinet when the run is nested under a level child', () => {
+    const levelId = 'level_add-side-zone-parent' as AnyNodeId
+    const zone = ZoneNode.parse({
+      id: 'zone_add-side-zone-parent' as AnyNodeId,
+      parentId: levelId,
+      name: 'Kitchen',
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 2],
+        [0, 2],
+      ],
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-add-side-zone-parent',
+      parentId: zone.id,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_anchor_add-side-zone-parent'],
+    })
+    const anchor = CabinetModuleNode.parse({
+      id: 'cabinet-module_anchor_add-side-zone-parent',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_add-side-zone-parent' as AnyNodeId,
+      parentId: levelId,
+      start: [1.1, -1],
+      end: [1.1, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([
+      zone as AnyNode,
+      run as AnyNode,
+      anchor as AnyNode,
+      blockingWall as AnyNode,
+    ])
+
+    const id = addCabinetModuleSide({
+      anchorModule: anchor,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    expect(id).toBeTruthy()
+    const added = sceneApi.get<CabinetModuleNode>(id!)
+    expect(added?.width).toBeCloseTo(0.55)
+    expect(added?.position[0]).toBeCloseTo(0.725)
+  })
+})
 
 describe('addCornerRun', () => {
   test('creates generated corner pieces under the actual base-cabinet and corner-filler parents', () => {
@@ -1206,5 +1344,4 @@ describe('addCornerRun', () => {
     const bridgeLeftEdge = bridgeWorld.position[0] - bridgeFiller!.width / 2
     expect(bridgeLeftEdge).toBeCloseTo(wallTopRightEdge)
   })
-
 })

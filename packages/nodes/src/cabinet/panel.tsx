@@ -72,6 +72,12 @@ const FRONT_OVERLAY_OPTIONS = [
   { value: 'inset', label: 'Inset' },
 ] as const
 
+const FRONT_STYLE_OPTIONS = [
+  { value: 'slab', label: 'Slab' },
+  { value: 'shaker', label: 'Shaker' },
+  { value: 'raised-arch', label: 'Raised Arch' },
+] as const
+
 const CABINET_TIER_OPTIONS = [
   { value: 'base', label: 'Base Cabinet' },
   { value: 'tall', label: 'Tall Cabinet' },
@@ -188,7 +194,7 @@ export default function CabinetPanel() {
       scene.updateNode(selectedId as AnyNodeId, nextPatch)
       const liveNode = scene.nodes[selectedId as AnyNodeId] as CabinetEditableNode | undefined
       if (liveNode?.type === 'cabinet-module' && liveNode.parentId) {
-        scene.dirtyNodes.add(liveNode.parentId as AnyNodeId)
+        scene.markDirty(liveNode.parentId as AnyNodeId)
         const parent = scene.nodes[liveNode.parentId as AnyNodeId] as
           | CabinetEditableNode
           | undefined
@@ -224,7 +230,7 @@ export default function CabinetPanel() {
               backAlignZ(liveNode.depth, wallChild.depth),
             ],
           })
-          scene.dirtyNodes.add(liveNode.id as AnyNodeId)
+          scene.markDirty(liveNode.id as AnyNodeId)
         }
       }
     },
@@ -328,7 +334,7 @@ export default function CabinetPanel() {
     const wall = wallChildOf(node, scene.nodes)
     if (!wall) return
     scene.deleteNode(wall.id as AnyNodeId)
-    scene.dirtyNodes.add(node.id as AnyNodeId)
+    scene.markDirty(node.id as AnyNodeId)
     setSelection({ selectedIds: [node.id] })
   }
 
@@ -581,6 +587,21 @@ export default function CabinetPanel() {
         <>
           <PanelSection title="Fronts">
             <div className="space-y-2 px-1 pb-2">
+              <div>
+                <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  Style
+                </div>
+                <SegmentedControl
+                  onChange={(value) =>
+                    updateNode({ frontStyle: value as CabinetNodeType['frontStyle'] })
+                  }
+                  options={FRONT_STYLE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  value={node.frontStyle ?? 'slab'}
+                />
+              </div>
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                   Mounting

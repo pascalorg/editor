@@ -39,6 +39,7 @@ import {
   cooktopKnobHitMaterial,
   cooktopKnobOnMaterial,
   cooktopTrimMaterial,
+  createWorldScaleBoxGeometry,
   stampSlot,
 } from './shared'
 
@@ -432,7 +433,10 @@ export function addCooktopCompartment(
   const surfaceY = topY + surfaceThickness / 2 - 0.002
   addCooktopFrameBorder(group, name, frameWidth, frameDepth, topY + 0.006)
   const surface = stampSlot(
-    new Mesh(new BoxGeometry(surfaceWidth, surfaceThickness, surfaceDepth), cooktopGlassMaterial),
+    new Mesh(
+      createWorldScaleBoxGeometry(surfaceWidth, surfaceThickness, surfaceDepth),
+      cooktopGlassMaterial,
+    ),
     'appliance',
   )
   surface.name = `${name}-surface`

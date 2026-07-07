@@ -102,6 +102,8 @@ type ViewerState = {
   resetSelection: () => void
 
   outliner: Outliner // No setter as we will manipulate directly the arrays
+  /** Bumped by GeometrySystem after each rebuild pass so selection/outline
+   * effects can re-apply to the freshly swapped meshes. */
   geometryRevision: number
   bumpGeometryRevision: () => void
 

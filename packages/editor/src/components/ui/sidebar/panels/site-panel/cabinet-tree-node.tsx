@@ -19,6 +19,7 @@ import {
   TreeNodeWrapper,
 } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { resolveTreeChildIds, treeContainsDescendant } from './tree-structure'
 
 interface CabinetTreeNodeProps {
   nodeId: AnyNodeId
@@ -34,11 +35,7 @@ export const CabinetTreeNode = memo(function CabinetTreeNode({
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(true)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const children = useScene(
-    useShallow(
-      (s) => (s.nodes[nodeId] as CabinetNode | CabinetModuleNode | undefined)?.children ?? [],
-    ),
-  )
+  const children = useScene(useShallow((s) => resolveTreeChildIds(nodeId, s.nodes)))
   const node = useScene((s) => s.nodes[nodeId] as CabinetNode | CabinetModuleNode | undefined)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
@@ -51,13 +48,9 @@ export const CabinetTreeNode = memo(function CabinetTreeNode({
       if (selectedIds.length === 0) return
       const nodes = useScene.getState().nodes
       for (const id of selectedIds) {
-        let current = nodes[id as AnyNodeId]
-        while (current?.parentId) {
-          if (current.parentId === nodeId) {
-            setExpanded(true)
-            return
-          }
-          current = nodes[current.parentId as AnyNodeId]
+        if (treeContainsDescendant(nodeId, id as AnyNodeId, nodes)) {
+          setExpanded(true)
+          return
         }
       }
     })

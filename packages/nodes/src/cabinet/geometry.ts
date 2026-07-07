@@ -1,4 +1,4 @@
-import type { GeometryContext } from '@pascal-app/core'
+import type { CabinetNode, GeometryContext } from '@pascal-app/core'
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import { Group } from 'three'
 import { addCooktopCompartment } from './geometry/cooktop'
@@ -95,7 +95,7 @@ export function buildCabinetGeometry(
   const drawerBoxFrontZ =
     frontZ - frontThickness / 2 - 0.001 - insetInteriorClearance
   const drawerBoxDepth = Math.max(0.05, drawerBoxFrontZ - drawerBoxBackZ)
-  const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetGeometryNode) : null
+  const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetNode) : null
   const isWallCornerFiller = node.moduleKind === 'corner-filler' && parentRun?.runTier === 'wall'
 
   if (node.moduleKind === 'corner-filler') {

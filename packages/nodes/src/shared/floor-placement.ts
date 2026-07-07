@@ -102,6 +102,20 @@ export function resolveAlignedFloorPlacement({
   }
 }
 
+// Node-surface clicks (wall/slab/…) are synthesized on pointerup; the
+// browser's real `click` fires right after and would re-trigger the same
+// placement through the canvas-level `grid:click` listener, which R3F
+// stopPropagation cannot reach. Eat that one follow-up click.
+function swallowFollowUpBrowserClick() {
+  if (typeof window === 'undefined') return
+  const swallow = (e: Event) => {
+    e.stopPropagation()
+    e.preventDefault()
+  }
+  window.addEventListener('click', swallow, { capture: true, once: true })
+  setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
+}
+
 export function stopPlacementCommitPropagation(event: FloorPlacementClickTriggerEvent) {
   const native = (event as { nativeEvent?: unknown }).nativeEvent
   const nativeStopPropagation = (native as { stopPropagation?: () => void } | undefined)
@@ -111,6 +125,7 @@ export function stopPlacementCommitPropagation(event: FloorPlacementClickTrigger
   }
   const direct = (event as { stopPropagation?: () => void }).stopPropagation
   if (typeof direct === 'function') direct.call(event)
+  if ('node' in event) swallowFollowUpBrowserClick()
 }
 
 export function subscribeFloorPlacementClicks(

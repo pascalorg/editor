@@ -711,10 +711,11 @@ export type FloorplanMoveTarget<N> = (args: {
  * plugin contributes a mark the same way a node's presentation does, with no
  * React rendering in core.
  */
-/** Host workspace a panel belongs to — `edit` (the build workspace) or
- * `studio` (the render workspace). Manifest metadata, not core logic: the
- * host's sidebar filters by its current workspace mode. */
-export type PanelWorkspace = 'edit' | 'studio'
+/** Host-defined workspace tag a panel belongs to. Opaque to core — the host's
+ * sidebar filters panels by its current workspace mode, and the vocabulary is
+ * the host's (the standalone editor uses `'edit'` for the build workspace and
+ * `'studio'` for the render workspace). Manifest metadata, not core logic. */
+export type PanelWorkspace = string & {}
 
 export type PluginPanel = {
   id: string
@@ -979,6 +980,40 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * and runs through `SceneApi`.
    */
   quickActions?: NodeQuickActionProvider<z.infer<S>>
+  /**
+   * Sidebar-tree presentation hooks. Lets a kind reshape how the generic
+   * scene tree walks its subtree — hiding derived/managed nodes and
+   * flattening intermediate containers — without the tree hardcoding any
+   * kind. The tree consults these for every node whose kind declares them;
+   * kinds whose scene-graph shape matches their desired tree shape omit
+   * this entirely.
+   */
+  tree?: {
+    /**
+     * Hide this node's row in the sidebar tree (e.g. derived/managed nodes
+     * whose contents surface elsewhere via `childIds`).
+     */
+    hidden?: (node: AnyNode, nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>) => boolean
+    /**
+     * Override the child ids the sidebar tree renders under this node.
+     * When unset the tree falls back to the node's own `children`.
+     */
+    childIds?: (node: AnyNode, nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>) => AnyNodeId[]
+  }
+  /**
+   * Selection-proxy behavior overrides. A node opts into proxying by writing
+   * `metadata.nodeSelectionProxyId` (see `lib/selection-proxy.ts` for the
+   * metadata contract); grouped affordances (move / rotate) then key off the
+   * proxy target. `bypassDirectPick` lets a kind keep the proxy for those
+   * grouped affordances while still routing a direct canvas pick to the
+   * clicked node itself — e.g. corner-generated cabinet modules stay
+   * individually selectable even though they proxy to their run.
+   */
+  selectionProxy?: {
+    /** Return true when a direct pick of `node` should select it instead of
+     * its resolved proxy target. */
+    bypassDirectPick?: (node: AnyNode, proxyTarget: AnyNode) => boolean
+  }
   /**
    * Geometry reads sibling/parent/child nodes (e.g. wall miters, opening
    * dimensions); the floor-plan layer must rebuild it whenever a
@@ -1492,7 +1527,13 @@ export type NodeQuickAction = {
   id: string
   label: string
   title?: string
-  icon?: NodeQuickActionIcon
+  /**
+   * Builtin glyph token (side-add arrows, convert) or an {@link IconRef}
+   * for kind-owned marks — quick actions with bespoke glyphs ship them
+   * from the kind's package instead of the menus hardcoding per-action
+   * SVG.
+   */
+  icon?: NodeQuickActionIcon | IconRef
   disabled?: boolean
   run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
 }

@@ -75,6 +75,7 @@ export {
   segmentsIntersect,
 } from './lib/polygon-relations'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
+export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   deriveSlotId,
   isSlotMaterialName,
@@ -105,6 +106,7 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,

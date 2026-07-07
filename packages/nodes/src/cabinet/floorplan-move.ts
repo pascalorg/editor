@@ -38,12 +38,6 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
   const originalLocal = [...node.position] as [number, number, number]
   let lastLocal: [number, number, number] = originalLocal
 
-  const bumpRunLayoutRevision = (runId: AnyNodeId) => {
-    const liveRun = useScene.getState().nodes[runId]
-    if (liveRun?.type !== 'cabinet') return
-    bumpCabinetRunLayoutRevision(createSceneApi(useScene), liveRun)
-  }
-
   const session: FloorplanMoveTargetSession = {
     affectedIds: run ? [moduleId, run.id as AnyNodeId] : [moduleId],
     apply({ planPoint, modifiers }) {

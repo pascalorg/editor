@@ -75,6 +75,10 @@ path as the built-ins.
 
 ## Notes / known gaps
 
+- `package.json` points `main`/`exports` at raw TypeScript (`./src/index.ts`),
+  which works here only because the host app's bundler transpiles workspace
+  packages. A real third-party plugin must ship built JS (with `.d.ts` types) or
+  otherwise ensure the consuming host transpiles the package.
 - `createNode` and the `floorPlaced.footprint` callback are typed against the
   host's hand-maintained `AnyNode` union, so the node is cast (`as AnyNode` /
   `as TreeNode`). The registry derives `AnyNode` post-migration.

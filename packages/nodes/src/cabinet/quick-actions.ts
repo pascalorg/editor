@@ -3,12 +3,13 @@ import type {
   AnyNodeId,
   CabinetModuleNode,
   CabinetNode,
+  IconRef,
   NodeQuickAction,
 } from '@pascal-app/core'
 import { moduleSideOpen, sideInsertX } from './run-layout'
 import {
-  addCornerRun,
   addCabinetModuleSide,
+  addCornerRun,
   addWallChildAbove,
   CABINET_BASE_WIDTH,
   CABINET_EDGE_EPSILON,
@@ -22,6 +23,29 @@ import {
 type CabinetContext = {
   run: CabinetNode
   module: CabinetModuleNode | null
+}
+
+// Lazy component IconRefs — the menus mount these behind Suspense, so the
+// glyph module loads only when a cabinet quick action is actually shown.
+const cabinetWallIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.CabinetWallGlyph })),
+}
+const cabinetTallIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.CabinetTallGlyph })),
+}
+const cabinetBaseIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.CabinetBaseGlyph })),
+}
+const cornerTurnLeftIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.CornerTurnLeftGlyph })),
+}
+const cornerTurnRightIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.CornerTurnRightGlyph })),
 }
 
 function resolveCabinetContext(
@@ -108,7 +132,7 @@ export function cabinetQuickActions({
       id: 'cabinet:add-corner-left',
       label: 'L Left',
       title: 'Turn an L corner to the left',
-      icon: 'add-left',
+      icon: cornerTurnLeftIcon,
       run: ({ sceneApi }) => {
         const id = addCornerRun({
           module: context.module!,
@@ -129,6 +153,7 @@ export function cabinetQuickActions({
         title: hasWallCabinet
           ? 'A wall cabinet already exists above this cabinet'
           : 'Add wall cabinet above',
+        icon: cabinetWallIcon,
         disabled: hasWallCabinet,
         run: ({ sceneApi }) => {
           const id = addWallChildAbove({
@@ -144,7 +169,7 @@ export function cabinetQuickActions({
         id: 'cabinet:to-tall',
         label: 'Tall',
         title: 'Switch to tall cabinet',
-        icon: 'convert',
+        icon: cabinetTallIcon,
         run: ({ sceneApi }) =>
           switchCabinetToTall({
             module: context.module!,
@@ -159,7 +184,7 @@ export function cabinetQuickActions({
         id: 'cabinet:to-base',
         label: 'Base',
         title: 'Switch to base cabinet',
-        icon: 'convert',
+        icon: cabinetBaseIcon,
         run: ({ sceneApi }) =>
           switchCabinetToBase({
             module: context.module!,
@@ -177,7 +202,7 @@ export function cabinetQuickActions({
       id: 'cabinet:add-corner-right',
       label: 'L Right',
       title: 'Turn an L corner to the right',
-      icon: 'add-right',
+      icon: cornerTurnRightIcon,
       run: ({ sceneApi }) => {
         const id = addCornerRun({
           module: context.module!,

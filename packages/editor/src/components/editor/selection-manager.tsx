@@ -59,6 +59,7 @@ import {
 } from '../../lib/paint-scope'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import {
+  resolveCanvasSelectionNode,
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
   type SelectionModifierKeys,
@@ -337,22 +338,6 @@ function resolveSelectModeNodeTarget(event: NodeEvent): AnyNode {
   }
 
   return event.node
-}
-
-/**
- * Kinds whose `position` lives in a host parent's frame (`movable.parentFrame`
- * — e.g. a cabinet module inside its run) route clicks / hovers / direct-move
- * to the parent while the parent is the sole selection: the user explicitly
- * picked the composite, so interacting with a child keeps operating on it.
- * Clicking a child while anything else is selected drills into the child.
- */
-function resolveHostSelectionTarget(node: AnyNode): AnyNode {
-  const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
-  if (!parentFrame) return node
-  const parent = parentFrame.resolveParent(node, useScene.getState().nodes)
-  if (!parent) return node
-  const selectedIds = useViewer.getState().selection.selectedIds
-  return selectedIds.length === 1 && selectedIds[0] === parent.id ? parent : node
 }
 
 function previewMeshMaterial(mesh: Mesh, material: Material | Material[]): PaintPreviewCleanup {
@@ -1198,7 +1183,11 @@ export const SelectionManager = () => {
       if (pointer.button !== 0 || !isCommandModifier(pointer)) return
 
       const eventNode = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
-      const node = resolveHostSelectionTarget(eventNode)
+      const node = resolveCanvasSelectionNode({
+        node: eventNode,
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
       if (!canDirectMoveNode(node)) return
       if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
 
@@ -1479,7 +1468,11 @@ export const SelectionManager = () => {
         return
       }
 
-      const node = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))
+      const node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
 
       // A ceiling is selectable only through its corner handles, never via
       // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
@@ -1538,6 +1531,11 @@ export const SelectionManager = () => {
             nodeToSelect = parentNode
           }
         }
+        nodeToSelect = resolveCanvasSelectionNode({
+          node: nodeToSelect,
+          nodes: useScene.getState().nodes,
+          selectedIds: selectedIdsBeforeRouting,
+        })
         // Clicking any node (e.g. the slab surface outside a hole) exits slab
         // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
         // click reaching here means the user clicked outside the hole.
@@ -1708,7 +1706,11 @@ export const SelectionManager = () => {
       // surface move tools keep tracking — but the select-hover outline must
       // stay put, so don't repaint under the cursor mid-drag.
       if (useViewer.getState().inputDragging) return
-      const node = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))
+      const node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1736,14 +1738,22 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (useViewer.getState().inputDragging) return
-      const nodeId = resolveHostSelectionTarget(resolveSelectModeNodeTarget(event))?.id
+      const nodeId = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      let node = resolveSelectModeNodeTarget(event)
+      let node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
 
       const currentPhase = useEditor.getState().phase
 

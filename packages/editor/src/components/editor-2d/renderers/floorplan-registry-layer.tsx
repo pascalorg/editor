@@ -10,6 +10,7 @@ import {
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
+  resolveSelectionProxyId,
   isRegistryMovable,
   kindsWithFloorplanScope,
   type LiveNodeOverrides,
@@ -1242,11 +1243,20 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   // Mirror the sidebar tree nodes' hover wiring — `useViewer.hoveredId` drives
   // the highlight halo in 3D as well as registry floor-plan hover strokes.
   const handlePointerEnter = useCallback(() => {
-    onHoveredIdChange(nodeId)
+    const node = useScene.getState().nodes[nodeId]
+    onHoveredIdChange(
+      node
+        ? resolveSelectionProxyId(node, useScene.getState().nodes as Record<string, AnyNode | undefined>)
+        : nodeId,
+    )
   }, [nodeId, onHoveredIdChange])
 
   const handlePointerLeave = useCallback(() => {
-    if (useViewer.getState().hoveredId === nodeId) onHoveredIdChange(null)
+    const node = useScene.getState().nodes[nodeId]
+    const targetId = node
+      ? resolveSelectionProxyId(node, useScene.getState().nodes as Record<string, AnyNode | undefined>)
+      : nodeId
+    if (useViewer.getState().hoveredId === targetId) onHoveredIdChange(null)
   }, [nodeId, onHoveredIdChange])
 
   const handleHandlePointerDown = useCallback(

@@ -1,6 +1,14 @@
 import type { AssetInput } from '@pascal-app/core'
 
-export const CATALOG_ITEMS: AssetInput[] = [
+/**
+ * A catalog tile: the asset plus optional editor placement metadata.
+ * `tool` names the placement tool the tile arms (defaults to the generic
+ * `'item'` drop tool) — kinds drawn by their own registry tool (e.g. the
+ * modular cabinet) point at that tool id instead.
+ */
+export type CatalogItem = AssetInput & { tool?: string }
+
+export const CATALOG_ITEMS: CatalogItem[] = [
   {
     id: 'cactus',
     category: 'furniture',
@@ -439,6 +447,7 @@ export const CATALOG_ITEMS: AssetInput[] = [
   },
   {
     id: 'cabinet',
+    tool: 'cabinet',
     category: 'furniture',
     name: 'Modular Cabinet',
     tags: [

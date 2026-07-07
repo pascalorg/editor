@@ -5,6 +5,7 @@ import {
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
   hasRegistry3DMoveTool,
+  isMovable,
   nodeRegistry,
   type SceneApi,
   useScene,
@@ -53,7 +54,13 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   // 3D direct move (Ctrl/Meta-drag, the move-cross grip) needs a move tool that
   // mounts in 3D — distinct from `isRegistryMovable`, which also accepts
   // floorplan-only movers (zone) for the 2D plan.
-  return hasRegistry3DMoveTool(node.type)
+  if (!hasRegistry3DMoveTool(node.type)) return false
+  // Bespoke movers (`affordanceTools.move`) own their constraints and often
+  // deliberately omit `capabilities.movable` — only gate registry-movable
+  // kinds on `isMovable`, so a per-node `movable.override` (e.g. a cabinet
+  // run locked behind its selection proxy) can opt out of direct move.
+  if (nodeRegistry.get(node.type)?.affordanceTools?.move) return true
+  return isMovable(node)
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {

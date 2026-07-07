@@ -14,6 +14,8 @@ const cooktopFields = {
   cooktopShowGrate: z.boolean().optional(),
 }
 
+export const CabinetFrontStyleSchema = z.enum(['slab', 'shaker', 'raised-arch'])
+
 // Discriminated on `type` so invalid field combinations (a drawer with a
 // pantry rack style, a fridge with burner state) are unrepresentable. New
 // compartment kinds add a variant here rather than widening a shared bag of
@@ -93,6 +95,7 @@ const cabinetBoxFields = {
   withFinishedBack: z.boolean().default(false),
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
+  frontStyle: CabinetFrontStyleSchema.default('slab'),
   handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
   handlePosition: z.enum(['auto', 'top', 'center']).default('auto'),
   frontOverlay: z.enum(['full', 'inset']).default('full'),

@@ -7,6 +7,7 @@ import type {
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
+import { selectionProxyIdFromMetadata } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { buildCabinetGeometry } from './geometry'
@@ -37,6 +38,7 @@ import {
   minCabinetCarcassHeightForStack,
   stackForCabinet,
 } from './stack'
+import { cabinetTreeChildIds, cabinetTreeHidden } from './tree-structure'
 import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
@@ -719,7 +721,7 @@ function cabinetModuleHandles(
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 6,
+  schemaVersion: 7,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -749,6 +751,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     withWaterfall: false,
     frontThickness: 0.018,
     frontGap: 0.003,
+    frontStyle: 'slab',
     handleStyle: 'bar',
     handlePosition: 'auto',
     frontOverlay: 'full',
@@ -760,7 +763,15 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
-    movable: { axes: ['x', 'z'], gridSnap: true, groupMoveSnap: resolveCabinetGroupMoveSnap },
+    movable: {
+      axes: ['x', 'z'],
+      gridSnap: true,
+      groupMoveSnap: resolveCabinetGroupMoveSnap,
+      override: ({ node }) =>
+        selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
+          ? { axes: [], gridSnap: false }
+          : null,
+    },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
@@ -801,6 +812,12 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     slots: () => cabinetSlots(),
   },
 
+  // Dirty-cascade: a dirtied run re-marks its hosted modules so their
+  // composite geometry re-flows with the run (see `cascadeDirty`).
+  relations: {
+    hosts: ['cabinet-module'],
+  },
+
   parametrics: cabinetParametrics,
   handles: cabinetHandles,
   geometry: buildCabinetGeometry,
@@ -827,6 +844,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       JSON.stringify(n.barLedge ?? null),
       n.frontThickness,
       n.frontGap,
+      n.frontStyle,
       n.handleStyle,
       n.handlePosition,
       n.frontOverlay,
@@ -846,6 +864,12 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     ]),
   floorplan: buildCabinetFloorplan,
   quickActions: cabinetQuickActions,
+  // Corner-derived leg runs hide their own tree rows; their modules are
+  // flattened into the source run's hierarchy.
+  tree: {
+    hidden: cabinetTreeHidden,
+    childIds: cabinetTreeChildIds,
+  },
   // E operates the run: every child module's doors/drawers swing together.
   keyboardActions: {
     e: {
@@ -857,6 +881,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
     { key: 'R / T', label: 'Rotate ±45°' },
+    { key: 'Shift+R', label: 'Rotate reverse' },
     { key: 'I', label: 'Island mode' },
     { key: 'Esc', label: 'Exit' },
   ],
@@ -877,7 +902,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
 export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> = {
   kind: 'cabinet-module',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: CabinetModuleNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -909,6 +934,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     moduleKind: 'standard' as const,
     openSide: undefined,
     cornerShelf: false,
+    frontStyle: 'slab',
     handleStyle: 'bar',
     handlePosition: 'auto',
     frontOverlay: 'full',
@@ -925,6 +951,10 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       gridSnap: true,
       parentFrame: cabinetModuleParentFrame,
       groupMoveSnap: resolveCabinetModuleGroupMoveSnap,
+      override: ({ node }) =>
+        selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
+          ? { axes: [], gridSnap: false }
+          : null,
     },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
@@ -968,6 +998,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.countertopOverhang,
       n.frontThickness,
       n.frontGap,
+      n.frontStyle,
       n.handleStyle,
       n.handlePosition,
       n.frontOverlay,
@@ -987,6 +1018,17 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   // plan-space translate would corrupt it on any rotated / offset run.
   floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
   quickActions: cabinetQuickActions,
+  tree: {
+    childIds: cabinetTreeChildIds,
+  },
+  // Corner-generated modules keep a proxy so grouped move/rotate
+  // affordances can still key off the run, but a direct body click should
+  // stay on the clicked module so added legs / wall cabinets remain
+  // individually selectable.
+  selectionProxy: {
+    bypassDirectPick: (node, proxyTarget) =>
+      node.type === 'cabinet-module' && proxyTarget.type === 'cabinet',
+  },
   // E animates this module's doors/drawers open ↔ closed (hood-only
   // modules have nothing to operate).
   keyboardActions: {

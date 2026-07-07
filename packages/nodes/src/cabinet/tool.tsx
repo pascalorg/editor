@@ -4,6 +4,7 @@ import {
   type AnyNodeId,
   CabinetModuleNode,
   CabinetNode,
+  createSceneApi,
   emitter,
   type GridEvent,
   getWallThickness,
@@ -24,7 +25,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh } from 'three'
 import {
   type FloorPlacementClickTriggerEvent,
@@ -34,7 +35,12 @@ import {
 } from '../shared/floor-placement'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
-import { cabinetDefinition, cabinetModuleDefinition } from './definition'
+import {
+  bumpCabinetRunsNear,
+  cabinetDefinition,
+  cabinetModuleDefinition,
+  cabinetRunFootprint,
+} from './definition'
 import { buildCabinetGeometry } from './geometry'
 import { cabinetPresetById } from './presets'
 import {
@@ -141,27 +147,19 @@ function WallSnapGuide({
   )
 }
 
-function cabinetMetadataRecord(metadata: unknown): Record<string, unknown> {
-  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
-    ? (metadata as Record<string, unknown>)
-    : {}
-}
-
-function bumpCabinetRunsLayoutRevisionOnLevel(levelId: AnyNodeId) {
+// Re-key only the sibling runs whose countertop join the new run can affect.
+// The adjacency watcher in system.tsx skips a run's first sighting, so it
+// never re-keys neighbors when a run APPEARS — this covers that gap. History
+// stays paused inside `bumpCabinetRunsNear`, keeping placement one undo step.
+function bumpCabinetRunsNearNewRun(runId: AnyNodeId) {
   const scene = useScene.getState()
-  for (const node of Object.values(scene.nodes)) {
-    if (node.type === 'cabinet' && node.parentId === levelId) {
-      const metadata = cabinetMetadataRecord(node.metadata)
-      const currentRevision =
-        typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
-      scene.updateNode(node.id as AnyNodeId, {
-        metadata: {
-          ...metadata,
-          cabinetLayoutRevision: currentRevision + 1,
-        },
-      })
-    }
-  }
+  const run = scene.nodes[runId]
+  if (run?.type !== 'cabinet') return
+  bumpCabinetRunsNear(
+    createSceneApi(useScene),
+    [cabinetRunFootprint(run, scene.nodes)],
+    new Set([runId]),
+  )
 }
 
 function wallHitFromWallEvent(event: WallEvent): WallHit | null {
@@ -227,16 +225,19 @@ const CabinetTool = () => {
     return group
   }, [previewNode])
 
-  const publishFloorplanPreview = (next: CabinetPlacement, island = islandModeRef.current) => {
-    usePlacementPreview.getState().set(
-      buildCabinetPlacementPreviewNode({
-        island,
-        position: next.position,
-        previewModule: previewNode,
-        yaw: next.yaw,
-      }),
-    )
-  }
+  const publishFloorplanPreview = useCallback(
+    (next: CabinetPlacement, island = islandModeRef.current) => {
+      usePlacementPreview.getState().set(
+        buildCabinetPlacementPreviewNode({
+          island,
+          position: next.position,
+          previewModule: previewNode,
+          yaw: next.yaw,
+        }),
+      )
+    },
+    [previewNode],
+  )
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -407,7 +408,7 @@ const CabinetTool = () => {
         { node: cabinet, parentId: activeLevelId },
         { node: module, parentId: cabinet.id },
       ])
-      bumpCabinetRunsLayoutRevisionOnLevel(activeLevelId as AnyNodeId)
+      bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [module.id] })
       triggerSFX('sfx:item-place')
       usePlacementPreview.getState().clear()
@@ -459,7 +460,7 @@ const CabinetTool = () => {
       window.removeEventListener('keydown', onKeyDown, true)
       usePlacementPreview.getState().clear()
     }
-  }, [activeLevelId, placementDimensions, previewNode])
+  }, [activeLevelId, placementDimensions, previewNode, publishFloorplanPreview])
 
   if (!activeLevelId || !placement) return null
   const placementLabel = !placement.valid

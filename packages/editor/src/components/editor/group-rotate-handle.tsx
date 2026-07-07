@@ -379,7 +379,14 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
         {/* Fat invisible grab target (torus wrapping the arrow). A plain
             default-layer mesh with the standard raycast — the shared
             `InvisibleHandleHitArea` (EDITOR_LAYER + custom raycast) never
-            received pointer events in this portalled context. */}
+            received pointer events in this portalled context: R3F's
+            `createPortal` gives the portal root its own fresh `Raycaster`
+            (default mask = layer 0 only), so the EDITOR_LAYER enable applied
+            to the root raycaster in `custom-camera-controls` never reaches
+            it. Harmless render-wise — the material is colorWrite:false /
+            depthWrite:false, so nothing leaks into thumbnails or the ink
+            pass. A proper fix would enable EDITOR_LAYER on the portal
+            raycaster from inside the portal. */}
         <mesh
           frustumCulled={false}
           geometry={hitGeometry}

@@ -107,7 +107,11 @@ describe('cabinet corner member deletion', () => {
 
     const legIds = linkedRunIdsOf(moduleId)
     expect(legIds.length).toBeGreaterThan(1)
-    const [deletedLegId, ...survivingLegIds] = legIds
+    const deletedLegId = legIds.find((id) => {
+      const node = useScene.getState().nodes[id]
+      return node?.type === 'cabinet' && node.parentId !== runId
+    })!
+    const survivingLegIds = legIds.filter((id) => id !== deletedLegId)
 
     useScene.getState().deleteNode(deletedLegId!)
 

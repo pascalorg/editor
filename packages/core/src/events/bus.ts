@@ -250,6 +250,15 @@ type RoomPresetEvents = {
   'room-preset:create': RoomPresetCreateEvent
 }
 
+type SelectionEvents = {
+  /**
+   * "Reveal this node" intent — the editor's node action menu emits it with the
+   * selected node; whoever owns the node's catalog/panel (host browser, a
+   * plugin's presets panel) listens and reveals it.
+   */
+  'selection:find-node': AnyNode
+}
+
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
@@ -302,6 +311,7 @@ type EditorEvents = GridEvents &
   ThumbnailEvents &
   SnapshotEvents &
   AIChatEvents &
-  RoomPresetEvents
+  RoomPresetEvents &
+  SelectionEvents
 
 export const emitter = mitt<EditorEvents>()

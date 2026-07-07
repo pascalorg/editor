@@ -87,14 +87,15 @@ export function registerNode(def: AnyNodeDefinition): void {
 }
 
 /**
- * Registry of left-rail panels contributed by plugins. Same add-only,
- * duplicate-id-throws semantics as the node registry, with one difference: it
- * is *observable*. Plugin discovery runs asynchronously after the first React
- * render (see `loadExternalPlugins`), so the sidebar subscribes via
- * {@link PanelRegistryImpl.subscribe} / {@link PanelRegistryImpl.getSnapshot}
- * (the `useSyncExternalStore` contract) and re-renders when a panel lands.
- * `getSnapshot` returns a stable array reference between registrations so the
- * subscribing component doesn't re-render in a loop.
+ * Registry of UI panels contributed by plugins; the host decides where they
+ * surface. Same add-only, duplicate-id-throws semantics as the node registry,
+ * with one difference: it is *observable*. Plugin discovery runs
+ * asynchronously after the first React render (see `loadExternalPlugins`), so
+ * the host UI subscribes via {@link PanelRegistryImpl.subscribe} /
+ * {@link PanelRegistryImpl.getSnapshot} (the `useSyncExternalStore` contract)
+ * and re-renders when a panel lands. `getSnapshot` returns a stable array
+ * reference between registrations so the subscribing component doesn't
+ * re-render in a loop.
  */
 class PanelRegistryImpl {
   private readonly panels = new Map<string, PluginPanel>()
@@ -346,7 +347,9 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
  */
 export type PluginDiscovery = () => Promise<Plugin[]>
 
-let pluginDiscovery: PluginDiscovery = async () => []
+const defaultPluginDiscovery: PluginDiscovery = async () => []
+
+let pluginDiscovery: PluginDiscovery = defaultPluginDiscovery
 
 /**
  * Replace the plugin discovery implementation. Call once at app startup
@@ -359,6 +362,11 @@ let pluginDiscovery: PluginDiscovery = async () => []
  * gate + duplicate-kind protection applies.
  */
 export function setPluginDiscovery(fn: PluginDiscovery): void {
+  if (isDevMode() && pluginDiscovery !== defaultPluginDiscovery) {
+    console.warn(
+      '[registry] setPluginDiscovery replaced an existing discovery chain — plugins registered earlier (e.g. via extendPluginDiscovery) are dropped. Use extendPluginDiscovery to compose instead.',
+    )
+  }
   pluginDiscovery = fn
 }
 

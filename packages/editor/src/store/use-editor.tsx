@@ -1269,6 +1269,7 @@ const useEditor = create<EditorState>()(
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
       }),
+      skipHydration: true,
     },
   ),
 )
