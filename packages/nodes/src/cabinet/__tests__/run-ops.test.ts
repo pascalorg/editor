@@ -691,6 +691,100 @@ describe('addCornerRun', () => {
     expect(allCabinets.every((node) => node.handlePosition === 'center')).toBe(true)
   })
 
+  test('propagates front styling into linked runs even when the corner re-layout bails', () => {
+    const levelId = 'level_corner-style-layout-bail' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-style-layout-bail',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      children: ['cabinet-module_source-style-layout-bail'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-style-layout-bail',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      stack: [{ id: 'door-style-layout-bail', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    addCornerRun({ module, run, sceneApi, side: 'right' })
+
+    // A wall drawn AFTER the corner exists blocks computeCornerRunLayout
+    // (connected width falls below minimum), so syncDerivedCornerRun bails.
+    const blockingWall = WallNode.parse({
+      id: 'wall_style-layout-bail' as AnyNodeId,
+      parentId: levelId,
+      start: [0, 0.5],
+      end: [3, 0.5],
+      thickness: 0.2,
+    })
+    sceneApi.upsert(blockingWall as AnyNode)
+
+    const changed = syncCornerStyleGroupFromRun({
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      patch: { frontStyle: 'raised-arch' },
+      sceneApi,
+    })
+
+    expect(changed).toBe(true)
+    const allCabinets = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetNode | CabinetModuleNode =>
+        node.type === 'cabinet' || node.type === 'cabinet-module',
+    )
+    expect(allCabinets.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+  })
+
+  test('propagates front styling into a leg run that gained extra modules', () => {
+    const levelId = 'level_corner-style-extended-leg' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-style-extended-leg',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      children: ['cabinet-module_source-style-extended-leg'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-style-extended-leg',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      stack: [{ id: 'door-style-extended-leg', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    addCornerRun({ module, run, sceneApi, side: 'right' })
+
+    // Extending the leg gives it modules that don't match the derived-run
+    // spec names, which makes syncDerivedCornerRun's re-layout bail.
+    const legRun = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetNode => node.type === 'cabinet' && node.name === 'Corner Base Run',
+    )!
+    addCabinetModuleSide({ anchorModule: null, run: legRun, sceneApi, side: 'right' })
+
+    const changed = syncCornerStyleGroupFromRun({
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      patch: { frontStyle: 'raised-arch' },
+      sceneApi,
+    })
+
+    expect(changed).toBe(true)
+    const allCabinets = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetNode | CabinetModuleNode =>
+        node.type === 'cabinet' || node.type === 'cabinet-module',
+    )
+    expect(allCabinets.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+  })
+
   test('anchors the right bridge filler to the live source wall cabinet edge', () => {
     const levelId = 'level_corner-bridge-anchor-right' as AnyNodeId
     const run = CabinetNode.parse({

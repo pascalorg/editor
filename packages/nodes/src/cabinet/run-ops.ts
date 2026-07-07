@@ -363,6 +363,26 @@ function applyCabinetRunStylePatch(
   }
 }
 
+/**
+ * Push a style patch onto every corner run linked to a source module. Styles
+ * must reach the legs even when `syncDerivedCornerRun`'s geometric re-layout
+ * bails (a wall drawn later blocks the layout, a leg gained extra modules),
+ * so this applies the patch directly instead of riding on the layout sync.
+ */
+function applyStylePatchToLinkedCornerRuns(
+  sceneApi: SceneApi,
+  sourceModule: CabinetModuleNode,
+  patch: CabinetRunStylePatch,
+) {
+  const link = cornerSourceLink(sourceModule.metadata)
+  if (!link) return
+  for (const runId of link.linkedRunIds) {
+    const linkedRun = sceneApi.get<CabinetNode>(runId)
+    if (linkedRun?.type !== 'cabinet') continue
+    applyCabinetRunStylePatch(sceneApi, linkedRun, patch)
+  }
+}
+
 export function syncCornerStyleGroupFromRun({
   run,
   patch,
@@ -381,20 +401,16 @@ export function syncCornerStyleGroupFromRun({
 
   applyCabinetRunStylePatch(sceneApi, sourceRun, patch)
   const cornerSources = cornerSourceModulesForRun(sourceRun, sceneApi.nodes())
-  if (cornerSources.length === 0) {
-    const sourceModule =
-      sceneApi.get<CabinetModuleNode>(source.module.id as AnyNodeId) ?? source.module
-    syncCornerRunsFromSourceModule({
-      module: sourceModule,
-      run: sceneApi.get<CabinetNode>(sourceRun.id as AnyNodeId) ?? sourceRun,
-      sceneApi,
-    })
-    return true
-  }
+  const sourceModules =
+    cornerSources.length > 0
+      ? cornerSources
+      : [sceneApi.get<CabinetModuleNode>(source.module.id as AnyNodeId) ?? source.module]
 
-  for (const sourceModule of cornerSources) {
+  for (const sourceModule of sourceModules) {
+    const liveModule = sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId) ?? sourceModule
+    applyStylePatchToLinkedCornerRuns(sceneApi, liveModule, patch)
     syncCornerRunsFromSourceModule({
-      module: sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId) ?? sourceModule,
+      module: liveModule,
       run: sceneApi.get<CabinetNode>(sourceRun.id as AnyNodeId) ?? sourceRun,
       sceneApi,
     })
