@@ -25,6 +25,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
+import { flushGeometryDisposals, queueGeometryDispose } from '../../lib/deferred-dispose'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -168,6 +169,12 @@ export const RoofSystem = () => {
   useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
+    // Free geometries queued for disposal on a previous frame before doing any
+    // rebuild work. Flushing at frame start guarantees the WebGPU renderer has
+    // already released the RenderObject for each outgoing geometry, avoiding the
+    // mid-frame dispose race (Sentry MONOREPO-EDITOR-DK/EG/EH).
+    flushGeometryDisposals()
+
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
@@ -240,7 +247,7 @@ export const RoofSystem = () => {
             // while roofMaterials only has 4 entries. Three.js raycasts into invisible groups,
             // so MeshBVH hits groups[4].materialIndex → undefined.side → crash.
             if (mesh.geometry.type === 'BoxGeometry') {
-              mesh.geometry.dispose()
+              queueGeometryDispose(mesh.geometry)
               mesh.geometry = createDegenerateRoofPlaceholder()
             }
             mesh.position.set(
@@ -305,7 +312,9 @@ function updateRoofSegmentGeometry(
 ) {
   const newGeo = generateRoofSegmentGeometry(node, nodes)
 
-  mesh.geometry.dispose()
+  // Defer the outgoing live geometry's dispose — the WebGPU renderer still
+  // references it this frame (Sentry MONOREPO-EDITOR-DK/EG/EH).
+  queueGeometryDispose(mesh.geometry)
   mesh.geometry = newGeo
   computeGeometryBoundsTree(newGeo)
 
@@ -496,7 +505,8 @@ function updateMergedRoofGeometry(
     .filter((n): n is RoofSegmentNode => n !== undefined && !hasSegmentMaterialOverride(n))
 
   if (children.length === 0) {
-    mergedMesh.geometry.dispose()
+    // Defer the outgoing live geometry's dispose (Sentry MONOREPO-EDITOR-DK/EG/EH).
+    queueGeometryDispose(mergedMesh.geometry)
     // Not BoxGeometry: its 6 groups against the merged mesh's 4-material array
     // crash GLTFExporter (materials[4] → undefined) when the roof bakes.
     mergedMesh.geometry = createDegenerateRoofPlaceholder()
@@ -612,7 +622,8 @@ function updateMergedRoofGeometry(
 
       finalGeo.computeVertexNormals()
       ensureRenderableGeometryAttributes(finalGeo)
-      mergedMesh.geometry.dispose()
+      // Defer the outgoing live geometry's dispose (Sentry MONOREPO-EDITOR-DK/EG/EH).
+      queueGeometryDispose(mergedMesh.geometry)
       mergedMesh.geometry = finalGeo
 
       finalWallTrimmed.geometry.dispose()
