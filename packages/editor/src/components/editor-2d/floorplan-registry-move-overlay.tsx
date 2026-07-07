@@ -448,6 +448,11 @@ export function FloorplanRegistryMoveOverlay() {
     // ── Path 2 — generic free-floating translate ────────────────────
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
+    const sceneNodes = useScene.getState().nodes as Record<string, AnyNode>
+    const relatedEntryIds = collectFloorplanMoveEntryIds(movingNode.id as AnyNodeId, sceneNodes)
+    const relatedEntries = Array.from(relatedEntryIds)
+      .map((id) => scene.querySelector(`[data-node-id="${id}"]`) as SVGGElement | null)
+      .filter((value): value is SVGGElement => value != null)
 
     // Polyline kinds (duct / pipe / lineset) carry a `path`, not a
     // `position` — translating a `position` here would write a field their
@@ -486,12 +491,12 @@ export function FloorplanRegistryMoveOverlay() {
     // so its untransformed bbox IS the world-space footprint. Cache the
     // moving entry's local bbox once (relative to originalPosition) and
     // derive anchors at any proposed (sx, sz) by translating it.
-    const movingLocalBBox = entry.getBBox()
+    const movingLocalBBox = unionFloorplanEntryBBox(relatedEntries)
     const candidateAnchors: AlignmentAnchor[] = []
     const allEntries = scene.querySelectorAll('[data-node-id]')
     for (const el of Array.from(allEntries)) {
       const otherId = el.getAttribute('data-node-id')
-      if (!otherId || otherId === movingNode.id) continue
+      if (!otherId || relatedEntryIds.has(otherId as AnyNodeId)) continue
       const b = (el as SVGGraphicsElement).getBBox()
       // Skip only fully-degenerate (point) entries. A thin run (duct / pipe /
       // lineset drawn as a line) has one zero dimension but is still a valid
@@ -614,7 +619,9 @@ export function FloorplanRegistryMoveOverlay() {
 
       const dx = finalX - originalPosition[0]
       const dz = finalZ - originalPosition[2]
-      entry.setAttribute('transform', `translate(${dx} ${dz})`)
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.setAttribute('transform', `translate(${dx} ${dz})`)
+      }
       boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
       lastSnapped = [finalX, finalZ]
     }
@@ -650,7 +657,9 @@ export function FloorplanRegistryMoveOverlay() {
             : { path: nextPath }) as Partial<AnyNode>,
         )
         useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
-        entry.removeAttribute('transform')
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
         useAlignmentGuides.getState().clear()
         setMovingNode(null)
         swallowNextClick()
@@ -677,7 +686,9 @@ export function FloorplanRegistryMoveOverlay() {
         )
       }
       useViewer.getState().setSelection({ selectedIds: [selectedId] })
-      entry.removeAttribute('transform')
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
       useAlignmentGuides.getState().clear()
       setMovingNode(null)
       swallowNextClick()
@@ -694,7 +705,9 @@ export function FloorplanRegistryMoveOverlay() {
           useScene.getState().deleteNode(movingNode.id as AnyNodeId)
           if (wasTracking) temporal.resume()
         }
-        entry.removeAttribute('transform')
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
         useAlignmentGuides.getState().clear()
         setMovingNode(null)
       }
@@ -707,10 +720,14 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey)
-      entry.removeAttribute('transform')
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
       // Always un-hide on teardown so a committed copy shows and a
       // never-revealed entry doesn't leak a hidden style onto a reused node.
-      entry.style.visibility = ''
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.style.visibility = ''
+      }
       boxEl.remove()
       useAlignmentGuides.getState().clear()
     }
@@ -760,6 +777,51 @@ function deepEqual(a: unknown, b: unknown): boolean {
     return true
   }
   return false
+}
+
+function collectFloorplanMoveEntryIds(
+  rootId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): Set<AnyNodeId> {
+  const root = nodes[rootId]
+  if (root?.type !== 'cabinet' && root?.type !== 'cabinet-module') {
+    return new Set([rootId])
+  }
+
+  const ids = new Set<AnyNodeId>()
+  const queue: AnyNodeId[] = [rootId]
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    if (ids.has(id)) continue
+    const node = nodes[id]
+    if (node?.type !== 'cabinet' && node?.type !== 'cabinet-module') continue
+    ids.add(id)
+    for (const childId of node.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type === 'cabinet' || child?.type === 'cabinet-module') {
+        queue.push(childId as AnyNodeId)
+      }
+    }
+  }
+  return ids
+}
+
+function unionFloorplanEntryBBox(entries: readonly SVGGraphicsElement[]): DOMRect {
+  const first = entries[0]?.getBBox()
+  if (!first) return new DOMRect(0, 0, 0, 0)
+
+  let minX = first.x
+  let minY = first.y
+  let maxX = first.x + first.width
+  let maxY = first.y + first.height
+  for (const entry of entries.slice(1)) {
+    const box = entry.getBBox()
+    minX = Math.min(minX, box.x)
+    minY = Math.min(minY, box.y)
+    maxX = Math.max(maxX, box.x + box.width)
+    maxY = Math.max(maxY, box.y + box.height)
+  }
+  return new DOMRect(minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY))
 }
 
 function swallowNextClick() {

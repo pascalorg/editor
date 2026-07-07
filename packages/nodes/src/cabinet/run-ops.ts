@@ -1358,24 +1358,23 @@ export function syncCornerRunsFromSourceModule({
  * outer edge with no anchor). Gap-checked — returns null when a flush
  * neighbor leaves no room for a standard-width unit.
  */
-export function addCabinetModuleSide({
+export function planCabinetModuleSideAddition({
   anchorModule,
+  nodes,
   run,
-  sceneApi,
   side,
 }: {
   anchorModule: CabinetModuleNode | null
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
   run: CabinetNode
-  sceneApi: SceneApi
   side: 'left' | 'right'
-}): AnyNodeId | null {
-  const modules = cabinetModulesForRun(run, sceneApi.nodes())
-  const desiredWidth = CABINET_BASE_WIDTH
+}): CabinetModuleNode | null {
+  const modules = cabinetModulesForRun(run, nodes)
   const x = sideInsertX({
     anchorModule,
     modules,
     side,
-    width: desiredWidth,
+    width: CABINET_BASE_WIDTH,
     epsilon: CABINET_EDGE_EPSILON,
   })
   if (x == null) return null
@@ -1387,18 +1386,18 @@ export function addCabinetModuleSide({
     centerX: x,
     centerZ: z,
     depth,
-    desiredWidth,
-    nodes: sceneApi.nodes(),
+    desiredWidth: CABINET_BASE_WIDTH,
+    nodes,
     run,
     side,
     sourceNode: anchorModule ?? run,
   })
   if (width < MIN_CORNER_CONNECTED_WIDTH - WALL_CLEARANCE_EPSILON) return null
-  const module = CabinetModuleNodeSchema.parse({
+  return CabinetModuleNodeSchema.parse({
     name: `Base Cabinet ${modules.length + 1}`,
     parentId: run.id,
     position: [
-      side === 'left' ? x + (desiredWidth - width) / 2 : x - (desiredWidth - width) / 2,
+      side === 'left' ? x + (CABINET_BASE_WIDTH - width) / 2 : x - (CABINET_BASE_WIDTH - width) / 2,
       runModuleBaseY(run),
       z,
     ],
@@ -1412,6 +1411,26 @@ export function addCabinetModuleSide({
     showPlinth: false,
     withCountertop: false,
   })
+}
+
+export function addCabinetModuleSide({
+  anchorModule,
+  run,
+  sceneApi,
+  side,
+}: {
+  anchorModule: CabinetModuleNode | null
+  run: CabinetNode
+  sceneApi: SceneApi
+  side: 'left' | 'right'
+}): AnyNodeId | null {
+  const module = planCabinetModuleSideAddition({
+    anchorModule,
+    nodes: sceneApi.nodes(),
+    run,
+    side,
+  })
+  if (!module) return null
   sceneApi.upsert(module as AnyNode, run.id as AnyNodeId)
   bumpCabinetRunLayoutRevision(sceneApi, run)
   return module.id

@@ -8,7 +8,7 @@ import type {
 } from '@pascal-app/core'
 import { GAS_HOB_BURNER_RADIUS, gasHobBurners, inductionZones } from './geometry/cooktop'
 import { FAUCET_SETBACK, sinkBowls } from './geometry/sink'
-import { getRunSpans } from './run-layout'
+import { getRunSpanEnds, getRunSpans } from './run-layout'
 import {
   type CabinetCompartment,
   compartmentCooktopLayout,
@@ -62,16 +62,26 @@ export function buildCabinetFloorplan(
   const overhang = node.withCountertop ? node.countertopOverhang : 0
   const barEdge = node.barLedge?.edge
   const backOverhang = node.withCountertop && barEdge !== 'back' ? node.countertopBackOverhang : 0
+  const spanEnds = getRunSpanEnds(node, ctx, spans)
   const children: FloorplanGeometry[] = []
 
   for (const span of spans) {
     const spanIndex = spans.indexOf(span)
+    const ends = spanEnds[spanIndex]!
+    const hasSlab = node.withCountertop && span.hasCountertop
     // Countertop slab outline — the heavier line a kitchen plan reads first.
-    // Tall spans (no countertop) fall back to their carcass footprint.
-    const front = span.maxZ + (span.hasCountertop ? overhang : 0)
-    const back = span.minZ - (span.hasCountertop ? backOverhang : 0)
-    const left = span.minX - (span.hasCountertop && barEdge !== 'left' ? overhang : 0)
-    const right = span.maxX + (span.hasCountertop && barEdge !== 'right' ? overhang : 0)
+    // Tall spans (no countertop) fall back to their carcass footprint. Side
+    // overhangs come from the shared span-end math so neighbor runs, L-corner
+    // legs, and side bars trim the plan outline exactly like the 3D slab.
+    const front = span.maxZ + (hasSlab ? overhang : 0)
+    const slabBack = span.minZ - (hasSlab ? backOverhang : 0)
+    // A finished decorative back panel adds real depth behind the carcass.
+    const back = Math.min(
+      slabBack,
+      node.withFinishedBack ? span.minZ - node.boardThickness : span.minZ,
+    )
+    const left = span.minX - (hasSlab ? ends.leftOverhang : 0)
+    const right = span.maxX + (hasSlab ? ends.rightOverhang : 0)
     children.push({
       kind: 'rect',
       x: left,
@@ -106,9 +116,9 @@ export function buildCabinetFloorplan(
             }
           : {
               x: barEdge === 'left' ? span.minX - node.barLedge.depth : span.maxX,
-              y: back,
+              y: slabBack,
               width: node.barLedge.depth,
-              height: Math.max(0.01, front - back),
+              height: Math.max(0.01, front - slabBack),
             }
       children.push({
         kind: 'rect',
@@ -132,7 +142,10 @@ export function buildCabinetModuleFloorplan(
   const world = resolveCabinetWorldPose(node, ctx)
   const parent = resolveCabinetParent(node.parentId as AnyNodeId | undefined, ctx)
   return buildModuleSymbol(node, world.position, world.rotation, ctx, {
-    aboveCutPlane: parent?.type === 'cabinet-module' ? true : parent?.type === 'cabinet' && parent.runTier === 'wall',
+    aboveCutPlane:
+      parent?.type === 'cabinet-module'
+        ? true
+        : parent?.type === 'cabinet' && parent.runTier === 'wall',
   })
 }
 
@@ -160,7 +173,10 @@ function resolveCabinetParent(
   ctx: GeometryContext,
 ): CabinetNode | CabinetModuleNode | null {
   if (!id) return null
-  if (ctx.parent?.id === id && (ctx.parent.type === 'cabinet' || ctx.parent.type === 'cabinet-module')) {
+  if (
+    ctx.parent?.id === id &&
+    (ctx.parent.type === 'cabinet' || ctx.parent.type === 'cabinet-module')
+  ) {
     return ctx.parent
   }
   const resolved = ctx.resolve(id)

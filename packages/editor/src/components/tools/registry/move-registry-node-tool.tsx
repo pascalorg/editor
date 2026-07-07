@@ -12,6 +12,7 @@ import {
   type EventSuffix,
   emitter,
   footprintAABBFrom,
+  getFloorPlacedFootprints,
   type GridEvent,
   movingFootprintAnchors,
   type NodeEvent,
@@ -484,14 +485,42 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         setValid(true)
         return
       }
-      const [x, y, z] = getVisualPosition(lastCursorRef.current)
-      const { valid: placeable } = spatialGridManager.canPlaceOnFloor(
-        levelId,
-        [x, y, z],
-        boxDimensions,
-        [0, previewRotationY(rotationRef.current), 0],
-        [node.id],
-      )
+      const livePosition = lastCursorRef.current
+      const liveRotation = previewRotationY(rotationRef.current)
+      const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+      const effectiveNode = {
+        ...(node as Record<string, unknown>),
+        position: livePosition,
+        rotation: Array.isArray((node as { rotation?: unknown }).rotation)
+          ? [
+              (((node as { rotation?: unknown }).rotation as [number?, number?, number?])[0] ?? 0),
+              rotationRef.current,
+              (((node as { rotation?: unknown }).rotation as [number?, number?, number?])[2] ?? 0),
+            ]
+          : rotationRef.current,
+      } as AnyNode
+      const footprints = floorPlaced
+        ? getFloorPlacedFootprints(floorPlaced, effectiveNode, { nodes: useScene.getState().nodes })
+        : []
+      const resolvedFootprints: Array<{
+        position: [number, number, number]
+        dimensions: [number, number, number]
+        rotation: [number, number, number]
+      }> = footprints.map((footprint) => ({
+        position: footprint.position ?? livePosition,
+        dimensions: footprint.dimensions,
+        rotation: footprint.rotation,
+      }))
+      const { valid: placeable } =
+        resolvedFootprints.length > 0
+          ? spatialGridManager.canPlaceOnFloorFootprints(levelId, resolvedFootprints, [node.id])
+          : spatialGridManager.canPlaceOnFloor(
+              levelId,
+              getVisualPosition(livePosition),
+              boxDimensions,
+              [0, liveRotation, 0],
+              [node.id],
+            )
       validRef.current = placeable
       setValid(placeable)
     }

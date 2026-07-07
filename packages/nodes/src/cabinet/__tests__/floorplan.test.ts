@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AnyNode, FloorplanGeometry, GeometryContext } from '@pascal-app/core'
 import { cabinetDefinition } from '../definition'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from '../floorplan'
+import { cabinetFloorplanSiblingOverrides } from '../floorplan-overrides'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 function makeContext(overrides: Partial<GeometryContext> = {}): GeometryContext {
@@ -95,6 +96,94 @@ describe('buildCabinetFloorplan', () => {
     expect(rects[0]!.width).toBeCloseTo(1.24)
   })
 
+  // 2D ↔ 3D parity: the plan outline must trim its side overhang exactly
+  // where the 3D slab does (adjacent collinear runs, L-corner mating edges,
+  // finished backs) — otherwise abutting runs draw overlapping countertops
+  // in plan that don't exist in 3D.
+  test('adjacent collinear sibling run suppresses that side overhang in plan', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_adjacent-a',
+      position: [0, 0, 0],
+      countertopOverhang: 0.02,
+      children: ['cabinet-module_adjacent-a'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_adjacent-a',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+    // Sibling run flush against this run's right edge (0.3 + 0.3).
+    const sibling = CabinetNode.parse({
+      id: 'cabinet_adjacent-b',
+      position: [0.6, 0, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+
+    const geometry = buildCabinetFloorplan(
+      run,
+      makeContext({ children: [module] as AnyNode[], siblings: [sibling] as AnyNode[] }),
+    )
+    const body = primitives(geometry, 'rect')[0] as Extract<FloorplanGeometry, { kind: 'rect' }>
+    // Left edge keeps the overhang; right edge is flush against the sibling.
+    expect(body.x).toBeCloseTo(-0.32)
+    expect(body.width).toBeCloseTo(0.62)
+  })
+
+  test('derived L-corner base leg draws flush on its mating edge', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_corner-leg',
+      countertopOverhang: 0.02,
+      children: ['cabinet-module_corner-leg'],
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'right',
+          sourceModuleId: 'cabinet-module_src',
+          sourceRunId: 'cabinet_src',
+        },
+      },
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-leg',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+
+    const geometry = buildCabinetFloorplan(run, makeContext({ children: [module] as AnyNode[] }))
+    const body = primitives(geometry, 'rect')[0] as Extract<FloorplanGeometry, { kind: 'rect' }>
+    // side 'right' mates on the leg's first-span left edge → flush left.
+    expect(body.x).toBeCloseTo(-0.3)
+    expect(body.width).toBeCloseTo(0.62)
+  })
+
+  test('finished back extends the plan footprint by the board thickness', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-back',
+      withFinishedBack: true,
+      countertopOverhang: 0.02,
+      countertopBackOverhang: 0,
+      boardThickness: 0.018,
+      children: ['cabinet-module_finished-back'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_finished-back',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+
+    const geometry = buildCabinetFloorplan(run, makeContext({ children: [module] as AnyNode[] }))
+    const body = primitives(geometry, 'rect')[0] as Extract<FloorplanGeometry, { kind: 'rect' }>
+    expect(body.y).toBeCloseTo(-0.29 - 0.018)
+    expect(body.height).toBeCloseTo(0.58 + 0.018 + 0.02)
+  })
+
   test('nested L-leg runs compose their source module transform in floorplan space', () => {
     const sourceRun = CabinetNode.parse({
       id: 'cabinet_source-run-floorplan-nested',
@@ -130,7 +219,8 @@ describe('buildCabinetFloorplan', () => {
       makeContext({
         parent: sourceModule as AnyNode,
         children: [childModule] as AnyNode[],
-        resolve: ((id: string) => (id === sourceRun.id ? sourceRun : undefined)) as GeometryContext['resolve'],
+        resolve: ((id: string) =>
+          id === sourceRun.id ? sourceRun : undefined) as GeometryContext['resolve'],
       }),
     ) as Extract<FloorplanGeometry, { kind: 'group' }>
 
@@ -243,6 +333,77 @@ describe('buildCabinetFloorplan', () => {
     )
 
     expect(transformed.kind).toBe('group')
+    expect(transformed.transform?.translate?.[0]).toBeCloseTo(expectedWorld.position[0])
+    expect(transformed.transform?.translate?.[1]).toBeCloseTo(expectedWorld.position[2])
+    expect(transformed.transform?.rotate).toBeCloseTo(-expectedWorld.rotation)
+  })
+
+  test('live parent overrides move nested cabinet symbols before commit', () => {
+    const sourceRun = CabinetNode.parse({
+      id: 'cabinet_source-run-floorplan-live',
+      position: [1.2, 0, 2.4],
+      rotation: Math.PI / 2,
+      children: ['cabinet-module_source-run-floorplan-live'],
+    })
+    const sourceModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-run-floorplan-live',
+      parentId: sourceRun.id,
+      position: [0.45, 0.1, -0.12],
+      rotation: Math.PI / 4,
+      width: 0.9,
+      depth: 0.58,
+      children: ['cabinet_child-run-floorplan-live'],
+    })
+    const childRun = CabinetNode.parse({
+      id: 'cabinet_child-run-floorplan-live',
+      parentId: sourceModule.id,
+      position: [0.3, 0, -0.2],
+      rotation: -Math.PI / 2,
+      children: ['cabinet-module_child-run-floorplan-live'],
+    })
+    const childModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_child-run-floorplan-live',
+      parentId: childRun.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+
+    const nodes = {
+      [sourceRun.id]: sourceRun,
+      [sourceModule.id]: sourceModule,
+      [childRun.id]: childRun,
+      [childModule.id]: childModule,
+    } as Record<string, AnyNode>
+    const contextNodes = cabinetFloorplanSiblingOverrides({
+      nodeId: childRun.id,
+      nodes,
+      liveOverrides: new Map([[sourceRun.id, { position: [3.2, 0, 4.4] }]]),
+    })
+
+    const geometry = buildCabinetFloorplan(
+      contextNodes[childRun.id] as typeof childRun,
+      makeContext({
+        parent: contextNodes[sourceModule.id] as AnyNode,
+        children: [contextNodes[childModule.id] as AnyNode],
+        resolve: ((id: string) => contextNodes[id]) as GeometryContext['resolve'],
+      }),
+    ) as Extract<FloorplanGeometry, { kind: 'group' }>
+
+    const transformed = geometry.children[0] as Extract<FloorplanGeometry, { kind: 'group' }>
+    const sourceModuleWorld = composeWorldPose(
+      [3.2, 0, 4.4],
+      sourceRun.rotation,
+      sourceModule.position,
+      sourceModule.rotation,
+    )
+    const expectedWorld = composeWorldPose(
+      sourceModuleWorld.position,
+      sourceModuleWorld.rotation,
+      childRun.position,
+      childRun.rotation,
+    )
+
     expect(transformed.transform?.translate?.[0]).toBeCloseTo(expectedWorld.position[0])
     expect(transformed.transform?.translate?.[1]).toBeCloseTo(expectedWorld.position[2])
     expect(transformed.transform?.rotate).toBeCloseTo(-expectedWorld.rotation)

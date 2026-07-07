@@ -390,13 +390,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     for (const [id] of liveTransforms) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (node && (def?.floorplanDependsOnSiblings || def?.floorplanSiblingOverrides)) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
     for (const [id] of liveOverrides) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (node && (def?.floorplanDependsOnSiblings || def?.floorplanSiblingOverrides)) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
@@ -1464,7 +1466,12 @@ function buildFloorplanEntryGeometry({
   }
 
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId,
+        nodes,
+        liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
+      })
     : nodes
   const sourceNode = contextNodes !== nodes ? (contextNodes[nodeId] ?? node) : node
   const overrideNode = liveOverride ? ({ ...sourceNode, ...liveOverride } as AnyNode) : sourceNode
@@ -1538,7 +1545,12 @@ export function getFloorplanLevelData(
 
   const computeLevelData = def.computeFloorplanLevelData as FloorplanLevelDataHook
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId: sampleId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId: sampleId,
+        nodes,
+        liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
+      })
     : nodes
   const siblings: AnyNode[] = []
   for (const id of ids) {
@@ -2629,7 +2641,7 @@ function endpointKey(x: number, y: number): string {
 //   - a gutter join depends on sibling gutters under the same roof.
 // Everything else stays cached, so dragging one wall/opening rebuilds a handful
 // of geometries rather than every wall + opening on the level.
-function computeAffectedSiblingIds(
+export function computeAffectedSiblingIds(
   liveFlaggedIds: readonly AnyNodeId[],
   nodes: Record<string, AnyNode>,
   liveOverrides: Map<string, Record<string, unknown>>,
@@ -2655,6 +2667,36 @@ function computeAffectedSiblingIds(
       }
     }
     return junctions.get(endpointKey(x, y)) ?? []
+  }
+
+  const addCabinetFamily = (startId: AnyNodeId) => {
+    const visited = new Set<AnyNodeId>()
+    const queue: AnyNodeId[] = [startId]
+    while (queue.length > 0) {
+      const id = queue.pop()!
+      if (visited.has(id)) continue
+      visited.add(id)
+      const node = nodes[id]
+      if (node?.type !== 'cabinet' && node?.type !== 'cabinet-module') continue
+      affected.add(id)
+
+      const parentId = node.parentId as AnyNodeId | undefined
+      const liveParentId = (liveOverrides.get(id) as { parentId?: string } | undefined)
+        ?.parentId as AnyNodeId | undefined
+      for (const nextParentId of [parentId, liveParentId]) {
+        const parent = nextParentId ? nodes[nextParentId] : null
+        if (nextParentId && (parent?.type === 'cabinet' || parent?.type === 'cabinet-module')) {
+          queue.push(nextParentId)
+        }
+      }
+
+      for (const childId of node.children ?? []) {
+        const child = nodes[childId as AnyNodeId]
+        if (child?.type === 'cabinet' || child?.type === 'cabinet-module') {
+          queue.push(childId as AnyNodeId)
+        }
+      }
+    }
   }
 
   for (const id of liveFlaggedIds) {
@@ -2699,6 +2741,8 @@ function computeAffectedSiblingIds(
           }
         }
       }
+    } else if (node.type === 'cabinet' || node.type === 'cabinet-module') {
+      addCabinetFamily(id)
     }
   }
   return affected

@@ -3,12 +3,14 @@ import type {
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
+  FloorPlacedFootprint,
   HandleDescriptor,
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
 import { selectionProxyIdFromMetadata } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
+import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { buildCabinetGeometry } from './geometry'
 import { toggleCabinetOperationState } from './interaction'
@@ -51,6 +53,73 @@ type CabinetLocalBounds = {
   maxZ: number
   size: [number, number, number]
   center: [number, number, number]
+}
+
+function appendCabinetFloorPlacedFootprints(
+  run: CabinetNodeType,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  parentPosition: [number, number, number],
+  parentRotation: number,
+  footprints: FloorPlacedFootprint[],
+) {
+  const cos = Math.cos(parentRotation)
+  const sin = Math.sin(parentRotation)
+  const runPosition: [number, number, number] = [
+    parentPosition[0] + run.position[0] * cos + run.position[2] * sin,
+    parentPosition[1] + run.position[1],
+    parentPosition[2] - run.position[0] * sin + run.position[2] * cos,
+  ]
+  const runRotation = parentRotation + run.rotation
+
+  const modules = cabinetModulesForRun(run, nodes)
+  if (modules.length > 0) {
+    const runCos = Math.cos(runRotation)
+    const runSin = Math.sin(runRotation)
+    for (const module of modules) {
+      const modulePosition: [number, number, number] = [
+        runPosition[0] + module.position[0] * runCos + module.position[2] * runSin,
+        runPosition[1] + module.position[1],
+        runPosition[2] - module.position[0] * runSin + module.position[2] * runCos,
+      ]
+      footprints.push({
+        position: modulePosition,
+        dimensions: [module.width, cabinetTotalHeight(module), module.depth],
+        rotation: [0, runRotation + module.rotation, 0],
+      })
+    }
+  } else {
+    footprints.push({
+      position: runPosition,
+      dimensions: [run.width, cabinetTotalHeight(run), run.depth],
+      rotation: [0, runRotation, 0],
+    })
+  }
+
+  for (const childId of run.children ?? []) {
+    const child = nodes[childId as AnyNodeId]
+    if (isCabinetRun(child)) {
+      appendCabinetFloorPlacedFootprints(child, nodes, runPosition, runRotation, footprints)
+    }
+  }
+}
+
+export function cabinetFloorPlacedFootprints(
+  node: CabinetNodeType,
+  nodes?: Readonly<Record<AnyNodeId, AnyNode>>,
+): FloorPlacedFootprint[] {
+  if (!nodes) {
+    return [
+      {
+        position: [...node.position] as [number, number, number],
+        dimensions: [node.width, cabinetTotalHeight(node), node.depth],
+        rotation: [0, node.rotation, 0],
+      },
+    ]
+  }
+
+  const footprints: FloorPlacedFootprint[] = []
+  appendCabinetFloorPlacedFootprints(node, nodes, [0, 0, 0], 0, footprints)
+  return footprints
 }
 
 const SIDE_HANDLE_OFFSET = 0.18
@@ -784,19 +853,11 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       },
     },
     floorPlaced: {
-      footprint: (node) => {
-        const n = node as CabinetNodeType
-        return {
-          dimensions: [
-            n.width,
-            (n.showPlinth ? n.plinthHeight : 0) +
-              n.carcassHeight +
-              (n.withCountertop ? n.countertopThickness : 0),
-            n.depth,
-          ] as [number, number, number],
-          rotation: [0, n.rotation, 0] as [number, number, number],
-        }
-      },
+      footprints: (node, ctx) =>
+        cabinetFloorPlacedFootprints(
+          node as CabinetNodeType,
+          ctx?.nodes as Readonly<Record<AnyNodeId, AnyNode>> | undefined,
+        ),
       collides: true,
     },
     alignmentFootprint: (node, nodes) => {
@@ -863,6 +924,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetFloorplan,
+  floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
   quickActions: cabinetQuickActions,
   // Corner-derived leg runs hide their own tree rows; their modules are
   // flattened into the source run's hierarchy.
@@ -880,10 +942,11 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
+    { key: 'C', label: 'Single / continuous run' },
     { key: 'R / T', label: 'Rotate ±45°' },
     { key: 'Shift+R', label: 'Rotate reverse' },
     { key: 'I', label: 'Island mode' },
-    { key: 'Esc', label: 'Exit' },
+    { key: 'Esc', label: 'Cancel run / exit' },
   ],
 
   presentation: {
@@ -1014,6 +1077,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetModuleFloorplan,
+  floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
   // 2D ↔ 3D parity: module position is run-local, so the generic overlay's
   // plan-space translate would corrupt it on any rotated / offset run.
   floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,

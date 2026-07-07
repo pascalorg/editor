@@ -1042,6 +1042,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   floorplanSiblingOverrides?: (args: {
     nodeId: AnyNodeId
     nodes: Record<AnyNodeId, AnyNode>
+    liveTransforms: Map<string, LiveTransformLike>
     liveOverrides: Map<string, Record<string, unknown>>
   }) => Record<AnyNodeId, AnyNode>
   /**
