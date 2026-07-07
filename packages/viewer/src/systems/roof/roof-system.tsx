@@ -25,7 +25,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
-import { flushGeometryDisposals, queueGeometryDispose } from '../../lib/deferred-dispose'
+import { queueGeometryDispose } from '../../lib/deferred-dispose'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -169,11 +169,12 @@ export const RoofSystem = () => {
   useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
-    // Free geometries queued for disposal on a previous frame before doing any
-    // rebuild work. Flushing at frame start guarantees the WebGPU renderer has
-    // already released the RenderObject for each outgoing geometry, avoiding the
-    // mid-frame dispose race (Sentry MONOREPO-EDITOR-DK/EG/EH).
-    flushGeometryDisposals()
+    // Geometries queued for disposal on a previous frame are flushed by the
+    // dedicated `GeometryDisposalFlushSystem` (negative frame priority), which
+    // runs before any rebuild system queues new disposals. Flushing here would
+    // run *after* GeometrySystem's rebuild in the same frame and could dispose
+    // geometries it just queued, before the render pass — reintroducing the
+    // dispose race (Sentry MONOREPO-EDITOR-DK/EG/EH).
 
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {

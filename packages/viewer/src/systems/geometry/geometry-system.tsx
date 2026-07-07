@@ -13,7 +13,7 @@ import {
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type BufferGeometry, FrontSide, type Group, type Material, type Mesh } from 'three'
-import { flushGeometryDisposals, queueGeometryDispose } from '../../lib/deferred-dispose'
+import { queueGeometryDispose } from '../../lib/deferred-dispose'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -106,12 +106,11 @@ export const GeometrySystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
-    // Free any geometries queued for disposal on a previous frame. Doing this
-    // at the START of the frame (before rebuild) guarantees the WebGPU renderer
-    // has already released its RenderObject for the outgoing geometry, avoiding
-    // the mid-frame dispose race (Sentry MONOREPO-EDITOR-DK/EG/EH).
-    flushGeometryDisposals()
-
+    // Geometries queued for disposal on a previous frame are flushed by the
+    // dedicated `GeometryDisposalFlushSystem`, which runs at a negative frame
+    // priority ahead of every rebuild system. Flushing here would risk
+    // disposing geometries queued by another system *this* frame, before the
+    // render pass (Sentry MONOREPO-EDITOR-DK/EG/EH).
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
 

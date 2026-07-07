@@ -41,9 +41,12 @@ export function queueGeometryDispose(geometry: BufferGeometry | null | undefined
 }
 
 /**
- * Dispose everything queued since the last flush. Call once at the top of a
- * `useFrame` callback, before any rebuild work runs, so the renderer has had a
- * full frame to release the outgoing geometries' RenderObjects.
+ * Dispose everything queued since the last flush. Called once per frame by
+ * `GeometryDisposalFlushSystem` at a negative `useFrame` priority, before any
+ * rebuild system runs, so the renderer has had a full frame to release the
+ * outgoing geometries' RenderObjects. Do not call this from a rebuild
+ * system's `useFrame` — doing so risks disposing geometries queued by another
+ * system in the same frame, before the render pass.
  */
 export function flushGeometryDisposals(): void {
   if (pendingGeometryDisposals.size === 0) return
