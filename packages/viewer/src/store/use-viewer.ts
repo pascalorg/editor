@@ -49,6 +49,10 @@ type ViewerState = {
   isExporting: boolean
   setExporting: (value: boolean) => void
 
+  /** Suspend the render loop while the canvas is fully covered (e.g. studio gallery). */
+  renderPaused: boolean
+  setRenderPaused: (value: boolean) => void
+
   shading: RenderShading
   shadingByContext: Partial<Record<RenderContext, RenderShading>>
   setShading: (shading: RenderShading) => void
@@ -232,6 +236,9 @@ const useViewer = create<ViewerState>()(
 
       isExporting: false,
       setExporting: (value) => set({ isExporting: value }),
+
+      renderPaused: false,
+      setRenderPaused: (value) => set({ renderPaused: value }),
 
       shading: 'rendered',
       shadingByContext: {},

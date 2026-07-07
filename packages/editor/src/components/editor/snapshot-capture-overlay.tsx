@@ -497,8 +497,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Top-center HUD — what the shot will be */}
-      {!isMobile && (
+      {/* Top-center HUD — what the shot will be. Preset captures are a fixed
+          square and carry their own "Frame your item" banner up there. */}
+      {!isMobile && !isPreset && (
         <div className="pointer-events-none absolute top-4 left-1/2 flex -translate-x-1/2 gap-2">
           <div className={HUD_CHIP_CLASS}>
             <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
@@ -600,7 +601,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           </div>
         )}
 
-        {!isMobile && (
+        {/* Preset captures carry their own "Frame your item" banner — the
+            snapshot pitch only applies to the studio/reference flow. */}
+        {!isMobile && !isPreset && (
           <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
             A <b className="font-semibold text-white">snapshot</b>
             {' freezes this exact camera angle as a reusable reference for renders & videos.'}
@@ -608,7 +611,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         )}
 
         <button
-          aria-label="Take snapshot"
+          aria-label={isPreset ? 'Capture' : 'Take snapshot'}
           className="group pointer-events-auto relative grid h-14 w-14 place-items-center rounded-full disabled:opacity-50"
           disabled={captureDisabled}
           onClick={handleCapture}
@@ -634,7 +637,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
             ? 'Capturing…'
             : captureState === 'saved'
               ? 'Saved'
-              : 'Take snapshot'}
+              : isPreset
+                ? 'Capture'
+                : 'Take snapshot'}
         </span>
       </div>
     </div>
