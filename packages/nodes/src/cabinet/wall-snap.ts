@@ -7,9 +7,8 @@ import {
   getWallThickness,
   type WallNode,
 } from '@pascal-app/core'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
 import type { WallHit } from '../shared/wall-attach-target'
-import { projectWallLocalPointToPlan } from '../shared/wall-attach-target'
+import { findClosestWallInPlan, projectWallLocalPointToPlan } from '../shared/wall-attach-target'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 
 const EDGE_SNAP_THRESHOLD = 0.08

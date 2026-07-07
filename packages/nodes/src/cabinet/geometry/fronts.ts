@@ -52,10 +52,7 @@ function resolveShakerFrameSize(width: number, height: number): number {
 function resolveRaisedArchFrameSize(width: number, height: number): number {
   return Math.min(
     RAISED_ARCH_FRAME_MAX,
-    Math.max(
-      RAISED_ARCH_FRAME_MIN,
-      Math.min(width, height) * (height >= 0.22 ? 0.17 : 0.21),
-    ),
+    Math.max(RAISED_ARCH_FRAME_MIN, Math.min(width, height) * (height >= 0.22 ? 0.17 : 0.21)),
   )
 }
 

@@ -74,8 +74,8 @@ export {
   polygonsOverlap,
   segmentsIntersect,
 } from './lib/polygon-relations'
-export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
+export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   deriveSlotId,
   isSlotMaterialName,
@@ -106,7 +106,6 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
-export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
@@ -136,6 +135,7 @@ export type {
 export * from './registry'
 export * from './schema'
 export * from './services'
+export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,

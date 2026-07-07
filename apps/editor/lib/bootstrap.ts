@@ -6,6 +6,7 @@ import {
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'
+import { type EditorPlugin, registerEditorPluginPanels } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -73,6 +74,7 @@ export async function loadExternalPlugins(): Promise<void> {
   const externals = await discoverPlugins()
   for (const plugin of externals) {
     await loadPlugin(plugin)
+    registerEditorPluginPanels(plugin as EditorPlugin)
   }
   if (isDev() && externals.length > 0 && typeof console !== 'undefined') {
     console.info(`[pascal:registry] + ${externals.length} discovered plugin(s)`)

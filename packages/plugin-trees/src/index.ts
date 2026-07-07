@@ -1,4 +1,5 @@
-import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import type { AnyNodeDefinition } from '@pascal-app/core'
+import type { EditorPlugin } from '@pascal-app/editor'
 // Side-effect: subscribes the panel store to `selection:find-node` so the
 // host's "find in catalog" lands on the right Nature section (see find-sync.ts).
 import './find-sync'
@@ -14,7 +15,7 @@ import { grassDefinition } from './grass-definition'
  * (`Trees`). Cast mirrors the built-in bundle: `AnyNodeDefinition` is the
  * hand-maintained union today; the registry derives it post-migration.
  */
-export const treesPlugin: Plugin = {
+export const treesPlugin: EditorPlugin = {
   id: 'pascal:trees',
   apiVersion: 1,
   nodes: [

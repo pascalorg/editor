@@ -608,7 +608,8 @@ export function FloorplanRegistryMoveOverlay() {
           nodes: useScene.getState().nodes as Record<string, AnyNode>,
           levelId:
             (useViewer.getState().selection.levelId as AnyNodeId | null) ??
-            ((movingNode.parentId as AnyNodeId | undefined) ?? null),
+            (movingNode.parentId as AnyNodeId | undefined) ??
+            null,
         })
         if (snappedPosition) {
           finalX = snappedPosition[0]

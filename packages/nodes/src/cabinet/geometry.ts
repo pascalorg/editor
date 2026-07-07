@@ -92,8 +92,7 @@ export function buildCabinetGeometry(
   const openingWidth = innerWidth
   const openingDepth = Math.max(0.01, depth - backInset - 0.02 - insetInteriorClearance)
   const drawerBoxBackZ = -depth / 2 + backInset + 0.02
-  const drawerBoxFrontZ =
-    frontZ - frontThickness / 2 - 0.001 - insetInteriorClearance
+  const drawerBoxFrontZ = frontZ - frontThickness / 2 - 0.001 - insetInteriorClearance
   const drawerBoxDepth = Math.max(0.05, drawerBoxFrontZ - drawerBoxBackZ)
   const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetNode) : null
   const isWallCornerFiller = node.moduleKind === 'corner-filler' && parentRun?.runTier === 'wall'
@@ -105,10 +104,7 @@ export function buildCabinetGeometry(
       1,
       stackForCabinet(node)
         .filter((compartment) => compartment.type === 'door')
-        .reduce(
-          (best, compartment) => Math.max(best, compartmentShelfCount(compartment)),
-          0,
-        ),
+        .reduce((best, compartment) => Math.max(best, compartmentShelfCount(compartment)), 0),
     )
     if (!openLeft) {
       const leftSideInset = isWallCornerFiller && openRight ? CORNER_FILLER_SIDE_INSET / 2 : 0
@@ -315,11 +311,7 @@ export function buildCabinetGeometry(
     addBox(
       group,
       [openingWidth, Math.max(0.001, row.height - board), backThickness],
-      [
-        innerCenterX,
-        subCellBottomY + row.height / 2,
-        -depth / 2 + backInset + backThickness / 2,
-      ],
+      [innerCenterX, subCellBottomY + row.height / 2, -depth / 2 + backInset + backThickness / 2],
       materials.carcass,
       `cabinet-back-${index}`,
       'carcass',

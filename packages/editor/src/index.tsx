@@ -318,6 +318,13 @@ export {
   type PlanarPoint,
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
+export {
+  type EditorPlugin,
+  type EditorPluginPanel,
+  type PluginPanelWorkspace,
+  pluginPanelRegistry,
+  registerEditorPluginPanels,
+} from './lib/plugin-panels'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item

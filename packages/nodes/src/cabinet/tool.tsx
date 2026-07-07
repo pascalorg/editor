@@ -39,12 +39,12 @@ import {
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
 import {
+  type CabinetStretchPreview,
   cabinetStretchEndLocalX,
   cabinetStretchExitSide,
   isForcePlacementEvent,
   planCabinetContinuousStretch,
   resolveCabinetContinuousValidity,
-  type CabinetStretchPreview,
   type StretchAnchor,
 } from './continuous-placement'
 import {
@@ -355,12 +355,11 @@ const CabinetTool = () => {
       const result =
         footprints.length > 0
           ? spatialGridManager.canPlaceOnFloorFootprints(activeLevelId, footprints)
-          : spatialGridManager.canPlaceOnFloor(
-              activeLevelId,
-              next.position,
-              placementDimensions,
-              [0, next.yaw, 0],
-            )
+          : spatialGridManager.canPlaceOnFloor(activeLevelId, next.position, placementDimensions, [
+              0,
+              next.yaw,
+              0,
+            ])
       return { ...next, conflictIds: result.conflictIds, valid: result.valid }
     }
 
@@ -436,10 +435,11 @@ const CabinetTool = () => {
         previewWidth: previewNode.width,
         rawPlanPosition: raw,
       })
-      const spanCenter = runLocalToPlan(
-        { position: anchor.position, rotation: anchor.yaw },
-        [stretch.centerLocalX, 0, 0],
-      )
+      const spanCenter = runLocalToPlan({ position: anchor.position, rotation: anchor.yaw }, [
+        stretch.centerLocalX,
+        0,
+        0,
+      ])
       const result = resolveCabinetContinuousValidity(
         spatialGridManager.canPlaceOnFloor(
           activeLevelId,
@@ -477,7 +477,10 @@ const CabinetTool = () => {
       const yaw =
         exitSide === 'right' ? segment.anchor.yaw - Math.PI / 2 : segment.anchor.yaw + Math.PI / 2
       const position = runLocalToPlan(
-        { position: [shiftedCorner[0], segment.anchor.position[1], shiftedCorner[1]], rotation: yaw },
+        {
+          position: [shiftedCorner[0], segment.anchor.position[1], shiftedCorner[1]],
+          rotation: yaw,
+        },
         [previewNode.depth / 2, 0, previewNode.depth / 2],
       )
       return {
@@ -577,7 +580,9 @@ const CabinetTool = () => {
         const first = segments[0]!
         const { cabinet, buildModule } = buildRunNodes(first.anchor.position, first.anchor.yaw)
         sceneApi.upsert(cabinet, activeLevelId)
-        const firstModules = first.stretch.modules.map((m, index) => buildModule(m.x, m.width, index))
+        const firstModules = first.stretch.modules.map((m, index) =>
+          buildModule(m.x, m.width, index),
+        )
         for (const module of firstModules) sceneApi.upsert(module, cabinet.id as AnyNodeId)
         bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
 
@@ -594,11 +599,13 @@ const CabinetTool = () => {
             side: cabinetStretchExitSide(previous.stretch),
           })
           if (!connectedId) throw new Error('Unable to create cabinet corner')
-          const connectedModule = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
+          const connectedModule =
+            sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
           const nextRun = connectedModule?.parentId
             ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
             : null
-          if (!connectedModule || !nextRun) throw new Error('Unable to resolve connected corner run')
+          if (!connectedModule || !nextRun)
+            throw new Error('Unable to resolve connected corner run')
 
           let accumulatedWidth = connectedModule.width
           let anchorModule = connectedModule
@@ -653,8 +660,9 @@ const CabinetTool = () => {
         const segment = { anchor, stretch: next.stretch }
         const segments = [...draftSegmentsRef.current, segment]
         const detail =
-          ((event as { nativeEvent?: { detail?: number } }).nativeEvent?.detail as number | undefined) ??
-          1
+          ((event as { nativeEvent?: { detail?: number } }).nativeEvent?.detail as
+            | number
+            | undefined) ?? 1
         if (detail >= 2) {
           finishDraft(segments, event)
           return

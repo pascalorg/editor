@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { BufferAttribute, Mesh } from 'three'
-import { CabinetModuleNode } from '../schema'
 import { buildCabinetGeometry } from '../geometry'
+import { CabinetModuleNode } from '../schema'
 
 function findMeshByNamePattern(root: { children: unknown[] }, pattern: RegExp): Mesh {
   const queue = [...root.children]
@@ -23,10 +23,7 @@ function findMeshByNamePrefix(root: { children: unknown[] }, prefix: string): Me
   throw new Error(`Mesh not found with prefix: ${prefix}`)
 }
 
-function frontProfileStats(
-  mesh: Mesh,
-  recessTolerance = 0.001,
-) {
+function frontProfileStats(mesh: Mesh, recessTolerance = 0.001) {
   const position = mesh.geometry.getAttribute('position') as BufferAttribute
   let frameMaxZ = -Infinity
   for (let i = 0; i < position.count; i += 1) frameMaxZ = Math.max(frameMaxZ, position.getZ(i))

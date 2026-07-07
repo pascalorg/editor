@@ -118,7 +118,10 @@ function geometryContext({
 }
 
 function sceneApiFixture(seed: AnyNode[]) {
-  const nodes = Object.fromEntries(seed.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+  const nodes = Object.fromEntries(seed.map((node) => [node.id, node])) as Record<
+    AnyNodeId,
+    AnyNode
+  >
 
   return {
     get: (id: AnyNodeId) => nodes[id],

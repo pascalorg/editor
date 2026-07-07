@@ -12,8 +12,8 @@ import {
   type EventSuffix,
   emitter,
   footprintAABBFrom,
-  getFloorPlacedFootprints,
   type GridEvent,
+  getFloorPlacedFootprints,
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
@@ -493,9 +493,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         position: livePosition,
         rotation: Array.isArray((node as { rotation?: unknown }).rotation)
           ? [
-              (((node as { rotation?: unknown }).rotation as [number?, number?, number?])[0] ?? 0),
+              ((node as { rotation?: unknown }).rotation as [number?, number?, number?])[0] ?? 0,
               rotationRef.current,
-              (((node as { rotation?: unknown }).rotation as [number?, number?, number?])[2] ?? 0),
+              ((node as { rotation?: unknown }).rotation as [number?, number?, number?])[2] ?? 0,
             ]
           : rotationRef.current,
       } as AnyNode

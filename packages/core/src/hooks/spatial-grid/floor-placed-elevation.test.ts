@@ -122,7 +122,7 @@ describe('floor-placed elevation resolver', () => {
           footprint: (node) => ({
             dimensions: (node as { asset: { dimensions: [number, number, number] } }).asset
               .dimensions,
-            rotation: [0, ((node as { rotation: [number, number, number] }).rotation[1] ?? 0), 0],
+            rotation: [0, (node as { rotation: [number, number, number] }).rotation[1] ?? 0, 0],
           }),
           collides: true,
         },
@@ -143,12 +143,7 @@ describe('floor-placed elevation resolver', () => {
     })
     useScene.setState({ nodes: nodesFor(level, blocker) })
 
-    const coarse = spatialGridManager.canPlaceOnFloor(
-      LEVEL_ID,
-      [0.5, 0, 0.5],
-      [1, 1, 1],
-      [0, 0, 0],
-    )
+    const coarse = spatialGridManager.canPlaceOnFloor(LEVEL_ID, [0.5, 0, 0.5], [1, 1, 1], [0, 0, 0])
     const precise = spatialGridManager.canPlaceOnFloorFootprints(LEVEL_ID, [
       { position: [0.2, 0, 0.5], dimensions: [0.4, 1, 1], rotation: [0, 0, 0] },
       { position: [0.8, 0, 0.2], dimensions: [0.4, 1, 0.4], rotation: [0, 0, 0] },

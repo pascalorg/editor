@@ -705,11 +705,7 @@ export class SpatialGridManager {
     rotation: [number, number, number],
     ignoreIds?: string[],
   ) {
-    return this.canPlaceOnFloorFootprints(
-      levelId,
-      [{ position, dimensions, rotation }],
-      ignoreIds,
-    )
+    return this.canPlaceOnFloorFootprints(levelId, [{ position, dimensions, rotation }], ignoreIds)
   }
 
   canPlaceOnFloorFootprints(

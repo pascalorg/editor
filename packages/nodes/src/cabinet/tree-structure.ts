@@ -103,6 +103,22 @@ export function cabinetTreeHidden(
   return isCabinetRun(node) && cornerDerivedRunLink(node.metadata) != null
 }
 
+export function cabinetTreeLabel(
+  node: AnyNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): string {
+  if (node.name) return node.name
+  if (isCabinetRun(node)) {
+    const moduleCount = resolveCabinetRunChildIds(node, nodes).filter((childId) => {
+      const child = nodes[childId]
+      return child?.type === 'cabinet-module'
+    }).length
+    return `Modular Cabinet (${moduleCount} module${moduleCount === 1 ? '' : 's'})`
+  }
+  if (isCabinetModule(node)) return 'Cabinet Module'
+  return 'Node'
+}
+
 /** `def.tree.childIds` for both cabinet kinds. */
 export function cabinetTreeChildIds(
   node: AnyNode,
@@ -130,4 +146,44 @@ export function cabinetTreeChildIds(
     resolved.push(child.id as AnyNodeId)
   }
   return resolved
+}
+
+export function cabinetFloorplanAffectedIds(args: {
+  node: AnyNode
+  nodes: Record<AnyNodeId, AnyNode>
+  liveOverrides: Map<string, Record<string, unknown>>
+}): readonly AnyNodeId[] {
+  const { node, nodes, liveOverrides } = args
+  const affected = new Set<AnyNodeId>()
+  const visited = new Set<AnyNodeId>()
+  const queue: AnyNodeId[] = [node.id as AnyNodeId]
+
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    const current = nodes[id]
+    if (!isCabinetRun(current) && !isCabinetModule(current)) continue
+    affected.add(id)
+
+    const parentIds = [
+      current.parentId as AnyNodeId | undefined,
+      (liveOverrides.get(id) as { parentId?: AnyNodeId } | undefined)?.parentId,
+    ]
+    for (const parentId of parentIds) {
+      const parent = parentId ? nodes[parentId] : undefined
+      if (parentId && (isCabinetRun(parent) || isCabinetModule(parent))) {
+        queue.push(parentId)
+      }
+    }
+
+    for (const childId of childIdsOf(current)) {
+      const child = nodes[childId]
+      if (isCabinetRun(child) || isCabinetModule(child)) {
+        queue.push(childId as AnyNodeId)
+      }
+    }
+  }
+
+  return Array.from(affected)
 }

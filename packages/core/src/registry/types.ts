@@ -702,37 +702,10 @@ export type FloorplanMoveTarget<N> = (args: {
 
 // ─── Plugin manifest ─────────────────────────────────────────────────
 
-/**
- * A left-rail panel contributed by a plugin. The host adds `icon` to the
- * sidebar icon rail; clicking it mounts `component` (lazy-loaded, behind a
- * per-panel error boundary) in the sidebar content area. `id` is namespaced
- * by the owning plugin id at load time, so two plugins may each declare a
- * panel id of `'main'` without colliding. `icon` reuses {@link IconRef} so a
- * plugin contributes a mark the same way a node's presentation does, with no
- * React rendering in core.
- */
-/** Host-defined workspace tag a panel belongs to. Opaque to core — the host's
- * sidebar filters panels by its current workspace mode, and the vocabulary is
- * the host's (the standalone editor uses `'edit'` for the build workspace and
- * `'studio'` for the render workspace). Manifest metadata, not core logic. */
-export type PanelWorkspace = string & {}
-
-export type PluginPanel = {
-  id: string
-  label: string
-  icon: IconRef
-  component: LazyComponent
-  /** Workspaces that surface this panel. Default `['edit']` — a placement /
-   * authoring panel has no business in the clean render workspace; a plugin
-   * that ships studio tooling opts in explicitly. */
-  workspaces?: readonly PanelWorkspace[]
-}
-
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
-  panels?: PluginPanel[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────
@@ -995,6 +968,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
      */
     hidden?: (node: AnyNode, nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>) => boolean
     /**
+     * Optional tree-row label override. When unset the host falls back to
+     * `node.name` / `def.presentation.label`.
+     */
+    label?: (node: AnyNode, nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>) => string
+    /**
      * Override the child ids the sidebar tree renders under this node.
      * When unset the tree falls back to the node's own `children`.
      */
@@ -1020,6 +998,20 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * sibling-affecting node is being dragged live.
    */
   floorplanDependsOnSiblings?: boolean
+  /**
+   * Optional hook for kinds whose floor-plan cache invalidation reaches beyond
+   * the default framework relationships (wall junction neighbours, host wall
+   * opening cuts, gutter siblings under one roof). Called when a node of this
+   * kind has a live drag/override in flight; returns the extra entry ids that
+   * must rebuild this frame.
+   */
+  floorplanAffectedIds?: (args: {
+    nodeId: AnyNodeId
+    node: AnyNode
+    nodes: Record<AnyNodeId, AnyNode>
+    liveTransforms: Map<string, LiveTransformLike>
+    liveOverrides: Map<string, Record<string, unknown>>
+  }) => readonly AnyNodeId[]
   /**
    * Optional hook letting a kind project the `useLiveNodeOverrides` map
    * into a fresh `nodes` snapshot before its `def.floorplan` builder

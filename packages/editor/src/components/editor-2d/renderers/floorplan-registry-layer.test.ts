@@ -65,13 +65,7 @@ describe('computeAffectedSiblingIds', () => {
     )
 
     expect(affected).toEqual(
-      new Set([
-        run.id,
-        module.id,
-        cornerModule.id,
-        childRun.id,
-        childModule.id,
-      ] as AnyNodeId[]),
+      new Set([run.id, module.id, cornerModule.id, childRun.id, childModule.id] as AnyNodeId[]),
     )
   })
 })

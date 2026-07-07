@@ -30,9 +30,9 @@ import {
   backAlignZ,
   resolveCabinetType,
   runModuleBaseY,
-  syncCornerRunsFromSourceModule,
   switchCabinetToBase,
   switchCabinetToTall,
+  syncCornerRunsFromSourceModule,
   wallChildOf,
 } from './run-ops'
 import {

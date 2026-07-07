@@ -10,8 +10,8 @@ import type {
 } from '@pascal-app/core'
 import { selectionProxyIdFromMetadata } from '@pascal-app/core'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
-import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
+import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
 import { buildCabinetGeometry } from './geometry'
 import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
@@ -40,7 +40,12 @@ import {
   minCabinetCarcassHeightForStack,
   stackForCabinet,
 } from './stack'
-import { cabinetTreeChildIds, cabinetTreeHidden } from './tree-structure'
+import {
+  cabinetFloorplanAffectedIds,
+  cabinetTreeChildIds,
+  cabinetTreeHidden,
+  cabinetTreeLabel,
+} from './tree-structure'
 import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
@@ -925,10 +930,12 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     ]),
   floorplan: buildCabinetFloorplan,
   floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
+  floorplanAffectedIds: cabinetFloorplanAffectedIds,
   quickActions: cabinetQuickActions,
   // Corner-derived leg runs hide their own tree rows; their modules are
   // flattened into the source run's hierarchy.
   tree: {
+    label: cabinetTreeLabel,
     hidden: cabinetTreeHidden,
     childIds: cabinetTreeChildIds,
   },
@@ -1078,11 +1085,13 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     ]),
   floorplan: buildCabinetModuleFloorplan,
   floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
+  floorplanAffectedIds: cabinetFloorplanAffectedIds,
   // 2D ↔ 3D parity: module position is run-local, so the generic overlay's
   // plan-space translate would corrupt it on any rotated / offset run.
   floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
   quickActions: cabinetQuickActions,
   tree: {
+    label: cabinetTreeLabel,
     childIds: cabinetTreeChildIds,
   },
   // Corner-generated modules keep a proxy so grouped move/rotate

@@ -262,7 +262,8 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
           if (s.kind === 'endpoint') continue
           const liveNode = liveNodes[s.id]
           if (!liveNode) continue
-          const groupMoveSnap = nodeRegistry.get(liveNode.type)?.capabilities?.movable?.groupMoveSnap
+          const groupMoveSnap = nodeRegistry.get(liveNode.type)?.capabilities?.movable
+            ?.groupMoveSnap
           if (!groupMoveSnap) continue
 
           const candidatePosition: [number, number, number] = [

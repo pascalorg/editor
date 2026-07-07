@@ -6,8 +6,8 @@ import { type TreesPanelMode, useTreesStore } from './store'
 
 /**
  * "Find in catalog" sync. The editor's node action menu emits
- * `selection:find-node`; the host opens the panel that owns the kind (via
- * `panelRegistry.panelForKind`) — but which *section* of the Nature panel to
+ * `selection:find-node`; the host opens the panel that owns the kind — but
+ * which *section* of the Nature panel to
  * show is plugin knowledge, so the plugin listens too and points its own store
  * at the found node's section + preset. Module-level (imported by the plugin
  * manifest) so the listener is live from plugin load, even while the panel has

@@ -10,7 +10,6 @@ import {
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
-  resolveSelectionProxyId,
   isRegistryMovable,
   kindsWithFloorplanScope,
   type LiveNodeOverrides,
@@ -18,6 +17,7 @@ import {
   nodeRegistry,
   pauseSceneHistory,
   resolveBuildingForLevel,
+  resolveSelectionProxyId,
   resumeSceneHistory,
   useInteractive,
   useLiveNodeOverrides,
@@ -391,14 +391,24 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     for (const [id] of liveTransforms) {
       const node = sceneNodes[id as AnyNodeId]
       const def = node ? nodeRegistry.get(node.type) : null
-      if (node && (def?.floorplanDependsOnSiblings || def?.floorplanSiblingOverrides)) {
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
     for (const [id] of liveOverrides) {
       const node = sceneNodes[id as AnyNodeId]
       const def = node ? nodeRegistry.get(node.type) : null
-      if (node && (def?.floorplanDependsOnSiblings || def?.floorplanSiblingOverrides)) {
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
@@ -671,7 +681,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
       const dependsOnSiblingInputs = !!(
-        def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides
+        def.floorplanDependsOnSiblings ||
+        def.floorplanSiblingOverrides ||
+        def.floorplanAffectedIds
       )
       const descriptor: FloorplanEntryDescriptor = { id, node, dependsOnSiblingInputs }
       if (ctxOverrides) descriptor.ctxOverrides = ctxOverrides
@@ -1248,7 +1260,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     const node = useScene.getState().nodes[nodeId]
     onHoveredIdChange(
       node
-        ? resolveSelectionProxyId(node, useScene.getState().nodes as Record<string, AnyNode | undefined>)
+        ? resolveSelectionProxyId(
+            node,
+            useScene.getState().nodes as Record<string, AnyNode | undefined>,
+          )
         : nodeId,
     )
   }, [nodeId, onHoveredIdChange])
@@ -1256,7 +1271,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const handlePointerLeave = useCallback(() => {
     const node = useScene.getState().nodes[nodeId]
     const targetId = node
-      ? resolveSelectionProxyId(node, useScene.getState().nodes as Record<string, AnyNode | undefined>)
+      ? resolveSelectionProxyId(
+          node,
+          useScene.getState().nodes as Record<string, AnyNode | undefined>,
+        )
       : nodeId
     if (useViewer.getState().hoveredId === targetId) onHoveredIdChange(null)
   }, [nodeId, onHoveredIdChange])
@@ -1406,7 +1424,11 @@ function buildFloorplanEntryGeometry({
     return null
   }
 
-  const dependsOnSiblingInputs = !!(def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides)
+  const dependsOnSiblingInputs = !!(
+    def.floorplanDependsOnSiblings ||
+    def.floorplanSiblingOverrides ||
+    def.floorplanAffectedIds
+  )
   const deps: NodeDeps = {
     node,
     live,
@@ -2669,40 +2691,21 @@ export function computeAffectedSiblingIds(
     return junctions.get(endpointKey(x, y)) ?? []
   }
 
-  const addCabinetFamily = (startId: AnyNodeId) => {
-    const visited = new Set<AnyNodeId>()
-    const queue: AnyNodeId[] = [startId]
-    while (queue.length > 0) {
-      const id = queue.pop()!
-      if (visited.has(id)) continue
-      visited.add(id)
-      const node = nodes[id]
-      if (node?.type !== 'cabinet' && node?.type !== 'cabinet-module') continue
-      affected.add(id)
-
-      const parentId = node.parentId as AnyNodeId | undefined
-      const liveParentId = (liveOverrides.get(id) as { parentId?: string } | undefined)
-        ?.parentId as AnyNodeId | undefined
-      for (const nextParentId of [parentId, liveParentId]) {
-        const parent = nextParentId ? nodes[nextParentId] : null
-        if (nextParentId && (parent?.type === 'cabinet' || parent?.type === 'cabinet-module')) {
-          queue.push(nextParentId)
-        }
-      }
-
-      for (const childId of node.children ?? []) {
-        const child = nodes[childId as AnyNodeId]
-        if (child?.type === 'cabinet' || child?.type === 'cabinet-module') {
-          queue.push(childId as AnyNodeId)
-        }
-      }
-    }
-  }
-
   for (const id of liveFlaggedIds) {
     const node = nodes[id]
     if (!node) continue
     affected.add(id)
+    const def = nodeRegistry.get(node.type)
+    const extraAffectedIds = def?.floorplanAffectedIds?.({
+      nodeId: id,
+      node,
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      liveTransforms: useLiveTransforms.getState().transforms,
+      liveOverrides,
+    })
+    if (extraAffectedIds) {
+      for (const extraId of extraAffectedIds) affected.add(extraId)
+    }
     if (node.type === 'wall') {
       const w = node as unknown as {
         start: [number, number]
@@ -2741,8 +2744,6 @@ export function computeAffectedSiblingIds(
           }
         }
       }
-    } else if (node.type === 'cabinet' || node.type === 'cabinet-module') {
-      addCabinetFamily(id)
     }
   }
   return affected

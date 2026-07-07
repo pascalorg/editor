@@ -1,7 +1,7 @@
 # @pascal-app/plugin-trees
 
-The first-party **example plugin** for the Pascal editor. It contributes a
-procedural _trees_ node and a left-rail _presets_ panel, and exists to prove —
+The first-party **example plugin** for the Pascal editor. It contributes
+procedural plant nodes plus the standalone editor's Nature panel, and exists to prove —
 and document — the minimal host surface every future plugin reuses.
 
 It is structurally identical to a third-party plugin: it peer-depends on
@@ -11,10 +11,11 @@ nothing private. Copy this folder as the starting point for a new plugin.
 
 ## What it demonstrates
 
-The contribution paths a plugin has:
+The contribution paths this package demonstrates:
 
-1. **Left-rail panel** — `panels` in the manifest. `presets-panel.tsx` is a
-   plain React component the host mounts behind an error boundary.
+1. **Host-side panel extension** — the standalone editor layers a Nature rail
+   panel on top of the core plugin manifest. `presets-panel.tsx` is a plain
+   React component the host mounts behind an error boundary.
 2. **Right inspector for free** — `def.parametrics` (`parametrics.ts`). The host
    renders the preset/height/seed controls + the Randomize action with zero
    tree-specific code.
@@ -70,8 +71,8 @@ setPluginDiscovery(async () => [treesPlugin])
 ```
 
 `treesPlugin` exports three node kinds (`trees:tree`, `trees:flower`,
-`trees:grass`) and one panel (`Trees`), loaded through the same `loadPlugin`
-path as the built-ins.
+`trees:grass`) for the core `loadPlugin` path. The editor app also reads the
+package's host-side panel metadata to surface the Nature rail entry.
 
 ## Notes / known gaps
 
