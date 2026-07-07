@@ -497,8 +497,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Top-center HUD — what the shot will be */}
-      {!isMobile && (
+      {/* Top-center HUD — what the shot will be. Preset captures are a fixed
+          square and carry their own "Frame your item" banner up there. */}
+      {!isMobile && !isPreset && (
         <div className="pointer-events-none absolute top-4 left-1/2 flex -translate-x-1/2 gap-2">
           <div className={HUD_CHIP_CLASS}>
             <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
