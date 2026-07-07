@@ -4,6 +4,7 @@ import { runLocalToPlan } from '../run-layout'
 import {
   addCornerRun,
   syncCornerRunsFromSourceModule,
+  syncCornerStyleGroupFromRun,
   wallBottomHeightForTallAlignment,
 } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
@@ -71,7 +72,7 @@ function resolveCabinetWorldTransform(
 }
 
 describe('addCornerRun', () => {
-  test('creates a base leg plus matching wall runs with corner fillers', () => {
+  test('creates generated corner pieces under the actual base-cabinet and corner-filler parents', () => {
     const levelId = 'level_corner-test' as AnyNodeId
     const run = CabinetNode.parse({
       id: 'cabinet_source-run',
@@ -127,21 +128,23 @@ describe('addCornerRun', () => {
     expect(bridgeFiller?.cornerShelf).toBe(true)
     expect(bridgeFiller?.stack?.[0]?.type).toBe('door')
     expect(bridgeFiller?.stack?.[0]?.shelfCount).toBe(3)
-    const wallCornerCabinet = modulesOut.find((node) => node.name === 'Wall Corner Cabinet')
-    expect(wallCornerCabinet?.openSide).toBe('right')
-    expect(wallCornerCabinet?.stack?.[0]?.type).toBe('door')
-    expect(wallCornerCabinet?.stack?.[0]?.shelfCount).toBe(3)
+    expect(modulesOut.find((node) => node.name === 'Wall Corner Cabinet')).toBeUndefined()
 
-    // The L legs are siblings of the source module under the SOURCE RUN —
-    // the run is the modular cabinet group; the clicked module stays a
-    // plain module (no cabinet children).
-    const derivedRunNodes = runs.filter((node) => node.id !== run.id)
-    expect(derivedRunNodes.every((node) => node.parentId === run.id)).toBe(true)
     const sourceModuleAfter = sceneApi.get<CabinetModuleNode>(module.id)!
     const sourceModuleChildren = (sourceModuleAfter.children ?? [])
       .map((id) => sceneApi.get<AnyNode>(id as AnyNodeId))
       .filter(Boolean)
-    expect(sourceModuleChildren.every((child) => child!.type !== 'cabinet')).toBe(true)
+    expect(sourceModuleChildren.filter((child) => child!.type === 'cabinet-module')).toHaveLength(1)
+    expect(
+      sourceModuleChildren.find(
+        (child) => child!.type === 'cabinet-module' && child!.name === 'Wall Cabinet',
+      ),
+    ).toBeTruthy()
+    const sourceWallTop = sourceModuleChildren.find(
+      (child): child is CabinetModuleNode =>
+        child!.type === 'cabinet-module' && child!.name === 'Wall Cabinet',
+    )
+    expect(sourceWallTop?.openSide).toBe('right')
 
     const legCabinet = modulesOut.find((node) => node.id === selectedId)
     expect(legCabinet?.openSide).toBe('left')
@@ -149,9 +152,27 @@ describe('addCornerRun', () => {
     expect(legCabinet?.width).toBeCloseTo(module.width)
     expect(legCabinet?.stack?.[0]?.type).toBe('door')
     expect(legCabinet?.stack?.[0]?.shelfCount).toBe(3)
-    const wallLegCabinet = modulesOut.find((node) => node.name === 'Wall Cabinet')
+    const wallLegCabinet = modulesOut.find(
+      (node) => node.name === 'Wall Cabinet' && node.parentId === legCabinet?.id,
+    )
     expect(wallLegCabinet?.stack?.[0]?.type).toBe('door')
     expect(wallLegCabinet?.stack?.[0]?.shelfCount).toBe(3)
+    expect(wallLegCabinet?.openSide).toBe('left')
+
+    const cornerFiller = modulesOut.find((node) => node.name === 'Corner Filler')
+    expect(cornerFiller).toBeTruthy()
+    const cornerFillerChildRuns = runs.filter((node) => node.parentId === cornerFiller?.id)
+    expect(cornerFillerChildRuns.map((node) => node.name).sort()).toEqual([
+      'Corner Wall Bridge',
+      'Corner Wall Run',
+    ])
+    const cornerFillerGrandchildren = cornerFillerChildRuns.flatMap((childRun) =>
+      (childRun.children ?? [])
+        .map((id) => sceneApi.get<CabinetModuleNode>(id as AnyNodeId))
+        .filter(Boolean)
+        .map((child) => child!.name),
+    )
+    expect(cornerFillerGrandchildren.sort()).toEqual(['Corner Wall Filler', 'Wall Bridge Filler'])
 
     const derivedRuns = runs.filter((node) => node.id !== run.id)
     const baseLeg = derivedRuns.find((node) => node.runTier === 'base')
@@ -244,8 +265,14 @@ describe('addCornerRun', () => {
     const modulesOut = Object.values(sceneApi.nodes()).filter(
       (node): node is CabinetModuleNode => node.type === 'cabinet-module',
     )
-    expect(modulesOut.find((node) => node.name === 'Base Cabinet')?.width).toBeCloseTo(0.45)
-    expect(modulesOut.find((node) => node.name === 'Wall Cabinet')?.width).toBeCloseTo(0.45)
+    const linkedBase = modulesOut.find(
+      (node) => node.id !== module.id && node.name === 'Base Cabinet',
+    )
+    expect(linkedBase?.width).toBeCloseTo(0.45)
+    expect(
+      modulesOut.find((node) => node.name === 'Wall Cabinet' && node.parentId === linkedBase?.id)
+        ?.width,
+    ).toBeCloseTo(0.45)
   })
 
   test('re-anchors linked L runs when the source module moves along its run', () => {
@@ -299,6 +326,592 @@ describe('addCornerRun', () => {
     expect(legWorldAfter.position[0] - legWorldBefore.position[0]).toBeCloseTo(delta)
     expect(legWorldAfter.position[2]).toBeCloseTo(legWorldBefore.position[2])
     expect(legWorldAfter.rotation).toBeCloseTo(legWorldBefore.rotation)
+  })
+
+  test('propagates front styling changes into linked corner runs and modules', () => {
+    const levelId = 'level_corner-linked-front-style' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-linked-front-style',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      children: ['cabinet-module_source-corner-linked-front-style'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-linked-front-style',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      stack: [{ id: 'door-source-linked-front-style', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    addCornerRun({
+      module,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    sceneApi.update(
+      run.id as AnyNodeId,
+      {
+        frontStyle: 'raised-arch',
+        frontOverlay: 'inset',
+        handleStyle: 'knob',
+        handlePosition: 'center',
+      } as Partial<AnyNode>,
+    )
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNode>(module.id)!,
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      sceneApi,
+    })
+
+    const nodes = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetNode | CabinetModuleNode =>
+        node.type === 'cabinet' || node.type === 'cabinet-module',
+    )
+    const linkedNodes = nodes.filter(
+      (node) => node.id !== run.id && node.id !== module.id && node.parentId !== module.id,
+    )
+
+    expect(linkedNodes.length).toBeGreaterThan(0)
+    expect(linkedNodes.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+    expect(linkedNodes.every((node) => node.frontOverlay === 'inset')).toBe(true)
+    expect(linkedNodes.every((node) => node.handleStyle === 'knob')).toBe(true)
+    expect(linkedNodes.every((node) => node.handlePosition === 'center')).toBe(true)
+  })
+
+  test('propagates front styling changes when a derived corner run is the selected run', () => {
+    const levelId = 'level_corner-derived-run-front-style' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-derived-front-style',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      children: ['cabinet-module_source-corner-derived-front-style'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-derived-front-style',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      stack: [{ id: 'door-source-derived-front-style', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    addCornerRun({
+      module,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const derivedRun = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetNode => node.type === 'cabinet' && node.name === 'Corner Base Run',
+    )!
+
+    const changed = syncCornerStyleGroupFromRun({
+      run: derivedRun,
+      patch: {
+        frontStyle: 'raised-arch',
+        frontOverlay: 'inset',
+        handleStyle: 'knob',
+        handlePosition: 'center',
+      },
+      sceneApi,
+    })
+
+    expect(changed).toBe(true)
+
+    const allCabinets = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetNode | CabinetModuleNode =>
+        node.type === 'cabinet' || node.type === 'cabinet-module',
+    )
+
+    expect(allCabinets.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+    expect(allCabinets.every((node) => node.frontOverlay === 'inset')).toBe(true)
+    expect(allCabinets.every((node) => node.handleStyle === 'knob')).toBe(true)
+    expect(allCabinets.every((node) => node.handlePosition === 'center')).toBe(true)
+  })
+
+  test('propagates front styling changes to corner groups on both sides of the source run', () => {
+    const levelId = 'level_corner-both-sides-front-style' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-both-sides-front-style',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+      children: [
+        'cabinet-module_left-both-sides-front-style',
+        'cabinet-module_center-both-sides-front-style',
+        'cabinet-module_right-both-sides-front-style',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-both-sides-front-style',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-both-sides-front-style',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-both-sides-front-style',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      frontOverlay: 'full',
+      handleStyle: 'bar',
+      handlePosition: 'auto',
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+    ])
+
+    addCornerRun({
+      module: left,
+      run,
+      sceneApi,
+      side: 'left',
+    })
+    addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const changed = syncCornerStyleGroupFromRun({
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      patch: {
+        frontStyle: 'raised-arch',
+        frontOverlay: 'inset',
+        handleStyle: 'knob',
+        handlePosition: 'center',
+      },
+      sceneApi,
+    })
+
+    expect(changed).toBe(true)
+
+    const allCabinets = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetNode | CabinetModuleNode =>
+        node.type === 'cabinet' || node.type === 'cabinet-module',
+    )
+
+    expect(allCabinets.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+    expect(allCabinets.every((node) => node.frontOverlay === 'inset')).toBe(true)
+    expect(allCabinets.every((node) => node.handleStyle === 'knob')).toBe(true)
+    expect(allCabinets.every((node) => node.handlePosition === 'center')).toBe(true)
+  })
+
+  test('anchors the right bridge filler to the live source wall cabinet edge', () => {
+    const levelId = 'level_corner-bridge-anchor-right' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-bridge-anchor-right',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-bridge-anchor-right',
+        'cabinet-module_center-bridge-anchor-right',
+        'cabinet-module_right-bridge-anchor-right',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-bridge-anchor-right',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-bridge-anchor-right',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      children: ['cabinet-module_center-wall-bridge-anchor-right'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-bridge-anchor-right',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-bridge-anchor-right',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const sourceWall = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' &&
+        node.name === 'Wall Cabinet' &&
+        node.parentId === right.id,
+    )
+    const bridgeFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+
+    expect(sourceWall).toBeTruthy()
+    expect(bridgeFiller).toBeTruthy()
+
+    const sourceWallWorld = resolveCabinetWorldTransform(sourceWall!, nodes)
+    const bridgeWorld = resolveCabinetWorldTransform(bridgeFiller!, nodes)
+
+    expect(bridgeWorld.position[0] - bridgeFiller!.width / 2).toBeCloseTo(
+      sourceWallWorld.position[0] + sourceWall!.width / 2,
+    )
+    expect(bridgeWorld.position[2]).toBeCloseTo(sourceWallWorld.position[2])
+  })
+
+  test('anchors the left bridge filler to the live source wall cabinet edge', () => {
+    const levelId = 'level_corner-bridge-anchor-left' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-bridge-anchor-left',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-bridge-anchor-left',
+        'cabinet-module_center-bridge-anchor-left',
+        'cabinet-module_right-bridge-anchor-left',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-bridge-anchor-left',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-bridge-anchor-left',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      children: ['cabinet-module_center-wall-bridge-anchor-left'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-bridge-anchor-left',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-bridge-anchor-left',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: left,
+      run,
+      sceneApi,
+      side: 'left',
+    })
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const sourceWall = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Cabinet' && node.parentId === left.id,
+    )
+    const bridgeFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+
+    expect(sourceWall).toBeTruthy()
+    expect(bridgeFiller).toBeTruthy()
+
+    const sourceWallWorld = resolveCabinetWorldTransform(sourceWall!, nodes)
+    const bridgeWorld = resolveCabinetWorldTransform(bridgeFiller!, nodes)
+
+    expect(bridgeWorld.position[0] + bridgeFiller!.width / 2).toBeCloseTo(
+      sourceWallWorld.position[0] - sourceWall!.width / 2,
+    )
+    expect(bridgeWorld.position[2]).toBeCloseTo(sourceWallWorld.position[2])
+  })
+
+  test('keeps the left bridge filler anchored after resyncing the source module', () => {
+    const levelId = 'level_corner-bridge-anchor-left-resync' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-bridge-anchor-left-resync',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-bridge-anchor-left-resync',
+        'cabinet-module_center-bridge-anchor-left-resync',
+        'cabinet-module_right-bridge-anchor-left-resync',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-bridge-anchor-left-resync',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-bridge-anchor-left-resync',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      children: ['cabinet-module_center-wall-bridge-anchor-left-resync'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-bridge-anchor-left-resync',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-bridge-anchor-left-resync',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: left,
+      run,
+      sceneApi,
+      side: 'left',
+    })
+
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNode>(left.id)!,
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      sceneApi,
+    })
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const sourceWall = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Cabinet' && node.parentId === left.id,
+    )
+    const bridgeFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+
+    expect(sourceWall).toBeTruthy()
+    expect(bridgeFiller).toBeTruthy()
+
+    const sourceWallWorld = resolveCabinetWorldTransform(sourceWall!, nodes)
+    const bridgeWorld = resolveCabinetWorldTransform(bridgeFiller!, nodes)
+
+    expect(bridgeWorld.position[0] + bridgeFiller!.width / 2).toBeCloseTo(
+      sourceWallWorld.position[0] - sourceWall!.width / 2,
+    )
+    expect(bridgeWorld.position[2]).toBeCloseTo(sourceWallWorld.position[2])
+  })
+
+  test('keeps the right bridge filler anchored after syncing a front-style change', () => {
+    const levelId = 'level_corner-bridge-anchor-right-style-sync' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-bridge-anchor-right-style-sync',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      frontStyle: 'slab',
+      children: [
+        'cabinet-module_left-bridge-anchor-right-style-sync',
+        'cabinet-module_center-bridge-anchor-right-style-sync',
+        'cabinet-module_right-bridge-anchor-right-style-sync',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-bridge-anchor-right-style-sync',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-bridge-anchor-right-style-sync',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+      children: ['cabinet-module_center-wall-bridge-anchor-right-style-sync'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-bridge-anchor-right-style-sync',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-bridge-anchor-right-style-sync',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+      frontStyle: 'slab',
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const changed = syncCornerStyleGroupFromRun({
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      patch: {
+        frontStyle: 'raised-arch',
+      },
+      sceneApi,
+    })
+
+    expect(changed).toBe(true)
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const sourceWall = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' &&
+        node.name === 'Wall Cabinet' &&
+        node.parentId === right.id,
+    )
+    const bridgeFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+
+    expect(sourceWall).toBeTruthy()
+    expect(bridgeFiller).toBeTruthy()
+
+    const sourceWallWorld = resolveCabinetWorldTransform(sourceWall!, nodes)
+    const bridgeWorld = resolveCabinetWorldTransform(bridgeFiller!, nodes)
+
+    expect(bridgeWorld.position[0] - bridgeFiller!.width / 2).toBeCloseTo(
+      sourceWallWorld.position[0] + sourceWall!.width / 2,
+    )
+    expect(bridgeWorld.position[2]).toBeCloseTo(sourceWallWorld.position[2])
   })
 
   test('adds only the uncovered bridge piece when a wall-top already occupies the corner', () => {
@@ -361,8 +974,12 @@ describe('addCornerRun', () => {
     expect(bridgeFillers).toHaveLength(1)
     expect(bridgeFillers[0]?.width).toBeCloseTo(0.26)
 
-    const wallCornerCabinets = modulesOut.filter((node) => node.name === 'Wall Corner Cabinet')
-    expect(wallCornerCabinets).toHaveLength(0)
+    const linkedBase = modulesOut.find(
+      (node) => node.id !== module.id && node.name === 'Base Cabinet',
+    )
+    expect(
+      modulesOut.find((node) => node.name === 'Wall Cabinet' && node.parentId === linkedBase?.id),
+    ).toBeTruthy()
   })
 
   test('creates nested second-corner runs in the correct world position', () => {
@@ -427,6 +1044,9 @@ describe('addCornerRun', () => {
         secondModuleWorld.position[2] - secondDerivedWorld.position[2],
       ),
     ).toBeGreaterThan(0.1)
+    expect((secondSelectedModule.metadata as Record<string, unknown>).nodeSelectionProxyId).toBe(
+      secondDerivedRun.id,
+    )
   })
 
   test('shortens the generated corner leg when a wall blocks the new span', () => {
@@ -586,4 +1206,5 @@ describe('addCornerRun', () => {
     const bridgeLeftEdge = bridgeWorld.position[0] - bridgeFiller!.width / 2
     expect(bridgeLeftEdge).toBeCloseTo(wallTopRightEdge)
   })
+
 })

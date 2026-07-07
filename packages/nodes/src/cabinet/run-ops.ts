@@ -6,6 +6,7 @@ import {
   calculateLevelMiters,
   getWallPlanFootprint,
   type SceneApi,
+  selectionProxyIdFromMetadata,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -63,12 +64,27 @@ type CornerDerivedRunLink = {
   sourceRunId: AnyNodeId
 }
 
+type CabinetRunStylePatch = Pick<
+  Partial<CabinetNode>,
+  'frontStyle' | 'frontOverlay' | 'handleStyle' | 'handlePosition'
+>
+
 export function cabinetMetadataRecord(
   metadata: CabinetEditableNode['metadata'],
 ): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? (metadata as Record<string, unknown>)
     : {}
+}
+
+function withSelectionProxyMetadata(
+  metadata: CabinetEditableNode['metadata'],
+  proxyId: AnyNodeId,
+): Record<string, unknown> {
+  return {
+    ...cabinetMetadataRecord(metadata),
+    nodeSelectionProxyId: proxyId,
+  }
 }
 
 function cornerSourceLink(metadata: CabinetEditableNode['metadata']): CornerSourceLink | null {
@@ -276,8 +292,25 @@ export function cabinetModulesForRun(
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
 }
 
+export function cornerSourceModulesForRun(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): CabinetModuleNode[] {
+  return cabinetModulesForRun(run, nodes).filter(
+    (module) => cornerSourceLink(module.metadata) != null,
+  )
+}
+
 function doorStack(shelfCount: number) {
   return [{ ...newCabinetCompartment('door'), shelfCount }]
+}
+
+function cloneWallCabinetStack(
+  sourceWallTop: CabinetModuleNode | null,
+  shelfCount: number,
+): CabinetModuleNode['stack'] {
+  if (!sourceWallTop) return doorStack(shelfCount)
+  return stackForCabinet(sourceWallTop).map((compartment) => ({ ...compartment }))
 }
 
 function inheritedShelfCount(module: CabinetModuleNode): number {
@@ -293,10 +326,79 @@ export function cornerLinkedSourceModuleForRun(
   run: CabinetNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
 ): CabinetModuleNode | null {
-  return (
-    cabinetModulesForRun(run, nodes).find((module) => cornerSourceLink(module.metadata) != null) ??
-    null
-  )
+  return cornerSourceModulesForRun(run, nodes)[0] ?? null
+}
+
+export function cornerStyleSourceForRun(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): { module: CabinetModuleNode; run: CabinetNode } | null {
+  const directSourceModule = cornerLinkedSourceModuleForRun(run, nodes)
+  if (directSourceModule) return { module: directSourceModule, run }
+
+  const derivedLink = cornerDerivedRunLink(run.metadata)
+  if (!derivedLink) return null
+
+  const sourceRun = nodes[derivedLink.sourceRunId]
+  const sourceModule = nodes[derivedLink.sourceModuleId]
+  if (sourceRun?.type !== 'cabinet' || sourceModule?.type !== 'cabinet-module') return null
+  return { module: sourceModule, run: sourceRun }
+}
+
+function applyCabinetRunStylePatch(
+  sceneApi: SceneApi,
+  run: CabinetNode,
+  patch: CabinetRunStylePatch,
+) {
+  if (Object.keys(patch).length === 0) return
+
+  sceneApi.update(run.id as AnyNodeId, patch as Partial<AnyNode>)
+  for (const module of cabinetModulesForRun(run, sceneApi.nodes())) {
+    sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
+    const wallChild = wallChildOf(module, sceneApi.nodes())
+    if (wallChild) {
+      sceneApi.update(wallChild.id as AnyNodeId, patch as Partial<AnyNode>)
+    }
+  }
+}
+
+export function syncCornerStyleGroupFromRun({
+  run,
+  patch,
+  sceneApi,
+}: {
+  run: CabinetNode
+  patch: CabinetRunStylePatch
+  sceneApi: SceneApi
+}): boolean {
+  if (Object.keys(patch).length === 0) return false
+
+  const source = cornerStyleSourceForRun(run, sceneApi.nodes())
+  if (!source) return false
+
+  const sourceRun = sceneApi.get<CabinetNode>(source.run.id as AnyNodeId) ?? source.run
+
+  applyCabinetRunStylePatch(sceneApi, sourceRun, patch)
+  const cornerSources = cornerSourceModulesForRun(sourceRun, sceneApi.nodes())
+  if (cornerSources.length === 0) {
+    const sourceModule =
+      sceneApi.get<CabinetModuleNode>(source.module.id as AnyNodeId) ?? source.module
+    syncCornerRunsFromSourceModule({
+      module: sourceModule,
+      run: sceneApi.get<CabinetNode>(sourceRun.id as AnyNodeId) ?? sourceRun,
+      sceneApi,
+    })
+    return true
+  }
+
+  for (const sourceModule of cornerSources) {
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId) ?? sourceModule,
+      run: sceneApi.get<CabinetNode>(sourceRun.id as AnyNodeId) ?? sourceRun,
+      sceneApi,
+    })
+  }
+  return true
 }
 
 function chainModuleCenters(widths: number[]): number[] {
@@ -402,6 +504,48 @@ function worldToCabinetLocalRotation(
   worldRotation: number,
 ) {
   return worldRotation - resolveCabinetWorldTransform(parent, nodes).rotation
+}
+
+function positionAlongWorldAxis(
+  origin: readonly [number, number, number],
+  axis: readonly [number, number],
+  distance: number,
+): [number, number, number] {
+  return [origin[0] + axis[0] * distance, origin[1], origin[2] + axis[1] * distance]
+}
+
+function anchoredBridgeRunWorldPosition({
+  sourceWallTop,
+  sourceRun,
+  bridgeWidth,
+  side,
+  fallbackPosition,
+  nodes,
+}: {
+  sourceWallTop: CabinetModuleNode | null
+  sourceRun: CabinetNode
+  bridgeWidth: number
+  side: CornerSide
+  fallbackPosition: [number, number, number]
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+}): [number, number, number] {
+  const sourceWallWorld =
+    sourceWallTop?.type === 'cabinet-module'
+      ? resolveCabinetWorldTransform(sourceWallTop, nodes)
+      : null
+  const sourceRunWorld = resolveCabinetWorldTransform(sourceRun, nodes)
+  const sourceAxis: [number, number] = [
+    Math.cos(sourceRunWorld.rotation),
+    -Math.sin(sourceRunWorld.rotation),
+  ]
+
+  return sourceWallWorld && typeof sourceWallTop?.width === 'number'
+    ? positionAlongWorldAxis(
+        sourceWallWorld.position,
+        sourceAxis,
+        (side === 'right' ? 1 : -1) * (sourceWallTop.width / 2 + bridgeWidth / 2),
+      )
+    : fallbackPosition
 }
 
 /** The cabinet-frame parent a derived corner run's placement is local to. */
@@ -882,6 +1026,32 @@ function upsertCabinetRunWithModules({
   return { runId: run.id as AnyNodeId, moduleIds }
 }
 
+function childModuleByName(
+  parent: CabinetNode | CabinetModuleNode,
+  name: string,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): CabinetModuleNode | null {
+  for (const childId of parent.children ?? []) {
+    const child = nodes[childId as AnyNodeId]
+    if (child?.type === 'cabinet-module' && child.name === name) return child
+  }
+  return null
+}
+
+function setCabinetSelectionProxy(sceneApi: SceneApi, id: AnyNodeId, proxyId: AnyNodeId) {
+  const live = sceneApi.get<CabinetNode | CabinetModuleNode>(id)
+  if (!live || (live.type !== 'cabinet' && live.type !== 'cabinet-module')) return
+  sceneApi.update(id, {
+    metadata: withSelectionProxyMetadata(live.metadata, proxyId),
+  } as Partial<AnyNode>)
+}
+
+function cornerSelectionRootId(sourceRun: CabinetNode, derivedRunId: AnyNodeId): AnyNodeId {
+  return selectionProxyIdFromMetadata(sourceRun.metadata)
+    ? derivedRunId
+    : (sourceRun.id as AnyNodeId)
+}
+
 function syncDerivedCornerRun({
   role,
   run,
@@ -964,22 +1134,35 @@ function syncDerivedCornerRun({
   const firstIndex = fullNames.indexOf(firstName)
   if (firstIndex < 0) return
 
+  const sourceWallTop = wallChildOf(sourceModule, sceneApi.nodes())
+  const isStandaloneBridgeFillerRun =
+    role === 'bridge' && modules.length === 1 && modules[0]?.name === 'Wall Bridge Filler'
+  const bridgeAnchorPosition =
+    isStandaloneBridgeFillerRun
+      ? anchoredBridgeRunWorldPosition({
+          sourceWallTop,
+          sourceRun,
+          bridgeWidth: layout.bridgeWidth,
+          side,
+          fallbackPosition: layout.bridgeFillerRunPosition,
+          nodes: sceneApi.nodes(),
+        })
+      : null
+
   const anchorPosition =
     role === 'base-leg'
       ? layout.baseRunPosition
       : role === 'wall-leg'
         ? layout.wallRunPosition
-        : modules.length === 1 && modules[0]?.name === 'Wall Bridge Filler'
-          ? layout.bridgeFillerRunPosition
+        : isStandaloneBridgeFillerRun
+          ? (bridgeAnchorPosition ?? layout.bridgeFillerRunPosition)
           : layout.bridgeRunPosition
   const sourceRunWorld = resolveCabinetWorldTransform(sourceRun, sceneApi.nodes())
   const rotation = role === 'bridge' ? sourceRunWorld.rotation : layout.legRotation
   const depth = role === 'base-leg' ? sourceRun.depth : CABINET_WALL_DEPTH
-  const runWorldPosition = runLocalToPlan({ position: anchorPosition, rotation }, [
-    fullCenters[firstIndex] ?? 0,
-    0,
-    0,
-  ])
+  const runWorldPosition = isStandaloneBridgeFillerRun
+    ? anchorPosition
+    : runLocalToPlan({ position: anchorPosition, rotation }, [fullCenters[firstIndex] ?? 0, 0, 0])
   // Place relative to the derived run's ACTUAL parent frame — source run for
   // new scenes, source module for legacy scenes that nested legs under it.
   const frameParent = cabinetFrameParent(run, sceneApi.nodes()) ?? sourceRun
@@ -1001,6 +1184,10 @@ function syncDerivedCornerRun({
       withFinishedBack: role === 'base-leg' ? sourceRun.withFinishedBack : false,
       showPlinth: role === 'base-leg' ? sourceRun.showPlinth : false,
       withCountertop: role === 'base-leg' ? sourceRun.withCountertop : false,
+      frontStyle: sourceRun.frontStyle,
+      frontOverlay: sourceRun.frontOverlay,
+      handleStyle: sourceRun.handleStyle,
+      handlePosition: sourceRun.handlePosition,
     } as Partial<AnyNode>,
   )
 
@@ -1024,10 +1211,32 @@ function syncDerivedCornerRun({
         moduleKind: spec.moduleKind,
         openSide: spec.openSide,
         cornerShelf: spec.cornerShelf,
+        frontStyle: sourceRun.frontStyle,
+        frontOverlay: sourceRun.frontOverlay,
+        handleStyle: sourceRun.handleStyle,
+        handlePosition: sourceRun.handlePosition,
         stack: doorStack(layout.connectedShelfCount),
+        metadata: entry.metadata,
       } as Partial<AnyNode>,
     )
   })
+
+  if (role === 'base-leg') {
+    const connectedBaseModule = childModuleByName(
+      sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run,
+      'Base Cabinet',
+      sceneApi.nodes(),
+    )
+    if (connectedBaseModule) {
+      ensureWallCabinetAbove({
+        module: connectedBaseModule,
+        run: sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run,
+        sceneApi,
+        shelfCount: layout.connectedShelfCount,
+        openSide: connectedBaseModule.openSide,
+      })
+    }
+  }
 
   bumpCabinetRunLayoutRevision(sceneApi, sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run)
 }
@@ -1045,7 +1254,7 @@ export function syncCornerRunsFromSourceModule({
   if (!link) return
   for (const runId of link.linkedRunIds) {
     const linkedRun = sceneApi.get<CabinetNode>(runId)
-    if (!linkedRun || linkedRun.type !== 'cabinet') continue
+    if (linkedRun?.type !== 'cabinet') continue
     const derivedLink = cornerDerivedRunLink(linkedRun.metadata)
     if (!derivedLink) continue
     syncDerivedCornerRun({
@@ -1177,16 +1386,23 @@ export function addCornerRun({
   const {
     baseRunPosition,
     wallRunPosition,
-    bridgeRunPosition,
     bridgeFillerRunPosition,
     legRotation,
     connectedWidth,
     connectedShelfCount,
     bridgeWidth,
-    sourceCornerWidth,
   } = resolvedLayout
   const runWorld = resolveCabinetWorldTransform(sourceRun, sceneApi.nodes())
-  const existingWallTop = wallChildOf(sourceModule, sceneApi.nodes())
+  const sourceWallChildId = ensureWallCabinetAbove({
+    module: sourceModule,
+    run: sourceRun,
+    sceneApi,
+    shelfCount: connectedShelfCount,
+    openSide: side,
+  })
+  const existingWallTop = sourceWallChildId
+    ? (sceneApi.get<CabinetModuleNode>(sourceWallChildId) ?? null)
+    : wallChildOf(sourceModule, sceneApi.nodes())
   // Legs are siblings of the source module under the SOURCE RUN — the run is
   // the modular cabinet group; the clicked module must not become a container.
   const baseLocalPosition = worldToCabinetLocalPosition(
@@ -1195,13 +1411,6 @@ export function addCornerRun({
     baseRunPosition,
   )
   const baseLocalRotation = worldToCabinetLocalRotation(sourceRun, sceneApi.nodes(), legRotation)
-  const wallLocalRotation = worldToCabinetLocalRotation(sourceRun, sceneApi.nodes(), legRotation)
-  const bridgeLocalRotation = worldToCabinetLocalRotation(
-    sourceRun,
-    sceneApi.nodes(),
-    runWorld.rotation,
-  )
-
   const baseModules =
     side === 'right'
       ? [
@@ -1237,97 +1446,6 @@ export function addCornerRun({
           },
         ]
 
-  const wallLegModules =
-    side === 'right'
-      ? [
-          {
-            name: 'Corner Wall Filler',
-            width: run.depth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'right' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-          {
-            name: 'Wall Cabinet',
-            width: connectedWidth,
-            openSide: 'left' as const,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-      : [
-          {
-            name: 'Wall Cabinet',
-            width: connectedWidth,
-            openSide: 'right' as const,
-            stack: doorStack(connectedShelfCount),
-          },
-          {
-            name: 'Corner Wall Filler',
-            width: run.depth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'left' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-
-  const bridgeModules = existingWallTop
-    ? side === 'right'
-      ? [
-          {
-            name: 'Wall Bridge Filler',
-            width: bridgeWidth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'left' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-      : [
-          {
-            name: 'Wall Bridge Filler',
-            width: bridgeWidth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'right' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-    : side === 'right'
-      ? [
-          {
-            name: 'Wall Corner Cabinet',
-            width: sourceCornerWidth,
-            openSide: 'right' as const,
-            stack: doorStack(connectedShelfCount),
-          },
-          {
-            name: 'Wall Bridge Filler',
-            width: bridgeWidth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'left' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-      : [
-          {
-            name: 'Wall Bridge Filler',
-            width: bridgeWidth,
-            moduleKind: 'corner-filler' as const,
-            openSide: 'right' as const,
-            cornerShelf: true,
-            stack: doorStack(connectedShelfCount),
-          },
-          {
-            name: 'Wall Corner Cabinet',
-            width: sourceCornerWidth,
-            openSide: 'left' as const,
-            stack: doorStack(connectedShelfCount),
-          },
-        ]
-
   const baseLeg = upsertCabinetRunWithModules({
     depth: sourceRun.depth,
     modulePatches: baseModules,
@@ -1339,10 +1457,15 @@ export function addCornerRun({
     sceneApi,
     sourceRun,
   })
+  const selectionRootId = cornerSelectionRootId(sourceRun, baseLeg.runId)
   const linkedRunIds: AnyNodeId[] = [baseLeg.runId]
+  const baseLegLiveMetadata = sceneApi.get<CabinetNode>(baseLeg.runId)?.metadata ?? null
+  const baseLegMetadata = cabinetMetadataRecord(baseLegLiveMetadata)
   sceneApi.update(baseLeg.runId, {
     metadata: {
-      ...cabinetMetadataRecord(sceneApi.get<CabinetNode>(baseLeg.runId)?.metadata ?? null),
+      ...(selectionRootId === baseLeg.runId
+        ? baseLegMetadata
+        : withSelectionProxyMetadata(baseLegLiveMetadata, selectionRootId)),
       cabinetCornerDerivedRun: {
         role: 'base-leg',
         side,
@@ -1351,34 +1474,64 @@ export function addCornerRun({
       },
     },
   } as Partial<AnyNode>)
-  for (const segment of uncoveredWallRunSegments({
-    depth: CABINET_WALL_DEPTH,
-    modulePatches: bridgeModules,
-    parentId: sourceRun.id as AnyNodeId,
-    position: existingWallTop ? bridgeFillerRunPosition : bridgeRunPosition,
-    rotation: runWorld.rotation,
-    sceneApi,
-  })) {
-    const bridgeSegmentLocalPosition = worldToCabinetLocalPosition(
+  for (const moduleId of baseLeg.moduleIds) {
+    setCabinetSelectionProxy(sceneApi, moduleId, selectionRootId)
+  }
+  const baseLegRunNode = sceneApi.get<CabinetNode>(baseLeg.runId) ?? run
+  const cornerFillerModule =
+    childModuleByName(baseLegRunNode, 'Corner Filler', sceneApi.nodes()) ??
+    sceneApi.get<CabinetModuleNode>(baseLeg.moduleIds[0]!)
+  const connectedBaseModule =
+    childModuleByName(baseLegRunNode, 'Base Cabinet', sceneApi.nodes()) ??
+    sceneApi.get<CabinetModuleNode>(baseLeg.moduleIds[1]!)
+
+  if (cornerFillerModule) {
+    const bridgeRunWorldPosition = anchoredBridgeRunWorldPosition({
+      sourceWallTop: existingWallTop,
       sourceRun,
+      bridgeWidth,
+      side,
+      fallbackPosition: bridgeFillerRunPosition,
+      nodes: sceneApi.nodes(),
+    })
+    const bridgeRunLocalPosition = worldToCabinetLocalPosition(
+      cornerFillerModule,
       sceneApi.nodes(),
-      segment.position,
+      bridgeRunWorldPosition,
+    )
+    const bridgeRunLocalRotation = worldToCabinetLocalRotation(
+      cornerFillerModule,
+      sceneApi.nodes(),
+      runWorld.rotation,
     )
     const bridgeRun = upsertCabinetRunWithModules({
       depth: CABINET_WALL_DEPTH,
-      modulePatches: segment.modulePatches,
+      modulePatches: [
+        {
+          name: 'Wall Bridge Filler',
+          width: bridgeWidth,
+          moduleKind: 'corner-filler',
+          openSide: side === 'right' ? 'left' : 'right',
+          cornerShelf: true,
+          stack: doorStack(connectedShelfCount),
+        },
+      ],
       name: 'Corner Wall Bridge',
-      parentId: sourceRun.id as AnyNodeId,
-      position: bridgeSegmentLocalPosition,
-      rotation: bridgeLocalRotation,
+      parentId: cornerFillerModule.id as AnyNodeId,
+      position: bridgeRunLocalPosition,
+      rotation: bridgeRunLocalRotation,
       runTier: 'wall',
       sceneApi,
       sourceRun,
     })
     linkedRunIds.push(bridgeRun.runId)
+    const bridgeRunLiveMetadata = sceneApi.get<CabinetNode>(bridgeRun.runId)?.metadata ?? null
+    const bridgeRunMetadata = cabinetMetadataRecord(bridgeRunLiveMetadata)
     sceneApi.update(bridgeRun.runId, {
       metadata: {
-        ...cabinetMetadataRecord(sceneApi.get<CabinetNode>(bridgeRun.runId)?.metadata ?? null),
+        ...(selectionRootId === bridgeRun.runId
+          ? bridgeRunMetadata
+          : withSelectionProxyMetadata(bridgeRunLiveMetadata, selectionRootId)),
         cabinetCornerDerivedRun: {
           role: 'bridge',
           side,
@@ -1387,35 +1540,49 @@ export function addCornerRun({
         },
       },
     } as Partial<AnyNode>)
-  }
-  for (const segment of uncoveredWallRunSegments({
-    depth: CABINET_WALL_DEPTH,
-    modulePatches: wallLegModules,
-    parentId: sourceRun.id as AnyNodeId,
-    position: wallRunPosition,
-    rotation: legRotation,
-    sceneApi,
-  })) {
-    const wallSegmentLocalPosition = worldToCabinetLocalPosition(
-      sourceRun,
-      sceneApi.nodes(),
-      segment.position,
+    for (const moduleId of bridgeRun.moduleIds) {
+      setCabinetSelectionProxy(sceneApi, moduleId, selectionRootId)
+    }
+    const wallModuleCenters = chainModuleCenters([run.depth, connectedWidth])
+    const cornerWallFillerCenter =
+      side === 'right' ? (wallModuleCenters[0] ?? 0) : (wallModuleCenters[1] ?? 0)
+    const cornerWallFillerWorldPosition = runLocalToPlan(
+      { position: wallRunPosition, rotation: legRotation },
+      [cornerWallFillerCenter, 0, 0],
     )
-    const wallLeg = upsertCabinetRunWithModules({
+    const wallFillerRun = upsertCabinetRunWithModules({
       depth: CABINET_WALL_DEPTH,
-      modulePatches: segment.modulePatches,
+      modulePatches: [
+        {
+          name: 'Corner Wall Filler',
+          width: run.depth,
+          moduleKind: 'corner-filler',
+          openSide: side === 'right' ? 'right' : 'left',
+          cornerShelf: true,
+          stack: doorStack(connectedShelfCount),
+        },
+      ],
       name: 'Corner Wall Run',
-      parentId: sourceRun.id as AnyNodeId,
-      position: wallSegmentLocalPosition,
-      rotation: wallLocalRotation,
+      parentId: cornerFillerModule.id as AnyNodeId,
+      position: worldToCabinetLocalPosition(
+        cornerFillerModule,
+        sceneApi.nodes(),
+        cornerWallFillerWorldPosition,
+      ),
+      rotation: worldToCabinetLocalRotation(cornerFillerModule, sceneApi.nodes(), legRotation),
       runTier: 'wall',
       sceneApi,
       sourceRun,
     })
-    linkedRunIds.push(wallLeg.runId)
-    sceneApi.update(wallLeg.runId, {
+    linkedRunIds.push(wallFillerRun.runId)
+    const wallFillerRunLiveMetadata =
+      sceneApi.get<CabinetNode>(wallFillerRun.runId)?.metadata ?? null
+    const wallFillerRunMetadata = cabinetMetadataRecord(wallFillerRunLiveMetadata)
+    sceneApi.update(wallFillerRun.runId, {
       metadata: {
-        ...cabinetMetadataRecord(sceneApi.get<CabinetNode>(wallLeg.runId)?.metadata ?? null),
+        ...(selectionRootId === wallFillerRun.runId
+          ? wallFillerRunMetadata
+          : withSelectionProxyMetadata(wallFillerRunLiveMetadata, selectionRootId)),
         cabinetCornerDerivedRun: {
           role: 'wall-leg',
           side,
@@ -1424,6 +1591,22 @@ export function addCornerRun({
         },
       },
     } as Partial<AnyNode>)
+    for (const moduleId of wallFillerRun.moduleIds) {
+      setCabinetSelectionProxy(sceneApi, moduleId, selectionRootId)
+    }
+  }
+
+  if (connectedBaseModule) {
+    const wallChildId = ensureWallCabinetAbove({
+      module: connectedBaseModule,
+      run: sceneApi.get<CabinetNode>(baseLeg.runId) ?? baseLegRunNode,
+      sceneApi,
+      shelfCount: connectedShelfCount,
+      openSide: connectedBaseModule.openSide,
+    })
+    if (wallChildId) {
+      setCabinetSelectionProxy(sceneApi, wallChildId, selectionRootId)
+    }
   }
 
   sceneApi.update(
@@ -1454,11 +1637,13 @@ export function addWallChildAbove({
   module,
   run,
   sceneApi,
+  openSide,
 }: {
   kind: 'cabinet' | 'hood'
   module: CabinetModuleNode
   run: CabinetNode
   sceneApi: SceneApi
+  openSide?: CabinetModuleNode['openSide']
 }): AnyNodeId | null {
   if (resolveCabinetType(module, run) !== 'base') return null
   if (wallChildOf(module, sceneApi.nodes())) return null
@@ -1486,10 +1671,67 @@ export function addWallChildAbove({
     showPlinth: false,
     withCountertop: false,
     stack: isHood ? [newCabinetCompartment('hood-pyramid')] : doorStack(1),
+    frontStyle: module.frontStyle,
+    frontOverlay: module.frontOverlay,
+    handleStyle: module.handleStyle,
+    handlePosition: module.handlePosition,
+    ...(openSide ? { openSide } : {}),
   })
   sceneApi.upsert(wall as AnyNode, module.id as AnyNodeId)
   sceneApi.markDirty(module.id as AnyNodeId)
   return wall.id
+}
+
+function ensureWallCabinetAbove({
+  module,
+  run,
+  sceneApi,
+  shelfCount,
+  openSide,
+}: {
+  module: CabinetModuleNode
+  run: CabinetNode
+  sceneApi: SceneApi
+  shelfCount: number
+  openSide?: CabinetModuleNode['openSide']
+}): AnyNodeId | null {
+  const existingWall = wallChildOf(module, sceneApi.nodes())
+  if (existingWall) {
+    sceneApi.update(
+      existingWall.id as AnyNodeId,
+      {
+        width: module.width,
+        depth: CABINET_WALL_DEPTH,
+        carcassHeight: CABINET_WALL_CARCASS_HEIGHT,
+        position: [
+          0,
+          wallBottomHeightForTallAlignment() - module.position[1],
+          backAlignZ(module.depth, CABINET_WALL_DEPTH),
+        ],
+        frontStyle: module.frontStyle,
+        frontOverlay: module.frontOverlay,
+        handleStyle: module.handleStyle,
+        handlePosition: module.handlePosition,
+        stack: cloneWallCabinetStack(existingWall, shelfCount),
+        ...(openSide ? { openSide } : {}),
+      } as Partial<AnyNode>,
+    )
+    return existingWall.id as AnyNodeId
+  }
+
+  const wallChildId = addWallChildAbove({
+    kind: 'cabinet',
+    module,
+    run,
+    sceneApi,
+    openSide,
+  })
+  if (!wallChildId) return null
+
+  sceneApi.update(wallChildId, {
+    stack: doorStack(shelfCount),
+  } as Partial<AnyNode>)
+  return wallChildId
 }
 
 /** Convert a base module to a tall unit (deletes any nested wall cabinet). */

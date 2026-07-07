@@ -4,6 +4,8 @@ import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { Box3 } from 'three'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { buildCabinetGeometry } from '../geometry'
+import { runLocalToPlan } from '../run-layout'
+import { addCornerRun, wallBottomHeightForTallAlignment } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 import { cabinetSlots } from '../slots'
 import {
@@ -115,6 +117,65 @@ function geometryContext({
   }
 }
 
+function sceneApiFixture(seed: AnyNode[]) {
+  const nodes = Object.fromEntries(seed.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+
+  return {
+    get: (id: AnyNodeId) => nodes[id],
+    nodes: () => nodes,
+    update: (id: AnyNodeId, patch: Partial<AnyNode>) => {
+      const current = nodes[id]
+      if (!current) return
+      nodes[id] = { ...current, ...patch } as AnyNode
+    },
+    upsert: (node: AnyNode, parentId?: AnyNodeId | null) => {
+      nodes[node.id as AnyNodeId] = node
+      if (parentId) {
+        const parent = nodes[parentId]
+        if (parent && Array.isArray((parent as { children?: unknown }).children)) {
+          const children = new Set(((parent as { children?: AnyNodeId[] }).children ?? []).slice())
+          children.add(node.id as AnyNodeId)
+          nodes[parentId] = { ...parent, children: [...children] } as AnyNode
+        }
+      }
+      return node.id as AnyNodeId
+    },
+    delete: () => {},
+    restore: () => {},
+    restoreAll: () => {},
+    markDirty: () => {},
+    pauseHistory: () => {},
+    resumeHistory: () => {},
+    getSubtree: () => null,
+    cloneNodesInto: () => null,
+  }
+}
+
+function resolveCabinetWorldTransform(
+  node: CabinetNode | CabinetModuleNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+): { position: [number, number, number]; rotation: number } {
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : null
+  if (parent?.type === 'cabinet' || parent?.type === 'cabinet-module') {
+    const worldParent = resolveCabinetWorldTransform(parent, nodes)
+    return {
+      position: runLocalToPlan(
+        {
+          position: worldParent.position,
+          rotation: worldParent.rotation,
+        },
+        node.position,
+      ),
+      rotation: worldParent.rotation + node.rotation,
+    }
+  }
+
+  return {
+    position: [...node.position] as [number, number, number],
+    rotation: node.rotation,
+  }
+}
+
 function countertopBounds(group: Object3D) {
   return findMeshesBySlot(group, 'countertop')
     .map((mesh) => {
@@ -157,6 +218,14 @@ function boxFrontUvSpan(mesh: Mesh) {
   }
 }
 
+function shakerFrameSize(width: number, height: number) {
+  return Math.min(0.085, Math.max(0.045, Math.min(width, height) * (height >= 0.22 ? 0.16 : 0.2)))
+}
+
+function raisedArchFrameSize(width: number, height: number) {
+  return Math.min(0.09, Math.max(0.048, Math.min(width, height) * (height >= 0.22 ? 0.17 : 0.21)))
+}
+
 describe('buildCabinetGeometry — cutout handles', () => {
   test('door cutouts sit vertically on the handle edge instead of the top edge', () => {
     const node = CabinetModuleNode.parse({
@@ -188,6 +257,187 @@ describe('buildCabinetGeometry — cutout handles', () => {
   })
 })
 
+describe('buildCabinetGeometry — shaker fronts', () => {
+  test('door fronts add a recessed center panel while keeping the outer frame proud', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      width: 0.6,
+      stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const leftDoor = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+$/)
+
+    leftDoor.geometry.computeBoundingBox()
+    const box = leftDoor.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const position = leftDoor.geometry.getAttribute('position') as BufferAttribute
+    let frameMaxZ = -Infinity
+    let panelMaxZ = -Infinity
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i)
+      const y = position.getY(i)
+      const z = position.getZ(i)
+      if (Math.abs(x) < 0.07 && Math.abs(y) < 0.16) panelMaxZ = Math.max(panelMaxZ, z)
+      else frameMaxZ = Math.max(frameMaxZ, z)
+    }
+
+    expect(frameMaxZ).toBeGreaterThan(panelMaxZ + 0.002)
+  })
+
+  test('door bar handles sit on the shaker side frame instead of the recessed panel', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      width: 0.6,
+      stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const leftDoor = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+$/)
+    const handle = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-handle$/)
+
+    leftDoor.geometry.computeBoundingBox()
+    const box = leftDoor.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const frame = shakerFrameSize(box!.max.x - box!.min.x, box!.max.y - box!.min.y)
+    expect(handle.position.x).toBeCloseTo(box!.max.x - frame / 2, 3)
+  })
+
+  test('door knob handles sit on the shaker side frame too', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      handleStyle: 'knob',
+      width: 0.6,
+      stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const leftDoor = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+$/)
+    const knob = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-handle$/)
+
+    leftDoor.geometry.computeBoundingBox()
+    const box = leftDoor.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const frame = shakerFrameSize(box!.max.x - box!.min.x, box!.max.y - box!.min.y)
+    expect(knob.position.x).toBeCloseTo(box!.max.x - frame / 2, 3)
+  })
+
+  test('drawer fronts support the same recessed shaker profile', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      width: 0.6,
+      stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const drawerFront = findMeshByNamePrefix(group, 'cabinet-drawer-front-')
+
+    drawerFront.geometry.computeBoundingBox()
+    const box = drawerFront.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const position = drawerFront.geometry.getAttribute('position') as BufferAttribute
+    let frameMaxZ = -Infinity
+    let panelMaxZ = -Infinity
+    for (let i = 0; i < position.count; i += 1) {
+      const x = position.getX(i)
+      const y = position.getY(i)
+      const z = position.getZ(i)
+      if (Math.abs(x) < 0.08 && Math.abs(y) < 0.03) panelMaxZ = Math.max(panelMaxZ, z)
+      else frameMaxZ = Math.max(frameMaxZ, z)
+    }
+
+    expect(frameMaxZ).toBeGreaterThan(panelMaxZ + 0.002)
+  })
+
+  test('drawer handles sit on the shaker top rail instead of the recessed panel', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      width: 0.6,
+      stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const drawerFront = findMeshByNamePrefix(group, 'cabinet-drawer-front-')
+    const handle = findMeshByNamePattern(group, /^cabinet-drawer-handle-[\d.]+-\d+$/)
+
+    drawerFront.geometry.computeBoundingBox()
+    const box = drawerFront.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const frame = shakerFrameSize(box!.max.x - box!.min.x, box!.max.y - box!.min.y)
+    expect(handle.position.y).toBeCloseTo(box!.max.y - frame / 2, 3)
+  })
+})
+
+describe('buildCabinetGeometry — raised arch fronts', () => {
+  test('door bar handles sit on the raised-arch side frame instead of the recessed panel', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'raised-arch',
+      width: 0.6,
+      stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const leftDoor = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+$/)
+    const handle = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-handle$/)
+
+    leftDoor.geometry.computeBoundingBox()
+    const box = leftDoor.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const frame = raisedArchFrameSize(box!.max.x - box!.min.x, box!.max.y - box!.min.y)
+    expect(handle.position.x).toBeCloseTo(box!.max.x - frame / 2, 3)
+  })
+
+  test('drawer auto handles sit on the raised-arch top rail instead of the recessed panel', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'raised-arch',
+      width: 0.6,
+      stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const drawerFront = findMeshByNamePrefix(group, 'cabinet-drawer-front-')
+    const handle = findMeshByNamePattern(group, /^cabinet-drawer-handle-[\d.]+-\d+$/)
+
+    drawerFront.geometry.computeBoundingBox()
+    const box = drawerFront.geometry.boundingBox
+    expect(box).toBeDefined()
+
+    const frame = raisedArchFrameSize(box!.max.x - box!.min.x, box!.max.y - box!.min.y)
+    expect(handle.position.y).toBeCloseTo(box!.max.y - frame / 2, 3)
+  })
+
+  test('drawer centered handles stay vertically centered when requested', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'raised-arch',
+      handlePosition: 'center',
+      width: 0.6,
+      stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const handle = findMeshByNamePattern(group, /^cabinet-drawer-handle-[\d.]+-\d+$/)
+
+    expect(handle.position.y).toBeCloseTo(0, 3)
+  })
+})
+
+describe('buildCabinetGeometry — inset internals', () => {
+  test('inset drawer boxes stay set back behind the front plane', () => {
+    const node = CabinetModuleNode.parse({
+      frontStyle: 'shaker',
+      frontOverlay: 'inset',
+      width: 0.6,
+      stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const drawerFront = findMeshByNamePrefix(group, 'cabinet-drawer-front-')
+    const drawerSide = findMeshByNamePrefix(group, 'cabinet-drawer-side-left-')
+
+    const frontBounds = worldBounds(drawerFront)
+    const sideBounds = worldBounds(drawerSide)
+
+    expect(sideBounds.max.z).toBeLessThan(frontBounds.min.z - 0.005)
+  })
+})
+
 describe('buildCabinetGeometry — glass doors', () => {
   test('glass door panes use the glass slot and transparent material', () => {
     const node = CabinetModuleNode.parse({
@@ -207,6 +457,25 @@ describe('buildCabinetGeometry — glass doors', () => {
       expect(typeof material.opacity).toBe('number')
       expect(material.opacity).toBeLessThan(1)
     }
+  })
+
+  test('raised-arch glass panes stay inside the front frame instead of protruding past it', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: 0.6,
+      carcassHeight: 2.07,
+      frontStyle: 'raised-arch',
+      stack: [{ id: 'glass-door', type: 'door', doorType: 'glass', shelfCount: 4 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const frame = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-frame$/)
+    const glass = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-glass$/)
+
+    const frameBounds = worldBounds(frame)
+    const glassBounds = worldBounds(glass)
+
+    expect(glassBounds.max.z).toBeLessThanOrEqual(frameBounds.max.z)
+    expect(glassBounds.min.z).toBeGreaterThanOrEqual(frameBounds.min.z)
   })
 })
 
@@ -1225,6 +1494,473 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertops.length).toBe(2)
     expect(countertops[0]!.maxX).toBeCloseTo(0)
     expect(countertops[1]!.minX).toBeCloseTo(0.6)
+  })
+
+  test('corner-derived base leg keeps the inner corner countertop edge flush on right turns', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_corner-base-leg-right',
+      runTier: 'base',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'right',
+          sourceModuleId: 'cabinet-module_source',
+          sourceRunId: 'cabinet_source-run',
+        },
+      },
+    })
+    const filler = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-filler-right',
+      parentId: run.id,
+      moduleKind: 'corner-filler',
+      openSide: 'right',
+      cornerShelf: true,
+      position: [0, 0.1, 0],
+      width: 0.58,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const base = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-base-right',
+      parentId: run.id,
+      position: [0.59, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [filler, base] }),
+      'rendered',
+      false,
+    )
+
+    const [countertop] = countertopBounds(group)
+    expect(countertop).toBeDefined()
+    expect(countertop!.minX).toBeCloseTo(-0.29)
+    expect(countertop!.maxX).toBeCloseTo(0.89 + run.countertopOverhang)
+  })
+
+  test('corner-derived base leg keeps the inner corner countertop edge flush on left turns', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_corner-base-leg-left',
+      runTier: 'base',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'left',
+          sourceModuleId: 'cabinet-module_source',
+          sourceRunId: 'cabinet_source-run',
+        },
+      },
+    })
+    const base = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-base-left',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const filler = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-filler-left',
+      parentId: run.id,
+      moduleKind: 'corner-filler',
+      openSide: 'left',
+      cornerShelf: true,
+      position: [0.59, 0.1, 0],
+      width: 0.58,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [base, filler] }),
+      'rendered',
+      false,
+    )
+
+    const [countertop] = countertopBounds(group)
+    expect(countertop).toBeDefined()
+    expect(countertop!.minX).toBeCloseTo(-0.3 - run.countertopOverhang)
+    expect(countertop!.maxX).toBeCloseTo(0.88)
+  })
+
+  test('corner-filler top pulls back slightly from its open side to avoid coplanar wall-top overlap', () => {
+    const rightOpen = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-filler-top-open-right',
+      moduleKind: 'corner-filler',
+      openSide: 'right',
+      position: [0, 0.1, 0],
+      width: 0.58,
+      depth: 0.32,
+      carcassHeight: 0.72,
+      boardThickness: 0.018,
+    })
+    const leftOpen = CabinetModuleNode.parse({
+      id: 'cabinet-module_corner-filler-top-open-left',
+      moduleKind: 'corner-filler',
+      openSide: 'left',
+      position: [0, 0.1, 0],
+      width: 0.58,
+      depth: 0.32,
+      carcassHeight: 0.72,
+      boardThickness: 0.018,
+    })
+
+    const rightGroup = buildCabinetGeometry(rightOpen, undefined, 'rendered', false)
+    const leftGroup = buildCabinetGeometry(leftOpen, undefined, 'rendered', false)
+
+    const rightTop = worldBounds(findMeshByName(rightGroup, 'cabinet-corner-filler-top'))
+    const leftTop = worldBounds(findMeshByName(leftGroup, 'cabinet-corner-filler-top'))
+
+    expect(rightTop.max.x).toBeLessThan(0.58 / 2)
+    expect(leftTop.min.x).toBeGreaterThan(-0.58 / 2)
+  })
+
+  test('generated wall bridge and corner wall fillers do not keep coplanar internal side panels', () => {
+    const levelId = 'level_corner-wall-filler-side-gap' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-wall-filler-side-gap',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-wall-filler-side-gap',
+        'cabinet-module_center-wall-filler-side-gap',
+        'cabinet-module_right-wall-filler-side-gap',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-wall-filler-side-gap',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-filler-side-gap',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      children: ['cabinet-module_center-wall-wall-filler-side-gap'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-wall-filler-side-gap',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-wall-filler-side-gap',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const bridge = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+    const corner = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+    )
+
+    expect(bridge).toBeTruthy()
+    expect(corner).toBeTruthy()
+
+    const bridgePose = resolveCabinetWorldTransform(bridge!, nodes)
+    const cornerPose = resolveCabinetWorldTransform(corner!, nodes)
+
+    const bridgeGroup = buildCabinetGeometry(
+      bridge!,
+      {
+        children: [],
+        parent: nodes[bridge!.parentId as AnyNodeId] as GeometryContext['parent'],
+        resolve: () => undefined as never,
+        siblings: [],
+      },
+      'rendered',
+      false,
+    )
+    bridgeGroup.position.set(...bridgePose.position)
+    bridgeGroup.rotation.y = bridgePose.rotation
+    bridgeGroup.updateMatrixWorld(true)
+
+    const cornerGroup = buildCabinetGeometry(
+      corner!,
+      {
+        children: [],
+        parent: nodes[corner!.parentId as AnyNodeId] as GeometryContext['parent'],
+        resolve: () => undefined as never,
+        siblings: [],
+      },
+      'rendered',
+      false,
+    )
+    cornerGroup.position.set(...cornerPose.position)
+    cornerGroup.rotation.y = cornerPose.rotation
+    cornerGroup.updateMatrixWorld(true)
+
+    const bridgeSide = worldBounds(findMeshByName(bridgeGroup, 'cabinet-corner-filler-side-right'))
+    const cornerSide = worldBounds(findMeshByName(cornerGroup, 'cabinet-corner-filler-side-left'))
+
+    expect(bridgeSide.max.x).toBeLessThan(cornerSide.min.x)
+  })
+
+  test('generated wall bridge and corner wall filler fronts pull back from the shared corner', () => {
+    const levelId = 'level_corner-wall-filler-front-gap' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-wall-filler-front-gap',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-wall-filler-front-gap',
+        'cabinet-module_center-wall-filler-front-gap',
+        'cabinet-module_right-wall-filler-front-gap',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-wall-filler-front-gap',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const center = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-filler-front-gap',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      children: ['cabinet-module_center-wall-wall-filler-front-gap'],
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-wall-filler-front-gap',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const centerWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_center-wall-wall-filler-front-gap',
+      parentId: center.id,
+      name: 'Wall Cabinet',
+      position: [0, wallBottomHeightForTallAlignment() - center.position[1], -0.13],
+      width: 0.9,
+      depth: 0.32,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      center as AnyNode,
+      right as AnyNode,
+      centerWall as AnyNode,
+    ])
+
+    addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const bridge = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )
+    const corner = Object.values(nodes).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+    )
+
+    expect(bridge).toBeTruthy()
+    expect(corner).toBeTruthy()
+
+    const bridgePose = resolveCabinetWorldTransform(bridge!, nodes)
+    const cornerPose = resolveCabinetWorldTransform(corner!, nodes)
+
+    const bridgeGroup = buildCabinetGeometry(
+      bridge!,
+      {
+        children: [],
+        parent: nodes[bridge!.parentId as AnyNodeId] as GeometryContext['parent'],
+        resolve: () => undefined as never,
+        siblings: [],
+      },
+      'rendered',
+      false,
+    )
+    bridgeGroup.position.set(...bridgePose.position)
+    bridgeGroup.rotation.y = bridgePose.rotation
+    bridgeGroup.updateMatrixWorld(true)
+
+    const cornerGroup = buildCabinetGeometry(
+      corner!,
+      {
+        children: [],
+        parent: nodes[corner!.parentId as AnyNodeId] as GeometryContext['parent'],
+        resolve: () => undefined as never,
+        siblings: [],
+      },
+      'rendered',
+      false,
+    )
+    cornerGroup.position.set(...cornerPose.position)
+    cornerGroup.rotation.y = cornerPose.rotation
+    cornerGroup.updateMatrixWorld(true)
+
+    const bridgeFront = worldBounds(findMeshByName(bridgeGroup, 'cabinet-corner-filler-front'))
+    const cornerFront = worldBounds(findMeshByName(cornerGroup, 'cabinet-corner-filler-front'))
+
+    expect(bridgeFront.max.x).toBeLessThan(cornerFront.min.x)
+    expect(bridgeFront.max.y).toBeLessThanOrEqual(cornerFront.max.y)
+  })
+
+  test('source run trims its right countertop overhang when a right L-leg is attached', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-right-leg',
+      runTier: 'base',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      children: ['cabinet-module_source-left', 'cabinet-module_source-right'] as AnyNodeId[],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-left',
+      parentId: run.id,
+      position: [-0.3, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-right',
+      parentId: run.id,
+      position: [0.3, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const rightLeg = CabinetNode.parse({
+      id: 'cabinet_child-right-leg',
+      parentId: run.id,
+      runTier: 'base',
+      position: [0.6, 0, 0],
+      rotation: -Math.PI / 2,
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'right',
+          sourceModuleId: right.id,
+          sourceRunId: run.id,
+        },
+      },
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [left, right, rightLeg] }),
+      'rendered',
+      false,
+    )
+
+    const [countertop] = countertopBounds(group)
+    expect(countertop).toBeDefined()
+    expect(countertop!.minX).toBeCloseTo(-0.6 - run.countertopOverhang)
+    expect(countertop!.maxX).toBeCloseTo(0.6)
+  })
+
+  test('source run trims its left countertop overhang when a left L-leg is attached', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-left-leg',
+      runTier: 'base',
+      withCountertop: true,
+      countertopThickness: 0.02,
+      countertopOverhang: 0.02,
+      children: ['cabinet-module_source-left', 'cabinet-module_source-right'] as AnyNodeId[],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-left',
+      parentId: run.id,
+      position: [-0.3, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-right',
+      parentId: run.id,
+      position: [0.3, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const leftLeg = CabinetNode.parse({
+      id: 'cabinet_child-left-leg',
+      parentId: run.id,
+      runTier: 'base',
+      position: [-0.6, 0, 0],
+      rotation: Math.PI / 2,
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'left',
+          sourceModuleId: left.id,
+          sourceRunId: run.id,
+        },
+      },
+    })
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [leftLeg, left, right] }),
+      'rendered',
+      false,
+    )
+
+    const [countertop] = countertopBounds(group)
+    expect(countertop).toBeDefined()
+    expect(countertop!.minX).toBeCloseTo(-0.6)
+    expect(countertop!.maxX).toBeCloseTo(0.6 + run.countertopOverhang)
   })
 
   test('countertop overhang does not enter an adjacent sibling tall cabinet', () => {

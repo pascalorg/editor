@@ -22,6 +22,10 @@ import {
   stackForCabinet,
 } from './stack'
 
+const CORNER_FILLER_TOP_INSET = 0.001
+const CORNER_FILLER_SIDE_INSET = 0.001
+const WALL_CORNER_FILLER_FRONT_HEIGHT_INSET = 0.001
+
 export function buildCabinetGeometry(
   node: CabinetGeometryNode,
   ctx?: GeometryContext,
@@ -74,6 +78,7 @@ export function buildCabinetGeometry(
   const backInset = Math.min(0.012, depth * 0.08)
   const frontRecess = 0.0015
   const inset = node.frontOverlay === 'inset'
+  const insetInteriorClearance = inset ? Math.max(0.012, frontThickness + frontRecess + 0.006) : 0
   // Overlay fronts sit proud on the carcass face; inset fronts sit flush within the opening.
   const frontZ = inset
     ? depth / 2 - frontThickness / 2 - frontRecess
@@ -85,10 +90,13 @@ export function buildCabinetGeometry(
   const innerWidth = Math.max(0.01, innerRight - innerLeft)
   const innerCenterX = (innerLeft + innerRight) / 2
   const openingWidth = innerWidth
-  const openingDepth = Math.max(0.01, depth - backInset - 0.02)
+  const openingDepth = Math.max(0.01, depth - backInset - 0.02 - insetInteriorClearance)
   const drawerBoxBackZ = -depth / 2 + backInset + 0.02
-  const drawerBoxFrontZ = frontZ - frontThickness / 2 - 0.001
+  const drawerBoxFrontZ =
+    frontZ - frontThickness / 2 - 0.001 - insetInteriorClearance
   const drawerBoxDepth = Math.max(0.05, drawerBoxFrontZ - drawerBoxBackZ)
+  const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetGeometryNode) : null
+  const isWallCornerFiller = node.moduleKind === 'corner-filler' && parentRun?.runTier === 'wall'
 
   if (node.moduleKind === 'corner-filler') {
     const filler = new Group()
@@ -103,20 +111,22 @@ export function buildCabinetGeometry(
         ),
     )
     if (!openLeft) {
+      const leftSideInset = isWallCornerFiller && openRight ? CORNER_FILLER_SIDE_INSET / 2 : 0
       addBox(
         filler,
         [board, carcassHeight, depth],
-        [-width / 2 + board / 2, bodyCenterY, 0],
+        [-width / 2 + board / 2 + leftSideInset, bodyCenterY, 0],
         materials.carcass,
         'cabinet-corner-filler-side-left',
         'carcass',
       )
     }
     if (!openRight) {
+      const rightSideInset = isWallCornerFiller && openLeft ? CORNER_FILLER_SIDE_INSET / 2 : 0
       addBox(
         filler,
         [board, carcassHeight, depth],
-        [width / 2 - board / 2, bodyCenterY, 0],
+        [width / 2 - board / 2 - rightSideInset, bodyCenterY, 0],
         materials.carcass,
         'cabinet-corner-filler-side-right',
         'carcass',
@@ -132,10 +142,14 @@ export function buildCabinetGeometry(
         'carcass',
       )
     }
+    // Keep open-side corner-filler tops just inside the shared boundary so
+    // neighboring wall-top fillers/cabinets don't land coplanar and shimmer.
+    const topLeft = innerLeft + (openLeft ? CORNER_FILLER_TOP_INSET : 0)
+    const topRight = innerRight - (openRight ? CORNER_FILLER_TOP_INSET : 0)
     addBox(
       filler,
-      [innerWidth, board, depth],
-      [innerCenterX, topY - board / 2, 0],
+      [Math.max(0.01, topRight - topLeft), board, depth],
+      [(topLeft + topRight) / 2, topY - board / 2, 0],
       materials.carcass,
       'cabinet-corner-filler-top',
       'carcass',
@@ -149,11 +163,22 @@ export function buildCabinetGeometry(
       'carcass',
     )
     const frontExtension = board / 2 + frontGap
-    const frontLeft = -width / 2 - (openLeft ? frontExtension : 0)
-    const frontRight = width / 2 + (openRight ? frontExtension : 0)
+    const wallFrontSharedInset = isWallCornerFiller ? frontThickness + frontGap : 0
+    const frontLeft =
+      -width / 2 -
+      (openLeft ? frontExtension : 0) +
+      (isWallCornerFiller && openRight ? wallFrontSharedInset : 0)
+    const frontRight =
+      width / 2 +
+      (openRight ? frontExtension : 0) -
+      (isWallCornerFiller && openLeft ? wallFrontSharedInset : 0)
+    const frontWidth = Math.max(0.01, frontRight - frontLeft)
+    const frontHeight = isWallCornerFiller
+      ? Math.max(0.01, carcassHeight - WALL_CORNER_FILLER_FRONT_HEIGHT_INSET * 2)
+      : carcassHeight
     addBox(
       filler,
-      [Math.max(0.01, frontRight - frontLeft), carcassHeight, frontThickness],
+      [frontWidth, frontHeight, frontThickness],
       [(frontLeft + frontRight) / 2, bodyCenterY, frontZ],
       materials.front,
       'cabinet-corner-filler-front',
@@ -252,7 +277,6 @@ export function buildCabinetGeometry(
   if (sinkBowlSpecs && sinkRow) {
     // Modules inside a run don't own a countertop (the run draws and cuts
     // it), so the faucet rises above the run's slab thickness instead.
-    const parentRun = ctx?.parent?.type === 'cabinet' ? (ctx.parent as CabinetGeometryNode) : null
     const slabThickness =
       countertopThickness > 0
         ? countertopThickness
