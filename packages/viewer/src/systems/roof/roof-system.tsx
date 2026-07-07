@@ -24,6 +24,7 @@ import * as THREE from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
@@ -904,6 +905,23 @@ function hasSegmentTrim(node: RoofSegmentNode): boolean {
   )
 }
 
+// Material slot the freshly exposed trim plane is assigned to. Slot 0 is the
+// wall/trim band — the same finish the gable walls render with (concrete-drywall
+// by default, continuous with the walls below). `remapRoofShellFaces` does not
+// reclassify slot 0, so any new interior face CSG carves out of a BoxGeometry
+// cutter lands on the wall band regardless of which box face it came from.
+// Without this the box's default 6 groups (materialIndex 0..5) collapse via
+// mod-4 and `remapRoofShellFaces` would reshuffle the vertical ones across
+// slots. Accessories still clamp the slot via `useSegmentTrimClippedGeometry`
+// when they expose fewer material slots.
+const TRIM_CUT_MATERIAL_SLOT = 0
+
+function assignTrimCutterSlot(geometry: THREE.BufferGeometry): void {
+  geometry.clearGroups()
+  const count = geometry.index ? geometry.index.count : geometry.getAttribute('position').count
+  geometry.addGroup(0, count, TRIM_CUT_MATERIAL_SLOT)
+}
+
 function buildTrimCutBrush(
   minX: number,
   maxX: number,
@@ -919,6 +937,11 @@ function buildTrimCutBrush(
 
   const geometry = new THREE.BoxGeometry(width, height, depth)
   geometry.translate((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2)
+  // World-metre UVs on the cutter so the newly exposed interior faces produced
+  // by CSG inherit tiled UVs (1 uv unit per metre) instead of the box's default
+  // 0→1-per-face, which would stretch the finish to fit each cut face.
+  applyWorldScaleBoxUVs(geometry, width, height, depth)
+  assignTrimCutterSlot(geometry)
   ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
 
@@ -973,6 +996,9 @@ function buildDiagonalTrimCutBrush(
   const geometry = new THREE.BoxGeometry(cutterLength, height, cutterDepth)
   geometry.rotateY(yaw)
   geometry.translate(centerX, (bounds.minY + bounds.maxY) / 2, centerZ)
+  // World-metre UVs so the diagonal cut's interior face inherits tiled UVs.
+  applyWorldScaleBoxUVs(geometry, cutterLength, height, cutterDepth)
+  assignTrimCutterSlot(geometry)
   ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
 
