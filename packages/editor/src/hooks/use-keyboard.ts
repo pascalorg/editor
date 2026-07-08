@@ -233,6 +233,13 @@ export const useKeyboard = ({
         // Set the wall tool explicitly so B never inherits a stale tool
         // (e.g. fence) left over from a prior build session.
         useEditor.getState().setTool('wall')
+      } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        useEditor.getState().setPhase('structure')
+        useEditor.getState().setStructureLayer('elements')
+        useEditor.getState().setMode('build')
+        useEditor.getState().setTool('measurement')
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()

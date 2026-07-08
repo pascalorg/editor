@@ -119,6 +119,7 @@ export type StructureTool =
   | 'column'
   | 'elevator'
   | 'stair'
+  | 'measurement'
   | 'item'
   | 'zone'
   | 'spawn'

@@ -16,6 +16,7 @@ export const tools: ToolConfig[] = [
   { id: 'door', iconSrc: '/icons/door.webp', label: 'Door' },
   { id: 'window', iconSrc: '/icons/window.webp', label: 'Window' },
   { id: 'stair', iconSrc: '/icons/stairs.webp', label: 'Stairs' },
+  { id: 'measurement', iconSrc: '/icons/blueprint.webp', label: 'Measure' },
   { id: 'roof', iconSrc: '/icons/roof.webp', label: 'Gable Roof' },
   { id: 'fence', iconSrc: '/icons/fence.webp', label: 'Fence' },
   { id: 'column', iconSrc: '/icons/column.webp', label: 'Column' },

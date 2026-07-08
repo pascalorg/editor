@@ -27,6 +27,7 @@ import {
   PencilLine,
   Plus,
   Redo2,
+  Ruler,
   Sparkles,
   Square,
   SquareStack,
@@ -41,6 +42,7 @@ import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
+import { useMeasurementTool } from '../../../store/use-measurement-tool'
 import { useCommandPalette } from './index'
 
 export function EditorCommands() {
@@ -130,6 +132,36 @@ export function EditorCommands() {
         icon: <ArrowRight className="h-4 w-4" />,
         keywords: ['stairs', 'staircase', 'flight', 'landing', 'steps'],
         execute: () => activateTool('stair'),
+      },
+      {
+        id: 'editor.tool.measurement',
+        label: 'Measure Tool',
+        group: 'Scene',
+        icon: <Ruler className="h-4 w-4" />,
+        keywords: ['measure', 'distance', 'ruler', 'length'],
+        execute: () => activateTool('measurement'),
+      },
+      {
+        id: 'editor.measurement.clear',
+        label: 'Clear Measurements',
+        group: 'Scene',
+        icon: <Trash2 className="h-4 w-4" />,
+        keywords: ['measure', 'distance', 'ruler', 'length', 'area', 'delete', 'remove'],
+        when: () => {
+          const measurement = useMeasurementTool.getState()
+          return (
+            measurement.segments.length > 0 ||
+            measurement.areas.length > 0 ||
+            measurement.perimeters.length > 0 ||
+            measurement.angles.length > 0 ||
+            measurement.draft !== null ||
+            measurement.angleDraft !== null
+          )
+        },
+        execute: () =>
+          run(() => {
+            useMeasurementTool.getState().clear()
+          }),
       },
       {
         id: 'editor.tool.zone',

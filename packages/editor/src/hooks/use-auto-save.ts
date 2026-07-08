@@ -3,6 +3,7 @@
 import { useScene } from '@pascal-app/core'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
+import { serializeMeasurements, useMeasurementTool } from '../store/use-measurement-tool'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -61,6 +62,7 @@ export function useAutoSave({
   useEffect(() => {
     let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
     let lastNodeCount = Object.keys(useScene.getState().nodes).length
+    let lastMeasurementsSnapshot = JSON.stringify(serializeMeasurements())
     // Collections + scene materials are document-level state that persists with
     // the graph but lives outside `nodes`. Track them by reference (zustand
     // hands out a new object on every mutation) so a material edit or a
@@ -76,7 +78,8 @@ export function useAutoSave({
       }
 
       const { nodes, rootNodeIds, collections, materials } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
+      const measurements = serializeMeasurements()
+      const sceneGraph = { nodes, rootNodeIds, collections, materials, measurements } as SceneGraph
 
       // Guard: refuse to autosave if the scene went from populated to nearly empty.
       // This catches accidental full deletions before they're persisted.
@@ -126,6 +129,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
+        lastMeasurementsSnapshot = JSON.stringify(serializeMeasurements())
         return
       }
 
@@ -134,6 +138,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
+        lastMeasurementsSnapshot = JSON.stringify(serializeMeasurements())
         return
       }
 
@@ -164,6 +169,40 @@ export function useAutoSave({
       }, AUTOSAVE_DEBOUNCE_MS)
     })
 
+    const handleDirtyMeasurementSnapshot = (currentMeasurementsSnapshot: string) => {
+      lastMeasurementsSnapshot = currentMeasurementsSnapshot
+      hasDirtyChangesRef.current = true
+      onDirtyRef.current?.()
+      setSaveStatus('pending')
+
+      if (isSavingRef.current) {
+        pendingSaveRef.current = true
+        return
+      }
+
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
+
+      saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = undefined
+        executeSave()
+      }, AUTOSAVE_DEBOUNCE_MS)
+    }
+
+    const unsubscribeMeasurements = useMeasurementTool.subscribe(() => {
+      const currentMeasurementsSnapshot = JSON.stringify(serializeMeasurements())
+      if (currentMeasurementsSnapshot === lastMeasurementsSnapshot) return
+
+      if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
+        lastMeasurementsSnapshot = currentMeasurementsSnapshot
+        if (isVersionPreviewModeRef.current) {
+          setSaveStatus('paused')
+        }
+        return
+      }
+
+      handleDirtyMeasurementSnapshot(currentMeasurementsSnapshot)
+    })
+
     // Flush any unsaved change while the page is going away. The network
     // save MUST set `keepalive` — a normal fetch is cancelled by the browser
     // the moment the page unloads, so a quick refresh right after an edit
@@ -173,7 +212,8 @@ export function useAutoSave({
       if (!hasDirtyChangesRef.current) return
       hasDirtyChangesRef.current = false
       const { nodes, rootNodeIds, collections, materials } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
+      const measurements = serializeMeasurements()
+      const sceneGraph = { nodes, rootNodeIds, collections, materials, measurements } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph, { keepalive: true }).catch(() => {})
       } else {
@@ -191,6 +231,7 @@ export function useAutoSave({
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
       flushOnExit()
       unsubscribe()
+      unsubscribeMeasurements()
     }
   }, [setSaveStatus])
 

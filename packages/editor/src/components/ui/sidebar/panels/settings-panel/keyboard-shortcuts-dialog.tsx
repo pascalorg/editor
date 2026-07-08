@@ -55,6 +55,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       { keys: ['V'], action: 'Switch to Select mode' },
       { keys: ['B'], action: 'Switch to Build mode' },
+      { keys: ['M'], action: 'Switch to Measure tool' },
       { keys: ['X'], action: 'Switch to Delete mode' },
       {
         keys: ['Esc'],

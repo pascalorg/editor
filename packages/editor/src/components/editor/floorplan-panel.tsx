@@ -113,6 +113,7 @@ import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
+import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
 import {
@@ -5971,6 +5972,7 @@ export function FloorplanPanel({
     (mode === 'build' && tool === 'item') || movingNode?.type === 'item'
   const isFloorItemBuildActive = mode === 'build' && tool === 'item' && !selectedItem?.attachTo
   const isFloorItemMoveActive = movingNode?.type === 'item' && !movingNode.asset.attachTo
+  const isMeasurementBuildActive = mode === 'build' && tool === 'measurement'
   // Ceiling-attached items (lights, fans). The 3D viewer drives these via
   // `ceiling:enter/move/click` raycast events on the ceiling mesh; the 2D
   // floor plan has no such mesh, so we synthesise the same events when the
@@ -6007,6 +6009,7 @@ export function FloorplanPanel({
     isFenceEndpointMoveActive ||
     isFloorItemBuildActive ||
     isFloorItemMoveActive ||
+    isMeasurementBuildActive ||
     isRegistryToolBuildActive
   const floorplanOpeningLocalY = useMemo(() => {
     if (movingNode?.type === 'door' || movingNode?.type === 'window') {
@@ -9213,7 +9216,6 @@ export function FloorplanPanel({
       showOpeningGhost,
       isPolygonBuildActive,
       isRoofBuildActive,
-      isSlabBuildActive,
       isWallBuildActive,
       levelId,
       publishFloorplanNavigationPose,
@@ -11095,6 +11097,13 @@ export function FloorplanPanel({
                   registry layer so the red lines and distance pills
                   paint on top of node geometry. */}
               <FloorplanAlignmentGuideLayer />
+
+              <FloorplanMeasurementToolLayer
+                active={isMeasurementBuildActive}
+                palette={palette}
+                sceneRotationDeg={floorplanSceneRotationDeg}
+                unit={unit}
+              />
 
               <FloorplanSiteLayer
                 isHighlighted={isSiteBoundaryHighlighted}

@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, type PointerEvent } from 'react'
 
 const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
 const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
@@ -127,6 +127,7 @@ function FloorplanMeasurementTick({
 type FloorplanMeasurementsLayerProps = {
   className: string
   measurements: LinearMeasurementOverlay[]
+  onMeasurementPointerDown?: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementPalette
   sceneRotationDeg?: number
 }
@@ -146,6 +147,7 @@ function normalizeReadableScreenAngle(angleDeg: number) {
 export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLayer({
   className,
   measurements,
+  onMeasurementPointerDown,
   palette,
   sceneRotationDeg = 0,
 }: FloorplanMeasurementsLayerProps) {
@@ -166,8 +168,16 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
             <g
               className={className}
               key={measurement.id}
-              pointerEvents="none"
-              style={{ userSelect: 'none' }}
+              onPointerDown={
+                onMeasurementPointerDown
+                  ? (event) => onMeasurementPointerDown(measurement.id, event)
+                  : undefined
+              }
+              pointerEvents={onMeasurementPointerDown ? 'auto' : 'none'}
+              style={{
+                cursor: onMeasurementPointerDown ? 'pointer' : undefined,
+                userSelect: 'none',
+              }}
             >
               <FloorplanMeasurementLine
                 dashed={measurement.dashedExtensions ?? true}

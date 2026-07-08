@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  angleBetweenMeasurements,
+  formatAngleMeasurement,
+  formatAreaMeasurement,
   formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
@@ -71,5 +74,36 @@ describe('linear measurements', () => {
   test('returns the display label for numeric controls', () => {
     expect(getLinearUnitLabel('metric')).toBe('m')
     expect(getLinearUnitLabel('imperial')).toBe('ft')
+  })
+})
+
+describe('area measurements', () => {
+  test('formats metric surface areas in square meters', () => {
+    expect(formatAreaMeasurement(12, 'metric')).toBe('12m²')
+    expect(formatAreaMeasurement(12.34, 'metric')).toBe('12.3m²')
+  })
+
+  test('formats imperial surface areas in rounded square feet', () => {
+    expect(formatAreaMeasurement(9.290304, 'imperial')).toBe('100ft²')
+  })
+
+  test('returns a placeholder for non-finite areas', () => {
+    expect(formatAreaMeasurement(NaN, 'metric')).toBe('--')
+    expect(formatAreaMeasurement(Infinity, 'imperial')).toBe('--')
+  })
+})
+
+describe('angle measurements', () => {
+  test('measures angle around the vertex point', () => {
+    expect(angleBetweenMeasurements([1, 0, 0], [0, 0, 0], [0, 0, 1])).toBeCloseTo(Math.PI / 2)
+  })
+
+  test('formats angle measurements in degrees', () => {
+    expect(formatAngleMeasurement(Math.PI / 2)).toBe('90°')
+    expect(formatAngleMeasurement(Math.PI / 3)).toBe('60°')
+  })
+
+  test('returns a placeholder for non-finite angles', () => {
+    expect(formatAngleMeasurement(NaN)).toBe('--')
   })
 })

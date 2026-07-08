@@ -38,6 +38,7 @@ import { SelectionAffordanceManager } from '../systems/selection-affordance-mana
 import { StairEditSystem } from '../systems/stair/stair-edit-system'
 import { ZoneLabelEditorSystem } from '../systems/zone/zone-label-editor-system'
 import { ZoneSystem } from '../systems/zone/zone-system'
+import { MeasurementHistoryPanel } from '../tools/measurement/measurement-history-panel'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
@@ -924,6 +925,24 @@ function PaintCursorLayer({
   )
 }
 
+function MeasurementHistoryPanelHost({
+  isVersionPreviewMode,
+  showLoader,
+}: {
+  isVersionPreviewMode: boolean
+  showLoader: boolean
+}) {
+  const mode = useEditor((s) => s.mode)
+  const tool = useEditor((s) => s.tool)
+  const unit = useViewer((s) => s.unit)
+
+  if (showLoader || isVersionPreviewMode || mode !== 'build' || tool !== 'measurement') {
+    return null
+  }
+
+  return <MeasurementHistoryPanel unit={unit} />
+}
+
 // ── Viewer canvas: memoized, subscribes to viewMode/floorplanPaneRatio internally ──
 // This prevents Editor from re-rendering when those values change.
 
@@ -1074,6 +1093,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
+      <MeasurementHistoryPanelHost
+        isVersionPreviewMode={isVersionPreviewMode}
+        showLoader={showLoader}
+      />
       {!(showLoader || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )

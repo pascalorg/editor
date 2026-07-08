@@ -25,6 +25,7 @@ import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
+import { MeasurementTool } from './measurement/measurement-tool'
 import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
@@ -56,6 +57,7 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     'property-line': SiteBoundaryEditor,
   },
   structure: {
+    measurement: MeasurementTool,
     roof: RoofTool,
     stair: StairTool,
     zone: ZoneTool,

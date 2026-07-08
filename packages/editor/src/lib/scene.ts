@@ -7,6 +7,7 @@ import useEditor, {
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import { hydrateMeasurements, type PersistedMeasurements } from '../store/use-measurement-tool'
 
 export type SceneGraph = {
   nodes: Record<string, unknown>
@@ -15,6 +16,7 @@ export type SceneGraph = {
   // payloads (and callers that only build nodes) stay valid.
   collections?: Record<string, unknown>
   materials?: Record<string, unknown>
+  measurements?: PersistedMeasurements
 }
 
 type PersistedSelectionPath = {
@@ -352,6 +354,7 @@ function resetEditorInteractionState() {
   outliner.selectedObjects.length = 0
   outliner.hoveredObjects.length = 0
   sceneRegistry.clear()
+  hydrateMeasurements(null)
   useEditor.setState({
     phase: 'site',
     mode: 'select',
@@ -381,8 +384,10 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
       collections: collections as any,
       materials: materials as any,
     })
+    hydrateMeasurements(sceneGraph.measurements)
   } else {
     useScene.getState().clearScene()
+    hydrateMeasurements(null)
   }
 
   syncEditorSelectionFromCurrentScene()
