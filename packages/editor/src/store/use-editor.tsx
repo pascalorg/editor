@@ -340,6 +340,11 @@ type EditorState = {
   setCanFindNode: (canFind: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  // Guide id with an in-flight reference-scale measurement (line drawing or
+  // length dialog). Owned by the floorplan panel; mirrored here so the
+  // reference panel can flip its Set Scale button into a Cancel.
+  referenceScaleActiveGuideId: string | null
+  setReferenceScaleActiveGuideId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
   setGuideLocked: (guideId: string, locked: boolean) => void
   setGuideScaleReferenceVisible: (guideId: string, visible: boolean) => void
@@ -987,6 +992,8 @@ const useEditor = create<EditorState>()(
       setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      referenceScaleActiveGuideId: null,
+      setReferenceScaleActiveGuideId: (id) => set({ referenceScaleActiveGuideId: id }),
       guideUi: {},
       setGuideLocked: (guideId, locked) =>
         set((state) => ({

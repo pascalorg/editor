@@ -114,10 +114,10 @@ export function projectAlignmentGuidesWorldToActiveBuildingLocal(
 
 /**
  * Baseline rotation the floor-plan view applies on top of the building
- * rotation. Mirrors `FLOORPLAN_VIEW_ROTATION_DEG = 90` in floorplan-panel.tsx —
+ * rotation. Mirrors `FLOORPLAN_VIEW_ROTATION_DEG = 0` in lib/floorplan/geometry.ts —
  * the scene group reads it via `floorplanSceneRotationDeg = FVR - buildingRot`.
  */
-const FLOORPLAN_VIEW_ROTATION_RAD = Math.PI / 2
+const FLOORPLAN_VIEW_ROTATION_RAD = 0
 
 function rotateAnchorsBy(
   anchors: readonly AlignmentAnchor[],

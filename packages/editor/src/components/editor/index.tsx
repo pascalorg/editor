@@ -165,6 +165,10 @@ export interface EditorProps {
   // Loading indicator (e.g. project fetching in community mode)
   isLoading?: boolean
 
+  // Fires when the full-screen scene loader shows/hides — lets hosts measure
+  // open-to-interactive time without reaching into internal loader state.
+  onLoaderChange?: (visible: boolean) => void
+
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 
@@ -1093,6 +1097,7 @@ export default function Editor({
   previewScene,
   isVersionPreviewMode = false,
   isLoading = false,
+  onLoaderChange,
   onThumbnailCapture,
   sidebarOverlay,
   viewerBanner,
@@ -1228,6 +1233,10 @@ export default function Editor({
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
+
+  useEffect(() => {
+    onLoaderChange?.(showLoader)
+  }, [showLoader, onLoaderChange])
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
