@@ -363,7 +363,11 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   const pad = 6 * unitsPerPixel
   const stroke = palette?.selectedStroke ?? '#3b82f6'
   return (
-    <g pointerEvents="none" transform={delta ? `translate(${delta[0]} ${delta[1]})` : undefined}>
+    <g
+      data-group-selection-box
+      pointerEvents="none"
+      transform={delta ? `translate(${delta[0]} ${delta[1]})` : undefined}
+    >
       <rect
         fill="none"
         height={box.depth + 2 * pad}
