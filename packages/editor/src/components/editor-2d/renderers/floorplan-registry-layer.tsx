@@ -929,8 +929,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         return
       }
 
-      // Capture the final state BEFORE the revert so we know what to
-      // re-apply post-resume.
+      // Legacy compatibility for sessions that still wrote preview state into
+      // `useScene` during `apply()`: capture the final state BEFORE the revert
+      // so we know what to re-apply post-resume. New sessions should provide a
+      // `commit()` hook and preview through live overrides/transforms instead.
       const sceneNodes = useScene.getState().nodes
       const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
       for (const snap of drag.snapshots) {
@@ -949,7 +951,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
 
       if (commitValid && finalUpdates.length > 0) {
-        // Single-undo dance (mirrors the 3D move-endpoint-tool):
+        // Legacy single-undo dance (mirrors the old 3D move-endpoint-tool):
         //   1. Revert to baseline while history is still paused (untracked).
         //   2. Resume history.
         //   3. Re-apply the final state — recorded as one tracked change.

@@ -542,14 +542,13 @@ export type FloorplanGeometry =
 //      history.
 //   3. Layer calls `apply` on every pointer-move with the current plan
 //      point + modifier keys.
-//   4. On pointer-up: layer reads the resulting scene state, reverts to
-//      the snapshot (still paused, untracked), resumes history, then
-//      re-applies the final state as a single tracked change (single-
-//      undo dance — same shape as Stage D 3D moves).
+//   4. On pointer-up: layer either calls the session's atomic `commit()` for
+//      one tracked final write, or uses the legacy snapshot diff path for
+//      sessions that have not migrated yet.
 //   5. On pointer-cancel / unmount: revert + resume without committing.
 //
-// `apply` is expected to call `scene.updateNodes` directly to drive
-// previews — the layer doesn't keep a separate draft state.
+// `apply` previews through live override/transform stores. It must not write
+// committed scene state per pointer tick.
 
 export type FloorplanAffordancePoint = readonly [x: number, y: number]
 
@@ -564,17 +563,11 @@ export type FloorplanAffordanceSession = {
   /** Node IDs the drag may mutate. Used by the dispatcher for the snapshot. */
   affectedIds: AnyNodeId[]
   /**
-   * Run a single drag tick. Two patterns are supported:
-   *  - **Scene-write preview**: implementation calls `scene.updateNodes`
-   *    each tick; the dispatcher captures a pre-drag snapshot and runs
-   *    a single-undo dance on commit (revert → resume → re-apply diff).
-   *    Suitable for affordances whose commit is a pure diff of the
-   *    affected fields.
-   *  - **Live-override preview**: implementation publishes per-frame
-   *    overrides to `useLiveNodeOverrides` (or another preview store);
-   *    `useScene` stays untouched during the drag. The session must
-   *    also expose `commit()` below, since there's no scene diff for
-   *    the dispatcher to write back.
+   * Run a single drag tick. New implementations publish per-frame overrides to
+   * `useLiveNodeOverrides` / `useLiveTransforms` (or another preview store);
+   * `useScene` stays untouched during the drag. Legacy sessions that still
+   * write preview state into `useScene` are supported only by the dispatcher's
+   * snapshot-diff compatibility path.
    *
    * Snap logic, linked-node cascade, and angle locking live here.
    */
@@ -589,13 +582,12 @@ export type FloorplanAffordanceSession = {
    */
   canCommit(): boolean
   /**
-   * Optional atomic-commit hook — mirror of the same field on
-   * `FloorplanMoveTargetSession`. When present, the dispatcher
-   * reverts to the pre-drag baseline (no-op if `apply()` never wrote
-   * to scene), resumes history, then calls `commit()` instead of
-   * re-applying a diff. The session owns the full final write
-   * (typically `applyNodeChanges` or `updateNodes`) plus clearing any
-   * live overrides it published in `apply()`.
+   * Optional atomic commit hook — mirror of the same field on
+   * `FloorplanMoveTargetSession`. New live-preview sessions should provide
+   * this so the dispatcher can revert to the pre-drag baseline, resume
+   * history, then call `commit()`. The session owns the full final write
+   * (typically `applyNodeChanges` or `updateNodes`) plus clearing any live
+   * overrides it published in `apply()`.
    */
   commit?(): void
 }
@@ -648,15 +640,10 @@ export type FloorplanMoveTargetSession = {
   /** Node IDs the move may mutate. Used by the dispatcher for snapshot capture. */
   affectedIds: AnyNodeId[]
   /**
-   * Single move-preview tick. Two patterns are supported:
-   *  - **Scene-write preview**: implementation calls `scene.updateNodes`
-   *    each tick; the dispatcher captures a pre-drag snapshot and runs
-   *    a single-undo dance on commit (revert → resume → re-apply diff).
-   *  - **Live-override preview**: implementation publishes per-frame
-   *    overrides to `useLiveNodeOverrides` / `useLiveTransforms`; the
-   *    scene store stays untouched during the drag. Sessions using this
-   *    path should also provide `commit()` below so the final scene write
-   *    happens once at the end.
+   * Single move-preview tick. Implementations publish per-frame overrides to
+   * `useLiveNodeOverrides` / `useLiveTransforms`; the scene store stays
+   * untouched during the drag. Provide `commit()` below so the final scene
+   * write happens once at the end.
    */
   apply(args: {
     planPoint: FloorplanAffordancePoint
@@ -924,8 +911,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * `def.floorplanAffordances?.[affordance].start({...})` on pointer-down,
    * receives a session, calls `apply(...)` on pointer-move and
    * `commit()` / `cancel()` on pointer-up / pointer-cancel. The session
-   * mutates scene state directly during `apply`; the dispatcher handles
-   * the snapshot + single-undo dance around it.
+   * previews through live override/transform stores during `apply`. Legacy
+   * sessions that still write preview state into `useScene` are handled by
+   * the dispatcher's snapshot + single-undo compatibility path.
    *
    * Mirrors the existing 3D `affordanceTools` map but for 2D SVG events,
    * and operates on plain JS data instead of mounting React. Kinds with

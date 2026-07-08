@@ -16,4 +16,3 @@ export function movementSfxStepKey({
   const step = gridSnapActive && gridStep > 0 ? gridStep : freeStep
   return coords.map((coord) => Math.round(coord / step)).join(',')
 }
-

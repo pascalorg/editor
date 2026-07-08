@@ -1,17 +1,13 @@
-import type { IconRef, LazyComponent, Plugin } from '@pascal-app/core'
+import type { IconRef, LazyComponent } from '@pascal-app/core'
 
-export type PluginPanelWorkspace = string & {}
+export type EditorHostPanelWorkspace = string & {}
 
-export type EditorPluginPanel = {
+export type EditorHostPanel = {
   id: string
   label: string
   icon: IconRef
   component: LazyComponent
-  workspaces?: readonly PluginPanelWorkspace[]
-}
-
-export type EditorPlugin = Plugin & {
-  panels?: EditorPluginPanel[]
+  workspaces?: readonly EditorHostPanelWorkspace[]
 }
 
 function isDevMode(): boolean {
@@ -27,11 +23,10 @@ function isDevMode(): boolean {
   return false
 }
 
-class PluginPanelRegistryImpl {
-  private readonly panels = new Map<string, EditorPluginPanel>()
+class EditorHostPanelRegistryImpl {
+  private readonly panels = new Map<string, EditorHostPanel>()
   private readonly listeners = new Set<() => void>()
-  private readonly kindPanels = new Map<string, string>()
-  private cached: EditorPluginPanel[] = []
+  private cached: EditorHostPanel[] = []
 
   subscribe = (onChange: () => void): (() => void) => {
     this.listeners.add(onChange)
@@ -40,39 +35,22 @@ class PluginPanelRegistryImpl {
     }
   }
 
-  getSnapshot = (): EditorPluginPanel[] => this.cached
-
-  panelForKind = (kind: string): string | undefined => this.kindPanels.get(kind)
-
-  registerPlugin(plugin: Pick<EditorPlugin, 'id' | 'nodes' | 'panels'>): void {
-    for (const panel of plugin.panels ?? []) {
-      const namespacedId = `${plugin.id}:${panel.id}`
-      this.registerPanel({ ...panel, id: namespacedId })
-      for (const def of plugin.nodes ?? []) {
-        if (!this.kindPanels.has(def.kind)) {
-          this.kindPanels.set(def.kind, namespacedId)
-        }
-      }
-    }
-  }
+  getSnapshot = (): EditorHostPanel[] => this.cached
 
   reset(): void {
     this.panels.clear()
-    this.kindPanels.clear()
     this.emit()
   }
 
-  private registerPanel(panel: EditorPluginPanel): void {
+  registerPanel(panel: EditorHostPanel): void {
     if (typeof panel.id !== 'string' || panel.id.length === 0) {
-      throw new Error('[editor:plugin-panels] panel id must be a non-empty string')
+      throw new Error('[editor:host-panels] panel id must be a non-empty string')
     }
     if (this.panels.has(panel.id)) {
       if (isDevMode()) {
-        console.warn(`[editor:plugin-panels] re-registering panel "${panel.id}" (HMR)`)
+        console.warn(`[editor:host-panels] re-registering panel "${panel.id}" (HMR)`)
       } else {
-        throw new Error(
-          `[editor:plugin-panels] duplicate panel id: "${panel.id}" already registered`,
-        )
+        throw new Error(`[editor:host-panels] duplicate panel id: "${panel.id}" already registered`)
       }
     }
     this.panels.set(panel.id, panel)
@@ -85,10 +63,8 @@ class PluginPanelRegistryImpl {
   }
 }
 
-export const pluginPanelRegistry = new PluginPanelRegistryImpl()
+export const editorHostPanelRegistry = new EditorHostPanelRegistryImpl()
 
-export function registerEditorPluginPanels(
-  plugin: Pick<EditorPlugin, 'id' | 'nodes' | 'panels'>,
-): void {
-  pluginPanelRegistry.registerPlugin(plugin)
+export function registerEditorHostPanel(panel: EditorHostPanel): void {
+  editorHostPanelRegistry.registerPanel(panel)
 }

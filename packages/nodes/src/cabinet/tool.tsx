@@ -46,7 +46,6 @@ import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
 import {
   type CabinetStretchPreview,
-  cabinetStretchEndLocalX,
   cabinetStretchExitSide,
   chooseCabinetContinuousAnchor,
   createCabinetContinuousContinuation,
@@ -275,23 +274,20 @@ const CabinetTool = () => {
   const surfaceQuatRef = useRef(new Quaternion())
   const surfaceForwardRef = useRef(new Vector3(0, 0, 1))
 
-  const previewNode = useMemo(
-    () => {
-      const runDefaults = cabinetDefinition.defaults()
-      return CabinetModuleNode.parse({
-        ...cabinetModuleDefinition.defaults(),
-        ...DEFAULT_PLACEMENT_PRESET.createPatch(),
-        showPlinth: runDefaults.showPlinth,
-        plinthHeight: runDefaults.plinthHeight,
-        toeKickDepth: runDefaults.toeKickDepth,
-        withCountertop: runDefaults.withCountertop,
-        countertopThickness: runDefaults.countertopThickness,
-        countertopOverhang: runDefaults.countertopOverhang,
-        countertopBackOverhang: runDefaults.countertopBackOverhang,
-      })
-    },
-    [],
-  )
+  const previewNode = useMemo(() => {
+    const runDefaults = cabinetDefinition.defaults()
+    return CabinetModuleNode.parse({
+      ...cabinetModuleDefinition.defaults(),
+      ...DEFAULT_PLACEMENT_PRESET.createPatch(),
+      showPlinth: runDefaults.showPlinth,
+      plinthHeight: runDefaults.plinthHeight,
+      toeKickDepth: runDefaults.toeKickDepth,
+      withCountertop: runDefaults.withCountertop,
+      countertopThickness: runDefaults.countertopThickness,
+      countertopOverhang: runDefaults.countertopOverhang,
+      countertopBackOverhang: runDefaults.countertopBackOverhang,
+    })
+  }, [])
   const placementDimensions = useMemo(() => {
     const defaults = cabinetDefinition.defaults()
     return [
@@ -581,7 +577,9 @@ const CabinetTool = () => {
         0,
         0,
       ])
-      const ignoreIds = chainRootRunRef.current ? [chainRootRunRef.current.id as AnyNodeId] : undefined
+      const ignoreIds = chainRootRunRef.current
+        ? [chainRootRunRef.current.id as AnyNodeId]
+        : undefined
       const result = resolveCabinetContinuousValidity(
         spatialGridManager.canPlaceOnFloor(
           activeLevelId,
@@ -709,7 +707,9 @@ const CabinetTool = () => {
       return { cabinet, buildModule }
     }
 
-    const commitDraftSegment = (segment: DraftSegment): {
+    const commitDraftSegment = (
+      segment: DraftSegment,
+    ): {
       endModule: ReturnType<typeof CabinetModuleNode.parse>
       run: CabinetNode
     } | null => {
@@ -717,9 +717,14 @@ const CabinetTool = () => {
       sceneApi.pauseHistory()
       try {
         if (!chainRunRef.current || !chainEndModuleRef.current || !chainCornerSideRef.current) {
-          const { cabinet, buildModule } = buildRunNodes(segment.anchor.position, segment.anchor.yaw)
+          const { cabinet, buildModule } = buildRunNodes(
+            segment.anchor.position,
+            segment.anchor.yaw,
+          )
           sceneApi.upsert(cabinet, activeLevelId)
-          const modules = segment.stretch.modules.map((m, index) => buildModule(m.x, m.width, index))
+          const modules = segment.stretch.modules.map((m, index) =>
+            buildModule(m.x, m.width, index),
+          )
           for (const module of modules) sceneApi.upsert(module, cabinet.id as AnyNodeId)
           bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
           sceneApi.resumeHistory()
@@ -736,13 +741,16 @@ const CabinetTool = () => {
           side: chainCornerSideRef.current,
         })
         if (!connectedId) throw new Error('Unable to create cabinet corner')
-        const connectedModule = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
+        const connectedModule =
+          sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
         const nextRun = connectedModule?.parentId
           ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
           : null
         if (!connectedModule || !nextRun) throw new Error('Unable to resolve connected corner run')
 
-        const plannedConnectedWidths = segment.stretch.modules.slice(1).map((module) => module.width)
+        const plannedConnectedWidths = segment.stretch.modules
+          .slice(1)
+          .map((module) => module.width)
         let anchorModule = connectedModule
         for (const expectedWidth of plannedConnectedWidths.slice(1)) {
           const addedId = addCabinetModuleSide({
@@ -756,13 +764,10 @@ const CabinetTool = () => {
           if (!added) break
           if (expectedWidth < added.width - 1e-4) {
             const leftEdge = added.position[0] - added.width / 2
-            sceneApi.update(
-              added.id as AnyNodeId,
-              {
-                width: expectedWidth,
-                position: [leftEdge + expectedWidth / 2, added.position[1], added.position[2]],
-              },
-            )
+            sceneApi.update(added.id as AnyNodeId, {
+              width: expectedWidth,
+              position: [leftEdge + expectedWidth / 2, added.position[1], added.position[2]],
+            })
             added = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(addedId) ?? added
           }
           anchorModule = added

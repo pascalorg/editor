@@ -6,9 +6,9 @@ import {
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'
-import { type EditorPlugin, registerEditorPluginPanels } from '@pascal-app/editor'
+import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-import { treesPlugin } from '@pascal-app/plugin-trees'
+import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they
@@ -74,16 +74,17 @@ export async function loadExternalPlugins(): Promise<void> {
   const externals = await discoverPlugins()
   for (const plugin of externals) {
     await loadPlugin(plugin)
-    registerEditorPluginPanels(plugin as EditorPlugin)
   }
   if (isDev() && externals.length > 0 && typeof console !== 'undefined') {
     console.info(`[pascal:registry] + ${externals.length} discovered plugin(s)`)
   }
 }
 
-// Register the first-party example plugin (trees node + presets rail panel)
-// alongside any host-provided discovery source instead of replacing it.
+// Register the first-party example node plugin alongside any host-provided
+// discovery source instead of replacing it. Its Nature rail panel is host UI,
+// so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
+registerEditorHostPanel(treesHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()

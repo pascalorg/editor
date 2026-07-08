@@ -161,7 +161,7 @@ export function useFloorplanBackgroundPlacement({
         // Align the committed vertex the same way the move-preview did, so the
         // placed point matches what the user saw — mode-driven (the chip):
         // `grid` quantizes, `angles` locks 15° rays, `lines` snaps onto walls /
-        // alignment, `off` is free. Alt forces (skips alignment).
+        // alignment, `off` is free. Alt remains force/free at commit time.
         const angleSnap = ceilingDraftPoints.length > 0 && isAngleSnapActive()
         const fallbackPoint = snapPolygonDraftPoint({
           point: planPoint,
@@ -172,7 +172,6 @@ export function useFloorplanBackgroundPlacement({
           rawPoint: planPoint,
           fallbackPoint,
           levelId,
-          altKey: event.altKey,
           align: !angleSnap,
         }).point
 
@@ -183,10 +182,10 @@ export function useFloorplanBackgroundPlacement({
 
       if (isRoofBuildActive) {
         // Footprint placement (polygon context: grid / lines / off, no angle),
-        // mode-driven to match the chip. Alt forces (skips alignment).
+        // mode-driven to match the chip. Alt is force/free at commit time;
+        // alignment display/pull follows the active magnetic mode.
         const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
           applySnap: isMagneticSnapActive(),
-          bypass: event.altKey,
         })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
@@ -281,13 +280,11 @@ export function useFloorplanBackgroundPlacement({
             rawPoint: planPoint,
             fallbackPoint,
             levelId,
-            altKey: event.altKey,
             align: !angleSnap,
           }).point
         } else if (!angleSnap) {
           snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
             applySnap: isMagneticSnapActive(),
-            bypass: event.altKey,
           })
         }
 
@@ -367,7 +364,7 @@ export function useFloorplanBackgroundPlacement({
       // local floor-plan draft handler (column / spawn / shelf / etc.).
       // The tool's `grid:click` subscriber owns the placement.
       if (isFloorplanGridInteractionActive) {
-        const snappedPoint = event.shiftKey ? planPoint : getSnappedFloorplanPoint(planPoint)
+        const snappedPoint = getSnappedFloorplanPoint(planPoint)
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
         return true

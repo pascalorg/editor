@@ -1,5 +1,5 @@
-import type { AnyNodeDefinition } from '@pascal-app/core'
-import type { EditorPlugin } from '@pascal-app/editor'
+import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import type { EditorHostPanel } from '@pascal-app/editor'
 // Side-effect: subscribes the panel store to `selection:find-node` so the
 // host's "find in catalog" lands on the right Nature section (see find-sync.ts).
 import './find-sync'
@@ -15,7 +15,7 @@ import { grassDefinition } from './grass-definition'
  * (`Trees`). Cast mirrors the built-in bundle: `AnyNodeDefinition` is the
  * hand-maintained union today; the registry derives it post-migration.
  */
-export const treesPlugin: EditorPlugin = {
+export const treesPlugin: Plugin = {
   id: 'pascal:trees',
   apiVersion: 1,
   nodes: [
@@ -23,14 +23,13 @@ export const treesPlugin: EditorPlugin = {
     flowerDefinition as unknown as AnyNodeDefinition,
     grassDefinition as unknown as AnyNodeDefinition,
   ],
-  panels: [
-    {
-      id: 'trees',
-      label: 'Nature',
-      icon: { kind: 'url', src: NATURE_ICON },
-      component: () => import('./presets-panel'),
-    },
-  ],
+}
+
+export const treesHostPanel: EditorHostPanel = {
+  id: 'pascal:trees:trees',
+  label: 'Nature',
+  icon: { kind: 'url', src: NATURE_ICON },
+  component: () => import('./presets-panel'),
 }
 
 // NOTE: no re-export from './geometry' — it imports ez-tree, which touches

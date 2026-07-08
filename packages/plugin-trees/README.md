@@ -1,8 +1,9 @@
 # @pascal-app/plugin-trees
 
 The first-party **example plugin** for the Pascal editor. It contributes
-procedural plant nodes plus the standalone editor's Nature panel, and exists to prove —
-and document — the minimal host surface every future plugin reuses.
+procedural plant nodes plus a separately exported host-side Nature panel, and
+exists to prove — and document — the minimal node-plugin surface every future
+plugin reuses.
 
 It is structurally identical to a third-party plugin: it peer-depends on
 `@pascal-app/{core,viewer,editor}` (plus `react`/`three`/`@react-three/fiber`/
@@ -13,9 +14,9 @@ nothing private. Copy this folder as the starting point for a new plugin.
 
 The contribution paths this package demonstrates:
 
-1. **Host-side panel extension** — the standalone editor layers a Nature rail
-   panel on top of the core plugin manifest. `presets-panel.tsx` is a plain
-   React component the host mounts behind an error boundary.
+1. **Host-side panel extension** — the standalone editor registers
+   `treesHostPanel` separately from the core plugin manifest. `presets-panel.tsx`
+   is a plain React component the host mounts behind an error boundary.
 2. **Right inspector for free** — `def.parametrics` (`parametrics.ts`). The host
    renders the preset/height/seed controls + the Randomize action with zero
    tree-specific code.
@@ -71,8 +72,9 @@ setPluginDiscovery(async () => [treesPlugin])
 ```
 
 `treesPlugin` exports three node kinds (`trees:tree`, `trees:flower`,
-`trees:grass`) for the core `loadPlugin` path. The editor app also reads the
-package's host-side panel metadata to surface the Nature rail entry.
+`trees:grass`) for the core `loadPlugin` path. The editor app separately imports
+`treesHostPanel` to surface the Nature rail entry; panels are not part of the v1
+core plugin manifest.
 
 ## Notes / known gaps
 

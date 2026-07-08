@@ -63,4 +63,3 @@ describe('movementSfxStepKey', () => {
     )
   })
 })
-
