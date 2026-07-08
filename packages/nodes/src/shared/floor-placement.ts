@@ -147,3 +147,23 @@ export function subscribeFloorPlacementClicks(
     }
   }
 }
+
+export function subscribeFloorPlacementDoubleClicks(
+  onDoubleClick: (event: FloorPlacementClickTriggerEvent) => void,
+) {
+  emitter.on('grid:double-click', onDoubleClick)
+  type SuffixedKey<K extends string> = `${K}:${EventSuffix}`
+  type DoubleClickKey = SuffixedKey<(typeof FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS)[number]>
+  for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
+    const key = `${kind}:double-click` as DoubleClickKey
+    emitter.on(key, onDoubleClick as never)
+  }
+
+  return () => {
+    emitter.off('grid:double-click', onDoubleClick)
+    for (const kind of FLOOR_PLACEMENT_CLICK_TRIGGER_KINDS) {
+      const key = `${kind}:double-click` as DoubleClickKey
+      emitter.off(key, onDoubleClick as never)
+    }
+  }
+}

@@ -87,6 +87,7 @@ describe('floor-placed elevation resolver', () => {
   beforeEach(() => {
     nodeRegistry._reset()
     spatialGridManager.clear()
+    useScene.setState({ nodes: {} })
   })
 
   test('returns 0 without a floorPlaced capability', () => {
@@ -153,6 +154,65 @@ describe('floor-placed elevation resolver', () => {
     expect(coarse.conflictIds).toEqual(['item_blocker'])
     expect(precise.valid).toBe(true)
     expect(precise.conflictIds).toEqual([])
+  })
+
+  test('canPlaceOnFloorFootprints ignores descendants of an ignored composite node', () => {
+    registerNode(
+      makeDefinition('cabinet', {
+        floorPlaced: {
+          footprint: () => ({
+            dimensions: [1, 1, 1],
+            rotation: [0, 0, 0],
+          }),
+          collides: true,
+        },
+      }),
+    )
+    registerNode(
+      makeDefinition('cabinet-module', {
+        floorPlaced: {
+          footprint: () => ({
+            dimensions: [1, 1, 1],
+            rotation: [0, 0, 0],
+          }),
+          collides: true,
+        },
+      }),
+    )
+
+    const level = makeLevel()
+    const run = {
+      id: 'cabinet_run',
+      type: 'cabinet',
+      object: 'node',
+      parentId: LEVEL_ID,
+      visible: true,
+      metadata: {},
+      children: ['cabinet-module_child'],
+      position: [0, 0, 0],
+      rotation: 0,
+    } as unknown as AnyNode
+    const module = {
+      id: 'cabinet-module_child',
+      type: 'cabinet-module',
+      object: 'node',
+      parentId: run.id,
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [0, 0, 0],
+      rotation: 0,
+    } as unknown as AnyNode
+    useScene.setState({ nodes: nodesFor(level, run, module) })
+
+    const result = spatialGridManager.canPlaceOnFloorFootprints(
+      LEVEL_ID,
+      [{ position: [0, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] }],
+      [run.id],
+    )
+
+    expect(result.valid).toBe(true)
+    expect(result.conflictIds).toEqual([])
   })
 
   test('returns 0 when applies returns false', () => {

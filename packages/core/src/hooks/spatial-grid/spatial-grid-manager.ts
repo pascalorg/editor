@@ -163,6 +163,28 @@ function resolveNodeLevelId(node: AnyNode, nodes: Record<string, AnyNode>): stri
   return 'default'
 }
 
+function expandIgnoredNodeIds(
+  ignoreIds: readonly string[] | undefined,
+  nodes: Record<string, AnyNode>,
+): Set<string> {
+  const ignored = new Set(ignoreIds ?? [])
+  const queue = [...ignored]
+
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    const node = nodes[id]
+    const children = (node as { children?: unknown } | undefined)?.children
+    if (!Array.isArray(children)) continue
+    for (const childId of children) {
+      if (typeof childId !== 'string' || ignored.has(childId)) continue
+      ignored.add(childId)
+      queue.push(childId)
+    }
+  }
+
+  return ignored
+}
+
 /**
  * Test if two line segments (a1->a2) and (b1->b2) intersect.
  */
@@ -718,7 +740,7 @@ export class SpatialGridManager {
     ignoreIds?: string[],
   ) {
     const nodes = useScene.getState().nodes
-    const ignoreSet = new Set(ignoreIds ?? [])
+    const ignoreSet = expandIgnoredNodeIds(ignoreIds, nodes)
     const draftBounds = footprints.map((footprint) =>
       footprintBoundsXZ(footprint.position, footprint.dimensions, footprint.rotation[1] ?? 0),
     )

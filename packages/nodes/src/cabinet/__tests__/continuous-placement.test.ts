@@ -3,6 +3,7 @@ import {
   cabinetStretchEndLocalX,
   cabinetStretchExitSide,
   fillCabinetContinuousSpan,
+  isCabinetContinuousFollowUpClick,
   planCabinetContinuousStretch,
   resolveCabinetContinuousValidity,
   type StretchAnchor,
@@ -100,5 +101,13 @@ describe('cabinet continuous placement', () => {
       conflictIds: [],
       valid: true,
     })
+  })
+
+  test('treats the second click in a double-click as a follow-up click to ignore', () => {
+    expect(isCabinetContinuousFollowUpClick(2)).toBe(true)
+  })
+
+  test('treats a normal click as a segment commit click', () => {
+    expect(isCabinetContinuousFollowUpClick(1)).toBe(false)
   })
 })

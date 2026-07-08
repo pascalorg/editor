@@ -332,6 +332,7 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
+export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
 export {
   clearSlabSnapFeedback,

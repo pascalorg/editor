@@ -17,24 +17,30 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  clearPlacementSurface,
+  getFloorStackPreviewPosition,
   getSideFromNormal,
   isGridSnapActive,
   isMagneticSnapActive,
   isValidWallSideFace,
   markToolCancelConsumed,
+  movementSfxStepKey,
+  publishPlacementSurface,
   triggerSFX,
   useEditor,
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { useFrame } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Mesh } from 'three'
+import { type Group, Mesh, Quaternion, Vector3 } from 'three'
 import {
   type FloorPlacementClickTriggerEvent,
   getLevelLocalSnappedPosition,
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
+  subscribeFloorPlacementDoubleClicks,
 } from '../shared/floor-placement'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { findClosestWallInPlan, type WallHit } from '../shared/wall-attach-target'
@@ -42,6 +48,7 @@ import {
   type CabinetStretchPreview,
   cabinetStretchEndLocalX,
   cabinetStretchExitSide,
+  isCabinetContinuousFollowUpClick,
   isForcePlacementEvent,
   planCabinetContinuousStretch,
   resolveCabinetContinuousValidity,
@@ -75,8 +82,10 @@ type CabinetPlacement = {
   snappedToWall: boolean
   valid: boolean
   conflictIds: string[]
+  wallLocalX?: number
   guide?: CabinetWallSnapPlacement['guide']
   snapReason?: CabinetWallSnapPlacement['snapReason']
+  wallSurfaceNormal?: [number, number, number]
   // Rubber-band state: anchor is `position`/`yaw`; modules are run-local
   // center offsets filling the anchor→cursor span.
   stretch?: CabinetStretchPreview
@@ -215,9 +224,15 @@ const CabinetTool = () => {
   const islandModeRef = useRef(false)
   const placementRef = useRef<CabinetPlacement | null>(null)
   const draftSegmentsRef = useRef<DraftSegment[]>([])
-  const previousSnapRef = useRef<[number, number] | null>(null)
+  const previousSnapRef = useRef<string | null>(null)
   const previousWasWallSnapRef = useRef(false)
+  const previousTickFrameRef = useRef(-1)
   const draftAnchorRef = useRef<StretchAnchor | null>(null)
+  const activeGhostRef = useRef<Group | null>(null)
+  const surfacePointRef = useRef(new Vector3())
+  const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
+  const surfaceQuatRef = useRef(new Quaternion())
+  const surfaceForwardRef = useRef(new Vector3(0, 0, 1))
 
   const previewNode = useMemo(
     () =>
@@ -284,6 +299,31 @@ const CabinetTool = () => {
     [previewNode],
   )
 
+  useFrame(() => {
+    const ghostGroup = activeGhostRef.current
+    const current = placementRef.current
+    if (!ghostGroup || !current) {
+      clearPlacementSurface()
+      return
+    }
+
+    ghostGroup.getWorldPosition(surfacePointRef.current)
+    if (current.snappedToWall) {
+      ghostGroup.getWorldQuaternion(surfaceQuatRef.current)
+      const forward = surfaceForwardRef.current.set(0, 0, 1).applyQuaternion(surfaceQuatRef.current)
+      forward.y = 0
+      if (forward.lengthSq() > 1e-6) {
+        surfaceNormalRef.current.copy(forward.normalize())
+      } else if (current.wallSurfaceNormal) {
+        surfaceNormalRef.current.set(...current.wallSurfaceNormal)
+      }
+      surfacePointRef.current.addScaledVector(surfaceNormalRef.current, -previewNode.depth / 2)
+    } else {
+      surfaceNormalRef.current.set(0, 1, 0)
+    }
+    publishPlacementSurface(surfacePointRef.current, surfaceNormalRef.current)
+  })
+
   useEffect(() => {
     if (!activeLevelId) return
     placementRef.current = null
@@ -291,8 +331,15 @@ const CabinetTool = () => {
     setDraftSegments([])
     previousSnapRef.current = null
     previousWasWallSnapRef.current = false
+    previousTickFrameRef.current = -1
     draftAnchorRef.current = null
     let lastWallEventTime = -1
+    let wallOwnedPointerAt = Number.NEGATIVE_INFINITY
+    const WALL_OWNS_POINTER_MS = 64
+    const markWallOwnedPointer = () => {
+      wallOwnedPointerAt = performance.now()
+    }
+    const wallOwnsPointer = () => performance.now() - wallOwnedPointerAt < WALL_OWNS_POINTER_MS
 
     const clearDraft = () => {
       draftSegmentsRef.current = []
@@ -301,6 +348,9 @@ const CabinetTool = () => {
       placementRef.current = null
       setPlacement(null)
       usePlacementPreview.getState().clear()
+      previousSnapRef.current = null
+      previousTickFrameRef.current = -1
+      clearPlacementSurface()
     }
 
     // The segmented draft survives only while continuous mode is on.
@@ -387,6 +437,11 @@ const CabinetTool = () => {
         width: previewNode.width,
       })
       if (!wallPlacement) return null
+      const wallSurfaceNormal = [Math.sin(wallPlacement.yaw), 0, Math.cos(wallPlacement.yaw)] as [
+        number,
+        number,
+        number,
+      ]
 
       return {
         conflictIds: [],
@@ -394,6 +449,8 @@ const CabinetTool = () => {
         position: wallPlacement.position,
         snapReason: wallPlacement.snapReason,
         valid: true,
+        wallLocalX: wallPlacement.localX,
+        wallSurfaceNormal,
         yaw: wallPlacement.yaw,
         snappedToWall: true,
       }
@@ -453,6 +510,7 @@ const CabinetTool = () => {
         position: anchor.position,
         yaw: anchor.yaw,
         snappedToWall: anchor.snappedToWall,
+        wallSurfaceNormal: anchor.wallSurfaceNormal,
         valid: result.valid,
         conflictIds: result.conflictIds,
         stretch,
@@ -492,32 +550,41 @@ const CabinetTool = () => {
       }
     }
 
-    const publishPlacement = (next: CabinetPlacement) => {
+    const publishPlacement = (next: CabinetPlacement, frame = -1) => {
       placementRef.current = next
       setPlacement(next)
       publishFloorplanPreview(next)
+      const nextSnapKey = movementSfxStepKey({
+        coords:
+          next.snappedToWall && typeof next.wallLocalX === 'number'
+            ? [next.wallLocalX]
+            : [next.position[0], next.position[2]],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
       const prev = previousSnapRef.current
       const wasWallSnap = previousWasWallSnapRef.current
-      if (!prev || prev[0] !== next.position[0] || prev[1] !== next.position[2]) {
+      if (frame !== previousTickFrameRef.current && prev !== nextSnapKey) {
         if (next.snappedToWall && !wasWallSnap) {
           triggerSFX('sfx:item-pick')
         } else {
           triggerSFX('sfx:grid-snap')
         }
-        previousSnapRef.current = [next.position[0], next.position[2]]
+        previousSnapRef.current = nextSnapKey
+        previousTickFrameRef.current = frame
       }
       previousWasWallSnapRef.current = next.snappedToWall
     }
 
     const onGridMove = (event: GridEvent) => {
       const ts = event.nativeEvent?.timeStamp ?? -1
-      if (ts === lastWallEventTime) return
+      if (ts === lastWallEventTime || wallOwnsPointer()) return
       const anchor = resolveDraftAnchor()
       if (anchor) {
-        publishPlacement(resolveStretchedPlacement(anchor, event))
+        publishPlacement(resolveStretchedPlacement(anchor, event), ts)
         return
       }
-      publishPlacement(resolvePlacement(event))
+      publishPlacement(resolvePlacement(event), ts)
     }
 
     const onWallMove = (event: WallEvent) => {
@@ -525,18 +592,20 @@ const CabinetTool = () => {
       if (event.node.parentId !== activeLevelId) return
       const anchor = resolveDraftAnchor()
       if (anchor) {
-        publishPlacement(resolveStretchedPlacement(anchor, event))
+        markWallOwnedPointer()
+        publishPlacement(resolveStretchedPlacement(anchor, event), lastWallEventTime)
         event.stopPropagation()
         return
       }
       const hit = islandModeRef.current ? null : wallHitFromWallEvent(event)
       const next = hit ? resolveWallHitPlacement(hit) : null
       if (next) {
-        publishPlacement(withPlacementValidity(next, false))
+        markWallOwnedPointer()
+        publishPlacement(withPlacementValidity(next, false), lastWallEventTime)
         event.stopPropagation()
         return
       }
-      publishPlacement(resolvePlacement(event))
+      publishPlacement(resolvePlacement(event), lastWallEventTime)
     }
 
     const buildRunNodes = (position: [number, number, number], yaw: number) => {
@@ -649,9 +718,26 @@ const CabinetTool = () => {
       stopPlacementCommitPropagation(event)
     }
 
+    const onDoubleClick = (event: FloorPlacementClickTriggerEvent) => {
+      if (!resolveDraftAnchor()) return
+      if (draftSegmentsRef.current.length === 0) {
+        stopPlacementCommitPropagation(event)
+        return
+      }
+      finishDraft(draftSegmentsRef.current, event)
+    }
+
     const onClick = (event: FloorPlacementClickTriggerEvent) => {
       const anchor = resolveDraftAnchor()
       if (anchor) {
+        const detail =
+          ((event as { nativeEvent?: { detail?: number } }).nativeEvent?.detail as
+            | number
+            | undefined) ?? 1
+        if (isCabinetContinuousFollowUpClick(detail)) {
+          stopPlacementCommitPropagation(event)
+          return
+        }
         const next = resolveStretchedPlacement(anchor, event)
         if (!next.valid || !next.stretch) {
           stopPlacementCommitPropagation(event)
@@ -659,14 +745,6 @@ const CabinetTool = () => {
         }
         const segment = { anchor, stretch: next.stretch }
         const segments = [...draftSegmentsRef.current, segment]
-        const detail =
-          ((event as { nativeEvent?: { detail?: number } }).nativeEvent?.detail as
-            | number
-            | undefined) ?? 1
-        if (detail >= 2) {
-          finishDraft(segments, event)
-          return
-        }
         draftSegmentsRef.current = segments
         setDraftSegments(segments)
         draftAnchorRef.current = nextOrthogonalAnchor(segment)
@@ -689,6 +767,7 @@ const CabinetTool = () => {
           position: next.position,
           yaw: next.yaw,
           snappedToWall: next.snappedToWall,
+          wallSurfaceNormal: next.wallSurfaceNormal,
         }
         publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))
         triggerSFX('sfx:item-pick')
@@ -703,8 +782,10 @@ const CabinetTool = () => {
       ])
       bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [module.id] })
+      useEditor.getState().setMode('select')
       triggerSFX('sfx:item-place')
       usePlacementPreview.getState().clear()
+      clearPlacementSurface()
       stopPlacementCommitPropagation(event)
     }
 
@@ -731,7 +812,7 @@ const CabinetTool = () => {
       if (event.key !== 'r' && event.key !== 'R' && event.key !== 't' && event.key !== 'T') return
       event.preventDefault()
       event.stopPropagation()
-      const steps = event.key === 't' || event.key === 'T' || event.shiftKey ? -1 : 1
+      const steps = event.key === 't' || event.key === 'T' ? -1 : 1
       yawRef.current += steps * ROTATE_STEP_RAD
       setYaw(yawRef.current)
       if (
@@ -767,15 +848,18 @@ const CabinetTool = () => {
     emitter.on('wall:move', onWallMove)
     emitter.on('tool:cancel', onCancel)
     const unsubscribePlacementClicks = subscribeFloorPlacementClicks(onClick)
+    const unsubscribePlacementDoubleClicks = subscribeFloorPlacementDoubleClicks(onDoubleClick)
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('wall:move', onWallMove)
       emitter.off('tool:cancel', onCancel)
       unsubscribePlacementClicks()
+      unsubscribePlacementDoubleClicks()
       window.removeEventListener('keydown', onKeyDown, true)
       draftAnchorRef.current = null
       usePlacementPreview.getState().clear()
+      clearPlacementSurface()
     }
   }, [activeLevelId, placementDimensions, previewNode, publishFloorplanPreview])
 
@@ -803,8 +887,8 @@ const CabinetTool = () => {
             ? 'Corner snap'
             : 'Wall snap'
         : islandMode
-          ? 'Island · R/T rotate'
-          : 'R/T rotate'
+          ? 'Island'
+          : null
   const labelPosition = stretch
     ? runLocalToPlan({ position: placement.position, rotation: placement.yaw }, [
         stretch.centerLocalX,
@@ -812,6 +896,17 @@ const CabinetTool = () => {
         0,
       ])
     : placement.position
+  const visualPosition = getFloorStackPreviewPosition({
+    node: buildCabinetPlacementPreviewNode({
+      island: islandMode,
+      position: placement.position,
+      previewModule: previewNode,
+      yaw: placement.yaw,
+    }),
+    position: placement.position,
+    rotation: placement.yaw,
+    levelId: activeLevelId,
+  })
 
   return (
     <LevelOffsetGroup>
@@ -834,7 +929,8 @@ const CabinetTool = () => {
         </group>
       ))}
       <group
-        position={placement.position}
+        ref={activeGhostRef}
+        position={visualPosition}
         rotation={[0, placement.snappedToWall || stretch ? placement.yaw : yaw, 0]}
       >
         {stretch ? (
@@ -863,26 +959,28 @@ const CabinetTool = () => {
           </mesh>
         )}
       </group>
-      <Html
-        center
-        position={[
-          labelPosition[0],
-          previewNode.plinthHeight + previewNode.carcassHeight + 0.35,
-          labelPosition[2],
-        ]}
-        style={{ pointerEvents: 'none', userSelect: 'none' }}
-        zIndexRange={[100, 0]}
-      >
-        <div
-          className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-1.5 text-xs shadow-sm backdrop-blur ${
-            placement.valid
-              ? 'border-border/60 bg-background/90'
-              : 'border-red-400/60 bg-red-950/85'
-          }`}
+      {placementLabel ? (
+        <Html
+          center
+          position={[
+            labelPosition[0],
+            previewNode.plinthHeight + previewNode.carcassHeight + 0.35,
+            labelPosition[2],
+          ]}
+          style={{ pointerEvents: 'none', userSelect: 'none' }}
+          zIndexRange={[100, 0]}
         >
-          <span className="font-medium text-foreground">{placementLabel}</span>
-        </div>
-      </Html>
+          <div
+            className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-1.5 text-xs shadow-sm backdrop-blur ${
+              placement.valid
+                ? 'border-border/60 bg-background/90'
+                : 'border-red-400/60 bg-red-950/85'
+            }`}
+          >
+            <span className="font-medium text-foreground">{placementLabel}</span>
+          </div>
+        </Html>
+      ) : null}
     </LevelOffsetGroup>
   )
 }

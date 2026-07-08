@@ -13,6 +13,7 @@ export type StretchAnchor = {
   position: [number, number, number]
   yaw: number
   snappedToWall: boolean
+  wallSurfaceNormal?: [number, number, number]
   forcedDirection?: 1 | -1
   leadingWidth?: number
 }
@@ -90,4 +91,8 @@ export function resolveCabinetContinuousValidity(
   forcePlace: boolean,
 ): PlacementCollisionResult {
   return forcePlace ? { conflictIds: [], valid: true } : result
+}
+
+export function isCabinetContinuousFollowUpClick(clickCount: number): boolean {
+  return clickCount >= 2
 }

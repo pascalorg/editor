@@ -21,6 +21,7 @@ import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -181,7 +182,11 @@ export function FloorplanRegistryMoveOverlay() {
         const moved = movedId ? useScene.getState().nodes[movedId] : undefined
         const pos = (moved as { position?: [number, number, number] } | undefined)?.position
         if (pos) {
-          const key = `${pos[0]},${pos[2]}`
+          const key = movementSfxStepKey({
+            coords: [pos[0], pos[2]],
+            gridSnapActive: isGridSnapActive(),
+            gridStep: useEditor.getState().gridSnapStep,
+          })
           if (key !== lastSnapKey) {
             lastSnapKey = key
             sfxEmitter.emit('sfx:grid-snap')

@@ -34,6 +34,7 @@ import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../../lib/planar-cursor-placement'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { movementSfxStepKey } from '../../../lib/sfx/movement-tick'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 
 import useAlignmentGuides from '../../../store/use-alignment-guides'
@@ -248,7 +249,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     return 0
   }, [node])
   const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(originalPosition)
-  const previousSnapRef = useRef<[number, number] | null>(null)
+  const previousSnapRef = useRef<string | null>(null)
   /**
    * The latest snapped cursor position from `grid:move`. We commit at
    * THIS position regardless of which event variant fires the click —
@@ -696,10 +697,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Carry connected ductwork along (preview only — committed on drop).
       previewConnectivity(position, rotationRef.current)
 
+      const nextSnapKey = movementSfxStepKey({
+        coords: [x, z],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== x || prev[1] !== z) {
+      if (prev !== nextSnapKey) {
         sfxEmitter.emit('sfx:grid-snap')
-        previousSnapRef.current = [x, z]
+        previousSnapRef.current = nextSnapKey
       }
     }
 

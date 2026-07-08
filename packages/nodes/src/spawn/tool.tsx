@@ -13,6 +13,7 @@ import {
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  movementSfxStepKey,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -43,7 +44,7 @@ function getExistingSpawnIds() {
 const SpawnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
-  const previousSnapRef = useRef<[number, number] | null>(null)
+  const previousSnapRef = useRef<string | null>(null)
 
   // Default spawn for the footprint anchors the alignment solver reads.
   const previewNode = useMemo(
@@ -79,10 +80,15 @@ const SpawnTool = () => {
       cursorRef.current?.position.set(...visualPosition)
       lastCursorRef.current = position
 
+      const nextSnapKey = movementSfxStepKey({
+        coords: [position[0], position[2]],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
       const prev = previousSnapRef.current
-      if (!prev || prev[0] !== position[0] || prev[1] !== position[2]) {
+      if (prev !== nextSnapKey) {
         triggerSFX('sfx:grid-snap')
-        previousSnapRef.current = [position[0], position[2]]
+        previousSnapRef.current = nextSnapKey
       }
     }
 

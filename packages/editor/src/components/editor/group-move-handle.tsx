@@ -16,6 +16,7 @@ import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
+import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -211,7 +212,7 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
           )
         : []
 
-    let lastSnap: Vec2 | null = null
+    let lastSnapKey: string | null = null
 
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
@@ -300,9 +301,14 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
       // emits per position change in EVERY mode (grid crossings are discrete;
       // the lines/off stream is rate-limited into a texture by the player's
       // minIntervalMs), so the group drag sounds the same as a single one.
-      if (!lastSnap || lastSnap[0] !== dx || lastSnap[1] !== dz) {
+      const nextSnapKey = movementSfxStepKey({
+        coords: [dx, dz],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
+      if (lastSnapKey !== nextSnapKey) {
         sfxEmitter.emit('sfx:grid-snap')
-        lastSnap = [dx, dz]
+        lastSnapKey = nextSnapKey
       }
 
       const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []

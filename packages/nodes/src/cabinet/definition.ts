@@ -144,6 +144,14 @@ function isCabinetRun(node: AnyNode | undefined): node is CabinetNodeType {
   return node?.type === 'cabinet'
 }
 
+function hasCabinetParentId(node: CabinetModuleNodeType): boolean {
+  const parentId = node.parentId
+  return (
+    typeof parentId === 'string' &&
+    (parentId.startsWith('cabinet_') || parentId.startsWith('cabinet-module_'))
+  )
+}
+
 function resolveCabinetGroupMoveSnap({
   candidatePosition,
   levelId,
@@ -949,9 +957,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
-    { key: 'C', label: 'Single / continuous run' },
-    { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Shift+R', label: 'Rotate reverse' },
+    { key: 'R / T', label: 'Rotate' },
     { key: 'I', label: 'Island mode' },
     { key: 'Esc', label: 'Cancel run / exit' },
   ],
@@ -1030,6 +1036,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     duplicable: true,
     deletable: true,
     floorPlaced: {
+      applies: (node) => !hasCabinetParentId(node as CabinetModuleNodeType),
       footprint: (node) => {
         const n = node as CabinetModuleNodeType
         return {
