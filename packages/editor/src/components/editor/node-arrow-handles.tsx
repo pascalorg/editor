@@ -931,7 +931,7 @@ export function GuideRing({
       frustumCulled={false}
       geometry={ringGeometry}
       material={ringMaterial}
-      position={center ? [center[0], center[1], center[2]] : [0, y, 0]}
+      position={center ? [center[0], y, center[2]] : [0, y, 0]}
       renderOrder={1009}
       rotation={[-Math.PI / 2, 0, 0]}
     />
@@ -1086,7 +1086,7 @@ function RotationWedge({
   ]
 
   return (
-    <group position={center ? [center[0], center[1], center[2]] : [0, y, 0]}>
+    <group position={center ? [center[0], y, center[2]] : [0, y, 0]}>
       <mesh
         frustumCulled={false}
         geometry={fill}

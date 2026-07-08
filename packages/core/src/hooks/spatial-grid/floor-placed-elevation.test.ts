@@ -156,6 +156,18 @@ describe('floor-placed elevation resolver', () => {
     expect(precise.conflictIds).toEqual([])
   })
 
+  test('canPlaceOnFloorFootprints rejects overlapping draft footprints', () => {
+    useScene.setState({ nodes: nodesFor(makeLevel()) })
+
+    const result = spatialGridManager.canPlaceOnFloorFootprints(LEVEL_ID, [
+      { position: [0, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] },
+      { position: [0.25, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] },
+    ])
+
+    expect(result.valid).toBe(false)
+    expect(result.conflictIds).toEqual([])
+  })
+
   test('canPlaceOnFloorFootprints ignores descendants of an ignored composite node', () => {
     registerNode(
       makeDefinition('cabinet', {

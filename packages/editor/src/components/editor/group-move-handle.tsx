@@ -255,9 +255,9 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
 
       // Kind-owned attachment snap (cabinet → wall): an attach behavior, not an
       // alignment guide — active in every snapping mode except Off.
+      const perNodeSnapOffsets = new Map<AnyNodeId, { dx: number; dz: number }>()
       if (isMagneticSnapActive() || isGridSnapActive()) {
         const liveNodes = useScene.getState().nodes
-        let bestAdjustment: { dx: number; dz: number; distance: number } | null = null
 
         for (const s of starts) {
           if (s.kind === 'endpoint') continue
@@ -285,16 +285,9 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
           const adjustmentDz = snappedPosition[2] - candidatePosition[2]
           const distance = Math.hypot(adjustmentDx, adjustmentDz)
           if (distance <= 1e-6) continue
-          if (!bestAdjustment || distance < bestAdjustment.distance) {
-            bestAdjustment = { dx: adjustmentDx, dz: adjustmentDz, distance }
-          }
+          perNodeSnapOffsets.set(s.id, { dx: adjustmentDx, dz: adjustmentDz })
         }
-
-        if (bestAdjustment) {
-          dx += bestAdjustment.dx
-          dz += bestAdjustment.dz
-          useAlignmentGuides.getState().clear()
-        }
+        if (perNodeSnapOffsets.size > 0) useAlignmentGuides.getState().clear()
       }
 
       // Ticker on each delta change — mirrors the single-node move, which
@@ -324,10 +317,11 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
           ])
         } else {
           // Slide on the floor: XZ shift, Y and rotation untouched.
+          const snapOffset = perNodeSnapOffsets.get(s.id)
           const position: [number, number, number] = [
-            s.position[0] + dx,
+            s.position[0] + dx + (snapOffset?.dx ?? 0),
             s.position[1],
-            s.position[2] + dz,
+            s.position[2] + dz + (snapOffset?.dz ?? 0),
           ]
           overrideEntries.push([s.id, { position }])
           if (s.kind === 'scalar') {

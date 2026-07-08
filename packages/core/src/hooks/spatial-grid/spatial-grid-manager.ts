@@ -744,6 +744,18 @@ export class SpatialGridManager {
     const draftBounds = footprints.map((footprint) =>
       footprintBoundsXZ(footprint.position, footprint.dimensions, footprint.rotation[1] ?? 0),
     )
+    for (let i = 0; i < draftBounds.length; i += 1) {
+      const a = draftBounds[i]!
+      for (let j = i + 1; j < draftBounds.length; j += 1) {
+        const b = draftBounds[j]!
+        if (
+          intervalsOverlap(a.minX, a.maxX, b.minX, b.maxX) &&
+          intervalsOverlap(a.minZ, a.maxZ, b.minZ, b.maxZ)
+        ) {
+          return { valid: false, conflictIds: [] }
+        }
+      }
+    }
 
     // A floor placement conflicts with any other COLLIDING floor-resting node,
     // not just items — every kind whose `floorPlaced.collides` is set (item /

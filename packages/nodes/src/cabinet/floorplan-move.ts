@@ -6,6 +6,7 @@ import {
   createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  type SceneApi,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -13,6 +14,90 @@ import { isGridSnapActive, isMagneticSnapActive, useEditor } from '@pascal-app/e
 import { cabinetModuleParentFrame } from './move-frame'
 import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './run-ops'
 import { resolveCabinetModuleWallSnapLocal } from './wall-snap'
+
+type SceneUpdate = { id: AnyNodeId; data: Partial<AnyNode> }
+
+function mergeSceneUpdate(
+  updates: Map<AnyNodeId, Partial<AnyNode>>,
+  id: AnyNodeId,
+  patch: Partial<AnyNode>,
+) {
+  updates.set(id, {
+    ...((updates.get(id) ?? {}) as Record<string, unknown>),
+    ...patch,
+  } as Partial<AnyNode>)
+}
+
+function collectCabinetModuleMoveCommitUpdates({
+  lastLocal,
+  moduleId,
+  runId,
+}: {
+  lastLocal: [number, number, number]
+  moduleId: AnyNodeId
+  runId: AnyNodeId
+}): SceneUpdate[] | null {
+  const baseNodes = useScene.getState().nodes as Record<AnyNodeId, AnyNode>
+  const nodes: Record<AnyNodeId, AnyNode> = { ...baseNodes }
+  const updates = new Map<AnyNodeId, Partial<AnyNode>>()
+  let unsupportedMutation = false
+
+  const sceneApi: SceneApi = {
+    get<N extends AnyNode = AnyNode>(id: AnyNodeId): N | undefined {
+      return nodes[id] as N | undefined
+    },
+    nodes() {
+      return nodes
+    },
+    update(id, patch) {
+      const current = nodes[id]
+      if (!current) return
+      nodes[id] = { ...current, ...patch } as AnyNode
+      mergeSceneUpdate(updates, id, patch)
+    },
+    upsert(node) {
+      if (!nodes[node.id as AnyNodeId]) {
+        unsupportedMutation = true
+        return node.id as AnyNodeId
+      }
+      nodes[node.id as AnyNodeId] = node
+      mergeSceneUpdate(updates, node.id as AnyNodeId, node as Partial<AnyNode>)
+      return node.id as AnyNodeId
+    },
+    delete() {
+      unsupportedMutation = true
+    },
+    restore() {},
+    restoreAll() {},
+    markDirty() {},
+    pauseHistory() {},
+    resumeHistory() {},
+    getSubtree() {
+      return null
+    },
+    cloneNodesInto() {
+      unsupportedMutation = true
+      return null
+    },
+  }
+
+  sceneApi.update(moduleId, { position: lastLocal } as Partial<AnyNode>)
+  const liveRun = sceneApi.get<CabinetNodeType>(runId)
+  if (liveRun?.type !== 'cabinet') return Array.from(updates, ([id, data]) => ({ id, data }))
+  bumpCabinetRunLayoutRevision(sceneApi, liveRun)
+
+  const liveModule = sceneApi.get<CabinetModuleNodeType>(moduleId)
+  if (liveModule?.type === 'cabinet-module') {
+    syncCornerRunsFromSourceModule({
+      module: liveModule,
+      run: sceneApi.get<CabinetNodeType>(runId) ?? liveRun,
+      sceneApi,
+    })
+  }
+
+  if (unsupportedMutation) return null
+  return Array.from(updates, ([id, data]) => ({ id, data }))
+}
 
 /**
  * 2D floor-plan move for a cabinet module — the parity twin of the 3D
@@ -88,9 +173,19 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
     commit() {
       const scene = useScene.getState()
       useLiveNodeOverrides.getState().clear(moduleId)
+      if (!run) {
+        scene.updateNodes([{ id: moduleId, data: { position: lastLocal } }])
+        return
+      }
+      const runId = run.id as AnyNodeId
+      const updates = collectCabinetModuleMoveCommitUpdates({ lastLocal, moduleId, runId })
+      if (updates) {
+        scene.updateNodes(updates)
+        return
+      }
+
       scene.updateNodes([{ id: moduleId, data: { position: lastLocal } }])
-      if (!run) return
-      const liveRun = useScene.getState().nodes[run.id as AnyNodeId]
+      const liveRun = useScene.getState().nodes[runId]
       if (liveRun?.type !== 'cabinet') return
       const sceneApi = createSceneApi(useScene)
       bumpCabinetRunLayoutRevision(sceneApi, liveRun)
@@ -100,7 +195,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
       if (liveModule?.type === 'cabinet-module') {
         syncCornerRunsFromSourceModule({
           module: liveModule,
-          run: sceneApi.get(run.id as AnyNodeId) ?? liveRun,
+          run: sceneApi.get(runId) ?? liveRun,
           sceneApi,
         })
       }
