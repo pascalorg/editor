@@ -4,6 +4,11 @@ import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  lingoUnitSpec,
+  measurementHint,
+  parseMeasurement,
+} from '../../../lib/measurement-parser'
+import {
   getLinearUnitLabel,
   linearUnitToMeters,
   metersToLinearUnit,
@@ -229,14 +234,46 @@ export function MetricControl({
   }, [])
 
   const submitValue = useCallback(() => {
-    const numValue = Number.parseFloat(inputValue)
-    if (Number.isNaN(numValue)) {
+    const spec = lingoUnitSpec(unit)
+    let stored = spec
+      ? parseMeasurement(inputValue, spec, {
+          bareUnit: isImperial ? 'ft' : spec.unitId,
+          system: isImperial ? 'us' : 'metric',
+        })
+      : null
+    if (stored === null) {
+      const numValue = Number.parseFloat(inputValue)
+      stored = Number.isFinite(numValue) ? toStoredValue(numValue) : null
+    }
+    if (stored === null) {
       setInputValue(toDisplayValue(value).toFixed(precision))
     } else {
-      applyCommittedValue(clamp(toStoredValue(numValue)))
+      applyCommittedValue(clamp(stored))
     }
     setIsEditing(false)
-  }, [inputValue, applyCommittedValue, clamp, toStoredValue, value, precision, toDisplayValue])
+  }, [
+    inputValue,
+    unit,
+    isImperial,
+    applyCommittedValue,
+    clamp,
+    toStoredValue,
+    value,
+    precision,
+    toDisplayValue,
+  ])
+
+  const spec = lingoUnitSpec(unit)
+  const hint =
+    isEditing && spec
+      ? measurementHint(inputValue, spec, {
+          bareUnit: isImperial ? 'ft' : spec.unitId,
+          system: isImperial ? 'us' : 'metric',
+          displayUnit: isImperial ? 'ft' : spec.unitId,
+          precision,
+          clamp,
+        })
+      : null
 
   const handleInputBlur = useCallback(() => {
     submitValue()
@@ -290,6 +327,11 @@ export function MetricControl({
       <div className="flex shrink-0 justify-end">
         {isEditing ? (
           <div className="flex items-center">
+            {hint && (
+              <span className="mr-1.5 shrink-0 whitespace-nowrap text-[11px] text-muted-foreground/50 tabular-nums">
+                {hint}
+              </span>
+            )}
             <input
               autoFocus
               className="w-full bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"

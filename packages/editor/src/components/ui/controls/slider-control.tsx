@@ -2,6 +2,11 @@
 
 import { useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  lingoUnitSpec,
+  measurementHint,
+  parseMeasurement,
+} from '../../../lib/measurement-parser'
 import { cn } from '../../../lib/utils'
 
 interface SliderControlProps {
@@ -199,16 +204,27 @@ export function SliderControl({
   }, [value, precision])
 
   const submitValue = useCallback(() => {
-    const numValue = Number.parseFloat(inputValue)
-    if (Number.isNaN(numValue)) {
+    const spec = lingoUnitSpec(unit)
+    let parsed = spec ? parseMeasurement(inputValue, spec) : null
+    if (parsed === null) {
+      const numValue = Number.parseFloat(inputValue)
+      parsed = Number.isFinite(numValue) ? numValue : null
+    }
+    if (parsed === null) {
       setInputValue(value.toFixed(precision))
     } else {
-      const nextValue = clamp(Number.parseFloat(numValue.toFixed(precision)))
+      const nextValue = clamp(Number.parseFloat(parsed.toFixed(precision)))
       onChange(nextValue)
       onCommit?.(nextValue)
     }
     setIsEditing(false)
-  }, [inputValue, onChange, onCommit, clamp, precision, value])
+  }, [inputValue, unit, onChange, onCommit, clamp, precision, value])
+
+  const spec = lingoUnitSpec(unit)
+  const hint =
+    isEditing && spec
+      ? measurementHint(inputValue, spec, { displayUnit: spec.unitId, precision, clamp })
+      : null
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -279,6 +295,11 @@ export function SliderControl({
       <div className="flex items-center text-xs">
         {isEditing ? (
           <>
+            {hint && (
+              <span className="mr-1 shrink-0 whitespace-nowrap text-[10px] text-muted-foreground/50 tabular-nums">
+                {hint}
+              </span>
+            )}
             <input
               autoFocus
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
