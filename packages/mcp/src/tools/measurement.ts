@@ -13,15 +13,21 @@ import { z } from 'zod'
  * The emitted JSON Schema is `number | string`, so the model is free to answer
  * in whatever unit it is thinking in; AI SDK v6 applies the transform and
  * forwards the canonical number to the tool executor.
+ *
+ * Tool-boundary safety: genuinely ambiguous separators (`"1,234"`, which could
+ * mean 1234 or 1.234) are rejected rather than silently absorbed, so a European
+ * decimal never becomes a 1000× value.
  */
 
 export interface MeasurementOptions {
-  /** Lower bound, in `unit`. */
-  min?: number
-  /** Upper bound, in `unit`. */
-  max?: number
   /** Semantic description (e.g. "Wall thickness"). The natural-language note is appended. */
   description?: string
+  /** Upper bound, in `unit`. */
+  max?: number
+  /** Inclusive lower bound, in `unit`. */
+  min?: number
+  /** Require the value to be strictly greater than 0 (for non-zero dimensions). */
+  positive?: boolean
 }
 
 function unitNoun(unit: string): string {
@@ -38,16 +44,29 @@ function unitNoun(unit: string): string {
 }
 
 function naturalLanguageNote(kind: Kind, unit: string): string {
-  const examples =
-    kind === 'angle'
-      ? unit === 'rad'
-        ? '45, "45°", "1.57rad", "0.25 turn"'
-        : '45, "45°", "1.57rad", "0.25 turn"'
-      : '0.9, "6 ft", "180cm", "2 ft 3 in"'
+  let examples: string
+  if (kind === 'angle') {
+    // Lead with an example in the field's own unit so a bare number is read
+    // the way the model intends (a bare "45" in a radians field is 45 rad).
+    examples =
+      unit === 'rad' ? '1.5708, "90°", "1.57rad", "0.25 turn"' : '45, "45°", "1.57rad", "0.25 turn"'
+  } else {
+    examples = '0.9, "6 ft", "180cm", "2 ft 3 in"'
+  }
   return `Accepts a number (${unitNoun(unit)}) or a natural-language string; other units are converted. e.g. ${examples}.`
 }
 
-function boundsNote(unit: string, min?: number, max?: number): string {
+function boundsNote(
+  unit: string,
+  min: number | undefined,
+  max: number | undefined,
+  positive: boolean,
+): string {
+  if (positive) {
+    return max === undefined
+      ? ` Must be greater than 0 ${unit}.`
+      : ` Greater than 0, up to ${max} ${unit}.`
+  }
   if (min !== undefined && max !== undefined) return ` Range ${min}–${max} ${unit}.`
   if (min !== undefined) return ` Minimum ${min} ${unit}.`
   if (max !== undefined) return ` Maximum ${max} ${unit}.`
@@ -55,10 +74,10 @@ function boundsNote(unit: string, min?: number, max?: number): string {
 }
 
 export function measurement(kind: Kind, unit: string, opts: MeasurementOptions = {}) {
-  const { min, max } = opts
+  const { min, max, positive = false } = opts
   const description = [
     opts.description,
-    naturalLanguageNote(kind, unit) + boundsNote(unit, min, max),
+    naturalLanguageNote(kind, unit) + boundsNote(unit, min, max, positive),
   ]
     .filter(Boolean)
     .join(' ')
@@ -70,7 +89,14 @@ export function measurement(kind: Kind, unit: string, opts: MeasurementOptions =
       if (typeof val === 'number') {
         value = val
       } else {
-        const result = parseQuantity(val, { kind, unit, strictness: 'forgiving' })
+        const result = parseQuantity(val, {
+          kind,
+          unit,
+          strictness: 'forgiving',
+          // A genuinely ambiguous separator ("1,234") must not silently become
+          // a 1000× value at a tool boundary — fail so the model self-corrects.
+          escalate: { AMBIGUOUS_NUMBER: 'error' },
+        })
         if (!result.ok) {
           ctx.addIssue({
             code: 'custom',
@@ -82,6 +108,10 @@ export function measurement(kind: Kind, unit: string, opts: MeasurementOptions =
       }
       if (!Number.isFinite(value)) {
         ctx.addIssue({ code: 'custom', message: `Value must be a finite ${kind} in ${unit}.` })
+        return z.NEVER
+      }
+      if (positive && value <= 0) {
+        ctx.addIssue({ code: 'custom', message: `Must be greater than 0 ${unit} (got ${value}).` })
         return z.NEVER
       }
       if (min !== undefined && value < min) {

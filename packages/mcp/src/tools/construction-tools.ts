@@ -23,14 +23,20 @@ const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
-  wallHeight: measurement('length', 'm', { min: 0, description: 'Wall height.' }).default(2.8),
-  wallThickness: measurement('length', 'm', { min: 0, description: 'Wall thickness.' }).default(
-    0.16,
+  wallHeight: measurement('length', 'm', { positive: true, description: 'Wall height.' }).default(
+    2.8,
   ),
+  wallThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).default(0.16),
   createSlab: z.boolean().default(true),
   createCeiling: z.boolean().default(true),
   slabElevation: measurement('length', 'm', { description: 'Slab elevation.' }).default(0.1),
-  ceilingHeight: measurement('length', 'm', { min: 0, description: 'Ceiling height.' }).optional(),
+  ceilingHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Ceiling height.',
+  }).optional(),
   namePrefix: z.string().optional(),
   wallMaterialPreset: z.string().optional(),
   slabMaterialPreset: z.string().optional(),
@@ -50,24 +56,24 @@ export const createRoofInput = {
   roofLevelId: NodeIdSchema.optional(),
   useDedicatedRoofLevel: z.boolean().default(true),
   roofLevelLabel: z.string().default('Roof'),
-  roofLevelElevation: measurement('length', 'm', {
-    description: 'Roof level elevation.',
-  }).optional(),
+  // A level ordinal (story index), not a length — kept numeric.
+  roofLevelElevation: z.number().optional(),
   roofLevelHeight: measurement('length', 'm', {
-    min: 0,
+    positive: true,
     description: 'Roof level height.',
   }).optional(),
   center: Vec3Schema.optional(),
-  width: measurement('length', 'm', { min: 0, description: 'Roof width.' }),
-  depth: measurement('length', 'm', { min: 0, description: 'Roof depth.' }),
+  width: measurement('length', 'm', { positive: true, description: 'Roof width.' }),
+  depth: measurement('length', 'm', { positive: true, description: 'Roof depth.' }),
   roofType: z.enum(ROOF_TYPES).default('hip'),
   pitch: measurement('angle', 'deg', { min: 0, max: 85, description: 'Roof pitch.' }).default(35),
   wallHeight: measurement('length', 'm', { min: 0, description: 'Knee-wall height.' }).default(
     0.35,
   ),
-  wallThickness: measurement('length', 'm', { min: 0, description: 'Wall thickness.' }).default(
-    0.16,
-  ),
+  wallThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).default(0.16),
   overhang: measurement('length', 'm', { min: 0, description: 'Eave overhang.' }).default(0.45),
   materialPreset: z.string().optional(),
   name: z.string().optional(),
@@ -86,13 +92,15 @@ export const createStairBetweenLevelsInput = {
   toLevelId: NodeIdSchema,
   position: Vec3Schema,
   rotation: measurement('angle', 'rad', { description: 'Y-axis rotation.' }).default(0),
-  width: measurement('length', 'm', { min: 0, description: 'Stair width.' }).default(1),
-  runLength: measurement('length', 'm', { min: 0, description: 'Horizontal run length.' }).default(
-    3,
-  ),
-  totalRise: measurement('length', 'm', { min: 0, description: 'Total vertical rise.' }).default(
-    2.8,
-  ),
+  width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
+  runLength: measurement('length', 'm', {
+    positive: true,
+    description: 'Horizontal run length.',
+  }).default(3),
+  totalRise: measurement('length', 'm', {
+    positive: true,
+    description: 'Total vertical rise.',
+  }).default(2.8),
   stepCount: z.number().int().positive().default(14),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
@@ -100,11 +108,11 @@ export const createStairBetweenLevelsInput = {
   createDestinationSlabOpening: z.boolean().default(true),
   createSourceCeilingOpening: z.boolean().default(true),
   openingWidth: measurement('length', 'm', {
-    min: 0,
+    positive: true,
     description: 'Floor opening width.',
   }).optional(),
   openingLength: measurement('length', 'm', {
-    min: 0,
+    positive: true,
     description: 'Floor opening length.',
   }).optional(),
   openingOffset: measurement('length', 'm', { min: 0, description: 'Opening offset.' }).default(0),

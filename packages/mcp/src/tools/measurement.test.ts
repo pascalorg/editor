@@ -46,6 +46,19 @@ describe('measurement()', () => {
     if (!r.success) expect(r.error.issues[0]?.message.toLowerCase()).toContain('number')
   })
 
+  test('positive rejects zero and negatives (restores .positive() behavior)', () => {
+    const m = measurement('length', 'm', { positive: true })
+    expect(m.safeParse(0).success).toBe(false)
+    expect(m.safeParse('0m').success).toBe(false)
+    expect(m.safeParse(-1).success).toBe(false)
+    expect(m.parse(0.1)).toBe(0.1)
+  })
+
+  test('rejects ambiguous separators instead of a silent 1000x reading', () => {
+    const r = measurement('length', 'm').safeParse('1,234')
+    expect(r.success).toBe(false)
+  })
+
   test('emits a number|string JSON schema advertising natural language', () => {
     const schema = z.toJSONSchema(
       measurement('length', 'm', { min: 0, description: 'Wall thickness.' }),

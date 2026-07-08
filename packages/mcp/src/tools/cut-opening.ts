@@ -13,8 +13,8 @@ export const cutOpeningInput = {
   wallId: NodeIdSchema,
   type: z.enum(['door', 'window']),
   position: z.number().min(0).max(1),
-  width: measurement('length', 'm', { min: 0, description: 'Opening width.' }),
-  height: measurement('length', 'm', { min: 0, description: 'Opening height.' }),
+  width: measurement('length', 'm', { positive: true, description: 'Opening width.' }),
+  height: measurement('length', 'm', { positive: true, description: 'Opening height.' }),
 }
 
 export const cutOpeningOutput = {

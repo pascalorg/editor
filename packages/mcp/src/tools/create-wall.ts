@@ -12,8 +12,11 @@ export const createWallInput = {
   levelId: NodeIdSchema,
   start: Vec2Schema,
   end: Vec2Schema,
-  thickness: measurement('length', 'm', { min: 0, description: 'Wall thickness.' }).optional(),
-  height: measurement('length', 'm', { min: 0, description: 'Wall height.' }).optional(),
+  thickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).optional(),
+  height: measurement('length', 'm', { positive: true, description: 'Wall height.' }).optional(),
 }
 
 export const createWallOutput = {

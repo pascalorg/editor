@@ -25,11 +25,11 @@ export const photoToSceneInput = {
   name: z.string().default('Scene from photo'),
   save: z.boolean().default(true),
   defaultWallThickness: measurement('length', 'm', {
-    min: 0,
+    positive: true,
     description: 'Default wall thickness.',
   }).default(0.2),
   defaultWallHeight: measurement('length', 'm', {
-    min: 0,
+    positive: true,
     description: 'Default wall height.',
   }).default(2.6),
 }
