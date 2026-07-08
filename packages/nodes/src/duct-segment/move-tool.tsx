@@ -15,6 +15,7 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   EDITOR_LAYER,
+  isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
@@ -183,7 +184,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
       // Figma-style magnetic alignment: snap the run's footprint box edges onto
       // nearby geometry and publish the guides. Grid follows the snapping mode;
       // lines follow magnetic alignment — the two are independent.
-      if (isMagneticSnapActive()) {
+      if (isAlignmentGuideActive()) {
         const proposed: Aabb2D = {
           minX: baseAabb.minX + dx,
           maxX: baseAabb.maxX + dx,
@@ -191,8 +192,10 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           maxZ: baseAabb.maxZ + dz,
         }
         const { dx: sdx, dz: sdz, guides } = resolveGhostAlignment(nodeId, proposed, candidates)
-        dx += sdx
-        dz += sdz
+        if (isMagneticSnapActive()) {
+          dx += sdx
+          dz += sdz
+        }
         useAlignmentGuides.getState().set(guides)
       } else {
         useAlignmentGuides.getState().clear()

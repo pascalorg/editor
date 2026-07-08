@@ -185,7 +185,8 @@ export function useFloorplanBackgroundPlacement({
         // Footprint placement (polygon context: grid / lines / off, no angle),
         // mode-driven to match the chip. Alt forces (skips alignment).
         const snappedPoint = alignFloorplanDraftPoint(getSnappedFloorplanPoint(planPoint), {
-          bypass: event.altKey || !isMagneticSnapActive(),
+          applySnap: isMagneticSnapActive(),
+          bypass: event.altKey,
         })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
@@ -218,12 +219,11 @@ export function useFloorplanBackgroundPlacement({
         const fenceGridBase = worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
-        const snappedPoint =
-          fenceLocked || fenceAngleSnap
-            ? fenceSnapped
-            : alignFloorplanDraftPoint(fenceSnapped, {
-                bypass: !isMagneticSnapActive(),
-              })
+        const snappedPoint = fenceLocked
+          ? fenceSnapped
+          : alignFloorplanDraftPoint(fenceSnapped, {
+              applySnap: isMagneticSnapActive() && !fenceAngleSnap,
+            })
 
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
@@ -275,20 +275,15 @@ export function useFloorplanBackgroundPlacement({
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        let snappedPoint = fallbackPoint
-        if (isSlabBuildActive) {
-          snappedPoint = resolveSlabPlanPointSnap({
-            rawPoint: planPoint,
-            fallbackPoint,
-            levelId,
-            altKey: event.altKey,
-            align: !angleSnap,
-          }).point
-        } else if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            bypass: event.altKey || !isMagneticSnapActive(),
-          })
-        }
+        // Zone shares the slab surface snap (wall corners / midpoints /
+        // crossings + alignment) — it's the same polygon-on-a-level draw.
+        const snappedPoint = resolveSlabPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
 
         // Emit the grid event so the registry-driven slab tool also
         // sees the click (parity with ceiling / fence / roof branches
@@ -330,12 +325,10 @@ export function useFloorplanBackgroundPlacement({
         if (wallLocked) {
           useAlignmentGuides.getState().clear()
         } else {
+          // Alignment lines are shown in every mode; the pull applies only when
+          // magnetic ('lines') and the segment isn't angle-locked.
           snappedPoint = alignFloorplanDraftPoint(wallSnapped, {
-            applySnap: !wallAngleSnap,
-            // Figma alignment pulls the endpoint onto existing wall corners /
-            // edges, so it is a line snap — suppress it whenever magnetic snap
-            // is off (`'off'` / `'angles'`), matching the wall-geometry snap.
-            bypass: !isMagneticSnapActive(),
+            applySnap: isMagneticSnapActive() && !wallAngleSnap,
           })
         }
 

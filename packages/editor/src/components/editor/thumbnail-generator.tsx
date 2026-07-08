@@ -151,7 +151,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       snapLevels: boolean,
       captureMode?: 'standard' | 'viewport' | 'area',
       cropRegion?: { x: number; y: number; width: number; height: number },
+      standardSize?: { w: number; h: number },
     ) => {
+      const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
+      const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
       if (isGenerating.current) return
       if (!onThumbnailCaptureRef.current) return
 
@@ -342,9 +345,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
             blob = await offscreen.convertToBlob({ type: 'image/png' })
           } else {
-            // Standard: center-crop to 1920×1080 aspect ratio
+            // Standard: center-crop to the requested aspect (default 1920×1080)
             const srcAspect = width / height
-            const dstAspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT
+            const dstAspect = standardW / standardH
             let sx = 0,
               sy = 0,
               sWidth = width,
@@ -356,8 +359,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               sHeight = Math.round(width / dstAspect)
               sy = Math.round((height - sHeight) / 2)
             }
-            outW = THUMBNAIL_WIDTH
-            outH = THUMBNAIL_HEIGHT
+            outW = standardW
+            outH = standardH
             const offscreen = new OffscreenCanvas(outW, outH)
             offscreen
               .getContext('2d')!
@@ -414,7 +417,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             )
           } else {
             const srcAspect = width / height
-            const dstAspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT
+            const dstAspect = standardW / standardH
             let sx = 0,
               sy = 0,
               sWidth = width,
@@ -426,8 +429,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               sHeight = Math.round(width / dstAspect)
               sy = Math.round((height - sHeight) / 2)
             }
-            outW = THUMBNAIL_WIDTH
-            outH = THUMBNAIL_HEIGHT
+            outW = standardW
+            outH = standardH
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
@@ -468,6 +471,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     const handleGenerateThumbnail = async (event: {
       captureMode?: 'standard' | 'viewport' | 'area'
       cropRegion?: { x: number; y: number; width: number; height: number }
+      standardSize?: { w: number; h: number }
       snapLevels?: boolean
       // `transparent` is informational here — the render pipeline already
       // captures with alpha (see `setClearAlpha(0)` above) — the flag is
@@ -475,7 +479,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // background bits) can branch on it without touching the emitter.
       transparent?: boolean
     }) => {
-      await generate(event.snapLevels === true, event.captureMode, event.cropRegion)
+      await generate(
+        event.snapLevels === true,
+        event.captureMode,
+        event.cropRegion,
+        event.standardSize,
+      )
     }
 
     emitter.on('camera-controls:generate-thumbnail', handleGenerateThumbnail)

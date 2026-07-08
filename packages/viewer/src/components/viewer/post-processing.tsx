@@ -126,8 +126,11 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
 
 const PostProcessingPasses = ({
   hoverStyles = DEFAULT_HOVER_STYLES,
+  disablePostFx = false,
 }: {
   hoverStyles?: HoverStyles
+  /** Host-controlled equivalent of `?disable=postFx` — see the Viewer prop. */
+  disablePostFx?: boolean
 }) => {
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
@@ -264,6 +267,19 @@ const PostProcessingPasses = ({
     }
 
     const perfDisable = readPerfDisableFlags()
+
+    // postFx off (host prop or ?disable=postFx): never allocate the pipeline —
+    // useFrame's null-pipeline branch direct-renders. Before this check the
+    // URL flag only skipped the pipeline at render time; the build still
+    // allocated every pass.
+    if (disablePostFx || perfDisable.postFx) {
+      hasPipelineErrorRef.current = false
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      return
+    }
     const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
@@ -521,6 +537,7 @@ const PostProcessingPasses = ({
     // whole pipeline. The uniform refs below are stable (useMemo), so they
     // never trigger a rebuild either.
     camera,
+    disablePostFx,
     hoverHiddenColor,
     hoverPulseMix,
     hoverStrength,
@@ -556,7 +573,12 @@ const PostProcessingPasses = ({
     sanitizeOutlineObjects(outliner.selectedObjects)
     sanitizeOutlineObjects(outliner.hoveredObjects)
 
-    if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
+    if (
+      disablePostFx ||
+      PERF_POST_FX_DISABLED ||
+      hasPipelineErrorRef.current ||
+      !renderPipelineRef.current
+    ) {
       try {
         if ((renderer as any).setClearAlpha) {
           ;(renderer as any).setClearAlpha(transparentBackground ? 0 : 1)

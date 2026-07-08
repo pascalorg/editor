@@ -28,6 +28,7 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   getSegmentGridStep,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
@@ -41,6 +42,7 @@ import {
   useFenceCurveDraft,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
+
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -483,11 +485,14 @@ const StraightFenceTool: React.FC = () => {
 
     // Align the drafted point onto another object's nearest real anchor and
     // publish the guide. Returns the possibly snapped point.
-    const alignPoint = (point: FencePlanPoint, bypass: boolean): FencePlanPoint => {
-      // Figma alignment pulls the endpoint onto existing corners / edges, so it
-      // is a line snap — suppress it whenever magnetic snap is off (`'off'` /
-      // `'angles'`), matching the fence-geometry snap.
-      if (bypass || !isMagneticSnapActive() || alignmentCandidates.length === 0) {
+    const alignPoint = (
+      point: FencePlanPoint,
+      options?: { applySnap?: boolean },
+    ): FencePlanPoint => {
+      // Figma alignment lines onto existing corners / edges are DISPLAYED in
+      // every mode except Off (isAlignmentGuideActive); the magnetic pull onto
+      // them is applied only in 'lines' mode (isMagneticSnapActive).
+      if (!isAlignmentGuideActive() || alignmentCandidates.length === 0) {
         useAlignmentGuides.getState().clear()
         return point
       }
@@ -497,7 +502,9 @@ const StraightFenceTool: React.FC = () => {
         threshold: ALIGNMENT_THRESHOLD_M,
       })
       useAlignmentGuides.getState().set(ar.guides)
-      return ar.snap ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz] : point
+      return ar.snap && options?.applySnap !== false && isMagneticSnapActive()
+        ? [point[0] + ar.snap.dx, point[1] + ar.snap.dz]
+        : point
     }
 
     const stopDrafting = () => {
@@ -516,7 +523,6 @@ const StraightFenceTool: React.FC = () => {
       // Snapping is governed by the snapping mode (`'off'` is the bypass);
       // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
       // mode, not Alt (continuation is cycled through the HUD / C).
-      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
@@ -529,7 +535,7 @@ const StraightFenceTool: React.FC = () => {
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
           }),
-          bypassAlign || angleLocked,
+          { applySnap: !angleLocked },
         )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
         cursorRef.current.position.copy(endingPoint.current)
@@ -567,7 +573,6 @@ const StraightFenceTool: React.FC = () => {
             fences,
             magnetic: isMagneticSnapActive(),
           }),
-          bypassAlign,
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
         setDraftMeasurement(null)
@@ -583,7 +588,6 @@ const StraightFenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
-      const bypassAlign = !isMagneticSnapActive()
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
@@ -593,7 +597,6 @@ const StraightFenceTool: React.FC = () => {
             fences,
             magnetic: isMagneticSnapActive(),
           }),
-          bypassAlign,
         )
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
@@ -612,7 +615,7 @@ const StraightFenceTool: React.FC = () => {
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
           }),
-          bypassAlign || angleLocked,
+          { applySnap: !angleLocked },
         )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z

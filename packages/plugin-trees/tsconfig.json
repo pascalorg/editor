@@ -1,0 +1,10 @@
+{
+  "extends": "@pascal/typescript-config/react-library.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src"],
+  "exclude": ["node_modules"]
+}

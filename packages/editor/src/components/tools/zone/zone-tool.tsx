@@ -12,6 +12,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from './../../../lib/constants'
 import { sfxEmitter } from './../../../lib/sfx-bus'
+import {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+} from './../../../lib/surface-plan-snap'
 import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
 import useEditor, { isAngleSnapActive, isGridSnapActive } from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -79,26 +83,35 @@ export const ZoneTool: React.FC = () => {
     if (!currentLevelId) return
 
     let cursorPosition: [number, number] = [0, 0]
-    let rawCursorPosition: [number, number] = [0, 0]
+    let snappedCursorPosition: [number, number] | null = null
 
     // Initialize line geometries
     mainLineRef.current.geometry = new BufferGeometry()
     closingLineRef.current.geometry = new BufferGeometry()
 
-    // Snapping follows the active mode (zone resolves to the 'wall' context):
-    // `angles` locks the ray to 15° from the last vertex, `grid` quantizes the
-    // distance along it, `lines` / `off` leave the raw cursor. No held-Shift
-    // bypass — Shift cycles the mode (see interaction-scope.md).
+    // Snapping follows the active mode: `angles` locks the ray to 15° from the
+    // last vertex (grid quantizes the distance along it), otherwise `grid`
+    // quantizes to the world-aligned grid; the shared surface snap then layers
+    // wall-corner/midpoint/crossing magnetics and alignment guides on top —
+    // the same pipeline slab/ceiling drafting uses. No held-Shift bypass —
+    // Shift cycles the mode (see interaction-scope.md).
     const snapDraftPoint = (
-      lastPoint: [number, number],
-      _gridPoint: [number, number],
+      lastPoint: [number, number] | undefined,
+      gridPoint: [number, number],
       rawPoint: [number, number],
+      altKey: boolean,
     ): [number, number] => {
-      const angleStep = isAngleSnapActive() ? DEFAULT_ANGLE_STEP : 0
       const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-      if (angleStep === 0 && gridStep === 0) return rawPoint
-      const [x, z] = snapPointAlongAngleRay(lastPoint, rawPoint, angleStep, gridStep)
-      return [x, z]
+      const orthoPoint: [number, number] =
+        isAngleSnapActive() && lastPoint
+          ? [...snapPointAlongAngleRay(lastPoint, rawPoint, DEFAULT_ANGLE_STEP, gridStep)]
+          : gridPoint
+      return resolveSurfacePlanPointSnap({
+        rawPoint,
+        fallbackPoint: orthoPoint,
+        levelId: currentLevelId,
+        altKey,
+      }).point
     }
 
     const updateLines = () => {
@@ -116,11 +129,9 @@ export const ZoneTool: React.FC = () => {
 
       // Add cursor point
       const lastPoint = points[points.length - 1]
-      if (lastPoint) {
-        const snapped = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
-        if (isValidPoint(snapped)) {
-          linePoints.push(new Vector3(snapped[0], y, snapped[1]))
-        }
+      const snapped = snappedCursorPosition ?? cursorPosition
+      if (lastPoint && isValidPoint(snapped)) {
+        linePoints.push(new Vector3(snapped[0], y, snapped[1]))
       }
 
       // Update main line geometry
@@ -134,17 +145,14 @@ export const ZoneTool: React.FC = () => {
 
       // Update closing line (from cursor back to first point)
       const firstPoint = points[0]
-      if (points.length >= 2 && lastPoint && isValidPoint(firstPoint)) {
-        const snapped = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
-        if (isValidPoint(snapped)) {
-          const closingPoints = [
-            new Vector3(snapped[0], y, snapped[1]),
-            new Vector3(firstPoint[0], y, firstPoint[1]),
-          ]
-          closingLineRef.current.geometry.dispose()
-          closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
-          closingLineRef.current.visible = true
-        }
+      if (points.length >= 2 && lastPoint && isValidPoint(firstPoint) && isValidPoint(snapped)) {
+        const closingPoints = [
+          new Vector3(snapped[0], y, snapped[1]),
+          new Vector3(firstPoint[0], y, firstPoint[1]),
+        ]
+        closingLineRef.current.geometry.dispose()
+        closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
+        closingLineRef.current.visible = true
       } else {
         closingLineRef.current.visible = false
       }
@@ -152,42 +160,42 @@ export const ZoneTool: React.FC = () => {
 
     const updatePreview = () => {
       const points = pointsRef.current
-      const lastPoint = points[points.length - 1]
+      const cursorPt = snappedCursorPosition ?? cursorPosition
 
-      let cursorPt: [number, number] | null = null
-      if (lastPoint) {
-        cursorPt = snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
-      } else if (points.length === 0) {
-        cursorPt = cursorPosition
-      }
-
-      setPreview({ points: [...points], cursorPoint: cursorPt, levelY: levelYRef.current })
+      setPreview({
+        points: [...points],
+        cursorPoint: isValidPoint(cursorPt) ? cursorPt : null,
+        levelY: levelYRef.current,
+      })
       updateLines()
     }
 
-    const onGridMove = (event: GridEvent) => {
-      if (!cursorRef.current) return
-
-      // World-grid snap projected into building-local; rotated buildings
-      // used to pull the snap off the visible grid lines. Grid quantize only
-      // in grid mode; off / lines / angles leave the raw cursor for the first
-      // vertex (later vertices snap along the ray in `snapDraftPoint`).
-      const [gridX, gridZ] = isGridSnapActive()
+    // World-grid snap projected into building-local; rotated buildings
+    // used to pull the snap off the visible grid lines. Grid quantize only
+    // in grid mode; off / lines / angles leave the raw cursor.
+    const gridPointOf = (event: GridEvent): [number, number] =>
+      isGridSnapActive()
         ? snapWorldXZForActiveBuilding(
             event.position[0],
             event.position[2],
             useEditor.getState().gridSnapStep,
           ).local
         : [event.localPosition[0], event.localPosition[2]]
-      cursorPosition = [gridX, gridZ]
-      rawCursorPosition = [event.localPosition[0], event.localPosition[2]]
+
+    const onGridMove = (event: GridEvent) => {
+      if (!cursorRef.current) return
+
+      cursorPosition = gridPointOf(event)
       levelYRef.current = event.localPosition[1]
 
-      // If we have points, snap to the 15° ray from the last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      const displayPoint = lastPoint
-        ? snapDraftPoint(lastPoint, cursorPosition, rawCursorPosition)
-        : cursorPosition
+      const displayPoint = snapDraftPoint(
+        lastPoint,
+        cursorPosition,
+        [event.localPosition[0], event.localPosition[2]],
+        event.nativeEvent?.altKey === true,
+      )
+      snappedCursorPosition = displayPoint
 
       // Play snap sound when the snapped position changes during drawing — only
       // when a quantizing mode is active (off / lines move continuously).
@@ -210,23 +218,13 @@ export const ZoneTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
-      const [gridX, gridZ] = isGridSnapActive()
-        ? snapWorldXZForActiveBuilding(
-            event.position[0],
-            event.position[2],
-            useEditor.getState().gridSnapStep,
-          ).local
-        : [event.localPosition[0], event.localPosition[2]]
-      let clickPoint: [number, number] = [gridX, gridZ]
-
-      // Snap to the 15° ray from the last point
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      if (lastPoint) {
-        clickPoint = snapDraftPoint(lastPoint, clickPoint, [
-          event.localPosition[0],
-          event.localPosition[2],
-        ])
-      }
+      const clickPoint = snapDraftPoint(
+        lastPoint,
+        gridPointOf(event),
+        [event.localPosition[0], event.localPosition[2]],
+        event.nativeEvent?.altKey === true,
+      )
 
       // Check if clicking on the first point to close the shape
       const firstPoint = pointsRef.current[0]
@@ -280,6 +278,7 @@ export const ZoneTool: React.FC = () => {
 
       // Reset state on unmount
       pointsRef.current = []
+      clearSurfacePlanSnapFeedback()
     }
   }, [currentLevelId])
 

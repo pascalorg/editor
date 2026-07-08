@@ -2,7 +2,11 @@ import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
-import { isCurvedWall, sampleWallCenterline } from '../../systems/wall/wall-curve'
+import {
+  getWallCurveFrameAt,
+  isCurvedWall,
+  sampleWallCenterline,
+} from '../../systems/wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
@@ -272,43 +276,99 @@ export function itemOverlapsPolygon(
   return false
 }
 
-/**
- * Check if wall segment (a) is substantially on polygon edge segment (b).
- * Returns true only if BOTH endpoints of the wall are on or very close to the edge.
- * This prevents walls that just touch one point from being detected.
- */
-function segmentsCollinearAndOverlap(
-  ax1: number,
-  az1: number,
-  ax2: number,
-  az2: number,
-  bx1: number,
-  bz1: number,
-  bx2: number,
-  bz2: number,
-): boolean {
-  const EPSILON = 1e-6
+function pointSegmentDistance(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared < 1e-18) return Math.hypot(px - ax, pz - az)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / lengthSquared))
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t))
+}
 
-  // Cross product to check collinearity
-  const cross1 = (ax2 - ax1) * (bz1 - az1) - (az2 - az1) * (bx1 - ax1)
-  const cross2 = (ax2 - ax1) * (bz2 - az1) - (az2 - az1) * (bx2 - ax1)
+// Ray-cast pointInPolygon is unreliable for points exactly on the polygon
+// boundary: the answer flips depending on which side of the polygon the edge
+// is on. Interval classification below therefore treats "within this distance
+// of the boundary" as inside explicitly, so walls sitting exactly on a slab
+// edge (the common case — auto-slab polygons derive from wall centerlines)
+// classify identically on every side of the slab.
+const ON_BOUNDARY_EPSILON = 1e-4
 
-  if (Math.abs(cross1) > EPSILON || Math.abs(cross2) > EPSILON) {
-    return false // Not collinear
+function pointOnPolygonBoundary(px: number, pz: number, polygon: Array<[number, number]>): boolean {
+  const n = polygon.length
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = polygon[i]!
+    const [bx, bz] = polygon[(i + 1) % n]!
+    if (pointSegmentDistance(px, pz, ax, az, bx, bz) <= ON_BOUNDARY_EPSILON) return true
   }
+  return false
+}
 
-  // Check if a point is on segment b
-  const onSegment = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) =>
-    Math.min(px, qx) - EPSILON <= rx &&
-    rx <= Math.max(px, qx) + EPSILON &&
-    Math.min(pz, qz) - EPSILON <= rz &&
-    rz <= Math.max(pz, qz) + EPSILON
+/**
+ * Length of the sub-intervals of segment (ax,az)→(bx,bz) that lie inside the
+ * polygon or on its boundary. The segment is split at every crossing with a
+ * polygon edge and each sub-interval is classified by its midpoint, so no
+ * test point ever sits on a crossing.
+ */
+function segmentInsideLength(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  polygon: Array<[number, number]>,
+): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return 0
 
-  // BOTH endpoints of wall (a) must be on edge (b) for substantial overlap
-  const a1OnB = onSegment(bx1, bz1, bx2, bz2, ax1, az1)
-  const a2OnB = onSegment(bx1, bz1, bx2, bz2, ax2, az2)
+  const ts = [0, 1]
+  const n = polygon.length
+  for (let i = 0; i < n; i++) {
+    const [px, pz] = polygon[i]!
+    const [qx, qz] = polygon[(i + 1) % n]!
+    const ex = qx - px
+    const ez = qz - pz
+    const denom = dx * ez - dz * ex
+    if (Math.abs(denom) < 1e-12) continue // parallel/collinear — nothing to split at
+    const t = ((px - ax) * ez - (pz - az) * ex) / denom
+    const s = ((px - ax) * dz - (pz - az) * dx) / denom
+    if (t > 0 && t < 1 && s >= -1e-9 && s <= 1 + 1e-9) ts.push(t)
+  }
+  ts.sort((a, b) => a - b)
 
-  return a1OnB && a2OnB
+  let inside = 0
+  for (let i = 1; i < ts.length; i++) {
+    const t0 = ts[i - 1]!
+    const t1 = ts[i]!
+    if (t1 - t0 < 1e-9) continue
+    const tm = (t0 + t1) / 2
+    const mx = ax + dx * tm
+    const mz = az + dz * tm
+    if (pointOnPolygonBoundary(mx, mz, polygon) || pointInPolygon(mx, mz, polygon)) {
+      inside += (t1 - t0) * length
+    }
+  }
+  return inside
+}
+
+function polylineInsideLength(
+  points: Array<{ x: number; y: number }>,
+  polygon: Array<[number, number]>,
+): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    total += segmentInsideLength(a.x, a.y, b.x, b.y, polygon)
+  }
+  return total
 }
 
 type WallOverlapInput = {
@@ -318,16 +378,81 @@ type WallOverlapInput = {
   thickness?: number
 }
 
+// Minimum length of wall that must lie on/inside a slab polygon before the
+// wall counts as overlapping it. Point contact (a perpendicular wall butting
+// into a room's edge) clips to ~zero length and never reaches this, so such
+// walls don't follow the slab's elevation.
+const WALL_SLAB_MIN_OVERLAP = 0.05
+
 /**
- * Test if a wall segment overlaps with a polygon.
- * A wall is considered to overlap if:
- * - Its midpoint is inside the polygon (wall crosses through)
- * - At least one endpoint is inside (wall partially or fully in slab)
- * - It's collinear with and overlaps a polygon edge (wall on slab boundary)
- * - (curved walls) any sample along the centerline is inside
+ * Centerline of the wall plus its two face lines (centerline offset by
+ * ±halfThickness). The face lines catch walls whose centerline sits on or
+ * just outside the slab boundary but whose body reaches onto the slab —
+ * e.g. slab polygons drawn to the room's interior faces.
+ */
+function wallTestPolylines(
+  start: [number, number],
+  end: [number, number],
+  curveOffset: number,
+  halfThickness: number,
+): Array<Array<{ x: number; y: number }>> {
+  const wallLike = { start, end, curveOffset }
+  if (curveOffset !== 0 && isCurvedWall(wallLike)) {
+    const count = 16
+    const center: Array<{ x: number; y: number }> = []
+    const left: Array<{ x: number; y: number }> = []
+    const right: Array<{ x: number; y: number }> = []
+    for (let i = 0; i <= count; i++) {
+      const frame = getWallCurveFrameAt(wallLike, i / count)
+      center.push(frame.point)
+      left.push({
+        x: frame.point.x + frame.normal.x * halfThickness,
+        y: frame.point.y + frame.normal.y * halfThickness,
+      })
+      right.push({
+        x: frame.point.x - frame.normal.x * halfThickness,
+        y: frame.point.y - frame.normal.y * halfThickness,
+      })
+    }
+    return halfThickness > 0 ? [center, left, right] : [center]
+  }
+
+  const center = [
+    { x: start[0], y: start[1] },
+    { x: end[0], y: end[1] },
+  ]
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-10 || halfThickness <= 0) return [center]
+  const nx = (-dz / len) * halfThickness
+  const nz = (dx / len) * halfThickness
+  return [
+    center,
+    [
+      { x: start[0] + nx, y: start[1] + nz },
+      { x: end[0] + nx, y: end[1] + nz },
+    ],
+    [
+      { x: start[0] - nx, y: start[1] - nz },
+      { x: end[0] - nx, y: end[1] - nz },
+    ],
+  ]
+}
+
+/**
+ * Test whether a wall overlaps a slab polygon along a segment of its length.
  *
- * Note: A wall with just one endpoint touching the edge but the rest outside
- * is NOT considered overlapping (adjacent only).
+ * The wall's centerline and both face lines are clipped against the polygon;
+ * the wall overlaps when the longest clipped inside-or-on-boundary length
+ * exceeds a threshold (5cm, halved for very short walls). Because interval
+ * midpoints classify "on the boundary" as inside explicitly (never by
+ * ray-cast tie-breaking), a wall sitting exactly on a slab edge resolves
+ * identically on every side of the slab.
+ *
+ * A wall that only touches the polygon at a point — a perpendicular wall
+ * butting into a room's edge, or a corner-to-corner touch — clips to ~zero
+ * length and does NOT overlap.
  */
 export function wallOverlapsPolygon(
   startOrWall: [number, number] | WallOverlapInput,
@@ -355,110 +480,20 @@ export function wallOverlapsPolygon(
   }
   const halfThickness = Math.max(thickness / 2, 0)
 
-  // Curved walls: sample the centerline. The chord-based checks below miss
-  // walls that bow into/out of the slab — e.g. endpoints on the slab
-  // boundary with the curve arcing inward through the slab interior. Without
-  // this, `getSlabElevationForWall` returns 0 (wall drops to floor) and
-  // `markNodesOverlappingSlab` never re-dirties the wall when the slab Y
-  // moves.
-  if (curveOffset !== 0) {
-    const wallLike = { start, end, curveOffset }
-    if (isCurvedWall(wallLike)) {
-      const samples = sampleWallCenterline(wallLike, 16)
-      for (let i = 0; i < samples.length; i++) {
-        const point = samples[i]!
-        if (pointInPolygon(point.x, point.y, polygon)) return true
-        // Also test ±halfThickness perpendicular at each sample so a curve
-        // skirting the slab edge with its centerline just outside still
-        // registers — its body sits inside the slab.
-        if (halfThickness > 0 && i > 0) {
-          const prev = samples[i - 1]!
-          const sx = point.x - prev.x
-          const sz = point.y - prev.y
-          const sl = Math.sqrt(sx * sx + sz * sz)
-          if (sl > 1e-10) {
-            const tnx = (-sz / sl) * halfThickness
-            const tnz = (sx / sl) * halfThickness
-            if (pointInPolygon(point.x + tnx, point.y + tnz, polygon)) return true
-            if (pointInPolygon(point.x - tnx, point.y - tnz, polygon)) return true
-          }
-        }
-      }
-    }
+  const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
+  const center = polylines[0]!
+  let centerLength = 0
+  for (let i = 1; i < center.length; i++) {
+    centerLength += Math.hypot(center[i]!.x - center[i - 1]!.x, center[i]!.y - center[i - 1]!.y)
   }
+  if (centerLength < 1e-9) return false
 
-  const dx = end[0] - start[0]
-  const dz = end[1] - start[1]
-  const len = Math.sqrt(dx * dx + dz * dz)
-
-  // Nudge endpoint test points a tiny step inward along the wall direction before
-  // testing containment. pointInPolygon (ray casting) produces false positives for
-  // points exactly on polygon vertices or edges — specifically the minimum-z corner
-  // of an axis-aligned polygon returns "inside" because the ray hits the opposite
-  // vertical edge exactly at its base. Nudging by 1e-6 m avoids this: a wall that
-  // merely starts at a slab corner and extends outward will have its nudged point
-  // clearly outside, while a wall that genuinely starts inside stays inside.
-  if (len > 1e-10) {
-    const step = Math.min(1e-6, len * 0.01)
-    const nx = (dx / len) * step
-    const nz = (dz / len) * step
-    if (pointInPolygon(start[0] + nx, start[1] + nz, polygon)) return true
-    if (pointInPolygon(end[0] - nx, end[1] - nz, polygon)) return true
-
-    // Also nudge perpendicular to the wall (into the slab interior) for walls that
-    // lie exactly on the slab boundary. The along-wall nudge keeps points on the
-    // boundary where pointInPolygon is unreliable; a perpendicular inward nudge
-    // moves the point clearly inside (or outside) the polygon.
-    // Sample the wall at 1/4, 1/2, 3/4 positions with a perpendicular nudge.
-    const PERP_STEP = 1e-4
-    const pnx = (-nz / step) * PERP_STEP // perpendicular left
-    const pnz = (nx / step) * PERP_STEP
-    for (const t of [0.25, 0.5, 0.75]) {
-      const bx = start[0] + dx * t
-      const bz = start[1] + dz * t
-      if (pointInPolygon(bx + pnx, bz + pnz, polygon)) return true
-      if (pointInPolygon(bx - pnx, bz - pnz, polygon)) return true
-    }
-
-    // Wall-thickness perpendicular test. Walls aren't infinitely thin lines;
-    // a wall whose centerline sits just outside the slab boundary still has
-    // half its body inside the slab and should follow the slab elevation.
-    // Without this, the perimeter walls of a room often miss the slab-overlap
-    // detection (the slab polygon is the room's interior, the wall centerline
-    // sits on or just outside its edge) and stay at Y=0 while the slab moves
-    // up.
-    if (halfThickness > 0) {
-      const ux = dx / len
-      const uz = dz / len
-      const tnx = -uz * halfThickness
-      const tnz = ux * halfThickness
-      for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-        const bx = start[0] + dx * t
-        const bz = start[1] + dz * t
-        if (pointInPolygon(bx + tnx, bz + tnz, polygon)) return true
-        if (pointInPolygon(bx - tnx, bz - tnz, polygon)) return true
-      }
-    }
+  let overlap = 0
+  for (const line of polylines) {
+    overlap = Math.max(overlap, polylineInsideLength(line, polygon))
   }
-
-  // Check if midpoint is inside (catches walls crossing through)
-  const midX = (start[0] + end[0]) / 2
-  const midZ = (start[1] + end[1]) / 2
-  if (pointInPolygon(midX, midZ, polygon)) return true
-
-  // Check if the wall is collinear with and overlaps any polygon edge
-  const n = polygon.length
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    const [p1x, p1z] = polygon[i]!
-    const [p2x, p2z] = polygon[j]!
-
-    if (segmentsCollinearAndOverlap(start[0], start[1], end[0], end[1], p1x, p1z, p2x, p2z)) {
-      return true
-    }
-  }
-
-  return false
+  const threshold = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, centerLength * 0.5))
+  return overlap >= threshold
 }
 
 export class SpatialGridManager {

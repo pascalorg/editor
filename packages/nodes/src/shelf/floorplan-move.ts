@@ -11,6 +11,7 @@ import {
 import {
   applyFloorplanAlignment,
   getFloorStackPreviewPosition,
+  isMagneticSnapActive,
   triggerSFX,
   useEditor,
   type WallPlanPoint,
@@ -76,7 +77,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
           originalRotationY,
         ),
         candidates,
-        { bypass: modifiers.altKey || modifiers.shiftKey },
+        { applySnap: isMagneticSnapActive(), bypass: modifiers.altKey || modifiers.shiftKey },
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next

@@ -118,8 +118,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Item Placement',
     shortcuts: [
-      { keys: ['R'], action: 'Rotate item clockwise, or toggle selected door open/closed' },
-      { keys: ['T'], action: 'Rotate item counter-clockwise, or close selected door' },
+      { keys: ['R', 'T'], action: 'Rotate item; with a door selected, R toggles open/closed and T closes' },
       {
         keys: ['Shift'],
         action: 'Temporarily bypass placement validation constraints',

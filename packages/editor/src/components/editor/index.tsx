@@ -55,6 +55,7 @@ import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
+import { usePluginPanels } from '../ui/sidebar/use-plugin-panels'
 import { CustomCameraControls } from './custom-camera-controls'
 import { EditorLayoutV2 } from './editor-layout-v2'
 import { ExportManager } from './export-manager'
@@ -137,6 +138,12 @@ export interface EditorProps {
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
   /**
+   * Full-bleed surface swapped in over the 3D canvas (v2) — e.g. the studio
+   * gallery. The canvas stays mounted underneath (no WebGL re-init) and the
+   * viewer toolbar stays on top so the host's stage switch remains reachable.
+   */
+  stageOverlay?: ReactNode
+  /**
    * Docked below the node inspector (v2). Hosts mount the "save as preset"
    * affordance here so it reads as part of the inspector surface and shows
    * only while a node is selected.
@@ -157,6 +164,10 @@ export interface EditorProps {
 
   // Loading indicator (e.g. project fetching in community mode)
   isLoading?: boolean
+
+  // Fires when the full-screen scene loader shows/hides — lets hosts measure
+  // open-to-interactive time without reaching into internal loader state.
+  onLoaderChange?: (visible: boolean) => void
 
   // Thumbnail
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
@@ -1076,6 +1087,7 @@ export default function Editor({
   sidebarTabs,
   viewerToolbarLeft,
   viewerToolbarRight,
+  stageOverlay,
   inspectorFooter,
   projectId,
   onLoad,
@@ -1085,6 +1097,7 @@ export default function Editor({
   previewScene,
   isVersionPreviewMode = false,
   isLoading = false,
+  onLoaderChange,
   onThumbnailCapture,
   sidebarOverlay,
   viewerBanner,
@@ -1114,6 +1127,12 @@ export default function Editor({
 
   const sidebarWidth = useSidebarStore((s) => s.width)
   const isSidebarCollapsed = useSidebarStore((s) => s.isCollapsed)
+
+  // Plugin-contributed rail panels (registry-only). Called unconditionally so
+  // hook order is stable across the v1 / v2 layout branches below; the v1
+  // AppSidebar path merges its own copy internally, the v2 path merges these
+  // into its tab bar.
+  const pluginRailPanels = usePluginPanels()
 
   useEffect(() => {
     const teardown = initializeEditorRuntime()
@@ -1215,6 +1234,10 @@ export default function Editor({
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
 
+  useEffect(() => {
+    onLoaderChange?.(showLoader)
+  }, [showLoader, onLoaderChange])
+
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
 
@@ -1286,7 +1309,17 @@ export default function Editor({
 
   // ── V2 layout ──
   if (layoutVersion === 'v2') {
-    const tabMap = new Map(sidebarTabs?.map((t) => [t.id, t]) ?? [])
+    // Plugin panels join the host's `sidebarTabs` as first-class tabs. Host
+    // tabs keep precedence (already in the map first); a plugin panel id can't
+    // collide with a host tab because it's namespaced by plugin id.
+    const tabMap = new Map<string, SidebarTab & { component: React.ComponentType }>(
+      sidebarTabs?.map((t) => [t.id, t]) ?? [],
+    )
+    for (const p of pluginRailPanels) {
+      if (!tabMap.has(p.id)) {
+        tabMap.set(p.id, { id: p.id, label: p.label, icon: p.icon, component: p.component })
+      }
+    }
 
     const renderTabContent = (tabId: string) => {
       // Built-in panels
@@ -1303,14 +1336,24 @@ export default function Editor({
       return <Component />
     }
 
-    const tabBarTabs =
-      sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
+    const tabBarTabs = [
+      ...(sidebarTabs?.map(({ id, label, mobileDefaultSnap, mobileIcon, icon }) => ({
         id,
         label,
         mobileDefaultSnap,
         mobileIcon,
         icon,
-      })) ?? []
+      })) ?? []),
+      // Plugin panels appear after the host's tabs in the rail. The icon
+      // doubles as the mobile icon; a half-height sheet is a sensible default.
+      ...pluginRailPanels.map((p) => ({
+        id: p.id,
+        label: p.label,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: p.icon,
+        icon: p.icon,
+      })),
+    ]
 
     return (
       <>
@@ -1337,7 +1380,7 @@ export default function Editor({
               navbarSlot={navbarSlot}
               overlays={
                 <>
-                  {!isCaptureMode && <FloatingLevelSelector />}
+                  {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
                   {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
@@ -1365,6 +1408,7 @@ export default function Editor({
               renderTabContent={renderTabContent}
               sidebarOverlay={sidebarOverlay}
               sidebarTabs={tabBarTabs}
+              stageOverlay={stageOverlay}
               viewerContent={viewerCanvas}
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}

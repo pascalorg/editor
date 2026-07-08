@@ -316,6 +316,12 @@ export function ZoneLabelEditorSystem() {
         .map((n) => n.id as ZoneNode['id']),
     ),
   )
+  // The zone renderer unmounts its <Html> label when zones are hidden —
+  // unmount the portals with it, or each editor would hold (and rAF-poll for)
+  // a detached label element.
+  const showZones = useViewer((s) => s.showZones)
+
+  if (!showZones) return null
 
   return (
     <>

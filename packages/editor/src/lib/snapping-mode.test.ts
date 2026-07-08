@@ -48,8 +48,8 @@ describe('resolveSnapFlags', () => {
 })
 
 describe('per-context snapping', () => {
-  it('items default to free (lines) with no angle lock', () => {
-    expect(defaultSnappingModeFor('item')).toBe('lines')
+  it('items default to grid with no angle lock', () => {
+    expect(defaultSnappingModeFor('item')).toBe('grid')
     expect(snappingModesFor('item')).toEqual(['lines', 'grid', 'off'])
     expect(snappingModesFor('item')).not.toContain('angles')
   })

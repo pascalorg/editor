@@ -41,6 +41,18 @@ type ViewerState = {
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
 
+  /** True during a GLB bake/export pass. Renderers that normally draw via a
+   * collective InstancedMesh (`def.system`) and mount only an invisible per-node
+   * proxy can watch this to emit real, visible geometry so the exporter — which
+   * clones only the `scene-renderer` subtree — captures them. Transient (never
+   * persisted). */
+  isExporting: boolean
+  setExporting: (value: boolean) => void
+
+  /** Suspend the render loop while the canvas is fully covered (e.g. studio gallery). */
+  renderPaused: boolean
+  setRenderPaused: (value: boolean) => void
+
   shading: RenderShading
   shadingByContext: Partial<Record<RenderContext, RenderShading>>
   setShading: (shading: RenderShading) => void
@@ -74,6 +86,14 @@ type ViewerState = {
 
   showGrid: boolean
   setShowGrid: (show: boolean) => void
+
+  // Presentation flag for parametric zones. When false the zone renderer
+  // unmounts its meshes AND its drei <Html> label (an <Html> costs per-frame
+  // matrix work + live DOM even at opacity 0, so hiding is not enough). The
+  // editor drives this from its structure layer; viewer surfaces keep the
+  // default. Not persisted — derived state, not a user preference.
+  showZones: boolean
+  setShowZones: (show: boolean) => void
 
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
@@ -222,6 +242,12 @@ const useViewer = create<ViewerState>()(
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),
 
+      isExporting: false,
+      setExporting: (value) => set({ isExporting: value }),
+
+      renderPaused: false,
+      setRenderPaused: (value) => set({ renderPaused: value }),
+
       shading: 'rendered',
       shadingByContext: {},
       setShading: (shading) =>
@@ -289,6 +315,9 @@ const useViewer = create<ViewerState>()(
           }
           return { showGrid: show, projectPreferences }
         }),
+
+      showZones: true,
+      setShowZones: (show) => set({ showZones: show }),
 
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),

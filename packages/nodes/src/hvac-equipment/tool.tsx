@@ -63,8 +63,8 @@ const HvacEquipmentTool = () => {
     // it); `'off'` is the no-snap bypass.
     const resolveAligned = (event: GridEvent): [number, number, number] =>
       alignDrawPoint(resolve(event), {
-        applySnap: true,
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
+        bypass: false,
       })
 
     const onMove = (event: GridEvent) => setCursor(resolveAligned(event))

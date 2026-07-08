@@ -8,6 +8,7 @@ export {
 export {
   clampPlanValue,
   doesPolygonIntersectSelectionBounds,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
   getDistanceToWallSegment,
   getFloorplanSelectionBounds,

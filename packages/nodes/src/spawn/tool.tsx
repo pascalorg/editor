@@ -10,6 +10,7 @@ import {
 import {
   CursorSphere,
   getFloorStackPreviewPosition,
+  isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
@@ -63,7 +64,8 @@ const SpawnTool = () => {
         rawZ: event.localPosition[2],
         gridStep: useEditor.getState().gridSnapStep,
         candidates: alignmentCandidates,
-        bypassAlignment: !isMagneticSnapActive(),
+        showAlignment: isAlignmentGuideActive(),
+        applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
       })
       useAlignmentGuides.getState().set(guides)

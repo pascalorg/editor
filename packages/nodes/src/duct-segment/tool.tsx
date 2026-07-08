@@ -745,8 +745,8 @@ const DuctSegmentTool = () => {
       const hasStart = draftRef.current.length > 0
       const alt = event.nativeEvent?.altKey === true
       const point = alignDrawPoint(r.point, {
-        applySnap: !hasStart || !isAngleSnapActive(),
-        bypass: !isMagneticSnapActive() || alt || r.snapped !== null,
+        applySnap: isMagneticSnapActive() && (!hasStart || !isAngleSnapActive()),
+        bypass: alt || r.snapped !== null,
       })
       return { ...r, point }
     }

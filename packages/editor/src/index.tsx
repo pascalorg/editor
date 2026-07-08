@@ -155,6 +155,7 @@ export {
   snapScalarToGrid,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
+  WALL_CONNECT_SNAP_RADIUS,
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapKind,
@@ -364,7 +365,10 @@ export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
+  CaptureMode,
   FloorplanSelectionTool,
+  SnapshotCropMode,
+  SnapshotStandardAspect,
   SplitOrientation,
   Tool,
   ToolDefaults,
@@ -375,6 +379,7 @@ export {
   default as useEditor,
   getActiveContinuationContext,
   getContinuation,
+  isAlignmentGuideActive,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,

@@ -132,6 +132,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
+    // The wall the door was grabbed from. Nulled the first time the anchor
+    // seeds on any other host: the grab offset is then forgotten for good.
+    let grabWallId: string | null = movingDoorNode.parentId
     let committed = false
     // Off-wall free-follow: when the cursor is over empty floor (no wall under
     // the ray) the door is parented to the level and tracks the cursor like an
@@ -278,10 +281,15 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const rawLocalX = event.localPosition[0]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
+        // Grab offset survives only on the original wall and only until the
+        // door anchors on any other host — after that every wall (the
+        // original included) centers the door under the cursor.
+        const preserveGrab = event.node.id === grabWallId
+        if (!preserveGrab) grabWallId = null
         dragAnchor = {
           wallId: event.node.id,
           rawX: rawLocalX,
-          startX: event.node.id === original.parentId ? original.position[0] : rawLocalX,
+          startX: preserveGrab ? original.position[0] : rawLocalX,
         }
       }
       const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
@@ -290,9 +298,10 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         rawLocalX: targetLocalX,
         width: movingDoorNode.width,
         candidates: alignmentCandidates,
-        // Along-wall alignment follows the magnetic ("lines") mode; the grid
+        // Along-wall alignment guides display in every snapping mode; the
+        // magnetic pull onto them lands only in "lines" mode. The grid
         // component lives in `snapToHalf` (itself mode-aware).
-        bypass: !isMagneticSnapActive(),
+        applySnap: isMagneticSnapActive(),
       })
       const { clampedX, clampedY } = clampToWall(
         event.node,
@@ -686,9 +695,12 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // Valid roof hit owns the pointer for the next few frames; the floor
       // free-follow stands down until the cursor genuinely leaves the roof.
       markWallOwnedPointer()
-      // Wall-frame drag anchor / live transform don't apply on a roof face.
+      // Wall-frame drag anchor / live transform don't apply on a roof face —
+      // and anchoring here counts as "elsewhere", so the original wall's grab
+      // offset is forgotten for good.
       freeFollowing = false
       dragAnchor = null
+      grabWallId = null
       lastTarget = null
       lastRoofEvent = event
       useLiveTransforms.getState().clear(movingDoorNode.id)

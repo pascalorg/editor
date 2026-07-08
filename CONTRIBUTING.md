@@ -44,6 +44,10 @@ bun check:fix    # Auto-fix issues
 
 A key rule: **`packages/viewer` must never import from `apps/editor`**. The viewer is a standalone component; editor-specific behavior is injected via props/children.
 
+### Building a plugin
+
+New node kinds and sidebar panels can ship as a plugin instead of editing the built-ins. Read [`wiki/architecture/plugin-authoring.md`](wiki/architecture/plugin-authoring.md) for the contract, and copy [`packages/plugin-trees`](packages/plugin-trees) as a worked example.
+
 ## Submitting a PR
 
 1. **Fork the repo** and create a branch from `main`

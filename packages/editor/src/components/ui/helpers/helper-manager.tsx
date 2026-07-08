@@ -12,6 +12,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import {
   type ContextualShortcutHint,
+  GROUP_MOVE_DRAG_LABEL,
+  GROUP_ROTATE_DRAG_LABEL,
   ROTATE_HANDLE_DRAG_LABEL,
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
@@ -93,6 +95,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
+  const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
   const movingNode = useMovingNode()
   const activeHandleDrag = useActiveHandleDrag()
@@ -144,11 +147,26 @@ export function HelperManager() {
   // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
   if (isMobile) return null
 
-  // Rotating a node via its in-world gizmo: advertise Shift = free rotation,
-  // the same angle-step bypass wall drafting exposes. Takes priority over the
-  // idle select-mode hints since a handle drag is the active interaction.
-  if (activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL) {
+  // The studio workspace (compose panel / gallery) has no scene selection or
+  // tools — editor shortcut hints would only mislead there.
+  if (workspaceMode === 'studio') return null
+
+  // Rotating a node (or a multi-selection group) via its in-world gizmo:
+  // advertise Shift = free rotation, the same angle-step bypass wall drafting
+  // exposes. Takes priority over the idle select-mode hints since a handle
+  // drag is the active interaction.
+  if (
+    activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL ||
+    activeHandleDrag?.label === GROUP_ROTATE_DRAG_LABEL
+  ) {
     return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
+  }
+
+  // Group-move drag: the drag resolves to the 'item' snap context (see
+  // `snapContextOf`), so surface the snapping chips — mode + grid step, with
+  // their Shift / Ctrl cycle shortcuts — for the duration.
+  if (activeHandleDrag?.label === GROUP_MOVE_DRAG_LABEL) {
+    return <ContextualHelperPanel hints={[]} snapContext={snapContext} />
   }
 
   // Reshaping a node's geometry (endpoint / curve / polygon corner). Checked
