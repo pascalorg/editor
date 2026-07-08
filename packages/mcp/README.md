@@ -251,7 +251,8 @@ plus the element's own height; slabs additionally carry an absolute
 
 **Heads-up when you compute coordinates outside the editor.** Pascal's
 viewports apply their own rotations on top of the world axes: the 2-D plan
-panel wraps its content in a 90° rotation (`FLOORPLAN_VIEW_ROTATION_DEG`), and
+panel rotates its content by the user's view rotation (north-aligned = 0°,
+`FLOORPLAN_VIEW_ROTATION_DEG` baseline, north = world −Z), and
 the 3-D "top-down" snap preserves the camera's current azimuth, so when invoked
 from the iso default position, world and screen axes are offset by ~45° until
 you orbit to an axis-aligned view. So a layout authored as if

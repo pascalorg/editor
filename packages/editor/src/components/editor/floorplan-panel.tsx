@@ -78,6 +78,7 @@ import {
   buildFloorplanItemEntry,
   buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   collectLevelDescendants,
+  FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
   getFloorplanWall as getSharedFloorplanWall,
   rotatePlanVector as rotateSharedPlanVector,
@@ -248,7 +249,6 @@ const FLOORPLAN_GUIDE_HANDLE_HINT_OFFSET = 72
 const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_X = 92
 const FLOORPLAN_GUIDE_HANDLE_HINT_PADDING_Y = 48
 const FLOORPLAN_GUIDE_ROTATION_SNAP_DEGREES = 15
-const FLOORPLAN_VIEW_ROTATION_DEG = 90
 const FLOORPLAN_ROTATION_DEGREES_PER_PIXEL = 0.35
 const FLOORPLAN_VIEW_ANIMATION_TIME_CONSTANT_MS = 90
 const FLOORPLAN_VIEW_ANIMATION_EPSILON = 0.0005
@@ -1125,9 +1125,28 @@ function getResizeCursorForAngle(angle: number) {
   return 'nesw-resize'
 }
 
-function getGuideResizeCursor(corner: GuideCorner, rotationSvg: number) {
+function getGuideResizeCursorAngle(corner: GuideCorner, aspectRatio: number, rotationSvg: number) {
   const signs = guideCornerSigns[corner]
-  return getResizeCursorForAngle(Math.atan2(signs.y, signs.x) + rotationSvg)
+  // Screen-space direction from the guide center toward the dragged corner:
+  // the corner diagonal depends on the image aspect, not a fixed 45°.
+  return Math.atan2(signs.y, signs.x * aspectRatio) + rotationSvg
+}
+
+function getGuideResizeCursor(angle: number, isDarkMode: boolean) {
+  const strokeColor = isDarkMode ? '#ffffff' : '#09090b'
+  const outlineColor = isDarkMode ? '#0a0e1b' : '#ffffff'
+  const degrees = Math.round((angle * 180) / Math.PI)
+  const arrowPath = 'M5 12h14M8.5 8.5 5 12l3.5 3.5M15.5 8.5 19 12l-3.5 3.5'
+  const svgMarkup = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <g transform="rotate(${degrees} 12 12)">
+        <path d="${arrowPath}" stroke="${outlineColor}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="${arrowPath}" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+    </svg>
+  `.trim()
+
+  return buildCursorUrl(svgMarkup, 12, 12, getResizeCursorForAngle(angle))
 }
 
 function buildCursorUrl(svgMarkup: string, hotspotX: number, hotspotY: number, fallback: string) {
@@ -3021,6 +3040,7 @@ function useGuideImageDimensions(url: string | null) {
 function FloorplanGuideImage({
   guide,
   isInteractive,
+  isLocked,
   isSelected,
   activeInteractionMode,
   onGuideSelect,
@@ -3028,6 +3048,10 @@ function FloorplanGuideImage({
 }: {
   guide: GuideNode
   isInteractive: boolean
+  // Locked guides stay CLICKABLE (select → panel → unlock / edit scale) but
+  // never start a translate drag. Removing the hit rect entirely made a
+  // scale-calibrated (auto-locked) reference unselectable until reload.
+  isLocked: boolean
   isSelected: boolean
   activeInteractionMode: GuideInteractionMode | null
   onGuideSelect: (guideId: GuideNode['id']) => void
@@ -3063,15 +3087,18 @@ function FloorplanGuideImage({
           onPointerDown={(event) => {
             if (event.button === 0) {
               event.stopPropagation()
-              if (isSelected) {
+              if (isSelected && !isLocked) {
                 onGuideTranslateStart(guide, event)
               }
             }
           }}
           pointerEvents="all"
           style={{
-            cursor:
-              isSelected && activeInteractionMode === 'translate'
+            cursor: isLocked
+              ? isSelected
+                ? 'default'
+                : 'pointer'
+              : isSelected && activeInteractionMode === 'translate'
                 ? 'grabbing'
                 : isSelected
                   ? 'grab'
@@ -3275,7 +3302,8 @@ const FloorplanGuideLayer = memo(function FloorplanGuideLayer({
             activeGuideInteractionGuideId === guide.id ? activeGuideInteractionMode : null
           }
           guide={guide}
-          isInteractive={isInteractive && guideUi[guide.id]?.locked !== true}
+          isInteractive={isInteractive}
+          isLocked={guideUi[guide.id]?.locked === true}
           isSelected={selectedGuideId === guide.id}
           key={guide.id}
           onGuideSelect={onGuideSelect}
@@ -3460,6 +3488,7 @@ function FloorplanGuideSelectionOverlay({
   guide,
   isDarkMode,
   rotationModifierPressed,
+  sceneRotationDeg,
   showHandles,
   onCornerHoverChange,
   onCornerPointerDown,
@@ -3467,6 +3496,7 @@ function FloorplanGuideSelectionOverlay({
   guide: GuideNode | null
   isDarkMode: boolean
   rotationModifierPressed: boolean
+  sceneRotationDeg: number
   showHandles: boolean
   onCornerHoverChange: (corner: GuideCorner | null) => void
   onCornerPointerDown: (
@@ -3546,7 +3576,18 @@ function FloorplanGuideSelectionOverlay({
                   style={{
                     cursor: rotationModifierPressed
                       ? getGuideRotateCursor(isDarkMode)
-                      : getGuideResizeCursor(corner, getGuideSvgRotation(guide.rotation[1])),
+                      : getGuideResizeCursor(
+                          getGuideResizeCursorAngle(
+                            corner,
+                            planWidth / planHeight,
+                            // The overlay renders inside the scene <g>, so the
+                            // on-screen corner direction carries the view
+                            // rotation on top of the guide's own rotation.
+                            getGuideSvgRotation(guide.rotation[1]) +
+                              (sceneRotationDeg * Math.PI) / 180,
+                          ),
+                          isDarkMode,
+                        ),
                   }}
                   vectorEffect="non-scaling-stroke"
                 />
@@ -3563,11 +3604,13 @@ function FloorplanGuideHandleHint({
   isDarkMode,
   isMacPlatform,
   rotationModifierPressed,
+  showScaleHint,
 }: {
   anchor: GuideHandleHintAnchor | null
   isDarkMode: boolean
   isMacPlatform: boolean
   rotationModifierPressed: boolean
+  showScaleHint: boolean
 }) {
   if (!anchor) {
     return null
@@ -3622,6 +3665,14 @@ function FloorplanGuideHandleHint({
             icon="ph:mouse-left-click-fill"
           />
         </div>
+
+        {showScaleHint && (
+          <div className="flex items-center gap-1.5 opacity-40">
+            <span className="font-medium text-[11px] lowercase leading-none">set scale</span>
+            <Ruler aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+            <span className="font-medium text-[11px] lowercase leading-none">panel</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -5167,6 +5218,18 @@ export function FloorplanPanel({
   const [pendingReferenceScale, setPendingReferenceScale] = useState<PendingReferenceScale | null>(
     null,
   )
+  // Mirror the in-flight scale flow to the store — the reference panel's
+  // Set Scale button flips into Cancel while it's active.
+  useEffect(() => {
+    useEditor
+      .getState()
+      .setReferenceScaleActiveGuideId(
+        referenceScaleDraft?.guideId ?? pendingReferenceScale?.guideId ?? null,
+      )
+  }, [referenceScaleDraft, pendingReferenceScale])
+  useEffect(() => {
+    return () => useEditor.getState().setReferenceScaleActiveGuideId(null)
+  }, [])
   const [referenceScaleValue, setReferenceScaleValue] = useState('1')
   const [referenceScaleUnit, setReferenceScaleUnit] = useState<ReferenceScaleUnit>(
     unit === 'imperial' ? 'feet' : 'meters',
@@ -9504,7 +9567,17 @@ export function FloorplanPanel({
           end: planPoint,
           measuredLengthUnits,
         })
-        setReferenceScaleValue(formatNumber(measuredLengthUnits, 2))
+        // Pre-fill with the drawn length in the pre-selected unit, so
+        // confirming without editing is a no-op instead of a surprise
+        // rescale (plan units are meters; convert when defaulting to feet).
+        setReferenceScaleValue(
+          formatNumber(
+            unit === 'imperial'
+              ? measuredLengthUnits / linearUnitToMeters(1, 'imperial')
+              : measuredLengthUnits,
+            2,
+          ),
+        )
         setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
         setReferenceScaleDraft(null)
         setCursorPoint(null)
@@ -10004,7 +10077,16 @@ export function FloorplanPanel({
       document.body.style.userSelect = 'none'
       document.body.style.cursor = shouldRotate
         ? getGuideRotateCursor(isDark)
-        : getGuideResizeCursor(corner, rotationSvg)
+        : getGuideResizeCursor(
+            getGuideResizeCursorAngle(
+              corner,
+              aspectRatio,
+              // Screen space includes the scene <g>'s view rotation on top of
+              // the guide's own rotation.
+              rotationSvg + (floorplanSceneRotationDeg * Math.PI) / 180,
+            ),
+            isDark,
+          )
 
       const nextDraft: GuideTransformDraft = {
         guideId: guide.id,
@@ -10016,7 +10098,7 @@ export function FloorplanPanel({
       guideTransformDraftRef.current = nextDraft
       setGuideTransformDraft(nextDraft)
     },
-    [canInteractWithGuides, guideUi, handleGuideSelect, isDark],
+    [canInteractWithGuides, floorplanSceneRotationDeg, guideUi, handleGuideSelect, isDark],
   )
   const handleGuideTranslateStart = useCallback(
     (guide: GuideNode, event: ReactPointerEvent<SVGRectElement>) => {
@@ -10667,6 +10749,7 @@ export function FloorplanPanel({
             isDarkMode={isDark}
             isMacPlatform={isMacPlatform}
             rotationModifierPressed={rotationModifierPressed}
+            showScaleHint={!selectedGuide.scaleReference}
           />
         )}
         {/* Floating Move / Duplicate / Delete buttons for registered
@@ -10693,14 +10776,23 @@ export function FloorplanPanel({
         {referenceScaleDraft && (
           <div className="pointer-events-none absolute top-3 left-1/2 z-30 -translate-x-1/2 rounded-md border bg-background/95 px-3 py-2 text-center text-sm shadow-sm">
             {referenceScaleDraft.start
-              ? 'Click the end of the known distance'
-              : 'Click the start of a known distance'}
+              ? 'Click the other end of that distance'
+              : 'Click one end of a distance you know — e.g. a dimension printed on the plan'}
           </div>
         )}
 
         {pendingReferenceScale && (
           <form
             className="absolute top-1/2 left-1/2 z-40 w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-background/95 p-3.5 text-foreground shadow-2xl backdrop-blur-md"
+            onKeyDown={(event) => {
+              // The focused length input keeps Escape from reaching the global
+              // handler — cancel the flow from here too.
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                guideEmitter.emit('guide:cancel-reference-scale')
+              }
+            }}
             onSubmit={(event) => {
               event.preventDefault()
               handleReferenceScaleConfirm()
@@ -11114,6 +11206,7 @@ export function FloorplanPanel({
                   onCornerHoverChange={setHoveredGuideCorner}
                   onCornerPointerDown={handleGuideCornerPointerDown}
                   rotationModifierPressed={rotationModifierPressed}
+                  sceneRotationDeg={floorplanSceneRotationDeg}
                   showHandles={canInteractWithGuides && guideUi[selectedGuide.id]?.locked !== true}
                 />
               )}

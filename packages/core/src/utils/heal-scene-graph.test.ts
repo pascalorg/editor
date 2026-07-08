@@ -47,4 +47,49 @@ describe('healSceneNodes', () => {
     expect(strippedChildRefs).toBe(0)
     expect(nodes.wall_a).toBe(input.wall_a)
   })
+
+  test('drops a stale child reference left behind by a reparent', () => {
+    // window's parentId says wall_b, but wall_a still lists it — the exact
+    // corruption that rendered a window twice (duplicate React keys in 2D).
+    const { nodes, strippedStaleChildRefs } = healSceneNodes({
+      wall_a: { id: 'wall_a', type: 'wall', start: [0, 0], end: [2, 0], children: ['window_1'] },
+      wall_b: { id: 'wall_b', type: 'wall', start: [2, 0], end: [4, 0], children: ['window_1'] },
+      window_1: { id: 'window_1', type: 'window', parentId: 'wall_b' },
+    })
+    expect(strippedStaleChildRefs).toBe(1)
+    expect((nodes.wall_a as { children: string[] }).children).toEqual([])
+    expect((nodes.wall_b as { children: string[] }).children).toEqual(['window_1'])
+  })
+
+  test('collapses same-array duplicate child references', () => {
+    const { nodes, strippedStaleChildRefs } = healSceneNodes({
+      wall_a: {
+        id: 'wall_a',
+        type: 'wall',
+        start: [0, 0],
+        end: [2, 0],
+        children: ['door_1', 'door_1'],
+      },
+      door_1: { id: 'door_1', type: 'door', parentId: 'wall_a' },
+    })
+    expect(strippedStaleChildRefs).toBe(1)
+    expect((nodes.wall_a as { children: string[] }).children).toEqual(['door_1'])
+  })
+
+  test('keeps children whose parentId matches or is absent', () => {
+    const input = {
+      wall_a: {
+        id: 'wall_a',
+        type: 'wall',
+        start: [0, 0],
+        end: [2, 0],
+        children: ['door_1', 'item_legacy'],
+      },
+      door_1: { id: 'door_1', type: 'door', parentId: 'wall_a' },
+      item_legacy: { id: 'item_legacy', type: 'item' },
+    }
+    const { nodes, strippedStaleChildRefs } = healSceneNodes(input)
+    expect(strippedStaleChildRefs).toBe(0)
+    expect(nodes.wall_a).toBe(input.wall_a)
+  })
 })
