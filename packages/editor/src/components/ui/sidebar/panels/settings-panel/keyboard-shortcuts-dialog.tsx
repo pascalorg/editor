@@ -78,6 +78,15 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         action: 'Add or remove an object from canvas multi-selection',
         note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
       },
+      {
+        keys: ['Left click'],
+        action: 'Drag any selected object to move the whole multi-selection',
+        note: 'With 2+ objects selected — in the 2D floor plan and via the 3D move handle alike.',
+      },
+      {
+        keys: ['R', 'T'],
+        action: 'Rotate a multi-selection ±45° around its center',
+      },
     ],
   },
   {

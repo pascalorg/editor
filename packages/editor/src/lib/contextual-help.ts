@@ -82,6 +82,23 @@ export function resolveSelectModeHelpHints({
     return hints
   }
 
+  // Multi-selection — advertise the group gestures: drag any member to slide
+  // the whole selection (2D floor plan body drag + the 3D move gizmo), R / T
+  // to step-rotate the group around its bounding-box center.
+  if (selectedCount > 1) {
+    hints.push({
+      keys: [LEFT_CLICK],
+      label: 'Drag any selected object to move the whole selection',
+    })
+    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
+    hints.push({
+      keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
+      label: 'Add or remove objects from the selection',
+      active: commandPressed || shiftPressed,
+    })
+    return hints
+  }
+
   // MEP handle workflow — duct/pipe runs and fittings are edited through the
   // in-world arrow rig that a click on the handle dot reveals, so surface those
   // hints first. A run endpoint's side / up-down arrows swing the run and Alt
