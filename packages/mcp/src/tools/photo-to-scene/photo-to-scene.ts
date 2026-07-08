@@ -13,6 +13,7 @@ import {
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { appendLiveSceneEvent } from '../live-sync'
+import { measurement } from '../measurement'
 
 /**
  * Input shape for the `photo_to_scene` orchestrator. `image` matches the
@@ -23,8 +24,14 @@ export const photoToSceneInput = {
   scaleHint: z.string().optional().describe('e.g. "1 cm = 1 m" or "approx 80 m²"'),
   name: z.string().default('Scene from photo'),
   save: z.boolean().default(true),
-  defaultWallThickness: z.number().default(0.2),
-  defaultWallHeight: z.number().default(2.6),
+  defaultWallThickness: measurement('length', 'm', {
+    min: 0,
+    description: 'Default wall thickness.',
+  }).default(0.2),
+  defaultWallHeight: measurement('length', 'm', {
+    min: 0,
+    description: 'Default wall height.',
+  }).default(2.6),
 }
 
 export const photoToSceneOutput = {
