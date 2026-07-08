@@ -39,9 +39,12 @@ import {
 import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
+  formatAreaLabel,
+  getAreaUnitLabel,
   getLinearUnitLabel,
   linearUnitToMeters,
   metersToLinearUnit,
+  squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
 import { cn } from './../../../../../lib/utils'
@@ -112,7 +115,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
   const linearLabel = getLinearUnitLabel(viewerUnit)
   const toDisplayLinear = (meters: number) => metersToLinearUnit(meters, viewerUnit)
   const toStoredLinear = (display: number) => linearUnitToMeters(display, viewerUnit)
-  const displayArea = isImperial ? area * 10.763_910_417 : area
+  const displayArea = squareMetersToAreaUnit(area, viewerUnit)
   const displayPerimeter = toDisplayLinear(perimeter)
 
   const handleToggleEdit = () => {
@@ -182,7 +185,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
         <div className="text-muted-foreground text-xs">
           Area:{' '}
           <span className="text-foreground">
-            {displayArea.toFixed(1)} {isImperial ? 'ft²' : 'm²'}
+            {displayArea.toFixed(1)} {getAreaUnitLabel(viewerUnit)}
           </span>
         </div>
         <div className="text-muted-foreground text-xs">
@@ -1117,6 +1120,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
+  const unit = useViewer((state) => state.unit)
 
   const isSelected = selectedZoneId === zone.id
   const isHovered = hoveredId === zone.id
@@ -1129,8 +1133,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
     }
   }, [isSelected])
 
-  const area = calculatePolygonArea(zone.polygon).toFixed(1)
-  const defaultName = `Zone (${area}m²)`
+  const defaultName = `Zone (${formatAreaLabel(calculatePolygonArea(zone.polygon), unit)})`
 
   const handleClick = () => {
     setSelection({ zoneId: zone.id })
