@@ -66,7 +66,7 @@ import {
 import { buildCabinetGeometry } from './geometry'
 import { cabinetPresetById } from './presets'
 import { runLocalToPlan } from './run-layout'
-import { addCabinetModuleSide, addCornerRun } from './run-ops'
+import { addCabinetModuleSide, addCornerRun, previewCornerAdditionLayout } from './run-ops'
 import {
   type CabinetWallSnapPlacement,
   collectCabinetWallSnapNeighbors,
@@ -104,6 +104,32 @@ type DraftAnchorState = StretchAnchor | StretchContinuation
 
 function isStretchContinuation(anchor: DraftAnchorState): anchor is StretchContinuation {
   return 'straightAnchor' in anchor
+}
+
+function stretchWithAdjustedConnectedWidth(
+  stretch: CabinetStretchPreview,
+  connectedWidth: number,
+): CabinetStretchPreview {
+  if (stretch.modules.length < 2) return stretch
+  const widths = [
+    stretch.modules[0]!.width,
+    connectedWidth,
+    ...stretch.modules.slice(2).map((module) => module.width),
+  ]
+  const halfFirst = widths[0]! / 2
+  let cum = 0
+  const modules = widths.map((width) => {
+    const x = stretch.direction * (cum + width / 2 - halfFirst)
+    cum += width
+    return { x, width }
+  })
+  const total = widths.reduce((sum, width) => sum + width, 0)
+  return {
+    modules,
+    length: total,
+    centerLocalX: stretch.direction * (total / 2 - halfFirst),
+    direction: stretch.direction,
+  }
 }
 
 function runModuleBaseY(plinthHeight: number, showPlinth: boolean) {
@@ -519,11 +545,37 @@ const CabinetTool = () => {
       event: FloorPlacementClickTriggerEvent,
     ): CabinetPlacement => {
       const raw = resolveRawPosition(event)
-      const stretch = planCabinetContinuousStretch({
+      let stretch = planCabinetContinuousStretch({
         anchor,
         previewWidth: previewNode.width,
         rawPlanPosition: raw,
       })
+      if (
+        anchor.leadingWidth != null &&
+        chainRunRef.current &&
+        chainEndModuleRef.current &&
+        chainCornerSideRef.current
+      ) {
+        const preview = previewCornerAdditionLayout({
+          module: chainEndModuleRef.current,
+          run: chainRunRef.current,
+          nodes: useScene.getState().nodes,
+          side: chainCornerSideRef.current,
+        })
+        if (!preview) {
+          return {
+            position: anchor.position,
+            yaw: anchor.yaw,
+            snappedToWall: anchor.snappedToWall,
+            wallSurfaceNormal: anchor.wallSurfaceNormal,
+            valid: false,
+            conflictIds: [],
+            stretch,
+            stretchAnchor: anchor,
+          }
+        }
+        stretch = stretchWithAdjustedConnectedWidth(stretch, preview.connectedWidth)
+      }
       const spanCenter = runLocalToPlan({ position: anchor.position, rotation: anchor.yaw }, [
         stretch.centerLocalX,
         0,

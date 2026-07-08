@@ -1124,6 +1124,28 @@ function childModuleByName(
   return null
 }
 
+export function previewCornerAdditionLayout({
+  module,
+  run,
+  nodes,
+  side,
+}: {
+  module: CabinetModuleNode
+  run: CabinetNode
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+  side: CornerSide
+}): {
+  connectedWidth: number
+  sourceWidth: number
+} | null {
+  const resolved = resolveCornerAdditionLayout({ module, run, nodes, side })
+  if (!resolved) return null
+  return {
+    connectedWidth: resolved.layout.connectedWidth,
+    sourceWidth: Math.min(resolved.sourceModule.width, resolved.layout.connectedWidth),
+  }
+}
+
 function setCabinetSelectionProxy(sceneApi: SceneApi, id: AnyNodeId, proxyId: AnyNodeId) {
   const live = sceneApi.get<CabinetNode | CabinetModuleNode>(id)
   if (!live || (live.type !== 'cabinet' && live.type !== 'cabinet-module')) return

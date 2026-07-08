@@ -4,6 +4,7 @@ import { runLocalToPlan } from '../run-layout'
 import {
   addCabinetModuleSide,
   addCornerRun,
+  previewCornerAdditionLayout,
   syncCornerRunsFromSourceModule,
   syncCornerStyleGroupFromRun,
   wallBottomHeightForTallAlignment,
@@ -1327,6 +1328,45 @@ describe('addCornerRun', () => {
     expect(sourceAfter.width).toBeCloseTo(0.56)
     expect(legCabinet?.width).toBeCloseTo(0.56)
     expect(wallLegCabinet?.width).toBeCloseTo(0.56)
+  })
+
+  test('reports the trimmed corner width during preview before adding the corner run', () => {
+    const levelId = 'level_corner-wall-clearance-preview' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-wall-clearance-preview',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-corner-wall-clearance-preview'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-wall-clearance-preview',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-wall-clearance-preview', type: 'door', shelfCount: 2 }],
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_corner-blocker-preview',
+      parentId: levelId,
+      start: [-1, 0.95],
+      end: [2, 0.95],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode, blockingWall as AnyNode])
+
+    const preview = previewCornerAdditionLayout({
+      module,
+      run,
+      nodes: sceneApi.nodes(),
+      side: 'right',
+    })
+
+    expect(preview).toBeTruthy()
+    expect(preview?.connectedWidth).toBeCloseTo(0.56)
+    expect(preview?.sourceWidth).toBeCloseTo(0.56)
   })
 
   test('does not add a corner leg when a blocking wall leaves no usable cabinet width', () => {

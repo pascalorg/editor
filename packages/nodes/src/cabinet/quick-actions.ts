@@ -25,6 +25,18 @@ type CabinetContext = {
   module: CabinetModuleNode | null
 }
 
+function resolveRunEndModule(
+  runModules: CabinetModuleNode[],
+  run: CabinetNode,
+  side: 'left' | 'right',
+): CabinetModuleNode | null {
+  const standardBaseModules = runModules.filter(
+    (module) => module.moduleKind === 'standard' && resolveCabinetType(module, run) === 'base',
+  )
+  if (standardBaseModules.length === 0) return null
+  return side === 'left' ? standardBaseModules[0] ?? null : standardBaseModules.at(-1) ?? null
+}
+
 // Lazy component IconRefs — the menus mount these behind Suspense, so the
 // glyph module loads only when a cabinet quick action is actually shown.
 const cabinetWallIcon: IconRef = {
@@ -78,6 +90,14 @@ export function cabinetQuickActions({
       ? Boolean(wallChildOf(context.module, nodes))
       : false
   const runModules = cabinetModulesForRun(context.run, nodes)
+  const leftCornerModule =
+    context.module && standardModule && selectedCabinetType === 'base'
+      ? context.module
+      : resolveRunEndModule(runModules, context.run, 'left')
+  const rightCornerModule =
+    context.module && standardModule && selectedCabinetType === 'base'
+      ? context.module
+      : resolveRunEndModule(runModules, context.run, 'right')
   const leftAvailable =
     sideInsertX({
       anchorModule: context.module,
@@ -95,17 +115,13 @@ export function cabinetQuickActions({
       epsilon: CABINET_EDGE_EPSILON,
     }) != null
   const canAddCornerLeft =
-    context.module != null &&
-    standardModule &&
+    leftCornerModule != null &&
     context.run.runTier === 'base' &&
-    selectedCabinetType === 'base' &&
-    moduleSideOpen(runModules, context.module.id, 'left', CABINET_EDGE_EPSILON)
+    moduleSideOpen(runModules, leftCornerModule.id, 'left', CABINET_EDGE_EPSILON)
   const canAddCornerRight =
-    context.module != null &&
-    standardModule &&
+    rightCornerModule != null &&
     context.run.runTier === 'base' &&
-    selectedCabinetType === 'base' &&
-    moduleSideOpen(runModules, context.module.id, 'right', CABINET_EDGE_EPSILON)
+    moduleSideOpen(runModules, rightCornerModule.id, 'right', CABINET_EDGE_EPSILON)
 
   const actions: NodeQuickAction[] = []
 
@@ -135,7 +151,7 @@ export function cabinetQuickActions({
       icon: cornerTurnLeftIcon,
       run: ({ sceneApi }) => {
         const id = addCornerRun({
-          module: context.module!,
+          module: leftCornerModule!,
           run: context.run,
           sceneApi,
           side: 'left',
@@ -205,7 +221,7 @@ export function cabinetQuickActions({
       icon: cornerTurnRightIcon,
       run: ({ sceneApi }) => {
         const id = addCornerRun({
-          module: context.module!,
+          module: rightCornerModule!,
           run: context.run,
           sceneApi,
           side: 'right',
