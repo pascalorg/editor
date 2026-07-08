@@ -1,6 +1,7 @@
 import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import { type Group, MathUtils, type Mesh } from 'three'
 import type { MeshBasicNodeMaterial } from 'three/webgpu'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
@@ -12,7 +13,21 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 const noopRaycast = () => {}
 
 export const ZoneSystem = () => {
+  // Outside the zones layer (or during snapshot capture) zones unmount
+  // entirely — meshes AND drei <Html> labels, which cost per-frame matrix work
+  // + live DOM even at opacity 0. The renderer reads this viewer flag; the
+  // unmount cleanup restores the default so preview / first-person surfaces
+  // (which swap this system for ViewerZoneSystem) keep their labels.
+  const structureLayerState = useEditor((s) => s.structureLayer)
+  const isCaptureModeState = useEditor((s) => s.isCaptureMode)
+  useEffect(() => {
+    useViewer.getState().setShowZones(structureLayerState === 'zones' && !isCaptureModeState)
+    return () => useViewer.getState().setShowZones(true)
+  }, [structureLayerState, isCaptureModeState])
+
   useFrame((_, delta) => {
+    if (!useViewer.getState().showZones) return
+
     const structureLayer = useEditor.getState().structureLayer
     const editorMode = useEditor.getState().mode
     const selectedLevelId = useViewer.getState().selection.levelId
@@ -54,9 +69,13 @@ export const ZoneSystem = () => {
             ? 1
             : 0
 
+      // Raycast is re-disabled per frame (not once per group): the meshes
+      // remount whenever the zones layer toggles, so a one-shot flag on the
+      // persistent group would leave fresh meshes clickable.
       const walls = (obj as Group).getObjectByName('walls') as Mesh | undefined
       if (walls) {
         walls.visible = meshVisible
+        walls.raycast = noopRaycast
         const material = walls.material as MeshBasicNodeMaterial
         if (material?.userData?.uOpacity) {
           material.userData.uOpacity.value = MathUtils.lerp(
@@ -70,6 +89,7 @@ export const ZoneSystem = () => {
       const floor = (obj as Group).getObjectByName('floor') as Mesh | undefined
       if (floor) {
         floor.visible = meshVisible
+        floor.raycast = noopRaycast
         const material = floor.material as MeshBasicNodeMaterial
         if (material?.userData?.uOpacity) {
           material.userData.uOpacity.value = MathUtils.lerp(
@@ -78,15 +98,6 @@ export const ZoneSystem = () => {
             lerpSpeed,
           )
         }
-      }
-
-      // Disable raycasting once per zone object so geometry never intercepts clicks
-      if (!obj.userData.__raycastDisabled) {
-        obj.raycast = noopRaycast
-        obj.traverse((child) => {
-          child.raycast = noopRaycast
-        })
-        obj.userData.__raycastDisabled = true
       }
 
       // Labels: visible on the current level (regardless of mode), but never
