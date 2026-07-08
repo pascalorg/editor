@@ -52,7 +52,6 @@ type UseFloorplanBackgroundPlacementArgs = {
   isOpeningPlacementActive: boolean
   isPolygonBuildActive: boolean
   isRoofBuildActive: boolean
-  isSlabBuildActive: boolean
   isWallBuildActive: boolean
   isZoneBuildActive: boolean
   levelId: string | null
@@ -111,7 +110,6 @@ export function useFloorplanBackgroundPlacement({
   isOpeningPlacementActive,
   isPolygonBuildActive,
   isRoofBuildActive,
-  isSlabBuildActive,
   isWallBuildActive,
   isZoneBuildActive,
   levelId,
@@ -390,7 +388,6 @@ export function useFloorplanBackgroundPlacement({
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
-      isSlabBuildActive,
       isWallBuildActive,
       isZoneBuildActive,
       levelId,
