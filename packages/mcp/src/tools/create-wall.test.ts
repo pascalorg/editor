@@ -42,6 +42,34 @@ describe('create_wall', () => {
     expect((created as { thickness?: number }).thickness).toBe(0.15)
   })
 
+  test('accepts a natural-language thickness and canonicalizes to meters', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_wall',
+      arguments: {
+        levelId: level.id,
+        start: [0, 0],
+        end: [4, 0],
+        thickness: '6 in',
+        height: '2.5m',
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const created = bridge.getNode(parsed.wallId) as { thickness?: number; height?: number }
+    expect(created.thickness).toBeCloseTo(0.1524, 6)
+    expect(created.height).toBeCloseTo(2.5, 6)
+  })
+
+  test('rejects an out-of-unit-family value', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_wall',
+      arguments: { levelId: level.id, start: [0, 0], end: [4, 0], thickness: 'banana' },
+    })
+    expect(result.isError).toBe(true)
+  })
+
   test('publishes a live scene snapshot when bound to a saved scene', async () => {
     const now = new Date().toISOString()
     const savedMeta: SceneMeta = {

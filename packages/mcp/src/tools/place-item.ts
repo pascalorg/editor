@@ -7,13 +7,14 @@ import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
 import { projectWorldPointToWallLocalX, wallLength } from './geometry'
 import { publishLiveSceneSnapshot } from './live-sync'
+import { measurement } from './measurement'
 import { NodeIdSchema, Vec3Schema } from './schemas'
 
 export const placeItemInput = {
   catalogItemId: z.string().min(1),
   targetNodeId: NodeIdSchema,
   position: Vec3Schema,
-  rotation: z.number().optional(),
+  rotation: measurement('angle', 'rad', { description: 'Y-axis rotation.' }).optional(),
 }
 
 export const placeItemOutput = {
