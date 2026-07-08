@@ -1,10 +1,17 @@
 'use client'
 
-import { useRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  useRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { createWallExtraSlotMaterials, WallTreatments } from './treatments'
 
 /**
  * Thin wall renderer.
@@ -27,7 +34,6 @@ import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
  */
 const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
-  // 3 groups map 1:1 to the wall's 3-material array (see getVisibleWallMaterials).
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(3), [])
   const collisionPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
 
@@ -49,12 +55,20 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneNodes = useScene((state) => state.nodes)
+  const childNodes = useMemo(
+    () =>
+      (node.children ?? [])
+        .map((childId) => sceneNodes[childId as AnyNodeId])
+        .filter((child): child is AnyNode => child !== undefined),
+    [node.children, sceneNodes],
+  )
   // Subscribe to the scene-material palette so editing a `scene:` material a
   // wall slot references re-renders the wall live (the wall-system geometry
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
   // content hash keeps unaffected walls on their cached materials.
   const sceneMaterials = useScene((s) => s.materials)
-  const material = getVisibleWallMaterials(
+  const baseMaterials = getVisibleWallMaterials(
     node,
     shading,
     textures,
@@ -62,12 +76,32 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     sceneTheme,
     sceneMaterials,
   )
+  const extraMaterials = useMemo(
+    () =>
+      createWallExtraSlotMaterials(
+        node,
+        shading,
+        textures,
+        sceneMaterials,
+        baseMaterials[1]!,
+        baseMaterials[2]!,
+      ),
+    [baseMaterials, node, sceneMaterials, shading, textures],
+  )
+  useEffect(
+    () => () => {
+      const baseSet = new Set(baseMaterials)
+      const owned = new Set(Object.values(extraMaterials).filter((entry) => !baseSet.has(entry)))
+      for (const entry of owned) entry.dispose()
+    },
+    [baseMaterials, extraMaterials],
+  )
 
   return (
     <mesh
       castShadow
       geometry={placeholderGeometry}
-      material={material}
+      material={baseMaterials}
       receiveShadow
       ref={ref}
       visible={node.visible}
@@ -78,6 +112,8 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         visible={false}
         {...handlers}
       />
+
+      <WallTreatments childrenNodes={childNodes} materials={extraMaterials} node={node} />
 
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />

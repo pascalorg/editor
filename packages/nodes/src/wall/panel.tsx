@@ -9,6 +9,10 @@ import {
   normalizeWallCurveOffset,
   useLiveNodeOverrides,
   useScene,
+  WALL_CHAIR_RAIL_DEFAULT,
+  WALL_CROWN_DEFAULT,
+  WALL_FACE_BAND_DEFAULT,
+  WALL_SKIRTING_DEFAULT,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -20,6 +24,7 @@ import {
   metersToLinearUnit,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useInteractionScope,
@@ -134,6 +139,12 @@ export default function WallPanel() {
   const displayCurveOffset = metersToLinearUnit(curveOffset, unit)
   const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
   const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
+  const wallHeightMeters = node.height ?? 2.5
+  const faceBands = { ...WALL_FACE_BAND_DEFAULT, ...(node.faceBands ?? {}) }
+
+  const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
+  const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
+  const chairRail = { ...WALL_CHAIR_RAIL_DEFAULT, ...(node.chairRail ?? {}) }
 
   return (
     <PanelWrapper
@@ -209,6 +220,45 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
+      <WallFaceBandSection
+        bands={faceBands}
+        onUpdate={handleUpdate}
+        unit={unit}
+        unitLabel={unitLabel}
+        wallHeightMeters={wallHeightMeters}
+      />
+
+      <WallTrimSection
+        node={node}
+        onUpdate={handleUpdate}
+        title="Skirting"
+        trimKey="skirting"
+        trimValue={skirting}
+        unit={unit}
+        unitLabel={unitLabel}
+        wallHeightMeters={wallHeightMeters}
+      />
+      <WallTrimSection
+        node={node}
+        onUpdate={handleUpdate}
+        title="Crown molding"
+        trimKey="crown"
+        trimValue={crown}
+        unit={unit}
+        unitLabel={unitLabel}
+        wallHeightMeters={wallHeightMeters}
+      />
+      <WallTrimSection
+        node={node}
+        onUpdate={handleUpdate}
+        title="Chair rail"
+        trimKey="chairRail"
+        trimValue={chairRail}
+        unit={unit}
+        unitLabel={unitLabel}
+        wallHeightMeters={wallHeightMeters}
+      />
+
       {!hasWallChildrenBlockingCurve && (
         <PanelSection title="Actions">
           <ActionGroup>
@@ -221,5 +271,194 @@ export default function WallPanel() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+function WallFaceBandSection({
+  bands,
+  onUpdate,
+  unit,
+  unitLabel,
+  wallHeightMeters,
+}: {
+  bands: NonNullable<WallNode['faceBands']>
+  onUpdate: (updates: Partial<WallNode>) => void
+  unit: 'metric' | 'imperial'
+  unitLabel: string
+  wallHeightMeters: number
+}) {
+  const lowerHeight = Math.max(0, Math.min(wallHeightMeters, bands.lowerHeight))
+  const middleHeight = Math.max(0, Math.min(wallHeightMeters - lowerHeight, bands.middleHeight))
+  const updateBands = (patch: Partial<NonNullable<WallNode['faceBands']>>) =>
+    onUpdate({
+      faceBands: {
+        ...bands,
+        ...patch,
+      },
+    })
+
+  return (
+    <PanelSection title="Wall bands">
+      <ActionGroup>
+        <ActionButton
+          label={bands.enabled ? 'Disable bands' : 'Enable bands'}
+          onClick={() => updateBands({ enabled: !bands.enabled })}
+        />
+      </ActionGroup>
+      {bands.enabled && (
+        <>
+          <SliderControl
+            label="Middle"
+            max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight), unit)}
+            min={metersToLinearUnit(0, unit)}
+            onChange={(value) =>
+              updateBands({
+                middleHeight: linearControlValueToMeters(value, unit, {
+                  maxMeters: Math.max(0, wallHeightMeters - lowerHeight),
+                  minMeters: 0,
+                }),
+              })
+            }
+            precision={2}
+            step={0.01}
+            unit={unitLabel}
+            value={metersToLinearUnit(middleHeight, unit)}
+          />
+          <SliderControl
+            label="Lower"
+            max={metersToLinearUnit(wallHeightMeters, unit)}
+            min={metersToLinearUnit(0, unit)}
+            onChange={(value) =>
+              updateBands({
+                lowerHeight: linearControlValueToMeters(value, unit, {
+                  maxMeters: wallHeightMeters,
+                  minMeters: 0,
+                }),
+              })
+            }
+            precision={2}
+            step={0.01}
+            unit={unitLabel}
+            value={metersToLinearUnit(lowerHeight, unit)}
+          />
+        </>
+      )}
+    </PanelSection>
+  )
+}
+
+function WallTrimSection({
+  node,
+  onUpdate,
+  title,
+  trimKey,
+  trimValue,
+  unit,
+  unitLabel,
+  wallHeightMeters,
+}: {
+  node: WallNode
+  onUpdate: (updates: Partial<WallNode>) => void
+  title: string
+  trimKey: 'skirting' | 'crown' | 'chairRail'
+  trimValue: NonNullable<WallNode['skirting']>
+  unit: 'metric' | 'imperial'
+  unitLabel: string
+  wallHeightMeters: number
+}) {
+  const updateTrim = (patch: Partial<NonNullable<WallNode['skirting']>>) =>
+    onUpdate({
+      [trimKey]: {
+        ...trimValue,
+        ...patch,
+      },
+    } as Partial<WallNode>)
+
+  return (
+    <PanelSection title={title}>
+      <ActionGroup>
+        <ActionButton
+          label={trimValue.enabled ? `Hide ${title.toLowerCase()}` : `Show ${title.toLowerCase()}`}
+          onClick={() => updateTrim({ enabled: !trimValue.enabled })}
+        />
+      </ActionGroup>
+      {trimValue.enabled && (
+        <>
+          <SegmentedControl
+            onChange={(next) => updateTrim({ sides: next as any })}
+            options={[
+              { label: 'Interior', value: 'interior' },
+              { label: 'Exterior', value: 'exterior' },
+              { label: 'Both', value: 'both' },
+            ]}
+            value={trimValue.sides}
+          />
+          <SegmentedControl
+            onChange={(next) => updateTrim({ profile: next as any })}
+            options={[
+              { label: 'Flat', value: 'flat' },
+              { label: 'Bevel', value: 'bevel' },
+              { label: 'Triangle', value: 'triangle' },
+              { label: 'Cove', value: 'cove' },
+              { label: 'Bullnose', value: 'bullnose' },
+            ]}
+            value={trimValue.profile}
+          />
+          <SliderControl
+            label="Height"
+            max={metersToLinearUnit(Math.max(0.05, wallHeightMeters), unit)}
+            min={metersToLinearUnit(0.01, unit)}
+            onChange={(value) =>
+              updateTrim({
+                height: linearControlValueToMeters(value, unit, {
+                  maxMeters: Math.max(0.05, wallHeightMeters),
+                  minMeters: 0.01,
+                }),
+              })
+            }
+            precision={2}
+            step={0.01}
+            unit={unitLabel}
+            value={metersToLinearUnit(trimValue.height, unit)}
+          />
+          <SliderControl
+            label="Proud"
+            max={metersToLinearUnit(0.2, unit)}
+            min={metersToLinearUnit(0.001, unit)}
+            onChange={(value) =>
+              updateTrim({
+                proud: linearControlValueToMeters(value, unit, {
+                  maxMeters: 0.2,
+                  minMeters: 0.001,
+                }),
+              })
+            }
+            precision={3}
+            step={0.005}
+            unit={unitLabel}
+            value={metersToLinearUnit(trimValue.proud, unit)}
+          />
+          {trimKey === 'chairRail' && (
+            <SliderControl
+              label="Offset"
+              max={metersToLinearUnit(Math.max(0.05, wallHeightMeters - trimValue.height), unit)}
+              min={metersToLinearUnit(0, unit)}
+              onChange={(value) =>
+                updateTrim({
+                  offsetY: linearControlValueToMeters(value, unit, {
+                    maxMeters: Math.max(0.05, wallHeightMeters - trimValue.height),
+                    minMeters: 0,
+                  }),
+                })
+              }
+              precision={2}
+              step={0.01}
+              unit={unitLabel}
+              value={metersToLinearUnit(trimValue.offsetY ?? 0, unit)}
+            />
+          )}
+        </>
+      )}
+    </PanelSection>
   )
 }

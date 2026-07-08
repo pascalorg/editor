@@ -6,7 +6,10 @@ import {
   type DoorNode,
   getAdjacentWallIds,
   getEffectiveNode,
+  getWallBandSlotId,
   getWallCurveFrameAt,
+  getWallFaceBandConfig,
+  getWallFaceBandForHeight,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
   getWallSurfacePolygon,
@@ -22,6 +25,8 @@ import {
   useScene,
   type WallMiterData,
   type WallNode,
+  type WallSurfaceSide,
+  type WallSurfaceSlotId,
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -37,6 +42,23 @@ csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
+const WALL_BAND_SPLIT_EPSILON = 1e-5
+const WALL_BAND_SLOT_MATERIAL_INDEX: Record<WallSurfaceSlotId, number> = {
+  interior: 1,
+  exterior: 2,
+  lowerInterior: 3,
+  middleInterior: 4,
+  upperInterior: 5,
+  lowerExterior: 6,
+  middleExterior: 7,
+  upperExterior: 8,
+  skirtingInterior: 0,
+  skirtingExterior: 0,
+  crownInterior: 0,
+  crownExterior: 0,
+  chairRailInterior: 0,
+  chairRailExterior: 0,
+}
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
@@ -191,15 +213,19 @@ function distanceToWallBoundaryEdge(point: THREE.Vector2, edge: TaggedWallBounda
 }
 
 function getWallFaceMaterialIndex(
-  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
+  wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands'>,
   face: 'front' | 'back',
-): 0 | 1 | 2 {
+  y: number,
+): number {
   const semantic = face === 'front' ? wall.frontSide : wall.backSide
-  const fallback = face === 'front' ? 1 : 2
+  const fallback: WallSurfaceSide = face === 'front' ? 'interior' : 'exterior'
+  const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
 
-  if (semantic === 'interior') return 1
-  if (semantic === 'exterior') return 2
-  return fallback
+  const bands = getWallFaceBandConfig(wall)
+  if (!bands.enabled) return WALL_BAND_SLOT_MATERIAL_INDEX[side]
+
+  const band = getWallFaceBandForHeight(wall, y)
+  return WALL_BAND_SLOT_MATERIAL_INDEX[getWallBandSlotId(side, band)]
 }
 
 function assignWallMaterialGroups(
@@ -285,7 +311,7 @@ function assignWallMaterialGroups(
       continue
     }
 
-    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag)
+    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag, centroid.y)
   }
 
   geometry.clearGroups()
@@ -303,6 +329,120 @@ function assignWallMaterialGroups(
   }
 
   geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
+}
+
+type SplitVertex = {
+  x: number
+  y: number
+  z: number
+}
+
+function interpolateSplitVertex(a: SplitVertex, b: SplitVertex, t: number): SplitVertex {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    z: a.z + (b.z - a.z) * t,
+  }
+}
+
+function clipPolygonByY(polygon: SplitVertex[], planeY: number, keepBelow: boolean): SplitVertex[] {
+  const out: SplitVertex[] = []
+  if (polygon.length === 0) return out
+
+  const isInside = (vertex: SplitVertex) =>
+    keepBelow
+      ? vertex.y <= planeY + WALL_BAND_SPLIT_EPSILON
+      : vertex.y >= planeY - WALL_BAND_SPLIT_EPSILON
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index]!
+    const previous = polygon[(index + polygon.length - 1) % polygon.length]!
+    const currentInside = isInside(current)
+    const previousInside = isInside(previous)
+
+    if (currentInside !== previousInside) {
+      const denom = current.y - previous.y
+      if (Math.abs(denom) > WALL_BAND_SPLIT_EPSILON) {
+        out.push(interpolateSplitVertex(previous, current, (planeY - previous.y) / denom))
+      }
+    }
+    if (currentInside) out.push(current)
+  }
+
+  return out
+}
+
+function triangulateSplitPolygon(polygon: SplitVertex[], positions: number[]) {
+  if (polygon.length < 3) return
+  const first = polygon[0]!
+  for (let index = 1; index < polygon.length - 1; index += 1) {
+    const b = polygon[index]!
+    const c = polygon[index + 1]!
+    positions.push(first.x, first.y, first.z, b.x, b.y, b.z, c.x, c.y, c.z)
+  }
+}
+
+function splitGeometryAtHorizontalPlanes(
+  geometry: THREE.BufferGeometry,
+  planes: number[],
+): THREE.BufferGeometry {
+  const splitPlanes = Array.from(
+    new Set(
+      planes
+        .filter((plane) => Number.isFinite(plane) && plane > WALL_BAND_SPLIT_EPSILON)
+        .map((plane) => Math.round(plane / WALL_BAND_SPLIT_EPSILON) * WALL_BAND_SPLIT_EPSILON),
+    ),
+  ).sort((a, b) => a - b)
+  if (splitPlanes.length === 0) return geometry
+
+  const source = geometry.index ? geometry.toNonIndexed() : geometry
+  const position = source.getAttribute('position')
+  if (!position || position.count === 0) return source
+
+  const positions: number[] = []
+  for (let index = 0; index < position.count; index += 3) {
+    let polygons: SplitVertex[][] = [
+      [
+        { x: position.getX(index), y: position.getY(index), z: position.getZ(index) },
+        { x: position.getX(index + 1), y: position.getY(index + 1), z: position.getZ(index + 1) },
+        { x: position.getX(index + 2), y: position.getY(index + 2), z: position.getZ(index + 2) },
+      ],
+    ]
+
+    for (const plane of splitPlanes) {
+      const next: SplitVertex[][] = []
+      for (const polygon of polygons) {
+        const minY = Math.min(...polygon.map((vertex) => vertex.y))
+        const maxY = Math.max(...polygon.map((vertex) => vertex.y))
+        if (plane <= minY + WALL_BAND_SPLIT_EPSILON || plane >= maxY - WALL_BAND_SPLIT_EPSILON) {
+          next.push(polygon)
+          continue
+        }
+
+        const below = clipPolygonByY(polygon, plane, true)
+        const above = clipPolygonByY(polygon, plane, false)
+        if (below.length >= 3) next.push(below)
+        if (above.length >= 3) next.push(above)
+      }
+      polygons = next
+    }
+
+    for (const polygon of polygons) triangulateSplitPolygon(polygon, positions)
+  }
+
+  if (source !== geometry) geometry.dispose()
+  source.dispose()
+
+  const split = new THREE.BufferGeometry()
+  split.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  split.computeVertexNormals()
+  return split
+}
+
+function getWallBandSplitPlanes(wall: WallNode): number[] {
+  const bands = getWallFaceBandConfig(wall)
+  if (!bands.enabled) return []
+  return [bands.lowerTop, bands.middleTop].filter((plane) => plane > WALL_BAND_SPLIT_EPSILON)
 }
 
 // ============================================================================
@@ -747,7 +887,14 @@ export function generateExtrudedWall(
   // Apply CSG subtraction for cutouts (doors/windows)
   const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
   if (cutoutBrushes.length === 0) {
-    return geometry
+    const splitGeometry = splitGeometryAtHorizontalPlanes(
+      geometry,
+      getWallBandSplitPlanes(wallNode),
+    )
+    splitGeometry.computeVertexNormals()
+    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges)
+    ensureRenderableGeometryAttributes(splitGeometry)
+    return splitGeometry
   }
 
   // Create wall brush from geometry
@@ -777,11 +924,15 @@ export function generateExtrudedWall(
   }
 
   const resultGeometry = csgGeometry(resultBrush)
-  resultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(resultGeometry, wallNode, boundaryEdges)
-  ensureRenderableGeometryAttributes(resultGeometry)
+  const splitResultGeometry = splitGeometryAtHorizontalPlanes(
+    resultGeometry,
+    getWallBandSplitPlanes(wallNode),
+  )
+  splitResultGeometry.computeVertexNormals()
+  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges)
+  ensureRenderableGeometryAttributes(splitResultGeometry)
 
-  return resultGeometry
+  return splitResultGeometry
 }
 
 /**

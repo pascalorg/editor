@@ -2,14 +2,17 @@ import {
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
+  getWallSurfaceSideFromBandSlot,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
   type SceneMaterialId,
   WALL_SLOT_DEFAULT,
+  WALL_SURFACE_SLOT_DEFAULTS,
   type WallNode,
   type WallSurfaceMaterialSpec,
   type WallSurfaceSide,
+  type WallSurfaceSlotId,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'
@@ -41,7 +44,7 @@ const WALL_HIGHLIGHT_PROFILES = {
 
 type WallHighlightKind = keyof typeof WALL_HIGHLIGHT_PROFILES
 
-export type WallMaterialArray = [Material, Material, Material]
+export type WallMaterialArray = Material[]
 
 export interface WallMaterials {
   visible: WallMaterialArray
@@ -126,6 +129,28 @@ function resolveWallFaceMaterial(
   return resolveWallSlotDefault(WALL_SLOT_DEFAULT[side], shading)
 }
 
+function resolveWallSlotMaterial(
+  wallNode: WallNode,
+  slotId: WallSurfaceSlotId,
+  shading: RenderShading,
+  sceneMaterials: SceneMaterials,
+): Material {
+  const ref = wallNode.slots?.[slotId]
+  if (ref) {
+    return (
+      resolveMaterialRef(ref, sceneMaterials, shading) ??
+      resolveWallSlotDefault(WALL_SURFACE_SLOT_DEFAULTS[slotId], shading)
+    )
+  }
+
+  const side = getWallSurfaceSideFromBandSlot(slotId)
+  if (side) {
+    return resolveWallFaceMaterial(wallNode, side, shading, sceneMaterials)
+  }
+
+  return resolveWallSlotDefault(WALL_SURFACE_SLOT_DEFAULTS[slotId], shading)
+}
+
 // Cache-key fragment for one face: the slot ref plus, for a `scene:` ref, the
 // referenced material's *content* — so editing a scene material assigned to a
 // wall invalidates the cache (a `library:` ref is static catalog content, so
@@ -149,6 +174,28 @@ function wallFaceMaterialSignature(
   return getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(wallNode, side))
 }
 
+function wallSlotMaterialSignature(
+  wallNode: WallNode,
+  slotId: WallSurfaceSlotId,
+  sceneMaterials: SceneMaterials,
+): string {
+  const ref = wallNode.slots?.[slotId]
+  if (ref) {
+    const parsed = parseMaterialRef(ref)
+    if (parsed?.kind === 'scene') {
+      return JSON.stringify({
+        ref,
+        material: sceneMaterials?.[parsed.id as SceneMaterialId]?.material ?? null,
+      })
+    }
+    return JSON.stringify({ ref })
+  }
+
+  const side = getWallSurfaceSideFromBandSlot(slotId)
+  if (side) return wallFaceMaterialSignature(wallNode, side, sceneMaterials)
+  return JSON.stringify({ default: WALL_SURFACE_SLOT_DEFAULTS[slotId] })
+}
+
 // Slot-first tint for the cutaway/invisible wall variant.
 function resolveWallFaceColor(
   wallNode: WallNode,
@@ -169,6 +216,28 @@ function resolveWallFaceColor(
     return fallback
   }
   return getSurfaceColor(getEffectiveWallSurfaceMaterial(wallNode, side), fallback)
+}
+
+function resolveWallSlotColor(
+  wallNode: WallNode,
+  slotId: WallSurfaceSlotId,
+  sceneMaterials: SceneMaterials,
+  fallback: string,
+): string {
+  const ref = wallNode.slots?.[slotId]
+  if (ref) {
+    const parsed = parseMaterialRef(ref)
+    if (parsed?.kind === 'library') {
+      return getMaterialPresetByRef(ref)?.mapProperties?.color ?? fallback
+    }
+    if (parsed?.kind === 'scene') {
+      const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
+      return sceneMaterial ? resolveMaterial(sceneMaterial.material).color : fallback
+    }
+  }
+
+  const side = getWallSurfaceSideFromBandSlot(slotId)
+  return side ? resolveWallFaceColor(wallNode, side, sceneMaterials, fallback) : fallback
 }
 
 function getSurfaceColor(spec: WallSurfaceMaterialSpec, fallback = DEFAULT_WALL_COLOR): string {
@@ -346,6 +415,12 @@ export function getWallMaterialHash(
     shading,
     interior: wallFaceMaterialSignature(wallNode, 'interior', sceneMaterials),
     exterior: wallFaceMaterialSignature(wallNode, 'exterior', sceneMaterials),
+    lowerInterior: wallSlotMaterialSignature(wallNode, 'lowerInterior', sceneMaterials),
+    middleInterior: wallSlotMaterialSignature(wallNode, 'middleInterior', sceneMaterials),
+    upperInterior: wallSlotMaterialSignature(wallNode, 'upperInterior', sceneMaterials),
+    lowerExterior: wallSlotMaterialSignature(wallNode, 'lowerExterior', sceneMaterials),
+    middleExterior: wallSlotMaterialSignature(wallNode, 'middleExterior', sceneMaterials),
+    upperExterior: wallSlotMaterialSignature(wallNode, 'upperExterior', sceneMaterials),
   })
 }
 
@@ -388,39 +463,71 @@ export function getMaterialsForWall(
         wallRoleMaterial,
         resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
         resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
       ]
-    : [wallRoleMaterial, wallRoleMaterial, wallRoleMaterial]
+    : Array.from({ length: 9 }, () => wallRoleMaterial)
 
   const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
     createInvisibleWallMaterial(wallRoleColor, textures ? shading : 'solid'),
-    createInvisibleWallMaterial(
-      textures
-        ? resolveWallFaceColor(wallNode, 'interior', sceneMaterials, wallRoleColor)
-        : wallRoleColor,
-      textures ? shading : 'solid',
+    ...(['interior', 'exterior'] as WallSurfaceSide[]).map((side) =>
+      createInvisibleWallMaterial(
+        textures
+          ? resolveWallFaceColor(wallNode, side, sceneMaterials, wallRoleColor)
+          : wallRoleColor,
+        textures ? shading : 'solid',
+      ),
     ),
-    createInvisibleWallMaterial(
-      textures
-        ? resolveWallFaceColor(wallNode, 'exterior', sceneMaterials, wallRoleColor)
-        : wallRoleColor,
-      textures ? shading : 'solid',
+    ...(
+      [
+        'lowerInterior',
+        'middleInterior',
+        'upperInterior',
+        'lowerExterior',
+        'middleExterior',
+        'upperExterior',
+      ] as WallSurfaceSlotId[]
+    ).map((slotId) =>
+      createInvisibleWallMaterial(
+        textures
+          ? resolveWallSlotColor(wallNode, slotId, sceneMaterials, wallRoleColor)
+          : wallRoleColor,
+        textures ? shading : 'solid',
+      ),
     ),
   ]
 
   const translucent: WallMaterialArray = [
     createTranslucentWallMaterial(wallRoleColor, textures ? shading : 'solid'),
-    createTranslucentWallMaterial(
-      textures
-        ? resolveWallFaceColor(wallNode, 'interior', sceneMaterials, wallRoleColor)
-        : wallRoleColor,
-      textures ? shading : 'solid',
+    ...(['interior', 'exterior'] as WallSurfaceSide[]).map((side) =>
+      createTranslucentWallMaterial(
+        textures
+          ? resolveWallFaceColor(wallNode, side, sceneMaterials, wallRoleColor)
+          : wallRoleColor,
+        textures ? shading : 'solid',
+      ),
     ),
-    createTranslucentWallMaterial(
-      textures
-        ? resolveWallFaceColor(wallNode, 'exterior', sceneMaterials, wallRoleColor)
-        : wallRoleColor,
-      textures ? shading : 'solid',
+    ...(
+      [
+        'lowerInterior',
+        'middleInterior',
+        'upperInterior',
+        'lowerExterior',
+        'middleExterior',
+        'upperExterior',
+      ] as WallSurfaceSlotId[]
+    ).map((slotId) =>
+      createTranslucentWallMaterial(
+        textures
+          ? resolveWallSlotColor(wallNode, slotId, sceneMaterials, wallRoleColor)
+          : wallRoleColor,
+        textures ? shading : 'solid',
+      ),
     ),
   ]
 

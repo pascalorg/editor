@@ -2,20 +2,55 @@ import {
   type AnyNode,
   type AnyNodeId,
   getEffectiveWallSurfaceMaterial,
+  getWallBandSlotId,
+  getWallFaceBandConfig,
+  getWallFaceBandForHeight,
+  getWallSurfaceSideFromBandSlot,
   type PaintCapability,
   type PaintPreviewArgs,
+  parseMaterialRef,
+  type SceneMaterialId,
   sceneRegistry,
+  useScene,
+  WALL_SURFACE_SLOT_DEFAULTS,
   type WallNode,
   type WallSurfaceSide,
+  type WallSurfaceSlotId,
 } from '@pascal-app/core'
 import type { Material, Mesh } from 'three'
-import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/slot-paint'
+import {
+  buildSlotPreviewMaterial,
+  createSlotPaintCapability,
+  previewSlotByUserData,
+} from '../shared/slot-paint'
+
+const WALL_SLOT_IDS = new Set<string>(Object.keys(WALL_SURFACE_SLOT_DEFAULTS))
+const WALL_ARRAY_SLOT_INDEX: Partial<Record<WallSurfaceSlotId, number>> = {
+  interior: 1,
+  exterior: 2,
+  lowerInterior: 3,
+  middleInterior: 4,
+  upperInterior: 5,
+  lowerExterior: 6,
+  middleExterior: 7,
+  upperExterior: 8,
+}
+const WALL_INDEX_SLOT = new Map<number, WallSurfaceSlotId>(
+  Object.entries(WALL_ARRAY_SLOT_INDEX).map(([slotId, index]) => [
+    index,
+    slotId as WallSurfaceSlotId,
+  ]),
+)
+
+function resolveSideFromMaterialIndex(materialIndex: number | null): WallSurfaceSide | null {
+  const slotId = materialIndex === null ? undefined : WALL_INDEX_SLOT.get(materialIndex)
+  if (slotId) return getWallSurfaceSideFromBandSlot(slotId)
+  return null
+}
 
 /**
- * Resolve which side of a wall the user clicked. Walls expose two
- * paintable surfaces — interior + exterior — split by:
- *   1. Material-slot index from the renderer's groups (1 = interior,
- *      2 = exterior). Cheap reference-equality path.
+ * Resolve which wall face band the user clicked. The side comes from:
+ *   1. Material-slot index from the renderer's groups. Cheap reference path.
  *   2. Falls back to the hit-surface normal + local-Z when the
  *      groups aren't conclusive. Front/back of the wall maps to the
  *      node's `frontSide` / `backSide` semantic; absent that, front
@@ -26,13 +61,30 @@ import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/s
  */
 export function resolveWallRole(args: {
   node: WallNode
+  hitObject?: { userData?: { slotId?: unknown } }
   materialIndex: number | null
   normal: readonly [number, number, number] | undefined
   localPosition: readonly [number, number, number] | undefined
-}): WallSurfaceSide | null {
-  const { node, materialIndex, normal, localPosition } = args
-  if (materialIndex === 1) return 'interior'
-  if (materialIndex === 2) return 'exterior'
+}): string | null {
+  const { node, hitObject, materialIndex, normal, localPosition } = args
+  const directSlotId = hitObject?.userData?.slotId
+  if (typeof directSlotId === 'string' && WALL_SLOT_IDS.has(directSlotId)) {
+    return directSlotId
+  }
+
+  const indexedSlotId = materialIndex === null ? undefined : WALL_INDEX_SLOT.get(materialIndex)
+  const indexedSide = resolveSideFromMaterialIndex(materialIndex)
+  const sideFromIndex = indexedSide ?? null
+  if (indexedSlotId && indexedSlotId !== 'interior' && indexedSlotId !== 'exterior') {
+    return indexedSlotId
+  }
+
+  if (sideFromIndex && localPosition) {
+    const bands = getWallFaceBandConfig(node)
+    if (!bands.enabled) return sideFromIndex
+    return getWallBandSlotId(sideFromIndex, getWallFaceBandForHeight(node, localPosition[1]))
+  }
+  if (sideFromIndex) return sideFromIndex
 
   const normalZ = normal?.[2]
   const localZ = localPosition?.[2]
@@ -41,6 +93,7 @@ export function resolveWallRole(args: {
   if (
     normalZ === undefined ||
     localZ === undefined ||
+    localPosition === undefined ||
     Math.abs(normalZ) < 0.65 ||
     Math.abs(localZ) < Math.max(thickness * 0.2, 0.01)
   ) {
@@ -51,17 +104,15 @@ export function resolveWallRole(args: {
   const semantic = hitFace === 'front' ? node.frontSide : node.backSide
 
   if (semantic === 'interior' || semantic === 'exterior') {
-    return semantic
+    const bands = getWallFaceBandConfig(node)
+    if (!bands.enabled) return semantic
+    return getWallBandSlotId(semantic, getWallFaceBandForHeight(node, localPosition[1]))
   }
 
-  return hitFace === 'front' ? 'interior' : 'exterior'
-}
-
-// The wall's 3-material array maps side → group index (see
-// `getVisibleWallMaterials`): 0 = edge/cap, 1 = interior, 2 = exterior.
-const WALL_SIDE_MATERIAL_INDEX: Record<WallSurfaceSide, 1 | 2> = {
-  interior: 1,
-  exterior: 2,
+  const side = hitFace === 'front' ? 'interior' : 'exterior'
+  const bands = getWallFaceBandConfig(node)
+  if (!bands.enabled) return side
+  return getWallBandSlotId(side, getWallFaceBandForHeight(node, localPosition[1]))
 }
 
 /**
@@ -72,9 +123,12 @@ const WALL_SIDE_MATERIAL_INDEX: Record<WallSurfaceSide, 1 | 2> = {
  */
 function applyWallPreview(args: PaintPreviewArgs): (() => void) | null {
   const { role, material, materialPreset } = args
-  const side = role as WallSurfaceSide
-  const index = WALL_SIDE_MATERIAL_INDEX[side]
-  if (!index) return null
+  if (!(role in WALL_ARRAY_SLOT_INDEX)) {
+    return previewSlotByUserData(args)
+  }
+
+  const index = WALL_ARRAY_SLOT_INDEX[role as WallSurfaceSlotId]
+  if (!index) return previewSlotByUserData(args)
 
   const mesh = sceneRegistry.nodes.get(args.node.id as AnyNodeId)
   if (!(mesh && (mesh as Mesh).isMesh)) return null
@@ -98,18 +152,36 @@ function applyWallPreview(args: PaintPreviewArgs): (() => void) | null {
 
 /**
  * Capability binding for the wall kind on the unified slot model. Painting
- * writes `node.slots[interior|exterior]` (a `library:` ref or a minted
- * `scene:` material) exactly like every other kind; `legacyEffective` reads
- * the retired inline `interiorMaterial*` / `exteriorMaterial*` fields so the
- * picker still shows the current value on a pre-migration scene.
+ * writes `node.slots[bandSide]` (a `library:` ref or a minted `scene:`
+ * material) exactly like every other kind; `legacyEffective` reads the
+ * whole-side fallback so old scenes still show the current value.
  */
 export const wallPaint: PaintCapability = createSlotPaintCapability({
   roomScope: true,
-  resolveRole: ({ node, materialIndex, normal, localPosition }) =>
-    resolveWallRole({ node: node as WallNode, materialIndex, normal, localPosition }),
+  resolveRole: ({ node, hitObject, materialIndex, normal, localPosition }) =>
+    resolveWallRole({
+      node: node as WallNode,
+      hitObject: hitObject as { userData?: { slotId?: unknown } } | undefined,
+      materialIndex,
+      normal,
+      localPosition,
+    }),
   applyPreview: applyWallPreview,
   legacyEffective: (node: AnyNode, role: string) => {
-    const spec = getEffectiveWallSurfaceMaterial(node as WallNode, role as WallSurfaceSide)
+    const side = getWallSurfaceSideFromBandSlot(role)
+    if (!side) return null
+
+    const sideRef = (node as WallNode).slots?.[side]
+    const parsed = parseMaterialRef(sideRef)
+    if (parsed?.kind === 'library') {
+      return { material: undefined, materialPreset: sideRef }
+    }
+    if (parsed?.kind === 'scene') {
+      const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
+      if (sceneMaterial) return { material: sceneMaterial.material, materialPreset: undefined }
+    }
+
+    const spec = getEffectiveWallSurfaceMaterial(node as WallNode, side)
     if (spec.material === undefined && spec.materialPreset === undefined) return null
     return { material: spec.material, materialPreset: spec.materialPreset }
   },

@@ -6,6 +6,85 @@ import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { WindowNode } from './window'
 
+export const WallTreatmentSide = z.enum(['interior', 'exterior', 'both'])
+export type WallTreatmentSide = z.infer<typeof WallTreatmentSide>
+
+export const WallTrimProfile = z.enum(['flat', 'bevel', 'triangle', 'cove', 'bullnose'])
+export type WallTrimProfile = z.infer<typeof WallTrimProfile>
+
+export const WallTrimConfig = z.object({
+  enabled: z.boolean().default(false),
+  sides: WallTreatmentSide.default('both'),
+  height: z.number().default(0.1),
+  proud: z.number().default(0.015),
+  profile: WallTrimProfile.default('flat'),
+  offsetY: z.number().optional(),
+})
+export type WallTrimConfig = z.infer<typeof WallTrimConfig>
+
+export const WALL_SKIRTING_DEFAULT: WallTrimConfig = {
+  enabled: false,
+  sides: 'both',
+  height: 0.1,
+  proud: 0.015,
+  profile: 'flat',
+}
+
+export const WALL_CROWN_DEFAULT: WallTrimConfig = {
+  enabled: false,
+  sides: 'both',
+  height: 0.08,
+  proud: 0.04,
+  profile: 'cove',
+}
+
+export const WALL_CHAIR_RAIL_DEFAULT: WallTrimConfig = {
+  enabled: false,
+  sides: 'both',
+  height: 0.04,
+  proud: 0.018,
+  profile: 'bullnose',
+  offsetY: 0.9,
+}
+
+export const WALL_TRIM_DEFAULTS = {
+  skirting: WALL_SKIRTING_DEFAULT,
+  crown: WALL_CROWN_DEFAULT,
+  chairRail: WALL_CHAIR_RAIL_DEFAULT,
+} as const
+
+export const WallFaceBandConfig = z.object({
+  enabled: z.boolean().default(false),
+  lowerHeight: z.number().default(0.9),
+  middleHeight: z.number().default(0.12),
+})
+export type WallFaceBandConfig = z.infer<typeof WallFaceBandConfig>
+
+export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
+  enabled: false,
+  lowerHeight: 0.9,
+  middleHeight: 0.12,
+}
+
+export const WALL_SURFACE_SLOT_DEFAULTS = {
+  interior: 'library:concrete-drywall',
+  exterior: 'library:concrete-drywall',
+  lowerInterior: 'library:concrete-drywall',
+  middleInterior: 'library:concrete-drywall',
+  upperInterior: 'library:concrete-drywall',
+  lowerExterior: 'library:concrete-drywall',
+  middleExterior: 'library:concrete-drywall',
+  upperExterior: 'library:concrete-drywall',
+  skirtingInterior: 'library:concrete-drywall',
+  skirtingExterior: 'library:concrete-drywall',
+  crownInterior: 'library:concrete-drywall',
+  crownExterior: 'library:concrete-drywall',
+  chairRailInterior: 'library:concrete-drywall',
+  chairRailExterior: 'library:concrete-drywall',
+} as const
+
+export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -30,6 +109,10 @@ export const WallNode = BaseNode.extend({
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
+  faceBands: WallFaceBandConfig.optional(),
+  skirting: WallTrimConfig.optional(),
+  crown: WallTrimConfig.optional(),
+  chairRail: WallTrimConfig.optional(),
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
@@ -52,6 +135,14 @@ export const WallNode = BaseNode.extend({
 export type WallNode = z.infer<typeof WallNode>
 
 export type WallSurfaceSide = 'interior' | 'exterior'
+export type WallFaceBand = 'lower' | 'middle' | 'upper'
+export type WallBandSurfaceSlotId =
+  | 'lowerInterior'
+  | 'middleInterior'
+  | 'upperInterior'
+  | 'lowerExterior'
+  | 'middleExterior'
+  | 'upperExterior'
 
 // Declared default appearance for an unpainted wall face in colored mode —
 // visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
@@ -59,8 +150,55 @@ export type WallSurfaceSide = 'interior' | 'exterior'
 // May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
 // collapses to the themed wall role (the escape hatch).
 export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
-  interior: 'library:concrete-drywall',
-  exterior: 'library:concrete-drywall',
+  interior: WALL_SURFACE_SLOT_DEFAULTS.interior,
+  exterior: WALL_SURFACE_SLOT_DEFAULTS.exterior,
+}
+
+export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands'>) {
+  const wallHeight = wall.height ?? 2.5
+  const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
+  const lowerHeight = Math.max(0, Math.min(wallHeight, raw.lowerHeight))
+  const middleHeight = raw.enabled
+    ? Math.max(0, Math.min(wallHeight - lowerHeight, raw.middleHeight))
+    : 0
+
+  return {
+    enabled: raw.enabled,
+    lowerHeight,
+    middleHeight,
+    lowerTop: lowerHeight,
+    middleTop: lowerHeight + middleHeight,
+  }
+}
+
+export function getWallFaceBandForHeight(
+  wall: Pick<WallNode, 'height' | 'faceBands'>,
+  y: number,
+): WallFaceBand {
+  const bands = getWallFaceBandConfig(wall)
+  if (!bands.enabled) return 'upper'
+  if (y < bands.lowerTop) return 'lower'
+  if (y < bands.middleTop) return 'middle'
+  return 'upper'
+}
+
+export function getWallBandSlotId(
+  side: WallSurfaceSide,
+  band: WallFaceBand,
+): WallBandSurfaceSlotId {
+  const suffix = side === 'interior' ? 'Interior' : 'Exterior'
+  return `${band}${suffix}` as WallBandSurfaceSlotId
+}
+
+export function getWallSurfaceSideFromBandSlot(slotId: string): WallSurfaceSide | null {
+  if (slotId === 'interior' || slotId === 'exterior') return slotId
+  if (slotId === 'lowerInterior' || slotId === 'middleInterior' || slotId === 'upperInterior') {
+    return 'interior'
+  }
+  if (slotId === 'lowerExterior' || slotId === 'middleExterior' || slotId === 'upperExterior') {
+    return 'exterior'
+  }
+  return null
 }
 
 export type WallSurfaceMaterialSpec = {
