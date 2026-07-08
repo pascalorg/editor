@@ -34,6 +34,7 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
+  translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
 import {
@@ -260,42 +261,24 @@ function GroupMoveHandleInner({ ids }: { ids: string[] }) {
         lastSnap = [dx, dz]
       }
 
-      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      // Shared rigid-slide math (also used by the 2D floorplan group drag);
+      // linked neighbours' shared endpoints follow so junctions stay welded.
+      const overrideEntries = translateGroupPatches(starts, links, dx, dz)
+      const patchById = new Map(overrideEntries)
       const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
-        if (s.kind === 'endpoint') {
-          overrideEntries.push([
-            s.id,
-            {
-              start: [s.start[0] + dx, s.start[1] + dz],
-              end: [s.end[0] + dx, s.end[1] + dz],
-            },
-          ])
-        } else {
-          // Slide on the floor: XZ shift, Y and rotation untouched.
-          const position: [number, number, number] = [
-            s.position[0] + dx,
-            s.position[1],
-            s.position[2] + dz,
-          ]
-          overrideEntries.push([s.id, { position }])
-          if (s.kind === 'scalar') {
-            liveTransforms.set(s.id, { position, rotation: s.rotation })
+        if (s.kind === 'scalar') {
+          const patch = patchById.get(s.id)
+          if (patch) {
+            liveTransforms.set(s.id, {
+              position: patch.position as [number, number, number],
+              rotation: s.rotation,
+            })
           }
         }
         useScene.getState().markDirty(s.id)
       }
-
-      // Shared endpoints of connected neighbours follow by the same delta so
-      // the junction stays welded; the far end stays put.
       for (const l of links) {
-        overrideEntries.push([
-          l.id,
-          {
-            start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
-            end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
-          },
-        ])
         useScene.getState().markDirty(l.id)
       }
       useLiveNodeOverrides.getState().setMany(overrideEntries)

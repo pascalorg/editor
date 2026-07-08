@@ -219,6 +219,92 @@ export function expandToComponent(
   return Array.from(included)
 }
 
+// Per-node field patch, keyed for `useLiveNodeOverrides.setMany` during a live
+// preview and for the single batched `updateNodes` on commit.
+export type GroupPatch = readonly [AnyNodeId, Record<string, unknown>]
+
+// Rigid group rotation: orbit each participant's anchor point(s) CCW by
+// `delta` (atan2 x→z sense) around `center` (level-frame XZ) and turn yaws by
+// `-delta` to match three.js Y-rotation handedness (same convention as the
+// single-item rotate handle in item/definition.ts). Endpoint nodes
+// (walls/fences) have no yaw — swinging both endpoints around the pivot
+// rotates them rigidly; their curveOffset sagitta is rotation-invariant, so
+// arcs are preserved. Linked neighbours' shared endpoints land exactly on the
+// selected wall's rotated endpoint (rot is deterministic), keeping junctions
+// welded while the far end stays put.
+export function rotateGroupPatches(
+  starts: ParticipantStart[],
+  links: LinkedNeighbor[],
+  center: { x: number; z: number },
+  delta: number,
+): GroupPatch[] {
+  const cos = Math.cos(delta)
+  const sin = Math.sin(delta)
+  const rot = (x: number, z: number): Vec2 => {
+    const dx = x - center.x
+    const dz = z - center.z
+    return [center.x + dx * cos - dz * sin, center.z + dx * sin + dz * cos]
+  }
+  const patches: GroupPatch[] = []
+  for (const s of starts) {
+    if (s.kind === 'endpoint') {
+      patches.push([s.id, { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) }])
+    } else {
+      const [px, pz] = rot(s.position[0], s.position[2])
+      const position: Vec3 = [px, s.position[1], pz]
+      const rotation =
+        s.kind === 'vec3'
+          ? ([s.rotation[0], s.rotation[1] - delta, s.rotation[2]] as Vec3)
+          : s.rotation - delta
+      patches.push([s.id, { position, rotation }])
+    }
+  }
+  for (const l of links) {
+    patches.push([
+      l.id,
+      {
+        start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
+        end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
+      },
+    ])
+  }
+  return patches
+}
+
+// Rigid group slide: shift every participant (and each linked neighbour's
+// shared endpoint) by the same level-frame XZ delta. Y and rotations untouched.
+export function translateGroupPatches(
+  starts: ParticipantStart[],
+  links: LinkedNeighbor[],
+  dx: number,
+  dz: number,
+): GroupPatch[] {
+  const patches: GroupPatch[] = []
+  for (const s of starts) {
+    if (s.kind === 'endpoint') {
+      patches.push([
+        s.id,
+        {
+          start: [s.start[0] + dx, s.start[1] + dz],
+          end: [s.end[0] + dx, s.end[1] + dz],
+        },
+      ])
+    } else {
+      patches.push([s.id, { position: [s.position[0] + dx, s.position[1], s.position[2] + dz] }])
+    }
+  }
+  for (const l of links) {
+    patches.push([
+      l.id,
+      {
+        start: l.startLinked ? [l.start[0] + dx, l.start[1] + dz] : l.start,
+        end: l.endLinked ? [l.end[0] + dx, l.end[1] + dz] : l.end,
+      },
+    ])
+  }
+  return patches
+}
+
 // Frozen world matrix of the level group + its inverse. A node's placement
 // (`position` / `start` / `end`) is stored in its parent level's frame, but the
 // gizmos raycast the ground plane in WORLD space. When the building is rotated

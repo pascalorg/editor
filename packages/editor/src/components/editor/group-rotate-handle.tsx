@@ -27,7 +27,7 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
-  type Vec2,
+  rotateGroupPatches,
   type Vec3,
 } from './group-transform-shared'
 import {
@@ -228,53 +228,29 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       while (delta < -Math.PI) delta += 2 * Math.PI
       if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
-      // Orbit each node's anchor point(s) CCW by `delta` (atan2 x→z sense) and
-      // turn its yaw by `-delta` to match three.js Y-rotation handedness (same
-      // convention as the single-item rotate handle in item/definition.ts).
-      // Endpoint nodes (walls/fences) have no yaw — swinging both endpoints
-      // around the pivot rotates them rigidly; their curveOffset sagitta is
-      // rotation-invariant, so arcs are preserved.
-      const cos = Math.cos(delta)
-      const sin = Math.sin(delta)
-      const rot = (x: number, z: number): Vec2 => {
-        const dx = x - localCenter.x
-        const dz = z - localCenter.z
-        return [localCenter.x + dx * cos - dz * sin, localCenter.z + dx * sin + dz * cos]
-      }
-      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      // Shared rigid-rotation math (also used by the keyboard group R/T);
+      // see `rotateGroupPatches` for the orbit/yaw handedness contract.
+      const overrideEntries = rotateGroupPatches(
+        starts,
+        links,
+        { x: localCenter.x, z: localCenter.z },
+        delta,
+      )
+      const patchById = new Map(overrideEntries)
       const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
-        if (s.kind === 'endpoint') {
-          overrideEntries.push([
-            s.id,
-            { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) },
-          ])
-        } else {
-          const [px, pz] = rot(s.position[0], s.position[2])
-          const position: Vec3 = [px, s.position[1], pz]
-          const rotation =
-            s.kind === 'vec3'
-              ? ([s.rotation[0], s.rotation[1] - delta, s.rotation[2]] as Vec3)
-              : s.rotation - delta
-          overrideEntries.push([s.id, { position, rotation }])
-          if (s.kind === 'scalar') {
-            liveTransforms.set(s.id, { position, rotation: s.rotation - delta })
+        if (s.kind === 'scalar') {
+          const patch = patchById.get(s.id)
+          if (patch) {
+            liveTransforms.set(s.id, {
+              position: patch.position as Vec3,
+              rotation: patch.rotation as number,
+            })
           }
         }
         useScene.getState().markDirty(s.id)
       }
-
-      // Drag each linked neighbour's shared endpoint to the same rotated spot
-      // (rot is deterministic, so it lands exactly on the selected wall's
-      // rotated endpoint), keeping the junction welded; the far end stays put.
       for (const l of links) {
-        overrideEntries.push([
-          l.id,
-          {
-            start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
-            end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
-          },
-        ])
         useScene.getState().markDirty(l.id)
       }
       useLiveNodeOverrides.getState().setMany(overrideEntries)
