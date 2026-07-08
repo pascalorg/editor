@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
 import { getGuideImageName } from '../../../lib/local-guide-image'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -59,6 +60,9 @@ export function ReferencePanel() {
     selectedReferenceId
       ? (s.nodes[selectedReferenceId as AnyNode['id']] as ReferenceNode | undefined)
       : undefined,
+  )
+  const isScaleFlowActive = useEditor(
+    (s) => s.referenceScaleActiveGuideId !== null && s.referenceScaleActiveGuideId === node?.id,
   )
 
   const handleUpdate = useCallback(
@@ -98,6 +102,9 @@ export function ReferencePanel() {
           } as Partial<GuideNode>,
         )
         setGuideScaleReferenceVisible(selectedReferenceId, true)
+        // The new image starts uncalibrated — drop the calibration auto-lock
+        // so it can be resized/rotated right away.
+        setGuideLocked(selectedReferenceId, false)
       } catch {
         setReplaceError('Could not replace that image.')
       } finally {
@@ -121,6 +128,13 @@ export function ReferencePanel() {
   const handleStartScale = useCallback(() => {
     if (node?.type !== 'guide') {
       return
+    }
+
+    // The scale line is drawn on the 2D plan — starting from a 3D-only view
+    // would arm the flow invisibly inside the hidden floorplan panel.
+    const editor = useEditor.getState()
+    if (editor.viewMode === '3d') {
+      editor.setViewMode('2d')
     }
 
     guideEmitter.emit('guide:set-reference-scale', { guideId: node.id })
@@ -233,33 +247,54 @@ export function ReferencePanel() {
 
           <PanelSection title="Reference Scale">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-sm">
-              <Ruler className="h-4 w-4 shrink-0 text-primary" />
+              <Ruler
+                className={cn(
+                  'h-4 w-4 shrink-0',
+                  node.scaleReference ? 'text-primary' : 'text-amber-600 dark:text-amber-400',
+                )}
+              />
               <span className="truncate text-muted-foreground">{scaleStatus}</span>
             </div>
 
-            <ActionGroup>
-              <ActionButton
-                label={node.scaleReference ? 'Edit Scale' : 'Set Scale'}
-                onClick={handleStartScale}
-              />
-              <ActionButton label="Cancel" onClick={handleCancelScale} />
-            </ActionGroup>
+            {!node.scaleReference && (
+              <p className="px-0.5 text-muted-foreground text-xs leading-snug">
+                {isScaleFlowActive
+                  ? 'Click both ends of a known distance on the plan, then type its real length.'
+                  : 'Draw a line over a known dimension on the plan, then type its real length to scale the image exactly.'}
+              </p>
+            )}
 
             <ActionGroup>
               <ActionButton
-                disabled={!node.scaleReference}
-                label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
-                onClick={() => {
-                  if (!node.scaleReference) return
-                  setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)
-                }}
-              />
-              <ActionButton
-                disabled={!node.scaleReference}
-                label="Clear Scale"
-                onClick={() => handleUpdate({ scaleReference: null } as Partial<GuideNode>)}
+                className={cn(
+                  !node.scaleReference &&
+                    !isScaleFlowActive &&
+                    'border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 active:bg-primary/25',
+                )}
+                label={
+                  isScaleFlowActive ? 'Cancel' : node.scaleReference ? 'Edit Scale' : 'Set Scale'
+                }
+                onClick={isScaleFlowActive ? handleCancelScale : handleStartScale}
               />
             </ActionGroup>
+
+            {node.scaleReference && (
+              <ActionGroup>
+                <ActionButton
+                  label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
+                  onClick={() => setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)}
+                />
+                <ActionButton
+                  label="Clear Scale"
+                  onClick={() => {
+                    handleUpdate({ scaleReference: null } as Partial<GuideNode>)
+                    // Calibrating auto-locked the guide; clearing the scale
+                    // returns it to a freely-editable reference.
+                    setGuideLocked(node.id, false)
+                  }}
+                />
+              </ActionGroup>
+            )}
           </PanelSection>
 
           <PanelSection title="Quick Actions">

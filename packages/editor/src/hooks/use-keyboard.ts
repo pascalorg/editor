@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { toggleDoorOpenState } from '../lib/door-interaction'
+import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import {
   copySelectedNodesToEditorClipboard,
@@ -12,6 +13,18 @@ import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
+
+// References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
+// the viewer selection, so selection-based key arms (R/T rotate) need this
+// separate lookup. Locked guides don't rotate, matching direct manipulation.
+function getRotatableSelectedReference() {
+  const refId = useEditor.getState().selectedReferenceId
+  if (!refId) return null
+  const node = useScene.getState().nodes[refId as AnyNodeId]
+  if (!node || (node.type !== 'guide' && node.type !== 'scan')) return null
+  if (useEditor.getState().guideUi[refId]?.locked === true) return null
+  return node
+}
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
 // so that the global Escape handler knows not to also switch to select mode.
@@ -141,6 +154,14 @@ export const useKeyboard = ({
 
       if (e.key === 'Escape') {
         e.preventDefault()
+
+        // An in-flight reference-scale measurement swallows Escape whole:
+        // cancel the flow but keep the reference selected and its panel open.
+        if (useEditor.getState().referenceScaleActiveGuideId) {
+          guideEmitter.emit('guide:cancel-reference-scale')
+          return
+        }
+
         _toolCancelConsumed = false
         emitter.emit('tool:cancel')
 
@@ -302,6 +323,22 @@ export const useKeyboard = ({
         // (`isPlacingOpening`): the placement tool owns R then (flip the draft
         // before commit), and the user can have a node selected at the same
         // time — without this guard both would fire (double flip + sfx).
+        //
+        // References (guide/scan) live in `selectedReferenceId`, not the viewer
+        // selection — check them first, like the Delete arm below.
+        const rotatableReference = getRotatableSelectedReference()
+        if (rotatableReference) {
+          e.preventDefault()
+          useScene.getState().updateNode(rotatableReference.id, {
+            rotation: [
+              rotatableReference.rotation[0],
+              steppedRotation(rotatableReference.rotation[1], 1),
+              rotatableReference.rotation[2],
+            ],
+          })
+          sfxEmitter.emit('sfx:item-rotate')
+          return
+        }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
@@ -357,6 +394,19 @@ export const useKeyboard = ({
         }
       } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode && !isPlacingOpening()) {
         // Rotate selected node counter-clockwise
+        const rotatableReference = getRotatableSelectedReference()
+        if (rotatableReference) {
+          e.preventDefault()
+          useScene.getState().updateNode(rotatableReference.id, {
+            rotation: [
+              rotatableReference.rotation[0],
+              steppedRotation(rotatableReference.rotation[1], -1),
+              rotatableReference.rotation[2],
+            ],
+          })
+          sfxEmitter.emit('sfx:item-rotate')
+          return
+        }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]

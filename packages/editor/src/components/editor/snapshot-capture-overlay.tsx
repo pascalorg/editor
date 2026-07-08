@@ -1,17 +1,20 @@
 'use client'
 
 import { emitter } from '@pascal-app/core'
-import { Camera, Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
+import { Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
+import useEditor, {
+  type SnapshotCropMode,
+  type SnapshotStandardAspect,
+} from '../../store/use-editor'
 
-// Local crop-mode enum — distinct from `useEditor.captureMode` (which
-// describes *why* a capture is happening, e.g. `preset`). This one says
-// HOW the captured pixels are cropped: full-frame 16:9 (`standard`),
-// raw canvas viewport, or user-dragged area.
-type CropMode = 'standard' | 'viewport' | 'area'
+// Local alias — distinct from `useEditor.captureMode` (which describes *why*
+// a capture is happening, e.g. `preset`). This one says HOW the captured
+// pixels are cropped: full-frame 16:9 (`standard`), raw canvas viewport, or
+// user-dragged area. Hosts can preselect it via `captureMode.crop`.
+type CropMode = SnapshotCropMode
 type CaptureState = 'idle' | 'capturing' | 'saved'
 
 interface DragPoint {
@@ -24,12 +27,23 @@ interface Drag {
   end: DragPoint
 }
 
+// Output presets for `standard` captures — long edge stays near 1920.
+const STANDARD_SIZES: Record<SnapshotStandardAspect, { w: number; h: number }> = {
+  '16:9': { w: 1920, h: 1080 },
+  '9:16': { w: 1080, h: 1920 },
+  '4:3': { w: 1920, h: 1440 },
+  '3:4': { w: 1440, h: 1920 },
+  '1:1': { w: 1440, h: 1440 },
+}
+type StandardAspect = SnapshotStandardAspect
+
 function getResolution(
   mode: CropMode,
   overlayEl: HTMLDivElement | null,
   drag: Drag | null,
+  standardAspect: StandardAspect,
 ): { w: number; h: number } | null {
-  if (mode === 'standard') return { w: 1920, h: 1080 }
+  if (mode === 'standard') return STANDARD_SIZES[standardAspect]
 
   if (!overlayEl) return null
   const rect = overlayEl.getBoundingClientRect()
@@ -49,6 +63,41 @@ function getResolution(
   return null
 }
 
+/** Rule-of-thirds guide rendered inside a framing surface. */
+function ThirdsGrid() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{
+        background: `
+          linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255,255,255,0.16) 33.33%, transparent calc(33.33% + 0.5px)),
+          linear-gradient(to right, transparent calc(66.66% - 0.5px), rgba(255,255,255,0.16) 66.66%, transparent calc(66.66% + 0.5px)),
+          linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255,255,255,0.16) 33.33%, transparent calc(33.33% + 0.5px)),
+          linear-gradient(to bottom, transparent calc(66.66% - 0.5px), rgba(255,255,255,0.16) 66.66%, transparent calc(66.66% + 0.5px))`,
+      }}
+    />
+  )
+}
+
+/** Accented corner brackets on the framing rect. */
+function CornerAccents() {
+  return (
+    <>
+      <span className="pointer-events-none absolute -top-0.5 -left-0.5 h-5 w-5 rounded-tl-md border-primary border-t-[2.5px] border-l-[2.5px]" />
+      <span className="pointer-events-none absolute -right-0.5 -bottom-0.5 h-5 w-5 rounded-br-md border-primary border-r-[2.5px] border-b-[2.5px]" />
+    </>
+  )
+}
+
+const HUD_CHIP_CLASS =
+  'flex flex-col gap-px rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 backdrop-blur-md'
+
+const CROP_LABELS: Record<CropMode, string> = {
+  standard: 'Standard',
+  viewport: 'Viewport',
+  area: 'Area',
+}
+
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const captureMode = useEditor((s) => s.captureMode)
@@ -58,12 +107,29 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   // a transparent background — the user picks framing but not the
   // crop shape. Matches the unified preset-thumbnail capture flow.
   const isPreset = captureMode.mode === 'preset'
+  const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
+  const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
 
   const [mode, setMode] = useState<CropMode>('standard')
+  const [standardAspect, setStandardAspect] = useState<StandardAspect>('16:9')
+  const [aspectMenuOpen, setAspectMenuOpen] = useState(false)
   const [drag, setDrag] = useState<Drag | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [captureState, setCaptureState] = useState<CaptureState>('idle')
   const overlayRef = useRef<HTMLDivElement>(null)
+  // Overlay size drives the computed standard-frame rect + resolution HUD.
+  const [overlaySize, setOverlaySize] = useState<{ w: number; h: number } | null>(null)
+
+  useEffect(() => {
+    if (!isCaptureMode) return
+    const el = overlayRef.current
+    if (!el) return
+    const update = () => setOverlaySize({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isCaptureMode])
 
   // Dismiss on Esc
   useEffect(() => {
@@ -82,7 +148,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   // tweak the framing, but they don't have to draw the rect first.
   useEffect(() => {
     if (!isCaptureMode) return
-    setMode(isPreset ? 'area' : 'standard')
+    setMode(isPreset ? 'area' : (requestedCrop ?? 'standard'))
+    setStandardAspect(requestedAspect ?? '16:9')
+    setAspectMenuOpen(false)
     setIsDragging(false)
     setCaptureState('idle')
     if (isPreset && overlayRef.current) {
@@ -97,7 +165,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     } else {
       setDrag(null)
     }
-  }, [isCaptureMode, isPreset])
+  }, [isCaptureMode, isPreset, requestedCrop, requestedAspect])
 
   // Listen for snapshot saved to show feedback then exit
   useEffect(() => {
@@ -265,16 +333,36 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       projectId,
       captureMode: mode,
       cropRegion,
+      standardSize: mode === 'standard' ? STANDARD_SIZES[standardAspect] : undefined,
       // In preset mode, the ThumbnailGenerator should keep the alpha
       // channel transparent so the saved preset thumbnail composes
       // cleanly onto any palette background.
       transparent: isPreset,
     })
-  }, [captureState, mode, drag, projectId, isPreset])
+  }, [captureState, mode, drag, projectId, isPreset, standardAspect])
 
   if (!isCaptureMode) return null
 
-  const resolution = getResolution(mode, overlayRef.current, drag)
+  const resolution = getResolution(mode, overlayRef.current, drag, standardAspect)
+
+  // Standard mode framing: the output is a center-crop of the canvas to the
+  // chosen aspect (see ThumbnailGenerator) — show exactly that region as a
+  // letterboxed frame.
+  const standardFrame =
+    mode === 'standard' && overlaySize
+      ? (() => {
+          const size = STANDARD_SIZES[standardAspect]
+          const targetRatio = size.w / size.h
+          const w = Math.min(overlaySize.w, overlaySize.h * targetRatio)
+          const h = w / targetRatio
+          return {
+            left: (overlaySize.w - w) / 2,
+            top: (overlaySize.h - h) / 2,
+            width: w,
+            height: h,
+          }
+        })()
+      : null
 
   // Area selection rect (CSS px, relative to overlay)
   const selectionStyle =
@@ -294,6 +382,23 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
+      {/* Standard mode: letterboxed 16:9 frame with thirds + corner accents */}
+      {standardFrame && (
+        <div
+          className="pointer-events-none absolute rounded-md border-[1.5px] border-white/85"
+          style={{
+            ...standardFrame,
+            boxShadow: '0 0 0 9999px rgba(10,10,14,0.4)',
+          }}
+        >
+          <ThirdsGrid />
+          <CornerAccents />
+        </div>
+      )}
+
+      {/* Viewport mode: the whole canvas is the frame — thirds only */}
+      {mode === 'viewport' && <ThirdsGrid />}
+
       {/* Area mode: dim layer + crosshair cursor + drag-to-select.
        *
        * Preset mode reuses the same DOM but stays click-through: the
@@ -336,7 +441,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               has a pre-staged square, so we never show it there. */}
           {!selectionStyle && !isPreset && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="rounded-full bg-black/40 px-4 py-2 text-sm text-white backdrop-blur-sm">
+              <span className="rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white backdrop-blur-md">
                 Drag the area you want to capture
               </span>
             </div>
@@ -345,6 +450,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           {/* Selection rect */}
           {selectionStyle && (
             <div
+              className="rounded-sm border-[1.5px] border-white/85"
               style={{
                 position: 'absolute',
                 left: selectionStyle.left,
@@ -352,11 +458,12 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                 width: selectionStyle.width,
                 height: selectionStyle.height,
                 pointerEvents: 'none',
-                boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)',
-                border: '2px dashed rgba(255,255,255,0.85)',
-                background: 'rgba(255,255,255,0.04)',
+                boxShadow: '0 0 0 9999px rgba(10,10,14,0.4)',
+                background: 'rgba(255,255,255,0.03)',
               }}
             >
+              {hasSelection && <ThirdsGrid />}
+              <CornerAccents />
               {/* Corner handles — preset mode locks the frame to the
                   auto-staged centered square; the user adjusts the
                   camera instead. */}
@@ -390,11 +497,34 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {/* Top-center HUD — what the shot will be. Preset captures are a fixed
+          square and carry their own "Frame your item" banner up there. */}
+      {!isMobile && !isPreset && (
+        <div className="pointer-events-none absolute top-4 left-1/2 flex -translate-x-1/2 gap-2">
+          <div className={HUD_CHIP_CLASS}>
+            <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
+              Crop
+            </span>
+            <span className="font-semibold text-white text-xs">
+              {isPreset ? 'Preset · square' : CROP_LABELS[mode]}
+            </span>
+          </div>
+          <div className={HUD_CHIP_CLASS}>
+            <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
+              Format
+            </span>
+            <span className="font-semibold text-white text-xs tabular-nums">
+              {resolution ? `${resolution.w} × ${resolution.h}` : '—'}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Top-right dismiss button (icon-only on mobile) */}
       <div className="pointer-events-auto absolute top-4 right-4">
         <button
           aria-label="Close capture mode"
-          className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-white/80 text-xs backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs backdrop-blur-md transition-colors hover:bg-neutral-950 hover:text-white"
           onClick={dismiss}
           type="button"
         >
@@ -403,104 +533,114 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         </button>
       </div>
 
-      {/* Bottom-center mode toolbar */}
-      <div className="pointer-events-auto absolute bottom-6 left-1/2 -translate-x-1/2">
-        {(() => {
-          // Preset capture mode locks both the crop shape (square) and
-          // the transparent-background output — hide the per-shape
-          // mode buttons so the user has nothing to second-guess.
-          const modeButtons = isPreset ? null : (
-            <>
-              <ModeButton
-                active={mode === 'standard'}
-                badge="16:9"
-                icon={<Monitor className="h-3.5 w-3.5" />}
-                label="Standard"
-                onClick={() => {
-                  setMode('standard')
-                  setDrag(null)
-                }}
-              />
-              <ModeButton
-                active={mode === 'viewport'}
-                icon={<Maximize2 className="h-3.5 w-3.5" />}
-                label="Viewport"
-                onClick={() => {
-                  setMode('viewport')
-                  setDrag(null)
-                }}
-              />
-              <ModeButton
-                active={mode === 'area'}
-                icon={<Crop className="h-3.5 w-3.5" />}
-                label="Area"
-                onClick={() => setMode('area')}
-              />
-            </>
-          )
+      {/* Subtle scrim so the bottom controls stay readable on bright scenes */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
 
-          const resolutionDisplay = (
-            <span className="min-w-[80px] text-center text-white/50 text-xs tabular-nums">
-              {resolution ? `${resolution.w} × ${resolution.h}` : '—'}
-            </span>
-          )
-
-          const captureButton = (
-            <button
-              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 font-medium text-primary-foreground text-xs transition-opacity disabled:opacity-50"
-              disabled={captureDisabled}
-              onClick={handleCapture}
-              type="button"
-            >
-              {captureState === 'capturing' ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Capturing
-                </>
-              ) : captureState === 'saved' ? (
-                <>
-                  <Check className="h-3.5 w-3.5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <Camera className="h-3.5 w-3.5" />
-                  Capture
-                </>
-              )}
-            </button>
-          )
-
-          if (isMobile) {
-            return (
-              <div className="flex flex-col items-stretch gap-2 rounded-2xl border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
-                {modeButtons && (
-                  <div className="flex items-center justify-center gap-1">{modeButtons}</div>
-                )}
-                <div
-                  className={
-                    modeButtons
-                      ? 'flex items-center justify-center gap-2 border-white/10 border-t pt-2'
-                      : 'flex items-center justify-center gap-2'
-                  }
-                >
-                  {resolutionDisplay}
-                  {captureButton}
-                </div>
+      {/* Bottom-center: crop switcher, caption + shutter */}
+      <div className="pointer-events-none absolute right-0 bottom-5 left-0 flex flex-col items-center gap-2.5">
+        {!isPreset && (
+          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+            {/* Clicking Standard while it's active opens the aspect picker */}
+            <ModeButton
+              active={mode === 'standard'}
+              badge={standardAspect}
+              icon={<Monitor className="h-3.5 w-3.5" />}
+              label={isMobile ? undefined : 'Standard'}
+              onClick={() => {
+                if (mode === 'standard') setAspectMenuOpen((v) => !v)
+                else setAspectMenuOpen(false)
+                setMode('standard')
+                setDrag(null)
+              }}
+            />
+            {aspectMenuOpen && mode === 'standard' && (
+              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl backdrop-blur-md">
+                {(Object.keys(STANDARD_SIZES) as StandardAspect[]).map((aspect) => (
+                  <button
+                    className={`rounded-full px-2.5 py-1 font-mono text-[11px] transition-colors ${
+                      aspect === standardAspect
+                        ? 'bg-white/15 text-white ring-1 ring-white/20'
+                        : 'text-white/55 hover:text-white/90'
+                    }`}
+                    key={aspect}
+                    onClick={() => {
+                      setStandardAspect(aspect)
+                      setAspectMenuOpen(false)
+                    }}
+                    type="button"
+                  >
+                    {aspect}
+                  </button>
+                ))}
               </div>
-            )
-          }
+            )}
+            <ModeButton
+              active={mode === 'viewport'}
+              icon={<Maximize2 className="h-3.5 w-3.5" />}
+              label={isMobile ? undefined : 'Viewport'}
+              onClick={() => {
+                setMode('viewport')
+                setDrag(null)
+                setAspectMenuOpen(false)
+              }}
+            />
+            <ModeButton
+              active={mode === 'area'}
+              icon={<Crop className="h-3.5 w-3.5" />}
+              label={isMobile ? undefined : 'Area'}
+              onClick={() => {
+                setMode('area')
+                setAspectMenuOpen(false)
+              }}
+            />
+            {isMobile && (
+              <span className="px-2 text-white/50 text-xs tabular-nums">
+                {resolution ? `${resolution.w} × ${resolution.h}` : '—'}
+              </span>
+            )}
+          </div>
+        )}
 
-          return (
-            <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-900/95 px-2 py-2 shadow-xl backdrop-blur-md">
-              {modeButtons}
-              {modeButtons && <div className="mx-1 h-4 w-px bg-white/10" />}
-              {resolutionDisplay}
-              <div className="mx-1 h-4 w-px bg-white/10" />
-              {captureButton}
-            </div>
-          )
-        })()}
+        {/* Preset captures carry their own "Frame your item" banner — the
+            snapshot pitch only applies to the studio/reference flow. */}
+        {!isMobile && !isPreset && (
+          <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
+            A <b className="font-semibold text-white">snapshot</b>
+            {' freezes this exact camera angle as a reusable reference for renders & videos.'}
+          </span>
+        )}
+
+        <button
+          aria-label={isPreset ? 'Capture' : 'Take snapshot'}
+          className="group pointer-events-auto relative grid h-14 w-14 place-items-center rounded-full disabled:opacity-50"
+          disabled={captureDisabled}
+          onClick={handleCapture}
+          type="button"
+        >
+          <span className="absolute inset-0 rounded-full border-[3px] border-white shadow-lg" />
+          <span
+            className={`h-10 w-10 rounded-full transition-transform duration-100 ${
+              captureState === 'capturing'
+                ? 'scale-[0.55] bg-primary'
+                : 'bg-white group-hover:scale-90 group-active:scale-75'
+            }`}
+          />
+          {captureState === 'capturing' && (
+            <Loader2 className="absolute h-4 w-4 animate-spin text-white" />
+          )}
+          {captureState === 'saved' && (
+            <Check className="absolute h-5 w-5 stroke-3 text-neutral-900" />
+          )}
+        </button>
+        <span className="pointer-events-none font-mono text-[10.5px] text-white uppercase tracking-[0.12em] drop-shadow">
+          {captureState === 'capturing'
+            ? 'Capturing…'
+            : captureState === 'saved'
+              ? 'Saved'
+              : isPreset
+                ? 'Capture'
+                : 'Take snapshot'}
+        </span>
       </div>
     </div>
   )
@@ -515,7 +655,7 @@ function ModeButton({
 }: {
   active: boolean
   icon: React.ReactNode
-  label: string
+  label?: string
   badge?: string
   onClick: () => void
 }) {

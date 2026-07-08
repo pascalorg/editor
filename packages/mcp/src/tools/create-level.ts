@@ -5,12 +5,16 @@ import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { publishLiveSceneSnapshot } from './live-sync'
+import { measurement } from './measurement'
 import { NodeIdSchema } from './schemas'
 
 export const createLevelInput = {
   buildingId: NodeIdSchema,
   elevation: z.number().optional(),
-  height: z.number().optional(),
+  height: measurement('length', 'm', {
+    min: 0,
+    description: 'Level height (stored in metadata).',
+  }).optional(),
   label: z.string().optional(),
 }
 

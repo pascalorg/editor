@@ -5,14 +5,18 @@ import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { publishLiveSceneSnapshot } from './live-sync'
+import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
 export const createWallInput = {
   levelId: NodeIdSchema,
   start: Vec2Schema,
   end: Vec2Schema,
-  thickness: z.number().positive().optional(),
-  height: z.number().positive().optional(),
+  thickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).optional(),
+  height: measurement('length', 'm', { positive: true, description: 'Wall height.' }).optional(),
 }
 
 export const createWallOutput = {

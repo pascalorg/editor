@@ -6,7 +6,13 @@ import type { FloorplanLineSegment, FloorplanSelectionBounds } from './types'
 // `FLOORPLAN_VIEW_ROTATION_DEG + userRotation - buildingRotation`; the PDF
 // export mirrors the aligned-to-north case (user offset 0) so an export points
 // the same way as the app's north-aligned view.
-export const FLOORPLAN_VIEW_ROTATION_DEG = 90
+//
+// North is world −Z: with a 0 baseline a rotation-0 reference image (top =
+// −Z) reads upright in the north-aligned view, and "align north" maps to a
+// 3D camera azimuth of 0. The old 90° baseline made north world −X, so
+// north-up floorplan scans displayed sideways whenever the compass claimed
+// the view was aligned.
+export const FLOORPLAN_VIEW_ROTATION_DEG = 0
 
 export function clampPlanValue(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)

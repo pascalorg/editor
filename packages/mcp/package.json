@@ -59,6 +59,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@pascal-app/lingo": "^0.1.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {

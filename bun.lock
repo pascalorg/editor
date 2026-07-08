@@ -131,6 +131,7 @@
         "@dnd-kit/utilities": "^3.2.2",
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.6.0",
+        "@pascal-app/lingo": "^0.1.0",
         "@radix-ui/react-alert-dialog": "^1.1.15",
         "@radix-ui/react-context-menu": "^2.2.16",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -220,6 +221,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
+        "@pascal-app/lingo": "^0.1.0",
         "zod": "^4.3.5",
       },
       "devDependencies": {
@@ -713,6 +715,8 @@
     "@pascal-app/editor": ["@pascal-app/editor@workspace:packages/editor"],
 
     "@pascal-app/ifc-converter": ["@pascal-app/ifc-converter@workspace:packages/ifc-converter"],
+
+    "@pascal-app/lingo": ["@pascal-app/lingo@0.1.0", "", { "peerDependencies": { "react": "^19" }, "optionalPeers": ["react"] }, "sha512-j4cN9DSc3QD4LGG003TCIO5+jMYySFpJO6467V0Q3IPumVkwq7/BpEAw8JGY6zTZFmFETIeupuPEi4drnA9m+g=="],
 
     "@pascal-app/mcp": ["@pascal-app/mcp@workspace:packages/mcp"],
 

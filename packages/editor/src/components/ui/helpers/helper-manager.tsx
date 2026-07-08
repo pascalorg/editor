@@ -95,6 +95,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
+  const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
   const movingNode = useMovingNode()
   const activeHandleDrag = useActiveHandleDrag()
@@ -145,6 +146,10 @@ export function HelperManager() {
 
   // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
   if (isMobile) return null
+
+  // The studio workspace (compose panel / gallery) has no scene selection or
+  // tools — editor shortcut hints would only mislead there.
+  if (workspaceMode === 'studio') return null
 
   // Rotating a node (or a multi-selection group) via its in-world gizmo:
   // advertise Shift = free rotation, the same angle-step bypass wall drafting

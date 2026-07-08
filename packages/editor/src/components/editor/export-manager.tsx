@@ -4,9 +4,32 @@ import { emitter, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
+import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { exportSceneToGlb, prepareSceneForExport } from '../../lib/glb-export'
+import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+
+// prepareSceneForExport neutralises container meshes (door/window hitbox roots,
+// material-less renderables) with an attribute-less geometry — GLTFExporter
+// emits those as plain transform nodes, but STL/OBJExporter read
+// `position.count` unconditionally and crash. Swap in a geometry with an empty
+// (count-0) position so they iterate zero vertices instead. Shared: the export
+// scene is a throwaway clone, only its geometry *ref* is swapped.
+const EMPTY_POSITION_GEOMETRY = new THREE.BufferGeometry()
+EMPTY_POSITION_GEOMETRY.setAttribute(
+  'position',
+  new THREE.Float32BufferAttribute(new Float32Array(0), 3),
+)
+
+function ensurePositionAttributes(root: THREE.Object3D) {
+  root.traverse((object) => {
+    const renderable = object as THREE.Mesh & { isLine?: boolean; isPoints?: boolean }
+    if (!(renderable.isMesh || renderable.isLine || renderable.isPoints)) return
+    if (!renderable.geometry?.getAttribute('position')) {
+      renderable.geometry = EMPTY_POSITION_GEOMETRY
+    }
+  })
+}
 
 export function ExportManager() {
   const scene = useThree((state) => state.scene)
@@ -23,40 +46,52 @@ export function ExportManager() {
 
       const date = new Date().toISOString().split('T')[0]
 
-      if (format === 'glb') {
-        const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
-        const blob = new Blob([buffer], { type: 'model/gltf-binary' })
-        downloadBlob(blob, `model_${date}.glb`)
-        return
-      }
-
-      // Hide editor affordances that live on the scene layer (selection handles,
-      // ceiling/site brackets) and let wall-cutout reveal all walls — the same
-      // synchronous capture path thumbnails use. We clone the scene inside the
-      // window, so the export snapshots the clean building, then restore.
-      emitter.emit('thumbnail:before-capture', undefined)
-      let prepared: ReturnType<typeof prepareSceneForExport>
+      // Signal export so instanced kinds (trees/flowers/grass) swap their
+      // invisible proxy for real, exportable geometry, then wait for the
+      // commit before cloning the scene graph (same dance as BakeExporter —
+      // without it every plant exports as its raycast collider, a white box).
+      useViewer.getState().setExporting(true)
       try {
-        prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes)
+        await nextFrames()
+
+        if (format === 'glb') {
+          const buffer = await exportSceneToGlb(sceneGroup, useScene.getState().nodes)
+          const blob = new Blob([buffer], { type: 'model/gltf-binary' })
+          downloadBlob(blob, `model_${date}.glb`)
+          return
+        }
+
+        // Hide editor affordances that live on the scene layer (selection handles,
+        // ceiling/site brackets) and let wall-cutout reveal all walls — the same
+        // synchronous capture path thumbnails use. We clone the scene inside the
+        // window, so the export snapshots the clean building, then restore.
+        emitter.emit('thumbnail:before-capture', undefined)
+        let prepared: ReturnType<typeof prepareSceneForExport>
+        try {
+          prepared = prepareSceneForExport(sceneGroup, useScene.getState().nodes)
+        } finally {
+          emitter.emit('thumbnail:after-capture', undefined)
+        }
+        const { scene: exportScene } = prepared
+        ensurePositionAttributes(exportScene)
+
+        if (format === 'stl') {
+          const exporter = new STLExporter()
+          const result = exporter.parse(exportScene, { binary: true })
+          const blob = new Blob([result], { type: 'model/stl' })
+          downloadBlob(blob, `model_${date}.stl`)
+          return
+        }
+
+        if (format === 'obj') {
+          const exporter = new OBJExporter()
+          const result = exporter.parse(exportScene)
+          const blob = new Blob([result], { type: 'model/obj' })
+          downloadBlob(blob, `model_${date}.obj`)
+          return
+        }
       } finally {
-        emitter.emit('thumbnail:after-capture', undefined)
-      }
-      const { scene: exportScene, animations } = prepared
-
-      if (format === 'stl') {
-        const exporter = new STLExporter()
-        const result = exporter.parse(exportScene, { binary: true })
-        const blob = new Blob([result], { type: 'model/stl' })
-        downloadBlob(blob, `model_${date}.stl`)
-        return
-      }
-
-      if (format === 'obj') {
-        const exporter = new OBJExporter()
-        const result = exporter.parse(exportScene)
-        const blob = new Blob([result], { type: 'model/obj' })
-        downloadBlob(blob, `model_${date}.obj`)
-        return
+        useViewer.getState().setExporting(false)
       }
     }
 

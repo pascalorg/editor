@@ -109,9 +109,16 @@ export type WorkspaceMode = 'edit' | 'studio'
 // — `ThumbnailGenerator` consults `captureMode.mode === 'preset'` and
 // applies those constraints. Keeping it a discriminated union lets us
 // add future modes without surfacing the choice to end users.
+// How the captured pixels are cropped: full-frame 16:9, raw canvas viewport,
+// or user-dragged area. Hosts (e.g. the studio capture bar) can preselect it
+// when entering capture mode.
+export type SnapshotCropMode = 'standard' | 'viewport' | 'area'
+/** Aspect presets available to `standard` crops. */
+export type SnapshotStandardAspect = '16:9' | '9:16' | '4:3' | '3:4' | '1:1'
+
 export type CaptureMode =
   | { mode: 'idle' }
-  | { mode: 'standard' }
+  | { mode: 'standard'; crop?: SnapshotCropMode; standardAspect?: SnapshotStandardAspect }
   | {
       mode: 'preset'
       isolated: AnyNodeId[]
@@ -362,6 +369,11 @@ type EditorState = {
   setCanFindNode: (canFind: boolean) => void
   selectedReferenceId: string | null
   setSelectedReferenceId: (id: string | null) => void
+  // Guide id with an in-flight reference-scale measurement (line drawing or
+  // length dialog). Owned by the floorplan panel; mirrored here so the
+  // reference panel can flip its Set Scale button into a Cancel.
+  referenceScaleActiveGuideId: string | null
+  setReferenceScaleActiveGuideId: (id: string | null) => void
   guideUi: Record<string, GuideUiState>
   setGuideLocked: (guideId: string, locked: boolean) => void
   setGuideScaleReferenceVisible: (guideId: string, visible: boolean) => void
@@ -1020,6 +1032,8 @@ const useEditor = create<EditorState>()(
       setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
       setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      referenceScaleActiveGuideId: null,
+      setReferenceScaleActiveGuideId: (id) => set({ referenceScaleActiveGuideId: id }),
       guideUi: {},
       setGuideLocked: (guideId, locked) =>
         set((state) => ({
