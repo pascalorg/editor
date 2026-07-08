@@ -25,12 +25,15 @@ const isVec3 = (v: unknown): v is Vec3 =>
   Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number')
 const isVec2 = (v: unknown): v is Vec2 =>
   Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number')
+const isVec2Array = (v: unknown): v is Vec2[] => Array.isArray(v) && v.length > 0 && v.every(isVec2)
 
 // How a participant's placement transforms rigidly around / with the group:
 //   - 'vec3'     position + [x,y,z] rotation (items, …)
 //   - 'scalar'   position + numeric rotation (columns)
 //   - 'endpoint' start/end tuples (walls, fences)
-export type ParticipantKind = 'vec3' | 'scalar' | 'endpoint'
+//   - 'polygon'  [x,z] vertex arrays (slabs, ceilings, zones) — the placement
+//                lives in the vertices themselves (plus optional hole rings)
+export type ParticipantKind = 'vec3' | 'scalar' | 'endpoint' | 'polygon'
 
 // A selected node qualifies when it belongs to the active level's horizontal
 // frame: either parented to that level, or declared building-scoped and parented
@@ -88,14 +91,17 @@ export function classifyParticipant(
   if (isVec3(p) && isVec3(r)) return 'vec3'
   if (isVec3(p) && getParticipantScalarRotation(node) !== null) return 'scalar'
   if (isVec2(start) && isVec2(end)) return 'endpoint'
+  if (isVec2Array((node as { polygon?: unknown }).polygon)) return 'polygon'
   return null
 }
 
-// Pre-drag placement snapshot + how to transform it.
+// Pre-drag placement snapshot + how to transform it. `holes` is null when the
+// kind carries no holes field (zone), so patches never write one onto it.
 export type ParticipantStart =
   | { id: AnyNodeId; kind: 'vec3'; position: Vec3; rotation: Vec3 }
   | { id: AnyNodeId; kind: 'scalar'; position: Vec3; rotation: number }
   | { id: AnyNodeId; kind: 'endpoint'; start: Vec2; end: Vec2 }
+  | { id: AnyNodeId; kind: 'polygon'; polygon: Vec2[]; holes: Vec2[][] | null }
 
 // An unselected wall/fence sharing a junction with a transforming endpoint. Only
 // the touching endpoint(s) follow, so the neighbour stays attached while its far
@@ -143,13 +149,23 @@ export function collectParticipants(
         position: [position[0], position[1], position[2]],
         rotation,
       })
-    } else {
+    } else if (kind === 'endpoint') {
       const n = node as AnyNode & { start: Vec2; end: Vec2 }
       starts.push({
         id: id as AnyNodeId,
         kind,
         start: [n.start[0], n.start[1]],
         end: [n.end[0], n.end[1]],
+      })
+    } else {
+      const n = node as AnyNode & { polygon: Vec2[]; holes?: Vec2[][] }
+      starts.push({
+        id: id as AnyNodeId,
+        kind,
+        polygon: n.polygon.map(([x, z]) => [x, z] as Vec2),
+        holes: Array.isArray(n.holes)
+          ? n.holes.map((hole) => hole.map(([x, z]) => [x, z] as Vec2))
+          : null,
       })
     }
   }
@@ -249,6 +265,10 @@ export function rotateGroupPatches(
   for (const s of starts) {
     if (s.kind === 'endpoint') {
       patches.push([s.id, { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) }])
+    } else if (s.kind === 'polygon') {
+      const patch: Record<string, unknown> = { polygon: s.polygon.map(([x, z]) => rot(x, z)) }
+      if (s.holes) patch.holes = s.holes.map((hole) => hole.map(([x, z]) => rot(x, z)))
+      patches.push([s.id, patch])
     } else {
       const [px, pz] = rot(s.position[0], s.position[2])
       const position: Vec3 = [px, s.position[1], pz]
@@ -280,15 +300,14 @@ export function translateGroupPatches(
   dz: number,
 ): GroupPatch[] {
   const patches: GroupPatch[] = []
+  const shift = ([x, z]: Vec2): Vec2 => [x + dx, z + dz]
   for (const s of starts) {
     if (s.kind === 'endpoint') {
-      patches.push([
-        s.id,
-        {
-          start: [s.start[0] + dx, s.start[1] + dz],
-          end: [s.end[0] + dx, s.end[1] + dz],
-        },
-      ])
+      patches.push([s.id, { start: shift(s.start), end: shift(s.end) }])
+    } else if (s.kind === 'polygon') {
+      const patch: Record<string, unknown> = { polygon: s.polygon.map(shift) }
+      if (s.holes) patch.holes = s.holes.map((hole) => hole.map(shift))
+      patches.push([s.id, patch])
     } else {
       patches.push([s.id, { position: [s.position[0] + dx, s.position[1], s.position[2] + dz] }])
     }

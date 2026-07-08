@@ -115,37 +115,46 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   // its scene identity (selection registry, GLB export polygon stamping).
   const showZones = useViewer((s) => s.showZones)
 
+  // Group-transform drags publish a translated/rotated polygon to
+  // `useLiveNodeOverrides`; merge it so the zone previews live instead of
+  // snapping only on commit (slab/ceiling get this via their systems'
+  // `getEffectiveNode`). Per-node subscription — unrelated overrides don't
+  // re-render this zone.
+  const livePolygon = useLiveNodeOverrides((s) => s.overrides.get(node.id)?.polygon) as
+    | Array<[number, number]>
+    | undefined
+  const polygon = livePolygon ?? node?.polygon
+
   // Create floor shape from polygon
   const floorShape = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 3) return null
+    if (!polygon || polygon.length < 3) return null
     const shape = new Shape()
-    const firstPt = node.polygon[0]!
+    const firstPt = polygon[0]!
 
     // Shape is in X-Y plane, we rotate it to X-Z plane
     // Negate Y (which becomes Z) to get correct orientation
     shape.moveTo(firstPt[0]!, -firstPt[1]!)
 
-    for (let i = 1; i < node.polygon.length; i++) {
-      const pt = node.polygon[i]!
+    for (let i = 1; i < polygon.length; i++) {
+      const pt = polygon[i]!
       shape.lineTo(pt[0]!, -pt[1]!)
     }
     shape.closePath()
 
     return shape
-  }, [node?.polygon])
+  }, [polygon])
 
   // Create wall geometry from polygon
   const wallGeometry = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 2) return null
-    return createWallGeometry(node.polygon)
-  }, [node?.polygon])
+    if (!polygon || polygon.length < 2) return null
+    return createWallGeometry(polygon)
+  }, [polygon])
 
   // Calculate polygon centroid for label positioning using the geometric centroid formula
   // This correctly handles polygons regardless of vertex distribution along edges
   const centroid = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 3) return [0, 0] as [number, number]
+    if (!polygon || polygon.length < 3) return [0, 0] as [number, number]
 
-    const polygon = node.polygon
     let signedArea = 0
     let cx = 0
     let cz = 0
@@ -165,7 +174,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     const factor = 1 / (6 * signedArea)
 
     return [cx * factor, cz * factor] as [number, number]
-  }, [node?.polygon])
+  }, [polygon])
 
   // Create materials
   const floorMaterial = useMemo(() => {

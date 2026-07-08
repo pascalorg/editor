@@ -186,6 +186,10 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       if (s.kind === 'endpoint') {
         reach(s.start[0], s.start[1])
         reach(s.end[0], s.end[1])
+      } else if (s.kind === 'polygon') {
+        for (const [x, z] of s.polygon) {
+          reach(x, z)
+        }
       } else {
         reach(s.position[0], s.position[2])
       }
