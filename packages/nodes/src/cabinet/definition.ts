@@ -957,6 +957,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
+    { key: 'Alt', label: 'Force / no wall snap' },
     { key: 'R / T', label: 'Rotate' },
     { key: 'I', label: 'Island mode' },
     { key: 'Esc', label: 'Cancel run / exit' },

@@ -135,13 +135,14 @@ function snap(value: number, step: number): number {
   return Math.round(value / step) * step
 }
 
-function isFreePlacementEvent(event: FloorPlacementClickTriggerEvent): boolean {
+function isFreePlacementEvent(event: { nativeEvent?: { altKey?: boolean } }): boolean {
   const native = (event as { nativeEvent?: { altKey?: boolean } }).nativeEvent
   return Boolean(native?.altKey)
 }
 
-// Wall snap is an attachment behavior (like door/window wall placement), not a
-// magnetic alignment guide — active in every snapping mode except Off.
+// Cabinet wall attachment is a placement affordance, separate from floor-grid
+// quantization. Keep the long-standing behavior in grid and magnetic modes;
+// Off remains the explicit way to place without wall attachment.
 function isWallSnapEligible(): boolean {
   return isGridSnapActive() || isMagneticSnapActive()
 }
@@ -597,7 +598,8 @@ const CabinetTool = () => {
         event.stopPropagation()
         return
       }
-      const hit = islandModeRef.current ? null : wallHitFromWallEvent(event)
+      const hit =
+        islandModeRef.current || isFreePlacementEvent(event) ? null : wallHitFromWallEvent(event)
       const next = hit ? resolveWallHitPlacement(hit) : null
       if (next) {
         markWallOwnedPointer()
