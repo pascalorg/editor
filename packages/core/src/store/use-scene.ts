@@ -25,6 +25,7 @@ import {
 } from '../schema/nodes/stair'
 import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stair-segment'
 import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema/nodes/wall'
+import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
 import {
   generateSceneMaterialId,
   type SceneMaterial,
@@ -129,6 +130,14 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
 
 function normalizeDoorNode(node: Record<string, unknown>) {
   const parsed = DoorNodeSchema.safeParse(node)
+  return parsed.success ? { ...node, ...parsed.data } : null
+}
+
+// Windows saved before a schema field existed (e.g. `columnRatios`/`rowRatios`/
+// `frameThickness`) load without it; the mesh builder then reads undefined and
+// throws every frame. Zod-parse on load so schema defaults land, like doors.
+function normalizeWindowNode(node: Record<string, unknown>) {
+  const parsed = WindowNodeSchema.safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
@@ -635,6 +644,13 @@ function migrateNodes(nodes: Record<string, any>): {
 
     if (node.type === 'door') {
       const normalized = normalizeDoorNode(node)
+      if (normalized) {
+        patchedNodes[id] = normalized
+      }
+    }
+
+    if (node.type === 'window') {
+      const normalized = normalizeWindowNode(node)
       if (normalized) {
         patchedNodes[id] = normalized
       }
