@@ -1,18 +1,13 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   lingoUnitSpec,
   measurementHint,
   parseMeasurement,
 } from '../../../lib/measurement-parser'
-import {
-  getLinearUnitLabel,
-  linearUnitToMeters,
-  metersToLinearUnit,
-} from '../../../lib/measurements'
+import { useLinearDisplay } from '../../../lib/use-linear-display'
 import { cn } from '../../../lib/utils'
 
 interface MetricControlProps {
@@ -42,19 +37,13 @@ export function MetricControl({
   unit = '',
   restoreOnCommit = true,
 }: MetricControlProps) {
-  const viewerUnit = useViewer((state) => state.unit)
-  const isImperial = viewerUnit === 'imperial' && unit === 'm'
-  const displayUnit = isImperial ? getLinearUnitLabel('imperial') : unit
+  const {
+    isImperial,
+    displayUnit,
+    toDisplay: toDisplayValue,
+    toStored: toStoredValue,
+  } = useLinearDisplay(unit, precision)
 
-  const toDisplayValue = useCallback(
-    (storedValue: number) => (isImperial ? metersToLinearUnit(storedValue, 'imperial') : storedValue),
-    [isImperial],
-  )
-  const toStoredValue = useCallback(
-    (displayValue: number) =>
-      isImperial ? linearUnitToMeters(displayValue, 'imperial') : displayValue,
-    [isImperial],
-  )
   const clamp = useCallback(
     (val: number) => {
       return Math.min(Math.max(val, min), max)
