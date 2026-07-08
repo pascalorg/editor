@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   cabinetStretchEndLocalX,
   cabinetStretchExitSide,
+  chooseCabinetContinuousAnchor,
+  createCabinetContinuousContinuation,
   fillCabinetContinuousSpan,
   isCabinetContinuousFollowUpClick,
   planCabinetContinuousStretch,
@@ -91,6 +93,53 @@ describe('cabinet continuous placement', () => {
     expect(stretch.modules[0]?.x).toBeCloseTo(0)
     expect(stretch.modules[1]?.width).toBeCloseTo(0.6)
     expect(stretch.modules[1]?.x).toBeGreaterThan(0.58 / 2)
+  })
+
+  test('leading-width anchors always preview the first connected cabinet after the corner filler', () => {
+    const stretch = planCabinetContinuousStretch({
+      anchor: { ...ANCHOR, forcedDirection: 1, leadingWidth: 0.58 },
+      previewWidth: 0.6,
+      rawPlanPosition: [0.05, 0, 0],
+    })
+
+    expect(stretch.modules.map((module) => module.width)).toEqual([0.58, 0.6])
+    expect(stretch.length).toBeCloseTo(1.18)
+  })
+
+  test('prefers continuing straight when the cursor moves forward from the committed end', () => {
+    const stretch = planCabinetContinuousStretch({
+      anchor: ANCHOR,
+      previewWidth: 0.6,
+      rawPlanPosition: [1.2, 0, 0],
+    })
+    const continuation = createCabinetContinuousContinuation({
+      anchor: ANCHOR,
+      previewDepth: 0.58,
+      previewWidth: 0.6,
+      stretch,
+    })
+
+    expect(chooseCabinetContinuousAnchor(continuation, [1.9, 0, 0.1])).toEqual(
+      continuation.straightAnchor,
+    )
+  })
+
+  test('prefers the L turn when the cursor moves more laterally than forward', () => {
+    const stretch = planCabinetContinuousStretch({
+      anchor: ANCHOR,
+      previewWidth: 0.6,
+      rawPlanPosition: [1.2, 0, 0],
+    })
+    const continuation = createCabinetContinuousContinuation({
+      anchor: ANCHOR,
+      previewDepth: 0.58,
+      previewWidth: 0.6,
+      stretch,
+    })
+
+    expect(chooseCabinetContinuousAnchor(continuation, [1.35, 0, -0.9])).toEqual(
+      continuation.turnAnchor,
+    )
   })
 
   test('treats Alt force-place as valid while keeping normal collisions blocked', () => {

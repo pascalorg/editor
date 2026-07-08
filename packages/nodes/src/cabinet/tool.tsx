@@ -48,11 +48,14 @@ import {
   type CabinetStretchPreview,
   cabinetStretchEndLocalX,
   cabinetStretchExitSide,
+  chooseCabinetContinuousAnchor,
+  createCabinetContinuousContinuation,
   isCabinetContinuousFollowUpClick,
   isForcePlacementEvent,
   planCabinetContinuousStretch,
   resolveCabinetContinuousValidity,
   type StretchAnchor,
+  type StretchContinuation,
 } from './continuous-placement'
 import {
   bumpCabinetRunsNear,
@@ -89,11 +92,18 @@ type CabinetPlacement = {
   // Rubber-band state: anchor is `position`/`yaw`; modules are run-local
   // center offsets filling the anchor→cursor span.
   stretch?: CabinetStretchPreview
+  stretchAnchor?: StretchAnchor
 }
 
 type DraftSegment = {
   anchor: StretchAnchor
   stretch: CabinetStretchPreview
+}
+
+type DraftAnchorState = StretchAnchor | StretchContinuation
+
+function isStretchContinuation(anchor: DraftAnchorState): anchor is StretchContinuation {
+  return 'straightAnchor' in anchor
 }
 
 function runModuleBaseY(plinthHeight: number, showPlinth: boolean) {
@@ -225,10 +235,14 @@ const CabinetTool = () => {
   const islandModeRef = useRef(false)
   const placementRef = useRef<CabinetPlacement | null>(null)
   const draftSegmentsRef = useRef<DraftSegment[]>([])
+  const chainRootRunRef = useRef<CabinetNode | null>(null)
+  const chainRunRef = useRef<CabinetNode | null>(null)
+  const chainEndModuleRef = useRef<ReturnType<typeof CabinetModuleNode.parse> | null>(null)
+  const chainCornerSideRef = useRef<'left' | 'right' | null>(null)
   const previousSnapRef = useRef<string | null>(null)
   const previousWasWallSnapRef = useRef(false)
   const previousTickFrameRef = useRef(-1)
-  const draftAnchorRef = useRef<StretchAnchor | null>(null)
+  const draftAnchorRef = useRef<DraftAnchorState | null>(null)
   const activeGhostRef = useRef<Group | null>(null)
   const surfacePointRef = useRef(new Vector3())
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
@@ -236,11 +250,20 @@ const CabinetTool = () => {
   const surfaceForwardRef = useRef(new Vector3(0, 0, 1))
 
   const previewNode = useMemo(
-    () =>
-      CabinetModuleNode.parse({
+    () => {
+      const runDefaults = cabinetDefinition.defaults()
+      return CabinetModuleNode.parse({
         ...cabinetModuleDefinition.defaults(),
         ...DEFAULT_PLACEMENT_PRESET.createPatch(),
-      }),
+        showPlinth: runDefaults.showPlinth,
+        plinthHeight: runDefaults.plinthHeight,
+        toeKickDepth: runDefaults.toeKickDepth,
+        withCountertop: runDefaults.withCountertop,
+        countertopThickness: runDefaults.countertopThickness,
+        countertopOverhang: runDefaults.countertopOverhang,
+        countertopBackOverhang: runDefaults.countertopBackOverhang,
+      })
+    },
     [],
   )
   const placementDimensions = useMemo(() => {
@@ -329,6 +352,10 @@ const CabinetTool = () => {
     if (!activeLevelId) return
     placementRef.current = null
     draftSegmentsRef.current = []
+    chainRootRunRef.current = null
+    chainRunRef.current = null
+    chainEndModuleRef.current = null
+    chainCornerSideRef.current = null
     setDraftSegments([])
     previousSnapRef.current = null
     previousWasWallSnapRef.current = false
@@ -344,6 +371,10 @@ const CabinetTool = () => {
 
     const clearDraft = () => {
       draftSegmentsRef.current = []
+      chainRootRunRef.current = null
+      chainRunRef.current = null
+      chainEndModuleRef.current = null
+      chainCornerSideRef.current = null
       setDraftSegments([])
       draftAnchorRef.current = null
       placementRef.current = null
@@ -355,7 +386,7 @@ const CabinetTool = () => {
     }
 
     // The segmented draft survives only while continuous mode is on.
-    const resolveDraftAnchor = (): StretchAnchor | null => {
+    const resolveDraftAnchor = (): DraftAnchorState | null => {
       const anchor = draftAnchorRef.current
       if (!anchor) return null
       if (useEditor.getState().getContinuation('cabinet') !== 'continuous') {
@@ -498,12 +529,14 @@ const CabinetTool = () => {
         0,
         0,
       ])
+      const ignoreIds = chainRootRunRef.current ? [chainRootRunRef.current.id as AnyNodeId] : undefined
       const result = resolveCabinetContinuousValidity(
         spatialGridManager.canPlaceOnFloor(
           activeLevelId,
           spanCenter,
           [stretch.length, placementDimensions[1], placementDimensions[2]],
           [0, anchor.yaw, 0],
+          ignoreIds,
         ),
         isForcePlacementEvent(event),
       )
@@ -515,40 +548,21 @@ const CabinetTool = () => {
         valid: result.valid,
         conflictIds: result.conflictIds,
         stretch,
+        stretchAnchor: anchor,
       }
     }
 
-    const nextOrthogonalAnchor = (segment: DraftSegment): StretchAnchor => {
-      const exitSide = cabinetStretchExitSide(segment.stretch)
-      const sourceAxis: [number, number] = [
-        Math.cos(segment.anchor.yaw),
-        -Math.sin(segment.anchor.yaw),
-      ]
-      const corner = runLocalToPlan(
-        { position: segment.anchor.position, rotation: segment.anchor.yaw },
-        [cabinetStretchEndLocalX(segment.stretch, previewNode.width), 0, -previewNode.depth / 2],
-      )
-      const sign = exitSide === 'right' ? 1 : -1
-      const shiftedCorner: [number, number] = [
-        corner[0] + sign * previewNode.depth * sourceAxis[0],
-        corner[2] + sign * previewNode.depth * sourceAxis[1],
-      ]
-      const yaw =
-        exitSide === 'right' ? segment.anchor.yaw - Math.PI / 2 : segment.anchor.yaw + Math.PI / 2
-      const position = runLocalToPlan(
-        {
-          position: [shiftedCorner[0], segment.anchor.position[1], shiftedCorner[1]],
-          rotation: yaw,
-        },
-        [previewNode.depth / 2, 0, previewNode.depth / 2],
-      )
-      return {
-        position,
-        yaw,
-        snappedToWall: false,
-        forcedDirection: 1,
-        leadingWidth: previewNode.depth,
+    const resolveActiveStretchPlacement = (
+      anchor: DraftAnchorState,
+      event: FloorPlacementClickTriggerEvent,
+    ): CabinetPlacement => {
+      if (isStretchContinuation(anchor)) {
+        return resolveStretchedPlacement(
+          chooseCabinetContinuousAnchor(anchor, resolveRawPosition(event)),
+          event,
+        )
       }
+      return resolveStretchedPlacement(anchor, event)
     }
 
     const publishPlacement = (next: CabinetPlacement, frame = -1) => {
@@ -582,7 +596,7 @@ const CabinetTool = () => {
       if (ts === lastWallEventTime || wallOwnsPointer()) return
       const anchor = resolveDraftAnchor()
       if (anchor) {
-        publishPlacement(resolveStretchedPlacement(anchor, event), ts)
+        publishPlacement(resolveActiveStretchPlacement(anchor, event), ts)
         return
       }
       publishPlacement(resolvePlacement(event), ts)
@@ -594,7 +608,7 @@ const CabinetTool = () => {
       const anchor = resolveDraftAnchor()
       if (anchor) {
         markWallOwnedPointer()
-        publishPlacement(resolveStretchedPlacement(anchor, event), lastWallEventTime)
+        publishPlacement(resolveActiveStretchPlacement(anchor, event), lastWallEventTime)
         event.stopPropagation()
         return
       }
@@ -643,64 +657,71 @@ const CabinetTool = () => {
       return { cabinet, buildModule }
     }
 
-    const commitDraftSegments = (segments: DraftSegment[]): AnyNodeId | null => {
-      if (segments.length === 0) return null
+    const commitDraftSegment = (segment: DraftSegment): {
+      endModule: ReturnType<typeof CabinetModuleNode.parse>
+      run: CabinetNode
+    } | null => {
       const sceneApi = createSceneApi(useScene)
       sceneApi.pauseHistory()
       try {
-        const first = segments[0]!
-        const { cabinet, buildModule } = buildRunNodes(first.anchor.position, first.anchor.yaw)
-        sceneApi.upsert(cabinet, activeLevelId)
-        const firstModules = first.stretch.modules.map((m, index) =>
-          buildModule(m.x, m.width, index),
-        )
-        for (const module of firstModules) sceneApi.upsert(module, cabinet.id as AnyNodeId)
-        bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
-
-        let currentRun = sceneApi.get<CabinetNode>(cabinet.id as AnyNodeId) ?? cabinet
-        let currentEndModule = firstModules[firstModules.length - 1]!
-
-        for (let index = 1; index < segments.length; index += 1) {
-          const previous = segments[index - 1]!
-          const segment = segments[index]!
-          const connectedId = addCornerRun({
-            module: currentEndModule,
-            run: currentRun,
-            sceneApi,
-            side: cabinetStretchExitSide(previous.stretch),
-          })
-          if (!connectedId) throw new Error('Unable to create cabinet corner')
-          const connectedModule =
-            sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
-          const nextRun = connectedModule?.parentId
-            ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
-            : null
-          if (!connectedModule || !nextRun)
-            throw new Error('Unable to resolve connected corner run')
-
-          let accumulatedWidth = connectedModule.width
-          let anchorModule = connectedModule
-          while (accumulatedWidth + 1e-4 < segment.stretch.length) {
-            const addedId = addCabinetModuleSide({
-              anchorModule,
-              run: nextRun,
-              sceneApi,
-              side: 'right',
-            })
-            if (!addedId) break
-            const added = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(addedId)
-            if (!added) break
-            accumulatedWidth += added.width
-            anchorModule = added
+        if (!chainRunRef.current || !chainEndModuleRef.current || !chainCornerSideRef.current) {
+          const { cabinet, buildModule } = buildRunNodes(segment.anchor.position, segment.anchor.yaw)
+          sceneApi.upsert(cabinet, activeLevelId)
+          const modules = segment.stretch.modules.map((m, index) => buildModule(m.x, m.width, index))
+          for (const module of modules) sceneApi.upsert(module, cabinet.id as AnyNodeId)
+          bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
+          sceneApi.resumeHistory()
+          return {
+            endModule: modules[modules.length - 1]!,
+            run: sceneApi.get<CabinetNode>(cabinet.id as AnyNodeId) ?? cabinet,
           }
-
-          bumpCabinetRunsNearNewRun(nextRun.id as AnyNodeId)
-          currentRun = sceneApi.get<CabinetNode>(nextRun.id as AnyNodeId) ?? nextRun
-          currentEndModule = anchorModule
         }
 
+        const connectedId = addCornerRun({
+          module: chainEndModuleRef.current,
+          run: chainRunRef.current,
+          sceneApi,
+          side: chainCornerSideRef.current,
+        })
+        if (!connectedId) throw new Error('Unable to create cabinet corner')
+        const connectedModule = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(connectedId)
+        const nextRun = connectedModule?.parentId
+          ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
+          : null
+        if (!connectedModule || !nextRun) throw new Error('Unable to resolve connected corner run')
+
+        const plannedConnectedWidths = segment.stretch.modules.slice(1).map((module) => module.width)
+        let anchorModule = connectedModule
+        for (const expectedWidth of plannedConnectedWidths.slice(1)) {
+          const addedId = addCabinetModuleSide({
+            anchorModule,
+            run: nextRun,
+            sceneApi,
+            side: 'right',
+          })
+          if (!addedId) break
+          let added = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(addedId)
+          if (!added) break
+          if (expectedWidth < added.width - 1e-4) {
+            const leftEdge = added.position[0] - added.width / 2
+            sceneApi.update(
+              added.id as AnyNodeId,
+              {
+                width: expectedWidth,
+                position: [leftEdge + expectedWidth / 2, added.position[1], added.position[2]],
+              },
+            )
+            added = sceneApi.get<ReturnType<typeof CabinetModuleNode.parse>>(addedId) ?? added
+          }
+          anchorModule = added
+        }
+
+        bumpCabinetRunsNearNewRun(nextRun.id as AnyNodeId)
         sceneApi.resumeHistory()
-        return currentRun.id as AnyNodeId
+        return {
+          endModule: anchorModule,
+          run: sceneApi.get<CabinetNode>(nextRun.id as AnyNodeId) ?? nextRun,
+        }
       } catch {
         sceneApi.restoreAll()
         sceneApi.resumeHistory()
@@ -708,25 +729,35 @@ const CabinetTool = () => {
       }
     }
 
-    const finishDraft = (segments: DraftSegment[], event: FloorPlacementClickTriggerEvent) => {
-      const selectedId = commitDraftSegments(segments)
-      if (!selectedId) {
-        stopPlacementCommitPropagation(event)
-        return
+    const resolveCurrentDraftSegment = (
+      anchor: DraftAnchorState,
+      event: FloorPlacementClickTriggerEvent,
+    ): DraftSegment | null => {
+      const currentPlacement =
+        placementRef.current?.stretch && placementRef.current.stretchAnchor
+          ? placementRef.current
+          : resolveActiveStretchPlacement(anchor, event)
+      if (!currentPlacement.valid || !currentPlacement.stretch || !currentPlacement.stretchAnchor) {
+        return null
       }
-      useViewer.getState().setSelection({ selectedIds: [selectedId] })
-      triggerSFX('sfx:item-place')
-      clearDraft()
-      stopPlacementCommitPropagation(event)
+      return { anchor: currentPlacement.stretchAnchor, stretch: currentPlacement.stretch }
     }
 
     const onDoubleClick = (event: FloorPlacementClickTriggerEvent) => {
-      if (!resolveDraftAnchor()) return
-      if (draftSegmentsRef.current.length === 0) {
-        stopPlacementCommitPropagation(event)
-        return
+      const anchor = resolveDraftAnchor()
+      if (!anchor) return
+      const segment = resolveCurrentDraftSegment(anchor, event)
+      if (segment) {
+        const committed = commitDraftSegment(segment)
+        if (committed) {
+          chainRunRef.current = committed.run
+          chainEndModuleRef.current = committed.endModule
+          chainCornerSideRef.current = cabinetStretchExitSide(segment.stretch)
+          triggerSFX('sfx:item-place')
+        }
       }
-      finishDraft(draftSegmentsRef.current, event)
+      clearDraft()
+      stopPlacementCommitPropagation(event)
     }
 
     const onClick = (event: FloorPlacementClickTriggerEvent) => {
@@ -737,21 +768,32 @@ const CabinetTool = () => {
             | number
             | undefined) ?? 1
         if (isCabinetContinuousFollowUpClick(detail)) {
+          clearDraft()
           stopPlacementCommitPropagation(event)
           return
         }
-        const next = resolveStretchedPlacement(anchor, event)
-        if (!next.valid || !next.stretch) {
+        const segment = resolveCurrentDraftSegment(anchor, event)
+        if (!segment) {
           stopPlacementCommitPropagation(event)
           return
         }
-        const segment = { anchor, stretch: next.stretch }
-        const segments = [...draftSegmentsRef.current, segment]
-        draftSegmentsRef.current = segments
-        setDraftSegments(segments)
-        draftAnchorRef.current = nextOrthogonalAnchor(segment)
-        publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))
-        triggerSFX('sfx:item-pick')
+        const committed = commitDraftSegment(segment)
+        if (!committed) {
+          stopPlacementCommitPropagation(event)
+          return
+        }
+        chainRootRunRef.current ??= committed.run
+        chainRunRef.current = committed.run
+        chainEndModuleRef.current = committed.endModule
+        chainCornerSideRef.current = cabinetStretchExitSide(segment.stretch)
+        draftAnchorRef.current = createCabinetContinuousContinuation({
+          anchor: segment.anchor,
+          previewDepth: previewNode.depth,
+          previewWidth: previewNode.width,
+          stretch: segment.stretch,
+        })
+        publishPlacement(resolveActiveStretchPlacement(draftAnchorRef.current, event))
+        triggerSFX('sfx:item-place')
         stopPlacementCommitPropagation(event)
         return
       }
@@ -765,6 +807,10 @@ const CabinetTool = () => {
       if (useEditor.getState().getContinuation('cabinet') === 'continuous') {
         draftSegmentsRef.current = []
         setDraftSegments([])
+        chainRootRunRef.current = null
+        chainRunRef.current = null
+        chainEndModuleRef.current = null
+        chainCornerSideRef.current = null
         draftAnchorRef.current = {
           position: next.position,
           yaw: next.yaw,
@@ -833,16 +879,6 @@ const CabinetTool = () => {
     const onCancel = () => {
       if (!draftAnchorRef.current) return
       markToolCancelConsumed()
-      const currentStretch = placementRef.current?.valid ? placementRef.current.stretch : undefined
-      const segments = [
-        ...draftSegmentsRef.current,
-        ...(currentStretch ? [{ anchor: draftAnchorRef.current, stretch: currentStretch }] : []),
-      ]
-      const selectedId = commitDraftSegments(segments)
-      if (selectedId) {
-        useViewer.getState().setSelection({ selectedIds: [selectedId] })
-        triggerSFX('sfx:item-place')
-      }
       clearDraft()
     }
 
