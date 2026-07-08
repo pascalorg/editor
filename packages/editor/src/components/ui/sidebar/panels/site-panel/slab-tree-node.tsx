@@ -2,6 +2,7 @@ import { type AnyNodeId, type SlabNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useState } from 'react'
+import { formatAreaLabel } from './../../../../../lib/measurements'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -25,6 +26,7 @@ export const SlabTreeNode = memo(function SlabTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const unit = useViewer((state) => state.unit)
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -45,8 +47,7 @@ export const SlabTreeNode = memo(function SlabTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const area = calculatePolygonArea(polygon).toFixed(1)
-  const defaultName = `Slab (${area}m²)`
+  const defaultName = `Slab (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
 
   return (
     <TreeNodeWrapper
