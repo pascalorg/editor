@@ -275,21 +275,15 @@ export function useFloorplanBackgroundPlacement({
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        let snappedPoint = fallbackPoint
-        if (isSlabBuildActive) {
-          snappedPoint = resolveSlabPlanPointSnap({
-            rawPoint: planPoint,
-            fallbackPoint,
-            levelId,
-            altKey: event.altKey,
-            align: !angleSnap,
-          }).point
-        } else if (!angleSnap) {
-          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            applySnap: isMagneticSnapActive(),
-            bypass: event.altKey,
-          })
-        }
+        // Zone shares the slab surface snap (wall corners / midpoints /
+        // crossings + alignment) — it's the same polygon-on-a-level draw.
+        const snappedPoint = resolveSlabPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          altKey: event.altKey,
+          align: !angleSnap,
+        }).point
 
         // Emit the grid event so the registry-driven slab tool also
         // sees the click (parity with ceiling / fence / roof branches

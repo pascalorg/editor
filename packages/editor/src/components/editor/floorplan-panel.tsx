@@ -8935,21 +8935,14 @@ export function FloorplanPanel({
           start: activePolygonDraftPoints[activePolygonDraftPoints.length - 1],
           angleSnap,
         })
-        let snappedPoint = fallbackPoint
-        if (isSlabBuildActive) {
-          snappedPoint = resolveSlabPlanPointSnap({
-            rawPoint: planPoint,
-            fallbackPoint,
-            levelId,
-            align: !angleSnap,
-          }).point
-        } else if (angleSnap) {
-          useAlignmentGuides.getState().clear()
-        } else {
-          snappedPoint = alignFloorplanDraftPoint(fallbackPoint, {
-            applySnap: isMagneticSnapActive(),
-          })
-        }
+        // Zone shares the slab surface snap (wall corners / midpoints /
+        // crossings + alignment) — it's the same polygon-on-a-level draw.
+        const snappedPoint = resolveSlabPlanPointSnap({
+          rawPoint: planPoint,
+          fallbackPoint,
+          levelId,
+          align: !angleSnap,
+        }).point
 
         // Emit `grid:move` so the registry-driven slab tool also tracks
         // the cursor (its 3D preview needs it).
@@ -9647,15 +9640,15 @@ export function FloorplanPanel({
         return
       }
 
+      const snappedPoint = resolveSlabPlanPointSnap({
+        rawPoint: planPoint,
+        fallbackPoint,
+        levelId,
+        align: !angleSnap,
+      }).point
       if (isZoneBuildActive) {
-        handleZonePlacementConfirm(fallbackPoint)
+        handleZonePlacementConfirm(snappedPoint)
       } else {
-        const snappedPoint = resolveSlabPlanPointSnap({
-          rawPoint: planPoint,
-          fallbackPoint,
-          levelId,
-          align: !angleSnap,
-        }).point
         // Slab is registry-driven: forward the double-click so the 3D tool
         // commits the node (zone has no registry tool, so it commits locally).
         emitFloorplanGridEvent('double-click', snappedPoint, event)

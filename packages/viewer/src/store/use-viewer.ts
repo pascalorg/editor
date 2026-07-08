@@ -87,6 +87,14 @@ type ViewerState = {
   showGrid: boolean
   setShowGrid: (show: boolean) => void
 
+  // Presentation flag for parametric zones. When false the zone renderer
+  // unmounts its meshes AND its drei <Html> label (an <Html> costs per-frame
+  // matrix work + live DOM even at opacity 0, so hiding is not enough). The
+  // editor drives this from its structure layer; viewer surfaces keep the
+  // default. Not persisted — derived state, not a user preference.
+  showZones: boolean
+  setShowZones: (show: boolean) => void
+
   transparentBackground: boolean
   setTransparentBackground: (transparent: boolean) => void
 
@@ -307,6 +315,9 @@ const useViewer = create<ViewerState>()(
           }
           return { showGrid: show, projectPreferences }
         }),
+
+      showZones: true,
+      setShowZones: (show) => set({ showZones: show }),
 
       transparentBackground: false,
       setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),

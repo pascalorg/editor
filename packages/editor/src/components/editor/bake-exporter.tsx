@@ -4,16 +4,7 @@ import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { exportSceneToGlb } from '../../lib/glb-export'
-
-/** Resolve after the next couple of animation frames, giving React/R3F time to
- * commit and mount export-only geometry (e.g. instanced kinds' real meshes)
- * before the exporter clones the scene graph. */
-function nextFrames(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-  })
-}
+import { exportSceneToGlb, nextFrames } from '../../lib/glb-export'
 
 export function BakeExporter({
   active,

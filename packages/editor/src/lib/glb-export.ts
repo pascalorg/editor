@@ -40,6 +40,16 @@ export type GlbExport = {
   animations: THREE.AnimationClip[]
 }
 
+/** Resolve after the next couple of animation frames, giving React/R3F time to
+ * commit and mount export-only geometry (e.g. instanced kinds' real meshes)
+ * before the exporter clones the scene graph. Callers must set
+ * `useViewer.setExporting(true)` first and reset it after the export. */
+export function nextFrames(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  })
+}
+
 export async function exportSceneToGlb(
   sceneGroup: Object3D,
   nodes: Record<string, AnyNode>,
@@ -296,9 +306,12 @@ function isRenderableMesh(mesh: THREE.Mesh): boolean {
   const position = mesh.geometry?.getAttribute('position')
   if (!position || position.count === 0) return false
   const material = mesh.material
-  return Array.isArray(material)
-    ? material.some((m) => m?.visible !== false)
-    : material?.visible !== false
+  // `colorWrite: false` is how raycast-only colliders (e.g. instanced plants'
+  // proxy boxes) hide on the GPU — glTF has no equivalent, so exporting one
+  // yields an opaque white box. Treat it as non-renderable.
+  const renders = (m: THREE.Material | null | undefined) =>
+    m?.visible !== false && m?.colorWrite !== false
+  return Array.isArray(material) ? material.some(renders) : renders(material)
 }
 
 // --- Material conversion -------------------------------------------------
