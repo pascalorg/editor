@@ -4,7 +4,12 @@ import { Group } from 'three'
 import { addCooktopCompartment } from './geometry/cooktop'
 import { addDishwasherCompartment } from './geometry/dishwasher'
 import { addFridgeCompartment } from './geometry/fridge'
-import { addDoorFronts, addDrawerFronts, addShelfBoards } from './geometry/fronts'
+import {
+  addDoorFronts,
+  addDrawerFronts,
+  addShelfBoards,
+  addSinkFalseFront,
+} from './geometry/fronts'
 import { addRangeHoodCompartment } from './geometry/hood'
 import { addApplianceCompartment } from './geometry/oven-microwave'
 import { addPullOutPantryCompartment } from './geometry/pantry'
@@ -25,6 +30,7 @@ import {
 const CORNER_FILLER_TOP_INSET = 0.001
 const CORNER_FILLER_SIDE_INSET = 0.001
 const WALL_CORNER_FILLER_FRONT_HEIGHT_INSET = 0.001
+const SINK_FALSE_FRONT_HEIGHT = 0.22
 
 export function buildCabinetGeometry(
   node: CabinetGeometryNode,
@@ -280,6 +286,20 @@ export function buildCabinetGeometry(
           ? parentRun.countertopThickness
           : 0.02
     addSinkCompartment(group, sinkBowlSpecs, 0, 0, topY, slabThickness, sinkRow.index)
+    const falseFrontHeight = Math.min(
+      Math.max(0.01, carcassHeight - frontGap * 2),
+      SINK_FALSE_FRONT_HEIGHT,
+    )
+    addSinkFalseFront(
+      group,
+      node,
+      materials,
+      inset ? openingWidth : Math.max(0.01, width - frontGap),
+      falseFrontHeight,
+      topY - falseFrontHeight / 2,
+      frontZ,
+      sinkRow.index,
+    )
   }
   rows.forEach((row, index) => {
     // Sink rows are zero-height; the basin/faucet render against the

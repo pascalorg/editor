@@ -46,6 +46,7 @@ export const CABINET_TALL_PLINTH_HEIGHT = 0.1
 export const CABINET_TALL_CARCASS_HEIGHT = 2.07
 export const CABINET_EDGE_EPSILON = 1e-4
 const MIN_CORNER_CONNECTED_WIDTH = 0.3
+const MIN_TRIMMED_CORNER_CONNECTED_WIDTH = 0.05
 const CORNER_WIDTH_SEARCH_STEP = 0.01
 const WALL_CLEARANCE_EPSILON = 1e-5
 
@@ -61,6 +62,7 @@ type CornerSourceLink = {
 type CornerDerivedRunLink = {
   role: CornerDerivedRunRole
   side: CornerSide
+  turnSide: CornerSide
   sourceModuleId: AnyNodeId
   sourceRunId: AnyNodeId
 }
@@ -111,6 +113,7 @@ function cornerDerivedRunLink(
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const role = (value as { role?: unknown }).role
   const side = (value as { side?: unknown }).side
+  const turnSide = (value as { turnSide?: unknown }).turnSide
   const sourceModuleId = (value as { sourceModuleId?: unknown }).sourceModuleId
   const sourceRunId = (value as { sourceRunId?: unknown }).sourceRunId
   if (
@@ -124,6 +127,7 @@ function cornerDerivedRunLink(
   return {
     role,
     side,
+    turnSide: turnSide === 'left' || turnSide === 'right' ? turnSide : side,
     sourceModuleId: sourceModuleId as AnyNodeId,
     sourceRunId: sourceRunId as AnyNodeId,
   }
@@ -605,6 +609,26 @@ function adjustedCornerSourceModule(
   }
 }
 
+function resolveCornerEndSide({
+  module,
+  modules,
+  preferredSide,
+}: {
+  module: CabinetModuleNode
+  modules: CabinetModuleNode[]
+  preferredSide: CornerSide
+}): CornerSide | null {
+  const extent = runLocalXExtent(modules)
+  if (!extent) return null
+  const atLeftEnd = Math.abs(moduleMinX(module) - extent.minX) <= CABINET_EDGE_EPSILON
+  const atRightEnd = Math.abs(moduleMaxX(module) - extent.maxX) <= CABINET_EDGE_EPSILON
+
+  if (preferredSide === 'left' && atLeftEnd) return 'left'
+  if (preferredSide === 'right' && atRightEnd) return 'right'
+  if (atLeftEnd !== atRightEnd) return atLeftEnd ? 'left' : 'right'
+  return null
+}
+
 function resolveCabinetHostLevelId(
   node: CabinetNode | CabinetModuleNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
@@ -694,7 +718,9 @@ function resolveWallLimitedWidth({
     if (overlaps.length === 0) continue
 
     for (const overlap of overlaps) {
-      if (overlap.maxX <= WALL_CLEARANCE_EPSILON) continue
+      if (overlap.maxX <= WALL_CLEARANCE_EPSILON || overlap.minX <= WALL_CLEARANCE_EPSILON) {
+        continue
+      }
       blockingDistance = Math.min(blockingDistance, Math.max(0, overlap.minX))
     }
   }
@@ -769,18 +795,92 @@ function resolveSideAddedModuleWidth({
   return cappedWidth
 }
 
+function resolveCornerSourceSideWallLimitedWidth({
+  desiredWidth,
+  module,
+  nodes,
+  run,
+  side,
+}: {
+  desiredWidth: number
+  module: CabinetModuleNode
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+  run: CabinetNode
+  side: CornerSide
+}): number {
+  const hostLevelId = resolveCabinetHostLevelId(module, nodes)
+  if (!hostLevelId) return desiredWidth
+
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode =>
+      node?.type === 'wall' &&
+      resolveLevelId(node, nodes as Record<string, AnyNode>) === hostLevelId,
+  )
+  if (walls.length === 0) return desiredWidth
+
+  const runWorld = resolveCabinetWorldTransform(run, nodes)
+  const miterData = calculateLevelMiters(walls)
+  const minZ = module.position[2] - module.depth / 2
+  const maxZ = module.position[2] + module.depth / 2
+  const centerZ = module.position[2]
+  const fixedEdge = side === 'right' ? moduleMinX(module) : moduleMaxX(module)
+  let cappedWidth = desiredWidth
+
+  for (const wall of walls) {
+    const footprint = getWallPlanFootprint(wall, miterData)
+    if (footprint.length < 3) continue
+
+    const localFootprint = footprint.map((point) => {
+      const local = planToRunLocal(runWorld, point.x, 0, point.y)
+      return { x: local[0], z: local[2] }
+    })
+    const footprintMinZ = Math.min(...localFootprint.map((point) => point.z))
+    const footprintMaxZ = Math.max(...localFootprint.map((point) => point.z))
+    if (
+      centerZ < footprintMinZ - WALL_CLEARANCE_EPSILON ||
+      centerZ > footprintMaxZ + WALL_CLEARANCE_EPSILON
+    ) {
+      continue
+    }
+
+    const overlap = overlappingPolygonXRangeWithinStrip(localFootprint, minZ, maxZ)
+    if (!overlap) continue
+
+    if (side === 'right') {
+      if (overlap.maxX <= fixedEdge + WALL_CLEARANCE_EPSILON) continue
+      const maxSourceRight = overlap.minX - run.depth
+      if (maxSourceRight <= fixedEdge + desiredWidth + WALL_CLEARANCE_EPSILON) {
+        cappedWidth = Math.min(cappedWidth, Math.max(0, maxSourceRight - fixedEdge))
+      }
+      continue
+    }
+
+    if (overlap.minX >= fixedEdge - WALL_CLEARANCE_EPSILON) continue
+    const minSourceLeft = overlap.maxX + run.depth
+    if (minSourceLeft >= fixedEdge - desiredWidth - WALL_CLEARANCE_EPSILON) {
+      cappedWidth = Math.min(cappedWidth, Math.max(0, fixedEdge - minSourceLeft))
+    }
+  }
+
+  return cappedWidth
+}
+
 function computeCornerRunLayout({
   module,
   run,
   nodes,
   side,
+  turnSide = side,
   sourceModuleOverride,
+  minConnectedWidth = MIN_CORNER_CONNECTED_WIDTH,
 }: {
   module: CabinetModuleNode
   run: CabinetNode
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
   side: CornerSide
+  turnSide?: CornerSide
   sourceModuleOverride?: CabinetModuleNode
+  minConnectedWidth?: number
 }) {
   const sourceModule = sourceModuleOverride ?? module
   const modules = cabinetModulesForRun(run, nodes).map((entry) =>
@@ -800,7 +900,7 @@ function computeCornerRunLayout({
     corner[2] + sign * run.depth * sourceAxis[1],
   ]
   const legRotation =
-    side === 'right' ? runWorld.rotation - Math.PI / 2 : runWorld.rotation + Math.PI / 2
+    turnSide === 'right' ? runWorld.rotation - Math.PI / 2 : runWorld.rotation + Math.PI / 2
   const legAxis: [number, number] = [Math.cos(legRotation), -Math.sin(legRotation)]
   const connectedWidth = resolveWallLimitedWidth({
     backLeft:
@@ -817,7 +917,7 @@ function computeCornerRunLayout({
     rotation: legRotation,
     sourceNode: sourceModule,
   })
-  if (connectedWidth < MIN_CORNER_CONNECTED_WIDTH - WALL_CLEARANCE_EPSILON) return null
+  if (connectedWidth < minConnectedWidth - WALL_CLEARANCE_EPSILON) return null
   const connectedShelfCount = inheritedShelfCount(module)
 
   const baseLegLength = run.depth + connectedWidth
@@ -904,29 +1004,60 @@ function resolveCornerAdditionLayout({
 }): {
   sourceModule: CabinetModuleNode
   layout: NonNullable<ReturnType<typeof computeCornerRunLayout>>
+  endSide: CornerSide
+  turnSide: CornerSide
 } | null {
+  const modules = cabinetModulesForRun(run, nodes)
+  const endSide = resolveCornerEndSide({ module, modules, preferredSide: side })
+  if (!endSide) return null
+  const turnSide = side
+  const maxSourceWidth = resolveCornerSourceSideWallLimitedWidth({
+    desiredWidth: module.width,
+    module,
+    nodes,
+    run,
+    side: endSide,
+  })
+  const sourceWasSideWallTrimmed = maxSourceWidth < module.width - CABINET_EDGE_EPSILON
+  const minConnectedWidth = sourceWasSideWallTrimmed
+    ? MIN_TRIMMED_CORNER_CONNECTED_WIDTH
+    : MIN_CORNER_CONNECTED_WIDTH
+  if (maxSourceWidth < minConnectedWidth - WALL_CLEARANCE_EPSILON) return null
+  const initialSourceModule = sourceWasSideWallTrimmed
+    ? adjustedCornerSourceModule(module, endSide, Number(maxSourceWidth.toFixed(4)))
+    : module
   const directLayout = computeCornerRunLayout({
     module,
     run,
     nodes,
-    side,
+    side: endSide,
+    turnSide,
+    sourceModuleOverride: initialSourceModule,
+    minConnectedWidth,
   })
-  if (directLayout) return { sourceModule: module, layout: directLayout }
+  if (directLayout)
+    return { sourceModule: initialSourceModule, layout: directLayout, endSide, turnSide }
 
   for (
-    let sourceWidth = module.width - CORNER_WIDTH_SEARCH_STEP;
-    sourceWidth >= MIN_CORNER_CONNECTED_WIDTH - WALL_CLEARANCE_EPSILON;
+    let sourceWidth = initialSourceModule.width - CORNER_WIDTH_SEARCH_STEP;
+    sourceWidth >= minConnectedWidth - WALL_CLEARANCE_EPSILON;
     sourceWidth -= CORNER_WIDTH_SEARCH_STEP
   ) {
-    const candidateModule = adjustedCornerSourceModule(module, side, Number(sourceWidth.toFixed(4)))
+    const candidateModule = adjustedCornerSourceModule(
+      module,
+      endSide,
+      Number(sourceWidth.toFixed(4)),
+    )
     const layout = computeCornerRunLayout({
       module,
       run,
       nodes,
-      side,
+      side: endSide,
+      turnSide,
       sourceModuleOverride: candidateModule,
+      minConnectedWidth,
     })
-    if (layout) return { sourceModule: candidateModule, layout }
+    if (layout) return { sourceModule: candidateModule, layout, endSide, turnSide }
   }
 
   return null
@@ -1166,6 +1297,7 @@ function syncDerivedCornerRun({
   sourceModule,
   sourceRun,
   side,
+  turnSide,
   sceneApi,
 }: {
   role: CornerDerivedRunRole
@@ -1173,6 +1305,7 @@ function syncDerivedCornerRun({
   sourceModule: CabinetModuleNode
   sourceRun: CabinetNode
   side: CornerSide
+  turnSide: CornerSide
   sceneApi: SceneApi
 }) {
   const layout = computeCornerRunLayout({
@@ -1180,6 +1313,7 @@ function syncDerivedCornerRun({
     run: sourceRun,
     nodes: sceneApi.nodes(),
     side,
+    turnSide,
   })
   if (!layout) return
 
@@ -1370,6 +1504,7 @@ export function syncCornerRunsFromSourceModule({
       sourceModule: module,
       sourceRun: run,
       side: derivedLink.side,
+      turnSide: derivedLink.turnSide,
       sceneApi,
     })
   }
@@ -1475,38 +1610,33 @@ export function addCornerRun({
   sceneApi: SceneApi
   side: 'left' | 'right'
 }): AnyNodeId | null {
-  if (run.runTier !== 'base' || resolveCabinetType(module, run) !== 'base') return null
-
-  const modules = cabinetModulesForRun(run, sceneApi.nodes())
-  const extent = runLocalXExtent(modules)
-  if (!extent) return null
-  const isEndModule =
-    side === 'left'
-      ? Math.abs(moduleMinX(module) - extent.minX) <= CABINET_EDGE_EPSILON
-      : Math.abs(moduleMaxX(module) - extent.maxX) <= CABINET_EDGE_EPSILON
-  if (!isEndModule) return null
+  const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run
+  const liveModule = sceneApi.get<CabinetModuleNode>(module.id as AnyNodeId) ?? module
+  if (liveRun.runTier !== 'base' || resolveCabinetType(liveModule, liveRun) !== 'base') {
+    return null
+  }
 
   const resolved = resolveCornerAdditionLayout({
-    module,
-    run,
+    module: liveModule,
+    run: liveRun,
     nodes: sceneApi.nodes(),
     side,
   })
   if (!resolved) return null
-  const { layout, sourceModule: resolvedSourceModule } = resolved
-  let sourceModule = module
-  let sourceRun = run
+  const { layout, sourceModule: resolvedSourceModule, endSide, turnSide } = resolved
+  let sourceModule = liveModule
+  let sourceRun = liveRun
   if (
-    resolvedSourceModule.width < module.width - CABINET_EDGE_EPSILON ||
-    layout.connectedWidth < module.width - CABINET_EDGE_EPSILON
+    resolvedSourceModule.width < liveModule.width - CABINET_EDGE_EPSILON ||
+    layout.connectedWidth < liveModule.width - CABINET_EDGE_EPSILON
   ) {
     const sourcePatch = cornerSourceModulePatch({
-      module,
-      side,
+      module: liveModule,
+      side: endSide,
       width: Math.min(resolvedSourceModule.width, layout.connectedWidth),
     })
-    sceneApi.update(module.id as AnyNodeId, sourcePatch as Partial<AnyNode>)
-    const existingWallTop = wallChildOf(module, sceneApi.nodes())
+    sceneApi.update(liveModule.id as AnyNodeId, sourcePatch as Partial<AnyNode>)
+    const existingWallTop = wallChildOf(liveModule, sceneApi.nodes())
     if (existingWallTop) {
       sceneApi.update(
         existingWallTop.id as AnyNodeId,
@@ -1515,14 +1645,19 @@ export function addCornerRun({
         } as Partial<AnyNode>,
       )
     }
-    sourceModule = sceneApi.get<CabinetModuleNode>(module.id as AnyNodeId) ?? module
-    sourceRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run
+    sourceModule = sceneApi.get<CabinetModuleNode>(liveModule.id as AnyNodeId) ?? liveModule
+    sourceRun = sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun
   }
   const resolvedLayout = computeCornerRunLayout({
     module: sourceModule,
     run: sourceRun,
     nodes: sceneApi.nodes(),
-    side,
+    side: endSide,
+    turnSide,
+    minConnectedWidth:
+      sourceModule.width < MIN_CORNER_CONNECTED_WIDTH - CABINET_EDGE_EPSILON
+        ? MIN_TRIMMED_CORNER_CONNECTED_WIDTH
+        : MIN_CORNER_CONNECTED_WIDTH,
   })
   if (!resolvedLayout) return null
   const {
@@ -1540,7 +1675,7 @@ export function addCornerRun({
     run: sourceRun,
     sceneApi,
     shelfCount: connectedShelfCount,
-    openSide: side,
+    openSide: endSide,
   })
   const existingWallTop = sourceWallChildId
     ? (sceneApi.get<CabinetModuleNode>(sourceWallChildId) ?? null)
@@ -1554,11 +1689,11 @@ export function addCornerRun({
   )
   const baseLocalRotation = worldToCabinetLocalRotation(sourceRun, sceneApi.nodes(), legRotation)
   const baseModules =
-    side === 'right'
+    endSide === 'right'
       ? [
           {
             name: 'Corner Filler',
-            width: run.depth,
+            width: sourceRun.depth,
             moduleKind: 'corner-filler' as const,
             openSide: 'right' as const,
             cornerShelf: true,
@@ -1580,7 +1715,7 @@ export function addCornerRun({
           },
           {
             name: 'Corner Filler',
-            width: run.depth,
+            width: sourceRun.depth,
             moduleKind: 'corner-filler' as const,
             openSide: 'left' as const,
             cornerShelf: true,
@@ -1610,7 +1745,8 @@ export function addCornerRun({
         : withSelectionProxyMetadata(baseLegLiveMetadata, selectionRootId)),
       cabinetCornerDerivedRun: {
         role: 'base-leg',
-        side,
+        side: endSide,
+        turnSide,
         sourceModuleId: sourceModule.id as AnyNodeId,
         sourceRunId: sourceRun.id as AnyNodeId,
       },
@@ -1619,7 +1755,7 @@ export function addCornerRun({
   for (const moduleId of baseLeg.moduleIds) {
     setCabinetSelectionProxy(sceneApi, moduleId, selectionRootId)
   }
-  const baseLegRunNode = sceneApi.get<CabinetNode>(baseLeg.runId) ?? run
+  const baseLegRunNode = sceneApi.get<CabinetNode>(baseLeg.runId) ?? sourceRun
   const cornerFillerModule =
     childModuleByName(baseLegRunNode, 'Corner Filler', sceneApi.nodes()) ??
     sceneApi.get<CabinetModuleNode>(baseLeg.moduleIds[0]!)
@@ -1632,7 +1768,7 @@ export function addCornerRun({
       sourceWallTop: existingWallTop,
       sourceRun,
       bridgeWidth,
-      side,
+      side: endSide,
       fallbackPosition: bridgeFillerRunPosition,
       nodes: sceneApi.nodes(),
     })
@@ -1653,7 +1789,7 @@ export function addCornerRun({
           name: 'Wall Bridge Filler',
           width: bridgeWidth,
           moduleKind: 'corner-filler',
-          openSide: side === 'right' ? 'left' : 'right',
+          openSide: endSide === 'right' ? 'left' : 'right',
           cornerShelf: true,
           stack: doorStack(connectedShelfCount),
         },
@@ -1676,7 +1812,8 @@ export function addCornerRun({
           : withSelectionProxyMetadata(bridgeRunLiveMetadata, selectionRootId)),
         cabinetCornerDerivedRun: {
           role: 'bridge',
-          side,
+          side: endSide,
+          turnSide,
           sourceModuleId: sourceModule.id as AnyNodeId,
           sourceRunId: sourceRun.id as AnyNodeId,
         },
@@ -1685,9 +1822,9 @@ export function addCornerRun({
     for (const moduleId of bridgeRun.moduleIds) {
       setCabinetSelectionProxy(sceneApi, moduleId, selectionRootId)
     }
-    const wallModuleCenters = chainModuleCenters([run.depth, connectedWidth])
+    const wallModuleCenters = chainModuleCenters([sourceRun.depth, connectedWidth])
     const cornerWallFillerCenter =
-      side === 'right' ? (wallModuleCenters[0] ?? 0) : (wallModuleCenters[1] ?? 0)
+      endSide === 'right' ? (wallModuleCenters[0] ?? 0) : (wallModuleCenters[1] ?? 0)
     const cornerWallFillerWorldPosition = runLocalToPlan(
       { position: wallRunPosition, rotation: legRotation },
       [cornerWallFillerCenter, 0, 0],
@@ -1697,9 +1834,9 @@ export function addCornerRun({
       modulePatches: [
         {
           name: 'Corner Wall Filler',
-          width: run.depth,
+          width: sourceRun.depth,
           moduleKind: 'corner-filler',
-          openSide: side === 'right' ? 'right' : 'left',
+          openSide: endSide === 'right' ? 'right' : 'left',
           cornerShelf: true,
           stack: doorStack(connectedShelfCount),
         },
@@ -1727,7 +1864,8 @@ export function addCornerRun({
           : withSelectionProxyMetadata(wallFillerRunLiveMetadata, selectionRootId)),
         cabinetCornerDerivedRun: {
           role: 'wall-leg',
-          side,
+          side: endSide,
+          turnSide,
           sourceModuleId: sourceModule.id as AnyNodeId,
           sourceRunId: sourceRun.id as AnyNodeId,
         },
@@ -1759,7 +1897,7 @@ export function addCornerRun({
           sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId)?.metadata ?? null,
         ),
         cabinetCornerSourceLink: {
-          side,
+          side: endSide,
           linkedRunIds,
         },
       },

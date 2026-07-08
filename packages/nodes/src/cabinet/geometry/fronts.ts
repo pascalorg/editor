@@ -608,7 +608,7 @@ function addDoorLeaf(
       'glass',
     )
     glassMesh.name = `${name}-glass`
-    glassMesh.position.set(0, 0, node.frontThickness / 2 + glassDepth / 2 + 0.001)
+    glassMesh.position.set(0, 0, node.frontThickness / 2 - glassDepth / 2 - 0.001)
     glassMesh.renderOrder = 2
     leafGroup.add(glassMesh)
     addHandleFeature(
@@ -697,6 +697,32 @@ export function addDoorFronts(
     frontZ,
     `cabinet-door-single-${centerY.toFixed(3)}`,
   )
+}
+
+export function addSinkFalseFront(
+  group: Group,
+  node: CabinetGeometryNode,
+  materials: CabinetSlotMaterials,
+  faceWidth: number,
+  faceHeight: number,
+  centerY: number,
+  frontZ: number,
+  index: number,
+) {
+  const frontWidth = Math.max(0.01, faceWidth - 2 * node.frontGap)
+  const frontHeight = Math.max(0.01, faceHeight - 2 * node.frontGap)
+  const mesh = stampSlot(
+    new Mesh(
+      buildFrontGeometry({ ...node, handleStyle: 'none' }, frontWidth, frontHeight, true),
+      materials.front,
+    ),
+    'front',
+  )
+  mesh.name = `cabinet-sink-false-front-${index}`
+  mesh.position.set(0, centerY, frontZ + 0.001)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  group.add(mesh)
 }
 
 export function addShelfBoards(

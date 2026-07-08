@@ -198,6 +198,7 @@ export type {
   WallTrimConfig,
 } from './nodes/wall'
 export {
+  buildEnabledWallFaceBandPatch,
   getEffectiveWallSurfaceMaterial,
   getWallBandSlotId,
   getWallFaceBandConfig,

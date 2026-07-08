@@ -1282,6 +1282,61 @@ describe('addCornerRun', () => {
     )
   })
 
+  test('turns left from the outer right end of an extended right-corner leg', () => {
+    const levelId = 'level_corner-extended-leg-left-turn' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-extended-leg-left-turn',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-corner-extended-leg-left-turn'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-extended-leg-left-turn',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-extended-leg-left-turn', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    const firstSelectedId = addCornerRun({ module, run, sceneApi, side: 'right' })
+    const firstSelectedModule = sceneApi.get<CabinetModuleNode>(firstSelectedId!)!
+    const firstDerivedRun = sceneApi.get<CabinetNode>(firstSelectedModule.parentId as AnyNodeId)!
+    const extendedId = addCabinetModuleSide({
+      anchorModule: firstSelectedModule,
+      run: firstDerivedRun,
+      sceneApi,
+      side: 'right',
+    })
+    const extendedModule = sceneApi.get<CabinetModuleNode>(extendedId!)!
+
+    const secondSelectedId = addCornerRun({
+      module: extendedModule,
+      run: firstDerivedRun,
+      sceneApi,
+      side: 'left',
+    })
+
+    expect(secondSelectedId).toBeTruthy()
+
+    const secondSelectedModule = sceneApi.get<CabinetModuleNode>(secondSelectedId!)!
+    const secondDerivedRun = sceneApi.get<CabinetNode>(secondSelectedModule.parentId as AnyNodeId)!
+    const nodes = sceneApi.nodes() as Record<AnyNodeId, AnyNode>
+    const firstDerivedWorld = resolveCabinetWorldTransform(firstDerivedRun, nodes)
+    const secondDerivedWorld = resolveCabinetWorldTransform(secondDerivedRun, nodes)
+
+    expect(secondDerivedWorld.rotation - firstDerivedWorld.rotation).toBeCloseTo(Math.PI / 2)
+    expect(
+      (secondDerivedRun.metadata as Record<string, unknown>).cabinetCornerDerivedRun,
+    ).toMatchObject({
+      side: 'right',
+      turnSide: 'left',
+    })
+  })
+
   test('shortens the generated corner leg when a wall blocks the new span', () => {
     const levelId = 'level_corner-wall-clearance' as AnyNodeId
     const run = CabinetNode.parse({
@@ -1328,6 +1383,256 @@ describe('addCornerRun', () => {
     expect(sourceAfter.width).toBeCloseTo(0.56)
     expect(legCabinet?.width).toBeCloseTo(0.56)
     expect(wallLegCabinet?.width).toBeCloseTo(0.56)
+  })
+
+  test('shrinks the source corner cabinet when a side wall blocks the turn pocket', () => {
+    const levelId = 'level_corner-side-wall-clearance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-side-wall-clearance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-corner-side-wall-clearance'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-side-wall-clearance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-side-wall-clearance', type: 'door', shelfCount: 2 }],
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_corner-side-blocker',
+      parentId: levelId,
+      start: [0.82, -1],
+      end: [0.82, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode, blockingWall as AnyNode])
+
+    const selectedId = addCornerRun({
+      module,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    expect(selectedId).toBeTruthy()
+
+    const modulesOut = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode => node.type === 'cabinet-module',
+    )
+    const sourceAfter = sceneApi.get<CabinetModuleNode>(module.id)!
+    const legCabinet = modulesOut.find((node) => node.id === selectedId)
+    const wallLegCabinet = modulesOut.find(
+      (node) => node.name === 'Wall Cabinet' && node.parentId === legCabinet?.id,
+    )
+
+    expect(sourceAfter.width).toBeCloseTo(0.59)
+    expect(legCabinet?.width).toBeCloseTo(0.59)
+    expect(wallLegCabinet?.width).toBeCloseTo(0.59)
+  })
+
+  test('shrinks the source corner cabinet when a left side wall blocks the turn pocket', () => {
+    const levelId = 'level_corner-left-side-wall-clearance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-left-side-wall-clearance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-corner-left-side-wall-clearance'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-left-side-wall-clearance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-left-side-wall-clearance', type: 'door', shelfCount: 2 }],
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_corner-left-side-blocker',
+      parentId: levelId,
+      start: [-0.82, -1],
+      end: [-0.82, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode, blockingWall as AnyNode])
+
+    const selectedId = addCornerRun({
+      module,
+      run,
+      sceneApi,
+      side: 'left',
+    })
+
+    expect(selectedId).toBeTruthy()
+
+    const modulesOut = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode => node.type === 'cabinet-module',
+    )
+    const sourceAfter = sceneApi.get<CabinetModuleNode>(module.id)!
+    const selectedModule = sceneApi.get<CabinetModuleNode>(selectedId!)!
+    const legCabinet = modulesOut.find(
+      (node) => node.name === 'Base Cabinet' && node.parentId === selectedModule.parentId,
+    )
+    const wallLegCabinet = modulesOut.find(
+      (node) => node.name === 'Wall Cabinet' && node.parentId === legCabinet?.id,
+    )
+
+    expect(sourceAfter.width).toBeCloseTo(0.59)
+    expect(legCabinet?.width).toBeCloseTo(0.59)
+    expect(wallLegCabinet?.width).toBeCloseTo(0.59)
+  })
+
+  test('adds the corner after a tight side wall trims the source below standard width', () => {
+    const levelId = 'level_corner-tight-side-wall-clearance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-tight-side-wall-clearance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-tight-side-wall-clearance',
+        'cabinet-module_mid-tight-side-wall-clearance',
+        'cabinet-module_right-tight-side-wall-clearance',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-tight-side-wall-clearance',
+      parentId: run.id,
+      position: [-0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const middle = CabinetModuleNode.parse({
+      id: 'cabinet-module_mid-tight-side-wall-clearance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-tight-side-wall-clearance',
+      parentId: run.id,
+      position: [0.9, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-tight-side-wall-clearance', type: 'door', shelfCount: 2 }],
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_corner-tight-side-blocker',
+      parentId: levelId,
+      start: [1.3, -1],
+      end: [1.3, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      middle as AnyNode,
+      right as AnyNode,
+      blockingWall as AnyNode,
+    ])
+
+    const selectedId = addCornerRun({
+      module: right,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    expect(selectedId).toBeTruthy()
+
+    const modulesOut = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode => node.type === 'cabinet-module',
+    )
+    const sourceAfter = sceneApi.get<CabinetModuleNode>(right.id)!
+    const legCabinet = modulesOut.find((node) => node.id === selectedId)
+
+    expect(sourceAfter.width).toBeCloseTo(0.17)
+    expect(legCabinet?.width).toBeCloseTo(0.17)
+  })
+
+  test('adds the left corner after a tight side wall trims the source below standard width', () => {
+    const levelId = 'level_corner-tight-left-side-wall-clearance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-tight-left-side-wall-clearance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [
+        'cabinet-module_left-tight-left-side-wall-clearance',
+        'cabinet-module_mid-tight-left-side-wall-clearance',
+        'cabinet-module_right-tight-left-side-wall-clearance',
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_left-tight-left-side-wall-clearance',
+      parentId: run.id,
+      position: [-0.9, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-tight-left-side-wall-clearance', type: 'door', shelfCount: 2 }],
+    })
+    const middle = CabinetModuleNode.parse({
+      id: 'cabinet-module_mid-tight-left-side-wall-clearance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_right-tight-left-side-wall-clearance',
+      parentId: run.id,
+      position: [0.75, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const blockingWall = WallNode.parse({
+      id: 'wall_corner-tight-left-side-blocker',
+      parentId: levelId,
+      start: [-1.3, -1],
+      end: [-1.3, 1],
+      thickness: 0.2,
+    })
+    const sceneApi = sceneApiFixture([
+      run as AnyNode,
+      left as AnyNode,
+      middle as AnyNode,
+      right as AnyNode,
+      blockingWall as AnyNode,
+    ])
+
+    const selectedId = addCornerRun({
+      module: left,
+      run,
+      sceneApi,
+      side: 'left',
+    })
+
+    expect(selectedId).toBeTruthy()
+
+    const modulesOut = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode => node.type === 'cabinet-module',
+    )
+    const sourceAfter = sceneApi.get<CabinetModuleNode>(left.id)!
+    const selectedModule = sceneApi.get<CabinetModuleNode>(selectedId!)!
+    const legCabinet = modulesOut.find(
+      (node) => node.name === 'Base Cabinet' && node.parentId === selectedModule.parentId,
+    )
+
+    expect(sourceAfter.width).toBeCloseTo(0.17)
+    expect(legCabinet?.width).toBeCloseTo(0.17)
   })
 
   test('reports the trimmed corner width during preview before adding the corner run', () => {

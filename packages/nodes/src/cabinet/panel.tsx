@@ -402,7 +402,7 @@ export default function CabinetPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/furniture.webp"
+      icon="/icons/item.webp"
       onBack={node.type === 'cabinet-module' ? backToRun : undefined}
       onClose={close}
       title={node.name || 'Modular Cabinet'}

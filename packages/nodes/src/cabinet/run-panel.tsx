@@ -282,7 +282,7 @@ export function CabinetRunPanel({
 
   return (
     <PanelWrapper
-      icon="/icons/furniture.webp"
+      icon="/icons/item.webp"
       onClose={onClose}
       title={node.name || 'Modular Cabinet'}
       width={320}

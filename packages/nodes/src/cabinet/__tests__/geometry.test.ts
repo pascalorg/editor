@@ -462,6 +462,24 @@ describe('buildCabinetGeometry — glass doors', () => {
     }
   })
 
+  test('rectangular glass panes stay inside the front frame instead of protruding past it', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: 0.6,
+      carcassHeight: 2.07,
+      stack: [{ id: 'glass-door', type: 'door', doorType: 'glass', shelfCount: 4 }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const frame = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-frame-top$/)
+    const glass = findMeshByNamePattern(group, /^cabinet-door-left-[\d.]+-glass$/)
+
+    const frameBounds = worldBounds(frame)
+    const glassBounds = worldBounds(glass)
+
+    expect(glassBounds.max.z).toBeLessThanOrEqual(frameBounds.max.z)
+    expect(glassBounds.min.z).toBeGreaterThanOrEqual(frameBounds.min.z)
+  })
+
   test('raised-arch glass panes stay inside the front frame instead of protruding past it', () => {
     const node = CabinetModuleNode.parse({
       cabinetType: 'tall',
@@ -2315,6 +2333,22 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-cap')).toBeDefined()
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')).toBeDefined()
+  })
+
+  test('sink module keeps a top false front in front of the basin', () => {
+    const node = sinkModule()
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+    const falseFront = findMeshByName(group, 'cabinet-sink-false-front-1')
+    const basinFront = findMeshByName(group, 'cabinet-sink-1-0-basin-front')
+
+    const frontBounds = worldBounds(falseFront)
+    const basinBounds = worldBounds(basinFront)
+    const topY = (node.showPlinth ? node.plinthHeight : 0) + node.carcassHeight
+
+    expect(falseFront.userData.slotId).toBe('front')
+    expect(frontBounds.max.y).toBeCloseTo(topY, 2)
+    expect(frontBounds.min.y).toBeLessThanOrEqual(basinBounds.min.y + 0.01)
+    expect(frontBounds.max.z).toBeGreaterThan(basinBounds.max.z)
   })
 
   test('faucet handle uses a horizontal mixer barrel with an upright pin lever', () => {

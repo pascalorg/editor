@@ -966,7 +966,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   presentation: {
     label: 'Modular Cabinet',
     description: 'A configurable parametric base cabinet.',
-    icon: { kind: 'url', src: '/icons/furniture.webp' },
+    icon: { kind: 'url', src: '/icons/item.webp' },
     paletteSection: 'furnish',
     paletteOrder: 34,
   },
@@ -1123,7 +1123,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   presentation: {
     label: 'Cabinet Module',
     description: 'An editable module inside a modular cabinet run.',
-    icon: { kind: 'url', src: '/icons/furniture.webp' },
+    icon: { kind: 'url', src: '/icons/item.webp' },
     paletteSection: 'furnish',
     paletteOrder: 35,
   },

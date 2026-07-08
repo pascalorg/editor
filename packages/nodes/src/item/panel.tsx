@@ -100,7 +100,7 @@ export default function ItemPanel() {
 
   return (
     <PanelWrapper
-      icon={node.asset.thumbnail || '/icons/furniture.webp'}
+      icon={node.asset.thumbnail || '/icons/item.webp'}
       onClose={handleClose}
       title={node.name || node.asset.name}
       width={300}

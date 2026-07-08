@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  buildEnabledWallFaceBandPatch,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
@@ -222,6 +223,7 @@ export default function WallPanel() {
 
       <WallFaceBandSection
         bands={faceBands}
+        node={node}
         onUpdate={handleUpdate}
         unit={unit}
         unitLabel={unitLabel}
@@ -276,12 +278,14 @@ export default function WallPanel() {
 
 function WallFaceBandSection({
   bands,
+  node,
   onUpdate,
   unit,
   unitLabel,
   wallHeightMeters,
 }: {
   bands: NonNullable<WallNode['faceBands']>
+  node: WallNode
   onUpdate: (updates: Partial<WallNode>) => void
   unit: 'metric' | 'imperial'
   unitLabel: string
@@ -302,7 +306,10 @@ function WallFaceBandSection({
       <ActionGroup>
         <ActionButton
           label={bands.enabled ? 'Disable bands' : 'Enable bands'}
-          onClick={() => updateBands({ enabled: !bands.enabled })}
+          onClick={() => {
+            if (bands.enabled) updateBands({ enabled: false })
+            else onUpdate(buildEnabledWallFaceBandPatch(node))
+          }}
         />
       </ActionGroup>
       {bands.enabled && (

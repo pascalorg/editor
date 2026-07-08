@@ -55,15 +55,15 @@ export const WALL_TRIM_DEFAULTS = {
 
 export const WallFaceBandConfig = z.object({
   enabled: z.boolean().default(false),
-  lowerHeight: z.number().default(0.9),
-  middleHeight: z.number().default(0.12),
+  lowerHeight: z.number().default(0.84),
+  middleHeight: z.number().default(0.61),
 })
 export type WallFaceBandConfig = z.infer<typeof WallFaceBandConfig>
 
 export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
   enabled: false,
-  lowerHeight: 0.9,
-  middleHeight: 0.12,
+  lowerHeight: 0.84,
+  middleHeight: 0.61,
 }
 
 export const WALL_SURFACE_SLOT_DEFAULTS = {
@@ -188,6 +188,36 @@ export function getWallBandSlotId(
 ): WallBandSurfaceSlotId {
   const suffix = side === 'interior' ? 'Interior' : 'Exterior'
   return `${band}${suffix}` as WallBandSurfaceSlotId
+}
+
+const WALL_FACE_BAND_SLOTS_BY_SIDE = {
+  interior: ['lowerInterior', 'middleInterior', 'upperInterior'],
+  exterior: ['lowerExterior', 'middleExterior', 'upperExterior'],
+} as const satisfies Record<WallSurfaceSide, readonly WallBandSurfaceSlotId[]>
+
+export function buildEnabledWallFaceBandPatch(
+  wall: Pick<WallNode, 'faceBands' | 'slots'>,
+): Pick<WallNode, 'faceBands' | 'slots'> {
+  const slots = { ...(wall.slots ?? {}) }
+
+  for (const side of ['interior', 'exterior'] as const) {
+    const sourceRef = slots[side]
+    for (const slotId of WALL_FACE_BAND_SLOTS_BY_SIDE[side]) {
+      if (sourceRef) slots[slotId] = sourceRef
+      else delete slots[slotId]
+    }
+  }
+
+  return {
+    faceBands: {
+      ...WALL_FACE_BAND_DEFAULT,
+      ...(wall.faceBands ?? {}),
+      enabled: true,
+      lowerHeight: WALL_FACE_BAND_DEFAULT.lowerHeight,
+      middleHeight: WALL_FACE_BAND_DEFAULT.middleHeight,
+    },
+    slots,
+  }
 }
 
 export function getWallSurfaceSideFromBandSlot(slotId: string): WallSurfaceSide | null {

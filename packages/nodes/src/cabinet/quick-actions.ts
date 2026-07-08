@@ -14,6 +14,8 @@ import {
   CABINET_BASE_WIDTH,
   CABINET_EDGE_EPSILON,
   cabinetModulesForRun,
+  planCabinetModuleSideAddition,
+  previewCornerAdditionLayout,
   resolveCabinetType,
   switchCabinetToBase,
   switchCabinetToTall,
@@ -34,7 +36,7 @@ function resolveRunEndModule(
     (module) => module.moduleKind === 'standard' && resolveCabinetType(module, run) === 'base',
   )
   if (standardBaseModules.length === 0) return null
-  return side === 'left' ? standardBaseModules[0] ?? null : standardBaseModules.at(-1) ?? null
+  return side === 'left' ? (standardBaseModules[0] ?? null) : (standardBaseModules.at(-1) ?? null)
 }
 
 // Lazy component IconRefs — the menus mount these behind Suspense, so the
@@ -98,7 +100,7 @@ export function cabinetQuickActions({
     context.module && standardModule && selectedCabinetType === 'base'
       ? context.module
       : resolveRunEndModule(runModules, context.run, 'right')
-  const leftAvailable =
+  const leftHasInsertSlot =
     sideInsertX({
       anchorModule: context.module,
       modules: runModules,
@@ -106,7 +108,7 @@ export function cabinetQuickActions({
       width: CABINET_BASE_WIDTH,
       epsilon: CABINET_EDGE_EPSILON,
     }) != null
-  const rightAvailable =
+  const rightHasInsertSlot =
     sideInsertX({
       anchorModule: context.module,
       modules: runModules,
@@ -114,52 +116,90 @@ export function cabinetQuickActions({
       width: CABINET_BASE_WIDTH,
       epsilon: CABINET_EDGE_EPSILON,
     }) != null
+  const leftAvailable =
+    leftHasInsertSlot &&
+    planCabinetModuleSideAddition({
+      anchorModule: context.module,
+      nodes,
+      run: context.run,
+      side: 'left',
+    }) != null
+  const rightAvailable =
+    rightHasInsertSlot &&
+    planCabinetModuleSideAddition({
+      anchorModule: context.module,
+      nodes,
+      run: context.run,
+      side: 'right',
+    }) != null
   const canAddCornerLeft =
     leftCornerModule != null &&
     context.run.runTier === 'base' &&
-    moduleSideOpen(runModules, leftCornerModule.id, 'left', CABINET_EDGE_EPSILON)
+    moduleSideOpen(runModules, leftCornerModule.id, 'left', CABINET_EDGE_EPSILON) &&
+    previewCornerAdditionLayout({
+      module: leftCornerModule,
+      run: context.run,
+      nodes,
+      side: 'left',
+    }) != null
   const canAddCornerRight =
     rightCornerModule != null &&
     context.run.runTier === 'base' &&
-    moduleSideOpen(runModules, rightCornerModule.id, 'right', CABINET_EDGE_EPSILON)
+    moduleSideOpen(runModules, rightCornerModule.id, 'right', CABINET_EDGE_EPSILON) &&
+    previewCornerAdditionLayout({
+      module: rightCornerModule,
+      run: context.run,
+      nodes,
+      side: 'right',
+    }) != null
 
   const actions: NodeQuickAction[] = []
-
-  if (leftAvailable) {
+  const pushSideAction = (side: 'left' | 'right', disabled: boolean) => {
     actions.push({
-      id: 'cabinet:add-left',
-      label: 'Left',
-      title: 'Add cabinet to the left',
-      icon: 'add-left',
+      id: `cabinet:add-${side}`,
+      label: side === 'left' ? 'Left' : 'Right',
+      title: side === 'left' ? 'Add cabinet to the left' : 'Add cabinet to the right',
+      icon: side === 'left' ? 'add-left' : 'add-right',
+      disabled,
       run: ({ sceneApi }) => {
+        if (disabled) return undefined
         const id = addCabinetModuleSide({
           anchorModule: context.module,
           run: context.run,
           sceneApi,
-          side: 'left',
+          side,
+        })
+        return id ? { selectedIds: [id] } : undefined
+      },
+    })
+  }
+  const pushCornerAction = (
+    module: CabinetModuleNode | null,
+    endSide: 'left' | 'right',
+    disabled: boolean,
+  ) => {
+    actions.push({
+      id: `cabinet:add-corner-${endSide}`,
+      label: endSide === 'left' ? 'L Left' : 'L Right',
+      title: endSide === 'left' ? 'Turn an L corner to the left' : 'Turn an L corner to the right',
+      icon: endSide === 'left' ? cornerTurnLeftIcon : cornerTurnRightIcon,
+      disabled,
+      run: ({ sceneApi }) => {
+        if (disabled || !module) return undefined
+        const id = addCornerRun({
+          module,
+          run: context.run,
+          sceneApi,
+          side: endSide,
         })
         return id ? { selectedIds: [id] } : undefined
       },
     })
   }
 
-  if (canAddCornerLeft) {
-    actions.push({
-      id: 'cabinet:add-corner-left',
-      label: 'L Left',
-      title: 'Turn an L corner to the left',
-      icon: cornerTurnLeftIcon,
-      run: ({ sceneApi }) => {
-        const id = addCornerRun({
-          module: leftCornerModule!,
-          run: context.run,
-          sceneApi,
-          side: 'left',
-        })
-        return id ? { selectedIds: [id] } : undefined
-      },
-    })
-  }
+  pushSideAction('left', !leftAvailable)
+
+  pushCornerAction(leftCornerModule, 'left', !canAddCornerLeft)
 
   if (context.module) {
     if (standardModule && selectedCabinetType === 'base') {
@@ -213,41 +253,9 @@ export function cabinetQuickActions({
     }
   }
 
-  if (canAddCornerRight) {
-    actions.push({
-      id: 'cabinet:add-corner-right',
-      label: 'L Right',
-      title: 'Turn an L corner to the right',
-      icon: cornerTurnRightIcon,
-      run: ({ sceneApi }) => {
-        const id = addCornerRun({
-          module: rightCornerModule!,
-          run: context.run,
-          sceneApi,
-          side: 'right',
-        })
-        return id ? { selectedIds: [id] } : undefined
-      },
-    })
-  }
+  pushCornerAction(rightCornerModule, 'right', !canAddCornerRight)
 
-  if (rightAvailable) {
-    actions.push({
-      id: 'cabinet:add-right',
-      label: 'Right',
-      title: 'Add cabinet to the right',
-      icon: 'add-right',
-      run: ({ sceneApi }) => {
-        const id = addCabinetModuleSide({
-          anchorModule: context.module,
-          run: context.run,
-          sceneApi,
-          side: 'right',
-        })
-        return id ? { selectedIds: [id] } : undefined
-      },
-    })
-  }
+  pushSideAction('right', !rightAvailable)
 
   return actions
 }
