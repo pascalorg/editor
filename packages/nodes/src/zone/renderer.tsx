@@ -1,6 +1,6 @@
 'use client'
 
-import { useRegistry, type ZoneNode } from '@pascal-app/core'
+import { useLiveNodeOverrides, useRegistry, type ZoneNode } from '@pascal-app/core'
 import { useNodeEvents, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
