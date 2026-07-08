@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   createSceneApi,
-  type FloorplanAffordancePoint,
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -41,6 +40,7 @@ import {
   snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
+import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
   boundaryReshapeScope,
@@ -59,6 +59,7 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
+import { FloorplanGroupSelectionBox, startFloorplanGroupMove } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -625,13 +626,46 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     [],
   )
 
+  // Photoshop-style group drag: plain pointer-down on a transformable member
+  // of a multi-selection slides the whole selection rigidly; a plain click
+  // (no drag) still collapses the selection to the pressed node on release.
+  // Modified clicks (selection toggle) and Cmd-drag / direct-rotate keep
+  // their existing paths. `immediate` engages without the drag threshold —
+  // the move-handle dot's pick-up semantics.
+  const startGroupMoveDrag = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
+      if (event.button !== 0) return false
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+      if (movingNode) return false
+      if (useEditor.getState().mode === 'delete') return false
+      const started = startFloorplanGroupMove(id, event, {
+        immediate,
+        onClickFallthrough: immediate ? undefined : () => applyEntrySelection(id, false),
+      })
+      if (!started) return false
+      event.preventDefault()
+      event.stopPropagation()
+      suppressBoxSelectForPointer(event)
+      return true
+    },
+    [movingNode, applyEntrySelection],
+  )
+
+  // Move-handle dot variant — routes the dot through the group session when
+  // the owning node is part of a multi-selection.
+  const handleGroupMoveHandlePointerDown = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => startGroupMoveDrag(id, event, true),
+    [startGroupMoveDrag],
+  )
+
   const handleEntryPointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {
       if (startDirectMoveDrag(id, event)) return
       if (startDirectRotateDrag(id, event)) return
+      if (startGroupMoveDrag(id, event)) return
       handleSelect(id, event)
     },
-    [handleSelect, startDirectMoveDrag, startDirectRotateDrag],
+    [handleSelect, startDirectMoveDrag, startDirectRotateDrag, startGroupMoveDrag],
   )
 
   const floorplanData = useMemo(() => {
@@ -1074,6 +1108,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             nodes={nodes}
             onClickStop={handleClickStop}
             onEntryPointerDown={handleEntryPointerDown}
+            onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
@@ -1120,6 +1155,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             nodes={nodes}
             onClickStop={handleClickStop}
             onEntryPointerDown={handleEntryPointerDown}
+            onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
@@ -1136,6 +1172,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           />
         ))}
       </g>
+      {/* Dashed group bbox — shows what a group drag carries along while a
+          multi-selection exists; rides the live delta mid-drag. */}
+      <FloorplanGroupSelectionBox palette={palette} unitsPerPixel={unitsPerPixel} />
       {/* Transient live-rotation readout — drawn last so the wedge + degree
           chip sit above all handle chrome while a rotate-arrow is dragged. */}
       {rotationOverlay && palette ? (
@@ -1171,6 +1210,7 @@ type FloorplanRegistryEntryProps = {
   nodes: Record<string, AnyNode>
   onClickStop: (event: React.MouseEvent<SVGGElement>) => void
   onEntryPointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => void
+  onGroupMovePointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => boolean
   onHandleHoverChange: (id: string | null) => void
   onHandlePointerDown: (
     nodeId: AnyNodeId,
@@ -1213,6 +1253,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   nodes,
   onClickStop,
   onEntryPointerDown,
+  onGroupMovePointerDown,
   onHandleHoverChange,
   onHandlePointerDown,
   onHoveredIdChange,
@@ -1276,13 +1317,16 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       event.preventDefault()
       event.stopPropagation()
       suppressBoxSelectForPointer(event)
+      // In a multi-selection the move dot drives the group session, matching
+      // the body-drag gesture — the whole selection slides, not one member.
+      if (onGroupMovePointerDown(nodeId, event)) return
       sfxEmitter.emit('sfx:item-pick')
       setMovingNode(currentNode as never)
       // Claim 2D ownership of this move at the source. `setMovingNode`
       // resets the origin to null, so this must follow it.
       setMovingNodeOrigin('2d')
     },
-    [nodeId, setMovingNode, setMovingNodeOrigin],
+    [nodeId, onGroupMovePointerDown, setMovingNode, setMovingNodeOrigin],
   )
 
   const cacheEntry = buildFloorplanEntryGeometry({
@@ -2869,24 +2913,6 @@ function formatGroupTransform(t?: {
   if (t.translate) parts.push(`translate(${t.translate[0]} ${t.translate[1]})`)
   if (t.rotate !== undefined) parts.push(`rotate(${(t.rotate * 180) / Math.PI})`)
   return parts.length > 0 ? parts.join(' ') : undefined
-}
-
-function clientToPlan(clientX: number, clientY: number): FloorplanAffordancePoint | null {
-  // The registry layer lives under the floor-plan scene `<g>`. The
-  // legacy panel computes the same conversion via floorplanSceneRef +
-  // getScreenCTM; we replicate it by walking up to the SVG owner.
-  const target = document.querySelector('g[data-floorplan-scene]') as SVGGElement | null
-  const svg = target?.ownerSVGElement
-  if (!(svg && target)) return null
-  const ctm = target.getScreenCTM()
-  if (!ctm) return null
-  const point = svg.createSVGPoint()
-  point.x = clientX
-  point.y = clientY
-  const transformed = point.matrixTransform(ctm.inverse())
-  // The floor-plan `<g>` maps plan X/Z directly to SVG x/y (Z stored as
-  // the Y axis on screen — same convention as `toSvgPlanPoint`).
-  return [transformed.x, transformed.y]
 }
 
 function swallowNextClick(timeoutMs = 0) {
