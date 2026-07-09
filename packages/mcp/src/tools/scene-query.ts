@@ -30,6 +30,11 @@ export const listLevelsOutput = {
 export const getLevelSummaryOutput = {
   levelId: z.string(),
   levelName: z.string().optional(),
+  // levelSummary() has always returned this; it was missing from the schema,
+  // which made any client that fetched tools/list first (and therefore
+  // validates structuredContent, e.g. pascal-ai-mcp) reject every
+  // get_level_summary call with -32602 "must NOT have additional properties".
+  floorIndex: z.number(),
   role: z.string(),
   metadataRole: z.string().nullable(),
   isOccupiedStory: z.boolean(),

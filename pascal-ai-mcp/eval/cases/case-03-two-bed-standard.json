@@ -4,16 +4,37 @@
   "difficulty": "standard",
   "description": "标准两室一厅一卫一厨，验证基础布局质量",
   "turns": [
-    { "role": "user", "message": "两室一厅一卫一厨，总面积大约70平米，两间卧室都要有窗" },
-    { "action": "confirm" }
+    {
+      "role": "user",
+      "message": "两室一厅一卫一厨，总面积大约70平米，两间卧室都要有窗"
+    },
+    {
+      "action": "confirm"
+    }
   ],
   "expectedFacts": {
     "bedroom_count": 2,
-    "requiredRoomTypes": ["卧室", "客厅", "卫生间", "厨房"]
+    "requiredRoomTypes": [
+      "卧室",
+      "客厅",
+      "卫生间",
+      "厨房"
+    ]
   },
-  "expectedRoomCounts": { "卧室": 2, "客厅": 1, "卫生间": 1, "厨房": 1 },
-  "totalArea": { "target": 70, "tolerance": 0.12 },
-  "windowsRequiredFor": ["卧室"],
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "卫生间": 1,
+    "厨房": 1
+  },
+  "totalArea": {
+    "target": 70,
+    "tolerance": 0.12
+  },
+  "windowsRequiredFor": [
+    "卧室"
+  ],
   "requireAllRoomsReachable": true,
-  "notes": "两间卧室都需要有有效外窗（windowsRequiredFor 逐间检查每间卧室都有朝外的窗，而不仅是场景里存在窗）；也是 case-13/14 的依赖用例"
+  "notes": "两间卧室都需要有有效外窗（windowsRequiredFor 逐间检查每间卧室都有朝外的窗，而不仅是场景里存在窗）；也是 case-13/14 的依赖用例",
+  "maxModelCalls": 15
 }

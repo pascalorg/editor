@@ -4,17 +4,45 @@
   "difficulty": "standard",
   "description": "标准三室两厅两卫，主卧带独卫",
   "turns": [
-    { "role": "user", "message": "三室两厅两卫一厨，面积约110平米，主卧带独立卫生间" },
-    { "action": "confirm" }
+    {
+      "role": "user",
+      "message": "三室两厅两卫一厨，面积约110平米，主卧带独立卫生间"
+    },
+    {
+      "action": "confirm"
+    }
   ],
   "expectedFacts": {
     "bedroom_count": 3,
-    "requiredRoomTypes": ["卧室", "客厅", "卫生间", "厨房"]
+    "requiredRoomTypes": [
+      "卧室",
+      "客厅",
+      "卫生间",
+      "厨房"
+    ]
   },
-  "expectedRoomCounts": { "卧室": 3, "客厅": 1, "餐厅": 1, "卫生间": 2, "厨房": 1 },
-  "totalArea": { "target": 110, "tolerance": 0.12 },
-  "windowsRequiredFor": ["卧室"],
+  "expectedRoomCounts": {
+    "卧室": 3,
+    "客厅": 1,
+    "餐厅": 1,
+    "卫生间": 2,
+    "厨房": 1
+  },
+  "totalArea": {
+    "target": 110,
+    "tolerance": 0.12
+  },
+  "windowsRequiredFor": [
+    "卧室"
+  ],
   "requireAllRoomsReachable": true,
-  "requiredAdjacency": [{ "a": "卧室", "b": "卫生间", "relation": "ensuite" }],
-  "notes": "“两厅”= 客厅 + 餐厅（各 1），而不是 2 个客厅——餐厅有独立房型模式（餐厅/饭厅/dining）。主卧独卫 = 至少一间卫生间只与单个卧室有门相连（ensuite 断言）；若门结构无法可靠确认套卫（仅共享墙无可确认门），输出 unsupported 而非静默通过；也是 case-14 的依赖用例"
+  "requiredAdjacency": [
+    {
+      "a": "卧室",
+      "b": "卫生间",
+      "relation": "ensuite"
+    }
+  ],
+  "notes": "“两厅”= 客厅 + 餐厅（各 1），而不是 2 个客厅——餐厅有独立房型模式（餐厅/饭厅/dining）。主卧独卫 = 至少一间卫生间只与单个卧室有门相连（ensuite 断言）；若门结构无法可靠确认套卫（仅共享墙无可确认门），输出 unsupported 而非静默通过；也是 case-14 的依赖用例",
+  "maxModelCalls": 20
 }

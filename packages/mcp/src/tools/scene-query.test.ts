@@ -70,6 +70,32 @@ describe('scene query tools', () => {
     expect(parsed.zones[0].areaSqMeters).toBe(12)
   })
 
+  test('get_level_summary structuredContent passes client-side output-schema validation', async () => {
+    // The SDK client only validates structuredContent against the declared
+    // output schema once it has cached the tool list — which is exactly what
+    // real consumers (e.g. pascal-ai-mcp) do on startup. Without this call
+    // the other tests never exercise the validation path, which is how the
+    // undeclared `floorIndex` field (returned by levelSummary since forever)
+    // shipped: every real get_level_summary call failed with -32602
+    // "data must NOT have additional properties" while tests stayed green.
+    await client.listTools()
+
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    bridge.createNode(WallNode.parse({ start: [0, 0], end: [4, 0] }), level.id)
+
+    const result = await client.callTool({
+      name: 'get_level_summary',
+      arguments: { levelId: level.id },
+    })
+    expect(result.isError).toBeFalsy()
+    const structured = result.structuredContent as Record<string, unknown>
+    expect(structured).toBeDefined()
+    expect(structured.levelId).toBe(level.id)
+    expect(typeof structured.floorIndex).toBe('number')
+    expect(Array.isArray(structured.walls)).toBe(true)
+    expect((structured.walls as unknown[]).length).toBe(1)
+  })
+
   test('verify_scene reports practical issues without replacing validate_scene', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     bridge.createNode(WallNode.parse({ start: [0, 0], end: [4, 0] }), level.id)

@@ -80,9 +80,11 @@ function ViewerControls() {
 ```typescript
 import { resolveCdnUrl, ASSETS_CDN_URL } from '@pascal-app/viewer'
 
-// Resolves relative paths to CDN URLs
+// Resolves relative paths on the current origin by default
 const url = resolveCdnUrl('/items/chair/model.glb')
-// → 'https://pascal-cdn.wawasensei.dev/items/chair/model.glb'
+// → '/items/chair/model.glb'
+
+// Set NEXT_PUBLIC_ASSETS_CDN_URL to serve relative paths from a CDN instead.
 
 // Handles external URLs and asset:// protocol
 const externalUrl = resolveCdnUrl('https://example.com/model.glb')

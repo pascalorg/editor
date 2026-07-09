@@ -15,6 +15,11 @@ export type AppConfig = {
   aiReferer?: string
   aiTitle: string
   aiTemperature: number
+  // Plan-first temperature split (批次 D): intent generation wants a little
+  // variety across correction rounds; the experimental LLM-geometry path
+  // wants none at all. Scene-agent/repair calls keep aiTemperature.
+  aiTemperatureIntent: number
+  aiTemperatureGeometry: number
   aiRequestTimeoutMs: number
   azureDeployment?: string
   azureApiVersion: string
@@ -80,6 +85,8 @@ export function loadConfig(): AppConfig {
       process.env.OPENROUTER_TEMPERATURE || process.env.AI_TEMPERATURE,
       0.2,
     ),
+    aiTemperatureIntent: parseFloatWithDefault(process.env.AI_TEMPERATURE_INTENT, 0.3),
+    aiTemperatureGeometry: parseFloatWithDefault(process.env.AI_TEMPERATURE_GEOMETRY, 0),
     // Per-attempt timeout for a single model API call. Without this, a
     // hung upstream request blocks that session's lock forever (the
     // conversation never recovers until the process is restarted).
@@ -106,7 +113,9 @@ export function loadConfig(): AppConfig {
     pascalDataDir: emptyToUndefined(process.env.PASCAL_DATA_DIR),
     maxToolRounds: parseIntWithDefault(process.env.AI_MCP_MAX_TOOL_ROUNDS, 12),
     maxClarificationRounds: parseIntWithDefault(process.env.AI_MAX_CLARIFICATION_ROUNDS, 3),
-    maxRepairRounds: parseIntWithDefault(process.env.AI_MAX_REPAIR_ROUNDS, 3),
+    // 批次 D：structure/openings/furniture are deterministic now, so repair
+    // rounds only chase decorative issues — two rounds is the budget (§5).
+    maxRepairRounds: parseIntWithDefault(process.env.AI_MAX_REPAIR_ROUNDS, 2),
     // Absolute safety ceiling on model API calls in a single chat turn. All
     // internal loops are already individually bounded (tool rounds, phases,
     // repair/clarification rounds), so this only trips on pathological

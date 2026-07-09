@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 630.8 828.8000000000001" font-family="sans-serif">
+<rect width="630.8" height="828.8000000000001" fill="white"/>
+<text x="40" y="24" font-size="16" font-weight="bold">三居 110㎡（两卫）  （9.18m × 11.98m）</text>
+<polygon points="40,614.8 266.2,614.8 266.2,758.8000000000001 421,758.8000000000001 421,614.8 590.8,614.8 590.8,419.20000000000005 156.39999999999998,419.20000000000005 156.39999999999998,559 40,559" fill="#fde9c8" stroke="#444" stroke-width="2"/>
+<text x="315.4" y="585" font-size="12" text-anchor="middle">客厅 ⊞</text>
+<text x="315.4" y="601" font-size="10" text-anchor="middle" fill="#666">31.6㎡</text>
+<polygon points="40,758.8000000000001 266.2,758.8000000000001 266.2,614.8 40,614.8" fill="#fdf3dc" stroke="#444" stroke-width="2"/>
+<text x="153.1" y="682.8000000000001" font-size="12" text-anchor="middle">餐厅</text>
+<text x="153.1" y="698.8000000000001" font-size="10" text-anchor="middle" fill="#666">9.0㎡</text>
+<polygon points="421,758.8000000000001 590.8,758.8000000000001 590.8,614.8 421,614.8" fill="#f9d9a6" stroke="#444" stroke-width="2"/>
+<text x="505.9" y="682.8000000000001" font-size="12" text-anchor="middle">厨房</text>
+<text x="505.9" y="698.8000000000001" font-size="10" text-anchor="middle" fill="#666">6.8㎡</text>
+<polygon points="40,559 156.39999999999998,559 156.39999999999998,419.20000000000005 40,419.20000000000005" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="98.19999999999999" y="485.1" font-size="12" text-anchor="middle">客卫</text>
+<text x="98.19999999999999" y="501.1" font-size="10" text-anchor="middle" fill="#666">4.5㎡</text>
+<polygon points="40,350.20000000000005 302.2,350.20000000000005 302.2,40 156.39999999999998,40 156.39999999999998,179.8 40,179.8" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="171.1" y="191.10000000000005" font-size="12" text-anchor="middle">主卧 ⊞</text>
+<text x="171.1" y="207.10000000000005" font-size="10" text-anchor="middle" fill="#666">18.1㎡</text>
+<polygon points="40,179.8 156.39999999999998,179.8 156.39999999999998,40 40,40" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="98.19999999999999" y="105.89999999999995" font-size="12" text-anchor="middle">主卫</text>
+<text x="98.19999999999999" y="121.89999999999995" font-size="10" text-anchor="middle" fill="#666">4.5㎡</text>
+<polygon points="302.2,350.20000000000005 459.40000000000003,350.20000000000005 459.40000000000003,40 302.2,40" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="380.79999999999995" y="191.10000000000005" font-size="12" text-anchor="middle">次卧 ⊞</text>
+<text x="380.79999999999995" y="207.10000000000005" font-size="10" text-anchor="middle" fill="#666">13.5㎡</text>
+<polygon points="459.40000000000003,350.20000000000005 590.8,350.20000000000005 590.8,40 459.40000000000003,40" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="525.1" y="191.10000000000005" font-size="12" text-anchor="middle">儿童房 ⊞</text>
+<text x="525.1" y="207.10000000000005" font-size="10" text-anchor="middle" fill="#666">11.3㎡</text>
+<polygon points="40,419.20000000000005 590.8,419.20000000000005 590.8,350.20000000000005 40,350.20000000000005" fill="#eeeeee" stroke="#444" stroke-width="2"/>
+<text x="315.4" y="380.70000000000005" font-size="12" text-anchor="middle">走廊</text>
+<text x="315.4" y="396.70000000000005" font-size="10" text-anchor="middle" fill="#666">10.6㎡</text>
+<circle cx="373.59999999999997" cy="419.20000000000005" r="6" fill="#c0392b"/>
+<circle cx="171.1" cy="350.20000000000005" r="6" fill="#c0392b"/>
+<circle cx="380.79999999999995" cy="350.20000000000005" r="6" fill="#c0392b"/>
+<circle cx="525.1" cy="350.20000000000005" r="6" fill="#c0392b"/>
+<circle cx="153.1" cy="614.8" r="6" fill="#c0392b"/>
+<circle cx="505.9" cy="614.8" r="6" fill="#c0392b"/>
+<circle cx="98.19999999999999" cy="419.20000000000005" r="6" fill="#c0392b"/>
+<circle cx="156.39999999999998" cy="109.89999999999995" r="6" fill="#c0392b"/>
+<text x="315.4" y="774.8000000000001" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
+<text x="40" y="820.8000000000001" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+</svg>

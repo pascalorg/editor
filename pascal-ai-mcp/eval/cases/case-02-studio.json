@@ -4,15 +4,34 @@
   "difficulty": "easy",
   "description": "标准一居室公寓",
   "turns": [
-    { "role": "user", "message": "设计一个约35平米的一居室公寓，要有卧室、卫生间、开放式厨房和客厅" },
-    { "action": "confirm" }
+    {
+      "role": "user",
+      "message": "设计一个约35平米的一居室公寓，要有卧室、卫生间、开放式厨房和客厅"
+    },
+    {
+      "action": "confirm"
+    }
   ],
   "expectedFacts": {
     "bedroom_count": 1,
-    "requiredRoomTypes": ["卧室", "卫生间", "厨房", "客厅"]
+    "requiredRoomTypes": [
+      "卧室",
+      "卫生间",
+      "厨房",
+      "客厅"
+    ]
   },
-  "expectedRoomCounts": { "卧室": 1, "卫生间": 1, "厨房": 1, "客厅": 1 },
-  "totalArea": { "target": 35, "tolerance": 0.15 },
+  "expectedRoomCounts": {
+    "卧室": 1,
+    "卫生间": 1,
+    "厨房": 1,
+    "客厅": 1
+  },
+  "totalArea": {
+    "target": 35,
+    "tolerance": 0.15
+  },
   "requireAllRoomsReachable": true,
-  "notes": "开放式厨房口径下，厨房和客厅之间可能没有隔墙/门；reachability 断言把无墙的共享边界当作开口，开放式厨房不应被误判为不可达。面积容差放宽到 ±15%（小户型比例波动大）"
+  "notes": "开放式厨房口径下，厨房和客厅之间可能没有隔墙/门；reachability 断言把无墙的共享边界当作开口，开放式厨房不应被误判为不可达。面积容差放宽到 ±15%（小户型比例波动大）",
+  "maxModelCalls": 15
 }

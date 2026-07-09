@@ -2,10 +2,13 @@ import type { ChatCompletionResponse, ChatMessage, OpenAiTool } from './types'
 
 // Optional per-call hooks: `signal` lets a caller abort an in-flight request
 // (e.g. on user cancel); `onAttempt` is invoked once per real HTTP attempt so
-// the caller can meter actual API usage including internal retries.
+// the caller can meter actual API usage including internal retries;
+// `temperature` overrides the client default for this one call (plan-first
+// temperature split, 批次 D).
 export type RequestHooks = {
   signal?: AbortSignal
   onAttempt?: () => void
+  temperature?: number
 }
 
 export type ModelClientOptions = {
@@ -60,7 +63,7 @@ export class OpenAiCompatibleClient {
     const body = JSON.stringify({
       ...(this.options.provider === 'azure-openai' ? {} : { model: this.options.model }),
       messages,
-      temperature: this.options.temperature,
+      temperature: hooks.temperature ?? this.options.temperature,
       ...(this.options.provider === 'azure-openai' ? {} : { session_id: sessionId }),
       ...extras,
     })

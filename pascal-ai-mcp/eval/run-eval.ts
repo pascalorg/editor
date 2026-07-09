@@ -25,7 +25,7 @@ import { join } from 'node:path'
 import { PascalAiAgent, toolPayload } from '../src/agent'
 import { loadConfig } from '../src/config'
 import { PascalMcpClient } from '../src/mcp'
-import type { ChatInput, ChatResult, SceneResult, WorkflowPhase } from '../src/types'
+import type { ChatInput, ChatResult, PhaseToolTrace, SceneResult, WorkflowPhase } from '../src/types'
 import {
   canConfirmFromPhase,
   checkBedroomCount,
@@ -45,6 +45,7 @@ import {
 import { scaffoldReviews } from './review'
 import {
   assertModification,
+  assertPlanFirstResult,
   rollupAssertions,
   runSceneAssertions,
   type AssertionConfig,
@@ -79,6 +80,11 @@ type CaseRunResult = {
   // Model API attempts this session made (from session.modelCallsTotal),
   // so a run that burned its retries is visible in the report.
   modelAttempts?: number
+  // Per-phase model/tool call trace from the agent (structure, openings,
+  // repair rounds). Makes non-convergence diagnosable: model calls per phase,
+  // exact tool sequence, per-tool counts, and — via ok create_room entries —
+  // how far the structure phase got before hitting the round limit.
+  toolTrace?: PhaseToolTrace[]
   // Furniture placement outcome breakdown (overlap / out-of-bounds / other).
   furniture?: FurnitureIssueBreakdown
   // Config-driven, data-based assertion results (room counts, area, windows,
@@ -345,6 +351,18 @@ async function runCase(
     for (let i = 0; i < testCase.turns.length; i++) {
       const turn = testCase.turns[i]!
       const currentPhase = lastResult?.session.phase as WorkflowPhase | undefined
+      // Existing-scene modifications may complete immediately on the user
+      // message, without entering a confirmation phase. In that case the
+      // following scripted confirm is redundant; keep the completed result
+      // and continue to scene/assertion collection instead of misclassifying
+      // a successful modification as an invalid confirmation flow.
+      if (
+        'action' in turn &&
+        turn.action === 'confirm' &&
+        (currentPhase === 'completed' || currentPhase === 'completed_with_issues')
+      ) {
+        break
+      }
       if ('action' in turn && turn.action === 'confirm' && !canConfirmFromPhase(currentPhase)) {
         const elapsedMs = Date.now() - started
         const failure = classifyFailure(currentPhase, lastResult?.reply)
@@ -365,6 +383,7 @@ async function runCase(
           failureCode: failure?.code,
           failureMessage: failure?.message ?? lastResult?.reply,
           modelAttempts: lastResult?.session.modelCallsTotal,
+          toolTrace: lastResult?.session.toolTrace,
           elapsedMs,
           finalPhase: currentPhase,
           checks: {},
@@ -478,6 +497,21 @@ async function runCase(
       assertionsPassed = false
     }
 
+    // 批次 D plan-first assertions (意见⑦: they judge fail like every other
+    // one): hard gates, model-call budget, furniture placement rate. Judged
+    // from the agent's SceneResult — no scene reload needed. Modification
+    // cases skip the furniture-rate assertion: the deterministic furniture
+    // executor only runs on fresh builds, so modify sessions legitimately
+    // have no placement tally.
+    if (workflow.ok && sceneResult) {
+      const planFirstResults = assertPlanFirstResult(sceneResult, {
+        ...(testCase.maxModelCalls !== undefined ? { maxModelCalls: testCase.maxModelCalls } : {}),
+      }).filter(result => !(testCase.basedOn && result.name === 'furniturePlacementRate'))
+      assertions = [...(assertions ?? []), ...planFirstResults]
+      assertionRollup = rollupAssertions(assertions)
+      if (!assertionRollup.allPassed) assertionsPassed = false
+    }
+
     const errorParts: string[] = []
     if (workflow.error) errorParts.push(workflow.error)
     if (zoneInspectionError && needsZoneChecks) errorParts.push(zoneInspectionError)
@@ -510,7 +544,8 @@ async function runCase(
       failureCode: failure?.code,
       failureMessage: failure?.message,
       modelAttempts: session.modelCallsTotal,
-      furniture: classifyFurnitureIssues(sceneResult?.furnitureIssues ?? []),
+      toolTrace: session.toolTrace,
+      furniture: classifyFurnitureIssues(sceneResult?.furnitureIssues ?? [], sceneResult?.furniturePlacement ?? []),
       assertions,
       assertionRollup,
       elapsedMs,
@@ -552,6 +587,9 @@ function logResult(result: CaseRunResult): void {
         `requirementMismatches=${result.sceneResult.requirementMismatches.length}`,
         `isolatedBedrooms=${result.sceneResult.isolatedBedrooms.length}`,
         `collisions=${result.sceneResult.collisions.length}`,
+        `gates=${result.sceneResult.gateFailures ? (result.sceneResult.gateFailures.length === 0 ? 'pass' : `${result.sceneResult.gateFailures.length}fail`) : 'n/a'}`,
+        `quality=${result.sceneResult.layoutQuality ?? 'n/a'}`,
+        `modelCalls=${result.sceneResult.modelCallsUsed ?? result.modelAttempts ?? 'n/a'}`,
       ].join(' ')
     : (result.error ?? '')
   const checkFlags = [
@@ -589,14 +627,18 @@ function buildSummary(results: CaseRunResult[]) {
     failureCodeCounts[r.failureCode] = (failureCodeCounts[r.failureCode] ?? 0) + 1
   }
   const furniturePlacementFailures = sum(r => r.furniture?.total ?? 0)
+  const furnitureUnplacedCount = sum(r => r.furniture?.unplacedCount ?? 0)
   const furnitureOverlapCount = sum(r => r.furniture?.overlapCount ?? 0)
   const furnitureOutOfBoundsCount = sum(r => r.furniture?.outOfBoundsCount ?? 0)
+  const furnitureDoorClearanceCount = sum(r => r.furniture?.doorClearanceCount ?? 0)
 
   return {
     failureCodeCounts,
     furniturePlacementFailures,
+    furnitureUnplacedCount,
     furnitureOverlapCount,
     furnitureOutOfBoundsCount,
+    furnitureDoorClearanceCount,
     furnitureIssueRate: nonEmptyRate(s => s.furnitureIssues),
     total,
     successCount,
@@ -637,7 +679,7 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
     `- 动线孤立卧室率（isolatedBedrooms 非空）：${(summary.isolatedBedroomRate * 100).toFixed(1)}%`,
     `- 碰撞率（collisions 非空）：${(summary.collisionRate * 100).toFixed(1)}%`,
     `- 家具问题率（furnitureIssues 非空）：${(summary.furnitureIssueRate * 100).toFixed(1)}%`,
-    `- 家具未正确放置总数：${summary.furniturePlacementFailures}（其中重叠 ${summary.furnitureOverlapCount}，越界 ${summary.furnitureOutOfBoundsCount}）`,
+    `- 家具问题总数：${summary.furniturePlacementFailures}（未放入场景 ${summary.furnitureUnplacedCount}，实际重叠 ${summary.furnitureOverlapCount}，实际越界 ${summary.furnitureOutOfBoundsCount}，挡门 ${summary.furnitureDoorClearanceCount}）`,
     '',
   ]
   const failureEntries = Object.entries(summary.failureCodeCounts)
@@ -671,11 +713,12 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
     if (result.sceneResult) {
       lines.push(
         `- 诊断：doorlessRooms=${result.sceneResult.doorlessRooms.length}, strayWindows=${result.sceneResult.strayWindows.length}, requirementMismatches=${result.sceneResult.requirementMismatches.length}, isolatedBedrooms=${result.sceneResult.isolatedBedrooms.length}, collisions=${result.sceneResult.collisions.length}`,
+        `- 门槛/质量：gates=${result.sceneResult.gateFailures ? (result.sceneResult.gateFailures.length === 0 ? '全过' : result.sceneResult.gateFailures.join('；')) : '无数据'}，layoutQuality=${result.sceneResult.layoutQuality ?? '无数据'}，模型调用=${result.sceneResult.modelCallsUsed ?? '无数据'}${result.sceneResult.furniture ? `，家具放置 ${result.sceneResult.furniture.placed}/${result.sceneResult.furniture.required}` : ''}`,
       )
     }
     if (result.furniture && result.furniture.total > 0) {
       lines.push(
-        `- 家具问题：共 ${result.furniture.total}（重叠 ${result.furniture.overlapCount}，越界 ${result.furniture.outOfBoundsCount}，其他 ${result.furniture.otherCount}）`,
+        `- 家具问题：共 ${result.furniture.total}（未放入 ${result.furniture.unplacedCount}，实际重叠 ${result.furniture.overlapCount}，实际越界 ${result.furniture.outOfBoundsCount}，挡门 ${result.furniture.doorClearanceCount}，其他 ${result.furniture.otherCount}）`,
       )
     }
     if (result.assertionRollup) {

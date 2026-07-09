@@ -112,6 +112,22 @@ describe('classifyFailure', () => {
     expect(classifyFailure('completed_with_issues', 'x')).toBeUndefined()
   })
 
+  test('structure-phase non-convergence gets its own code instead of unknown (case-04 regression)', () => {
+    const result = classifyFailure(
+      'failed',
+      '户型生成失败：结构建造阶段在 2 轮尝试后仍未收敛完成。已确认的结构化需求仍然保留，可以稍后重试。',
+    )
+    expect(result).toMatchObject({ stage: 'generation', code: 'structure_not_converged' })
+  })
+
+  test('plan-first rejection (zero scenes created) gets its own code', () => {
+    const result = classifyFailure(
+      'failed',
+      '户型规划未通过校验（已尝试 3 轮）：\n- 分区器无法排布该意图：面积不足\n已确认的需求仍然保留，可以补充或调整需求后重试。',
+    )
+    expect(result).toMatchObject({ stage: 'generation', code: 'plan_rejected' })
+  })
+
   test('rate-limited requirement extraction is model_rate_limit, not clarification', () => {
     const result = classifyFailure('failed', '需求解析失败：Model API failed after 5 attempt(s): 429 Too Many Requests。你可以重试')
     expect(result).toMatchObject({ stage: 'requirement_extraction', code: 'model_rate_limit' })
@@ -139,18 +155,39 @@ describe('classifyFailure', () => {
 })
 
 describe('classifyFurnitureIssues', () => {
-  test('buckets overlap and out-of-bounds separately', () => {
-    const result = classifyFurnitureIssues([
-      'coffee-table: overlaps another item',
-      'bathroom-sink: outside room bounds',
-      'fridge: overlaps another item',
-      '目录中找不到 "x"，已用占位方块代替',
-    ])
-    expect(result).toEqual({ total: 4, overlapCount: 2, outOfBoundsCount: 1, otherCount: 1 })
+  test('furnish-time skips are unplaced (not "overlaps"), current-state kinds bucket separately', () => {
+    const result = classifyFurnitureIssues(
+      [
+        'coffee-table: overlaps another item', // legacy skip string = never placed
+        '未能放置 fridge（预定位置与已有家具冲突）',
+        'bathroom-sink: outside room bounds', // legacy skip string = never placed
+        '目录中找不到 "x"，已用占位方块代替',
+      ],
+      [
+        { kind: 'overlap' },
+        { kind: 'door_clearance' },
+        { kind: 'out_of_bounds' },
+      ],
+    )
+    expect(result).toEqual({
+      total: 7,
+      unplacedCount: 3,
+      overlapCount: 1,
+      outOfBoundsCount: 1,
+      doorClearanceCount: 1,
+      otherCount: 1,
+    })
   })
 
-  test('empty list is all zeros', () => {
-    expect(classifyFurnitureIssues([])).toEqual({ total: 0, overlapCount: 0, outOfBoundsCount: 0, otherCount: 0 })
+  test('empty inputs are all zeros', () => {
+    expect(classifyFurnitureIssues([])).toEqual({
+      total: 0,
+      unplacedCount: 0,
+      overlapCount: 0,
+      outOfBoundsCount: 0,
+      doorClearanceCount: 0,
+      otherCount: 0,
+    })
   })
 })
 

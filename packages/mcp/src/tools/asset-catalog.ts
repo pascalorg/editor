@@ -1,7 +1,7 @@
 import type { AssetInput } from '@pascal-app/core/schema'
 
 /**
- * Built-in catalog for standalone/headless MCP use (130 items).
+ * Built-in catalog for standalone/headless MCP use (133 items).
  *
  * The editor has a larger UI catalog (`packages/editor/.../catalog-items.tsx`),
  * but depending on `@pascal-app/editor` from the MCP package would pull
@@ -210,18 +210,6 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     surface: { height: 1.0287 },
-  },
-  {
-    id: 'stove',
-    category: 'kitchen',
-    tags: ['floor', 'large', 'kitchen'],
-    name: 'Stove',
-    thumbnail: '/items/stove/thumbnail.webp',
-    src: '/items/stove/model.glb',
-    dimensions: [1, 1, 1],
-    offset: [0, 0, -0.05],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1],
   },
   {
     id: 'fridge',
@@ -561,6 +549,58 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     surface: { height: 0.775 },
+  },
+  {
+    id: 'bathroom-vanity-compact',
+    category: 'bathroom',
+    tags: ['floor', 'bathroom', 'vanity', 'sink', 'storage', 'compact'],
+    name: 'Compact Bathroom Vanity',
+    thumbnail: '/items/bathroom-vanity-compact/thumbnail.webp',
+    src: '/items/bathroom-vanity-compact/model.glb',
+    dimensions: [0.45, 0.9163, 0.42],
+    offset: [0, 0, -0.01],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    surface: { height: 0.9163 },
+  },
+  {
+    id: 'kitchen-wall-cabinet',
+    category: 'kitchen',
+    tags: ['floor', 'kitchen', 'cabinet', 'storage', 'against-wall'],
+    name: 'Kitchen Wall Cabinet',
+    thumbnail: '/items/kitchen-wall-cabinet/thumbnail.webp',
+    src: '/items/kitchen-wall-cabinet/model.glb',
+    dimensions: [1.3453, 0.76, 0.373],
+    offset: [-0.0032, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    surface: { height: 0.76 },
+  },
+  {
+    id: 'shoe-cabinet',
+    category: 'furniture',
+    tags: ['floor', 'entry', 'storage', 'shoe', 'cabinet', 'compact'],
+    name: 'Shoe Cabinet',
+    thumbnail: '/items/shoe-cabinet/thumbnail.webp',
+    src: '/items/shoe-cabinet/model.glb',
+    dimensions: [0.6, 1.1, 0.2319],
+    offset: [0, 0, -0.016],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    surface: { height: 1.1 },
+  },
+  {
+    id: 'kitchen-sink-counter',
+    category: 'kitchen',
+    tags: ['floor', 'kitchen', 'sink', 'counter', 'cabinet', 'storage'],
+    name: 'Kitchen Sink Counter',
+    thumbnail: '/items/kitchen-sink-counter/thumbnail.webp',
+    src: '/items/kitchen-sink-counter/model.glb',
+    dimensions: [1.55, 1.0955, 0.6],
+    offset: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    surface: { height: 1.0955 },
   },
 
   // --- Synced from packages/editor's larger catalog (packages/editor/src/components/ui/item-catalog/catalog-items.tsx) ---

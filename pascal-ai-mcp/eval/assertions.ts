@@ -172,24 +172,27 @@ export function buildZoneAdjacency(zones: ZoneInfo[], walls: WallInfo[]): Adjace
     for (let j = i + 1; j < zones.length; j++) {
       const a = zones[i]!
       const b = zones[j]!
-      // Find a shared boundary segment between the two zones.
-      let shared: Seg | null = null
+      // Two zones can share SEVERAL disjoint boundary segments — e.g. a
+      // kitchen carved out of an L-shaped living hub touches it on two
+      // sides — and the door may sit on any of them. Checking only the
+      // first shared segment found used to mark such rooms unreachable
+      // (case-03 regression: 厨房 had a door on its second shared edge).
+      // Connected if ANY shared segment has a door, or ANY is open (no
+      // covering wall).
+      let connected = false
       for (const ea of zoneEdges(a)) {
+        if (connected) break
         for (const eb of zoneEdges(b)) {
-          if (segmentsCoverSameLine(ea, eb)) {
-            shared = ea
+          if (!segmentsCoverSameLine(ea, eb)) continue
+          const coveringWalls = walls.filter(w => segmentsCoverSameLine(w, ea))
+          const hasDoor = coveringWalls.some(w => w.openings.some(o => o.type === 'door'))
+          if (hasDoor || coveringWalls.length === 0) {
+            connected = true
             break
           }
         }
-        if (shared) break
       }
-      if (!shared) continue
-      // Walls covering that shared boundary.
-      const coveringWalls = walls.filter(w => segmentsCoverSameLine(w, shared!))
-      const hasDoor = coveringWalls.some(w => w.openings.some(o => o.type === 'door'))
-      const hasWall = coveringWalls.length > 0
-      // Connected if a door links them, or the shared boundary is open (no wall).
-      if (hasDoor || !hasWall) {
+      if (connected) {
         adjacency.get(a.id)!.add(b.id)
         adjacency.get(b.id)!.add(a.id)
       }
@@ -470,6 +473,64 @@ export function diffSnapshots(before: SceneSnapshot, after: SceneSnapshot): Scen
   return { added, deleted, modified, addedByType, deletedByType }
 }
 
+// ---------------------------------------------------------------------------
+// Node-level change classification for the modification checks.
+//
+// The raw JSON diff above counts ANY property change as "modified" — but a
+// wall's `children` array changes whenever a door/window is hosted on it, and
+// hosting a new door on an existing wall does not damage the wall itself. A
+// case like "只加一扇必要的房门" would false-positive on maxModifiedOriginalWalls.
+// So the GATING wall check compares geometry fields only (start/end/thickness/
+// height); children/metadata-only changes are reported informationally. To
+// keep that from hiding real damage, original door/window nodes get their own
+// geometry/host check (`openingChanged`) and deletions stay gated separately.
+// ---------------------------------------------------------------------------
+
+// Positions come back from the same serialized graph, so genuine edits differ
+// by far more than float noise; 1mm keeps us safe against re-serialization.
+const GEOM_FIELD_EPS = 0.001
+
+function numbersDiffer(a: unknown, b: unknown): boolean {
+  if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) > GEOM_FIELD_EPS
+  return a !== b
+}
+
+function pairDiffers(a: unknown, b: unknown): boolean {
+  const isPair = (v: unknown): v is [number, number] =>
+    Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number')
+  if (isPair(a) && isPair(b)) return numbersDiffer(a[0], b[0]) || numbersDiffer(a[1], b[1])
+  return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+/** True when a wall's structural geometry (not children/metadata) changed. */
+export function wallGeometryChanged(before: Record<string, unknown>, after: Record<string, unknown>): boolean {
+  return (
+    pairDiffers(before.start, after.start) ||
+    pairDiffers(before.end, after.end) ||
+    numbersDiffer(before.thickness, after.thickness) ||
+    numbersDiffer(before.height, after.height)
+  )
+}
+
+/** True when a door/window moved, was resized, or was re-hosted on another wall. */
+export function openingChanged(before: Record<string, unknown>, after: Record<string, unknown>): boolean {
+  const positionDiffers = (() => {
+    const isTriple = (v: unknown): v is number[] =>
+      Array.isArray(v) && v.length === 3 && v.every(n => typeof n === 'number')
+    if (isTriple(before.position) && isTriple(after.position)) {
+      return before.position.some((value, index) => numbersDiffer(value, (after.position as number[])[index]))
+    }
+    return JSON.stringify(before.position) !== JSON.stringify(after.position)
+  })()
+  return (
+    positionDiffers ||
+    numbersDiffer(before.width, after.width) ||
+    numbersDiffer(before.height, after.height) ||
+    before.parentId !== after.parentId ||
+    before.wallId !== after.wallId
+  )
+}
+
 export type ModificationChecks = {
   addedRoomType?: string
   adjacentTo?: string
@@ -618,14 +679,22 @@ export function assertModification(
     })
   }
   if (config.maxModifiedOriginalWalls !== undefined) {
-    const modifiedWalls = diff.modified.filter(id => nodeType(before[id]) === 'wall')
-    const ok = modifiedWalls.length <= config.maxModifiedOriginalWalls
+    // Geometry-field comparison only: a wall that merely gained a door in its
+    // `children` array is NOT a modified wall (see wallGeometryChanged doc).
+    const touchedWalls = diff.modified.filter(id => nodeType(before[id]) === 'wall')
+    const geometryModified = touchedWalls.filter(id =>
+      wallGeometryChanged(before[id] as Record<string, unknown>, after[id] as Record<string, unknown>),
+    )
+    const childrenOnly = touchedWalls.filter(id => !geometryModified.includes(id))
+    const ok = geometryModified.length <= config.maxModifiedOriginalWalls
     results.push({
       name: 'modification:modifiedOriginalWalls',
       status: ok ? 'pass' : 'fail',
-      expected: `修改原墙 ≤ ${config.maxModifiedOriginalWalls}`,
-      actual: modifiedWalls.length,
-      reason: ok ? undefined : `修改了 ${modifiedWalls.length} 面原墙，超过阈值 ${config.maxModifiedOriginalWalls}：${modifiedWalls.join(', ')}`,
+      expected: `修改原墙几何（start/end/thickness/height）≤ ${config.maxModifiedOriginalWalls}`,
+      actual: `几何修改 ${geometryModified.length}；仅 children/metadata 变化 ${childrenOnly.length}（不计入）`,
+      reason: ok
+        ? undefined
+        : `修改了 ${geometryModified.length} 面原墙的几何，超过阈值 ${config.maxModifiedOriginalWalls}：${geometryModified.join(', ')}`,
     })
   }
   if (config.preserveOriginalOpenings) {
@@ -640,6 +709,23 @@ export function assertModification(
       expected: '原有门窗未被删除',
       actual: `删除了 ${deletedOpenings.length} 个原门窗`,
       reason: ok ? undefined : `原门窗被删除：${deletedOpenings.join(', ')}`,
+    })
+    // Complement to the geometry-only wall check above: ignoring wall
+    // children changes must not hide a door/window that was itself moved,
+    // resized, or re-hosted — surviving original openings get their own
+    // geometry/host comparison.
+    const changedOpenings = diff.modified.filter(id => {
+      const t = nodeType(before[id])
+      if (t !== 'door' && t !== 'window') return false
+      return openingChanged(before[id] as Record<string, unknown>, after[id] as Record<string, unknown>)
+    })
+    const openingsOk = changedOpenings.length === 0
+    results.push({
+      name: 'modification:modifiedOriginalOpenings',
+      status: openingsOk ? 'pass' : 'fail',
+      expected: '原有门窗的位置/尺寸/所在墙未被修改',
+      actual: `${changedOpenings.length} 个原门窗发生几何或宿主变化`,
+      reason: openingsOk ? undefined : `原门窗被修改：${changedOpenings.join(', ')}`,
     })
   }
 
@@ -785,4 +871,68 @@ export function rollupAssertions(results: AssertionResult[]): AssertionRollup {
     unsupported,
     allPassed: gating.length > 0 && failed === 0 && unsupported === 0,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Plan-first result assertions (批次 D, 意见⑦: new assertions judge fail like
+// every other one). These read the agent's own SceneResult instead of the
+// scene graph: hard gates all passed, model-call budget respected, required
+// furniture placement rate. `unsupported` (field absent — a pre-批次D
+// session) still blocks allPassed, so an old build can't quietly skip them.
+// ---------------------------------------------------------------------------
+
+export type PlanFirstSceneResult = {
+  gateFailures?: string[]
+  modelCallsUsed?: number
+  furniture?: { placed: number; required: number }
+}
+
+export const FURNITURE_PLACEMENT_RATE_MIN = 0.9
+
+export function assertPlanFirstResult(
+  sceneResult: PlanFirstSceneResult | undefined,
+  options: { maxModelCalls?: number } = {},
+): AssertionResult[] {
+  const results: AssertionResult[] = []
+
+  if (!sceneResult?.gateFailures) {
+    results.push({ name: 'gatesPassed', status: 'unsupported', reason: 'sceneResult.gateFailures 缺失（旧版本会话？）' })
+  } else {
+    results.push({
+      name: 'gatesPassed',
+      status: sceneResult.gateFailures.length === 0 ? 'pass' : 'fail',
+      expected: '全部完成门槛通过',
+      actual: sceneResult.gateFailures.length === 0 ? '通过' : `${sceneResult.gateFailures.length} 项未过`,
+      reason: sceneResult.gateFailures.length > 0 ? sceneResult.gateFailures.join('；') : undefined,
+    })
+  }
+
+  if (options.maxModelCalls !== undefined) {
+    if (typeof sceneResult?.modelCallsUsed !== 'number') {
+      results.push({ name: 'modelCallBudget', status: 'unsupported', reason: 'sceneResult.modelCallsUsed 缺失' })
+    } else {
+      results.push({
+        name: 'modelCallBudget',
+        status: sceneResult.modelCallsUsed <= options.maxModelCalls ? 'pass' : 'fail',
+        expected: `≤${options.maxModelCalls} 次模型调用`,
+        actual: sceneResult.modelCallsUsed,
+      })
+    }
+  }
+
+  if (!sceneResult?.furniture) {
+    results.push({ name: 'furniturePlacementRate', status: 'unsupported', reason: 'sceneResult.furniture 缺失' })
+  } else if (sceneResult.furniture.required === 0) {
+    results.push({ name: 'furniturePlacementRate', status: 'pass', expected: '无必备家具要求', actual: '0/0' })
+  } else {
+    const rate = sceneResult.furniture.placed / sceneResult.furniture.required
+    results.push({
+      name: 'furniturePlacementRate',
+      status: rate >= FURNITURE_PLACEMENT_RATE_MIN ? 'pass' : 'fail',
+      expected: `≥${Math.round(FURNITURE_PLACEMENT_RATE_MIN * 100)}%`,
+      actual: `${sceneResult.furniture.placed}/${sceneResult.furniture.required}（${Math.round(rate * 100)}%）`,
+    })
+  }
+
+  return results
 }

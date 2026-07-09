@@ -1,8 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildOpeningRepairData,
+  buildPlanTargets,
+  formatPlanSnapshot,
+  checkAreaRequirements,
+  checkFurniturePlacement,
+  checkModificationProtection,
+  computeZoneAreaStats,
   evaluateBrief,
+  extractAreaRangeConstraint,
   findIsolatedBedrooms,
+  requestsStructurePreservation,
   formatSummary,
   mergeBrief,
   modifyFailureRecovery,
@@ -10,8 +18,11 @@ import {
   publicEditorUrl,
   shouldModifyExistingScene,
   shouldRouteAsExistingSceneRequest,
+  structuralDrift,
+  windowRoomTypesFromBrief,
   isSceneQuestion,
   classifySceneIntentFallback,
+  type ItemSummary,
   type WallWithOpenings,
   type ZoneSummary,
 } from './agent'
@@ -179,6 +190,24 @@ describe('circulation: findIsolatedBedrooms', () => {
     expect(findIsolatedBedrooms(zones, walls)).toEqual([])
   })
 
+  test('single-room dwelling: the bedroom with the entry door on an exterior wall is not isolated', () => {
+    // Plan-first single-room builds (case-01) produce exactly this shape:
+    // one bedroom zone, one door, and that door opens straight outside.
+    const zones = [zone('bed', '单人卧室', [[0, 0], [4, 0], [4, 3], [0, 3]])]
+    const walls = [doorWall('w1', [0, 0], [4, 0])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
+
+  test('an interior door that reaches no public room still flags the bedroom', () => {
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('kit', '厨房', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    // Door on the interior shared wall only — not on the building boundary.
+    const walls = [doorWall('w1', [4, 0.5], [4, 2.5])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual(['卧室'])
+  })
+
   test('bedroom whose only door leads to the kitchen is flagged', () => {
     const zones = [
       zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
@@ -201,6 +230,27 @@ describe('circulation: findIsolatedBedrooms', () => {
     expect(findIsolatedBedrooms(zones, walls)).toEqual(['卧室A'])
   })
 
+  test('a combined living/open-kitchen zone counts as circulation, not a blocked kitchen', () => {
+    // Regression for case-02: the studio's public zone was named
+    // "客厅/开放式厨房" and the 厨房 substring made the classifier treat it as
+    // blocked-service, flagging the bedroom as isolated forever.
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('livkit', '客厅/开放式厨房', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
+
+  test('a pure kitchen zone still blocks circulation', () => {
+    const zones = [
+      zone('bed', '卧室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('kit', 'Kitchen', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    const walls = [doorWall('w1', [4, 0], [4, 3])]
+    expect(findIsolatedBedrooms(zones, walls)).toEqual(['卧室'])
+  })
+
   test('bedroom reaching a walk-in closet counts as satisfied under the current rule (documented limitation)', () => {
     // classifyCirculationRoomKind only special-cases bedroom/kitchen/
     // bathroom; anything else (walk-in closets, dining, storage, ...) is
@@ -214,6 +264,200 @@ describe('circulation: findIsolatedBedrooms', () => {
     ]
     const walls = [doorWall('w1', [4, 0], [4, 3])]
     expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
+})
+
+describe('deterministic area acceptance', () => {
+  const areaBrief = (target: number) =>
+    brief({ existingCondition: [fact('floor_area_sqm', '面积', target)] })
+
+  test('non-overlapping rooms: union equals sum, no overlap pairs', () => {
+    const zones = [
+      zone('a', '客厅', [[0, 0], [5, 0], [5, 4], [0, 4]]),
+      zone('b', '卧室', [[5, 0], [10, 0], [10, 4], [5, 4]]),
+    ]
+    const stats = computeZoneAreaStats(zones)
+    expect(stats.sumArea).toBeCloseTo(40)
+    expect(stats.unionArea).toBeCloseTo(40)
+    expect(stats.overlapArea).toBeCloseTo(0)
+    expect(stats.overlappingPairs).toEqual([])
+  })
+
+  test('overlapping rooms are detected and union does not double-count', () => {
+    const zones = [
+      zone('a', '客厅', [[0, 0], [6, 0], [6, 4], [0, 4]]),
+      zone('b', '卧室', [[4, 0], [10, 0], [10, 4], [4, 4]]),
+    ]
+    const stats = computeZoneAreaStats(zones)
+    expect(stats.sumArea).toBeCloseTo(48)
+    expect(stats.unionArea).toBeCloseTo(40)
+    expect(stats.overlapArea).toBeCloseTo(8)
+    expect(stats.overlappingPairs).toHaveLength(1)
+    expect(stats.overlappingPairs[0]?.areaSqMeters).toBeCloseTo(8)
+  })
+
+  test('an L-shaped room is measured correctly', () => {
+    const zones = [zone('a', '客厅', [[0, 0], [6, 0], [6, 2], [2, 2], [2, 6], [0, 6]])]
+    const stats = computeZoneAreaStats(zones)
+    expect(stats.sumArea).toBeCloseTo(20)
+    expect(stats.unionArea).toBeCloseTo(20)
+  })
+
+  test('total area within ±10% of the brief target passes', () => {
+    const zones = [zone('a', '客厅', [[0, 0], [10, 0], [10, 7], [0, 7]])]
+    expect(checkAreaRequirements(zones, areaBrief(70))).toEqual([])
+  })
+
+  test('total area 50% over the target is flagged with repair guidance (case-03 regression)', () => {
+    const zones = [zone('a', '客厅', [[0, 0], [15, 0], [15, 7], [0, 7]])]
+    const issues = checkAreaRequirements(zones, areaBrief(70))
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toContain('总面积不符')
+    expect(issues[0]).toContain('105')
+    expect(issues[0]).toContain('整体调整建筑外轮廓')
+  })
+
+  test('room-boundary intrusion is flagged even when total area is on target', () => {
+    const zones = [
+      zone('a', '客厅', [[0, 0], [6, 0], [6, 7], [0, 7]]),
+      zone('b', '卧室', [[5, 0], [10, 0], [10, 7], [5, 7]]),
+    ]
+    const issues = checkAreaRequirements(zones, areaBrief(70))
+    expect(issues.some(issue => issue.includes('重叠'))).toBe(true)
+  })
+
+  test('no area target in the brief means no area assertion', () => {
+    const zones = [zone('a', '客厅', [[0, 0], [20, 0], [20, 7], [0, 7]])]
+    expect(checkAreaRequirements(zones, brief())).toEqual([])
+  })
+})
+
+describe('current-state furniture placement check', () => {
+  const room = zone('liv', '客厅', [[0, 0], [6, 0], [6, 4], [0, 4]])
+  const item = (id: string, x: number, z: number, w = 1, d = 1, ry = 0): ItemSummary => ({
+    id,
+    name: id,
+    position: [x, 0, z],
+    rotation: [0, ry, 0],
+    asset: { dimensions: [w, 1, d] },
+  })
+
+  test('well-separated items inside the room pass', () => {
+    const items = [item('sofa', 1.5, 2, 2, 0.9), item('table', 4.5, 2, 1, 1)]
+    expect(checkFurniturePlacement([room], [], items)).toEqual([])
+  })
+
+  test('two overlapping items are flagged as an actual overlap', () => {
+    const items = [item('sofa', 2, 2, 2, 0.9), item('table', 2.5, 2, 1, 1)]
+    const issues = checkFurniturePlacement([room], [], items)
+    expect(issues.some(i => i.kind === 'overlap')).toBe(true)
+  })
+
+  test('rotation is honored: a rotated long item can poke out of the room', () => {
+    // 2.4m-long item near the bottom wall: fits when aligned along x, pokes
+    // through the wall once rotated 90° — check_collisions would miss this.
+    const aligned = [item('bed', 3, 0.7, 2.4, 1.2)]
+    expect(checkFurniturePlacement([room], [], aligned)).toEqual([])
+    const rotated = [item('bed', 3, 0.7, 2.4, 1.2, Math.PI / 2)]
+    const issues = checkFurniturePlacement([room], [], rotated)
+    expect(issues.some(i => i.kind === 'out_of_bounds')).toBe(true)
+  })
+
+  test('an item centered outside every room is flagged', () => {
+    const issues = checkFurniturePlacement([room], [], [item('plant', 10, 10)])
+    expect(issues.some(i => i.kind === 'out_of_bounds' && i.message.includes('不在任何房间'))).toBe(true)
+  })
+
+  test('an item parked in front of a door violates door clearance', () => {
+    const doorWall: WallWithOpenings = {
+      id: 'w-door',
+      start: [0, 0],
+      end: [6, 0],
+      openings: [{ type: 'door', position: [3, 1.05, 0], width: 0.9 } as unknown as { type: string }],
+    }
+    const blocking = [item('cabinet', 3, 0.5, 1, 0.6)]
+    const issues = checkFurniturePlacement([room], [doorWall], blocking)
+    expect(issues.some(i => i.kind === 'door_clearance')).toBe(true)
+    const clear = [item('cabinet', 5.2, 0.5, 1, 0.6)]
+    expect(checkFurniturePlacement([room], [doorWall], clear).some(i => i.kind === 'door_clearance')).toBe(false)
+  })
+
+  test('wall-mounted items are exempt from floor checks', () => {
+    const wallArt: ItemSummary = {
+      id: 'art',
+      position: [10, 1.5, 10],
+      asset: { dimensions: [1, 1, 0.05], attachTo: 'wall' },
+    }
+    expect(checkFurniturePlacement([room], [], [wallArt])).toEqual([])
+  })
+})
+
+describe('modification protection', () => {
+  const case13Request =
+    '保持建筑外轮廓和其他房间不变，在客厅内部靠右侧划分一个约 6–8㎡的独立书房，为书房增加一扇通往客厅的门。除必要的新隔墙和房门外，不修改其他墙体、门窗。'
+
+  test('preservation language detection', () => {
+    expect(requestsStructurePreservation(case13Request)).toBe(true)
+    expect(requestsStructurePreservation('把主卧扩大一些，卫生间相应缩小')).toBe(false)
+  })
+
+  test('area range extraction handles common dash/unit variants and ambiguity', () => {
+    expect(extractAreaRangeConstraint(case13Request)).toEqual({ min: 6, max: 8 })
+    expect(extractAreaRangeConstraint('加一个6-8平米的书房')).toEqual({ min: 6, max: 8 })
+    expect(extractAreaRangeConstraint('客厅改成 20~25㎡，书房 6–8㎡')).toBeNull() // 两个范围，放弃判定
+    expect(extractAreaRangeConstraint('加一个书房')).toBeNull()
+  })
+
+  test('flags a deleted original wall and a geometry-modified original wall under preservation', () => {
+    const before = {
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5 },
+      w2: { type: 'wall', start: [4, 0], end: [4, 3], thickness: 0.2, height: 2.5 },
+    }
+    const after = {
+      w1: { type: 'wall', start: [0, 0], end: [3, 0], thickness: 0.2, height: 2.5 }, // clipped
+      // w2 deleted
+    }
+    const issues = checkModificationProtection(before, after, case13Request)
+    expect(issues.some(issue => issue.includes('w1') && issue.includes('几何'))).toBe(true)
+    expect(issues.some(issue => issue.includes('w2') && issue.includes('删除'))).toBe(true)
+  })
+
+  test('a wall that only gained a door child is not a violation', () => {
+    const before = {
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5, children: [] as string[] },
+    }
+    const after = {
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5, children: ['d1'] },
+      d1: { type: 'door', position: [2, 1.05, 0], width: 0.9, height: 2.1, parentId: 'w1' },
+    }
+    expect(checkModificationProtection(before, after, case13Request)).toEqual([])
+  })
+
+  test('a moved original window is a violation under preservation', () => {
+    const before = { win1: { type: 'window', position: [1, 1.5, 0], width: 1.5, height: 1.5, parentId: 'w1' } }
+    const after = { win1: { type: 'window', position: [2, 1.5, 0], width: 1.5, height: 1.5, parentId: 'w1' } }
+    const issues = checkModificationProtection(before, after, case13Request)
+    expect(issues.some(issue => issue.includes('win1'))).toBe(true)
+  })
+
+  test('an oversized added room is flagged against the requested range (case-13 regression)', () => {
+    const before = {}
+    const after = {
+      study: { type: 'zone', name: '书房', polygon: [[0, 0], [4.4, 0], [4.4, 3], [0, 3]] }, // 13.2㎡
+    }
+    const issues = checkModificationProtection(before, after, case13Request)
+    expect(issues.some(issue => issue.includes('书房') && issue.includes('13.2'))).toBe(true)
+  })
+
+  test('an in-range added room passes and resize requests skip structure protection', () => {
+    const inRange = {
+      study: { type: 'zone', name: '书房', polygon: [[0, 0], [3.5, 0], [3.5, 2], [0, 2]] }, // 7㎡
+    }
+    expect(checkModificationProtection({}, inRange, case13Request)).toEqual([])
+    // No preservation language → moving original walls is allowed.
+    const before = { w1: { type: 'wall', start: [0, 0], end: [4, 0] } }
+    const after = { w1: { type: 'wall', start: [0, 0], end: [5, 0] } }
+    expect(checkModificationProtection(before, after, '把主卧扩大一些')).toEqual([])
   })
 })
 
@@ -330,5 +574,114 @@ describe('modify-failure recovery', () => {
     expect(shouldRouteAsExistingSceneRequest('awaiting_modification_confirmation', '换个方向开门')).toBe(true)
     expect(shouldRouteAsExistingSceneRequest('awaiting_modification_confirmation', '   ')).toBe(false)
     expect(shouldRouteAsExistingSceneRequest('completed', '换个方向开门')).toBe(false)
+  })
+})
+
+describe('plan-first: buildPlanTargets', () => {
+  test('bedroom count comes from the numeric fact', () => {
+    const targets = buildPlanTargets(brief({
+      designGoals: [fact('bedroom_count', '卧室数量', 3)],
+      hardConstraints: [fact('floor_area_sqm', '建筑面积', 90)],
+    }))
+    expect(targets.totalAreaSqm).toBe(90)
+    expect(targets.requiredRooms).toContainEqual({ type: 'bedroom', count: 3 })
+  })
+
+  test('presence types are counted from the requested-rooms list', () => {
+    const targets = buildPlanTargets(brief({
+      designGoals: [fact('rooms', '功能空间', ['客厅', '厨房', '卫生间'])],
+    }))
+    expect(targets.requiredRooms).toContainEqual({ type: 'kitchen', count: 1 })
+    expect(targets.requiredRooms).toContainEqual({ type: 'bathroom', count: 1 })
+    expect(targets.requiredRooms).toContainEqual({ type: 'living', count: 1 })
+  })
+
+  test('an entry embedding its own quantity suppresses that exact-count requirement', () => {
+    const targets = buildPlanTargets(brief({
+      designGoals: [fact('rooms', '功能空间', ['两个卫生间', '厨房'])],
+    }))
+    const types = (targets.requiredRooms ?? []).map(entry => entry.type)
+    expect(types).not.toContain('bathroom')
+    expect(types).toContain('kitchen')
+  })
+
+  test('empty brief produces empty targets', () => {
+    expect(buildPlanTargets(brief())).toEqual({})
+  })
+})
+
+describe('plan-first: formatPlanSnapshot', () => {
+  test('lists rooms with type/area, marks the entry, and names connections', () => {
+    const snapshot = formatPlanSnapshot({
+      footprint: { width: 8, depth: 5 },
+      entry: { roomId: 'living-1' },
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', polygon: [[0, 0], [5, 0], [5, 5], [0, 5]], requiresExteriorWindow: true },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', polygon: [[5, 0], [8, 0], [8, 5], [5, 5]], requiresExteriorWindow: true },
+      ],
+      connections: [{ from: 'living-1', to: 'bedroom-1', type: 'door' }],
+    })
+    expect(snapshot).toContain('客厅（living，约 25㎡，入户）')
+    expect(snapshot).toContain('主卧（bedroom，约 15㎡）')
+    expect(snapshot).toContain('客厅↔主卧')
+    expect(snapshot).toContain('不可改动')
+  })
+})
+
+describe('批次 D: structuralDrift', () => {
+  const wall = (start: [number, number], end: [number, number]) =>
+    ({ type: 'wall', start, end, thickness: 0.2 }) as Record<string, unknown>
+
+  test('unchanged structure reports no drift', () => {
+    const snapshot = { w1: wall([0, 0], [4, 0]), z1: { type: 'zone', polygon: [[0, 0], [4, 0], [4, 3], [0, 3]] } }
+    expect(structuralDrift(snapshot, structuredClone(snapshot))).toEqual([])
+  })
+
+  test('moved wall / deleted zone / added wall are all drift', () => {
+    const before = { w1: wall([0, 0], [4, 0]), z1: { type: 'zone', polygon: [[0, 0], [4, 0], [4, 3], [0, 3]] } }
+    expect(structuralDrift(before, { ...before, w1: wall([0, 0], [5, 0]) })).toHaveLength(1)
+    const { z1: _z1, ...withoutZone } = before
+    expect(structuralDrift(before, withoutZone)).toHaveLength(1)
+    expect(structuralDrift(before, { ...before, w2: wall([0, 3], [4, 3]) })).toHaveLength(1)
+  })
+
+  test('item and opening changes are NOT structural drift', () => {
+    const before = {
+      w1: wall([0, 0], [4, 0]),
+      item1: { type: 'item', position: [1, 0, 1] },
+    }
+    const after = {
+      w1: wall([0, 0], [4, 0]),
+      item1: { type: 'item', position: [2, 0, 2] },
+      door1: { type: 'door', position: [1, 1.05, 0] },
+    }
+    expect(structuralDrift(before, after)).toEqual([])
+  })
+
+  test('sub-millimeter float noise is not drift', () => {
+    const before = { w1: wall([0, 0], [4, 0]) }
+    const after = { w1: wall([0.0004, 0], [4, 0]) }
+    expect(structuralDrift(before, after)).toEqual([])
+  })
+})
+
+describe('批次 D: windowRoomTypesFromBrief', () => {
+  test('explicit window request maps mentioned rooms to types', () => {
+    const types = windowRoomTypesFromBrief(brief({
+      designGoals: [fact('window_requirements', '采光要求', '三间卧室都要有窗，客厅采光好')],
+    }))
+    expect(types.sort()).toEqual(['bedroom', 'living'])
+  })
+
+  test('no window facts → empty', () => {
+    expect(windowRoomTypesFromBrief(brief({
+      designGoals: [fact('bedroom_count', '卧室数量', 3)],
+    }))).toEqual([])
+  })
+
+  test('room mention without window context does not count', () => {
+    expect(windowRoomTypesFromBrief(brief({
+      designGoals: [fact('rooms', '功能空间', ['卧室', '厨房'])],
+    }))).toEqual([])
   })
 })

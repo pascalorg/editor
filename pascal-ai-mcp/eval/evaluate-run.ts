@@ -61,6 +61,10 @@ export type FailureCode =
   | 'clarification_incomplete'
   | 'mcp_error'
   | 'cancelled'
+  | 'structure_not_converged'
+  // Plan-first flow: the intent→partition→validation loop exhausted its
+  // correction rounds before any scene was created.
+  | 'plan_rejected'
   | 'unknown'
 
 export type FailureClassification = {
@@ -86,13 +90,15 @@ export function classifyFailure(
 
   let stage: FailureStage = 'unknown'
   if (/需求解析失败/.test(text)) stage = 'requirement_extraction'
-  else if (/户型生成失败|无法加载场景/.test(text)) stage = 'generation'
+  else if (/户型生成失败|户型规划未通过校验|无法加载场景/.test(text)) stage = 'generation'
   else if (/场景修改失败/.test(text)) stage = 'modification'
   else if (/场景核对失败/.test(text)) stage = 'inspection'
   else if (phase === 'clarifying' || phase === 'awaiting_confirmation') stage = 'confirmation'
 
   let code: FailureCode = 'unknown'
   if (/取消|cancelled/i.test(text)) code = 'cancelled'
+  else if (/户型规划未通过校验/.test(text)) code = 'plan_rejected'
+  else if (/未收敛/.test(text)) code = 'structure_not_converged'
   else if (/429|rate.?limit|too many requests/i.test(text)) code = 'model_rate_limit'
   else if (/timeout|timed out|ETIMEDOUT|abort/i.test(text)) code = 'model_timeout'
   else if (/invalid.*json|unexpected (token|end of json)|not valid json|json.*parse/i.test(text)) {
@@ -106,24 +112,53 @@ export function classifyFailure(
 
 export type FurnitureIssueBreakdown = {
   total: number
+  // Furnishing-time failures: the item was never put into the scene at all
+  // ("skipped: overlaps another item" means NOT PLACED, not that two placed
+  // items overlap — earlier reports mislabeled these as real overlaps).
+  unplacedCount: number
+  // Current-state problems, from the agent's deterministic placement check
+  // (sceneResult.furniturePlacement): items that ARE in the scene and are
+  // actually overlapping / out of their room / blocking a door.
   overlapCount: number
   outOfBoundsCount: number
+  doorClearanceCount: number
   otherCount: number
 }
 
-/** Buckets structured furniture issues for the report (overlap / out-of-bounds / other). */
-export function classifyFurnitureIssues(issues: string[]): FurnitureIssueBreakdown {
+/**
+ * Buckets furniture problems for the report. `issues` is the historical
+ * event log (unplaced items, catalog placeholders); `placement` is the
+ * structured current-state check. Prefers structured kinds over string
+ * matching wherever structure exists.
+ */
+export function classifyFurnitureIssues(
+  issues: string[],
+  placement: Array<{ kind: string }> = [],
+): FurnitureIssueBreakdown {
+  let unplacedCount = 0
+  let otherCount = 0
+  for (const issue of issues) {
+    // Every furnish_room skip (未能放置 / legacy English strings) means the
+    // item was not placed, regardless of the predicted reason.
+    if (/未能放置|overlaps another item|outside room bounds|asset not found/i.test(issue)) unplacedCount++
+    else otherCount++
+  }
   let overlapCount = 0
   let outOfBoundsCount = 0
-  for (const issue of issues) {
-    if (/overlap|重叠/i.test(issue)) overlapCount++
-    else if (/outside|out of bounds|越界|超出/i.test(issue)) outOfBoundsCount++
+  let doorClearanceCount = 0
+  for (const entry of placement) {
+    if (entry.kind === 'overlap') overlapCount++
+    else if (entry.kind === 'out_of_bounds') outOfBoundsCount++
+    else if (entry.kind === 'door_clearance') doorClearanceCount++
+    else otherCount++
   }
   return {
-    total: issues.length,
+    total: issues.length + placement.length,
+    unplacedCount,
     overlapCount,
     outOfBoundsCount,
-    otherCount: issues.length - overlapCount - outOfBoundsCount,
+    doorClearanceCount,
+    otherCount,
   }
 }
 
@@ -251,6 +286,8 @@ export type EvalCase = {
   windowsRequiredFor?: string[]
   /** Require every room reachable from an entry/public space (open rooms count). */
   requireAllRoomsReachable?: boolean
+  /** 批次 D: fail the case when the turn used more model calls than this (§9 budgets). */
+  maxModelCalls?: number
   /** Required adjacency relationships between room types (e.g. ensuite). */
   requiredAdjacency?: Array<{ a: string; b: string; relation: AdjacencyRelation }>
   /** Overall footprint width×depth with tolerance, e.g. {width:5,depth:18,tolerance:0.12}. */

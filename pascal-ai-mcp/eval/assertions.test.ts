@@ -4,6 +4,7 @@ import {
   assertAllRoomsReachable,
   assertBounds,
   assertModification,
+  assertPlanFirstResult,
   assertRoomCounts,
   assertTotalArea,
   assertWindowsRequiredFor,
@@ -100,6 +101,28 @@ describe('assertAllRoomsReachable', () => {
       wall('shared', 4, 0, 4, 3, []), // solid wall between bedroom and living, no door
     ]
     expect(assertAllRoomsReachable(zones, walls).status).toBe('fail')
+  })
+
+  test('two zones sharing several boundary segments connect if ANY segment has a door (case-03 regression)', () => {
+    // Kitchen carved out of an L-shaped living hub: they share BOTH the
+    // kitchen's west edge (solid wall) and its south edge (has the door).
+    // The old first-shared-segment check saw only the solid wall and marked
+    // the kitchen unreachable.
+    const lShapedLiving = {
+      id: 'liv',
+      name: '客厅',
+      polygon: [[0, 0], [3.7, 0], [3.7, 2.4], [7.1, 2.4], [7.1, 5], [0, 5]] as Array<[number, number]>,
+      areaSqMeters: 27,
+      bounds: { width: 7.1, depth: 5 },
+    }
+    const kitchen = zone('kit', '厨房', 3.7, 0, 7.1, 2.4)
+    const walls = [
+      wall('entry', 0, 0, 3.7, 0, ['door']), // exterior entry into living
+      wall('kit-west', 3.7, 0, 3.7, 2.4, []), // solid shared wall, no door
+      wall('kit-south', 3.7, 2.4, 7.1, 2.4, ['door']), // the actual kitchen door
+    ]
+    const result = assertAllRoomsReachable([lShapedLiving, kitchen], walls)
+    expect(result.status).toBe('pass')
   })
 })
 
@@ -231,6 +254,63 @@ describe('diffSnapshots + assertModification', () => {
     expect(openingCheck?.status).toBe('fail')
   })
 
+  test('a wall that only gained a door child does NOT count as a modified original wall', () => {
+    // Case-13 semantics: hosting a necessary new door on an existing wall
+    // changes wall.children but not the wall itself; the full-JSON diff used
+    // to count this against maxModifiedOriginalWalls=0.
+    const beforeSnap: SceneSnapshot = {
+      zoneLiv: { type: 'zone', name: '客厅' },
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5, children: [] },
+    }
+    const afterSnap: SceneSnapshot = {
+      zoneLiv: { type: 'zone', name: '客厅' },
+      zoneStudy: { type: 'zone', name: '书房' },
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5, children: ['dNew'] },
+      dNew: { type: 'door' },
+    }
+    const afterZones = [zone('liv', '客厅', 0, 0, 4, 3), zone('study', '书房', 4, 0, 7, 3)]
+    const afterWalls = [wall('liv-study', 4, 0, 4, 3, ['door'])]
+    const results = assertModification(beforeSnap, afterSnap, { zones: afterZones, walls: afterWalls }, {
+      maxModifiedOriginalWalls: 0,
+    })
+    const check = results.find(r => r.name === 'modification:modifiedOriginalWalls')
+    expect(check?.status).toBe('pass')
+  })
+
+  test('a wall whose geometry moved DOES count as a modified original wall', () => {
+    const beforeSnap: SceneSnapshot = {
+      w1: { type: 'wall', start: [0, 0], end: [4, 0], thickness: 0.2, height: 2.5, children: [] },
+    }
+    const afterSnap: SceneSnapshot = {
+      w1: { type: 'wall', start: [0, 0], end: [3, 0], thickness: 0.2, height: 2.5, children: [] },
+    }
+    const results = assertModification(beforeSnap, afterSnap, { zones: [], walls: [] }, {
+      maxModifiedOriginalWalls: 0,
+    })
+    const check = results.find(r => r.name === 'modification:modifiedOriginalWalls')
+    expect(check?.status).toBe('fail')
+    expect(check?.reason).toContain('w1')
+  })
+
+  test('a moved/re-hosted original window is caught by the opening-node check', () => {
+    const beforeSnap: SceneSnapshot = {
+      win1: { type: 'window', position: [1, 1.5, 0], width: 1.5, height: 1.5, parentId: 'w1' },
+    }
+    const movedSnap: SceneSnapshot = {
+      win1: { type: 'window', position: [2.5, 1.5, 0], width: 1.5, height: 1.5, parentId: 'w1' },
+    }
+    const rehostedSnap: SceneSnapshot = {
+      win1: { type: 'window', position: [1, 1.5, 0], width: 1.5, height: 1.5, parentId: 'w2' },
+    }
+    const unchangedSnap: SceneSnapshot = structuredClone(beforeSnap)
+    const check = (after: SceneSnapshot) =>
+      assertModification(beforeSnap, after, { zones: [], walls: [] }, { preserveOriginalOpenings: true })
+        .find(r => r.name === 'modification:modifiedOriginalOpenings')
+    expect(check(movedSnap)?.status).toBe('fail')
+    expect(check(rehostedSnap)?.status).toBe('fail')
+    expect(check(unchangedSnap)?.status).toBe('pass')
+  })
+
   test('modification fails when original furniture was deleted', () => {
     const afterZones = [zone('bed', '卧室', 0, 0, 4, 3), zone('liv', '客厅', 4, 0, 8, 3), zone('study', '书房', 8, 0, 11, 3)]
     const afterWalls = [wall('liv-study', 8, 0, 8, 3, ['door'])]
@@ -328,5 +408,47 @@ describe('diffSnapshots + assertModification', () => {
       { targetRoomArea: { type: '卧室', min: 16, nameIncludes: ['主卧'] } },
     )
     expect(results.find(r => r.name === 'modification:targetRoomArea:卧室')?.status).toBe('fail')
+  })
+})
+
+describe('批次 D: assertPlanFirstResult', () => {
+  test('all gates passed + within budget + full placement → all pass', () => {
+    const results = assertPlanFirstResult(
+      { gateFailures: [], modelCallsUsed: 7, furniture: { placed: 10, required: 10 } },
+      { maxModelCalls: 15 },
+    )
+    expect(results.map(r => [r.name, r.status])).toEqual([
+      ['gatesPassed', 'pass'],
+      ['modelCallBudget', 'pass'],
+      ['furniturePlacementRate', 'pass'],
+    ])
+  })
+
+  test('gate failures and budget overrun judge fail', () => {
+    const results = assertPlanFirstResult(
+      { gateFailures: ['卧室「主卧」缺少必备家具：床'], modelCallsUsed: 21, furniture: { placed: 8, required: 10 } },
+      { maxModelCalls: 20 },
+    )
+    const byName = new Map(results.map(r => [r.name, r.status]))
+    expect(byName.get('gatesPassed')).toBe('fail')
+    expect(byName.get('modelCallBudget')).toBe('fail')
+    // 8/10 = 80% < 90%
+    expect(byName.get('furniturePlacementRate')).toBe('fail')
+  })
+
+  test('placement rate at exactly 90% passes', () => {
+    const results = assertPlanFirstResult({ gateFailures: [], furniture: { placed: 9, required: 10 } })
+    expect(results.find(r => r.name === 'furniturePlacementRate')?.status).toBe('pass')
+  })
+
+  test('missing fields are unsupported (blocks allPassed, never silently skipped)', () => {
+    const results = assertPlanFirstResult({}, { maxModelCalls: 15 })
+    expect(results.every(r => r.status === 'unsupported')).toBe(true)
+    expect(rollupAssertions(results).allPassed).toBe(false)
+  })
+
+  test('budget assertion only appears when the case declares a limit', () => {
+    const results = assertPlanFirstResult({ gateFailures: [], furniture: { placed: 1, required: 1 } })
+    expect(results.some(r => r.name === 'modelCallBudget')).toBe(false)
   })
 })

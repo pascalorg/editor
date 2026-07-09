@@ -1,3 +1,5 @@
+import type { LayoutIntent, LayoutPlan } from './layout-plan'
+
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
 export type TextContent = { type: 'text'; text: string }
@@ -92,6 +94,19 @@ export type WorkflowPhase =
   | 'cancelled'
   | 'failed'
 
+// A current-state furniture placement problem, computed deterministically
+// from the scene graph (rotated footprints vs room polygons / other items /
+// door clearance) — as opposed to `furnitureIssues`, which records historical
+// placement-tool events (e.g. furnish_room declining to place an item).
+export type FurniturePlacementIssue = {
+  kind: 'overlap' | 'out_of_bounds' | 'door_clearance'
+  itemId: string
+  itemName?: string
+  otherItemId?: string
+  room?: string
+  message: string
+}
+
 export type SceneResult = {
   sceneId: string | null
   editorUrl: string | null
@@ -107,8 +122,44 @@ export type SceneResult = {
   // miss / not placed). Previously only surfaced in the reply text and not
   // counted anywhere; now structured here and folded into remainingIssueCount.
   furnitureIssues: string[]
+  // Deterministic current-state placement check results (see
+  // FurniturePlacementIssue). Optional so sessions persisted by older builds
+  // still parse.
+  furniturePlacement?: FurniturePlacementIssue[]
   repairRounds: number
   remainingIssueCount: number
+  // Deterministic scene-executor findings (failed MCP calls, missing host
+  // walls, as-built area drift). Observability only: the same underlying
+  // problems are re-detected live by collectDiagnostics, so these are NOT
+  // folded into remainingIssueCount — that would double-count them.
+  executionIssues?: string[]
+  // Model API attempts this generate/modify turn actually used (sum over
+  // toolTrace phases), so eval reports can assert call budgets per case.
+  modelCallsUsed?: number
+  // Completion hard-gate failures (§5). Empty array = all gates passed.
+  // Absent on sessions persisted by pre-批次D builds. Gate failures overlap
+  // with the diagnostics above, so they gate the `completed` phase but are
+  // NOT added to remainingIssueCount (that would double-count).
+  gateFailures?: string[]
+  // layout-metrics quality score for the as-built scene (0-100).
+  layoutQuality?: number
+  // Deterministic furniture executor tallies, for the ≥90% placement-rate
+  // eval assertion. `required` = placed + missing.
+  furniture?: { placed: number; required: number }
+}
+
+// Per-phase model/tool call trace, recorded while the scene agent runs. This
+// exists to make non-convergence diagnosable from an eval report alone: how
+// many completions a phase used, the exact tool call sequence (so "which room
+// did it get to before hitting the round limit" is answerable), per-tool
+// counts, and whether the phase converged or was rescued by a continuation.
+export type PhaseToolTrace = {
+  phase: string
+  modelCalls: number
+  toolCalls: Array<{ name: string; ok: boolean; detail?: string }>
+  toolCounts: Record<string, number>
+  converged: boolean
+  continuationAttempts: number
 }
 
 export type WorkflowSession = {
@@ -137,11 +188,20 @@ export type WorkflowSession = {
   // project itself is left in storage (never auto-deleted) — recorded here
   // purely as an audit trail / for manual cleanup.
   abandonedSceneIds?: string[]
+  // Plan-first generation (GENERATION_REDESIGN.md): the confirmed model
+  // intent and the validated deterministic plan the scene was built from.
+  // Persisted so modify turns can quote the plan as the factual room list
+  // and so eval reports can compare plan vs as-built.
+  layoutIntent?: LayoutIntent
+  layoutPlan?: LayoutPlan
   executionSteps?: Array<{
     phase: 'structure' | 'openings' | 'furnishing' | 'verification'
     status: 'completed' | 'failed'
     label: string
   }>
+  // Reset at the start of each generate/modify turn; one entry per scene-agent
+  // phase (structure, openings, repair round, ...). See PhaseToolTrace.
+  toolTrace?: PhaseToolTrace[]
   createdAt: string
   updatedAt: string
 }
