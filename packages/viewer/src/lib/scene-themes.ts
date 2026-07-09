@@ -8,6 +8,10 @@ export type SceneTheme = {
   // the site ground fill. The 3D background + lights come from the fields below.
   appearance: 'light' | 'dark'
   background: string
+  // Optional zenith colour for the backdrop: the post pipeline renders a
+  // vertical screen-space gradient from this (top) to `background` (horizon).
+  // Omitted → flat `background`, as before.
+  backgroundSky?: string
   // Colour of the site ground fill. Kept
   // separate from `background` so dark themes can have a lit ground that reads
   // as ground rather than going near-black.
@@ -30,6 +34,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Studio',
     appearance: 'light',
     background: '#ffffff',
+    backgroundSky: '#e7edf3',
     ground: '#f4f4f2',
     ambient: { color: '#ffffff', intensity: 0.15 },
     hemi: { sky: '#ffffff', ground: '#aaa49a', intensity: 0.45 },
@@ -51,6 +56,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Paper',
     appearance: 'light',
     background: '#ede9df',
+    backgroundSky: '#ded7c6',
     ground: '#e7e1d3',
     ambient: { color: '#fff9eb', intensity: 0.55 },
     hemi: { sky: '#fff5d9', ground: '#c2b89c', intensity: 0.35 },
@@ -72,6 +78,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Sunset',
     appearance: 'light',
     background: '#f6e8d4',
+    backgroundSky: '#b5bede',
     ground: '#ecd9bf',
     ambient: { color: '#ffd9a8', intensity: 0.45 },
     hemi: { sky: '#ffd9a8', ground: '#5b4634', intensity: 0.4 },
@@ -93,6 +100,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Overcast',
     appearance: 'light',
     background: '#e6e7e6',
+    backgroundSky: '#cfd3d2',
     ground: '#dadcd9',
     ambient: { color: '#eef0ef', intensity: 1.1 },
     hemi: { sky: '#f4f5f3', ground: '#bcbfbb', intensity: 0.9 },
@@ -111,6 +119,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Blueprint',
     appearance: 'light',
     background: '#dde6ef',
+    backgroundSky: '#bfd2e6',
     ground: '#c9d6e6',
     ambient: { color: '#cfdcec', intensity: 0.7 },
     hemi: { sky: '#dfeaf6', ground: '#5b6b80', intensity: 0.55 },
@@ -132,6 +141,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Mediterranean',
     appearance: 'light',
     background: '#bdd6e8',
+    backgroundSky: '#8ab4d6',
     ground: '#ddd2bb',
     ambient: { color: '#d6e6f3', intensity: 0.5 },
     hemi: { sky: '#a8c8e2', ground: '#d8c9a4', intensity: 0.6 },
@@ -153,6 +163,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Twilight',
     appearance: 'dark',
     background: '#3a3550',
+    backgroundSky: '#272338',
     ground: '#67618a',
     ambient: { color: '#a89cc8', intensity: 0.55 },
     hemi: { sky: '#d8a8c0', ground: '#3a3450', intensity: 0.7 },
@@ -174,6 +185,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Night',
     appearance: 'dark',
     background: '#1f2433',
+    backgroundSky: '#12161f',
     ground: '#4a5470',
     ambient: { color: '#a0b0ff', intensity: 0.25 },
     hemi: { sky: '#3a4666', ground: '#232a3d', intensity: 0.55 },
@@ -195,6 +207,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     name: 'Verdant',
     appearance: 'light',
     background: '#d6e4d2',
+    backgroundSky: '#bcd4c6',
     ground: '#c7d6b4',
     ambient: { color: '#e3efdd', intensity: 0.5 },
     hemi: { sky: '#cfe6cf', ground: '#8ea06f', intensity: 0.65 },

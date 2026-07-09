@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, sceneRegistry } from '@pascal-app/core'
-import { GRID_LAYER, SSGI_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
+import { GRID_LAYER, SSGI_BAKE_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -94,17 +94,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
 
         const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, cam as any)
-        giPass.sliceCount.value = SSGI_PARAMS.sliceCount
-        giPass.stepCount.value = SSGI_PARAMS.stepCount
-        giPass.radius.value = SSGI_PARAMS.radius
-        giPass.expFactor.value = SSGI_PARAMS.expFactor
-        giPass.thickness.value = SSGI_PARAMS.thickness
-        giPass.backfaceLighting.value = SSGI_PARAMS.backfaceLighting
-        giPass.aoIntensity.value = SSGI_PARAMS.aoIntensity
-        giPass.giIntensity.value = SSGI_PARAMS.giIntensity
-        giPass.useLinearThickness.value = SSGI_PARAMS.useLinearThickness
-        giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
-        giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
+        giPass.sliceCount.value = SSGI_BAKE_PARAMS.sliceCount
+        giPass.stepCount.value = SSGI_BAKE_PARAMS.stepCount
+        giPass.radius.value = SSGI_BAKE_PARAMS.radius
+        giPass.expFactor.value = SSGI_BAKE_PARAMS.expFactor
+        giPass.thickness.value = SSGI_BAKE_PARAMS.thickness
+        giPass.backfaceLighting.value = SSGI_BAKE_PARAMS.backfaceLighting
+        giPass.aoIntensity.value = SSGI_BAKE_PARAMS.aoIntensity
+        giPass.giIntensity.value = SSGI_BAKE_PARAMS.giIntensity
+        giPass.useLinearThickness.value = SSGI_BAKE_PARAMS.useLinearThickness
+        giPass.useScreenSpaceSampling.value = SSGI_BAKE_PARAMS.useScreenSpaceSampling
+        giPass.useTemporalFiltering = SSGI_BAKE_PARAMS.useTemporalFiltering
 
         const giTexture = (giPass as any).getTextureNode()
         const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))

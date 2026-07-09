@@ -19,6 +19,7 @@ import {
   renderOutput,
   sample,
   saturation,
+  screenUV,
   time,
   uniform,
   vec3,
@@ -44,17 +45,24 @@ export const GRADE_PARAMS = {
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 2,
+  sliceCount: 1,
   stepCount: 6,
   radius: 1.6,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
   aoIntensity: 1.7,
-  giIntensity: 2,
+  giIntensity: 1,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
   useTemporalFiltering: false,
+}
+
+// Heavier SSGI for one-shot renders (thumbnails / bake capture) where frame
+// time doesn't matter — the interactive editor stays on SSGI_PARAMS.
+export const SSGI_BAKE_PARAMS = {
+  ...SSGI_PARAMS,
+  sliceCount: 2,
 }
 
 // Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
@@ -151,10 +159,16 @@ const PostProcessingPasses = ({
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
-  const initBg = getSceneTheme(useViewer.getState().sceneTheme).background
+  const initTheme = getSceneTheme(useViewer.getState().sceneTheme)
+  const initBg = initTheme.background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
+  // Zenith colour of the backdrop gradient (falls back to the flat background).
+  const initSky = initTheme.backgroundSky ?? initBg
+  const bgSkyUniform = useRef(uniform(new Color(initSky)))
+  const bgSkyCurrent = useRef(new Color(initSky))
+  const bgSkyTarget = useRef(new Color())
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
@@ -413,7 +427,7 @@ const PostProcessingPasses = ({
 
         const giTexture = (giPass as any).getTextureNode()
 
-        const gi = giPass.rgb
+        let gi: any = giPass.rgb
         let ao: any
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
@@ -423,6 +437,12 @@ const PostProcessingPasses = ({
           denoisePass.index.value = 0
           denoisePass.radius.value = 4
           ao = (denoisePass as any).r
+          // The GI bounce is composited additively, so its sampling noise reads
+          // as grain on lit surfaces — denoise it like the AO.
+          const giDenoise = denoise(vec4(gi, float(1)), scenePassDepth, sceneNormal, camera)
+          giDenoise.index.value = 1
+          giDenoise.radius.value = 4
+          gi = (giDenoise as any).rgb
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
@@ -506,7 +526,10 @@ const PostProcessingPasses = ({
         )
       }
 
-      const composited = mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha)
+      // Backdrop: vertical sky gradient (theme zenith at the top of the screen,
+      // horizon colour at the bottom) behind the scene content.
+      const bgGradient = mix(bgSkyUniform.current, bgUniform.current, screenUV.y)
+      const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
@@ -584,9 +607,13 @@ const PostProcessingPasses = ({
     }
 
     // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
-    bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
+    const bgTheme = getSceneTheme(useViewer.getState().sceneTheme)
+    bgTarget.current.set(bgTheme.background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
+    bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
+    bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyUniform.current.value.copy(bgSkyCurrent.current)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
     inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
 

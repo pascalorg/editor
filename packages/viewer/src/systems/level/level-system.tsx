@@ -37,6 +37,9 @@ export const LevelSystem = () => {
     entries.sort((a, b) => a.index - b.index)
 
     // Walk sorted levels, accumulating base Y offsets
+    const selectedIndex = selectedLevel
+      ? entries.find((e) => e.levelId === selectedLevel)?.index
+      : undefined
     let cumulativeY = 0
     for (const { levelId, index, obj } of entries) {
       const level = nodes[levelId as LevelNode['id']]
@@ -46,17 +49,22 @@ export const LevelSystem = () => {
 
       obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
 
-      // Solo: hidden levels stay in the shadow map (shadow-caster-only) so the
-      // sun still shadows the soloed floor through hidden roofs/floors above.
+      // Solo: hidden levels ABOVE the soloed one stay in the shadow map
+      // (shadow-caster-only) so the sun still shadows the soloed floor through
+      // them; levels below can't block the sun, so they plain-hide.
       const hidden = levelMode === 'solo' && Boolean(selectedLevel) && level?.id !== selectedLevel
-      if (hidden) {
+      const castsWhileHidden = hidden && selectedIndex !== undefined && index > selectedIndex
+      if (castsWhileHidden) {
         applyShadowOnly(obj)
         shadowOnlyLevels.add(obj)
-      } else if (shadowOnlyLevels.has(obj)) {
-        clearShadowOnly(obj)
-        shadowOnlyLevels.delete(obj)
+        obj.visible = true
+      } else {
+        if (shadowOnlyLevels.has(obj)) {
+          clearShadowOnly(obj)
+          shadowOnlyLevels.delete(obj)
+        }
+        obj.visible = !hidden
       }
-      obj.visible = true
 
       cumulativeY += getLevelHeight(
         levelId,
