@@ -89,7 +89,7 @@ export function resolveSelectModeHelpHints({
   if (selectedCount > 1) {
     hints.push({
       keys: [LEFT_CLICK],
-      label: 'Drag any selected object to move the whole selection',
+      label: 'Click or drag the selection to move it as one',
     })
     hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
     hints.push({

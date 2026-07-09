@@ -15,7 +15,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { memo, useMemo } from 'react'
+import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
@@ -326,25 +326,49 @@ export function startFloorplanGroupMove(
   return true
 }
 
+const GROUP_BOX_CURSOR_STYLE = { cursor: 'move' } as const
+
 /**
  * Dashed bounding box around the current multi-selection's transformable
  * participants (expanded to the welded wall/fence component) — shows what a
- * group drag will carry along. Rides the live drag delta so it tracks the
- * group mid-gesture. Mounted inside the floor-plan scene `<g>`, so plan
- * coords render directly.
+ * group drag will carry along, and IS the group's drag handle: press anywhere
+ * inside it to slide the group, click to pick it up. Holding a selection
+ * modifier (Cmd/Ctrl/Shift) lets pointer events pass through so members under
+ * the box can still be toggled in and out. Rides the live drag delta so it
+ * tracks the group mid-gesture. Mounted inside the floor-plan scene `<g>`, so
+ * plan coords render directly.
  */
 export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionBox({
   palette,
   unitsPerPixel,
+  onPointerDown,
 }: {
   palette: FloorplanPalette | undefined
   unitsPerPixel: number
+  onPointerDown?: (event: ReactPointerEvent<SVGGElement>) => void
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const levelId = useViewer((s) => s.selection.levelId)
   const nodes = useScene((s) => s.nodes)
   const delta = useFloorplanGroupDrag((s) => s.delta)
   const movingNode = useMovingNode()
+  const mode = useEditor((s) => s.mode)
+
+  // While a selection modifier is held the box steps aside so clicks reach
+  // the entries underneath (toggle membership) instead of starting a drag.
+  const [modifierHeld, setModifierHeld] = useState(false)
+  useEffect(() => {
+    const update = (e: KeyboardEvent) => setModifierHeld(e.metaKey || e.ctrlKey || e.shiftKey)
+    const clear = () => setModifierHeld(false)
+    window.addEventListener('keydown', update)
+    window.addEventListener('keyup', update)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', update)
+      window.removeEventListener('keyup', update)
+      window.removeEventListener('blur', clear)
+    }
+  }, [])
 
   const box = useMemo(() => {
     if (selectedIds.length < 2 || !levelId) return null
@@ -366,18 +390,21 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
     }
   }, [selectedIds, levelId, nodes])
 
-  if (!box || movingNode) return null
+  if (!box || movingNode || mode === 'delete') return null
 
   const pad = 6 * unitsPerPixel
   const stroke = palette?.selectedStroke ?? '#3b82f6'
+  const interactive = !modifierHeld && !!onPointerDown
   return (
     <g
       data-group-selection-box
-      pointerEvents="none"
+      onPointerDown={interactive ? onPointerDown : undefined}
+      pointerEvents={interactive ? 'auto' : 'none'}
+      style={interactive ? GROUP_BOX_CURSOR_STYLE : undefined}
       transform={delta ? `translate(${delta[0]} ${delta[1]})` : undefined}
     >
       <rect
-        fill="none"
+        fill="transparent"
         height={box.depth + 2 * pad}
         stroke={stroke}
         strokeDasharray={`${4 * unitsPerPixel} ${3 * unitsPerPixel}`}

@@ -25,6 +25,7 @@ import useEditor, {
 import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanGroupDrag } from '../editor-2d/floorplan-group-move'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { startGroupPickUp } from './group-actions'
 import {
   classifyParticipant,
   collectParticipants,
@@ -39,10 +40,10 @@ import { swallowNextClick } from './handles/use-handle-drag'
 // 3D sibling of the 2D floorplan group move (and successor of the removed
 // group-move gizmo cross): pressing any selected element's body in a
 // multi-selection and dragging past the threshold slides the whole selection
-// on the ground plane. A plain click (no drag) falls through to the selection
-// manager's normal click handling (collapse-to-single). Shares the group
-// participant snapshot, welded junctions, snapping entry points, live
-// override previews, and single-undo commit with the 2D session.
+// on the ground plane; a plain click (no drag) enters the group pick-up,
+// parity with the single-item click-to-move. Shares the group participant
+// snapshot, welded junctions, snapping entry points, live override previews,
+// and single-undo commit with the 2D session.
 
 // Figma-style alignment-snap threshold (meters) — same pull distance as the
 // single-node registry move.
@@ -273,9 +274,12 @@ export function armGroupMove3d(args: {
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
     if (!session) {
-      // Plain click — remove the listeners and let the selection manager's
-      // click handling run (collapse the selection to the pressed node).
+      // Plain click — enter the group pick-up, parity with the single-item
+      // click-to-move. Eat the click so the selection manager's click
+      // handling doesn't collapse the multi-selection underneath it.
       removeListeners()
+      swallowNextClick()
+      startGroupPickUp()
       return
     }
     swallowNextClick()

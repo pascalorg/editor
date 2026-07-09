@@ -58,6 +58,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { FloorplanGroupSelectionBox, startFloorplanGroupMove } from '../floorplan-group-move'
@@ -642,10 +643,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   // Photoshop-style group drag: plain pointer-down on a transformable member
   // of a multi-selection slides the whole selection rigidly; a plain click
-  // (no drag) still collapses the selection to the pressed node on release.
-  // Modified clicks (selection toggle) and Cmd-drag / direct-rotate keep
-  // their existing paths. `immediate` engages without the drag threshold —
-  // the move-handle dot's pick-up semantics.
+  // (no drag) enters the group pick-up instead — parity with the single-item
+  // click-to-move (clicking outside still deselects). Modified clicks
+  // (selection toggle) and Cmd-drag / direct-rotate keep their existing
+  // paths. `immediate` engages without the drag threshold — the move-handle
+  // dot's pick-up semantics.
   const startGroupMoveDrag = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
       if (event.button !== 0) return false
@@ -654,7 +656,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (useEditor.getState().mode === 'delete') return false
       const started = startFloorplanGroupMove(id, event, {
         immediate,
-        onClickFallthrough: immediate ? undefined : () => applyEntrySelection(id, false),
+        onClickFallthrough: immediate ? undefined : () => startGroupPickUp(),
       })
       if (!started) return false
       event.preventDefault()
@@ -662,13 +664,30 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       suppressBoxSelectForPointer(event)
       return true
     },
-    [movingNode, applyEntrySelection],
+    [movingNode],
   )
 
   // Move-handle dot variant — routes the dot through the group session when
   // the owning node is part of a multi-selection.
   const handleGroupMoveHandlePointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => startGroupMoveDrag(id, event, true),
+    [startGroupMoveDrag],
+  )
+
+  // The dashed selection box is itself the group's drag handle: a press
+  // anywhere inside it slides the group (or picks it up on a plain click),
+  // anchored on the first transformable member.
+  const handleGroupBoxPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGGElement>) => {
+      const { selectedIds: currentIds, levelId: currentLevelId } = useViewer.getState().selection
+      const sceneNodes = useScene.getState().nodes
+      const anchor = currentIds.find(
+        (id) =>
+          classifyParticipant(sceneNodes[id as AnyNodeId], currentLevelId, sceneNodes) !== null,
+      )
+      if (!anchor) return
+      startGroupMoveDrag(anchor as AnyNodeId, event)
+    },
     [startGroupMoveDrag],
   )
 
@@ -1191,8 +1210,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         ))}
       </g>
       {/* Dashed group bbox — shows what a group drag carries along while a
-          multi-selection exists; rides the live delta mid-drag. */}
-      <FloorplanGroupSelectionBox palette={palette} unitsPerPixel={unitsPerPixel} />
+          multi-selection exists, rides the live delta mid-drag, and doubles
+          as the group's whole-area drag handle. */}
+      <FloorplanGroupSelectionBox
+        onPointerDown={handleGroupBoxPointerDown}
+        palette={palette}
+        unitsPerPixel={unitsPerPixel}
+      />
       {/* Transient live-rotation readout — drawn last so the wedge + degree
           chip sit above all handle chrome while a rotate-arrow is dragged. */}
       {rotationOverlay && palette ? (

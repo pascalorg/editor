@@ -70,7 +70,7 @@ describe('resolveSelectModeHelpHints', () => {
     expect(hints).toEqual([
       {
         keys: ['Left click'],
-        label: 'Drag any selected object to move the whole selection',
+        label: 'Click or drag the selection to move it as one',
       },
       { keys: ['R / T'], label: 'Rotate the selection ±45°' },
       {
