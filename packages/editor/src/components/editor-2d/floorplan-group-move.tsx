@@ -37,13 +37,13 @@ import {
 } from '../editor/group-transform-shared'
 import { swallowNextClick } from '../editor/handles/use-handle-drag'
 
-// 2D sibling of the 3D `GroupMoveHandle`: dragging any selected element of a
-// multi-selection slides the whole selection rigidly (Photoshop semantics).
-// Shares the 3D gizmo's participant snapshot + translate math, its live
-// preview channel (`useLiveNodeOverrides.setMany` + welded `LinkedNeighbor`
-// endpoints), its snapping entry points (grid step via `isGridSnapActive`,
-// Figma alignment via the shared resolver), and its single-undo commit
-// (history pause → one `updateNodes` → resume).
+// 2D sibling of the 3D body-drag group move (`group-move-3d.ts`): dragging
+// any selected element of a multi-selection slides the whole selection
+// rigidly (Photoshop semantics). Both share the participant snapshot +
+// translate math, the live preview channel (`useLiveNodeOverrides.setMany` +
+// welded `LinkedNeighbor` endpoints), the snapping entry points (grid step
+// via `isGridSnapActive`, Figma alignment via the shared resolver), and the
+// single-undo commit (history pause → one `updateNodes` → resume).
 
 // Same engage threshold as the layer's Cmd-drag direct move.
 const DRAG_THRESHOLD_PX = 4
@@ -54,7 +54,7 @@ type FloorplanGroupDragState = {
   delta: Vec2 | null
   set: (delta: Vec2 | null) => void
 }
-const useFloorplanGroupDrag = create<FloorplanGroupDragState>((set) => ({
+export const useFloorplanGroupDrag = create<FloorplanGroupDragState>((set) => ({
   delta: null,
   set: (delta) => set({ delta }),
 }))

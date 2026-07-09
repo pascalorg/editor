@@ -81,7 +81,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Left click'],
         action: 'Drag any selected object to move the whole multi-selection',
-        note: 'With 2+ objects selected — in the 2D floor plan and via the 3D move handle alike.',
+        note: 'With 2+ objects selected — in the 2D floor plan and the 3D view alike.',
       },
       {
         keys: ['R', 'T'],

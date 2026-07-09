@@ -65,7 +65,6 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
-import { GroupMoveHandle } from './group-move-handle'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { RiserDiagramPanel } from './riser-diagram-panel'
@@ -733,7 +732,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
-      {!noEditing && <GroupMoveHandle />}
       {!noEditing && <WallOpeningHighlights />}
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}

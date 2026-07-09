@@ -75,6 +75,8 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { armGroupMove3d } from './group-move-3d'
+import { classifyParticipant } from './group-transform-shared'
 import { swallowNextClick } from './node-arrow-handles'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
@@ -711,6 +713,8 @@ export const SelectionManager = () => {
   // the editor wraps the canvas in a div with a custom `cursor: url(...)`, which
   // (being a closer ancestor) overrides any body cursor over the canvas.
   const glDomElement = useThree((s) => s.gl.domElement)
+  const camera = useThree((s) => s.camera)
+  const raycaster = useThree((s) => s.raycaster)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
@@ -1159,7 +1163,30 @@ export const SelectionManager = () => {
 
     const onPointerDown = (event: NodeEvent) => {
       const pointer = pointerEventFromNodeEvent(event)
-      if (pointer.button !== 0 || !isCommandModifier(pointer)) return
+      if (pointer.button !== 0) return
+
+      // Plain press on a transformable member of a multi-selection arms the
+      // group move — dragging slides the whole selection on the ground plane
+      // (the 3D sibling of the 2D floorplan group drag, replacing the removed
+      // group-move gizmo cross). A plain click (no drag) still falls through
+      // to the normal click handling, which collapses to the pressed node.
+      if (
+        !(pointer.shiftKey || pointer.altKey || isCommandModifier(pointer)) &&
+        armGroupMove3d({
+          nodeId: event.node.id as AnyNodeId,
+          clientX: pointer.clientX,
+          clientY: pointer.clientY,
+          pointerId: pointer.pointerId,
+          nativeEvent: pointer,
+          camera,
+          raycaster,
+          domElement: glDomElement,
+        })
+      ) {
+        return
+      }
+
+      if (!isCommandModifier(pointer)) return
 
       const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
       if (!canDirectMoveNode(node)) return
@@ -1260,7 +1287,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
       }
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement])
 
   // Move cursor over the selected movable node: the visual cue that clicking it
   // picks it up (replaces the removed move-cross gizmo). Reacts only when the
@@ -1272,15 +1299,24 @@ export const SelectionManager = () => {
     let prevKey = ' '
     const applyCursor = () => {
       const { selection, hoveredId } = useViewer.getState()
-      const sole = selection.selectedIds.length === 1 ? selection.selectedIds[0] : null
-      const key = `${hoveredId ?? ''}|${sole ?? ''}`
+      const selectedIds = selection.selectedIds
+      const sole = selectedIds.length === 1 ? selectedIds[0] : null
+      const key = `${hoveredId ?? ''}|${sole ?? ''}|${selectedIds.length}`
       if (key === prevKey) return
       prevKey = key
-      const node =
-        sole != null && hoveredId === sole && !getMovingNode()
-          ? useScene.getState().nodes[sole as AnyNodeId]
-          : null
-      if (node && canDirectMoveNode(node)) {
+      let wantsMove = false
+      if (hoveredId && !getMovingNode()) {
+        if (sole === hoveredId) {
+          const node = useScene.getState().nodes[sole as AnyNodeId]
+          wantsMove = !!node && canDirectMoveNode(node)
+        } else if (selectedIds.length > 1 && selectedIds.includes(hoveredId)) {
+          // Group member: dragging it slides the whole selection.
+          const nodes = useScene.getState().nodes
+          wantsMove =
+            classifyParticipant(nodes[hoveredId as AnyNodeId], selection.levelId, nodes) !== null
+        }
+      }
+      if (wantsMove) {
         glDomElement.style.cursor = 'move'
         owns = true
       } else if (owns) {

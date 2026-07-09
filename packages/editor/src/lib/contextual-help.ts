@@ -22,9 +22,10 @@ export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
 // select-mode hints off-screen — a resize is its own action, not a selection.
 export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
 
-// `activeHandleDrag.label`s for the multi-selection group gizmos' drags. Kept
-// here (not in the gizmo components) so `snapping-mode.ts` can resolve the
-// group move to the 'item' snap context without importing component code.
+// `activeHandleDrag.label`s for the multi-selection group drags: the body
+// drag sessions (2D floorplan + 3D ground plane) and the rotate gizmo. Kept
+// here (not in the session/gizmo modules) so `snapping-mode.ts` can resolve
+// the group move to the 'item' snap context without importing component code.
 export const GROUP_MOVE_DRAG_LABEL = 'group-move-handle'
 export const GROUP_ROTATE_DRAG_LABEL = 'group-rotate-handle'
 
