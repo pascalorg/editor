@@ -3,6 +3,8 @@
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three/webgpu'
+import { getSceneTheme } from '../../lib/scene-themes'
+import useViewer from '../../store/use-viewer'
 
 /**
  * Scene IBL — a small procedural gradient sky (cool zenith → warm horizon →
@@ -22,6 +24,8 @@ const HORIZON = [0.95, 0.84, 0.66] as const
 const GROUND = [0.38, 0.35, 0.3] as const
 
 const ENV_INTENSITY = 0.6
+// The gradient sky is a daylight source; dark themes only want a whisper of it.
+const ENV_INTENSITY_DARK = 0.2
 const WIDTH = 64
 const HEIGHT = 32
 
@@ -64,18 +68,19 @@ function buildGradientSky(): THREE.DataTexture {
 export function SceneEnvironment() {
   const scene = useThree((state) => state.scene)
   const texture = useMemo(buildGradientSky, [])
+  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
 
   useEffect(() => {
     const prevEnvironment = scene.environment
     const prevIntensity = scene.environmentIntensity
     scene.environment = texture
-    scene.environmentIntensity = ENV_INTENSITY
+    scene.environmentIntensity = appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY
     return () => {
       scene.environment = prevEnvironment
       scene.environmentIntensity = prevIntensity
       texture.dispose()
     }
-  }, [scene, texture])
+  }, [scene, texture, appearance])
 
   return null
 }
