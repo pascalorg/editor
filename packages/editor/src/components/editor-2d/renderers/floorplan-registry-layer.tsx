@@ -58,6 +58,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { FloorplanGroupSelectionBox, startFloorplanGroupMove } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
@@ -245,6 +246,8 @@ type FloorplanLevelDataHook = (args: {
 type FloorplanRenderPass = 'base' | 'overlay'
 
 const POINTER_CURSOR_STYLE = { cursor: 'pointer' } as const
+// Group members advertise the drag-to-move-the-selection gesture.
+const MOVE_CURSOR_STYLE = { cursor: 'move' } as const
 const NO_POINTER_EVENTS_STYLE = { pointerEvents: 'none' } as const
 
 function snapshotNode(node: AnyNode): NodeSnapshot {
@@ -355,6 +358,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // Marquee preview selection — matches the legacy `highlightedIdSet` use
   // (filter-while-marquee), surfaces selection chrome without keyboard focus.
   const highlightedIdSet = useMemo(() => new Set(previewSelectedIds), [previewSelectedIds])
+  // Multi-selection: members show highlight only (per-node edit chrome hidden)
+  // and transformable members advertise the drag-to-move gesture.
+  const isMultiSelect = selectedIds.length > 1
+  const groupParticipantIdSet = useMemo(() => {
+    if (selectedIds.length < 2 || !levelId) return null
+    return new Set(
+      selectedIds.filter(
+        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      ),
+    )
+  }, [selectedIds, levelId, nodes])
 
   // Interactive state lives in refs; only the visible feedback bits go
   // into React state to keep re-renders cheap during drag.
@@ -1116,6 +1130,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             pass="base"
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
+            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
+            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
@@ -1163,6 +1179,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             pass="overlay"
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
+            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
+            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
@@ -1208,6 +1226,10 @@ type FloorplanRegistryEntryProps = {
   node: AnyNode
   nodeId: AnyNodeId
   nodes: Record<string, AnyNode>
+  /** Selected member of a multi-selection: hide its per-node edit chrome. */
+  suppressHandles: boolean
+  /** Transformable member of a multi-selection: advertise drag-to-move. */
+  groupMoveCursor: boolean
   onClickStop: (event: React.MouseEvent<SVGGElement>) => void
   onEntryPointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => void
   onGroupMovePointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => boolean
@@ -1251,6 +1273,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   node,
   nodeId,
   nodes,
+  suppressHandles,
+  groupMoveCursor,
   onClickStop,
   onEntryPointerDown,
   onGroupMovePointerDown,
@@ -1349,7 +1373,14 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     siblingEpoch,
     visibilityRootId,
   })
-  const geometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
+  const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
+  // Multi-selection shows highlight only: strip this member's edit handles /
+  // dimension chrome (all of which live in the overlay pass) while keeping
+  // its highlighted body geometry.
+  const geometry =
+    rawGeometry && suppressHandles && pass === 'overlay'
+      ? stripHandleChrome(rawGeometry)
+      : rawGeometry
   if (!geometry) return null
 
   const entryClick = isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : onClickStop
@@ -1364,7 +1395,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       onPointerDown={entryPointerDown}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      style={POINTER_CURSOR_STYLE}
+      style={groupMoveCursor ? MOVE_CURSOR_STYLE : POINTER_CURSOR_STYLE}
     >
       <InteractiveGeometry
         activeDragId={activeDragId}
@@ -2640,6 +2671,36 @@ export function splitFloorplanOverlay(g: FloorplanGeometry): {
     return { base, overlay }
   }
   return { base: g, overlay: null }
+}
+
+/**
+ * Per-node edit chrome hidden while a multi-selection is active: the group is
+ * manipulated as one rigid piece (drag to move, R/T to rotate), so individual
+ * handles / dimension labels on each member would mislead. `text` stays —
+ * zone names are identification, not editing chrome.
+ */
+const HANDLE_CHROME_KINDS = new Set<FloorplanGeometry['kind']>([
+  'endpoint-handle',
+  'midpoint-handle',
+  'edge-handle',
+  'move-handle',
+  'move-arrow',
+  'rotate-arrow',
+  'dimension',
+  'dimension-label',
+  'equal-spacing-badge',
+])
+
+function stripHandleChrome(g: FloorplanGeometry): FloorplanGeometry | null {
+  if (HANDLE_CHROME_KINDS.has(g.kind)) return null
+  if (g.kind === 'group') {
+    const children = g.children
+      .map(stripHandleChrome)
+      .filter((c): c is FloorplanGeometry => c !== null)
+    if (children.length === 0) return null
+    return { kind: 'group', children, transform: g.transform }
+  }
+  return g
 }
 
 // Stable string key for a wall endpoint, rounded to 1 mm so floating-point
