@@ -112,6 +112,7 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
+import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
@@ -10753,9 +10754,11 @@ export function FloorplanPanel({
           />
         )}
         {/* Floating Move / Duplicate / Delete buttons for registered
-            kinds. All kinds are registry-driven now, so this is the
-            only action menu the floor plan mounts. */}
+            kinds. All kinds are registry-driven now, so these are the
+            only action menus the floor plan mounts — the single-node
+            pill, plus the group pill for multi-selections. */}
         <FloorplanRegistryActionMenu />
+        <FloorplanGroupActionMenu />
 
         {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (

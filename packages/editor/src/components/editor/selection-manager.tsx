@@ -78,6 +78,7 @@ import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/b
 import { armGroupMove3d } from './group-move-3d'
 import { classifyParticipant } from './group-transform-shared'
 import { swallowNextClick } from './node-arrow-handles'
+import { setEditorThreeContext } from './three-context-bridge'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -716,6 +717,13 @@ export const SelectionManager = () => {
   const camera = useThree((s) => s.camera)
   const raycaster = useThree((s) => s.raycaster)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
+
+  // Publish the live three context for DOM-level sessions (group pick-up
+  // move) that raycast the 3D view from outside the R3F tree.
+  useEffect(() => {
+    setEditorThreeContext({ camera, raycaster, domElement: glDomElement })
+    return () => setEditorThreeContext(null)
+  }, [camera, raycaster, glDomElement])
   const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
     ctrl: false,

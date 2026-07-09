@@ -65,6 +65,7 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
+import { GroupFloatingActionMenu } from './group-floating-action-menu'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { RiserDiagramPanel } from './riser-diagram-panel'
@@ -737,6 +738,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FenceTangentLines3D />}
       {!noEditing && <FloatingActionMenu />}
+      {!noEditing && <GroupFloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
