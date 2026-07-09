@@ -7,9 +7,9 @@ import type {
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
-import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
