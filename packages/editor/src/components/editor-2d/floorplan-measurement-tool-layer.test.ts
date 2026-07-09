@@ -107,6 +107,18 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
+  test('shift locks the 2D draft endpoint to horizontal or vertical while drawing', () => {
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
+    handleFloorplanMeasurementGridMove(gridEvent([1, 0, 4], { shiftKey: true }))
+    handleFloorplanMeasurementGridClick(gridEvent([1, 0, 4], { shiftKey: true }))
+
+    expect(useMeasurementTool.getState().segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [0, 0, 4],
+      view: '2d',
+    })
+  })
+
   test('snaps the first 2D placement point to nearby wall anchors', () => {
     seedScene([wallNode()])
 

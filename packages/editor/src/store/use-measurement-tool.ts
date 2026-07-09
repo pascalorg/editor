@@ -102,6 +102,28 @@ export function distanceBetweenMeasurements(a: MeasurementPoint, b: MeasurementP
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
 }
 
+export function axisLockedMeasurementPoint(
+  start: MeasurementPoint,
+  end: MeasurementPoint,
+  view: MeasurementView,
+): MeasurementPoint {
+  const axes = view === '2d' ? ([0, 2] as const) : ([0, 1, 2] as const)
+  let strongestAxis = axes[0]
+  let strongestDistance = Math.abs(end[strongestAxis] - start[strongestAxis])
+
+  for (const axis of axes.slice(1)) {
+    const distance = Math.abs(end[axis] - start[axis])
+    if (distance > strongestDistance) {
+      strongestAxis = axis
+      strongestDistance = distance
+    }
+  }
+
+  return start.map((value, axis) =>
+    axis === strongestAxis ? end[axis as keyof MeasurementPoint] : value,
+  ) as MeasurementPoint
+}
+
 function isMeasurementView(value: unknown): value is MeasurementView {
   return value === '2d' || value === '3d'
 }

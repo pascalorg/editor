@@ -33,6 +33,7 @@ import {
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import useInteractionScope from '../../store/use-interaction-scope'
 import {
+  axisLockedMeasurementPoint,
   distanceBetweenMeasurements,
   type MeasurementAngle,
   type MeasurementArea,
@@ -669,9 +670,13 @@ function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
 
 export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
-  const point = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
-  setMeasurementCursorPoint(point)
   const measurement = useMeasurementTool.getState()
+  const rawPoint = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const point =
+    event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
+      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '2d')
+      : rawPoint
+  setMeasurementCursorPoint(point)
   if (measurement.angleDraft) {
     measurement.updateAngle(point)
     return
@@ -682,8 +687,16 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
 
 export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
-  const point = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
   const measurement = useMeasurementTool.getState()
+  const rawPoint = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const point =
+    event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
+      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '2d')
+      : rawPoint
+  if (event.nativeEvent.shiftKey && measurement.draft?.view === '2d') {
+    measurement.commit(point)
+    return
+  }
   if (event.nativeEvent.shiftKey || measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)

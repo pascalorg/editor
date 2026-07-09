@@ -36,6 +36,7 @@ import {
 import { cn } from '../../../lib/utils'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
+  axisLockedMeasurementPoint,
   distanceBetweenMeasurements,
   type MeasurementAngle,
   type MeasurementArea,
@@ -424,8 +425,12 @@ export function handleMeasurementGridMove3D(
 ): void {
   if (!isCanvasEvent(event, canvas)) return
   if (shouldIgnoreGridEvent()) return
-  const point = measurementPointFromGridEvent(event)
   const measurement = useMeasurementTool.getState()
+  const rawPoint = measurementPointFromGridEvent(event)
+  const point =
+    event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
+      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
+      : rawPoint
   measurement.setCursor('3d', point)
   if (measurement.angleDraft) {
     measurement.updateAngle(point)
@@ -442,9 +447,17 @@ export function handleMeasurementGridClick3D(
 ): void {
   if (!isCanvasEvent(event, canvas)) return
   if (shouldIgnoreGridEvent()) return
-  const point = measurementPointFromGridEvent(event)
   const measurement = useMeasurementTool.getState()
+  const rawPoint = measurementPointFromGridEvent(event)
+  const point =
+    event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
+      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
+      : rawPoint
   measurement.setCursor('3d', point)
+  if (event.nativeEvent.shiftKey && measurement.draft?.view === '3d') {
+    measurement.commit(point)
+    return
+  }
   if (event.nativeEvent.shiftKey || measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)
@@ -464,12 +477,20 @@ export function handleMeasurementGridClick3D(
 export function handleMeasurementNodeClick3D(event: NodeEvent): void {
   event.stopPropagation()
 
-  const point = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
   const measurement = useMeasurementTool.getState()
+  const rawPoint = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
+  const point =
+    event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
+      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
+      : rawPoint
   const quickMeasure = Boolean(
     event.nativeEvent.altKey || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
   )
   measurement.setCursor('3d', point)
+  if (event.nativeEvent.shiftKey && measurement.draft?.view === '3d') {
+    measurement.commit(point)
+    return
+  }
   if (event.nativeEvent.shiftKey || measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)

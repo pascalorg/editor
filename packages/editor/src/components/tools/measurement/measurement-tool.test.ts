@@ -121,6 +121,20 @@ describe('measurement 3D grid handlers', () => {
     })
   })
 
+  test('shift locks the 3D draft endpoint to the strongest axis while drawing', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+
+    handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
+    handleMeasurementGridMove3D(gridEvent([1, 2, 5], canvas, { shiftKey: true }), canvas)
+    handleMeasurementGridClick3D(gridEvent([1, 2, 5], canvas, { shiftKey: true }), canvas)
+
+    expect(useMeasurementTool.getState().segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [0, 0, 5],
+      view: '3d',
+    })
+  })
+
   test('snaps the first 3D surface placement point to nearby surface anchors', () => {
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
 
@@ -137,6 +151,17 @@ describe('measurement 3D grid handlers', () => {
     expect(useMeasurementTool.getState().segments[0]).toMatchObject({
       start: [0, 0, 0],
       end: [4, 0, 3],
+      view: '3d',
+    })
+  })
+
+  test('shift locks the committed 3D surface endpoint after snapping', () => {
+    handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
+    handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [3.92, 0, 2.92], { shiftKey: true }))
+
+    expect(useMeasurementTool.getState().segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
       view: '3d',
     })
   })

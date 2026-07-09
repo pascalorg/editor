@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
+  axisLockedMeasurementPoint,
   hydrateMeasurements,
   normalizePersistedMeasurements,
   serializeMeasurements,
@@ -11,6 +12,12 @@ afterEach(() => {
 })
 
 describe('useMeasurementTool', () => {
+  test('axisLockedMeasurementPoint constrains to the strongest drawing axis', () => {
+    expect(axisLockedMeasurementPoint([0, 0, 0], [1, 2, 4], '2d')).toEqual([0, 0, 4])
+    expect(axisLockedMeasurementPoint([0, 0, 0], [1, 2, 4], '3d')).toEqual([0, 0, 4])
+    expect(axisLockedMeasurementPoint([0, 0, 0], [1, 5, 4], '3d')).toEqual([0, 5, 0])
+  })
+
   test('commits point-to-point measurements and selects the new segment', () => {
     const measurement = useMeasurementTool.getState()
     measurement.begin('2d', [0, 0, 0])
