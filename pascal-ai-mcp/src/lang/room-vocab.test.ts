@@ -73,6 +73,20 @@ describe('detectLanguage', () => {
     expect(detectLanguage('')).toBe('en')
     expect(detectLanguage(undefined)).toBe('en')
   })
+
+  test('sticky rules: kana-less ja stays ja, short acks keep the prior language', () => {
+    // Terse Japanese without kana is indistinguishable from Chinese — an
+    // established ja session must not flip to zh.
+    expect(detectLanguage('寝室2、浴室1', 'ja')).toBe('ja')
+    expect(detectLanguage('寝室2、浴室1', 'zh')).toBe('zh')
+    // Habitual short latin acks ("ok", "yes") must not flip a zh/ja session
+    // to English; a real English sentence still switches.
+    expect(detectLanguage('ok', 'zh')).toBe('zh')
+    expect(detectLanguage('yes', 'ja')).toBe('ja')
+    expect(detectLanguage('Please make the bedroom bigger', 'zh')).toBe('en')
+    // No prior session language: everything behaves as before.
+    expect(detectLanguage('ok')).toBe('en')
+  })
 })
 
 describe('reply templates', () => {

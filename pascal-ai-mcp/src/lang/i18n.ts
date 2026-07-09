@@ -16,11 +16,17 @@ export type Lang = 'zh' | 'ja' | 'en'
 
 // Kana ⇒ Japanese; Han without kana ⇒ Chinese; otherwise English. Checked
 // against the user's most recent message each turn, so a conversation that
-// switches language switches replies too.
-export function detectLanguage(text: string | undefined | null): Lang {
-  if (!text) return 'en'
+// switches language switches replies too. Two sticky rules soften the
+// per-message detection:
+// - a ja session stays ja on kana-less messages (terse Japanese like
+//   「寝室2、浴室1」 is pure kanji and indistinguishable from Chinese);
+// - short CJK-less messages ("ok", "yes") keep the prior language instead
+//   of flipping the conversation to English.
+export function detectLanguage(text: string | undefined | null, prior?: Lang): Lang {
+  if (!text) return prior ?? 'en'
   if (/[぀-ヿ]/.test(text)) return 'ja'
-  if (/[一-鿿]/.test(text)) return 'zh'
+  if (/[一-鿿]/.test(text)) return prior === 'ja' ? 'ja' : 'zh'
+  if (prior && text.trim().length <= 4) return prior
   return 'en'
 }
 
@@ -188,6 +194,98 @@ export const MESSAGES = {
     p => `\n……以及另外 ${p.count} 项`,
     p => `\n……ほか ${p.count} 件`,
     p => `\n…and ${p.count} more`,
+  ),
+  // --- ingest routing / existing-scene路径（zh 文案与旧硬编码逐字一致，eval 的
+  // 失败分类正则依赖其中几条的关键词） ---
+  taskCancelled: def<Record<string, never>>(
+    () => '已取消当前户型设计任务。现有场景没有被修改。',
+    () => '間取り設計タスクをキャンセルしました。既存のシーンは変更されていません。',
+    () => 'The floor plan task was cancelled. The existing scene was not modified.',
+  ),
+  modifyConfirmed: def<Record<string, never>>(
+    () => '修改已确认，正在更新当前户型。',
+    () => '修正を確認しました。間取りを更新しています。',
+    () => 'Modification confirmed — updating the floor plan.',
+  ),
+  notReadyToConfirm: def<Record<string, never>>(
+    () => '当前需求还没有达到可确认状态，请先补充关键条件。',
+    () => '要件はまだ確認できる状態ではありません。先に重要な条件を補足してください。',
+    () => 'The requirements are not ready to confirm yet — please provide the key details first.',
+  ),
+  confirmedWithDefaults: def<Record<string, never>>(
+    () => '已按当前信息并采用系统默认假设确认需求，正在生成户型。',
+    () => '現在の情報とデフォルトの前提で要件を確定し、間取りを生成しています。',
+    () => 'Requirements confirmed with current information and default assumptions — generating the floor plan.',
+  ),
+  requirementsConfirmed: def<Record<string, never>>(
+    () => '需求已确认，正在生成户型。',
+    () => '要件を確認しました。間取りを生成しています。',
+    () => 'Requirements confirmed — generating the floor plan.',
+  ),
+  emptyInput: def<Record<string, never>>(
+    () => '请输入户型需求，或上传一张户型图。',
+    () => '間取りの要件を入力するか、間取り図を1枚アップロードしてください。',
+    () => 'Please describe your floor plan requirements, or upload a floor plan image.',
+  ),
+  describeChangesInText: def<Record<string, never>>(
+    () => '户型已经生成。请用文字描述需要修改的内容。',
+    () => '間取りは生成済みです。修正したい内容をテキストで入力してください。',
+    () => 'The floor plan is already generated. Please describe the changes you want in text.',
+  ),
+  messageTooLong: def<Record<string, never>>(
+    () => '文字需求不能超过 5000 个字符，请精简后重新提交。',
+    () => 'テキストは 5000 文字以内にしてください。要約して再送信をお願いします。',
+    () => 'Text requirements must be under 5000 characters — please shorten and resubmit.',
+  ),
+  unsupportedImage: def<Record<string, never>>(
+    () => '当前仅支持单张 JPG、JPEG 或 PNG 户型图，且图片必须小于 20 MB。',
+    () => '現在は JPG・JPEG・PNG の間取り図 1 枚のみ対応しています（20 MB 未満）。',
+    () => 'Only a single JPG, JPEG, or PNG floor plan image under 20 MB is supported.',
+  ),
+  sceneLoadFailed: def<{ sceneId: string; error: string }>(
+    p => `无法加载场景 ${p.sceneId}：${p.error}。请刷新页面重新打开项目，或稍后重试。`,
+    p => `シーン ${p.sceneId} を読み込めませんでした：${p.error}。ページを更新してプロジェクトを開き直すか、後で再試行してください。`,
+    p => `Failed to load scene ${p.sceneId}: ${p.error}. Refresh the page to reopen the project, or try again later.`,
+  ),
+  briefParseFailed: def<{ error: string }>(
+    p => `需求解析失败：${p.error}。你可以重试，已输入的文字仍保留在当前会话中。`,
+    p => `要件の解析に失敗しました：${p.error}。再試行できます。入力済みのテキストはこのセッションに保持されています。`,
+    p => `Requirement parsing failed: ${p.error}. You can retry — your input is preserved in this session.`,
+  ),
+  inspectNoScene: def<Record<string, never>>(
+    () => '找不到需要核对的场景。',
+    () => '確認対象のシーンが見つかりません。',
+    () => 'No scene found to inspect.',
+  ),
+  inspectFailed: def<{ error: string }>(
+    p => `场景核对失败：${p.error}。当前场景没有被修改。`,
+    p => `シーンの確認に失敗しました：${p.error}。現在のシーンは変更されていません。`,
+    p => `Scene inspection failed: ${p.error}. The current scene was not modified.`,
+  ),
+  inspectStarting: def<Record<string, never>>(
+    () => '正在核对当前户型。',
+    () => '現在の間取りを確認しています。',
+    () => 'Inspecting the current floor plan.',
+  ),
+  sceneIntentAmbiguous: def<Record<string, never>>(
+    () => '我还不能确定你是想查询当前户型，还是要新增、修改或删除内容。请明确说明操作和对象，例如“查看这面墙多长”或“删除客厅东侧的窗户”。',
+    () => 'ご要望が現在の間取りの確認なのか、追加・修正・削除なのか判断できませんでした。操作と対象を明確にしてください。例：「この壁の長さを確認して」「リビング東側の窓を削除して」。',
+    () => "I can't tell whether you want to inspect the current floor plan or add, modify, or delete something. Please state the action and target, e.g. \"check how long this wall is\" or \"delete the window on the east side of the living room\".",
+  ),
+  deleteConfirm: def<{ message: string }>(
+    p => `准备删除当前户型内容：${p.message}\n\n这是删除操作，确认后目标节点及其关联内容可能被移除。请确认后再执行，确认前不会更改场景。`,
+    p => `間取りから次の内容を削除しようとしています：${p.message}\n\nこれは削除操作です。確認後、対象ノードと関連する内容が取り除かれる可能性があります。確認するまでシーンは変更されません。`,
+    p => `About to delete from the current floor plan: ${p.message}\n\nThis is a destructive operation — the target nodes and related content may be removed once confirmed. Nothing changes until you confirm.`,
+  ),
+  sceneCreateStarting: def<{ message: string }>(
+    p => `正在新增当前户型：${p.message}`,
+    p => `間取りに追加しています：${p.message}`,
+    p => `Adding to the current floor plan: ${p.message}`,
+  ),
+  sceneUpdateStarting: def<{ message: string }>(
+    p => `正在修改当前户型：${p.message}`,
+    p => `間取りを修正しています：${p.message}`,
+    p => `Modifying the current floor plan: ${p.message}`,
   ),
 } as const
 

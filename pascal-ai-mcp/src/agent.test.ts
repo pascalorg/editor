@@ -164,6 +164,8 @@ test('non-empty projects use incremental MCP modification', () => {
 test('scene follow-up questions stay read-only', () => {
   expect(isSceneQuestion('现在好像有个墙是8米的？')).toBe(true)
   expect(isSceneQuestion('把这面墙改成5米')).toBe(false)
+  expect(isSceneQuestion('この壁の長さは8メートルですか')).toBe(true)
+  expect(isSceneQuestion('How long is that wall?')).toBe(true)
 })
 
 test('existing scene requests are routed by CRUD intent', () => {
@@ -172,6 +174,24 @@ test('existing scene requests are routed by CRUD intent', () => {
   expect(classifySceneIntentFallback('把这面墙改成4米')).toBe('update')
   expect(classifySceneIntentFallback('删除客厅东侧的窗户')).toBe('delete')
   expect(classifySceneIntentFallback('客厅东边的窗户')).toBe('ambiguous')
+})
+
+test('fallback intent classification understands all three reply-hint languages', () => {
+  // The reply templates tell users to answer with these exact phrases — the
+  // deterministic fallback must classify every one of them as update.
+  expect(classifySceneIntentFallback('继续修复')).toBe('update')
+  expect(classifySceneIntentFallback('keep fixing')).toBe('update')
+  expect(classifySceneIntentFallback('修正を続けて')).toBe('update')
+
+  expect(classifySceneIntentFallback('リビング東側の窓を削除して')).toBe('delete')
+  expect(classifySceneIntentFallback('南側の壁に窓を追加して')).toBe('create')
+  expect(classifySceneIntentFallback('この壁を4メートルに変えて')).toBe('update')
+  expect(classifySceneIntentFallback('この壁の長さを教えて')).toBe('query')
+
+  expect(classifySceneIntentFallback('Delete the window on the east wall')).toBe('delete')
+  expect(classifySceneIntentFallback('Add a window to the south wall')).toBe('create')
+  expect(classifySceneIntentFallback('Move the sofa away from the door')).toBe('update')
+  expect(classifySceneIntentFallback('Show me the living room walls')).toBe('query')
 })
 
 function zone(id: string, name: string, polygon: Array<[number, number]>): ZoneSummary {
@@ -488,11 +508,18 @@ function input(overrides: Partial<ChatInput> = {}): ChatInput {
 
 describe('ingest state machine: planIngestAction', () => {
   test('cancel ends the turn and marks the session cancelled', () => {
-    const s = session({ phase: 'clarifying', questions: ['q'] })
+    const s = session({ phase: 'clarifying', questions: ['q'], language: 'zh' })
     const plan = planIngestAction(input({ action: 'cancel' }), s)
     expect(plan).toEqual({ kind: 'reply', reply: '已取消当前户型设计任务。现有场景没有被修改。' })
     expect(s.phase).toBe('cancelled')
     expect(s.questions).toEqual([])
+  })
+
+  test('routing replies follow the session language', () => {
+    const ja = planIngestAction(input({ action: 'cancel' }), session({ phase: 'clarifying', language: 'ja' }))
+    if (ja.kind === 'reply') expect(ja.reply).toContain('キャンセル')
+    const en = planIngestAction(input({ action: 'cancel' }), session({ phase: 'clarifying' }))
+    if (en.kind === 'reply') expect(en.reply).toContain('cancelled')
   })
 
   test('confirm from awaiting_confirmation routes to generation', () => {
@@ -504,7 +531,7 @@ describe('ingest state machine: planIngestAction', () => {
   })
 
   test('confirm from clarifying is the accept-defaults escape hatch', () => {
-    const s = session({ phase: 'clarifying' })
+    const s = session({ phase: 'clarifying', language: 'zh' })
     const plan = planIngestAction(input({ action: 'confirm' }), s)
     expect(plan.kind).toBe('route')
     expect(plan).toMatchObject({ next: 'generate' })
@@ -527,7 +554,7 @@ describe('ingest state machine: planIngestAction', () => {
   })
 
   test('empty input asks for something to work with', () => {
-    const plan = planIngestAction(input({ message: '   ' }), session())
+    const plan = planIngestAction(input({ message: '   ' }), session({ language: 'zh' }))
     expect(plan).toEqual({ kind: 'reply', reply: '请输入户型需求，或上传一张户型图。' })
   })
 

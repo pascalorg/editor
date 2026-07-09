@@ -2,6 +2,7 @@ import { END, START, StateGraph } from '@langchain/langgraph'
 import { evaluateCompletionGates, type GateFailure, type GateReport, type GateWall } from './completion-gates'
 import type { AppConfig } from './config'
 import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
+import { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
 import {
   classifyRoomTypeByName,
   ROOM_NAME_PATTERNS,
@@ -115,7 +116,7 @@ type Evaluation = {
   questions: string[]
 }
 
-export type SceneIntent = 'query' | 'create' | 'update' | 'delete' | 'ambiguous'
+export { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
 
 export class PascalAiAgent {
   private readonly model?: OpenAiCompatibleClient
@@ -307,7 +308,7 @@ export class PascalAiAgent {
     // else en). A confirm/cancel action carries no text — keep the previous
     // detection so a bare confirmation doesn't flip the language to English.
     if (input.message?.trim()) {
-      session.language = detectLanguage(input.message)
+      session.language = detectLanguage(input.message, session.language)
     }
 
     // Pure state-machine core decides the turn and applies I/O-free
@@ -326,7 +327,7 @@ export class PascalAiAgent {
           return this.routeExistingSceneRequest(session, message)
         }
       } catch (error) {
-        const reply = `无法加载场景 ${session.sceneId}：${errorMessage(error)}。请刷新页面重新打开项目，或稍后重试。`
+        const reply = t(session.language, 'sceneLoadFailed', { sceneId: session.sceneId, error: errorMessage(error) })
         session.messages.push({ role: 'assistant', content: reply })
         return { session, reply, next: 'finish' }
       }
@@ -343,7 +344,7 @@ export class PascalAiAgent {
       return { session, reply: '', next: 'evaluate' }
     } catch (error) {
       session.phase = 'failed'
-      const reply = `需求解析失败：${errorMessage(error)}。你可以重试，已输入的文字仍保留在当前会话中。`
+      const reply = t(session.language, 'briefParseFailed', { error: errorMessage(error) })
       // Record the failure reply so the eval harness and the /sessions
       // recovery endpoint can read the real reason instead of an empty tail.
       session.messages.push({ role: 'assistant', content: reply })
@@ -357,7 +358,7 @@ export class PascalAiAgent {
     const sceneId = session.sceneResult?.sceneId ?? session.sceneId
     if (!sceneId) {
       session.phase = 'failed'
-      return { session, reply: '找不到需要核对的场景。', next: 'finish' }
+      return { session, reply: t(session.language, 'inspectNoScene', {}), next: 'finish' }
     }
     try {
       await this.callMcp(session.sessionId, 'load_scene', { id: sceneId })
@@ -369,7 +370,7 @@ export class PascalAiAgent {
       return { session, reply, next: 'finish' }
     } catch (error) {
       session.phase = 'completed_with_issues'
-      const reply = `场景核对失败：${errorMessage(error)}。当前场景没有被修改。`
+      const reply = t(session.language, 'inspectFailed', { error: errorMessage(error) })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -383,13 +384,13 @@ export class PascalAiAgent {
     const intent = await this.classifySceneIntent(session, message)
     if (intent === 'query') {
       session.phase = 'inspecting'
-      return { session, reply: '正在核对当前户型。', next: 'inspect' }
+      return { session, reply: t(session.language, 'inspectStarting', {}), next: 'inspect' }
     }
     if (intent === 'ambiguous') {
       session.phase = session.sceneResult?.remainingIssueCount
         ? 'completed_with_issues'
         : 'completed'
-      const reply = '我还不能确定你是想查询当前户型，还是要新增、修改或删除内容。请明确说明操作和对象，例如“查看这面墙多长”或“删除客厅东侧的窗户”。'
+      const reply = t(session.language, 'sceneIntentAmbiguous', {})
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -400,13 +401,14 @@ export class PascalAiAgent {
     // apply_patch 完成、可撤销，直接执行以免每次微调都要多一次确认往返。
     if (intent === 'delete') {
       session.phase = 'awaiting_modification_confirmation'
-      const reply = `准备删除当前户型内容：${message}\n\n这是删除操作，确认后目标节点及其关联内容可能被移除。请确认后再执行，确认前不会更改场景。`
+      const reply = t(session.language, 'deleteConfirm', { message })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
     session.phase = 'modifying'
-    const label = intent === 'create' ? '新增' : '修改'
-    const reply = `正在${label}当前户型：${message}`
+    const reply = intent === 'create'
+      ? t(session.language, 'sceneCreateStarting', { message })
+      : t(session.language, 'sceneUpdateStarting', { message })
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'modify' }
   }
@@ -1987,19 +1989,19 @@ export function planIngestAction(input: ChatInput, session: WorkflowSession): In
   if (input.action === 'cancel') {
     session.phase = 'cancelled'
     session.questions = []
-    return { kind: 'reply', reply: '已取消当前户型设计任务。现有场景没有被修改。' }
+    return { kind: 'reply', reply: t(session.language, 'taskCancelled', {}) }
   }
 
   if (input.action === 'confirm') {
     if (session.phase === 'awaiting_modification_confirmation' && session.pendingModification) {
       session.phase = 'modifying'
-      return { kind: 'route', reply: '修改已确认，正在更新当前户型。', next: 'modify' }
+      return { kind: 'route', reply: t(session.language, 'modifyConfirmed', {}), next: 'modify' }
     }
     // `clarifying` is allowed too: the explicit "接受默认假设，直接生成" escape
     // hatch that keeps a low-confidence brief from being trapped in the
     // clarification loop with no way forward.
     if (session.phase !== 'awaiting_confirmation' && session.phase !== 'clarifying') {
-      return { kind: 'reply', reply: '当前需求还没有达到可确认状态，请先补充关键条件。' }
+      return { kind: 'reply', reply: t(session.language, 'notReadyToConfirm', {}) }
     }
     const acceptedDefaults = session.phase === 'clarifying'
     session.confirmedAt = new Date().toISOString()
@@ -2008,15 +2010,15 @@ export function planIngestAction(input: ChatInput, session: WorkflowSession): In
     return {
       kind: 'route',
       reply: acceptedDefaults
-        ? '已按当前信息并采用系统默认假设确认需求，正在生成户型。'
-        : '需求已确认，正在生成户型。',
+        ? t(session.language, 'confirmedWithDefaults', {})
+        : t(session.language, 'requirementsConfirmed', {}),
       next: 'generate',
     }
   }
 
   const message = input.message?.trim() ?? ''
   if (!message && !input.imageDataUrl) {
-    return { kind: 'reply', reply: '请输入户型需求，或上传一张户型图。' }
+    return { kind: 'reply', reply: t(session.language, 'emptyInput', {}) }
   }
   // A failed modification left phase here so a plain confirm can retry it; a
   // fresh plain message instead means "new change" — clear the stale pending
@@ -2028,17 +2030,17 @@ export function planIngestAction(input: ChatInput, session: WorkflowSession): In
   }
   if (isCompletedPhase(session.phase)) {
     if (!message) {
-      return { kind: 'reply', reply: '户型已经生成。请用文字描述需要修改的内容。' }
+      return { kind: 'reply', reply: t(session.language, 'describeChangesInText', {}) }
     }
     return { kind: 'route-existing', message }
   }
   if (message.length > 5000) {
-    return { kind: 'reply', reply: '文字需求不能超过 5000 个字符，请精简后重新提交。' }
+    return { kind: 'reply', reply: t(session.language, 'messageTooLong', {}) }
   }
   if (input.imageDataUrl && !isSupportedImage(input.imageDataUrl)) {
     session.phase = 'failed'
     session.availability = 'unusable'
-    return { kind: 'reply', reply: '当前仅支持单张 JPG、JPEG 或 PNG 户型图，且图片必须小于 20 MB。' }
+    return { kind: 'reply', reply: t(session.language, 'unsupportedImage', {}) }
   }
   return { kind: 'intake', message }
 }
@@ -3642,26 +3644,9 @@ export function shouldModifyExistingScene(count: number): boolean {
   return count > 0
 }
 
-export function isSceneQuestion(message: string): boolean {
-  const value = message.trim()
-  return /[?？]$/.test(value) || /(?:是不是|是否|有没有|好像|多少|多长|多高|多宽|是什么|为什么|吗|呢)[?？]?$/.test(value)
-}
-
 function isSceneIntent(value: unknown): value is SceneIntent {
   return value === 'query' || value === 'create' || value === 'update' ||
     value === 'delete' || value === 'ambiguous'
-}
-
-export function classifySceneIntentFallback(message: string): SceneIntent {
-  const value = message.trim()
-  if (/(?:删除|删掉|移除|去掉|拆除)/.test(value)) return 'delete'
-  if (/(?:新增|添加|加一个|创建|放置|摆放|增加)/.test(value)) return 'create'
-  if (/(?:继续修复|修复|再修|重新修|继续优化|再优化|修改|改成|改为|调整|移动|缩短|延长|扩大|缩小|重命名|替换)/.test(value)) return 'update'
-  if (
-    isSceneQuestion(value) ||
-    /(?:查看|查询|检查|核对|测量|告诉我|显示)/.test(value)
-  ) return 'query'
-  return 'ambiguous'
 }
 
 function isCollision(value: unknown): value is { aId: string; bId: string; kind: string } {
