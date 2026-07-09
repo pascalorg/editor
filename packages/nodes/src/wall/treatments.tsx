@@ -388,6 +388,36 @@ function buildPlanPolygon(outer: Point2[], inner: Point2[]) {
   return shape
 }
 
+function applyWorldScaleUvs(geometry: THREE.BufferGeometry) {
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!position) return
+  const normal = geometry.getAttribute('normal') as THREE.BufferAttribute | undefined
+  const uv = new Float32Array(position.count * 2)
+
+  for (let index = 0; index < position.count; index += 1) {
+    const x = position.getX(index)
+    const y = position.getY(index)
+    const z = position.getZ(index)
+    const nx = Math.abs(normal?.getX(index) ?? 0)
+    const ny = Math.abs(normal?.getY(index) ?? 0)
+    const nz = Math.abs(normal?.getZ(index) ?? 0)
+    const offset = index * 2
+
+    if (ny >= nx && ny >= nz) {
+      uv[offset] = x
+      uv[offset + 1] = z
+    } else if (nz >= nx) {
+      uv[offset] = x
+      uv[offset + 1] = y
+    } else {
+      uv[offset] = z
+      uv[offset + 1] = y
+    }
+  }
+
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
+}
+
 function buildTrimSliceGeometry(
   outer: Point2[],
   inner: Point2[],
@@ -405,6 +435,7 @@ function buildTrimSliceGeometry(
   geometry.rotateX(-Math.PI / 2)
   geometry.translate(0, translateY, 0)
   geometry.computeVertexNormals()
+  applyWorldScaleUvs(geometry)
   return geometry
 }
 
@@ -492,7 +523,6 @@ function resolveWallSlotMaterial(
 export function createWallExtraSlotMaterials(
   node: WallNode,
   shading: RenderShading,
-  _textures: boolean,
   sceneMaterials: SceneMaterials,
 ) {
   return {

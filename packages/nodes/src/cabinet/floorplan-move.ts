@@ -125,7 +125,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: run ? [moduleId, run.id as AnyNodeId] : [moduleId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const snap = (value: number) =>
         isGridSnapActive()
           ? Math.round(value / useEditor.getState().gridSnapStep) *
@@ -143,7 +143,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
       }
 
       let local = cabinetModuleParentFrame.planToLocal(run, planX, originalLocal[1], planZ)
-      if (isMagneticSnapActive() && !modifiers.altKey) {
+      if (isMagneticSnapActive()) {
         const snapFn = cabinetModuleParentFrame.magneticSnap
         if (snapFn) {
           local = snapFn(node as AnyNode, run, local, useScene.getState().nodes)
@@ -151,7 +151,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
       }
       // Wall attachment snap — 2D parity with the 3D move tool's
       // `groupMoveSnap` pass: active in every snapping mode except Off.
-      if ((isGridSnapActive() || isMagneticSnapActive()) && !modifiers.altKey && run.parentId) {
+      if ((isGridSnapActive() || isMagneticSnapActive()) && run.parentId) {
         const snapped = resolveCabinetModuleWallSnapLocal({
           candidateLocal: local,
           module: node,
