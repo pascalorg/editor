@@ -112,6 +112,7 @@ export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
+export { PlacementBox } from './components/tools/shared/placement-box'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
@@ -370,6 +371,7 @@ export {
 } from './lib/world-grid-snap'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
+export { default as useCabinetPlacementStatus } from './store/use-cabinet-placement-status'
 export {
   type CabinetPlacementType,
   default as useCabinetPlacementType,

@@ -144,7 +144,7 @@ function isCabinetRun(node: AnyNode | undefined): node is CabinetNodeType {
   return node?.type === 'cabinet'
 }
 
-function hasCabinetParentId(node: CabinetModuleNodeType): boolean {
+function hasCabinetParentId(node: Pick<CabinetEditableNode, 'parentId'>): boolean {
   const parentId = node.parentId
   return (
     typeof parentId === 'string' &&
@@ -866,6 +866,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       },
     },
     floorPlaced: {
+      applies: (node) => !hasCabinetParentId(node as CabinetNodeType),
       footprints: (node, ctx) =>
         cabinetFloorPlacedFootprints(
           node as CabinetNodeType,
@@ -957,7 +958,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
-    { key: 'Alt', label: 'Force / no wall snap' },
+    { key: 'Alt', label: 'Force place' },
     { key: 'R / T', label: 'Rotate' },
     { key: 'Esc', label: 'Cancel run / exit' },
   ],

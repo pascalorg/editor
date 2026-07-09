@@ -44,7 +44,13 @@ const KEY_CELL_CLASS = 'flex items-center gap-1'
 // Keys pressed together join with "+"; an entry that is itself an array is a
 // group of alternatives and joins with "/" — so [['Cmd/Ctrl', 'Shift'],
 // 'Left click'] reads "⌘ / ⇧ + click".
-function ShortcutSequence({ keys }: { keys: Array<string | string[]> }) {
+function ShortcutSequence({
+  active = false,
+  keys,
+}: {
+  active?: boolean
+  keys: Array<string | string[]>
+}) {
   return (
     <div className={KEY_CELL_CLASS}>
       {keys.map((entry, index) => (
@@ -60,11 +66,17 @@ function ShortcutSequence({ keys }: { keys: Array<string | string[]> }) {
                 {altIndex > 0 ? (
                   <span className="text-[9px] text-muted-foreground/70">/</span>
                 ) : null}
-                <ShortcutToken className={TOKEN_CLASS} value={alternative} />
+                <ShortcutToken
+                  className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+                  value={alternative}
+                />
               </Fragment>
             ))
           ) : (
-            <ShortcutToken className={TOKEN_CLASS} value={entry} />
+            <ShortcutToken
+              className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+              value={entry}
+            />
           )}
         </Fragment>
       ))}
@@ -372,15 +384,15 @@ export function ContextualHelperPanel({
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div
-          className={cn(ROW_CLASS, 'items-start', hint.active && 'rounded-md bg-primary/10')}
+          className={cn(ROW_CLASS, 'items-start')}
           key={`${hint.keys.join('+')}:${hint.label}`}
         >
-          <ShortcutSequence keys={hint.keys} />
+          <ShortcutSequence active={hint.active} keys={hint.keys} />
           <div className="min-w-0">
             <div
               className={cn(
                 'text-xs leading-5',
-                hint.active ? 'text-foreground' : 'text-muted-foreground',
+                hint.active ? 'font-medium text-white' : 'text-muted-foreground',
               )}
             >
               {hint.label}

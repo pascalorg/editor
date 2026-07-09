@@ -83,4 +83,57 @@ describe('cabinet placement collision', () => {
     expect(result.valid).toBe(false)
     expect(result.conflictIds).toEqual(['cabinet_existing'])
   })
+
+  test('does not treat nested cabinet run local footprints as world blockers', () => {
+    const level = levelNode()
+    const rootRun = {
+      ...CabinetNode.parse({
+        id: 'cabinet_existing',
+        parentId: LEVEL_ID,
+        position: [10, 0, 0],
+        rotation: 0,
+        children: [],
+      }),
+      children: ['cabinet_child-run'],
+    }
+    const childRun = CabinetNode.parse({
+      id: 'cabinet_child-run',
+      parentId: rootRun.id,
+      position: [5, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_nested'],
+    })
+    const nestedModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_nested',
+      parentId: childRun.id,
+      position: [0, 0.1, 0],
+      width: 1.2,
+      depth: 0.58,
+    })
+    useScene.setState({
+      nodes: {
+        [level.id]: level,
+        [rootRun.id]: rootRun,
+        [childRun.id]: childRun,
+        [nestedModule.id]: nestedModule,
+      },
+    })
+
+    const falseBlockAtChildLocal = spatialGridManager.canPlaceOnFloor(
+      LEVEL_ID,
+      [5, 0, 0],
+      [0.6, 0.84, 0.58],
+      [0, 0, 0],
+    )
+    const blockAtChildWorld = spatialGridManager.canPlaceOnFloor(
+      LEVEL_ID,
+      [15, 0, 0],
+      [0.6, 0.84, 0.58],
+      [0, 0, 0],
+    )
+
+    expect(falseBlockAtChildLocal).toEqual({ valid: true, conflictIds: [] })
+    expect(blockAtChildWorld.valid).toBe(false)
+    expect(blockAtChildWorld.conflictIds).toEqual(['cabinet_existing'])
+  })
 })
