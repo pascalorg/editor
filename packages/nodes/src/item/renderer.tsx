@@ -215,11 +215,20 @@ const MODEL_RETRY_DELAYS_MS = [1_000, 3_000]
  * during exports) and lands in `useViewer.itemLoadFailures` so a bake host can
  * record which items are missing from the artifact.
  */
-const ModelWithRetry = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
+const ModelWithRetry = ({
+  node,
+  setSettled,
+}: {
+  node: ItemNode
+  setSettled: (value: boolean) => void
+}) => {
   // `failures` counts boundary catches; `epoch` bumps after each cache clear
   // to reset the boundary and re-mount the loader. The retry timer is owned by
   // an effect (not the error handler) so StrictMode's synthetic
-  // unmount/remount re-arms it instead of silently discarding it.
+  // unmount/remount re-arms it instead of silently discarding it. The host
+  // keys this component by asset URL, so a model swap starts from a clean
+  // retry budget — and the mount effect below un-settles the item so the new
+  // load is awaited too.
   const [failures, setFailures] = useState(0)
   const [epoch, setEpoch] = useState(0)
   const url = resolveCdnUrl(node.asset.src) || ''
@@ -228,17 +237,21 @@ const ModelWithRetry = ({ node, markSettled }: { node: ItemNode; markSettled: ()
   const handleError = useCallback(() => setFailures((current) => current + 1), [])
 
   useEffect(() => {
+    setSettled(false)
+  }, [setSettled])
+
+  useEffect(() => {
     if (failures === 0 || gaveUp) return
     const delay = MODEL_RETRY_DELAYS_MS[failures - 1] ?? 0
     const timer = setTimeout(() => {
-      console.log(
-        `[item] retrying model load (${failures}/${MODEL_RETRY_DELAYS_MS.length}) ${url}`,
-      )
+      console.log(`[item] retrying model load (${failures}/${MODEL_RETRY_DELAYS_MS.length}) ${url}`)
       useGLTF.clear(url)
       setEpoch((current) => current + 1)
     }, delay)
     return () => clearTimeout(timer)
   }, [failures, gaveUp, url])
+
+  const markSettled = useCallback(() => setSettled(true), [setSettled])
 
   useEffect(() => {
     if (!gaveUp) return
@@ -266,10 +279,11 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   // "Settled" = the model resolved, terminally failed (skipped), or was never
   // expected. `ItemSystem` holds the dirty mark until then, so scene-ready
   // (and headless bakes) wait for real item content instead of exporting the
-  // loading placeholder.
-  const markSettled = useCallback(() => {
+  // loading placeholder. A model swap un-settles (ModelWithRetry's mount
+  // effect via its URL key) so the replacement load is awaited too.
+  const setSettled = useCallback((value: boolean) => {
     const group = ref.current as (Group & { userData: Record<string, unknown> }) | null
-    if (group) group.userData.itemModelSettled = true
+    if (group) group.userData.itemModelSettled = value
   }, [])
 
   // Merge live drag overrides so the mesh transforms in real time during a
@@ -286,8 +300,8 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     (node as ItemNode & { roomClearPreview?: unknown }).roomClearPreview === true
 
   useEffect(() => {
-    if (roomClearPreview) markSettled()
-  }, [roomClearPreview, markSettled])
+    if (roomClearPreview) setSettled(true)
+  }, [roomClearPreview, setSettled])
 
   const content = (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
@@ -295,7 +309,7 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
         <ClearPreviewModel node={node} />
       ) : (
         <>
-          <ModelWithRetry markSettled={markSettled} node={node} />
+          <ModelWithRetry key={node.asset.src ?? 'no-src'} node={node} setSettled={setSettled} />
           {node.children?.map((childId) => (
             <NodeRenderer key={childId} nodeId={childId} />
           ))}
