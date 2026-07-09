@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, type Object3D, UnsignedByteType } from 'three'
+import { Color, Layers, type Object3D, Scene, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
@@ -57,6 +57,11 @@ export const SSGI_PARAMS = {
 //   - outline: skip the merged-outline node and its 14 internal RTs
 //   - postFx:  bypass the whole RenderPipeline and use renderer.render(scene, camera)
 //              directly — isolates raw scene-render cost from any post-FX overhead
+//   - draw:    skip the render call entirely — frames still tick (useFrame
+//              systems, scene-ready) but no draw is ever submitted. For
+//              consumers that only need the built scene graph, never pixels:
+//              the headless bake worker renders on SwiftShader (CPU), where
+//              per-frame vertex/draw cost dominates the whole capture.
 function readPerfDisableFlags() {
   if (typeof window === 'undefined') {
     return { ao: false, denoise: false, outline: false, postFx: false }
@@ -83,6 +88,17 @@ const PERF_POST_FX_DISABLED =
       .split(',')
       .map((s) => s.trim()),
   ).has('postFx')
+
+const PERF_DRAW_DISABLED =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('disable') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('draw')
+
+// Stand-in scene for `?disable=draw` frames — cleared, never populated.
+const emptyScene = new Scene()
 
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
@@ -559,6 +575,23 @@ const PostProcessingPasses = ({
 
   useFrame((_, delta) => {
     if (size.width < 1 || size.height < 1) {
+      return
+    }
+
+    // `?disable=draw`: nothing downstream wants pixels — render an EMPTY scene
+    // instead of the real one. This is the only render call (positive-priority
+    // useFrame subscribers already disable R3F's automatic render), so the real
+    // scene is never drawn: per-frame vertex/draw cost drops to a single 64×64
+    // clear, which is what makes headless bakes viable on SwiftShader (CPU).
+    // Rendering nothing at all is NOT an option — with zero submitted frames
+    // Chromium's no-damage scheduler throttles rAF to 1Hz (measured), stalling
+    // the useFrame systems the bake still needs.
+    if (PERF_DRAW_DISABLED) {
+      try {
+        ;(renderer as any).render(emptyScene, camera)
+      } catch {
+        // A failed empty draw changes nothing — systems keep ticking.
+      }
       return
     }
 
