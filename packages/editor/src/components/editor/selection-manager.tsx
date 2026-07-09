@@ -1198,7 +1198,12 @@ export const SelectionManager = () => {
 
       const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
       if (!canDirectMoveNode(node)) return
-      if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
+      // Sole selection only: per-node direct manipulation stands down for a
+      // multi-selection (the group sessions own plain drags there, and Cmd is
+      // the selection-toggle key — a wobbly Cmd+click must not yank one
+      // member out of the group).
+      const currentSelectedIds = useViewer.getState().selection.selectedIds
+      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== node.id) return
 
       const startX = pointer.clientX
       const startY = pointer.clientY
@@ -1360,9 +1365,10 @@ export const SelectionManager = () => {
       if (event.button !== 2 || !isCommandModifier(event)) return
       if (!(event.target instanceof HTMLCanvasElement)) return
 
+      // Sole selection only — same stand-down as the Cmd-drag move above.
       const selectedIds = useViewer.getState().selection.selectedIds
       const hoveredId = useViewer.getState().hoveredId as AnyNodeId | null
-      if (!hoveredId || !selectedIds.includes(hoveredId)) return
+      if (!hoveredId || selectedIds.length !== 1 || selectedIds[0] !== hoveredId) return
 
       const node = useScene.getState().nodes[hoveredId]
       if (!node || !canDirectRotateNode(node)) return

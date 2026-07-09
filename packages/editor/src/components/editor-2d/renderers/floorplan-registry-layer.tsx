@@ -484,7 +484,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const node = useScene.getState().nodes[id]
       if (!node || !isRegistryMovable(node.type)) return false
-      if (!useViewer.getState().selection.selectedIds.includes(id)) return false
+      // Sole selection only: per-node direct manipulation stands down for a
+      // multi-selection (the group session owns plain drags there, and Cmd is
+      // the selection-toggle key — a wobbly Cmd+click must not yank one
+      // member out of the group).
+      const currentSelectedIds = useViewer.getState().selection.selectedIds
+      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== id) return false
 
       event.preventDefault()
       event.stopPropagation()
@@ -554,8 +559,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const node = useScene.getState().nodes[id]
       if (!node || !canDirectRotateNode(node)) return false
+      // Sole selection only — same stand-down as the direct move above.
       const selectedIds = useViewer.getState().selection.selectedIds
-      if (!selectedIds.includes(id)) return false
+      if (selectedIds.length !== 1 || selectedIds[0] !== id) return false
       event.preventDefault()
       event.stopPropagation()
 
@@ -697,18 +703,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   // Corner rotate handles on the dashed selection box — 15° steps, Shift
   // free, mirroring the 3D group rotate gizmo.
-  const handleGroupBoxRotatePointerDown = useCallback(
-    (event: ReactPointerEvent<SVGGElement>) => {
-      if (event.button !== 0) return
-      if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (useEditor.getState().mode === 'delete') return
-      if (startFloorplanGroupRotate(event)) {
-        event.preventDefault()
-        suppressBoxSelectForPointer(event)
-      }
-    },
-    [],
-  )
+  const handleGroupBoxRotatePointerDown = useCallback((event: ReactPointerEvent<SVGGElement>) => {
+    if (event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    if (useEditor.getState().mode === 'delete') return
+    if (startFloorplanGroupRotate(event)) {
+      event.preventDefault()
+      suppressBoxSelectForPointer(event)
+    }
+  }, [])
 
   const handleEntryPointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {

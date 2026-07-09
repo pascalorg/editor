@@ -102,12 +102,12 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
         action: 'Move the selected movable object under the cursor',
-        note: 'Drag in Select mode. Guided snapping and guides are enabled by default.',
+        note: 'Drag in Select mode with a single object selected. Guided snapping and guides are enabled by default.',
       },
       {
         keys: ['Cmd/Ctrl', 'Right click'],
         action: 'Rotate the selected object under the cursor',
-        note: 'Drag left or right in Select mode. Rotation snaps to 15° increments by default.',
+        note: 'Drag left or right in Select mode with a single object selected. Rotation snaps to 15° increments by default.',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'Right click'],
