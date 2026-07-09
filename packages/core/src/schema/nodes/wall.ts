@@ -269,6 +269,14 @@ function getWallFaceBandDefaultSlot(slotId: WallBandSurfaceSlotId): string {
   return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper
 }
 
+function getWallFaceTopBandSlot(
+  side: WallSurfaceSide,
+  count: number,
+): WallBandSurfaceSlotId | null {
+  const slots = getWallFaceBandSlotsForCount(side, count)
+  return slots[slots.length - 1] ?? null
+}
+
 export function buildWallFaceBandCountPatch(
   wall: Pick<WallNode, 'faceBands' | 'slots'>,
   count: number,
@@ -280,12 +288,26 @@ export function buildWallFaceBandCountPatch(
     : 1
 
   for (const side of ['interior', 'exterior'] as const) {
-    const activeSlots = new Set(getWallFaceBandSlotsForCount(side, nextCount))
+    const nextSlots = getWallFaceBandSlotsForCount(side, nextCount)
+    const activeSlots = new Set(nextSlots)
     const previouslyActiveSlots = new Set(getWallFaceBandSlotsForCount(side, previousCount))
+    const previousTopSlot = getWallFaceTopBandSlot(side, previousCount)
+    const nextTopSlot = getWallFaceTopBandSlot(side, nextCount)
+    const topMaterial =
+      (previousTopSlot ? slots[previousTopSlot] : undefined) ??
+      slots[side] ??
+      WALL_SURFACE_SLOT_DEFAULTS[side]
     for (const slotId of WALL_FACE_BAND_SLOTS_BY_SIDE[side]) {
       if (activeSlots.has(slotId)) {
+        if (slotId === nextTopSlot) {
+          slots[slotId] = topMaterial
+          continue
+        }
         const wasActive = previouslyActiveSlots.has(slotId)
-        if (!wasActive || !slots[slotId]) slots[slotId] = getWallFaceBandDefaultSlot(slotId)
+        const wasPreviousTop = slotId === previousTopSlot
+        if (!wasActive || wasPreviousTop || !slots[slotId]) {
+          slots[slotId] = getWallFaceBandDefaultSlot(slotId)
+        }
       } else {
         delete slots[slotId]
       }

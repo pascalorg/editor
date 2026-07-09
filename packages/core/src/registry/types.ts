@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import type { BufferGeometry, Object3D, Ray } from 'three'
+import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
@@ -733,6 +733,11 @@ export type SnapProfile = 'item' | 'structural'
  */
 export type BakePolicy = 'static' | 'strip' | 'replace'
 
+export type ExportAnimationContext<N = AnyNode> = {
+  node: N
+  object: Object3D
+}
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -831,6 +836,16 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * work (animations, named-mesh material poking).
    */
   geometry?: (node: z.infer<S>, ctx: GeometryContext) => Object3D
+  /**
+   * Optional GLB export animation hook for kind-owned moving parts. The
+   * exporter calls this against the cloned export subtree after material/mesh
+   * cleanup; implementations should leave `object` in its intended rest pose
+   * and return engine-agnostic Three.js clips that target objects inside that
+   * subtree.
+   */
+  exportAnimation?: (
+    ctx: ExportAnimationContext<z.infer<S>>,
+  ) => AnimationClip | AnimationClip[] | null | undefined
   /**
    * Optional cache key over the geometry-relevant inputs of `node`. When
    * set, `<GeometrySystem>` skips the rebuild (dispose + re-create the

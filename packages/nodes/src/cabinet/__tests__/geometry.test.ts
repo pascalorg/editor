@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId, GeometryContext, LinearResizeHandle } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { Box3 } from 'three'
+import { bakeCabinetAnimationClip } from '../animation'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { buildCabinetGeometry } from '../geometry'
 import { runLocalToPlan } from '../run-layout'
@@ -517,6 +518,92 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     })
     return found
   }
+
+  test('bakes open clips for cabinet storage and appliance moving parts', () => {
+    const cases = [
+      {
+        name: 'door',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'door', type: 'door', doorType: 'double', shelfCount: 2 }],
+      },
+      {
+        name: 'drawer',
+        expectedTrack: '.position',
+        stack: [{ id: 'drawer', type: 'drawer', drawerCount: 3 }],
+      },
+      {
+        name: 'pull-out-pantry',
+        expectedTrack: '.position',
+        stack: [{ id: 'pantry', type: 'pull-out-pantry', height: 1.8, shelfCount: 5 }],
+      },
+      {
+        name: 'oven',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'oven', type: 'oven', height: 0.595 }],
+      },
+      {
+        name: 'microwave',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'micro', type: 'microwave', height: MICROWAVE_STANDARD_HEIGHT }],
+      },
+      {
+        name: 'dishwasher',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'dishwasher', type: 'dishwasher', height: DISHWASHER_STANDARD_HEIGHT }],
+      },
+      {
+        name: 'fridge-single',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT }],
+      },
+      {
+        name: 'fridge-double',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'fridge', type: 'fridge-double', height: FRIDGE_COLUMN_HEIGHT }],
+      },
+      {
+        name: 'fridge-top-freezer',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'fridge', type: 'fridge-top-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+      },
+      {
+        name: 'fridge-bottom-freezer',
+        expectedTrack: '.quaternion',
+        stack: [{ id: 'fridge', type: 'fridge-bottom-freezer', height: FRIDGE_COLUMN_HEIGHT }],
+      },
+    ] as const
+
+    for (const entry of cases) {
+      const node = CabinetModuleNode.parse({
+        id: `cabinet-module_anim_${entry.name.replaceAll('-', '_')}`,
+        width: entry.name.includes('fridge') ? FRIDGE_COLUMN_WIDTH : 0.8,
+        carcassHeight: entry.name.includes('fridge') ? TALL_CABINET_CARCASS_HEIGHT : 0.9,
+        stack: entry.stack,
+      })
+      const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+      const clip = bakeCabinetAnimationClip(node, group)
+
+      expect(clip?.name).toBe(`${node.id}: open`)
+      expect(clip?.duration).toBe(1)
+      expect(clip?.userData).toEqual({ loop: false })
+      expect(clip!.tracks.length).toBeGreaterThan(0)
+      expect(clip!.tracks.some((track) => track.name.endsWith(entry.expectedTrack))).toBe(true)
+      for (const track of clip!.tracks) {
+        const targetUuid = track.name.slice(0, track.name.lastIndexOf('.'))
+        expect(group.getObjectByProperty('uuid', targetUuid)).toBeDefined()
+      }
+    }
+  })
+
+  test('does not bake a cabinet clip when no compartment part moves', () => {
+    const node = CabinetModuleNode.parse({
+      id: 'cabinet-module_anim_static_sink',
+      stack: [{ id: 'sink', type: 'sink' }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    expect(bakeCabinetAnimationClip(node, group)).toBeNull()
+  })
 
   test('oven compartment emits fascia, cavity, racks, and glass door with appliance slots', () => {
     const node = CabinetModuleNode.parse({

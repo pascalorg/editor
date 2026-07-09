@@ -66,6 +66,7 @@ export type {
   DistributionRole,
   DragAction,
   EditorCtx,
+  ExportAnimationContext,
   FloorPlacedConfig,
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,

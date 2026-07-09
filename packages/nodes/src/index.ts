@@ -117,9 +117,11 @@ export const builtinPlugin: Plugin = {
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
+  bakeCabinetAnimationClip,
   type CabinetPlacementType,
   cabinetDefinition,
   cabinetModuleDefinition,
+  poseCabinetMovingParts,
   useCabinetPlacementStatus,
   useCabinetPlacementType,
 } from './cabinet'

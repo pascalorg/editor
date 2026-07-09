@@ -9,6 +9,7 @@ import type {
   SceneApi,
 } from '@pascal-app/core'
 import { selectionProxyIdFromMetadata } from '@pascal-app/core'
+import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
@@ -896,6 +897,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   parametrics: cabinetParametrics,
   handles: cabinetHandles,
   geometry: buildCabinetGeometry,
+  exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   system: {
     module: () => import('./system'),
     priority: 2,
@@ -1062,6 +1064,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   parametrics: cabinetModuleParametrics,
   handles: cabinetModuleHandles,
   geometry: buildCabinetGeometry,
+  exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   // `operationState` is deliberately absent — see cabinetDefinition.geometryKey.
   geometryKey: (n) =>
     JSON.stringify([

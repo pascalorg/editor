@@ -4,6 +4,7 @@ import { type AnyNodeId, getEffectiveNode, type SceneApi, sceneRegistry } from '
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import type { BufferAttribute, Material, Mesh, Object3D } from 'three'
+import { poseCabinetMovingParts } from './animation'
 import { type CooktopFlameSeed, updateCooktopFlameTube } from './cooktop-flame'
 import {
   bumpCabinetRunsNear,
@@ -11,19 +12,6 @@ import {
   cabinetRunFootprint,
   cabinetRunNeighborSignature,
 } from './definition'
-
-type CabinetPose =
-  | { type: 'rotate'; axis: 'x' | 'y' | 'z'; angle: number }
-  | { type: 'translate'; axis: 'x' | 'y' | 'z'; distance: number }
-
-function poseCabinet(root: Object3D, openScale: number) {
-  root.traverse((obj) => {
-    const pose = obj.userData.cabinetPose as CabinetPose | undefined
-    if (!pose) return
-    if (pose.type === 'rotate') obj.rotation[pose.axis] = pose.angle * openScale
-    else obj.position[pose.axis] = pose.distance * openScale
-  })
-}
 
 function materialWithOpacity(material: Material | Material[] | undefined): Material | null {
   if (!material) return null
@@ -127,7 +115,7 @@ const CabinetAnimationSystem = ({ sceneApi }: { sceneApi: SceneApi }) => {
         const obj = sceneRegistry.nodes.get(id)
         if (!obj) continue
         if (applied.get(id) !== value) {
-          poseCabinet(obj, value)
+          poseCabinetMovingParts(obj, value)
           applied.set(id, value)
         }
         animateCabinetFlames(obj, clock.elapsedTime, updateTubes)

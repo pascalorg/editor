@@ -106,9 +106,9 @@ describe('wall face bands', () => {
       interior: 'library:interior-finish',
       exterior: 'scene:exterior-finish',
       lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
-      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperInterior: 'library:interior-finish',
       lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
-      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperExterior: 'scene:exterior-finish',
     })
     expect(patch.slots?.middleInterior).toBeUndefined()
     expect(patch.slots?.middleExterior).toBeUndefined()
@@ -137,10 +137,10 @@ describe('wall face bands', () => {
     expect(patch.slots).toMatchObject({
       lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
       middleInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
-      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperInterior: 'library:stale-top',
       lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
       middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
-      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperExterior: 'scene:exterior-finish',
     })
     expect(patch.slots?.topInterior).toBeUndefined()
     expect(patch.slots?.topExterior).toBeUndefined()
@@ -157,9 +157,9 @@ describe('wall face bands', () => {
 
     expect(patch.slots).toEqual({
       lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
-      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperInterior: WALL_SURFACE_SLOT_DEFAULTS.interior,
       lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
-      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      upperExterior: WALL_SURFACE_SLOT_DEFAULTS.exterior,
     })
     expect(patch.slots?.middleInterior).toBeUndefined()
     expect(patch.slots?.middleExterior).toBeUndefined()
@@ -192,6 +192,40 @@ describe('wall face bands', () => {
       lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
       middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
       upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+    })
+  })
+
+  test('increasing to four bands keeps the previous top material on the new top band', () => {
+    const patch = buildWallFaceBandCountPatch(
+      {
+        faceBands: {
+          enabled: true,
+          count: 3,
+          lowerHeight: 0.2,
+          middleHeight: 0.3,
+          upperHeight: 0.61,
+        },
+        slots: {
+          lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+          middleInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+          upperInterior: 'scene:painted-top-interior',
+          lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+          middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+          upperExterior: 'library:painted-top-exterior',
+        },
+      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      4,
+    )
+
+    expect(patch.slots).toMatchObject({
+      lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      topInterior: 'scene:painted-top-interior',
+      lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      topExterior: 'library:painted-top-exterior',
     })
   })
 })

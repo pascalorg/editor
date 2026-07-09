@@ -1,3 +1,4 @@
+export { bakeCabinetAnimationClip, poseCabinetMovingParts } from './animation'
 export { cabinetDefinition, cabinetModuleDefinition } from './definition'
 export { default as useCabinetPlacementStatus } from './placement-status'
 export {
