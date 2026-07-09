@@ -8,6 +8,7 @@ import type {
   OrthographicCamera,
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
@@ -152,6 +153,9 @@ export function Lights() {
         // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
+          // Shadow-caster-only geometry (hidden roofs/levels in cutaway views)
+          // is visible to the shadow pass alone — see lib/shadow-only.ts.
+          cam.layers.enable(SHADOW_ONLY_LAYER)
           cam.left = -size
           cam.right = size
           cam.top = size

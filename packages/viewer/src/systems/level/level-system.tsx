@@ -1,9 +1,17 @@
 import { getLevelHeight, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
+import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 
 const EXPLODED_GAP = 5
+
+// Levels currently in shadow-caster-only mode (solo hides them from the color
+// passes but keeps their sun shadows). Tracked so we can restore layer masks
+// exactly once on transition; apply re-runs every frame so meshes rebuilt
+// while hidden (theme/texture changes) get re-hidden.
+const shadowOnlyLevels = new WeakSet<Object3D>()
 
 export const LevelSystem = () => {
   useFrame((_, delta) => {
@@ -37,7 +45,18 @@ export const LevelSystem = () => {
       const targetY = baseY + explodedExtra
 
       obj.position.y = lerp(obj.position.y, targetY, delta * 12) // Smoothly animate to new Y position
-      obj.visible = levelMode !== 'solo' || level?.id === selectedLevel || !selectedLevel
+
+      // Solo: hidden levels stay in the shadow map (shadow-caster-only) so the
+      // sun still shadows the soloed floor through hidden roofs/floors above.
+      const hidden = levelMode === 'solo' && Boolean(selectedLevel) && level?.id !== selectedLevel
+      if (hidden) {
+        applyShadowOnly(obj)
+        shadowOnlyLevels.add(obj)
+      } else if (shadowOnlyLevels.has(obj)) {
+        clearShadowOnly(obj)
+        shadowOnlyLevels.delete(obj)
+      }
+      obj.visible = true
 
       cumulativeY += getLevelHeight(
         levelId,

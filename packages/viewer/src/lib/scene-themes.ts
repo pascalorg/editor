@@ -8,7 +8,7 @@ export type SceneTheme = {
   // the site ground fill. The 3D background + lights come from the fields below.
   appearance: 'light' | 'dark'
   background: string
-  // Colour of the site ground fill + infinite ground-occluder plane. Kept
+  // Colour of the site ground fill. Kept
   // separate from `background` so dark themes can have a lit ground that reads
   // as ground rather than going near-black.
   ground: string

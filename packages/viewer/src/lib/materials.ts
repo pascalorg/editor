@@ -11,6 +11,7 @@ import {
   type SurfaceRole,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
@@ -395,6 +396,32 @@ function applyMaterialMapProperties(
   material.needsUpdate = true
 }
 
+// Glass-like transparency threshold: any standard material authored as
+// `transparent` with opacity below this gets the fresnel treatment.
+const GLASS_OPACITY_THRESHOLD = 0.6
+
+/**
+ * Fresnel-driven opacity for glass: nearly the authored opacity head-on,
+ * increasingly opaque (showing the environment reflection) at grazing angles.
+ * This is what makes glass read as a surface instead of a flat blue tint.
+ */
+function applyGlassFresnel(material: MeshStandardNodeMaterial) {
+  const facing = transformedNormalView.dot(positionViewDirection).clamp(0, 1)
+  const fresnel = facing.oneMinus().pow(3)
+  material.opacityNode = mix(float(material.opacity), float(0.92), fresnel)
+  material.envMapIntensity = 1.4
+}
+
+function maybeApplyGlassFresnel(material: THREE.Material) {
+  if (
+    material instanceof MeshStandardNodeMaterial &&
+    material.transparent &&
+    material.opacity < GLASS_OPACITY_THRESHOLD
+  ) {
+    applyGlassFresnel(material)
+  }
+}
+
 function applyMaterialPresetTextures(material: CommonMaterial, preset: MaterialPresetPayload) {
   const { maps, mapProperties } = preset
 
@@ -447,6 +474,7 @@ export function createMaterialFromPreset(
   const material =
     shading === 'solid' ? new MeshLambertNodeMaterial() : new MeshStandardNodeMaterial()
   applyMaterialPresetToMaterials(material, preset)
+  maybeApplyGlassFresnel(material)
   materialCache.set(cacheKey, material)
   return material
 }
@@ -496,6 +524,7 @@ export function createMaterial(
           metalness: props.metalness,
         })
 
+  maybeApplyGlassFresnel(threeMaterial)
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial
 }
@@ -655,6 +684,7 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
           roughness: 0.1,
           metalness: 0.1,
         })
+  maybeApplyGlassFresnel(material)
   defaultMaterialCache.set(cacheKey, material)
   return material
 }

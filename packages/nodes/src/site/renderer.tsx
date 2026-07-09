@@ -24,6 +24,7 @@ import {
   Shape,
   ShapeGeometry,
 } from 'three'
+import { color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
@@ -59,21 +60,54 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useRegistry(node.id, 'site', ref)
 
   const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
+  const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
   const polygonPoints = livePolygon?.points ?? node.polygon?.points
 
+  // Centroid + radius of the lot polygon, for the presentation fade below.
+  const fadeBounds = useMemo(() => {
+    if (!polygonPoints || polygonPoints.length < 3) return null
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of polygonPoints) {
+      cx += x ?? 0
+      cz += z ?? 0
+    }
+    cx /= polygonPoints.length
+    cz /= polygonPoints.length
+    let radius = 0
+    for (const [x, z] of polygonPoints) {
+      radius = Math.max(radius, Math.hypot((x ?? 0) - cx, (z ?? 0) - cz))
+    }
+    return { cx, cz, radius }
+  }, [polygonPoints])
+
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
+  //
+  // The ground fill fades radially into the theme background toward the lot
+  // boundary so the scene reads as a deliberate presentation vignette instead
+  // of a hard-edged plate floating on the backdrop.
   const groundMaterial = useMemo(() => {
     const material = new MeshLambertNodeMaterial({ color: bgColor })
+    if (fadeBounds) {
+      const center = vec2(fadeBounds.cx, fadeBounds.cz)
+      const dist = positionWorld.xz.sub(center).length()
+      const fade = smoothstep(
+        float(fadeBounds.radius * 0.45),
+        float(fadeBounds.radius * 0.98),
+        dist,
+      )
+      material.colorNode = mix(color(bgColor), color(backgroundColor), fade)
+    }
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
     return material
-  }, [bgColor])
+  }, [bgColor, backgroundColor, fadeBounds])
 
   // Cache slab polygon references to keep the selector stable across unrelated store updates
   const slabPolygonsCache = useRef<[number, number][][]>([])
