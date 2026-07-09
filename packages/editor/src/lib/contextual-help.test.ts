@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveSelectModeHelpHints } from './contextual-help'
+import { resolveMeasurementHelpHints, resolveSelectModeHelpHints } from './contextual-help'
 
 describe('resolveSelectModeHelpHints', () => {
   test('stays hidden in idle select mode with no selection', () => {
@@ -84,5 +84,70 @@ describe('resolveSelectModeHelpHints', () => {
         active: true,
       },
     ])
+  })
+})
+
+describe('resolveMeasurementHelpHints', () => {
+  test('shows length drawing and quick measure hints before placement', () => {
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: false,
+        mode: 'distance',
+        modifierPressed: false,
+        shiftPressed: false,
+      }),
+    ).toEqual([
+      { keys: ['Click'], label: 'Start length' },
+      {
+        keys: ['Shift', 'Click'],
+        label: 'Start angle',
+        active: false,
+      },
+      {
+        keys: [['Alt', 'Cmd/Ctrl'], 'Click'],
+        label: 'Quick measure object',
+        active: false,
+      },
+      { keys: ['Esc'], label: 'Clear measurements' },
+    ])
+  })
+
+  test('shows axis lock while a length draft is active', () => {
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: true,
+        mode: 'distance',
+        modifierPressed: false,
+        shiftPressed: true,
+      }),
+    ).toContainEqual({
+      keys: ['Shift', 'Click'],
+      label: 'Lock to axis and finish',
+      active: true,
+    })
+  })
+
+  test('shows direct surface hints for area and perimeter modes', () => {
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: false,
+        mode: 'area',
+        modifierPressed: false,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({ keys: ['Click'], label: 'Measure surface area' })
+
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: false,
+        mode: 'perimeter',
+        modifierPressed: false,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({ keys: ['Click'], label: 'Measure perimeter' })
   })
 })

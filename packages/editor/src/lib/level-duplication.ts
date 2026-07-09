@@ -23,6 +23,17 @@ const STRUCTURAL_NODE_TYPES = new Set<AnyNode['type']>([
   'door',
 ])
 
+type LevelDuplicateCreateOp = {
+  node: AnyNode
+  parentId: AnyNodeId | undefined
+}
+
+type LevelDuplicateCreateResult = {
+  createOps: LevelDuplicateCreateOp[]
+  newLevelId: AnyNodeId
+  shiftedLevels: Array<{ id: AnyNodeId; level: number }>
+}
+
 function shouldKeepNode(node: AnyNode, preset: LevelDuplicatePreset) {
   if (NON_DUPLICABLE_NODE_TYPES.has(node.type)) return false
   if (preset === 'everything') return true
@@ -116,7 +127,7 @@ export function buildLevelDuplicateCreateOps({
   level: LevelNode
   levels: LevelNode[]
   preset: LevelDuplicatePreset
-}) {
+}): LevelDuplicateCreateResult {
   const { clonedNodes, newLevelId } = cloneLevelSubtree(nodes, level.id)
   const parentBuildingId =
     (level.parentId as AnyNodeId | null) ?? findLevelBuildingId(nodes, level.id)

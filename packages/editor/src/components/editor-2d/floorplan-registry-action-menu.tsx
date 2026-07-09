@@ -12,7 +12,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -45,7 +45,7 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  *
  * Hidden while in a move state (so we don't show buttons over a ghost).
  */
-export function FloorplanRegistryActionMenu() {
+export function FloorplanRegistryActionMenu(): ReactNode {
   const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
   const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)

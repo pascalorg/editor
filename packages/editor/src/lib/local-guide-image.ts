@@ -25,7 +25,7 @@ export async function createLocalGuideImage({
   file: File
   levelId: string
   position?: [number, number, number]
-}) {
+}): Promise<GuideNodeType> {
   const assetUrl = await saveAsset(file)
   const guide = GuideNode.parse({
     name: getGuideImageName(file.name),

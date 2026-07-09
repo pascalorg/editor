@@ -1,4 +1,4 @@
-import type { ZoneNode } from '@pascal-app/core'
+import type { FloorplanAffordance, ZoneNode } from '@pascal-app/core'
 import {
   createPolygonAddVertexAffordance,
   createPolygonMoveEdgeAffordance,
@@ -15,6 +15,9 @@ import {
  *   - `add-vertex` — insert a new vertex at an edge midpoint, then drag.
  *   - `move-edge` — drag an entire edge perpendicular to itself.
  */
-export const zoneMoveVertexAffordance = createPolygonVertexAffordance<ZoneNode>('zone')
-export const zoneAddVertexAffordance = createPolygonAddVertexAffordance<ZoneNode>('zone')
-export const zoneMoveEdgeAffordance = createPolygonMoveEdgeAffordance<ZoneNode>('zone')
+export const zoneMoveVertexAffordance: FloorplanAffordance<ZoneNode> =
+  createPolygonVertexAffordance<ZoneNode>('zone')
+export const zoneAddVertexAffordance: FloorplanAffordance<ZoneNode> =
+  createPolygonAddVertexAffordance<ZoneNode>('zone')
+export const zoneMoveEdgeAffordance: FloorplanAffordance<ZoneNode> =
+  createPolygonMoveEdgeAffordance<ZoneNode>('zone')

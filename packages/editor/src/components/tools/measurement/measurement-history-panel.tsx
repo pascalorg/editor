@@ -1,7 +1,7 @@
 'use client'
 
 import { DraftingCompass, Maximize2, Ruler, SquareDashed, Trash2, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { type ComponentType, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   angleBetweenMeasurements,
@@ -29,7 +29,7 @@ type MeasurementHistoryRow = {
 }
 
 const MEASUREMENT_MODES: Array<{
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   id: MeasurementMode
   label: string
 }> = [
@@ -43,7 +43,10 @@ function historyViewLabel(view: '2d' | '3d'): '2D' | '3D' {
   return view === '2d' ? '2D' : '3D'
 }
 
-export function MeasurementHistoryPanel({ portal = true, unit }: MeasurementHistoryPanelProps) {
+export function MeasurementHistoryPanel({
+  portal = true,
+  unit,
+}: MeasurementHistoryPanelProps): ReactNode {
   const [mounted, setMounted] = useState(false)
   const segments = useMeasurementTool((state) => state.segments)
   const areas = useMeasurementTool((state) => state.areas)

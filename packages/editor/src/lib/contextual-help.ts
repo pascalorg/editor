@@ -53,6 +53,14 @@ export type SelectModeHelpContext = {
   mepSelection?: 'run' | 'fitting' | null
 }
 
+export type MeasurementHelpContext = {
+  angleDraftActive: boolean
+  draftActive: boolean
+  mode: 'distance' | 'area' | 'perimeter' | 'angle'
+  modifierPressed: boolean
+  shiftPressed: boolean
+}
+
 const COMMAND_KEY = 'Cmd/Ctrl'
 const LEFT_CLICK = 'Left click'
 const RIGHT_CLICK = 'Right click'
@@ -60,6 +68,7 @@ const SHIFT_KEY = 'Shift'
 const CLICK = 'Click'
 const ALT_KEY = 'Alt'
 const ROTATE_KEYS = 'R / T'
+const ESC_KEY = 'Esc'
 
 export function resolveSelectModeHelpHints({
   selectedCount,
@@ -120,5 +129,44 @@ export function resolveSelectModeHelpHints({
     active: commandPressed || shiftPressed,
   })
 
+  return hints
+}
+
+export function resolveMeasurementHelpHints({
+  angleDraftActive,
+  draftActive,
+  mode,
+  modifierPressed,
+  shiftPressed,
+}: MeasurementHelpContext): ContextualShortcutHint[] {
+  const hints: ContextualShortcutHint[] = []
+
+  if (mode === 'area') {
+    hints.push({ keys: [CLICK], label: 'Measure surface area' })
+  } else if (mode === 'perimeter') {
+    hints.push({ keys: [CLICK], label: 'Measure perimeter' })
+  } else if (mode === 'angle' || angleDraftActive) {
+    hints.push({
+      keys: [CLICK],
+      label: angleDraftActive ? 'Place next angle point' : 'Start angle',
+    })
+  } else {
+    hints.push({
+      keys: [CLICK],
+      label: draftActive ? 'Finish length' : 'Start length',
+    })
+    hints.push({
+      keys: [SHIFT_KEY, CLICK],
+      label: draftActive ? 'Lock to axis and finish' : 'Start angle',
+      active: shiftPressed,
+    })
+    hints.push({
+      keys: [[ALT_KEY, COMMAND_KEY], CLICK],
+      label: 'Quick measure object',
+      active: modifierPressed,
+    })
+  }
+
+  hints.push({ keys: [ESC_KEY], label: 'Clear measurements' })
   return hints
 }

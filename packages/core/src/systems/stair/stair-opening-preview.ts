@@ -49,7 +49,7 @@ export function getNodesWithLiveStairOpeningInputs(
   liveTransforms: ReadonlyMap<string, LiveTransform>,
   liveOverrides: ReadonlyMap<string, LiveNodeOverrides>,
   previewSurfaceIds: ReadonlySet<string>,
-) {
+): Record<string, AnyNode> {
   const nextNodes: Record<string, AnyNode> = { ...nodes }
 
   for (const [nodeId, override] of liveOverrides) {

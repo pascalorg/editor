@@ -1,4 +1,9 @@
-import { type AnyNode, resolveLevelId, type SlabNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type FloorplanAffordance,
+  resolveLevelId,
+  type SlabNode,
+} from '@pascal-app/core'
 import { resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
@@ -43,15 +48,9 @@ const slabSnapOptions = {
   },
 }
 
-export const slabMoveVertexAffordance = createPolygonVertexAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
-)
-export const slabAddVertexAffordance = createPolygonAddVertexAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
-)
-export const slabMoveEdgeAffordance = createPolygonMoveEdgeAffordance<SlabNode>(
-  'slab',
-  slabSnapOptions,
-)
+export const slabMoveVertexAffordance: FloorplanAffordance<SlabNode> =
+  createPolygonVertexAffordance<SlabNode>('slab', slabSnapOptions)
+export const slabAddVertexAffordance: FloorplanAffordance<SlabNode> =
+  createPolygonAddVertexAffordance<SlabNode>('slab', slabSnapOptions)
+export const slabMoveEdgeAffordance: FloorplanAffordance<SlabNode> =
+  createPolygonMoveEdgeAffordance<SlabNode>('slab', slabSnapOptions)

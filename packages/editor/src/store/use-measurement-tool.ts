@@ -116,7 +116,7 @@ export function axisLockedMeasurementPoint(
   view: MeasurementView,
 ): MeasurementPoint {
   const axes = view === '2d' ? ([0, 2] as const) : ([0, 1, 2] as const)
-  let strongestAxis = axes[0]
+  let strongestAxis: 0 | 1 | 2 = axes[0]
   let strongestDistance = Math.abs(end[strongestAxis] - start[strongestAxis])
 
   for (const axis of axes.slice(1)) {

@@ -18,7 +18,13 @@ interface MobilePanelSheetProps {
 const HEIGHT_VH = 50
 const DRAG_CLOSE_THRESHOLD_PX = 120
 
-export function MobilePanelSheet({ open, onClose, icon, title, children }: MobilePanelSheetProps) {
+export function MobilePanelSheet({
+  open,
+  onClose,
+  icon,
+  title,
+  children,
+}: MobilePanelSheetProps): ReactNode {
   const [mounted, setMounted] = useState(false)
   const setMobilePanelSheetHeight = useEditor((s) => s.setMobilePanelSheetHeight)
 

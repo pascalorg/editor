@@ -162,6 +162,11 @@ function getLengthUnitFactor(ifcApi: WebIFC.IfcAPI, modelID: number): number {
 
 type Mat4 = number[]
 
+type IfcLocalPlacementLine = {
+  PlacementRelTo?: { value?: number }
+  RelativePlacement?: { value?: number }
+}
+
 function identity(): Mat4 {
   return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 }
@@ -270,7 +275,7 @@ function resolveWorldTransform(ifcApi: WebIFC.IfcAPI, modelID: number, placement
   let current: number | null = placementId
 
   while (current) {
-    const placement = ifcApi.GetLine(modelID, current)
+    const placement: IfcLocalPlacementLine = ifcApi.GetLine(modelID, current)
     if (placement.RelativePlacement?.value) {
       chain.push(placement.RelativePlacement.value)
     }

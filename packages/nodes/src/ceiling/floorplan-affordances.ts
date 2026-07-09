@@ -1,4 +1,9 @@
-import { type AnyNode, type CeilingNode, resolveLevelId } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type CeilingNode,
+  type FloorplanAffordance,
+  resolveLevelId,
+} from '@pascal-app/core'
 import { resolveCeilingPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
@@ -35,15 +40,9 @@ const ceilingSnapOptions = {
   },
 }
 
-export const ceilingMoveVertexAffordance = createPolygonVertexAffordance<CeilingNode>(
-  'ceiling',
-  ceilingSnapOptions,
-)
-export const ceilingAddVertexAffordance = createPolygonAddVertexAffordance<CeilingNode>(
-  'ceiling',
-  ceilingSnapOptions,
-)
-export const ceilingMoveEdgeAffordance = createPolygonMoveEdgeAffordance<CeilingNode>(
-  'ceiling',
-  ceilingSnapOptions,
-)
+export const ceilingMoveVertexAffordance: FloorplanAffordance<CeilingNode> =
+  createPolygonVertexAffordance<CeilingNode>('ceiling', ceilingSnapOptions)
+export const ceilingAddVertexAffordance: FloorplanAffordance<CeilingNode> =
+  createPolygonAddVertexAffordance<CeilingNode>('ceiling', ceilingSnapOptions)
+export const ceilingMoveEdgeAffordance: FloorplanAffordance<CeilingNode> =
+  createPolygonMoveEdgeAffordance<CeilingNode>('ceiling', ceilingSnapOptions)

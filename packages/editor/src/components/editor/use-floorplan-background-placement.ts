@@ -392,7 +392,6 @@ export function useFloorplanBackgroundPlacement({
       isOpeningPlacementActive,
       isPolygonBuildActive,
       isRoofBuildActive,
-      isSlabBuildActive,
       isWallBuildActive,
       isZoneBuildActive,
       levelId,

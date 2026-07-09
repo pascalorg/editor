@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { LiveTransform } from '../store/use-live-transforms'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -994,6 +995,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   floorplanSiblingOverrides?: (args: {
     nodeId: AnyNodeId
     nodes: Record<AnyNodeId, AnyNode>
+    liveTransforms: ReadonlyMap<string, LiveTransform>
     liveOverrides: Map<string, Record<string, unknown>>
   }) => Record<AnyNodeId, AnyNode>
   /**

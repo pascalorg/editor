@@ -594,6 +594,22 @@ function resolveBound(
   return typeof bound === 'function' ? bound(node, sceneApi) : bound
 }
 
+function resolveDecorationRadius(
+  decoration: { radius: (...args: never[]) => number },
+  node: AnyNode,
+  sceneApi: ReturnType<typeof createSceneApi>,
+): number {
+  return decoration.radius(node as never, sceneApi as never)
+}
+
+function resolveDecorationY(
+  decoration: { y?: (...args: never[]) => number },
+  node: AnyNode,
+  sceneApi: ReturnType<typeof createSceneApi>,
+): number {
+  return decoration.y?.(node as never, sceneApi as never) ?? 0
+}
+
 function LinearArrow({
   descriptor,
   node,
@@ -818,8 +834,8 @@ function LinearArrow({
       <>
         {showDecoration && decoration ? (
           <GuideRing
-            radius={decoration.radius(node as never)}
-            y={decoration.y?.(node as never) ?? 0}
+            radius={resolveDecorationRadius(decoration, node, placementSceneApi)}
+            y={resolveDecorationY(decoration, node, placementSceneApi)}
           />
         ) : null}
         {showLabel ? (
@@ -846,8 +862,8 @@ function LinearArrow({
     <>
       {showDecoration && decoration ? (
         <GuideRing
-          radius={decoration.radius(node as never)}
-          y={decoration.y?.(node as never) ?? 0}
+          radius={resolveDecorationRadius(decoration, node, placementSceneApi)}
+          y={resolveDecorationY(decoration, node, placementSceneApi)}
         />
       ) : null}
       <HandleArrow
@@ -1239,8 +1255,8 @@ function ArcArrow({
     <>
       {showDecoration && decoration ? (
         <GuideRing
-          radius={decoration.radius(node as never)}
-          y={decoration.y?.(node as never) ?? 0}
+          radius={resolveDecorationRadius(decoration, node, placementSceneApi)}
+          y={resolveDecorationY(decoration, node, placementSceneApi)}
         />
       ) : null}
       {/* Live rotation readout. Rendered HERE (a child of the node frame, the
@@ -1252,7 +1268,7 @@ function ArcArrow({
           delta={rotationDelta}
           handleAngle={Math.atan2(position[2], position[0])}
           orbitRadius={Math.hypot(position[0], position[2])}
-          y={decoration?.y?.(node as never) ?? 0}
+          y={decoration ? resolveDecorationY(decoration, node, placementSceneApi) : 0}
         />
       ) : null}
       <HandleArrow

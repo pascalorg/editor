@@ -14,7 +14,7 @@ import { grassDefinition } from './grass-definition'
  * (`Trees`). Cast mirrors the built-in bundle: `AnyNodeDefinition` is the
  * hand-maintained union today; the registry derives it post-migration.
  */
-export const treesPlugin: Plugin = {
+export const treesPlugin = {
   id: 'pascal:trees',
   apiVersion: 1,
   nodes: [
@@ -30,7 +30,7 @@ export const treesPlugin: Plugin = {
       component: () => import('./presets-panel'),
     },
   ],
-}
+} satisfies Plugin
 
 // NOTE: no re-export from './geometry' — it imports ez-tree, which touches
 // `document` at module scope and would crash SSR (this barrel is eagerly

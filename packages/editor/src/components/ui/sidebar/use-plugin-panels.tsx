@@ -1,11 +1,34 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef, panelRegistry, type PluginPanel } from '@pascal-app/core'
+import * as coreRegistry from '@pascal-app/core/registry'
 import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
 import useEditor from '../../../store/use-editor'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
+
+type IconRef =
+  | { kind: 'iconify'; name: string }
+  | { kind: 'lazy'; module: () => Promise<{ default: ComponentType }> }
+  | { kind: 'svg'; path: string; viewBox: string }
+  | { kind: 'url'; src: string }
+
+type PluginPanel = {
+  component: () => Promise<{ default: ComponentType }>
+  icon: IconRef
+  id: string
+  label: string
+  workspaces?: string[]
+}
+
+const panelRegistry = (
+  coreRegistry as unknown as {
+    panelRegistry: {
+      getSnapshot: () => PluginPanel[]
+      subscribe: (listener: () => void) => () => void
+    }
+  }
+).panelRegistry
 
 /** Resolve a plugin's {@link IconRef} into a rail-sized React node. Mirrors the
  * inspector's `renderIcon`, sized for the 24px icon-rail button. */

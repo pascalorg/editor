@@ -1449,7 +1449,12 @@ function buildFloorplanEntryGeometry({
   }
 
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId,
+        nodes,
+        liveOverrides,
+        liveTransforms: useLiveTransforms.getState().transforms,
+      })
     : nodes
   const sourceNode = contextNodes !== nodes ? (contextNodes[nodeId] ?? node) : node
   const overrideNode = liveOverride ? ({ ...sourceNode, ...liveOverride } as AnyNode) : sourceNode
@@ -1523,7 +1528,12 @@ export function getFloorplanLevelData(
 
   const computeLevelData = def.computeFloorplanLevelData as FloorplanLevelDataHook
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId: sampleId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId: sampleId,
+        nodes,
+        liveOverrides,
+        liveTransforms: useLiveTransforms.getState().transforms,
+      })
     : nodes
   const siblings: AnyNode[] = []
   for (const id of ids) {

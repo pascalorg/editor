@@ -15,6 +15,7 @@ import {
   GROUP_MOVE_DRAG_LABEL,
   GROUP_ROTATE_DRAG_LABEL,
   ROTATE_HANDLE_DRAG_LABEL,
+  resolveMeasurementHelpHints,
   resolveRotateHandleHelpHints,
   resolveSelectModeHelpHints,
 } from '../../../lib/contextual-help'
@@ -28,6 +29,7 @@ import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { useMeasurementTool } from '../../../store/use-measurement-tool'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { ItemHelper } from './item-helper'
@@ -54,12 +56,14 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
 }
 
 type ActiveModifierKeys = {
+  alt: boolean
   command: boolean
   shift: boolean
 }
 
 function useActiveModifierKeys(): ActiveModifierKeys {
   const [modifiers, setModifiers] = useState<ActiveModifierKeys>({
+    alt: false,
     command: false,
     shift: false,
   })
@@ -68,6 +72,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
     const updateModifiers = (event: KeyboardEvent) => {
       const isKeyDown = event.type === 'keydown'
       setModifiers({
+        alt: event.altKey || (isKeyDown && event.key === 'Alt'),
         command:
           event.metaKey ||
           event.ctrlKey ||
@@ -76,7 +81,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
       })
     }
     const clearModifiers = () => {
-      setModifiers({ command: false, shift: false })
+      setModifiers({ alt: false, command: false, shift: false })
     }
 
     window.addEventListener('keydown', updateModifiers)
@@ -100,6 +105,9 @@ export function HelperManager() {
   const movingNode = useMovingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const measurementMode = useMeasurementTool((s) => s.mode)
+  const measurementDraft = useMeasurementTool((s) => s.draft)
+  const measurementAngleDraft = useMeasurementTool((s) => s.angleDraft)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
   const selectedNodes = useScene(
@@ -201,6 +209,20 @@ export function HelperManager() {
   // paint one surface, so this renders nothing until a scoped target is active.
   if (mode === 'material-paint') {
     return <ContextualHelperPanel hints={[]} showPaintScope />
+  }
+
+  if (tool === 'measurement') {
+    return (
+      <ContextualHelperPanel
+        hints={resolveMeasurementHelpHints({
+          angleDraftActive: Boolean(measurementAngleDraft),
+          draftActive: Boolean(measurementDraft),
+          mode: measurementMode,
+          modifierPressed: modifiers.alt || modifiers.command,
+          shiftPressed: modifiers.shift,
+        })}
+      />
+    )
   }
 
   // Idle select only — an active scope (handle-drag, box-select, …) must not show
