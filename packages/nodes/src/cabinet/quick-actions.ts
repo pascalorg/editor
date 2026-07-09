@@ -161,6 +161,7 @@ export function cabinetQuickActions({
       title: side === 'left' ? 'Add cabinet to the left' : 'Add cabinet to the right',
       icon: side === 'left' ? 'add-left' : 'add-right',
       disabled,
+      history: 'single',
       run: ({ sceneApi }) => {
         if (disabled) return undefined
         const id = addCabinetModuleSide({
@@ -184,6 +185,7 @@ export function cabinetQuickActions({
       title: endSide === 'left' ? 'Turn an L corner to the left' : 'Turn an L corner to the right',
       icon: endSide === 'left' ? cornerTurnLeftIcon : cornerTurnRightIcon,
       disabled,
+      history: 'single',
       run: ({ sceneApi }) => {
         if (disabled || !module) return undefined
         const id = addCornerRun({

@@ -1516,6 +1516,7 @@ export type NodeQuickAction = {
    */
   icon?: NodeQuickActionIcon | IconRef
   disabled?: boolean
+  history?: 'single'
   run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
 }
 

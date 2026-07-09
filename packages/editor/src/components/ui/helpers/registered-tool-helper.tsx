@@ -27,12 +27,12 @@ export function RegisteredToolHelper({
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
-  // The snapping chip (when a context is active) already shows Shift = cycle, so
-  // drop the redundant 'Cycle snapping mode' tool hint to avoid a double pill;
-  // also hide draft-gated hints until the draft is far enough along.
+  // Some hints are replaced by live contextual chips, so keep the generic
+  // registry renderer from duplicating stale/static versions.
   const visible = hints.filter(
     (hint) =>
       !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
+      !(hint.key === 'I' && hint.label === 'Island mode') &&
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
   if (visible.length === 0 && !snapContext && !continuationContext) return null

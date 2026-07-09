@@ -24,6 +24,7 @@ import {
   type NodeQuickAction,
   nodeRegistry,
   RoofSegmentNode,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   SpawnNode,
   StairNode,
@@ -761,7 +762,9 @@ export function FloatingActionMenu() {
     (action: NodeQuickAction) => (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node || action.disabled) return
-      const result = action.run({ node, sceneApi: createSceneApi(useScene) })
+      const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
+      const result =
+        action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
       if (result?.selectedIds) setSelection({ selectedIds: result.selectedIds })
       if (result?.selectedIds) {
         const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)

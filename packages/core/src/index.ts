@@ -141,6 +141,7 @@ export {
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
 } from './store/history-control'
 export {
   type ControlValue,

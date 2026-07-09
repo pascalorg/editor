@@ -27,6 +27,7 @@ import {
   movementSfxStepKey,
   publishPlacementSurface,
   triggerSFX,
+  useCabinetPlacementType,
   useEditor,
   usePlacementPreview,
 } from '@pascal-app/editor'
@@ -255,9 +256,10 @@ const CabinetTool = () => {
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
-  const [islandMode, setIslandMode] = useState(false)
+  const placementType = useCabinetPlacementType((s) => s.type)
+  const islandMode = placementType === 'island'
   const yawRef = useRef(0)
-  const islandModeRef = useRef(false)
+  const islandModeRef = useRef(useCabinetPlacementType.getState().type === 'island')
   const placementRef = useRef<CabinetPlacement | null>(null)
   const draftSegmentsRef = useRef<DraftSegment[]>([])
   const chainRootRunRef = useRef<CabinetNode | null>(null)
@@ -405,6 +407,25 @@ const CabinetTool = () => {
       previousSnapRef.current = null
       previousTickFrameRef.current = -1
       clearPlacementSurface()
+    }
+
+    const applyPlacementType = (type: 'cabinet' | 'island') => {
+      const nextIslandMode = type === 'island'
+      if (nextIslandMode === islandModeRef.current) return
+      const currentPlacement = placementRef.current
+      const hasContinuousDraft =
+        draftAnchorRef.current !== null || draftSegmentsRef.current.length > 0
+      if (hasContinuousDraft) clearDraft()
+      islandModeRef.current = nextIslandMode
+      if (hasContinuousDraft) return
+      // Drop a stale wall-snapped preview so the next move re-resolves free.
+      if (nextIslandMode && currentPlacement?.snappedToWall) {
+        placementRef.current = null
+        setPlacement(null)
+        usePlacementPreview.getState().clear()
+      } else if (currentPlacement) {
+        publishFloorplanPreview(currentPlacement, nextIslandMode)
+      }
     }
 
     // The segmented draft survives only while continuous mode is on.
@@ -900,17 +921,7 @@ const CabinetTool = () => {
       if (event.key === 'i' || event.key === 'I') {
         event.preventDefault()
         event.stopPropagation()
-        clearDraft()
-        islandModeRef.current = !islandModeRef.current
-        setIslandMode(islandModeRef.current)
-        // Drop a stale wall-snapped preview so the next move re-resolves free.
-        if (islandModeRef.current && placementRef.current?.snappedToWall) {
-          placementRef.current = null
-          setPlacement(null)
-          usePlacementPreview.getState().clear()
-        } else if (placementRef.current) {
-          publishFloorplanPreview(placementRef.current, islandModeRef.current)
-        }
+        useCabinetPlacementType.getState().cycleType()
         triggerSFX('sfx:item-rotate')
         return
       }
@@ -942,6 +953,9 @@ const CabinetTool = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('wall:move', onWallMove)
     emitter.on('tool:cancel', onCancel)
+    const unsubscribeCabinetPlacementType = useCabinetPlacementType.subscribe((state) => {
+      applyPlacementType(state.type)
+    })
     const unsubscribePlacementClicks = subscribeFloorPlacementClicks(onClick)
     const unsubscribePlacementDoubleClicks = subscribeFloorPlacementDoubleClicks(onDoubleClick)
     window.addEventListener('keydown', onKeyDown, true)
@@ -949,6 +963,7 @@ const CabinetTool = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('wall:move', onWallMove)
       emitter.off('tool:cancel', onCancel)
+      unsubscribeCabinetPlacementType()
       unsubscribePlacementClicks()
       unsubscribePlacementDoubleClicks()
       window.removeEventListener('keydown', onKeyDown, true)

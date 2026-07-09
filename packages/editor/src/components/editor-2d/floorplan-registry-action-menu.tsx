@@ -8,6 +8,7 @@ import {
   getWallMidpointHandlePoint,
   type NodeQuickAction,
   nodeRegistry,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   useLiveNodeOverrides,
   useScene,
@@ -314,7 +315,8 @@ export function FloorplanRegistryActionMenu() {
 
   const handleQuickAction = (action: NodeQuickAction) => {
     if (action.disabled) return
-    const result = action.run({ node, sceneApi: createSceneApi(useScene) })
+    const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
+    const result = action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
     if (result?.selectedIds) useViewer.getState().setSelection({ selectedIds: result.selectedIds })
     if (result?.selectedIds) {
       const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)

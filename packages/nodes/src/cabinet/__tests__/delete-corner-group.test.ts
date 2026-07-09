@@ -6,8 +6,10 @@ import type {
 } from '@pascal-app/core'
 import { loadPlugin, nodeRegistry } from '../../../../core/src/registry'
 import { createSceneApi } from '../../../../core/src/registry/scene-api'
+import { runAsSingleSceneHistoryStep } from '../../../../core/src/store/history-control'
 import useScene from '../../../../core/src/store/use-scene'
 import { builtinPlugin } from '../../index'
+import { cabinetQuickActions } from '../quick-actions'
 import { addCornerRun, wallBottomHeightForTallAlignment } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
@@ -125,6 +127,86 @@ describe('cabinet corner member deletion', () => {
     }
     // The source module's link no longer references the deleted leg.
     expect(linkedRunIdsOf(moduleId)).toEqual(survivingLegIds)
+  })
+
+  test('undo and redo treat an L-corner quick action as one scene step', () => {
+    const { runId, moduleId, module } = seedCornerScene('undo-redo-corner')
+    const beforeIds = new Set(Object.keys(useScene.getState().nodes))
+    const action = cabinetQuickActions({
+      node: module,
+      nodes: useScene.getState().nodes,
+    }).find((entry) => entry.id === 'cabinet:add-corner-right')
+
+    expect(action).toBeDefined()
+    expect(action?.history).toBe('single')
+
+    const beforePastCount = useScene.temporal.getState().pastStates.length
+    const result = runAsSingleSceneHistoryStep(useScene, () =>
+      action!.run({
+        node: module as AnyNode,
+        sceneApi: createSceneApi(useScene),
+      }),
+    )
+
+    expect(result?.selectedIds?.[0]).toBeTruthy()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(beforePastCount + 1)
+
+    const afterIds = new Set(Object.keys(useScene.getState().nodes))
+    const createdIds = [...afterIds].filter((id) => !beforeIds.has(id)) as AnyNodeId[]
+    expect(createdIds.length).toBeGreaterThan(5)
+    expect(linkedRunIdsOf(moduleId).length).toBeGreaterThan(1)
+
+    useScene.temporal.getState().undo()
+
+    const undoneNodes = useScene.getState().nodes
+    expect(undoneNodes[runId]).toBeDefined()
+    expect(undoneNodes[moduleId]).toBeDefined()
+    for (const id of createdIds) {
+      expect(undoneNodes[id]).toBeUndefined()
+    }
+    expect(linkedRunIdsOf(moduleId)).toEqual([])
+
+    useScene.temporal.getState().redo()
+
+    const redoneNodes = useScene.getState().nodes
+    for (const id of createdIds) {
+      expect(redoneNodes[id]).toBeDefined()
+    }
+    expect(linkedRunIdsOf(moduleId).length).toBeGreaterThan(1)
+  })
+
+  test('undo treats a side-add quick action as one scene step', () => {
+    const { runId, moduleId, module } = seedCornerScene('undo-side-add')
+    const beforeIds = new Set(Object.keys(useScene.getState().nodes))
+    const action = cabinetQuickActions({
+      node: module,
+      nodes: useScene.getState().nodes,
+    }).find((entry) => entry.id === 'cabinet:add-right')
+
+    expect(action).toBeDefined()
+    expect(action?.history).toBe('single')
+
+    const beforePastCount = useScene.temporal.getState().pastStates.length
+    const result = runAsSingleSceneHistoryStep(useScene, () =>
+      action!.run({
+        node: module as AnyNode,
+        sceneApi: createSceneApi(useScene),
+      }),
+    )
+
+    expect(result?.selectedIds?.[0]).toBeTruthy()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(beforePastCount + 1)
+
+    const afterIds = new Set(Object.keys(useScene.getState().nodes))
+    const createdIds = [...afterIds].filter((id) => !beforeIds.has(id)) as AnyNodeId[]
+    expect(createdIds).toHaveLength(1)
+
+    useScene.temporal.getState().undo()
+
+    const undoneNodes = useScene.getState().nodes
+    expect(undoneNodes[runId]).toBeDefined()
+    expect(undoneNodes[moduleId]).toBeDefined()
+    expect(undoneNodes[createdIds[0]!]).toBeUndefined()
   })
 
   test('deleting a module inside a leg run removes only that module', () => {
