@@ -369,10 +369,15 @@ export const CustomCameraControls = () => {
   const lastPublishedNavigationSync = useRef<NavigationCameraPoseSnapshot | null>(null)
   const pendingFloorplanNavigationPose = useRef<PendingNavigationCameraPoseSnapshot | null>(null)
   const lastApplied2dNavigationRevision = useRef(0)
+  const savedSmoothTimeRef = useRef<number | null>(null)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
   const clearPendingFloorplanNavigationPose = useCallback(() => {
     pendingFloorplanNavigationPose.current = null
+    if (savedSmoothTimeRef.current !== null && controls.current) {
+      controls.current.smoothTime = savedSmoothTimeRef.current
+      savedSmoothTimeRef.current = null
+    }
   }, [])
 
   const camera = useThree((state) => state.camera)
@@ -478,6 +483,13 @@ export const CustomCameraControls = () => {
           Math.abs(viewWidthUpdate.viewWidth - pose.viewWidth) >=
           NAVIGATION_SYNC_VIEW_WIDTH_EPSILON,
       }
+      // Match 3D settle time to 2D exponential decay (τ=90ms). SmoothDamp's
+      // effective time constant is smoothTime/2, so smoothTime=0.18 gives
+      // τ≈90ms and visual convergence in ~350-400ms, matching the 2D panel.
+      if (savedSmoothTimeRef.current === null) {
+        savedSmoothTimeRef.current = control.smoothTime
+      }
+      control.smoothTime = 0.18
       control.moveTo(pose.target[0], pose.target[1], pose.target[2], true)
       control.rotateTo(targetAzimuth, control.polarAngle, true)
       applyCameraViewWidth(control, viewWidthUpdate)
@@ -499,7 +511,7 @@ export const CustomCameraControls = () => {
         isCameraAtNavigationPose(pendingFloorplanPose, syncTarget, syncSpherical.theta, viewWidth)
       ) {
         lastPublishedNavigationSync.current = pendingFloorplanPose
-        pendingFloorplanNavigationPose.current = null
+        clearPendingFloorplanNavigationPose()
         if (pendingFloorplanPose.publishOnComplete) {
           useEditor.getState().publishNavigationSyncPose({
             source: '3d',
@@ -540,7 +552,7 @@ export const CustomCameraControls = () => {
       azimuth: syncSpherical.theta,
       viewWidth,
     })
-  }, [camera, isFirstPersonMode, viewportSize])
+  }, [camera, clearPendingFloorplanNavigationPose, isFirstPersonMode, viewportSize])
 
   useEffect(() => {
     if (isFirstPersonMode || (!isFloorplanOpen && currentLevelId === null)) return
@@ -573,7 +585,7 @@ export const CustomCameraControls = () => {
     )
     const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical)
 
-    pendingFloorplanNavigationPose.current = null
+    clearPendingFloorplanNavigationPose()
     if (horizontal !== 0) control.truck(horizontal * step, 0, true)
     if (vertical !== 0) control.forward(vertical * step, true)
   })
@@ -725,7 +737,7 @@ export const CustomCameraControls = () => {
           !isEditableKeyboardTarget(event.target)
         ) {
           setKeyboardPanKey(keyboardPanKeys.current, event.code, true)
-          pendingFloorplanNavigationPose.current = null
+          clearPendingFloorplanNavigationPose()
           event.preventDefault()
           event.stopPropagation()
         }
@@ -788,7 +800,7 @@ export const CustomCameraControls = () => {
 
     const onPointerDown = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !gl.domElement.contains(event.target)) return
-      pendingFloorplanNavigationPose.current = null
+      clearPendingFloorplanNavigationPose()
       if (event.button !== 1 && !(event.button === 0 && keyState.space)) return
 
       panPointerId = event.pointerId
@@ -797,7 +809,7 @@ export const CustomCameraControls = () => {
     }
 
     const onWheel = () => {
-      pendingFloorplanNavigationPose.current = null
+      clearPendingFloorplanNavigationPose()
     }
 
     const onPointerUp = (event: PointerEvent) => {
@@ -839,7 +851,25 @@ export const CustomCameraControls = () => {
       clearKeyboardPanKeys()
       clearNavigationCursor()
     }
-  }, [cameraMode, gl, isPreviewMode, isFirstPersonMode])
+  }, [cameraMode, gl, isPreviewMode, isFirstPersonMode, clearPendingFloorplanNavigationPose])
+
+  // Cancel any in-progress 2D-origin navigation pose when the user starts
+  // dragging (right-click orbit, middle-click pan, touch). `controlstart`
+  // fires only for user pointer interactions — not for programmatic
+  // moveTo/rotateTo which emit `transitionstart` instead.
+  useEffect(() => {
+    if (isFirstPersonMode) return
+    const control = controls.current
+    if (!control) return
+
+    const onControlStart = () => {
+      clearPendingFloorplanNavigationPose()
+    }
+    control.addEventListener('controlstart', onControlStart)
+    return () => {
+      control.removeEventListener('controlstart', onControlStart)
+    }
+  }, [isFirstPersonMode, clearPendingFloorplanNavigationPose])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
   const previewTargetNodeId = isPreviewMode

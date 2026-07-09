@@ -1,4 +1,5 @@
 import type { BuildStats, SchemaIssue, ValidateBuildJsonResult } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import {
   AlertTriangle,
   AppWindow,
@@ -22,6 +23,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../../../../components/ui/primitives/dialog'
+import {
+  getAreaUnitLabel,
+  type LinearUnit,
+  squareMetersToAreaUnit,
+} from '../../../../../lib/measurements'
 
 export type PendingImport = {
   fileName: string
@@ -80,15 +86,17 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatFloorArea(m2: number): string {
+function formatFloorArea(m2: number, unit: LinearUnit): string {
   if (m2 === 0) return '—'
-  if (m2 < 10) return `${m2.toFixed(2)} m²`
-  return `${m2.toFixed(1)} m²`
+  const value = squareMetersToAreaUnit(m2, unit)
+  const label = getAreaUnitLabel(unit)
+  return `${value < 10 ? value.toFixed(2) : value.toFixed(1)} ${label}`
 }
 
 export function LoadBuildDialog({ pending, onCancel, onConfirm }: Props) {
   const [showAllWarnings, setShowAllWarnings] = useState(false)
   const [showSchemaIssues, setShowSchemaIssues] = useState(false)
+  const unit = useViewer((state) => state.unit)
 
   if (!pending) return null
 
@@ -165,7 +173,7 @@ export function LoadBuildDialog({ pending, onCancel, onConfirm }: Props) {
                     <div className="flex items-center justify-between border-t px-3 py-2">
                       <span className="text-muted-foreground text-sm">Floor area</span>
                       <span className="font-medium text-sm">
-                        {formatFloorArea(stats.floorAreaM2)}
+                        {formatFloorArea(stats.floorAreaM2, unit)}
                       </span>
                     </div>
                   )}
