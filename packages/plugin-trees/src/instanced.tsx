@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useNodeEvents, useViewer } from '@pascal-app/viewer'
+import { useFrame } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { type BufferGeometry, type InstancedMesh, type Material, Matrix4, Object3D } from 'three'
 import { toStaticMaterial } from './wind-node'
@@ -73,6 +74,26 @@ export function InstancedKindSystem<N extends Placeable>({
       (n) => (n.type as string) === kind && !active.has(n.id as string),
     ) as unknown as N[]
   }, [scene, kind, activeKey])
+
+  // Consume the dirty marks for this kind. Instances rebuild synchronously
+  // from the store (the memos above), so a rendered node is already "built" —
+  // but `FloorElevationSystem` deliberately leaves the mark for kinds with a
+  // `def.system`, expecting that system to clear it. Without this pass the
+  // marks live forever: `hasPendingSceneBuildWork` never goes false, so the
+  // scene-ready signal (and every headless bake) stalls at its frame cap.
+  // Priority 2 = after the priority-1 floor-elevation lift in the same frame;
+  // clearing only registered nodes leaves unmounted proxies for a later frame.
+  useFrame(() => {
+    const { dirtyNodes, nodes: sceneNodes, clearDirty } = useScene.getState()
+    if (dirtyNodes.size === 0) return
+    for (const id of dirtyNodes) {
+      const node = sceneNodes[id]
+      if (!node || (node.type as string) !== kind) continue
+      if (!sceneRegistry.nodes.has(id)) continue
+      clearDirty(id)
+    }
+  }, 2)
+
   return <InstancedNodes getVariant={getVariant} nodes={nodes} variantKeyOf={variantKeyOf} />
 }
 
