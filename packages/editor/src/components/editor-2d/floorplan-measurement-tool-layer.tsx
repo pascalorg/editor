@@ -8,10 +8,8 @@ import {
   emitter,
   type FenceNode,
   type GridEvent,
-  getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
   getScaledDimensions,
-  getWallCurveFrameAt,
   getWallCurveLength,
   type ItemNode,
   type SlabNode,
@@ -24,6 +22,14 @@ import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { getRotatedRectanglePolygon } from '../../lib/floorplan/geometry'
 import { getItemFloorplanTransform } from '../../lib/floorplan/items'
 import {
+  collectCommittedMeasurementSnapGeometry,
+  collectPlanMeasurementSnapGeometry,
+  mergeMeasurementSnapGeometry,
+  polygonAreaAndCentroid,
+  resolvePlanMeasurementConstraint,
+  resolvePlanMeasurementSnap,
+} from '../../lib/measurement-snapping'
+import {
   angleBetweenMeasurements,
   formatAngleMeasurement,
   formatAreaMeasurement,
@@ -35,11 +41,14 @@ import useInteractionScope from '../../store/use-interaction-scope'
 import {
   axisLockedMeasurementPoint,
   distanceBetweenMeasurements,
+  isDraggingMeasurementEndpoint,
   type MeasurementAngle,
   type MeasurementArea,
+  type MeasurementDisplayPrecision,
   type MeasurementPerimeter,
   type MeasurementPoint,
   type MeasurementSegment,
+  type MeasurementSegmentEndpoint,
   type MeasurementSnapTarget,
   useMeasurementTool,
 } from '../../store/use-measurement-tool'
@@ -60,6 +69,10 @@ type FloorplanMeasurementToolLayerProps = {
 const FLOORPLAN_MEASUREMENT_SNAP_RADIUS = 0.25
 const FLOORPLAN_AREA_LABEL_FONT_SIZE = 0.18
 const FLOORPLAN_ANGLE_LABEL_FONT_SIZE = 0.16
+const FLOORPLAN_ENDPOINT_HANDLE_RADIUS = 0.08
+const FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS = 0.18
+const FLOORPLAN_LABEL_COLLISION_CELL = 0.35
+const FLOORPLAN_LABEL_STAGGER_STEP = 0.22
 
 function isFloorplanEvent(event: GridEvent): boolean {
   const target = event.nativeEvent?.target
@@ -72,116 +85,6 @@ function pointFromGridEvent(event: GridEvent): MeasurementPoint {
 
 function setMeasurementCursorPoint(point: MeasurementPoint | null): void {
   useFloorplanDraftPreview.getState().setCursorPoint(point ? [point[0], point[2]] : null)
-}
-
-function squaredPlanDistance(a: MeasurementPoint, b: MeasurementPoint): number {
-  const dx = a[0] - b[0]
-  const dz = a[2] - b[2]
-  return dx * dx + dz * dz
-}
-
-type FloorplanSnapAnchor = {
-  label: string
-  point: MeasurementPoint
-}
-
-function wallMeasurementAnchors(node: WallNode): FloorplanSnapAnchor[] {
-  const midpoint = getWallCurveFrameAt(node, 0.5).point
-  return [
-    { label: 'Endpoint', point: [node.start[0], 0, node.start[1]] },
-    { label: 'Midpoint', point: [midpoint.x, 0, midpoint.y] },
-    { label: 'Endpoint', point: [node.end[0], 0, node.end[1]] },
-  ]
-}
-
-function fenceMeasurementAnchors(node: FenceNode): FloorplanSnapAnchor[] {
-  const midpoint = getFenceCenterlineFrameAt(node, 0.5).point
-  const pathAnchors =
-    node.path?.map((point) => ({
-      label: 'Path point',
-      point: [point[0], 0, point[1]] as MeasurementPoint,
-    })) ?? []
-  return [
-    { label: 'Endpoint', point: [node.start[0], 0, node.start[1]] },
-    ...pathAnchors,
-    { label: 'Midpoint', point: [midpoint.x, 0, midpoint.y] },
-    { label: 'Endpoint', point: [node.end[0], 0, node.end[1]] },
-  ]
-}
-
-function surfaceMeasurementAnchors(node: SlabNode | CeilingNode | ZoneNode): FloorplanSnapAnchor[] {
-  const centroid = polygonAreaAndCentroid(node.polygon).centroid
-  const edgeMidpoints = node.polygon.map((point, index) => {
-    const next = node.polygon[(index + 1) % node.polygon.length] ?? point
-    return {
-      label: 'Edge midpoint',
-      point: [(point[0] + next[0]) / 2, 0, (point[1] + next[1]) / 2] as MeasurementPoint,
-    }
-  })
-  return [
-    ...node.polygon.map((point) => ({
-      label: 'Vertex',
-      point: [point[0], 0, point[1]] as MeasurementPoint,
-    })),
-    ...edgeMidpoints,
-    { label: 'Center', point: [centroid.x, 0, centroid.y] },
-  ]
-}
-
-function rectangleMeasurementAnchors(
-  polygon: ReadonlyArray<{ x: number; y: number }>,
-): FloorplanSnapAnchor[] {
-  if (polygon.length === 0) return []
-  const centroid = {
-    x: polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length,
-    y: polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length,
-  }
-  const edgeMidpoints = polygon.map((point, index) => {
-    const next = polygon[(index + 1) % polygon.length] ?? point
-    return {
-      label: 'Edge midpoint',
-      point: [(point.x + next.x) / 2, 0, (point.y + next.y) / 2] as MeasurementPoint,
-    }
-  })
-
-  return [
-    ...polygon.map((point) => ({
-      label: 'Corner',
-      point: [point.x, 0, point.y] as MeasurementPoint,
-    })),
-    ...edgeMidpoints,
-    { label: 'Center', point: [centroid.x, 0, centroid.y] },
-  ]
-}
-
-function itemMeasurementAnchors(node: ItemNode): FloorplanSnapAnchor[] {
-  const sceneNodes = useScene.getState().nodes
-  const transform = getItemFloorplanTransform(node, new Map(Object.entries(sceneNodes)), new Map())
-  if (!transform) return []
-
-  const [width, , depth] = getScaledDimensions(node)
-  const polygon = getRotatedRectanglePolygon(transform.position, width, depth, transform.rotation)
-  return rectangleMeasurementAnchors(polygon)
-}
-
-function columnMeasurementAnchors(node: ColumnNode): FloorplanSnapAnchor[] {
-  const polygon = getRotatedRectanglePolygon(
-    { x: node.position[0], y: node.position[2] },
-    node.width,
-    node.depth,
-    node.rotation,
-  )
-  return rectangleMeasurementAnchors(polygon)
-}
-
-function elevatorMeasurementAnchors(node: ElevatorNode): FloorplanSnapAnchor[] {
-  const polygon = getRotatedRectanglePolygon(
-    { x: node.position[0], y: node.position[2] },
-    node.shaftWidth ?? node.width,
-    node.shaftDepth ?? node.depth,
-    node.rotation,
-  )
-  return rectangleMeasurementAnchors(polygon)
 }
 
 function rectangleLengthSegment(
@@ -253,70 +156,40 @@ function resolveFloorplanMeasurementSnap(point: MeasurementPoint): {
   point: MeasurementPoint
   target: MeasurementSnapTarget | null
 } {
-  const maxDistanceSq = FLOORPLAN_MEASUREMENT_SNAP_RADIUS * FLOORPLAN_MEASUREMENT_SNAP_RADIUS
-  let closest: FloorplanSnapAnchor | null = null
-  let closestDistanceSq = maxDistanceSq
-
-  for (const node of Object.values(useScene.getState().nodes)) {
-    const anchors =
-      node.type === 'wall'
-        ? wallMeasurementAnchors(node)
-        : node.type === 'fence'
-          ? fenceMeasurementAnchors(node)
-          : node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone'
-            ? surfaceMeasurementAnchors(node)
-            : node.type === 'item'
-              ? itemMeasurementAnchors(node)
-              : node.type === 'column'
-                ? columnMeasurementAnchors(node)
-                : node.type === 'elevator'
-                  ? elevatorMeasurementAnchors(node)
-                  : null
-    if (!anchors) continue
-
-    for (const anchor of anchors) {
-      const distanceSq = squaredPlanDistance(point, anchor.point)
-      if (distanceSq <= closestDistanceSq) {
-        closest = anchor
-        closestDistanceSq = distanceSq
-      }
-    }
-  }
-
-  return {
-    point: closest?.point ?? point,
-    target: closest ? { label: closest.label, point: closest.point, view: '2d' } : null,
-  }
+  return resolvePlanMeasurementSnap(
+    point,
+    mergeMeasurementSnapGeometry(
+      collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
+      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments, '2d'),
+    ),
+    {
+      enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
+      radiusMeters: FLOORPLAN_MEASUREMENT_SNAP_RADIUS,
+      view: '2d',
+    },
+  )
 }
 
-function polygonAreaAndCentroid(polygon: ReadonlyArray<readonly [number, number]>): {
-  area: number
-  centroid: { x: number; y: number }
+function resolveFloorplanMeasurementConstraint(
+  start: MeasurementPoint,
+  point: MeasurementPoint,
+): {
+  point: MeasurementPoint
+  target: MeasurementSnapTarget | null
 } {
-  let cx = 0
-  let cy = 0
-  let area = 0
-
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const p1 = polygon[j]!
-    const p2 = polygon[i]!
-    const f = p1[0] * p2[1] - p2[0] * p1[1]
-    cx += (p1[0] + p2[0]) * f
-    cy += (p1[1] + p2[1]) * f
-    area += f
-  }
-
-  area /= 2
-
-  if (Math.abs(area) < 1e-9) {
-    const fallback = polygon[0] ?? [0, 0]
-    return { area: 0, centroid: { x: fallback[0], y: fallback[1] } }
-  }
-
-  return {
-    area: Math.abs(area),
-    centroid: { x: cx / (6 * area), y: cy / (6 * area) },
-  }
+  return resolvePlanMeasurementConstraint(
+    start,
+    point,
+    mergeMeasurementSnapGeometry(
+      collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
+      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments, '2d'),
+    ),
+    {
+      enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
+      radiusMeters: FLOORPLAN_MEASUREMENT_SNAP_RADIUS,
+      view: '2d',
+    },
+  )
 }
 
 function surfaceAreaMeasurement(node: SlabNode | CeilingNode | ZoneNode): {
@@ -358,6 +231,7 @@ function toOverlay(
   segment: Pick<MeasurementSegment, 'id' | 'start' | 'end' | 'measuredDistanceMeters'>,
   unit: LinearUnit,
   selectedId: string | null,
+  displayPrecision: MeasurementDisplayPrecision,
 ): LinearMeasurementOverlay | null {
   const start = { x: segment.start[0], y: segment.start[2] }
   const end = { x: segment.end[0], y: segment.end[2] }
@@ -380,6 +254,7 @@ function toOverlay(
     label: formatLinearMeasurement(
       segment.measuredDistanceMeters ?? distanceBetweenMeasurements(segment.start, segment.end),
       unit,
+      { precision: displayPrecision },
     ),
     labelX: mid.x,
     labelY: mid.y,
@@ -404,6 +279,30 @@ function toOverlay(
     isSelected: selectedId ? selectedId === segment.id : true,
     dashedExtensions: false,
   }
+}
+
+export function staggerFloorplanMeasurementLabels(
+  overlays: LinearMeasurementOverlay[],
+): LinearMeasurementOverlay[] {
+  const seen = new Map<string, number>()
+  return overlays.map((overlay) => {
+    const key = `${Math.round(overlay.labelX / FLOORPLAN_LABEL_COLLISION_CELL)}:${Math.round(
+      overlay.labelY / FLOORPLAN_LABEL_COLLISION_CELL,
+    )}`
+    const index = seen.get(key) ?? 0
+    seen.set(key, index + 1)
+    if (index === 0) return overlay
+
+    const radians = (overlay.labelAngleDeg * Math.PI) / 180
+    const normal = { x: -Math.sin(radians), y: Math.cos(radians) }
+    const direction = index % 2 === 0 ? -1 : 1
+    const magnitude = Math.ceil(index / 2) * FLOORPLAN_LABEL_STAGGER_STEP
+    return {
+      ...overlay,
+      labelX: overlay.labelX + normal.x * direction * magnitude,
+      labelY: overlay.labelY + normal.y * direction * magnitude,
+    }
+  })
 }
 
 function nodeEndpointSegment(node: WallNode | FenceNode): {
@@ -493,12 +392,14 @@ function normalizeAngleDelta(delta: number): number {
 
 function AngleMeasurementLabel({
   angle,
+  displayPrecision,
   isSelected,
   onPointerDown,
   palette,
   sceneRotationDeg,
 }: {
   angle: MeasurementAngle
+  displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
   onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
@@ -583,7 +484,9 @@ function AngleMeasurementLabel({
         x={label.x}
         y={label.y}
       >
-        {formatAngleMeasurement(angleBetweenMeasurements(angle.first, angle.vertex, angle.second))}
+        {formatAngleMeasurement(angleBetweenMeasurements(angle.first, angle.vertex, angle.second), {
+          precision: displayPrecision,
+        })}
       </text>
     </g>
   )
@@ -591,6 +494,7 @@ function AngleMeasurementLabel({
 
 function AreaMeasurementLabel({
   area,
+  displayPrecision,
   isSelected,
   onPointerDown,
   palette,
@@ -598,6 +502,7 @@ function AreaMeasurementLabel({
   unit,
 }: {
   area: MeasurementArea
+  displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
   onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
@@ -622,13 +527,14 @@ function AreaMeasurementLabel({
         x={area.labelPoint[0]}
         y={area.labelPoint[2]}
       >
-        {formatAreaMeasurement(area.areaSquareMeters, unit)}
+        {formatAreaMeasurement(area.areaSquareMeters, unit, { precision: displayPrecision })}
       </text>
     </g>
   )
 }
 
 function PerimeterMeasurementLabel({
+  displayPrecision,
   isSelected,
   onPointerDown,
   palette,
@@ -636,6 +542,7 @@ function PerimeterMeasurementLabel({
   sceneRotationDeg,
   unit,
 }: {
+  displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
   onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
@@ -661,7 +568,7 @@ function PerimeterMeasurementLabel({
         x={perimeter.labelPoint[0]}
         y={perimeter.labelPoint[2]}
       >
-        {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit)}`}
+        {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit, { precision: displayPrecision })}`}
       </text>
     </g>
   )
@@ -676,38 +583,172 @@ function FloorplanSnapTargetMarker({
 }) {
   const x = target.point[0]
   const y = target.point[2]
+  const kind = target.kind ?? 'vertex'
+  const glyph = (() => {
+    if (kind === 'grid') {
+      return (
+        <rect
+          fill="rgba(14, 165, 233, 0.12)"
+          height={0.22}
+          stroke="rgb(14, 165, 233)"
+          strokeWidth={1.3}
+          vectorEffect="non-scaling-stroke"
+          width={0.22}
+          x={x - 0.11}
+          y={y - 0.11}
+        />
+      )
+    }
+    if (kind === 'intersection') {
+      return (
+        <>
+          <line
+            stroke="rgb(14, 165, 233)"
+            strokeLinecap="round"
+            strokeWidth={1.45}
+            vectorEffect="non-scaling-stroke"
+            x1={x - 0.14}
+            x2={x + 0.14}
+            y1={y - 0.14}
+            y2={y + 0.14}
+          />
+          <line
+            stroke="rgb(14, 165, 233)"
+            strokeLinecap="round"
+            strokeWidth={1.45}
+            vectorEffect="non-scaling-stroke"
+            x1={x - 0.14}
+            x2={x + 0.14}
+            y1={y + 0.14}
+            y2={y - 0.14}
+          />
+        </>
+      )
+    }
+    if (kind === 'edge') {
+      return (
+        <line
+          stroke="rgb(14, 165, 233)"
+          strokeLinecap="round"
+          strokeWidth={1.8}
+          vectorEffect="non-scaling-stroke"
+          x1={x - 0.2}
+          x2={x + 0.2}
+          y1={y}
+          y2={y}
+        />
+      )
+    }
+    if (kind === 'midpoint') {
+      return (
+        <path
+          d={`M ${x} ${y - 0.15} L ${x + 0.15} ${y + 0.12} L ${x - 0.15} ${y + 0.12} Z`}
+          fill="rgba(14, 165, 233, 0.14)"
+          stroke="rgb(14, 165, 233)"
+          strokeLinejoin="round"
+          strokeWidth={1.25}
+          vectorEffect="non-scaling-stroke"
+        />
+      )
+    }
+    if (kind === 'center') {
+      return (
+        <>
+          <circle
+            cx={x}
+            cy={y}
+            fill="rgba(14, 165, 233, 0.14)"
+            r={0.13}
+            stroke="rgb(14, 165, 233)"
+            strokeWidth={1.25}
+            vectorEffect="non-scaling-stroke"
+          />
+          <circle cx={x} cy={y} fill="rgb(14, 165, 233)" r={0.035} />
+        </>
+      )
+    }
+    if (kind === 'guide') {
+      return (
+        <>
+          <line
+            stroke="rgb(14, 165, 233)"
+            strokeDasharray="0.08 0.06"
+            strokeLinecap="round"
+            strokeWidth={1.2}
+            vectorEffect="non-scaling-stroke"
+            x1={x - 0.22}
+            x2={x + 0.22}
+            y1={y}
+            y2={y}
+          />
+          <line
+            stroke="rgb(14, 165, 233)"
+            strokeDasharray="0.08 0.06"
+            strokeLinecap="round"
+            strokeWidth={1.2}
+            vectorEffect="non-scaling-stroke"
+            x1={x}
+            x2={x}
+            y1={y - 0.22}
+            y2={y + 0.22}
+          />
+        </>
+      )
+    }
+    if (kind === 'measurement') {
+      return (
+        <>
+          <circle
+            cx={x}
+            cy={y}
+            fill="rgba(14, 165, 233, 0.1)"
+            r={0.14}
+            stroke="rgb(14, 165, 233)"
+            strokeWidth={1.15}
+            vectorEffect="non-scaling-stroke"
+          />
+          <circle
+            cx={x}
+            cy={y}
+            fill="none"
+            r={0.07}
+            stroke="rgb(14, 165, 233)"
+            strokeWidth={1.15}
+            vectorEffect="non-scaling-stroke"
+          />
+        </>
+      )
+    }
+
+    return (
+      <path
+        d={`M ${x} ${y - 0.16} L ${x + 0.16} ${y} L ${x} ${y + 0.16} L ${x - 0.16} ${y} Z`}
+        fill="rgba(14, 165, 233, 0.14)"
+        stroke="rgb(14, 165, 233)"
+        strokeLinejoin="round"
+        strokeWidth={1.25}
+        vectorEffect="non-scaling-stroke"
+      />
+    )
+  })()
 
   return (
     <g className="floorplan-measurement-snap-target" pointerEvents="none">
-      <circle
-        cx={x}
-        cy={y}
-        fill="rgba(14, 165, 233, 0.16)"
-        r={0.11}
-        stroke="rgb(14, 165, 233)"
-        strokeWidth={1.3}
-        vectorEffect="non-scaling-stroke"
-      />
-      <line
-        stroke="rgb(14, 165, 233)"
-        strokeLinecap="round"
-        strokeWidth={1.1}
-        vectorEffect="non-scaling-stroke"
-        x1={x - 0.16}
-        x2={x + 0.16}
-        y1={y}
-        y2={y}
-      />
-      <line
-        stroke="rgb(14, 165, 233)"
-        strokeLinecap="round"
-        strokeWidth={1.1}
-        vectorEffect="non-scaling-stroke"
-        x1={x}
-        x2={x}
-        y1={y - 0.16}
-        y2={y + 0.16}
-      />
+      {target.guideLine ? (
+        <line
+          stroke="rgb(14, 165, 233)"
+          strokeDasharray="0.12 0.08"
+          strokeLinecap="round"
+          strokeOpacity={0.75}
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+          x1={target.guideLine.start[0]}
+          x2={target.guideLine.end[0]}
+          y1={target.guideLine.start[2]}
+          y2={target.guideLine.end[2]}
+        />
+      ) : null}
+      {glyph}
       <text
         dominantBaseline="central"
         fill="rgb(14, 165, 233)"
@@ -757,16 +798,62 @@ function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
   })
 }
 
+function resolveFloorplanEditablePoint(event: GridEvent): {
+  point: MeasurementPoint
+  target: MeasurementSnapTarget | null
+} {
+  const measurement = useMeasurementTool.getState()
+  const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const drag = measurement.draggingSegmentEndpoint
+  if (!drag) return snap
+
+  const segment = measurement.segments.find((entry) => entry.id === drag.id)
+  const anchor =
+    drag.endpoint === 'start'
+      ? (segment?.end ?? null)
+      : drag.endpoint === 'end'
+        ? (segment?.start ?? null)
+        : null
+  const constrained =
+    !event.nativeEvent.shiftKey && anchor
+      ? resolveFloorplanMeasurementConstraint(anchor, snap.point)
+      : null
+  const point =
+    event.nativeEvent.shiftKey && anchor
+      ? axisLockedMeasurementPoint(anchor, snap.point, '2d')
+      : (constrained?.point ?? snap.point)
+
+  return {
+    point,
+    target: event.nativeEvent.shiftKey ? null : (constrained?.target ?? snap.target),
+  }
+}
+
 export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
   const measurement = useMeasurementTool.getState()
+  if (measurement.draggingSegmentEndpoint) {
+    const resolved = resolveFloorplanEditablePoint(event)
+    measurement.updateSegmentEndpoint(
+      measurement.draggingSegmentEndpoint.id,
+      measurement.draggingSegmentEndpoint.endpoint,
+      resolved.point,
+    )
+    measurement.setSnapTarget(resolved.target)
+    setMeasurementCursorPoint(resolved.point)
+    return
+  }
   const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
   const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
+  const constrained =
+    !isAxisLocked && measurement.draft?.view === '2d'
+      ? resolveFloorplanMeasurementConstraint(measurement.draft.start, snap.point)
+      : null
   const point =
     isAxisLocked && measurement.draft
       ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
-      : snap.point
-  measurement.setSnapTarget(isAxisLocked ? null : snap.target)
+      : (constrained?.point ?? snap.point)
+  measurement.setSnapTarget(isAxisLocked ? null : (constrained?.target ?? snap.target))
   setMeasurementCursorPoint(point)
   if (measurement.angleDraft) {
     measurement.updateAngle(point)
@@ -779,13 +866,29 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
 export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
   const measurement = useMeasurementTool.getState()
+  if (measurement.draggingSegmentEndpoint) {
+    const resolved = resolveFloorplanEditablePoint(event)
+    measurement.updateSegmentEndpoint(
+      measurement.draggingSegmentEndpoint.id,
+      measurement.draggingSegmentEndpoint.endpoint,
+      resolved.point,
+    )
+    measurement.setSnapTarget(resolved.target)
+    setMeasurementCursorPoint(resolved.point)
+    measurement.endSegmentEndpointDrag()
+    return
+  }
   const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
   const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
+  const constrained =
+    !isAxisLocked && measurement.draft?.view === '2d'
+      ? resolveFloorplanMeasurementConstraint(measurement.draft.start, snap.point)
+      : null
   const point =
     isAxisLocked && measurement.draft
       ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
-      : snap.point
-  measurement.setSnapTarget(isAxisLocked ? null : snap.target)
+      : (constrained?.point ?? snap.point)
+  measurement.setSnapTarget(isAxisLocked ? null : (constrained?.target ?? snap.target))
   if (event.nativeEvent.shiftKey && measurement.draft?.view === '2d') {
     measurement.commit(point)
     return
@@ -818,8 +921,10 @@ export function FloorplanMeasurementToolLayer({
   const angles = useMeasurementTool((state) => state.angles)
   const draft = useMeasurementTool((state) => state.draft)
   const angleDraft = useMeasurementTool((state) => state.angleDraft)
+  const displayPrecision = useMeasurementTool((state) => state.displayPrecision)
   const selectedId = useMeasurementTool((state) => state.selectedId)
   const snapTarget = useMeasurementTool((state) => state.snapTarget)
+  const draggingSegmentEndpoint = useMeasurementTool((state) => state.draggingSegmentEndpoint)
 
   useEffect(() => {
     if (!active) return
@@ -862,15 +967,20 @@ export function FloorplanMeasurementToolLayer({
       event.stopPropagation()
       measurement.deleteSelected()
     }
+    const handlePointerUp = () => {
+      useMeasurementTool.getState().endSegmentEndpointDrag()
+    }
 
     window.addEventListener('click', handleGeometryClick, true)
     window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('pointerup', handlePointerUp, true)
     emitter.on('grid:move', handleFloorplanMeasurementGridMove)
     emitter.on('grid:click', handleFloorplanMeasurementGridClick)
     emitter.on('tool:cancel', handleCancel)
     return () => {
       window.removeEventListener('click', handleGeometryClick, true)
       window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('pointerup', handlePointerUp, true)
       emitter.off('grid:move', handleFloorplanMeasurementGridMove)
       emitter.off('grid:click', handleFloorplanMeasurementGridClick)
       emitter.off('tool:cancel', handleCancel)
@@ -884,15 +994,16 @@ export function FloorplanMeasurementToolLayer({
 
   const measurements = useMemo(() => {
     if (!active) return []
-    return [
+    const overlays = [
       ...segments.filter((segment) => segment.view === '2d'),
       ...(draft?.view === '2d' && draft.end
         ? [{ id: 'measurement-draft', start: draft.start, end: draft.end }]
         : []),
     ]
-      .map((segment) => toOverlay(segment, unit, selectedId))
+      .map((segment) => toOverlay(segment, unit, selectedId, displayPrecision))
       .filter((measurement): measurement is NonNullable<typeof measurement> => measurement !== null)
-  }, [active, draft, segments, selectedId, unit])
+    return staggerFloorplanMeasurementLabels(overlays)
+  }, [active, displayPrecision, draft, segments, selectedId, unit])
 
   const areaMeasurements = active ? areas.filter((area) => area.view === '2d') : []
   const perimeterMeasurements = active
@@ -914,6 +1025,18 @@ export function FloorplanMeasurementToolLayer({
     event.stopPropagation()
     useMeasurementTool.getState().selectMeasurement(id)
   }
+  const handleEndpointPointerDown = (
+    id: string,
+    endpoint: MeasurementSegmentEndpoint,
+    event: PointerEvent<SVGGElement>,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    useMeasurementTool.getState().startSegmentEndpointDrag(id, endpoint)
+  }
+  const selectedSegment = selectedId
+    ? segments.find((segment) => segment.id === selectedId && segment.view === '2d')
+    : null
 
   if (!active) return null
 
@@ -931,6 +1054,7 @@ export function FloorplanMeasurementToolLayer({
       {areaMeasurements.map((area) => (
         <AreaMeasurementLabel
           area={area}
+          displayPrecision={displayPrecision}
           isSelected={selectedId ? selectedId === area.id : true}
           key={area.id}
           onPointerDown={handleMeasurementPointerDown}
@@ -941,6 +1065,7 @@ export function FloorplanMeasurementToolLayer({
       ))}
       {perimeterMeasurements.map((perimeter) => (
         <PerimeterMeasurementLabel
+          displayPrecision={displayPrecision}
           isSelected={selectedId ? selectedId === perimeter.id : true}
           key={perimeter.id}
           onPointerDown={handleMeasurementPointerDown}
@@ -953,6 +1078,7 @@ export function FloorplanMeasurementToolLayer({
       {angleMeasurements.map((angle) => (
         <AngleMeasurementLabel
           angle={angle}
+          displayPrecision={displayPrecision}
           isSelected={selectedId ? selectedId === angle.id : true}
           key={angle.id}
           onPointerDown={handleMeasurementPointerDown}
@@ -963,6 +1089,7 @@ export function FloorplanMeasurementToolLayer({
       {draftAngle ? (
         <AngleMeasurementLabel
           angle={draftAngle}
+          displayPrecision={displayPrecision}
           isSelected
           onPointerDown={handleMeasurementPointerDown}
           palette={palette}
@@ -971,6 +1098,50 @@ export function FloorplanMeasurementToolLayer({
       ) : null}
       {snapTarget?.view === '2d' ? (
         <FloorplanSnapTargetMarker sceneRotationDeg={sceneRotationDeg} target={snapTarget} />
+      ) : null}
+      {selectedSegment ? (
+        <g className="floorplan-measurement-endpoint-handles" pointerEvents="auto">
+          {(['start', 'end'] as const).map((endpoint) => {
+            const point = selectedSegment[endpoint]
+            const activeHandle = isDraggingMeasurementEndpoint(
+              draggingSegmentEndpoint,
+              selectedSegment.id,
+              endpoint,
+            )
+            return (
+              <g
+                aria-label={`Drag ${endpoint} measurement endpoint`}
+                className="floorplan-measurement-tool"
+                key={endpoint}
+                onPointerDown={(event) =>
+                  handleEndpointPointerDown(selectedSegment.id, endpoint, event)
+                }
+                style={{ cursor: activeHandle ? 'grabbing' : 'grab' }}
+              >
+                <circle
+                  cx={point[0]}
+                  cy={point[2]}
+                  fill="transparent"
+                  r={FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS}
+                />
+                <circle
+                  cx={point[0]}
+                  cy={point[2]}
+                  fill={activeHandle ? 'rgb(245, 158, 11)' : 'rgb(14, 165, 233)'}
+                  pointerEvents="none"
+                  r={
+                    activeHandle
+                      ? FLOORPLAN_ENDPOINT_HANDLE_RADIUS * 1.35
+                      : FLOORPLAN_ENDPOINT_HANDLE_RADIUS
+                  }
+                  stroke="white"
+                  strokeWidth={activeHandle ? 1.8 : 1.4}
+                  vectorEffect="non-scaling-stroke"
+                />
+              </g>
+            )
+          })}
+        </g>
       ) : null}
     </>
   )

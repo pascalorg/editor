@@ -6,6 +6,7 @@ import { angleBetweenMeasurements } from '../lib/measurements'
 export type MeasurementPoint = [number, number, number]
 export type MeasurementView = '2d' | '3d'
 export type MeasurementMode = 'distance' | 'area' | 'perimeter' | 'angle'
+export type MeasurementDisplayPrecision = 'coarse' | 'standard' | 'fine'
 
 export type MeasurementSegment = {
   id: string
@@ -41,6 +42,7 @@ export type MeasurementDraft = {
   start: MeasurementPoint
   end: MeasurementPoint | null
   view: MeasurementView
+  surfaceNormal?: MeasurementPoint
 }
 
 export type MeasurementAngleDraft = {
@@ -56,9 +58,46 @@ export type MeasurementCursor = {
 }
 
 export type MeasurementSnapTarget = {
+  guideLine?: {
+    end: MeasurementPoint
+    start: MeasurementPoint
+  }
+  kind?: MeasurementSnapKind
   label: string
   point: MeasurementPoint
   view: MeasurementView
+}
+
+export type MeasurementSnapKind =
+  | 'center'
+  | 'edge'
+  | 'endpoint'
+  | 'grid'
+  | 'guide'
+  | 'intersection'
+  | 'measurement'
+  | 'midpoint'
+  | 'surface'
+  | 'vertex'
+
+export type MeasurementSnapSettings = Record<MeasurementSnapKind, boolean>
+export type MeasurementSegmentEndpoint = 'end' | 'start'
+export type DraggingMeasurementSegmentEndpoint = {
+  endpoint: MeasurementSegmentEndpoint
+  id: string
+}
+
+export const DEFAULT_MEASUREMENT_SNAP_SETTINGS: MeasurementSnapSettings = {
+  center: true,
+  edge: true,
+  endpoint: true,
+  grid: true,
+  guide: true,
+  intersection: true,
+  measurement: true,
+  midpoint: true,
+  surface: true,
+  vertex: true,
 }
 
 export type PersistedMeasurements = {
@@ -79,17 +118,35 @@ type MeasurementToolState = {
   cursor: MeasurementCursor | null
   snapTarget: MeasurementSnapTarget | null
   mode: MeasurementMode
+  displayPrecision: MeasurementDisplayPrecision
+  continuousMeasurement: boolean
+  enabledSnapKinds: MeasurementSnapSettings
+  draggingSegmentEndpoint: DraggingMeasurementSegmentEndpoint | null
   selectedId: string | null
-  begin: (view: MeasurementView, start: MeasurementPoint) => void
+  begin: (view: MeasurementView, start: MeasurementPoint, surfaceNormal?: MeasurementPoint) => void
   update: (end: MeasurementPoint) => void
-  commit: (end?: MeasurementPoint) => void
+  updateDraftLength: (lengthMeters: number) => void
+  commit: (end?: MeasurementPoint, measuredDistanceMeters?: number) => void
   beginAngle: (view: MeasurementView, first: MeasurementPoint) => void
   updateAngle: (point: MeasurementPoint) => void
+  updateAngleDegrees: (degrees: number) => void
   commitAngle: (point?: MeasurementPoint) => void
   setCursor: (view: MeasurementView, point: MeasurementPoint | null) => void
   setSnapTarget: (target: MeasurementSnapTarget | null) => void
   setMode: (mode: MeasurementMode) => void
+  setDisplayPrecision: (precision: MeasurementDisplayPrecision) => void
+  setContinuousMeasurement: (enabled: boolean) => void
+  setSnapKindEnabled: (kind: MeasurementSnapKind, enabled: boolean) => void
+  setAllSnapKindsEnabled: (enabled: boolean) => void
+  resetSnapKinds: () => void
   selectMeasurement: (id: string | null) => void
+  startSegmentEndpointDrag: (id: string, endpoint: MeasurementSegmentEndpoint) => void
+  updateSegmentEndpoint: (
+    id: string,
+    endpoint: MeasurementSegmentEndpoint,
+    point: MeasurementPoint,
+  ) => void
+  endSegmentEndpointDrag: () => void
   removeMeasurement: (id: string) => void
   deleteSelected: () => void
   addSegment: (
@@ -98,6 +155,7 @@ type MeasurementToolState = {
     end: MeasurementPoint,
     measuredDistanceMeters?: number,
   ) => void
+  updateSegmentLength: (id: string, lengthMeters: number) => void
   addArea: (view: MeasurementView, labelPoint: MeasurementPoint, areaSquareMeters: number) => void
   addPerimeter: (view: MeasurementView, labelPoint: MeasurementPoint, lengthMeters: number) => void
   cancelDraft: () => void
@@ -108,6 +166,14 @@ let nextMeasurementId = 1
 
 export function distanceBetweenMeasurements(a: MeasurementPoint, b: MeasurementPoint): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+}
+
+export function isDraggingMeasurementEndpoint(
+  dragging: DraggingMeasurementSegmentEndpoint | null,
+  id: string,
+  endpoint: MeasurementSegmentEndpoint,
+): boolean {
+  return dragging?.id === id && dragging.endpoint === endpoint
 }
 
 export function axisLockedMeasurementPoint(
@@ -141,6 +207,36 @@ function normalizePoint(value: unknown): MeasurementPoint | null {
   const point = value.map((entry) => (typeof entry === 'number' ? entry : Number.NaN))
   if (!point.every(Number.isFinite)) return null
   return point as MeasurementPoint
+}
+
+function normalizeVector(vector: MeasurementPoint): MeasurementPoint | null {
+  const length = Math.hypot(vector[0], vector[1], vector[2])
+  if (length < 1e-8) return null
+  return [vector[0] / length, vector[1] / length, vector[2] / length]
+}
+
+function crossVector(a: MeasurementPoint, b: MeasurementPoint): MeasurementPoint {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+function dotVector(a: MeasurementPoint, b: MeasurementPoint): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+function rotateVectorAroundAxis(
+  vector: MeasurementPoint,
+  axis: MeasurementPoint,
+  radians: number,
+): MeasurementPoint {
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const cross = crossVector(axis, vector)
+  const dot = dotVector(axis, vector)
+  return [
+    vector[0] * cos + cross[0] * sin + axis[0] * dot * (1 - cos),
+    vector[1] * cos + cross[1] * sin + axis[1] * dot * (1 - cos),
+    vector[2] * cos + cross[2] * sin + axis[2] * dot * (1 - cos),
+  ]
 }
 
 function readMeasurementIdNumber(id: string): number {
@@ -256,6 +352,7 @@ export function hydrateMeasurements(value: unknown) {
     ...measurements,
     angleDraft: null,
     cursor: null,
+    draggingSegmentEndpoint: null,
     draft: null,
     selectedId: null,
     snapTarget: null,
@@ -272,10 +369,30 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   cursor: null,
   snapTarget: null,
   mode: 'distance',
+  displayPrecision: 'standard',
+  continuousMeasurement: false,
+  enabledSnapKinds: DEFAULT_MEASUREMENT_SNAP_SETTINGS,
+  draggingSegmentEndpoint: null,
   selectedId: null,
-  begin: (view, start) => set({ draft: { start, end: null, view }, selectedId: null }),
+  begin: (view, start, surfaceNormal) =>
+    set({ draft: { start, end: null, surfaceNormal, view }, selectedId: null }),
   update: (end) => set((state) => (state.draft ? { draft: { ...state.draft, end } } : state)),
-  commit: (end) => {
+  updateDraftLength: (lengthMeters) => {
+    if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-4)) return
+    set((state) => {
+      if (!state.draft?.end) return state
+      const currentLength = distanceBetweenMeasurements(state.draft.start, state.draft.end)
+      if (currentLength < 1e-4) return state
+      const scale = lengthMeters / currentLength
+      const end: MeasurementPoint = [
+        state.draft.start[0] + (state.draft.end[0] - state.draft.start[0]) * scale,
+        state.draft.start[1] + (state.draft.end[1] - state.draft.start[1]) * scale,
+        state.draft.start[2] + (state.draft.end[2] - state.draft.start[2]) * scale,
+      ]
+      return { draft: { ...state.draft, end } }
+    })
+  },
+  commit: (end, measuredDistanceMeters) => {
     const draft = get().draft
     if (!draft) return
 
@@ -287,7 +404,9 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
 
     const id = `measurement-${nextMeasurementId++}`
     set((state) => ({
-      draft: null,
+      draft: state.continuousMeasurement
+        ? { start: resolvedEnd, end: null, view: draft.view }
+        : null,
       selectedId: id,
       segments: [
         ...state.segments,
@@ -296,6 +415,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           start: draft.start,
           end: resolvedEnd,
           view: draft.view,
+          measuredDistanceMeters,
         },
       ],
     }))
@@ -311,6 +431,38 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           : { ...state.angleDraft, vertex: point },
       }
     }),
+  updateAngleDegrees: (degrees) => {
+    if (!(Number.isFinite(degrees) && degrees > 1e-4 && degrees < 360)) return
+    set((state) => {
+      const draft = state.angleDraft
+      if (!(draft?.vertex && draft.second)) return state
+      const firstVector: MeasurementPoint = [
+        draft.first[0] - draft.vertex[0],
+        draft.first[1] - draft.vertex[1],
+        draft.first[2] - draft.vertex[2],
+      ]
+      const secondVector: MeasurementPoint = [
+        draft.second[0] - draft.vertex[0],
+        draft.second[1] - draft.vertex[1],
+        draft.second[2] - draft.vertex[2],
+      ]
+      const firstUnit = normalizeVector(firstVector)
+      const secondLength = Math.hypot(secondVector[0], secondVector[1], secondVector[2])
+      if (!(firstUnit && secondLength > 1e-4)) return state
+
+      const currentNormal = normalizeVector(crossVector(firstVector, secondVector))
+      const axis =
+        currentNormal ??
+        (draft.view === '2d' ? ([0, -1, 0] as MeasurementPoint) : ([0, 1, 0] as MeasurementPoint))
+      const rotated = rotateVectorAroundAxis(firstUnit, axis, (degrees * Math.PI) / 180)
+      const second: MeasurementPoint = [
+        draft.vertex[0] + rotated[0] * secondLength,
+        draft.vertex[1] + rotated[1] * secondLength,
+        draft.vertex[2] + rotated[2] * secondLength,
+      ]
+      return { angleDraft: { ...draft, second } }
+    })
+  },
   commitAngle: (point) => {
     const angleDraft = get().angleDraft
     if (!angleDraft) return
@@ -372,7 +524,50 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   setSnapTarget: (target) => set({ snapTarget: target }),
   setMode: (mode) =>
     set({ angleDraft: null, draft: null, mode, selectedId: null, snapTarget: null }),
+  setDisplayPrecision: (displayPrecision) => set({ displayPrecision }),
+  setContinuousMeasurement: (continuousMeasurement) => set({ continuousMeasurement }),
+  setSnapKindEnabled: (kind, enabled) =>
+    set((state) => ({
+      enabledSnapKinds: {
+        ...state.enabledSnapKinds,
+        [kind]: enabled,
+      },
+      snapTarget: state.snapTarget?.kind === kind && !enabled ? null : state.snapTarget,
+    })),
+  setAllSnapKindsEnabled: (enabled) =>
+    set((state) => {
+      const enabledSnapKinds = Object.fromEntries(
+        Object.keys(DEFAULT_MEASUREMENT_SNAP_SETTINGS).map((kind) => [kind, enabled]),
+      ) as MeasurementSnapSettings
+      return {
+        enabledSnapKinds,
+        snapTarget: state.snapTarget?.kind && !enabled ? null : state.snapTarget,
+      }
+    }),
+  resetSnapKinds: () =>
+    set((state) => ({
+      enabledSnapKinds: DEFAULT_MEASUREMENT_SNAP_SETTINGS,
+      snapTarget:
+        state.snapTarget?.kind && !DEFAULT_MEASUREMENT_SNAP_SETTINGS[state.snapTarget.kind]
+          ? null
+          : state.snapTarget,
+    })),
   selectMeasurement: (id) => set({ selectedId: id }),
+  startSegmentEndpointDrag: (id, endpoint) =>
+    set({ draggingSegmentEndpoint: { endpoint, id }, selectedId: id }),
+  updateSegmentEndpoint: (id, endpoint, point) =>
+    set((state) => ({
+      segments: state.segments.map((segment) =>
+        segment.id === id
+          ? {
+              ...segment,
+              [endpoint]: point,
+              measuredDistanceMeters: undefined,
+            }
+          : segment,
+      ),
+    })),
+  endSegmentEndpointDrag: () => set({ draggingSegmentEndpoint: null }),
   removeMeasurement: (id) =>
     set((state) => ({
       areas: state.areas.filter((area) => area.id !== id),
@@ -406,6 +601,23 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           measuredDistanceMeters,
         },
       ],
+    }))
+  },
+  updateSegmentLength: (id, lengthMeters) => {
+    if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-4)) return
+    set((state) => ({
+      segments: state.segments.map((segment) => {
+        if (segment.id !== id) return segment
+        const currentLength = distanceBetweenMeasurements(segment.start, segment.end)
+        if (currentLength < 1e-4) return segment
+        const scale = lengthMeters / currentLength
+        const end: MeasurementPoint = [
+          segment.start[0] + (segment.end[0] - segment.start[0]) * scale,
+          segment.start[1] + (segment.end[1] - segment.start[1]) * scale,
+          segment.start[2] + (segment.end[2] - segment.start[2]) * scale,
+        ]
+        return { ...segment, end, measuredDistanceMeters: lengthMeters }
+      }),
     }))
   },
   addArea: (view, labelPoint, areaSquareMeters) => {
@@ -450,13 +662,15 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       selectedId: id,
     }))
   },
-  cancelDraft: () => set({ angleDraft: null, draft: null, snapTarget: null }),
+  cancelDraft: () =>
+    set({ angleDraft: null, draggingSegmentEndpoint: null, draft: null, snapTarget: null }),
   clear: () =>
     set({
       angleDraft: null,
       angles: [],
       areas: [],
       cursor: null,
+      draggingSegmentEndpoint: null,
       draft: null,
       perimeters: [],
       selectedId: null,

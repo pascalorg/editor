@@ -1,10 +1,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, type GridEvent, useScene } from '@pascal-app/core'
-import { useMeasurementTool } from '../../store/use-measurement-tool'
+import {
+  DEFAULT_MEASUREMENT_SNAP_SETTINGS,
+  type MeasurementSnapKind,
+  useMeasurementTool,
+} from '../../store/use-measurement-tool'
 import {
   handleFloorplanMeasurementGridClick,
   handleFloorplanMeasurementGridMove,
   handleFloorplanMeasurementNodeClick2D,
+  staggerFloorplanMeasurementLabels,
 } from './floorplan-measurement-tool-layer'
 
 beforeAll(() => {
@@ -16,13 +21,21 @@ beforeEach(() => {
   useScene.getState().clearScene()
   useMeasurementTool.getState().clear()
   useMeasurementTool.getState().setMode('distance')
+  resetSnapSettings()
 })
 
 afterEach(() => {
   useScene.getState().clearScene()
   useMeasurementTool.getState().clear()
   useMeasurementTool.getState().setMode('distance')
+  resetSnapSettings()
 })
+
+function resetSnapSettings() {
+  for (const [kind, enabled] of Object.entries(DEFAULT_MEASUREMENT_SNAP_SETTINGS)) {
+    useMeasurementTool.getState().setSnapKindEnabled(kind as MeasurementSnapKind, enabled)
+  }
+}
 
 function gridEvent(
   localPosition: [number, number, number],
@@ -56,6 +69,54 @@ function zoneNode(): AnyNode {
   } as never
 }
 
+function slabWithHoleNode(): AnyNode {
+  return {
+    id: 'slab_measurement_hole_2d',
+    type: 'slab',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    elevation: 0,
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    holes: [
+      [
+        [1, 1],
+        [2, 1],
+        [2, 2],
+        [1, 2],
+      ],
+    ],
+  } as never
+}
+
+function siteNode(): AnyNode {
+  return {
+    id: 'site_measurement_2d',
+    type: 'site',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    polygon: {
+      type: 'polygon',
+      points: [
+        [-2, -1],
+        [2, -1],
+        [2, 1],
+        [-2, 1],
+      ],
+    },
+  } as never
+}
+
 function wallNode(): AnyNode {
   return {
     id: 'wall_measurement_2d',
@@ -70,6 +131,172 @@ function wallNode(): AnyNode {
   } as never
 }
 
+function curvedWallNode(): AnyNode {
+  return {
+    ...wallNode(),
+    id: 'wall_measurement_curved_2d',
+    curveOffset: 1,
+  } as never
+}
+
+function splineFenceNode(): AnyNode {
+  return {
+    id: 'fence_measurement_spline_2d',
+    type: 'fence',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [0, 0],
+    end: [4, 0],
+    path: [
+      [0, 0],
+      [2, 1],
+      [4, 0],
+    ],
+  } as never
+}
+
+function windowNode(): AnyNode {
+  return {
+    id: 'window_measurement_2d',
+    type: 'window',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    wallId: 'wall_measurement_2d',
+    position: [2, 1, 0],
+    width: 1,
+    height: 1,
+  } as never
+}
+
+function crossingWallNode(): AnyNode {
+  return {
+    id: 'wall_measurement_crossing_2d',
+    type: 'wall',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [2, -2],
+    end: [2, 2],
+  } as never
+}
+
+function stairNode(): AnyNode {
+  return {
+    id: 'stair_measurement_2d',
+    type: 'stair',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['stair_segment_measurement_2d'],
+    position: [0, 0, 0],
+    rotation: 0,
+    stairType: 'straight',
+    width: 1,
+  } as never
+}
+
+function stairSegmentNode(): AnyNode {
+  return {
+    id: 'stair_segment_measurement_2d',
+    type: 'stair-segment',
+    object: 'node',
+    parentId: 'stair_measurement_2d',
+    visible: true,
+    metadata: {},
+    children: [],
+    width: 1,
+    length: 3,
+    height: 2.5,
+    attachmentSide: 'front',
+  } as never
+}
+
+function ductSegmentNode(): AnyNode {
+  return {
+    id: 'duct_segment_measurement_2d',
+    type: 'duct-segment',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    path: [
+      [0, 2.4, 0],
+      [2, 2.4, 0],
+      [2, 2.4, 3],
+    ],
+  } as never
+}
+
+function roofNode(overrides: Partial<AnyNode> = {}): AnyNode {
+  return {
+    id: 'roof_measurement_2d',
+    type: 'roof',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: ['roof_segment_measurement_2d'],
+    position: [0, 0, 0],
+    rotation: 0,
+    ...overrides,
+  } as never
+}
+
+function roofSegmentNode(overrides: Partial<AnyNode> = {}): AnyNode {
+  return {
+    id: 'roof_segment_measurement_2d',
+    type: 'roof-segment',
+    object: 'node',
+    parentId: 'roof_measurement_2d',
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [0, 0, 0],
+    rotation: 0,
+    roofType: 'gable',
+    width: 4,
+    depth: 2,
+    pitch: 40,
+    wallHeight: 0.5,
+    wallThickness: 0.1,
+    deckThickness: 0.1,
+    overhang: 0.3,
+    shingleThickness: 0.05,
+    gambrelLowerWidthRatio: 0.5,
+    mansardSteepWidthRatio: 0.15,
+    dutchHipWidthRatio: 0.25,
+    dutchWaistLengthRatio: 0.98,
+    ...overrides,
+  } as never
+}
+
+function skylightNode(): AnyNode {
+  return {
+    id: 'skylight_measurement_2d',
+    type: 'skylight',
+    object: 'node',
+    parentId: 'roof_segment_measurement_2d',
+    visible: true,
+    metadata: {},
+    children: [],
+    roofSegmentId: 'roof_segment_measurement_2d',
+    position: [0, 0, 0],
+    rotation: 0,
+    width: 2,
+    height: 1,
+  } as never
+}
+
 function seedScene(nodes: AnyNode[]) {
   useScene.setState({
     nodes: Object.fromEntries(nodes.map((node) => [node.id, node])),
@@ -79,7 +306,36 @@ function seedScene(nodes: AnyNode[]) {
   } as never)
 }
 
+function measurementOverlay(id: string, labelX: number, labelY: number) {
+  return {
+    id,
+    label: id,
+    labelX,
+    labelY,
+    labelAngleDeg: 0,
+    dimensionLineStart: { x1: 0, y1: 0, x2: 1, y2: 0 },
+    dimensionLineEnd: { x1: 1, y1: 0, x2: 2, y2: 0 },
+    extensionStart: { x1: 0, y1: 0, x2: 0, y2: 0 },
+    extensionEnd: { x1: 2, y1: 0, x2: 2, y2: 0 },
+  }
+}
+
 describe('floorplan measurement grid handlers', () => {
+  test('staggers overlapping 2D measurement labels', () => {
+    const overlays = staggerFloorplanMeasurementLabels([
+      measurementOverlay('a', 1, 1),
+      measurementOverlay('b', 1.02, 1.01),
+      measurementOverlay('c', 4, 4),
+    ])
+
+    expect(overlays[0]?.labelX).toBe(1)
+    expect(overlays[0]?.labelY).toBe(1)
+    expect(overlays[1]?.labelX).toBeCloseTo(1.02)
+    expect(overlays[1]?.labelY).toBeGreaterThan(1.01)
+    expect(overlays[2]?.labelX).toBe(4)
+    expect(overlays[2]?.labelY).toBe(4)
+  })
+
   test('commits a 2D point-to-point distance from two grid clicks', () => {
     handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
     handleFloorplanMeasurementGridMove(gridEvent([3, 0, 4]))
@@ -107,6 +363,34 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
+  test('drags a saved 2D measurement endpoint through snapping', () => {
+    seedScene([wallNode()])
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [1, 0, 1], [2, 0, 1], 1)
+    const segmentId = useMeasurementTool.getState().segments[0]!.id
+
+    measurement.setSnapKindEnabled('guide', false)
+    measurement.startSegmentEndpointDrag(segmentId, 'end')
+    handleFloorplanMeasurementGridMove(gridEvent([3.9, 0, 0.08]))
+    handleFloorplanMeasurementGridClick(gridEvent([3.9, 0, 0.08]))
+
+    const segment = useMeasurementTool.getState().segments[0]
+    expect(segment).toMatchObject({
+      start: [1, 0, 1],
+      measuredDistanceMeters: undefined,
+      view: '2d',
+    })
+    expect(segment?.end[0]).toBeCloseTo(4)
+    expect(segment?.end[1]).toBeCloseTo(0)
+    expect(segment?.end[2]).toBeCloseTo(0)
+    expect(useMeasurementTool.getState().draggingSegmentEndpoint).toBeNull()
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'endpoint',
+      point: [4, 0, 0],
+      view: '2d',
+    })
+  })
+
   test('shift locks the 2D draft endpoint to horizontal or vertical while drawing', () => {
     handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
     handleFloorplanMeasurementGridMove(gridEvent([1, 0, 4], { shiftKey: true }))
@@ -129,10 +413,26 @@ describe('floorplan measurement grid handlers', () => {
       view: '2d',
     })
     expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'endpoint',
       label: 'Endpoint',
       point: [0, 0, 0],
       view: '2d',
     })
+  })
+
+  test('does not snap 2D placement to endpoints when endpoint snaps are disabled', () => {
+    seedScene([wallNode()])
+    useMeasurementTool.getState().setSnapKindEnabled('endpoint', false)
+    useMeasurementTool.getState().setSnapKindEnabled('edge', false)
+    useMeasurementTool.getState().setSnapKindEnabled('grid', false)
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, 0.06]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [0.08, 0, 0.06],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.kind).not.toBe('endpoint')
   })
 
   test('snaps the committed 2D endpoint to nearby wall anchors', () => {
@@ -157,6 +457,455 @@ describe('floorplan measurement grid handlers', () => {
     expect(useMeasurementTool.getState().snapTarget).toMatchObject({
       label: 'Midpoint',
       point: [2, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to wall edge projections', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.25, 0, 0.08]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.25, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Wall edge',
+      point: [1.25, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to sampled curved wall edges', () => {
+    seedScene([curvedWallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.8819660112501051, 0, -0.7360679774997898]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [0.8819660112501051, 0, -0.7360679774997898],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Wall edge',
+      point: [0.8819660112501051, 0, -0.7360679774997898],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to sampled spline fence edges', () => {
+    seedScene([splineFenceNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.9704915028125263, 0, 0.625]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [0.9704915028125263, 0, 0.625],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Fence edge',
+      point: [0.9704915028125263, 0, 0.625],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to hosted opening endpoints', () => {
+    seedScene([wallNode(), windowNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.52, 0, 0.03]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.5, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'endpoint',
+      label: 'Opening endpoint',
+      point: [1.5, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to hosted opening centers', () => {
+    seedScene([wallNode(), windowNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([2.03, 0, 0.04]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [2, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'center',
+      label: 'Opening center',
+      point: [2, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to hosted opening edges', () => {
+    seedScene([wallNode(), windowNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.75, 0, 0.08]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.75, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Opening edge',
+      point: [1.75, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to composite stair footprint corners', () => {
+    seedScene([stairNode(), stairSegmentNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([-0.48, 0, 2.96]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [-0.5, 0, 3],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'vertex',
+      label: 'Stair corner',
+      point: [-0.5, 0, 3],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to MEP run path edges', () => {
+    seedScene([ductSegmentNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([2.08, 0, 1.25]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [2, 0, 1.25],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Run edge',
+      point: [2, 0, 1.25],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to surface opening hole edges', () => {
+    seedScene([slabWithHoleNode()])
+    useMeasurementTool.getState().setSnapKindEnabled('midpoint', false)
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.4, 0, 1.08]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.4, 0, 1],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Surface opening edge',
+      point: [1.4, 0, 1],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to site property lines', () => {
+    seedScene([siteNode()])
+    useMeasurementTool.getState().setSnapKindEnabled('midpoint', false)
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.4, 0, -1.08]))
+
+    const draft = useMeasurementTool.getState().draft
+    expect(draft?.start[0]).toBeCloseTo(0.4)
+    expect(draft?.start[1]).toBeCloseTo(0)
+    expect(draft?.start[2]).toBeCloseTo(-1)
+    expect(draft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Property line edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(0.4)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(-1)
+  })
+
+  test('snaps 2D placement points to roof ridge edges', () => {
+    seedScene([roofNode(), roofSegmentNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.25, 0, 0.08]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.25, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof ridge edge',
+      point: [1.25, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to roof eave corners', () => {
+    seedScene([roofNode(), roofSegmentNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([-2.03, 0, -1.04]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [-2, 0, -1],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'vertex',
+      label: 'Roof eave corner',
+      point: [-2, 0, -1],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to rotated roof ridge edges', () => {
+    seedScene([roofNode(), roofSegmentNode({ rotation: Math.PI / 2 } as never)])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, -1.25]))
+
+    const draft = useMeasurementTool.getState().draft
+    expect(draft?.start[0]).toBeCloseTo(0)
+    expect(draft?.start[1]).toBeCloseTo(0)
+    expect(draft?.start[2]).toBeCloseTo(-1.25)
+    expect(draft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof ridge edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(0)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(-1.25)
+  })
+
+  test('snaps 2D placement points to roof accessory edges', () => {
+    seedScene([
+      roofNode({ position: [10, 0, 20], rotation: Math.PI / 2 } as never),
+      roofSegmentNode({ position: [2, 0, 0] } as never),
+      skylightNode(),
+    ])
+    useMeasurementTool.getState().setSnapKindEnabled('midpoint', false)
+
+    handleFloorplanMeasurementGridClick(gridEvent([10.58, 0, 18.2]))
+
+    const draft = useMeasurementTool.getState().draft
+    expect(draft?.start[0]).toBeCloseTo(10.5)
+    expect(draft?.start[1]).toBeCloseTo(0)
+    expect(draft?.start[2]).toBeCloseTo(18.2)
+    expect(draft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Skylight edge',
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D placement points to hip roof edges', () => {
+    seedScene([roofNode(), roofSegmentNode({ roofType: 'hip' } as never)])
+
+    handleFloorplanMeasurementGridClick(gridEvent([-1.2, 0, 0.2]))
+
+    const draft = useMeasurementTool.getState().draft
+    expect(draft?.start[0]).toBeCloseTo(-1.2)
+    expect(draft?.start[1]).toBeCloseTo(0)
+    expect(draft?.start[2]).toBeCloseTo(0.2)
+    expect(draft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof hip edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(-1.2)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(0.2)
+  })
+
+  test('snaps 2D placement points to mansard roof break edges', () => {
+    seedScene([roofNode(), roofSegmentNode({ roofType: 'mansard' } as never)])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.6, 0, 0.7]))
+
+    const draft = useMeasurementTool.getState().draft
+    expect(draft?.start[0]).toBeCloseTo(0.6)
+    expect(draft?.start[1]).toBeCloseTo(0)
+    expect(draft?.start[2]).toBeCloseTo(0.7)
+    expect(draft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof break edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(0.6)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(0.7)
+  })
+
+  test('snaps 2D placement points to dutch roof ridge and break edges', () => {
+    seedScene([roofNode(), roofSegmentNode({ roofType: 'dutch' } as never)])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.4, 0, 0.08]))
+
+    const ridgeDraft = useMeasurementTool.getState().draft
+    expect(ridgeDraft?.start[0]).toBeCloseTo(0.4)
+    expect(ridgeDraft?.start[1]).toBeCloseTo(0)
+    expect(ridgeDraft?.start[2]).toBeCloseTo(0)
+    expect(ridgeDraft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof ridge edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(0.4)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(0)
+
+    useMeasurementTool.getState().clear()
+    useMeasurementTool.getState().setMode('distance')
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.4, 0, 0.5]))
+
+    const breakDraft = useMeasurementTool.getState().draft
+    expect(breakDraft?.start[0]).toBeCloseTo(0.4)
+    expect(breakDraft?.start[1]).toBeCloseTo(0)
+    expect(breakDraft?.start[2]).toBeCloseTo(0.5)
+    expect(breakDraft?.view).toBe('2d')
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Roof break edge',
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget?.point[0]).toBeCloseTo(0.4)
+    expect(useMeasurementTool.getState().snapTarget?.point[2]).toBeCloseTo(0.5)
+  })
+
+  test('prefers 2D endpoints over closer edge projections in crowded snaps', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.12, 0, 0.04]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [0, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'endpoint',
+      label: 'Endpoint',
+      point: [0, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('prefers 2D wall intersections when segments cross nearby', () => {
+    seedScene([wallNode(), crossingWallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([2.03, 0, 0.04]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [2, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'intersection',
+      label: 'Intersection',
+      point: [2, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('falls back to 2D grid snapping when no object target is nearby', () => {
+    handleFloorplanMeasurementGridClick(gridEvent([1.04, 0, 1.96]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1, 0, 2],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'grid',
+      label: 'Grid',
+      point: [1, 0, 2],
+      view: '2d',
+    })
+  })
+
+  test('does not snap 2D points to anchors outside the snap radius', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.04, 0, 1.96]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1, 0, 2],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      label: 'Grid',
+      point: [1, 0, 2],
+      view: '2d',
+    })
+  })
+
+  test('snaps 2D points to saved measurement midpoints', () => {
+    useMeasurementTool.getState().addSegment('2d', [0, 0, 0], [3, 0, 0])
+
+    handleFloorplanMeasurementGridClick(gridEvent([1.52, 0, 0.04]))
+
+    expect(useMeasurementTool.getState().draft).toMatchObject({
+      start: [1.5, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      kind: 'measurement',
+      label: 'Measurement midpoint',
+      point: [1.5, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('constrains 2D distance endpoints parallel to a nearby host edge', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, 0.06]))
+    handleFloorplanMeasurementGridMove(gridEvent([2, 0, 0.08]))
+    handleFloorplanMeasurementGridClick(gridEvent([2, 0, 0.08]))
+
+    expect(useMeasurementTool.getState().segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [2, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      guideLine: {
+        end: [2, 0, 0],
+        start: [-2, 0, 0],
+      },
+      kind: 'guide',
+      label: 'Parallel',
+      point: [2, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('constrains 2D distance endpoints perpendicular to a nearby host edge', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, 0.06]))
+    handleFloorplanMeasurementGridMove(gridEvent([0.08, 0, 2]))
+    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, 2]))
+
+    expect(useMeasurementTool.getState().segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [0, 0, 2],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      label: 'Perpendicular',
+      point: [0, 0, 2],
       view: '2d',
     })
   })

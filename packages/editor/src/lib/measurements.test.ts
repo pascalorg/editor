@@ -16,9 +16,22 @@ describe('linear measurements', () => {
     expect(formatLinearMeasurement(3.456, 'metric')).toBe('3.46m')
   })
 
+  test('formats metric measurements at selectable precision', () => {
+    expect(formatLinearMeasurement(3.4567, 'metric', { precision: 'coarse' })).toBe('3.5m')
+    expect(formatLinearMeasurement(3.4567, 'metric', { precision: 'standard' })).toBe('3.46m')
+    expect(formatLinearMeasurement(3.4567, 'metric', { precision: 'fine' })).toBe('3.457m')
+  })
+
   test('formats imperial measurements as feet and inches', () => {
     expect(formatLinearMeasurement(3.048, 'imperial')).toBe(`10'0"`)
     expect(formatLinearMeasurement(3.2004, 'imperial')).toBe(`10'6"`)
+  })
+
+  test('formats imperial measurements at selectable precision', () => {
+    expect(formatLinearMeasurement(0.3302, 'imperial', { precision: 'coarse' })).toBe(`1'1"`)
+    expect(formatLinearMeasurement(0.3302, 'imperial', { precision: 'standard' })).toBe(`1'1"`)
+    expect(formatLinearMeasurement(0.3302, 'imperial', { precision: 'fine' })).toBe(`1'1"`)
+    expect(formatLinearMeasurement(0.3334, 'imperial', { precision: 'fine' })).toBe(`1'1 1/8"`)
   })
 
   test('carries rounded 12 inches into the next foot', () => {
@@ -83,6 +96,12 @@ describe('area measurements', () => {
     expect(formatAreaMeasurement(12.34, 'metric')).toBe('12.3m²')
   })
 
+  test('formats areas at selectable precision', () => {
+    expect(formatAreaMeasurement(12.345, 'metric', { precision: 'coarse' })).toBe('12m²')
+    expect(formatAreaMeasurement(12.345, 'metric', { precision: 'standard' })).toBe('12.3m²')
+    expect(formatAreaMeasurement(12.345, 'metric', { precision: 'fine' })).toBe('12.35m²')
+  })
+
   test('formats imperial surface areas in rounded square feet', () => {
     expect(formatAreaMeasurement(9.290304, 'imperial')).toBe('100ft²')
   })
@@ -101,6 +120,12 @@ describe('angle measurements', () => {
   test('formats angle measurements in degrees', () => {
     expect(formatAngleMeasurement(Math.PI / 2)).toBe('90°')
     expect(formatAngleMeasurement(Math.PI / 3)).toBe('60°')
+  })
+
+  test('formats angle measurements at selectable precision', () => {
+    expect(formatAngleMeasurement(Math.PI / 7, { precision: 'coarse' })).toBe('26°')
+    expect(formatAngleMeasurement(Math.PI / 7, { precision: 'standard' })).toBe('25.7°')
+    expect(formatAngleMeasurement(Math.PI / 7, { precision: 'fine' })).toBe('25.71°')
   })
 
   test('returns a placeholder for non-finite angles', () => {
