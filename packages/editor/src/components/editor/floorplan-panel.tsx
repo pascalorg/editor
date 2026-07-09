@@ -3845,10 +3845,12 @@ const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer(
 })
 
 const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
+  dimmed,
   isHighlighted,
   palette,
   sitePolygon,
 }: {
+  dimmed: boolean
   isHighlighted: boolean
   palette: FloorplanPalette
   sitePolygon: SitePolygonEntry | null
@@ -3865,7 +3867,9 @@ const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
   const dashPattern = `${dashLength} ${gapLength}`
 
   return (
-    <>
+    // The dashed property line reads like the dashed group selection box —
+    // step it back while a multi (or in-flight marquee) selection exists.
+    <g data-site-boundary opacity={dimmed ? 0.2 : undefined}>
       <polygon
         fill="none"
         pointerEvents="none"
@@ -3890,7 +3894,7 @@ const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
         strokeWidth={strokeWidth}
         vectorEffect="non-scaling-stroke"
       />
-    </>
+    </g>
   )
 })
 
@@ -11159,6 +11163,7 @@ export function FloorplanPanel({
               <FloorplanAlignmentGuideLayer />
 
               <FloorplanSiteLayer
+                dimmed={selectedIds.length > 1 || previewSelectedIds.length > 1}
                 isHighlighted={isSiteBoundaryHighlighted}
                 palette={palette}
                 sitePolygon={visibleSitePolygon}

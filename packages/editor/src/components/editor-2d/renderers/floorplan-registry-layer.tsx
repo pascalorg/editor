@@ -366,10 +366,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // Multi-selection: members show highlight only (per-node edit chrome hidden)
   // and transformable members advertise the drag-to-move gesture.
   const isMultiSelect = selectedIds.length > 1
-  // The site's dashed property line visually fights the dashed group
-  // selection box — step it back while a multi (or in-flight marquee)
-  // selection exists.
-  const dimSite = isMultiSelect || previewSelectedIds.length > 1
   const groupParticipantIdSet = useMemo(() => {
     if (selectedIds.length < 2 || !levelId) return null
     return new Set(
@@ -1176,7 +1172,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
             suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
-            dimmed={dimSite && entry.node.type === 'site'}
             groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
@@ -1226,7 +1221,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
             suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
-            dimmed={dimSite && entry.node.type === 'site'}
             groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
@@ -1281,8 +1275,6 @@ type FloorplanRegistryEntryProps = {
   nodes: Record<string, AnyNode>
   /** Selected member of a multi-selection: hide its per-node edit chrome. */
   suppressHandles: boolean
-  /** Step this entry back visually (site line during multi/box selection). */
-  dimmed: boolean
   /** Transformable member of a multi-selection: advertise drag-to-move. */
   groupMoveCursor: boolean
   onClickStop: (event: React.MouseEvent<SVGGElement>) => void
@@ -1329,7 +1321,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   nodeId,
   nodes,
   suppressHandles,
-  dimmed,
   groupMoveCursor,
   onClickStop,
   onEntryPointerDown,
@@ -1451,7 +1442,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       onPointerDown={entryPointerDown}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      opacity={dimmed ? 0.2 : undefined}
       style={groupMoveCursor ? MOVE_CURSOR_STYLE : POINTER_CURSOR_STYLE}
     >
       <InteractiveGeometry
