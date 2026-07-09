@@ -241,7 +241,9 @@ export function SlabHoleHighlights() {
     }
   }, [hoveredHole, selectedIds, setHoveredHole])
 
-  if (selectedIds.length === 0) return null
+  // Sole selection only — hole outlines are click-to-edit chrome, and a
+  // multi-selection shows highlight only (the group transforms as one piece).
+  if (selectedIds.length !== 1) return null
 
   return (
     <>

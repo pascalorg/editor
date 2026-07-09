@@ -112,6 +112,7 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
+import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
@@ -135,6 +136,11 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from '../tools/select/box-select-state'
+import {
+  type Point2 as MarqueePoint2,
+  polygonsIntersect as marqueePolygonsIntersect,
+  segmentIntersectsPolygon as marqueeSegmentIntersectsPolygon,
+} from '../tools/select/marquee-geometry'
 import {
   createScreenRectangleSelectionElement,
   hideScreenRectangleSelectionElement,
@@ -905,6 +911,35 @@ function getSelectionModifierKeys(event?: {
   }
 }
 
+const isMarqueeVec2 = (v: unknown): v is [number, number] =>
+  Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number')
+const isMarqueeVec2Array = (v: unknown): v is [number, number][] =>
+  Array.isArray(v) && v.length > 0 && v.every(isMarqueeVec2)
+
+/** The screen marquee mapped into plan coordinates through the scene CTM —
+ *  a quad (rotated views give a rotated quad, so tests stay exact). */
+function screenRectToPlanQuad(rect: ScreenRect, scene: SVGGElement): MarqueePoint2[] | null {
+  const svg = scene.ownerSVGElement
+  const ctm = scene.getScreenCTM()
+  if (!(svg && ctm)) return null
+  const inverse = ctm.inverse()
+  const corners: [number, number][] = [
+    [rect.minX, rect.minY],
+    [rect.maxX, rect.minY],
+    [rect.maxX, rect.maxY],
+    [rect.minX, rect.maxY],
+  ]
+  const quad: MarqueePoint2[] = []
+  for (const [x, y] of corners) {
+    const pt = svg.createSVGPoint()
+    pt.x = x
+    pt.y = y
+    const plan = pt.matrixTransform(inverse)
+    quad.push([plan.x, plan.y])
+  }
+  return quad
+}
+
 function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement): string[] {
   const scene = svg.querySelector<SVGGElement>('[data-floorplan-scene]')
   if (!scene) {
@@ -916,7 +951,32 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     return []
   }
 
-  const candidateIdSet = new Set(candidateIds)
+  // Plan-footprint membership for the data kinds — walls/fences by their
+  // segment, slab/ceiling/zone by their polygon — exact under rotated
+  // geometry AND rotated views. The DOM-rect fallback below is an
+  // axis-aligned screen AABB, which inflates around anything diagonal.
+  const planQuad = screenRectToPlanQuad(rect, scene)
+  const sceneNodes = useScene.getState().nodes
+  const dataTested = new Set<string>()
+  const hitIdsFromData = new Set<string>()
+  if (planQuad) {
+    for (const id of candidateIds) {
+      const node = sceneNodes[id as AnyNodeId] as
+        | { start?: unknown; end?: unknown; polygon?: unknown }
+        | undefined
+      if (!node) continue
+      const { start, end, polygon } = node
+      if (isMarqueeVec2(start) && isMarqueeVec2(end)) {
+        dataTested.add(id)
+        if (marqueeSegmentIntersectsPolygon(start, end, planQuad)) hitIdsFromData.add(id)
+      } else if (isMarqueeVec2Array(polygon)) {
+        dataTested.add(id)
+        if (marqueePolygonsIntersect(polygon, planQuad)) hitIdsFromData.add(id)
+      }
+    }
+  }
+
+  const candidateIdSet = new Set(candidateIds.filter((id) => !dataTested.has(id)))
   const hitIds = new Set<string>()
   const baseElementsById = new Map<string, SVGGraphicsElement[]>()
   const fallbackElementsById = new Map<string, SVGGraphicsElement[]>()
@@ -937,7 +997,7 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     }
   }
 
-  for (const id of candidateIds) {
+  for (const id of candidateIdSet) {
     const elements = baseElementsById.get(id) ?? fallbackElementsById.get(id) ?? []
     for (const element of elements) {
       const elementRect = element.getBoundingClientRect()
@@ -952,7 +1012,7 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     }
   }
 
-  return candidateIds.filter((id) => hitIds.has(id))
+  return candidateIds.filter((id) => hitIds.has(id) || hitIdsFromData.has(id))
 }
 
 function swallowNextFloorplanScreenSelectionClick() {
@@ -3788,10 +3848,12 @@ const FloorplanReferenceFloorLayer = memo(function FloorplanReferenceFloorLayer(
 })
 
 const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
+  dimmed,
   isHighlighted,
   palette,
   sitePolygon,
 }: {
+  dimmed: boolean
   isHighlighted: boolean
   palette: FloorplanPalette
   sitePolygon: SitePolygonEntry | null
@@ -3808,7 +3870,9 @@ const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
   const dashPattern = `${dashLength} ${gapLength}`
 
   return (
-    <>
+    // The dashed property line reads like the dashed group selection box —
+    // step it back while a multi (or in-flight marquee) selection exists.
+    <g data-site-boundary opacity={dimmed ? 0.2 : undefined}>
       <polygon
         fill="none"
         pointerEvents="none"
@@ -3833,7 +3897,7 @@ const FloorplanSiteLayer = memo(function FloorplanSiteLayer({
         strokeWidth={strokeWidth}
         vectorEffect="non-scaling-stroke"
       />
-    </>
+    </g>
   )
 })
 
@@ -10803,9 +10867,11 @@ export function FloorplanPanel({
           />
         )}
         {/* Floating Move / Duplicate / Delete buttons for registered
-            kinds. All kinds are registry-driven now, so this is the
-            only action menu the floor plan mounts. */}
+            kinds. All kinds are registry-driven now, so these are the
+            only action menus the floor plan mounts — the single-node
+            pill, plus the group pill for multi-selections. */}
         <FloorplanRegistryActionMenu />
+        <FloorplanGroupActionMenu />
 
         {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (
@@ -11149,6 +11215,7 @@ export function FloorplanPanel({
               <FloorplanAlignmentGuideLayer />
 
               <FloorplanSiteLayer
+                dimmed={selectedIds.length > 1 || previewSelectedIds.length > 1}
                 isHighlighted={isSiteBoundaryHighlighted}
                 palette={palette}
                 sitePolygon={visibleSitePolygon}

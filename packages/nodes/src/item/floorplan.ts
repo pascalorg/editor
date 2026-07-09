@@ -185,7 +185,11 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   })
 
   const isSelected = ctx.viewState?.selected ?? false
+  // Marquee preview — the about-to-be-selected tint every other kind shows.
+  const isHighlighted = ctx.viewState?.highlighted ?? false
+  const showSelection = isSelected || isHighlighted
   const isMoving = ctx.viewState?.moving ?? false
+  const selectedStroke = ctx.viewState?.palette?.selectedStroke ?? '#3b82f6'
   const floorPlanUrl = node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
@@ -200,8 +204,11 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       // the child renders a paintable surface. `fill="none"` would make
       // clicks pass through to whatever's beneath, breaking selection.
       fill: floorPlanUrl ? 'transparent' : '#fef3c7',
-      stroke: '#92400e',
-      strokeWidth: 0.012,
+      // Selected items read as selected: palette stroke + heavier weight
+      // (the move dot used to be the only cue, and it hides in
+      // multi-selections).
+      stroke: showSelection ? selectedStroke : '#92400e',
+      strokeWidth: showSelection ? 0.035 : 0.012,
       opacity: 0.85,
     },
   ]
@@ -220,6 +227,19 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       // sprite rotates the same way as its footprint box (and 3D); otherwise the
       // two counter-rotate and diverge by 2x the item's rotation.
       rotation: -transform.rotation,
+    })
+  }
+  // Selection ring ABOVE the thumbnail — the base polygon's selected stroke
+  // sits underneath the image, so re-draw it on top. `fill: none` keeps the
+  // ring click-through; the base polygon owns hit-testing.
+  if (showSelection && floorPlanUrl) {
+    children.push({
+      kind: 'polygon',
+      points,
+      fill: 'none',
+      stroke: selectedStroke,
+      strokeWidth: 0.035,
+      opacity: isSelected ? 0.95 : 0.7,
     })
   }
   // Move handle — orange dot at the item center. Only when selected and not

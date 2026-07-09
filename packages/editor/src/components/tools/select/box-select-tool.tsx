@@ -1,8 +1,17 @@
-import { sceneRegistry, type ZoneNode } from '@pascal-app/core'
+import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
-import { Box3, type Camera, type Object3D, Vector3 } from 'three'
+import {
+  Box3,
+  type Camera,
+  Matrix4,
+  type Object3D,
+  Plane,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
@@ -10,6 +19,13 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from './box-select-state'
+import {
+  convexHull2D,
+  type Point2,
+  polygonsIntersect,
+  rectIntersectsHull,
+  segmentIntersectsPolygon,
+} from './marquee-geometry'
 import { PlaneBoxSelectTool } from './plane-box-select-tool'
 import {
   createScreenRectangleSelectionElement,
@@ -19,14 +35,20 @@ import {
   SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX,
   type ScreenRect,
   screenRectFromDomRect,
-  screenRectsIntersect,
   updateScreenRectangleSelectionElement,
 } from './screen-rectangle-selection'
 import { collectSelectableCandidateIds } from './select-candidates'
 
 const tempBox = new Box3()
+const tempChildBox = new Box3()
+const tempInvWorld = new Matrix4()
+const tempRelMatrix = new Matrix4()
 const tempWorldPoint = new Vector3()
 const tempScreenPoint = new Vector3()
+const tempNDC = new Vector2()
+const tempPlane = new Plane()
+const tempRaycaster = new Raycaster()
+const UP = new Vector3(0, 1, 0)
 const boxCorners = [
   new Vector3(),
   new Vector3(),
@@ -59,55 +81,72 @@ function projectWorldPointToScreen(
   ]
 }
 
-function getObjectScreenRect(
+/**
+ * Union bounding box of the object's mesh geometry in the OBJECT's OWN frame
+ * (an oriented box). The world AABB the previous implementation used inflates
+ * around rotated geometry — a diagonal wall's world AABB spans a whole square
+ * — and projecting THAT to a screen AABB inflates again, which made the
+ * marquee select objects visually far from the cursor.
+ */
+function computeLocalBox(object: Object3D): Box3 | null {
+  tempBox.makeEmpty()
+  tempInvWorld.copy(object.matrixWorld).invert()
+  object.traverse((child) => {
+    const mesh = child as {
+      isMesh?: boolean
+      geometry?: { boundingBox: Box3 | null; computeBoundingBox: () => void }
+      matrixWorld: import('three').Matrix4
+    }
+    if (!mesh.isMesh || !mesh.geometry) return
+    if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox()
+    const bounds = mesh.geometry.boundingBox
+    if (!bounds || bounds.isEmpty()) return
+    tempChildBox.copy(bounds)
+    tempRelMatrix.multiplyMatrices(tempInvWorld, mesh.matrixWorld)
+    tempChildBox.applyMatrix4(tempRelMatrix)
+    tempBox.union(tempChildBox)
+  })
+  return tempBox.isEmpty() ? null : tempBox
+}
+
+/** Screen-space convex hull of the object's oriented bounding box. */
+function getObjectScreenHull(
   object: Object3D,
   camera: Camera,
   canvasRect: DOMRect,
-): ScreenRect | null {
+): Point2[] | null {
   object.updateWorldMatrix(true, true)
-  tempBox.setFromObject(object)
+  const localBox = computeLocalBox(object)
 
-  if (tempBox.isEmpty()) {
+  if (!localBox) {
     object.getWorldPosition(tempWorldPoint)
     const projected = projectWorldPointToScreen(tempWorldPoint, camera, canvasRect)
-    if (!projected) return null
-    const [x, y] = projected
-    return { minX: x, minY: y, maxX: x, maxY: y }
+    return projected ? [projected] : null
   }
 
-  boxCorners[0]!.set(tempBox.min.x, tempBox.min.y, tempBox.min.z)
-  boxCorners[1]!.set(tempBox.min.x, tempBox.min.y, tempBox.max.z)
-  boxCorners[2]!.set(tempBox.min.x, tempBox.max.y, tempBox.min.z)
-  boxCorners[3]!.set(tempBox.min.x, tempBox.max.y, tempBox.max.z)
-  boxCorners[4]!.set(tempBox.max.x, tempBox.min.y, tempBox.min.z)
-  boxCorners[5]!.set(tempBox.max.x, tempBox.min.y, tempBox.max.z)
-  boxCorners[6]!.set(tempBox.max.x, tempBox.max.y, tempBox.min.z)
-  boxCorners[7]!.set(tempBox.max.x, tempBox.max.y, tempBox.max.z)
+  boxCorners[0]!.set(localBox.min.x, localBox.min.y, localBox.min.z)
+  boxCorners[1]!.set(localBox.min.x, localBox.min.y, localBox.max.z)
+  boxCorners[2]!.set(localBox.min.x, localBox.max.y, localBox.min.z)
+  boxCorners[3]!.set(localBox.min.x, localBox.max.y, localBox.max.z)
+  boxCorners[4]!.set(localBox.max.x, localBox.min.y, localBox.min.z)
+  boxCorners[5]!.set(localBox.max.x, localBox.min.y, localBox.max.z)
+  boxCorners[6]!.set(localBox.max.x, localBox.max.y, localBox.min.z)
+  boxCorners[7]!.set(localBox.max.x, localBox.max.y, localBox.max.z)
 
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-
+  const projectedPoints: Point2[] = []
   for (const corner of boxCorners) {
+    corner.applyMatrix4(object.matrixWorld)
     const projected = projectWorldPointToScreen(corner, camera, canvasRect)
-    if (!projected) continue
-    const [x, y] = projected
-    minX = Math.min(minX, x)
-    minY = Math.min(minY, y)
-    maxX = Math.max(maxX, x)
-    maxY = Math.max(maxY, y)
+    if (projected) projectedPoints.push(projected)
   }
 
-  if (minX !== Number.POSITIVE_INFINITY) {
-    return { minX, minY, maxX, maxY }
+  if (projectedPoints.length === 0) {
+    object.getWorldPosition(tempWorldPoint)
+    const projected = projectWorldPointToScreen(tempWorldPoint, camera, canvasRect)
+    return projected ? [projected] : null
   }
 
-  object.getWorldPosition(tempWorldPoint)
-  const projected = projectWorldPointToScreen(tempWorldPoint, camera, canvasRect)
-  if (!projected) return null
-  const [x, y] = projected
-  return { minX: x, minY: y, maxX: x, maxY: y }
+  return convexHull2D(projectedPoints)
 }
 
 function isObjectVisible(object: Object3D): boolean {
@@ -119,6 +158,46 @@ function isObjectVisible(object: Object3D): boolean {
   return true
 }
 
+const isVec2 = (v: unknown): v is [number, number] =>
+  Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number')
+const isVec2Array = (v: unknown): v is [number, number][] =>
+  Array.isArray(v) && v.length > 0 && v.every(isVec2)
+
+/**
+ * The marquee rect projected onto the active level's floor plane, in the
+ * LEVEL frame — a convex quad (perspective keeps rect convexity). Null when
+ * any corner ray misses the plane (camera near the horizon); callers fall
+ * back to the screen-hull test then.
+ */
+function marqueeGroundQuad(rect: ScreenRect, camera: Camera, canvasRect: DOMRect): Point2[] | null {
+  const levelId = useViewer.getState().selection.levelId
+  const levelObject = levelId ? sceneRegistry.nodes.get(levelId) : null
+  if (!levelObject) return null
+  levelObject.updateWorldMatrix(true, false)
+  tempInvWorld.copy(levelObject.matrixWorld).invert()
+  levelObject.getWorldPosition(tempWorldPoint)
+  tempPlane.set(UP, -tempWorldPoint.y)
+
+  const corners: [number, number][] = [
+    [rect.minX, rect.minY],
+    [rect.maxX, rect.minY],
+    [rect.maxX, rect.maxY],
+    [rect.minX, rect.maxY],
+  ]
+  const quad: Point2[] = []
+  for (const [cx, cy] of corners) {
+    tempNDC.set(
+      ((cx - canvasRect.left) / canvasRect.width) * 2 - 1,
+      -((cy - canvasRect.top) / canvasRect.height) * 2 + 1,
+    )
+    tempRaycaster.setFromCamera(tempNDC, camera)
+    if (!tempRaycaster.ray.intersectPlane(tempPlane, tempWorldPoint)) return null
+    tempWorldPoint.applyMatrix4(tempInvWorld)
+    quad.push([tempWorldPoint.x, tempWorldPoint.z])
+  }
+  return quad
+}
+
 function collectNodeIdsInScreenRect(
   rect: ScreenRect,
   camera: Camera,
@@ -127,11 +206,37 @@ function collectNodeIdsInScreenRect(
   const canvasRect = canvas.getBoundingClientRect()
   const result: string[] = []
 
+  // Plan-footprint membership for the data kinds (walls / fences by their
+  // segment, slabs / ceilings / zones by their polygon) — exact under any
+  // rotation, matching the plane-marquee tool's semantics. Kinds whose
+  // placement lives in mesh transforms (items, columns, …) intersect the
+  // marquee with their oriented bbox projected to a screen hull instead.
+  const quad = marqueeGroundQuad(rect, camera, canvasRect)
+  const nodes = useScene.getState().nodes
+
   for (const id of collectSelectableCandidateIds()) {
     const object = sceneRegistry.nodes.get(id)
     if (!object || !isObjectVisible(object)) continue
-    const objectRect = getObjectScreenRect(object, camera, canvasRect)
-    if (objectRect && screenRectsIntersect(rect, objectRect)) {
+
+    if (quad) {
+      const node = nodes[id as keyof typeof nodes] as
+        | { start?: unknown; end?: unknown; polygon?: unknown }
+        | undefined
+      if (node) {
+        const { start, end, polygon } = node
+        if (isVec2(start) && isVec2(end)) {
+          if (segmentIntersectsPolygon(start, end, quad)) result.push(id)
+          continue
+        }
+        if (isVec2Array(polygon)) {
+          if (polygonsIntersect(polygon, quad)) result.push(id)
+          continue
+        }
+      }
+    }
+
+    const hull = getObjectScreenHull(object, camera, canvasRect)
+    if (hull && rectIntersectsHull(rect, hull)) {
       result.push(id)
     }
   }

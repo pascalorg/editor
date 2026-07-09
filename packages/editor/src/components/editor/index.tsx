@@ -65,8 +65,9 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
-import { GroupMoveHandle } from './group-move-handle'
+import { GroupFloatingActionMenu } from './group-floating-action-menu'
 import { GroupRotateHandle } from './group-rotate-handle'
+import { GroupSelectionBox3D } from './group-selection-box-3d'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { RiserDiagramPanel } from './riser-diagram-panel'
 import { SelectionManager } from './selection-manager'
@@ -733,12 +734,13 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
-      {!noEditing && <GroupMoveHandle />}
+      {!noEditing && <GroupSelectionBox3D />}
       {!noEditing && <WallOpeningHighlights />}
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FenceTangentLines3D />}
       {!noEditing && <FloatingActionMenu />}
+      {!noEditing && <GroupFloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
