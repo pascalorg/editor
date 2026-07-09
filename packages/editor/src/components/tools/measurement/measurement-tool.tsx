@@ -466,6 +466,9 @@ export function handleMeasurementNodeClick3D(event: NodeEvent): void {
 
   const point = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
   const measurement = useMeasurementTool.getState()
+  const quickMeasure = Boolean(
+    event.nativeEvent.altKey || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
+  )
   measurement.setCursor('3d', point)
   if (event.nativeEvent.shiftKey || measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
@@ -477,7 +480,7 @@ export function handleMeasurementNodeClick3D(event: NodeEvent): void {
   }
 
   if (!measurement.draft) {
-    if (event.nativeEvent.altKey || measurement.mode === 'perimeter') {
+    if (quickMeasure || measurement.mode === 'perimeter') {
       const perimeter = surfacePerimeterMeasurementFromNode(event.node)
       if (perimeter) {
         measurement.addPerimeter('3d', perimeter.labelPoint, perimeter.lengthMeters)
@@ -493,7 +496,7 @@ export function handleMeasurementNodeClick3D(event: NodeEvent): void {
       }
     }
 
-    if (measurement.mode === 'distance' && event.nativeEvent.altKey) {
+    if (measurement.mode === 'distance' && quickMeasure) {
       const segment = directLengthSegmentFromNode(event.node)
       if (segment) {
         measurement.addSegment('3d', segment.start, segment.end, segment.measuredDistanceMeters)

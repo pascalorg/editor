@@ -239,6 +239,21 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
+  test('ctrl-click on a 2D measurable wall quick-adds its length without taking over drawing clicks', () => {
+    const handled = handleFloorplanMeasurementNodeClick2D(wallNode() as never, { ctrlKey: true })
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.draft).toBeNull()
+    expect(state.segments).toHaveLength(1)
+    expect(state.segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
+      measuredDistanceMeters: 4,
+      view: '2d',
+    })
+  })
+
   test('deleteSelected removes the selected 2D measurement', () => {
     handleFloorplanMeasurementNodeClick2D(wallNode() as never, { altKey: true })
 

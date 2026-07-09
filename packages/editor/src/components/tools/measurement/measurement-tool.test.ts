@@ -40,7 +40,7 @@ function gridEvent(
 function nodeEvent(
   node: AnyNode,
   position: [number, number, number],
-  options: { altKey?: boolean; shiftKey?: boolean } = {},
+  options: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {},
 ): NodeEvent {
   return {
     node,
@@ -50,6 +50,8 @@ function nodeEvent(
     stopPropagation: () => {},
     nativeEvent: {
       altKey: options.altKey ?? false,
+      ctrlKey: options.ctrlKey ?? false,
+      metaKey: options.metaKey ?? false,
       shiftKey: options.shiftKey ?? false,
     } as never,
   }
@@ -259,6 +261,20 @@ describe('measurement 3D grid handlers', () => {
     handleMeasurementNodeClick3D(nodeEvent(wallNode(), [2, 0, 0], { altKey: true }))
 
     const state = useMeasurementTool.getState()
+    expect(state.segments).toHaveLength(1)
+    expect(state.segments[0]).toMatchObject({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
+      measuredDistanceMeters: 4,
+      view: '3d',
+    })
+  })
+
+  test('ctrl-click on a 3D measurable wall quick-adds its length without starting a draft', () => {
+    handleMeasurementNodeClick3D(nodeEvent(wallNode(), [2, 0, 0], { ctrlKey: true }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.draft).toBeNull()
     expect(state.segments).toHaveLength(1)
     expect(state.segments[0]).toMatchObject({
       start: [0, 0, 0],

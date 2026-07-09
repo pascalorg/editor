@@ -416,13 +416,14 @@ type FloorplanMeasurableNode =
 
 export function handleFloorplanMeasurementNodeClick2D(
   node: FloorplanMeasurableNode,
-  options: { altKey?: boolean; shiftKey?: boolean } = {},
+  options: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean } = {},
 ): boolean {
   const measurementMode = useMeasurementTool.getState().mode
+  const quickMeasure = Boolean(options.altKey || options.ctrlKey || options.metaKey)
   if (options.shiftKey || measurementMode === 'angle') return false
 
   if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-    if (options.altKey || measurementMode === 'perimeter') {
+    if (quickMeasure || measurementMode === 'perimeter') {
       const perimeter = surfacePerimeterMeasurement(node)
       useMeasurementTool.getState().addPerimeter('2d', perimeter.labelPoint, perimeter.lengthMeters)
       return true
@@ -435,7 +436,7 @@ export function handleFloorplanMeasurementNodeClick2D(
   }
 
   if (measurementMode !== 'distance') return false
-  if (!options.altKey) return false
+  if (!quickMeasure) return false
   if (
     !(
       node.type === 'wall' ||
@@ -660,6 +661,8 @@ function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
 
   return handleFloorplanMeasurementNodeClick2D(node, {
     altKey: event.altKey,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
     shiftKey: event.shiftKey,
   })
 }
