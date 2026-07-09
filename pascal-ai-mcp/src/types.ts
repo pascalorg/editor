@@ -188,6 +188,11 @@ export type WorkflowSession = {
   // project itself is left in storage (never auto-deleted) — recorded here
   // purely as an audit trail / for manual cleanup.
   abandonedSceneIds?: string[]
+  // Reply language, detected from the user's most recent message each turn
+  // (kana→ja, han→zh, otherwise en). Replies render through src/lang/i18n.ts
+  // in this language; internal strings (prompts, diagnostics, sceneResult)
+  // stay Chinese regardless.
+  language?: 'zh' | 'ja' | 'en'
   // Plan-first generation (GENERATION_REDESIGN.md): the confirmed model
   // intent and the validated deterministic plan the scene was built from.
   // Persisted so modify turns can quote the plan as the factual room list

@@ -59,3 +59,34 @@ describe('patterns', () => {
     expect(roomNamePattern('other')).toBeNull()
   })
 })
+
+// --- i18n (reply language) ---------------------------------------------------
+import { detectLanguage, issueText, t } from './i18n'
+
+describe('detectLanguage', () => {
+  test('kana → ja; han without kana → zh; else en', () => {
+    expect(detectLanguage('3LDKの間取りをお願いします')).toBe('ja')
+    expect(detectLanguage('間取り図')).toBe('ja') // り is kana
+    expect(detectLanguage('玄関')).toBe('zh') // pure kanji is indistinguishable from Chinese; han wins
+    expect(detectLanguage('三室一厅，70平米')).toBe('zh')
+    expect(detectLanguage('A 70 sqm two-bedroom flat')).toBe('en')
+    expect(detectLanguage('')).toBe('en')
+    expect(detectLanguage(undefined)).toBe('en')
+  })
+})
+
+describe('reply templates', () => {
+  test('t renders per language and defaults to en', () => {
+    expect(t('zh', 'modifySuccess', {})).toContain('已按你的要求')
+    expect(t('ja', 'modifySuccess', {})).toContain('ご要望どおり')
+    expect(t('en', 'modifySuccess', {})).toContain('modified as requested')
+    expect(t(undefined, 'modifySuccess', {})).toContain('modified as requested')
+  })
+
+  test('issue templates render structured findings in each language', () => {
+    expect(issueText('ja', 'doorlessRoom', { room: '寝室' })).toContain('ドアがなく')
+    expect(issueText('en', 'isolatedBedroom', { room: 'Bedroom A' })).toContain('invalid circulation')
+    expect(issueText('zh', 'gateMissingRoom', { type: 'bedroom', actual: 1, expected: 2 }))
+      .toBe('房型「bedroom」只有 1 间，brief 要求 2 间')
+  })
+})

@@ -80,7 +80,7 @@ JSON 结构（LayoutIntent，只有语义，没有任何坐标）：
 - 需求要求开放式厨房时，输出一间 type 为 living_kitchen 的房间代替独立的 living + kitchen，不要再单独输出厨房。
 - 动线空间（走廊/玄关）不需要你规划——分区器会按需自动加，除非需求明确要求。
 - targetAreaSqm 缺省时按房型默认值分配，各房间面积之和不必精确等于总面积，分区器会整体缩放。
-- 卧室/客厅/书房默认需要外窗，不需要重复声明；只在需求特别要求（或明确不要窗）时设置 requiresExteriorWindow。`
+- 卧室/客厅/书房默认需要外窗，不需要重复声明；只在需求特别要求（或明确不要窗）时设置 requiresExteriorWindow。\n- 房间的 name 使用用户需求所用的语言（中文需求用中文名、日本語なら日本語、英语用英语）；id 一律用英文小写。`
 
 const PLAN_SYSTEM_PROMPT = `你是户型规划器。只返回一个 JSON 对象，不要任何解释或 Markdown 代码块。
 JSON 结构（LayoutPlan，含坐标，单位米，原点 (0,0)，轴对齐）：

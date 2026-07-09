@@ -1,6 +1,7 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
-import { evaluateCompletionGates, type GateReport, type GateWall } from './completion-gates'
+import { evaluateCompletionGates, type GateFailure, type GateReport, type GateWall } from './completion-gates'
 import type { AppConfig } from './config'
+import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
 import {
   classifyRoomTypeByName,
   ROOM_NAME_PATTERNS,
@@ -90,7 +91,7 @@ class GenerationCancelledError extends Error {
 // safety ceiling against runaway cost/latency (normal jobs never hit it).
 class BudgetExceededError extends Error {
   constructor(limit: number) {
-    super(`本次任务的模型调用次数超过安全上限（${limit} 次），已自动停止以避免资源浪费`)
+    super(`Model call count exceeded the safety limit (${limit}) for this task; stopped automatically to avoid waste`)
     this.name = 'BudgetExceededError'
   }
 }
@@ -243,7 +244,7 @@ export class PascalAiAgent {
     // a user can still stop a session that has hit the limit.
     const priorTotal = session.modelCallsTotal ?? 0
     if (input.action !== 'cancel' && priorTotal >= this.config.maxModelCallsPerSession) {
-      const reply = '本会话的模型调用已达累计上限，为控制成本已暂停。请新建一个会话继续。'
+      const reply = t(session.language, 'sessionCallLimit', {})
       session.updatedAt = new Date().toISOString()
       this.sessions.set(input.sessionId, session)
       return { sessionId: input.sessionId, reply, session }
@@ -301,6 +302,13 @@ export class PascalAiAgent {
   private async ingest(state: WorkflowGraphState): Promise<Partial<WorkflowGraphState>> {
     const { input } = state
     const session = structuredClone(state.session)
+
+    // Reply language follows the user's latest message (kana→ja, han→zh,
+    // else en). A confirm/cancel action carries no text — keep the previous
+    // detection so a bare confirmation doesn't flip the language to English.
+    if (input.message?.trim()) {
+      session.language = detectLanguage(input.message)
+    }
 
     // Pure state-machine core decides the turn and applies I/O-free
     // transitions; only the delegation markers below need MCP/model calls.
@@ -435,7 +443,7 @@ export class PascalAiAgent {
 
   private async evaluate(state: WorkflowGraphState): Promise<Partial<WorkflowGraphState>> {
     const session = structuredClone(state.session)
-    const evaluation = evaluateBrief(session.brief, session.inputType, this.config)
+    const evaluation = evaluateBrief(session.brief, session.inputType, this.config, session.language)
     session.availability = evaluation.availability
     session.reasons = evaluation.reasons
     session.questions = dedupe([...session.questions, ...evaluation.questions]).slice(0, 3)
@@ -456,16 +464,11 @@ export class PascalAiAgent {
       const reachedLimit = session.clarificationRounds >= this.config.maxClarificationRounds
       const questions = session.questions.length > 0
         ? session.questions
-        : ['请补充户型面积或边界尺寸，以及必须包含的功能空间。']
+        : [t(session.language, 'clarifyDefault', {})]
+      const numbered = questions.map((question, index) => `${index + 1}. ${question}`).join('\n')
       const reply = reachedLimit
-        ? [
-            '目前仍有关键条件未确认。你可以点击“确认”让系统采用合理默认假设直接生成，或点击“取消”结束任务；也可以继续补充下面的条件：',
-            ...questions.map((question, index) => `${index + 1}. ${question}`),
-          ].join('\n')
-        : [
-            '我已经保留了可用信息，还需要确认以下关键条件：',
-            ...questions.map((question, index) => `${index + 1}. ${question}`),
-          ].join('\n')
+        ? t(session.language, 'clarifyAtLimit', { questions: numbered })
+        : t(session.language, 'clarifyAsk', { questions: numbered })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -474,7 +477,9 @@ export class PascalAiAgent {
     // `session.summary` 仍用结构化摘要（含来源/置信度），它会作为 brief 传给
     // 生成模型，结构信息对生成质量有用；面向用户展示的是自然语言版本。
     session.summary = formatSummary(session.brief)
-    const reply = `${formatUserFacingSummary(session.brief)}\n\n确认后我才会开始生成并修改 Pascal 场景。如有不符，请直接补充或纠正。`
+    const reply = t(session.language, 'confirmPrompt', {
+      summary: formatUserFacingSummary(session.brief, session.language),
+    })
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -522,7 +527,10 @@ export class PascalAiAgent {
       let planned = await this.buildPlanForSession(session)
       if (!planned.ok) {
         session.phase = 'failed'
-        const reply = `户型规划未通过校验（已尝试 ${planned.modelCalls} 轮）：\n${planned.failures.map(failure => `- ${failure}`).join('\n')}\n已确认的需求仍然保留，可以补充或调整需求后重试。`
+        const reply = t(session.language, 'planRejected', {
+          rounds: planned.modelCalls,
+          list: planned.failures.map(failure => `- ${failure}`).join('\n'),
+        })
         session.messages.push({ role: 'assistant', content: reply })
         return { session, reply, next: 'finish' }
       }
@@ -599,12 +607,13 @@ export class PascalAiAgent {
         ? 'completed'
         : 'completed_with_issues'
       const reply = buildCompletionReply({
-        successText: `户型已生成并通过自动检查。${sceneResult.editorUrl ? `\n打开场景：${sceneResult.editorUrl}` : ''}`,
+        lang: session.language ?? 'en',
+        successText: t(session.language, 'generateSuccess', { url: sceneResult.editorUrl }),
         repairRounds,
         diagnostics,
         toolNamesUsed,
         furnitureIssues,
-        gateFailures: sceneResult.gateFailures ?? [],
+        gateFailures: construction.gates.failures,
       })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
@@ -625,12 +634,12 @@ export class PascalAiAgent {
       }
       if (error instanceof GenerationCancelledError) {
         session.phase = 'cancelled'
-        const reply = '已在生成过程中取消。未完成的半成品不会保存到你的项目，已确认的需求仍然保留，可以稍后重新生成。'
+        const reply = t(session.language, 'generateCancelled', {})
         session.messages.push({ role: 'assistant', content: reply })
         return { session, reply, next: 'finish' }
       }
       session.phase = 'failed'
-      const reply = `户型生成失败：${errorMessage(error)}。已确认的结构化需求仍然保留，可以稍后重试。`
+      const reply = t(session.language, 'generateFailed', { error: errorMessage(error) })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -679,12 +688,13 @@ export class PascalAiAgent {
       ? 'completed'
       : 'completed_with_issues'
     const reply = buildCompletionReply({
-      successText: '已在现有户型基础上完成修改，并通过自动检查。',
+      lang: session.language ?? 'en',
+      successText: t(session.language, 'applyToExistingSuccess', {}),
       repairRounds,
       diagnostics,
       toolNamesUsed,
       furnitureIssues,
-      gateFailures: session.sceneResult.gateFailures ?? [],
+      gateFailures: gates.report.failures,
     })
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
@@ -699,7 +709,7 @@ export class PascalAiAgent {
       session.phase = 'failed'
       return {
         session,
-        reply: '找不到需要修改的场景，请重新生成户型。',
+        reply: t(session.language, 'modifyNoScene', {}),
         next: 'finish',
       }
     }
@@ -800,12 +810,13 @@ export class PascalAiAgent {
       delete session.pendingModification
       delete session.pendingOperation
       const reply = buildCompletionReply({
-        successText: '已按你的要求修改当前户型，并通过自动检查。',
+        lang: session.language ?? 'en',
+        successText: t(session.language, 'modifySuccess', {}),
         repairRounds,
         diagnostics,
         toolNamesUsed,
         furnitureIssues,
-        gateFailures: session.sceneResult.gateFailures ?? [],
+        gateFailures: gates.report.failures,
       })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
@@ -814,7 +825,7 @@ export class PascalAiAgent {
         // Leave pendingModification/pendingOperation and phase intact so the
         // user can re-confirm the same change later; the scene was not saved.
         session.phase = 'awaiting_modification_confirmation'
-        const reply = '已在修改过程中取消。原场景保持不变，发送确认即可重试同一修改，或直接描述新的修改需求。'
+        const reply = t(session.language, 'modifyCancelled', {})
         session.messages.push({ role: 'assistant', content: reply })
         return { session, reply, next: 'finish' }
       }
@@ -829,8 +840,8 @@ export class PascalAiAgent {
       const recovery = modifyFailureRecovery(Boolean(session.pendingModification), Boolean(session.sceneResult))
       session.phase = recovery.phase
       const reply = recovery.canRetry
-        ? `场景修改失败：${errorMessage(error)}。原场景和修改要求都已保留，发送确认即可重试同一操作，或直接描述新的修改需求。`
-        : `场景修改失败：${errorMessage(error)}。原场景已保留，可以重新描述需要的修改。`
+        ? t(session.language, 'modifyFailedRetry', { error: errorMessage(error) })
+        : t(session.language, 'modifyFailedNoRetry', { error: errorMessage(error) })
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     }
@@ -860,7 +871,7 @@ export class PascalAiAgent {
       {
         role: 'system',
         content:
-          'Inspect the active Pascal scene and answer the user accurately. Use read-only tools when needed. Never mutate the scene. State what you verified, identify relevant node ids when useful, and distinguish measured facts from uncertainty. Use the recent conversation to resolve references like "that wall" or "the one I mentioned".',
+          'Inspect the active Pascal scene and answer the user accurately. Use read-only tools when needed. Never mutate the scene. State what you verified, identify relevant node ids when useful, and distinguish measured facts from uncertainty. Use the recent conversation to resolve references like "that wall" or "the one I mentioned". Reply in the language of the user\'s message (default to English if unclear).',
       },
       { role: 'user', content: `${history}${question}` },
     ]
@@ -899,7 +910,7 @@ export class PascalAiAgent {
 
 输出字段：existingCondition、designGoals、hardConstraints、assumptions、uncertainties、conflicts、questions、overallConfidence、imageUsable、imageReason。
 conflicts 格式：{"key":"...","existingValue":"...","requestedValue":"...","question":"..."}。
-questions 每次最多 3 个，只问会改变空间结构的问题。
+questions 每次最多 3 个，只问会改变空间结构的问题；questions 和所有 label 使用用户输入的语言（无法判断时用英语）。
 已有需求：${JSON.stringify(session.brief)}
 最新文字：${message || '无附带文字'}
 输入类型：${imageDataUrl ? '单张户型图；图片是现状依据，文字是目标或指令。请尽量从图中识别墙体、门、窗、房间及其大致布局/尺寸，作为 existingCondition 现状事实（识别不确定的放入 uncertainties，不要写成用户确认的事实）' : '纯文字需求'}`
@@ -1780,6 +1791,8 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     requirementMismatches: string[]
     isolatedBedrooms: string[]
     furniturePlacementIssues: FurniturePlacementIssue[]
+    strayWallIds: string[]
+    mismatchL10n: Array<MismatchFinding['l10n']>
   }> {
     const [validationRaw, verificationRaw, collisionsRaw, zonesRaw, wallsRaw, levelSummaryRaw] = await Promise.all([
       this.callMcp(session.sessionId, 'validate_scene', {}),
@@ -1813,6 +1826,11 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
     const items = Array.isArray(levelSummaryPayload.items)
       ? levelSummaryPayload.items.filter(isItemSummary)
       : []
+    const mismatchFindings = [
+      ...compareRoomsToRequirements(zones.map(z => z.name), session.brief),
+      ...checkAreaRequirements(zones, session.brief),
+    ]
+    const strayWallIds = findStrayWindows(zones, walls)
     return {
       validation: {
         valid: validationPayload.valid === true,
@@ -1821,13 +1839,15 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       verificationIssues,
       collisions,
       doorlessRooms: findDoorlessRooms(zones, walls),
-      strayWindows: findStrayWindows(zones, walls),
-      requirementMismatches: [
-        ...compareRoomsToRequirements(zones.map(z => z.name), session.brief),
-        ...checkAreaRequirements(zones, session.brief),
-      ],
+      strayWindows: strayWallIds.map(wallId => issueText('zh', 'strayWindow', { wallId })),
+      requirementMismatches: mismatchFindings.map(finding => finding.message),
       isolatedBedrooms: findIsolatedBedrooms(zones, walls),
       furniturePlacementIssues: checkFurniturePlacement(zones, walls, items),
+      // Structured sources for reply-language re-rendering (see
+      // describeRemainingIssues). Extra strings appended later by
+      // extraChecks have no l10n and pass through untranslated.
+      strayWallIds,
+      mismatchL10n: mismatchFindings.map(finding => finding.l10n),
     }
   }
 
@@ -2050,10 +2070,6 @@ export function countDiagnosticIssues(diagnostics: {
  * `classifySceneIntentFallback` as an `update` intent, which re-enters the
  * modify path and runs another diagnose/repair pass on the same scene.
  */
-function remainingIssuesHint(): string {
-  return '\n\n如果希望我再自动尝试修正这些问题，回复"继续修复"即可；也可以直接描述具体改动，或在编辑器中手动调整。'
-}
-
 export function describeRemainingIssues(
   diagnostics: {
     validation: { errors: string[] }
@@ -2064,23 +2080,56 @@ export function describeRemainingIssues(
     requirementMismatches: string[]
     isolatedBedrooms: string[]
     furniturePlacementIssues?: FurniturePlacementIssue[]
+    strayWallIds?: string[]
+    mismatchL10n?: Array<{ id: 'zoneOverlap' | 'totalAreaOff' | 'bedroomShortfall' | 'missingSupportSpace'; params: Record<string, string | number> }>
   },
+  lang: Lang = 'zh',
   limit = 5,
 ): string {
+  // Structured sources render in the reply language; validation/verification
+  // strings come from MCP in English and pass through, as do extraChecks
+  // strings appended after collectDiagnostics (no l10n available).
+  const mismatchCount = diagnostics.mismatchL10n?.length ?? 0
+  const mismatches = diagnostics.mismatchL10n
+    ? [
+        ...diagnostics.mismatchL10n.map(entry => issueText(lang, entry.id, entry.params as never)),
+        ...diagnostics.requirementMismatches.slice(mismatchCount),
+      ]
+    : diagnostics.requirementMismatches
+  const strayWindows = diagnostics.strayWallIds
+    ? diagnostics.strayWallIds.map(wallId => issueText(lang, 'strayWindow', { wallId }))
+    : diagnostics.strayWindows
   const items = [
     ...diagnostics.validation.errors,
     ...diagnostics.verificationIssues,
-    ...diagnostics.collisions.map(c => `${c.aId} 与 ${c.bId} 存在 ${c.kind} 碰撞`),
-    ...diagnostics.doorlessRooms.map(name => `房间「${name}」没有任何门，是封闭空间`),
-    ...diagnostics.strayWindows,
-    ...diagnostics.requirementMismatches,
-    ...diagnostics.isolatedBedrooms.map(name => `卧室「${name}」只能经过卫生间/厨房/其他卧室到达，动线不合规`),
-    ...(diagnostics.furniturePlacementIssues ?? []).map(issue => issue.message),
+    ...diagnostics.collisions.map(c => issueText(lang, 'collision', { a: c.aId, b: c.bId, kind: c.kind })),
+    ...diagnostics.doorlessRooms.map(room => issueText(lang, 'doorlessRoom', { room })),
+    ...strayWindows,
+    ...mismatches,
+    ...diagnostics.isolatedBedrooms.map(room => issueText(lang, 'isolatedBedroom', { room })),
+    ...(diagnostics.furniturePlacementIssues ?? []).map(issue => renderPlacementIssue(issue, lang)),
   ]
   if (items.length === 0) return ''
   const shown = items.slice(0, limit).map(item => `- ${item}`).join('\n')
-  const more = items.length > limit ? `\n……以及另外 ${items.length - limit} 项` : ''
+  const more = items.length > limit ? t(lang, 'moreItems', { count: items.length - limit }) : ''
   return `\n${shown}${more}`
+}
+
+// FurniturePlacementIssue carries its structure (kind + names), so the reply
+// can re-render it in any language; `message` stays the zh canonical text.
+function renderPlacementIssue(issue: FurniturePlacementIssue, lang: Lang): string {
+  if (lang === 'zh') return issue.message
+  const item = issue.itemName || issue.itemId
+  switch (issue.kind) {
+    case 'overlap':
+      return issueText(lang, 'placementOverlap', { item, other: issue.otherItemId ?? '?' })
+    case 'out_of_bounds':
+      return issueText(lang, 'placementOutOfBounds', { item, room: issue.room ?? null })
+    case 'door_clearance':
+      return issueText(lang, 'placementDoorClearance', { item })
+    default:
+      return issue.message
+  }
 }
 
 /**
@@ -2150,10 +2199,13 @@ export function countAllIssues(
   return countDiagnosticIssues(diagnostics) + furnitureIssues.length
 }
 
-function describeFurnitureIssues(furnitureIssues: string[], limit = 5): string {
+function describeFurnitureIssues(furnitureIssues: string[], lang: Lang, limit = 5): string {
   const shown = furnitureIssues.slice(0, limit).map(issue => `- ${issue}`).join('\n')
-  const more = furnitureIssues.length > limit ? `\n……以及另外 ${furnitureIssues.length - limit} 项` : ''
-  return `有 ${furnitureIssues.length} 件家具未正确放置（越界/重叠/未成功放置）：\n${shown}${more}`
+  return t(lang, 'furnitureIssuesSummary', {
+    count: furnitureIssues.length,
+    list: shown,
+    moreCount: Math.max(0, furnitureIssues.length - limit),
+  })
 }
 
 // Builds the completion reply, counting structural diagnostics and furniture
@@ -2161,6 +2213,7 @@ function describeFurnitureIssues(furnitureIssues: string[], limit = 5): string {
 // (which the repair loop never attempts) instead of claiming a bogus repair
 // round count.
 function buildCompletionReply(args: {
+  lang: Lang
   successText: string
   repairRounds: number
   diagnostics: Parameters<typeof describeRemainingIssues>[0]
@@ -2169,29 +2222,50 @@ function buildCompletionReply(args: {
   // §5 hard-gate failures. Shown even when diagnostics are clean — a scene
   // can pass every repairable check and still fail a gate (e.g. brief 要求的
   // 房型缺失), and the reply must say so instead of claiming success.
-  gateFailures?: string[]
+  // Structured (with l10n) so the list renders in the reply language.
+  gateFailures?: GateFailure[]
 }): string {
+  const lang = args.lang
   const structural = countDiagnosticIssues(args.diagnostics)
   const furniture = args.furnitureIssues.length
   const gates = args.gateFailures?.length ?? 0
   const touchedFurniture = [...args.toolNamesUsed].some(name => FURNITURE_TOOLS.has(name))
-  const generalNote = touchedFurniture
-    ? '\n\n提示：家具的精确摆放（是否贴墙、挡门、朝向）仍建议在编辑器里再确认一下。'
-    : ''
+  const generalNote = touchedFurniture ? t(lang, 'furnitureGeneralNote', {}) : ''
   if (structural === 0 && furniture === 0 && gates === 0) {
     return `${args.successText}${generalNote}`
   }
   const parts: string[] = []
   if (structural > 0) {
-    parts.push(`自动修正已达上限（${args.repairRounds} 轮），仍有 ${structural} 个结构问题需要人工确认：${describeRemainingIssues(args.diagnostics)}`)
+    parts.push(t(lang, 'repairCapReached', {
+      rounds: args.repairRounds,
+      count: structural,
+      list: describeRemainingIssues(args.diagnostics, lang),
+    }))
   }
   if (gates > 0) {
-    parts.push(`完成门槛未全部通过（${gates} 项）：\n${args.gateFailures!.map(f => `- ${f}`).join('\n')}`)
+    const list = args.gateFailures!
+      .map(failure => `- ${renderGateFailure(failure, lang)}`)
+      .join('\n')
+    parts.push(t(lang, 'gatesNotPassed', { count: gates, list }))
   }
   if (furniture > 0) {
-    parts.push(describeFurnitureIssues(args.furnitureIssues))
+    parts.push(describeFurnitureIssues(args.furnitureIssues, lang))
   }
-  return `${parts.join('\n\n')}${remainingIssuesHint()}${generalNote}`
+  return `${parts.join('\n\n')}${t(lang, 'remainingIssuesHint', {})}${generalNote}`
+}
+
+// Gate failures carry {id, params}; re-render in the reply language, falling
+// back to the canonical zh message when a failure predates the l10n field.
+function renderGateFailure(failure: GateFailure, lang: Lang): string {
+  if (lang === 'zh' || !failure.l10n) return failure.message
+  try {
+    // The l10n id/params come from completion-gates as a loosely-typed pair;
+    // issueText's overloads can't see through that, so cast at this boundary.
+    const render = issueText as (l: Lang, id: string, params: unknown) => string
+    return render(lang, failure.l10n.id, failure.l10n.params)
+  } catch {
+    return failure.message
+  }
 }
 
 /**
@@ -2823,15 +2897,19 @@ function round1(value: number): number {
  * repair prompt forwards these strings verbatim — fixing a global area miss
  * requires re-partitioning, not nudging one room.
  */
-export function checkAreaRequirements(zones: ZoneSummary[], brief: DesignBrief): string[] {
+export type MismatchFinding = {
+  message: string
+  l10n: { id: 'zoneOverlap' | 'totalAreaOff' | 'bedroomShortfall' | 'missingSupportSpace'; params: Record<string, string | number> }
+}
+
+export function checkAreaRequirements(zones: ZoneSummary[], brief: DesignBrief): MismatchFinding[] {
   if (zones.length === 0) return []
-  const issues: string[] = []
+  const issues: MismatchFinding[] = []
   const stats = computeZoneAreaStats(zones)
   for (const pair of stats.overlappingPairs) {
     if (pair.areaSqMeters <= MIN_MEANINGFUL_ZONE_OVERLAP_SQM) continue
-    issues.push(
-      `房间「${pair.aName}」与「${pair.bName}」的地面区域重叠约 ${round1(pair.areaSqMeters)}㎡，房间边界互相侵入，需要修正其中一间的轮廓`,
-    )
+    const params = { a: pair.aName, b: pair.bName, area: round1(pair.areaSqMeters) }
+    issues.push({ message: issueText('zh', 'zoneOverlap', params), l10n: { id: 'zoneOverlap', params } })
   }
   const target = numberFact(brief, FLOOR_AREA_FACT_KEYS)
   if (target !== undefined && target > 0) {
@@ -2839,9 +2917,8 @@ export function checkAreaRequirements(zones: ZoneSummary[], brief: DesignBrief):
     const actual = stats.unionArea
     if (Math.abs(actual - target) > target * AREA_TOLERANCE_RATIO) {
       const deviation = Math.round((Math.abs(actual - target) / target) * 100)
-      issues.push(
-        `总面积不符：需求约 ${target}㎡，当前所有房间实际覆盖约 ${round1(actual)}㎡（偏差 ${deviation}%，允许 ±${Math.round(AREA_TOLERANCE_RATIO * 100)}%）。请整体调整建筑外轮廓和房间划分来贴近目标总面积，不要只微调单个房间`,
-      )
+      const params = { target, actual: round1(actual), deviation, tolerance: Math.round(AREA_TOLERANCE_RATIO * 100) }
+      issues.push({ message: issueText('zh', 'totalAreaOff', params), l10n: { id: 'totalAreaOff', params } })
     }
   }
   return issues
@@ -3026,10 +3103,12 @@ function overallZoneBounds(
   return bounds
 }
 
+// Returns the OFFENDING WALL IDS; callers render the message per language
+// (zh for diagnostics/prompts, the user's language for the reply summary).
 function findStrayWindows(zones: ZoneSummary[], walls: WallWithOpenings[]): string[] {
   const bounds = overallZoneBounds(zones)
   if (!bounds) return []
-  const issues: string[] = []
+  const wallIds: string[] = []
   for (const wall of walls) {
     if (!wall.openings.some(o => o.type === 'window')) continue
     const midX = (wall.start[0] + wall.end[0]) / 2
@@ -3039,11 +3118,9 @@ function findStrayWindows(zones: ZoneSummary[], walls: WallWithOpenings[]): stri
       Math.abs(midX - bounds.maxX) <= EXTERIOR_BOUNDARY_EPSILON_M ||
       Math.abs(midZ - bounds.minZ) <= EXTERIOR_BOUNDARY_EPSILON_M ||
       Math.abs(midZ - bounds.maxZ) <= EXTERIOR_BOUNDARY_EPSILON_M
-    if (!onBoundary) {
-      issues.push(`墙 ${wall.id} 上的窗户不在建筑外边界附近，疑似开在了室内隔墙上`)
-    }
+    if (!onBoundary) wallIds.push(wall.id)
   }
-  return issues
+  return wallIds
 }
 
 /**
@@ -3059,13 +3136,14 @@ function findStrayWindows(zones: ZoneSummary[], walls: WallWithOpenings[]): stri
  * it mentioned a number of bedrooms. Only requestedRooms (the brief's own
  * explicit room list) drives which support spaces are checked for.
  */
-function compareRoomsToRequirements(zoneNames: string[], brief: DesignBrief): string[] {
-  const issues: string[] = []
+function compareRoomsToRequirements(zoneNames: string[], brief: DesignBrief): MismatchFinding[] {
+  const issues: MismatchFinding[] = []
   const bedroomCount = numberFact(brief, ['bedroom_count', 'bedrooms'])
   if (bedroomCount !== undefined && bedroomCount > 0) {
     const actual = zoneNames.filter(name => ROOM_NAME_PATTERNS.bedroom.test(name)).length
     if (actual < bedroomCount) {
-      issues.push(`卧室数量不足：需求 ${bedroomCount} 间，实际建了 ${actual} 间`)
+      const params = { expected: bedroomCount, actual }
+      issues.push({ message: issueText('zh', 'bedroomShortfall', params), l10n: { id: 'bedroomShortfall', params } })
     }
   }
   const requestedRooms = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
@@ -3077,7 +3155,8 @@ function compareRoomsToRequirements(zoneNames: string[], brief: DesignBrief): st
   for (const [label, pattern] of supportSpaces) {
     const wasRequested = requestedRooms.some(room => pattern.test(room))
     if (wasRequested && !zoneNames.some(name => pattern.test(name))) {
-      issues.push(`缺少${label}：需求中明确要求了该空间但没有建`)
+      const params = { label }
+      issues.push({ message: issueText('zh', 'missingSupportSpace', params), l10n: { id: 'missingSupportSpace', params } })
     }
   }
   return issues
@@ -3182,6 +3261,7 @@ export function evaluateBrief(
   brief: DesignBrief,
   inputType: 'text' | 'image',
   config: Pick<AppConfig, 'usableConfidence' | 'partialConfidence'>,
+  lang: Lang = 'zh',
 ): Evaluation {
   const allFacts = [
     ...brief.existingCondition,
@@ -3203,17 +3283,18 @@ export function evaluateBrief(
 
   if (!hasGeometry) {
     reasons.push('缺少面积或边界尺寸')
-    questions.push('户型的建筑面积或外部边界尺寸是多少？')
+    questions.push(t(lang, 'askFloorArea', {}))
   }
   if (!hasFunction) {
     reasons.push('缺少必要功能空间')
-    questions.push('必须包含哪些房间或功能空间？')
+    questions.push(t(lang, 'askRequiredRooms', {}))
   }
   if (brief.conflicts.length > 0) {
     reasons.push('现状与设计目标存在尚未解决的冲突')
     questions.push(...brief.conflicts.map(conflict => conflict.question))
   }
-  questions.push(...brief.uncertainties.map(fact => `请确认${fact.label}：${formatValue(fact.value)}`))
+  questions.push(...brief.uncertainties.map(fact =>
+    t(lang, 'askConfirmFact', { label: fact.label, value: formatValue(fact.value) })))
 
   if (inputType === 'image' && averageConfidence < config.partialConfidence && !hasGeometry) {
     return {
@@ -3235,23 +3316,25 @@ export function evaluateBrief(
  * as defaults unless you correct them", so confirming is informed consent
  * rather than a silent acceptance of everything the system inferred.
  */
-export function formatUserFacingSummary(brief: DesignBrief): string {
+export function formatUserFacingSummary(brief: DesignBrief, lang: Lang = 'zh'): string {
+  // Fact labels/values come from extraction in the user's own language; only
+  // the frame text is templated.
   const list = (facts: RequirementFact[]) =>
     facts.map(fact => `${fact.label}：${formatValue(fact.value)}`).join('；')
-  const lines: string[] = ['我目前理解的需求如下：']
-  if (brief.existingCondition.length > 0) lines.push(`· 现状：${list(brief.existingCondition)}`)
-  if (brief.designGoals.length > 0) lines.push(`· 设计目标：${list(brief.designGoals)}`)
-  if (brief.hardConstraints.length > 0) lines.push(`· 硬性约束：${list(brief.hardConstraints)}`)
+  const lines: string[] = [t(lang, 'summaryIntro', {})]
+  if (brief.existingCondition.length > 0) lines.push(t(lang, 'summaryExisting', { list: list(brief.existingCondition) }))
+  if (brief.designGoals.length > 0) lines.push(t(lang, 'summaryGoals', { list: list(brief.designGoals) }))
+  if (brief.hardConstraints.length > 0) lines.push(t(lang, 'summaryConstraints', { list: list(brief.hardConstraints) }))
   const unconfirmed = [...brief.assumptions, ...brief.uncertainties]
   if (unconfirmed.length > 0) {
-    lines.push('以下内容我会按默认假设处理（尚未经你确认），如不符请补充：')
+    lines.push(t(lang, 'summaryAssumptions', {}))
     for (const fact of unconfirmed) lines.push(`  - ${fact.label}：${formatValue(fact.value)}`)
   }
   for (const conflict of brief.conflicts) {
-    lines.push(`  - 待确认冲突：${conflict.question}`)
+    lines.push(t(lang, 'summaryConflict', { question: conflict.question }))
   }
   if (lines.length === 1) {
-    lines.push('（暂未提取到明确信息，将主要依据合理默认假设生成，你可以随时补充。）')
+    lines.push(t(lang, 'summaryEmpty', {}))
   }
   return lines.join('\n')
 }

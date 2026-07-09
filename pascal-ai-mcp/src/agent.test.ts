@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   buildOpeningRepairData,
+  describeRemainingIssues,
+  formatUserFacingSummary,
   buildPlanTargets,
   formatPlanSnapshot,
   checkAreaRequirements,
@@ -312,9 +314,10 @@ describe('deterministic area acceptance', () => {
     const zones = [zone('a', '客厅', [[0, 0], [15, 0], [15, 7], [0, 7]])]
     const issues = checkAreaRequirements(zones, areaBrief(70))
     expect(issues).toHaveLength(1)
-    expect(issues[0]).toContain('总面积不符')
-    expect(issues[0]).toContain('105')
-    expect(issues[0]).toContain('整体调整建筑外轮廓')
+    expect(issues[0]!.message).toContain('总面积不符')
+    expect(issues[0]!.message).toContain('105')
+    expect(issues[0]!.message).toContain('整体调整建筑外轮廓')
+    expect(issues[0]!.l10n.id).toBe('totalAreaOff')
   })
 
   test('room-boundary intrusion is flagged even when total area is on target', () => {
@@ -323,7 +326,7 @@ describe('deterministic area acceptance', () => {
       zone('b', '卧室', [[5, 0], [10, 0], [10, 7], [5, 7]]),
     ]
     const issues = checkAreaRequirements(zones, areaBrief(70))
-    expect(issues.some(issue => issue.includes('重叠'))).toBe(true)
+    expect(issues.some(issue => issue.message.includes('重叠'))).toBe(true)
   })
 
   test('no area target in the brief means no area assertion', () => {
@@ -715,5 +718,35 @@ describe('三语兼容：日语输入', () => {
     expect(targets.requiredRooms).toContainEqual({ type: 'living', count: 1 })
     expect(targets.requiredRooms).toContainEqual({ type: 'kitchen', count: 1 })
     expect(targets.requiredRooms).toContainEqual({ type: 'bathroom', count: 1 })
+  })
+})
+
+describe('回复语言跟随：边界渲染', () => {
+  test('formatUserFacingSummary renders the frame in the reply language', () => {
+    const b = brief({ designGoals: [fact('rooms', '間取り', ['リビング'])] })
+    expect(formatUserFacingSummary(b, 'ja')).toContain('現在把握している要件')
+    expect(formatUserFacingSummary(b, 'en')).toContain('my current understanding')
+    expect(formatUserFacingSummary(b, 'zh')).toContain('我目前理解的需求')
+  })
+
+  test('describeRemainingIssues re-renders structured findings per language', () => {
+    const diagnostics = {
+      validation: { errors: [] },
+      verificationIssues: [],
+      collisions: [],
+      doorlessRooms: ['寝室'],
+      strayWindows: ['墙 w1 上的窗户不在建筑外边界附近，疑似开在了室内隔墙上'],
+      requirementMismatches: ['卧室数量不足：需求 2 间，实际建了 1 间'],
+      isolatedBedrooms: [],
+      strayWallIds: ['w1'],
+      mismatchL10n: [{ id: 'bedroomShortfall' as const, params: { expected: 2, actual: 1 } }],
+    }
+    const ja = describeRemainingIssues(diagnostics, 'ja')
+    expect(ja).toContain('ドアがなく')
+    expect(ja).toContain('寝室の数が不足')
+    expect(ja).toContain('壁 w1 の窓')
+    const zh = describeRemainingIssues(diagnostics, 'zh')
+    expect(zh).toContain('没有任何门')
+    expect(zh).toContain('卧室数量不足')
   })
 })

@@ -50,7 +50,11 @@ export type GateTargets = {
   zoneTypes?: Record<string, RoomType>
 }
 
-export type GateFailure = { gate: number; id: string; message: string }
+// `l10n` carries the message's template id + params so agent.ts can re-render
+// the failure in the user's reply language; `message` stays the canonical
+// Chinese used in prompts and persisted sessions.
+export type GateFailureL10n = { id: string; params: Record<string, string | number | boolean> }
+export type GateFailure = { gate: number; id: string; message: string; l10n?: GateFailureL10n }
 export type GateReport = { passed: boolean; failures: GateFailure[] }
 
 const TOTAL_AREA_TOLERANCE = 0.1
@@ -103,6 +107,7 @@ export function evaluateCompletionGates(
           gate: 1,
           id: 'missing-room',
           message: `房型「${requirement.type}」只有 ${actual} 间，brief 要求 ${requirement.count} 间`,
+          l10n: { id: 'gateMissingRoom', params: { type: requirement.type, actual, expected: requirement.count } },
         })
       }
     }
@@ -119,6 +124,7 @@ export function evaluateCompletionGates(
         gate: 2,
         id: 'total-area',
         message: `实测总面积 ${unionArea.toFixed(1)}㎡ 偏离目标 ${targets.totalAreaSqm}㎡ 达 ${Math.round(deviation * 100)}%`,
+        l10n: { id: 'gateTotalArea', params: { actual: unionArea.toFixed(1), target: targets.totalAreaSqm, deviation: Math.round(deviation * 100) } },
       })
     }
   }
@@ -129,7 +135,7 @@ export function evaluateCompletionGates(
   // --- gate 3: no room isolated from the entry door ---
   if (zones.length > 0) {
     if (graph.entryZoneIds.size === 0) {
-      failures.push({ gate: 3, id: 'no-entry-door', message: '没有通向室外的入户门' })
+      failures.push({ gate: 3, id: 'no-entry-door', message: '没有通向室外的入户门', l10n: { id: 'gateNoEntryDoor', params: {} } })
     } else {
       const reachable = bfs([...graph.entryZoneIds], graph.adjacency, () => true)
       for (const zone of zones) {
@@ -138,6 +144,7 @@ export function evaluateCompletionGates(
             gate: 3,
             id: 'isolated-room',
             message: `房间「${label(zone)}」经门和开放边界都无法从入户门到达`,
+            l10n: { id: 'gateIsolatedRoom', params: { room: label(zone) } },
           })
         }
       }
@@ -168,6 +175,7 @@ export function evaluateCompletionGates(
         gate: 4,
         id: 'missing-window',
         message: `用户要求的「${type}」外窗不存在于对应房间的外墙上`,
+        l10n: { id: 'gateMissingWindow', params: { type } },
       })
     }
   }
@@ -183,6 +191,7 @@ export function evaluateCompletionGates(
           gate: 5,
           id: 'bedroom-access',
           message: `卧室「${label(bedroom.zone)}」无公共空间可达（户型中没有公共房型）`,
+          l10n: { id: 'gateBedroomAccess', params: { room: label(bedroom.zone), noPublic: true } },
         })
         continue
       }
@@ -194,6 +203,7 @@ export function evaluateCompletionGates(
           gate: 5,
           id: 'bedroom-access',
           message: `卧室「${label(bedroom.zone)}」无法不穿过厨房/卫生间/其他卧室到达公共空间`,
+          l10n: { id: 'gateBedroomAccess', params: { room: label(bedroom.zone), noPublic: false } },
         })
       }
     }
@@ -218,6 +228,7 @@ export function evaluateCompletionGates(
           gate: 6,
           id: 'missing-equipment',
           message: `${entry.type === 'bathroom' ? '卫生间' : '厨房'}「${label(entry.zone)}」缺少必备设备：${missing.label}`,
+          l10n: { id: 'gateMissingEquipment', params: { roomKind: entry.type === 'bathroom' ? '卫生间' : '厨房', room: label(entry.zone), label: missing.label } },
         })
       }
     }
@@ -227,6 +238,7 @@ export function evaluateCompletionGates(
           gate: 7,
           id: 'missing-bedroom-furniture',
           message: `卧室「${label(entry.zone)}」缺少必备家具：${missing.label}`,
+          l10n: { id: 'gateMissingBedroomFurniture', params: { room: label(entry.zone), label: missing.label } },
         })
       }
     }

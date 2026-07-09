@@ -199,7 +199,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
             maybeRedirectToScene(body, recovered)
             return
           }
-          throw new Error('AI 服务返回为空或被截断。如果生成可能已完成，请刷新页面查看结果，或稍后重试。')
+          throw new Error('The AI service returned an empty or truncated response. If generation may have finished, refresh the page to check the result, or try again later.')
         }
 
         if (!response.ok) throw new Error(payload.error ?? `AI request failed (${response.status})`)
@@ -247,7 +247,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
       {
         id: crypto.randomUUID(),
         role: 'user',
-        content: imageDataUrl ? `${message || '请分析这张户型图'}\n[图片：${imageName}]` : message,
+        content: imageDataUrl ? `${message || 'Please analyze this floor plan'}\n[Image: ${imageName}]` : message,
       },
     ])
     setInput('')
@@ -261,11 +261,11 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
     if (!file) return
     setError('')
     if (!['image/png', 'image/jpeg'].includes(file.type)) {
-      setError('仅支持 JPG、JPEG 或 PNG 户型图。')
+      setError('Only JPG, JPEG, or PNG floor plans are supported.')
       return
     }
     if (file.size > 20 * 1024 * 1024) {
-      setError('图片不能超过 20 MB。')
+      setError('The image must be smaller than 20 MB.')
       return
     }
     try {
@@ -274,7 +274,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
       const shortSide = Math.min(bitmap.width, bitmap.height)
       bitmap.close()
       if (longSide < 1200 || shortSide < 600) {
-        setError('图片分辨率不足：长边至少 1200px，短边至少 600px。')
+        setError('Image resolution too low: at least 1200px on the long side and 600px on the short side.')
         return
       }
       const reader = new FileReader()
@@ -282,10 +282,10 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
         setImageDataUrl(typeof reader.result === 'string' ? reader.result : null)
         setImageName(file.name)
       }
-      reader.onerror = () => setError('无法读取图片，请重新选择。')
+      reader.onerror = () => setError('Could not read the image. Please choose it again.')
       reader.readAsDataURL(file)
     } catch {
-      setError('无法解析图片，请确认文件没有损坏。')
+      setError('Could not parse the image. Please make sure the file is not corrupted.')
     }
   }, [])
 
@@ -304,14 +304,14 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <header className="flex h-11 shrink-0 items-center gap-2 border-border/70 border-b px-3">
         <Bot className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate font-medium text-sm">AI 户型设计</span>
+        <span className="truncate font-medium text-sm">AI Floor Plan Designer</span>
         {session && (
           <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
             {phaseLabel(session.phase)}
           </span>
         )}
         <button
-          aria-label="清空会话"
+          aria-label="Clear session"
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           onClick={() => void clearSession()}
           type="button"
@@ -323,9 +323,9 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 && (
           <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
-            <p className="font-medium">描述你想要的户型</p>
+            <p className="font-medium">Describe the home you want</p>
             <p className="mt-1 text-muted-foreground text-xs leading-5">
-              可以输入面积、房间、居住人数和限制，也可以上传一张户型图。信息不足时我会先追问，确认后才修改场景。
+              Enter the floor area, rooms, occupants, and constraints, or upload a floor plan image. I will ask follow-up questions when details are missing, and only change the scene after you confirm.
             </p>
           </div>
         )}
@@ -346,10 +346,10 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
             <span>
               {session?.phase === 'generating'
-                ? '正在生成并检查场景…'
+                ? 'Generating and checking the scene…'
                 : session?.phase === 'modifying'
-                  ? '正在修改并检查场景…'
-                  : '正在理解需求…'}
+                  ? 'Modifying and checking the scene…'
+                  : 'Understanding your requirements…'}
             </span>
             {(session?.phase === 'generating' || session?.phase === 'modifying') && (
               <button
@@ -359,7 +359,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
                 type="button"
               >
                 <X className="h-3 w-3" />
-                {cancelling ? '正在停止…' : '停止生成'}
+                {cancelling ? 'Stopping…' : 'Stop generating'}
               </button>
             )}
           </div>
@@ -394,10 +394,10 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
           >
             <Check className="h-4 w-4" />
             {session.phase === 'awaiting_modification_confirmation'
-              ? '确认执行'
+              ? 'Confirm and apply'
               : session.phase === 'clarifying'
-                ? '接受默认并生成'
-                : '确认并生成'}
+                ? 'Accept defaults and generate'
+                : 'Confirm and generate'}
           </button>
           <button
             className="flex items-center justify-center gap-1 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
@@ -406,15 +406,15 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
             type="button"
           >
             <X className="h-4 w-4" />
-            取消
+            Cancel
           </button>
         </div>
       )}
 
       {(session?.sceneResult?.remainingIssueCount ?? 0) > 0 && (
         <div className="mx-3 mb-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs">
-          自动检查仍有 {session?.sceneResult?.remainingIssueCount}{' '}
-          个问题；场景可以打开查看，也可以继续输入修改要求。
+          Automated checks still found {session?.sceneResult?.remainingIssueCount}{' '}
+          issue(s). You can open the scene to review, or keep typing change requests.
         </div>
       )}
 
@@ -436,7 +436,7 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
         )}
         <div className="flex items-end gap-2">
           <button
-            aria-label="上传户型图"
+            aria-label="Upload floor plan"
             className="rounded-lg border border-border p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
             disabled={busy}
             onClick={() => fileInputRef.current?.click()}
@@ -467,16 +467,16 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
             }}
             placeholder={
               session?.phase === 'clarifying'
-                ? '回答上面的问题…'
+                ? 'Answer the questions above…'
                 : session?.phase === 'completed' || session?.phase === 'completed_with_issues'
-                  ? '继续修改当前户型…'
-                  : '描述面积、房间和设计要求…'
+                  ? 'Keep refining the current floor plan…'
+                  : 'Describe the area, rooms, and design requirements…'
             }
             rows={1}
             value={input}
           />
           <button
-            aria-label="发送"
+            aria-label="Send"
             className="rounded-lg bg-blue-600 p-2 text-white hover:bg-blue-500 disabled:opacity-40"
             disabled={busy || (!input.trim() && !imageDataUrl)}
             onClick={() => void send()}
@@ -492,16 +492,16 @@ export function AiAssistantPanel({ sceneId }: { sceneId?: string }) {
 
 function phaseLabel(phase: Phase): string {
   return {
-    intake: '等待输入',
-    clarifying: '需要补充',
-    awaiting_confirmation: '等待确认',
-    awaiting_modification_confirmation: '等待修改确认',
-    inspecting: '核对中',
-    generating: '生成中',
-    modifying: '修改中',
-    completed: '已完成',
-    completed_with_issues: '待人工确认',
-    cancelled: '已取消',
-    failed: '需要处理',
+    intake: 'Waiting for input',
+    clarifying: 'Needs details',
+    awaiting_confirmation: 'Awaiting confirmation',
+    awaiting_modification_confirmation: 'Awaiting change confirmation',
+    inspecting: 'Inspecting',
+    generating: 'Generating',
+    modifying: 'Modifying',
+    completed: 'Completed',
+    completed_with_issues: 'Needs review',
+    cancelled: 'Cancelled',
+    failed: 'Needs attention',
   }[phase]
 }
