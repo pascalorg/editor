@@ -685,3 +685,35 @@ describe('批次 D: windowRoomTypesFromBrief', () => {
     }))).toEqual([])
   })
 })
+
+describe('三语兼容：日语输入', () => {
+  test('日语房间名的隔绝卧室检查', () => {
+    const zones = [
+      zone('bed', '寝室', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('hall', '廊下', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    expect(findIsolatedBedrooms(zones, [doorWall('w1', [4, 0], [4, 3])])).toEqual([])
+    // 寝室の唯一のドアがキッチンにしか通じない → flagged
+    const zones2 = [
+      zone('bed', '洋室A', [[0, 0], [4, 0], [4, 3], [0, 3]]),
+      zone('kit', 'キッチン', [[4, 0], [8, 0], [8, 3], [4, 3]]),
+    ]
+    expect(findIsolatedBedrooms(zones2, [doorWall('w1', [4, 0.5], [4, 2.5])])).toEqual(['洋室A'])
+  })
+
+  test('日语 brief 事实的外窗要求提取', () => {
+    const types = windowRoomTypesFromBrief(brief({
+      designGoals: [fact('window_requirements', '採光要件', '寝室とリビングに窓が必要')],
+    }))
+    expect(types.sort()).toEqual(['bedroom', 'living'])
+  })
+
+  test('日语房间清单的 PlanTargets 提取', () => {
+    const targets = buildPlanTargets(brief({
+      designGoals: [fact('rooms', '間取り', ['リビング', 'キッチン', 'トイレ'])],
+    }))
+    expect(targets.requiredRooms).toContainEqual({ type: 'living', count: 1 })
+    expect(targets.requiredRooms).toContainEqual({ type: 'kitchen', count: 1 })
+    expect(targets.requiredRooms).toContainEqual({ type: 'bathroom', count: 1 })
+  })
+})

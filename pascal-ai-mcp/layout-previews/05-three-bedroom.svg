@@ -36,6 +36,6 @@
 <circle cx="505.9" cy="614.8" r="6" fill="#c0392b"/>
 <circle cx="98.19999999999999" cy="419.20000000000005" r="6" fill="#c0392b"/>
 <circle cx="156.39999999999998" cy="109.89999999999995" r="6" fill="#c0392b"/>
-<text x="315.4" y="774.8000000000001" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
+<text x="315.4" y="435.20000000000005" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
 <text x="40" y="820.8000000000001" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
 </svg>

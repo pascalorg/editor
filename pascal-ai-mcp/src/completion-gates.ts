@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import { findMissingFurniture } from './furniture-checklist'
+import { classifyRoomTypeByName } from './lang/room-vocab'
 import {
   analyzePolygonGrid,
   collinearOverlapLength,
@@ -43,6 +44,10 @@ export type GateTargets = {
   // Room types the user explicitly asked exterior windows for (gate 4 only
   // covers explicit requests; default window preferences are plan-level).
   requiredWindowRoomTypes?: RoomType[]
+  // Authoritative zoneId→type mapping from the layout plan (plan-first
+  // builds). When a zone appears here its type is taken verbatim and the
+  // name-based guess is skipped — room names can then be in any language.
+  zoneTypes?: Record<string, RoomType>
 }
 
 export type GateFailure = { gate: number; id: string; message: string }
@@ -63,26 +68,12 @@ const FORBIDDEN_INTERMEDIATE_TYPES: ReadonlySet<RoomType> = new Set([
   'kitchen', 'bathroom', 'bedroom',
 ])
 
-// Zone-name → room type. Combined-function names must resolve before their
-// parts ("客厅/开放式厨房" is a living_kitchen, not a kitchen); circulation
-// names resolve first for the same reason as classifyRoomKind in
-// layout-metrics (case-02 false positive).
-export function classifyZoneType(name: string): RoomType {
-  if (/(客厅|起居|living)[^,;，；]*(厨房|kitchen)|开放式?厨房|living[-_ ]?kitchen/i.test(name)) {
-    return 'living_kitchen'
-  }
-  if (/走廊|过道|corridor|hallway|\bhall\b/i.test(name)) return 'hallway'
-  if (/玄关|门厅|entry|foyer/i.test(name)) return 'entry'
-  if (/卧|bedroom/i.test(name)) return 'bedroom'
-  if (/卫生间|浴室|洗手间|bathroom|卫浴|[主客公次]卫/i.test(name)) return 'bathroom'
-  if (/厨房|kitchen/i.test(name)) return 'kitchen'
-  if (/餐厅|饭厅|dining/i.test(name)) return 'dining'
-  if (/客厅|起居|living|大厅/i.test(name)) return 'living'
-  if (/书房|study|office/i.test(name)) return 'study'
-  if (/储物|储藏|storage|closet/i.test(name)) return 'storage'
-  if (/阳台|balcony/i.test(name)) return 'balcony'
-  return 'other'
-}
+// Zone-name → room type: delegates to the shared trilingual vocabulary
+// (src/lang/room-vocab.ts). Kept as an export because the gates tests and
+// external callers address it under this name. Name classification is the
+// FALLBACK — freshly generated scenes pass explicit zone types via
+// GateTargets.zoneTypes and never guess.
+export const classifyZoneType = classifyRoomTypeByName
 
 export function evaluateCompletionGates(
   zones: GateZone[],
@@ -91,7 +82,10 @@ export function evaluateCompletionGates(
   targets: GateTargets = {},
 ): GateReport {
   const failures: GateFailure[] = []
-  const typed = zones.map(zone => ({ zone, type: classifyZoneType(zone.name || '') }))
+  const typed = zones.map(zone => ({
+    zone,
+    type: targets.zoneTypes?.[zone.id] ?? classifyZoneType(zone.name || ''),
+  }))
   const label = (zone: GateZone) => zone.name || zone.id
 
   // --- gate 1: required rooms present (minimum counts) ---

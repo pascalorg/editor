@@ -1,4 +1,4 @@
-import type { LayoutIntent, LayoutPlan } from './layout-plan'
+import type { LayoutIntent, LayoutPlan, RoomType } from './layout-plan'
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
@@ -194,6 +194,12 @@ export type WorkflowSession = {
   // and so eval reports can compare plan vs as-built.
   layoutIntent?: LayoutIntent
   layoutPlan?: LayoutPlan
+  // Authoritative zoneId→RoomType mapping recorded when the deterministic
+  // executor builds the plan's rooms. Lets the gates/diagnostics use real
+  // types instead of guessing from names — which makes room names
+  // language-independent (中/日/英). Name-based classification remains the
+  // fallback for modify-path and legacy scenes.
+  zoneRoomTypes?: Record<string, RoomType>
   executionSteps?: Array<{
     phase: 'structure' | 'openings' | 'furnishing' | 'verification'
     status: 'completed' | 'failed'

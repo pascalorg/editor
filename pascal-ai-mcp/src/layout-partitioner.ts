@@ -32,6 +32,7 @@
 import {
   DEFAULT_ROOM_AREAS,
   defaultRequiresWindow,
+  longestExteriorEdge,
   polygonArea,
   sharedBoundaryLength,
   type LayoutIntent,
@@ -536,11 +537,24 @@ function tryBandLayout(
   }
 
   // --- entry room ---
-  const entryRoom = others.find(r => r.type === 'entry') ?? hub
+  // 入户优先级：玄关 > 走廊 > 公共枢纽（客厅）。入户门应该开在动线空间，
+  // 而不是把客厅的外墙当大门；只有户型里没有动线空间、或候选房间够不着
+  // ≥0.9m 的外墙边时才逐级回退到客厅。
+  const footprintSize = { width: W, depth: D }
+  const canHostEntryDoor = (roomId: string): boolean => {
+    const polygon = planRooms.find(room => room.id === roomId)?.polygon
+    return polygon !== undefined && longestExteriorEdge(polygon, footprintSize) >= MIN_DOOR_EDGE_M
+  }
+  const entryCandidates = [
+    others.find(r => r.type === 'entry')?.id,
+    corridorNeeded ? corridorId : corridorRoom?.id,
+    hub.id,
+  ].filter((id): id is string => Boolean(id))
+  const entryRoomId = entryCandidates.find(canHostEntryDoor) ?? hub.id
 
   const plan: LayoutPlan = {
     footprint: { width: W, depth: D },
-    entry: { roomId: entryRoom.id },
+    entry: { roomId: entryRoomId },
     rooms: planRooms,
     connections: dedupeConnections(connections),
   }

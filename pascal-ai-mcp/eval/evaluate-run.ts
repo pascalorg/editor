@@ -3,17 +3,19 @@
 // without spending tokens or spinning up the scene server. `run-eval.ts`
 // imports these rather than reimplementing the logic inline.
 
+import { ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
 import type { SceneResult, WorkflowPhase } from '../src/types'
 
+// Case configs address room types by their Chinese labels; the patterns that
+// recognize actual zone names come from the shared trilingual vocabulary, so
+// Japanese scenes (寝室/リビング/キッチン…) assert the same way.
 export const ROOM_TYPE_PATTERNS: Record<string, RegExp> = {
-  // Bedrooms are commonly named 主卧/次卧/客卧, which don't literally contain
-  // "卧室" — match those too so bedroom counting isn't silently under-counted.
-  卧室: /卧室|卧房|主卧|次卧|客卧|bedroom/i,
-  客厅: /客厅|起居室|living/i,
-  卫生间: /卫生间|浴室|洗手间|卫浴|bathroom/i,
-  厨房: /厨房|kitchen/i,
-  书房: /书房|书斋|study|office/i,
-  餐厅: /餐厅|饭厅|dining/i,
+  卧室: ROOM_NAME_PATTERNS.bedroom,
+  客厅: ROOM_NAME_PATTERNS.living,
+  卫生间: ROOM_NAME_PATTERNS.bathroom,
+  厨房: ROOM_NAME_PATTERNS.kitchen,
+  书房: ROOM_NAME_PATTERNS.study,
+  餐厅: ROOM_NAME_PATTERNS.dining,
 }
 
 export type SuccessDetermination = { ok: boolean; error?: string }

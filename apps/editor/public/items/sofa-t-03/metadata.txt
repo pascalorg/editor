@@ -1,0 +1,6 @@
+sofa_T_03
+尺⼨：2.33 × 0.824 × 0.875 m
+类别：sofa_T_03
+尺⼨档：Standard Size
+正⾯：+Z
+放置：floor / againstWall

@@ -217,3 +217,52 @@ describe('partitionLayout: infeasible intents fail explicitly', () => {
     expect(validation.fatal).toEqual([])
   })
 })
+
+describe('入户门房间选择：玄关 > 走廊 > 客厅', () => {
+  test('有贯通走廊的三居：入户门开在走廊，不再是客厅', () => {
+    const result = partitionLayout({
+      targetTotalAreaSqm: 95,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 26 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 15 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'bedroom-3', name: '小卧', type: 'bedroom', targetAreaSqm: 10 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 7 },
+        { id: 'bathroom-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+      ],
+    })
+    if (!result.ok) throw new Error(result.reason)
+    const entryRoom = result.plan.rooms.find(room => room.id === result.plan.entry.roomId)
+    expect(entryRoom?.type).toBe('hallway')
+  })
+
+  test('明确给了玄关时玄关优先于走廊', () => {
+    const result = partitionLayout({
+      targetTotalAreaSqm: 100,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 25 },
+        { id: 'entry-1', name: '玄关', type: 'entry', targetAreaSqm: 3.5 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 15 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 7 },
+        { id: 'bathroom-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+      ],
+    })
+    if (!result.ok) throw new Error(result.reason)
+    expect(result.plan.entry.roomId).toBe('entry-1')
+  })
+
+  test('无走廊无玄关的一居：回退到客厅', () => {
+    const result = partitionLayout({
+      targetTotalAreaSqm: 55,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 22 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 14 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 6 },
+        { id: 'bathroom-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 4 },
+      ],
+    })
+    if (!result.ok) throw new Error(result.reason)
+    expect(result.plan.entry.roomId).toBe('living-1')
+  })
+})

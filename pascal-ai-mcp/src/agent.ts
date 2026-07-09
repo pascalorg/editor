@@ -1,6 +1,12 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
 import { evaluateCompletionGates, type GateReport, type GateWall } from './completion-gates'
 import type { AppConfig } from './config'
+import {
+  classifyRoomTypeByName,
+  ROOM_NAME_PATTERNS,
+  roomNamePattern,
+  WINDOW_PATTERN,
+} from './lang/room-vocab'
 import { executeFurniturePlan } from './furniture-executor'
 import { computeLayoutQuality } from './layout-metrics'
 import type { LayoutPlan, RoomType } from './layout-plan'
@@ -1356,6 +1362,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
       ...(planTargets.totalAreaSqm !== undefined ? { totalAreaSqm: planTargets.totalAreaSqm } : {}),
       ...(planTargets.requiredRooms ? { requiredRooms: planTargets.requiredRooms } : {}),
       ...(requiredWindowRoomTypes.length > 0 ? { requiredWindowRoomTypes } : {}),
+      ...(session.zoneRoomTypes ? { zoneTypes: session.zoneRoomTypes } : {}),
     })
     const layoutQuality = computeLayoutQuality(zones, walls, {
       ...(planTargets.totalAreaSqm !== undefined ? { targetTotalAreaSqm: planTargets.totalAreaSqm } : {}),
@@ -1428,6 +1435,14 @@ questions 每次最多 3 个，只问会改变空间结构的问题。
         polygon: planRoom.polygon,
         zoneId: report.rooms.find(built => built.planRoomId === planRoom.id)?.zoneId ?? null,
       }))
+      // Authoritative zone types for the gates/diagnostics: with this on the
+      // session, room names can be in any language — nothing downstream needs
+      // to guess types from 中/日/英 keywords for plan-first builds.
+      session.zoneRoomTypes = Object.fromEntries(
+        furnitureRooms
+          .filter(room => room.zoneId !== null)
+          .map(room => [room.zoneId as string, room.type]),
+      )
       const furnished = await executeFurniturePlan({
         rooms: furnitureRooms,
         levelId,
@@ -2865,19 +2880,19 @@ function findDoorlessRooms(zones: ZoneSummary[], walls: WallWithOpenings[]): str
 // `type` field, only a model-chosen name.
 type CirculationRoomKind = 'bedroom' | 'blocked-service' | 'passable'
 
+// Delegates to the shared trilingual vocabulary. living_kitchen resolves to
+// passable (an open kitchen merged into the living space IS the public path —
+// the case-02 lesson); pure kitchens/bathrooms block transit.
 function classifyCirculationRoomKind(name: string): CirculationRoomKind {
-  if (/卧室|bedroom/i.test(name)) return 'bedroom'
-  // Mixed-function names ("客厅/开放式厨房", "living/dining + open kitchen")
-  // must count as circulation: an open kitchen merged into the living space
-  // IS the public path. Checking passable keywords first prevents the 厨房
-  // substring from misclassifying the whole combined zone as blocked —
-  // previously that false positive was unfixable and burned every repair
-  // round (observed in case-02).
-  if (/客厅|起居|living|走廊|过道|corridor|hallway|hall\b|玄关|门厅|entry|foyer|餐厅|饭厅|dining/i.test(name)) {
-    return 'passable'
+  switch (classifyRoomTypeByName(name)) {
+    case 'bedroom':
+      return 'bedroom'
+    case 'kitchen':
+    case 'bathroom':
+      return 'blocked-service'
+    default:
+      return 'passable'
   }
-  if (/厨房|kitchen|卫生间|浴室|洗手间|bathroom/i.test(name)) return 'blocked-service'
-  return 'passable'
 }
 
 // Which zone(s) a wall's segment lies along the boundary of. A door on a
@@ -3048,16 +3063,16 @@ function compareRoomsToRequirements(zoneNames: string[], brief: DesignBrief): st
   const issues: string[] = []
   const bedroomCount = numberFact(brief, ['bedroom_count', 'bedrooms'])
   if (bedroomCount !== undefined && bedroomCount > 0) {
-    const actual = zoneNames.filter(name => /卧室|bedroom/i.test(name)).length
+    const actual = zoneNames.filter(name => ROOM_NAME_PATTERNS.bedroom.test(name)).length
     if (actual < bedroomCount) {
       issues.push(`卧室数量不足：需求 ${bedroomCount} 间，实际建了 ${actual} 间`)
     }
   }
   const requestedRooms = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
   const supportSpaces: Array<[string, RegExp]> = [
-    ['厨房', /厨房|kitchen/i],
-    ['卫生间', /卫生间|浴室|洗手间|bathroom/i],
-    ['客厅', /客厅|起居室|living/i],
+    ['厨房', ROOM_NAME_PATTERNS.kitchen],
+    ['卫生间', ROOM_NAME_PATTERNS.bathroom],
+    ['客厅', ROOM_NAME_PATTERNS.living],
   ]
   for (const [label, pattern] of supportSpaces) {
     const wasRequested = requestedRooms.some(room => pattern.test(room))
@@ -3274,9 +3289,9 @@ export function buildPlanTargets(brief: DesignBrief): PlanTargets {
   }
   const requested = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
   const presencePatterns: Array<[RoomType, RegExp]> = [
-    ['kitchen', /厨房|kitchen/i],
-    ['bathroom', /卫生间|浴室|洗手间|bathroom/i],
-    ['living', /客厅|起居室|living/i],
+    ['kitchen', ROOM_NAME_PATTERNS.kitchen],
+    ['bathroom', ROOM_NAME_PATTERNS.bathroom],
+    ['living', ROOM_NAME_PATTERNS.living],
   ]
   const embedsQuantity = /[0-9０-９两三四五六七八九]/
   for (const [type, pattern] of presencePatterns) {
@@ -3296,22 +3311,15 @@ export function buildPlanTargets(brief: DesignBrief): PlanTargets {
 // Scans every fact whose key/label/value mentions windows and maps the room
 // words found alongside.
 export function windowRoomTypesFromBrief(brief: DesignBrief): RoomType[] {
-  const roomPatterns: Array<[RoomType, RegExp]> = [
-    ['bedroom', /卧|bedroom/i],
-    ['living', /客厅|起居|living/i],
-    ['study', /书房|study/i],
-    ['kitchen', /厨房|kitchen/i],
-    ['dining', /餐厅|dining/i],
-    ['bathroom', /卫生间|浴室|bathroom/i],
-  ]
+  const roomTypes: RoomType[] = ['bedroom', 'living', 'study', 'kitchen', 'dining', 'bathroom']
   const types = new Set<RoomType>()
   for (const fact of [
     ...brief.designGoals, ...brief.hardConstraints, ...brief.existingCondition, ...brief.assumptions,
   ]) {
     const text = `${fact.key} ${fact.label} ${formatValue(fact.value)}`
-    if (!/窗|window/i.test(text)) continue
-    for (const [type, pattern] of roomPatterns) {
-      if (pattern.test(text)) types.add(type)
+    if (!WINDOW_PATTERN.test(text)) continue
+    for (const type of roomTypes) {
+      if (roomNamePattern(type)?.test(text)) types.add(type)
     }
   }
   return [...types]

@@ -1,0 +1,6 @@
+sofa_T_05
+尺⼨：2.87 × 0.859 × 0.991 m
+类别：sofa_T_05
+尺⼨档：Standard Size
+正⾯：+Z
+放置：floor / againstWall

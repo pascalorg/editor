@@ -11,6 +11,7 @@
 // reason. `unsupported` means "this can't be reliably decided from the data we
 // have" and must NOT be counted as a pass by the caller.
 
+import { ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
 import { ROOM_TYPE_PATTERNS } from './evaluate-run'
 
 export type ZoneInfo = {
@@ -149,8 +150,16 @@ function countRoomsOfType(zones: ZoneInfo[], type: string): number {
 }
 
 // "Public circulation" room types a bedroom is allowed to reach through.
+// Name recognition comes from the shared trilingual vocabulary (中/日/英).
 const PUBLIC_TYPES = ['客厅', '书房', '餐厅']
-const PUBLIC_NAME_PATTERN = /客厅|起居|living|玄关|门厅|走廊|过道|hall|entry|foyer|corridor/i
+const PUBLIC_NAME_PATTERN = new RegExp(
+  [
+    ROOM_NAME_PATTERNS.living.source,
+    ROOM_NAME_PATTERNS.hallway.source,
+    ROOM_NAME_PATTERNS.entry.source,
+  ].join('|'),
+  'i',
+)
 
 function zoneIsPublic(zone: ZoneInfo): boolean {
   if (PUBLIC_TYPES.some(t => zoneIsType(zone, t))) return true

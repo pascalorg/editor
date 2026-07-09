@@ -1,0 +1,6 @@
+sofa_T_02
+尺⼨：1.957 × 0.562 × 0.815 m
+类别：sofa_T_02
+尺⼨档：Standard Size
+正⾯：+Z
+放置：floor / againstWall

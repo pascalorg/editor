@@ -1,0 +1,6 @@
+sofa_T_04
+尺⼨：3.144 × 0.853 × 2.0 m
+类别：sofa_T_04
+尺⼨档：Standard Size
+正⾯：+Z
+放置：floor / againstWall

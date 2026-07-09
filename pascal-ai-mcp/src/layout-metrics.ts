@@ -27,6 +27,8 @@
 // call in without import cycles.
 // ---------------------------------------------------------------------------
 
+import { classifyRoomTypeByName } from './lang/room-vocab'
+
 export type MetricsZone = {
   id: string
   name: string
@@ -124,16 +126,28 @@ export function bandTableForTotalArea(totalAreaSqm: number): BandTable {
 
 // --- room classification ----------------------------------------------------
 
-// Order matters: mixed-function names ("客厅/开放式厨房") must resolve to the
-// passable/living reading first — same rationale as
-// classifyCirculationRoomKind in agent.ts (case-02 false positive).
+// Delegates to the shared trilingual vocabulary and folds the RoomType enum
+// down to metric kinds: circulation for hallway/entry, living for every
+// public living/dining variant (a living_kitchen scores as living, not as a
+// kitchen — the case-02 rule).
 export function classifyRoomKind(name: string): RoomKind {
-  if (/走廊|过道|corridor|hallway|hall\b|玄关|门厅|entry|foyer/i.test(name)) return 'circulation'
-  if (/客厅|起居|living|餐厅|饭厅|dining/i.test(name)) return 'living'
-  if (/卧室|bedroom/i.test(name)) return 'bedroom'
-  if (/厨房|kitchen/i.test(name)) return 'kitchen'
-  if (/卫生间|浴室|洗手间|bathroom/i.test(name)) return 'bathroom'
-  return 'other'
+  switch (classifyRoomTypeByName(name)) {
+    case 'hallway':
+    case 'entry':
+      return 'circulation'
+    case 'living':
+    case 'living_kitchen':
+    case 'dining':
+      return 'living'
+    case 'bedroom':
+      return 'bedroom'
+    case 'kitchen':
+      return 'kitchen'
+    case 'bathroom':
+      return 'bathroom'
+    default:
+      return 'other'
+  }
 }
 
 // --- geometry helpers -------------------------------------------------------
