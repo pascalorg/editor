@@ -6,6 +6,11 @@ interface ErrorBoundaryProps {
   fallback: ReactNode
   /** Tag for log lines so we can tell which boundary swallowed an error. */
   scope?: string
+  /** Notified once per caught error — lets the host schedule a retry. */
+  onError?: (error: Error) => void
+  /** Changing this key clears a caught error and re-mounts `children` — the
+   * retry half of `onError` (bump it after clearing whatever failed). */
+  resetKey?: unknown
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, { hasError: boolean }> {
@@ -19,6 +24,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, { hasError: boo
       error,
       info.componentStack,
     )
+    this.props.onError?.(error)
+  }
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false })
+    }
   }
   render() {
     return this.state.hasError ? this.props.fallback : this.props.children

@@ -36,7 +36,7 @@ import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useGLTF } from '@react-three/drei/core/Gltf'
 import { useFrame } from '@react-three/fiber'
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AnimationAction, Group, Material, Mesh } from 'three'
 import { MathUtils } from 'three'
 import { positionLocal, smoothstep, time } from 'three/tsl'
@@ -181,6 +181,7 @@ const resolveItemMaterial = (
 const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   const handlers = useNodeEvents(node, 'item')
   const shading = useViewer((s) => s.shading)
+  const isExporting = useViewer((s) => s.isExporting)
   const [w, h, d] = node.asset.dimensions
   const material = useMemo(() => {
     const next = createDefaultMaterial('#ef4444', 1, shading) as MutableMaterial
@@ -191,6 +192,10 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
     return next
   }, [shading])
 
+  // Debug affordance only — a bake must never ship the red placeholder box
+  // (observed baked into a prod artifact when an item GLB 504'd mid-capture).
+  if (isExporting) return null
+
   return (
     <mesh position-y={h / 2} {...handlers}>
       <boxGeometry args={[w, h, d]} />
@@ -199,10 +204,73 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   )
 }
 
+const MODEL_RETRY_DELAYS_MS = [1_000, 3_000]
+
+/**
+ * Load the item model with bounded retries. drei's `useGLTF` caches a rejected
+ * load by URL, so a transient fetch failure (e.g. a storage 504 under the bake
+ * page's asset-request burst) would otherwise stay broken for the whole
+ * session — clear the cache entry and re-mount. After the retries are
+ * exhausted the item settles as SKIPPED: it renders the debug box (nothing
+ * during exports) and lands in `useViewer.itemLoadFailures` so a bake host can
+ * record which items are missing from the artifact.
+ */
+const ModelWithRetry = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
+  // `failures` counts boundary catches; `epoch` bumps after each cache clear
+  // to reset the boundary and re-mount the loader. The retry timer is owned by
+  // an effect (not the error handler) so StrictMode's synthetic
+  // unmount/remount re-arms it instead of silently discarding it.
+  const [failures, setFailures] = useState(0)
+  const [epoch, setEpoch] = useState(0)
+  const url = resolveCdnUrl(node.asset.src) || ''
+  const gaveUp = !url || failures > MODEL_RETRY_DELAYS_MS.length
+
+  const handleError = useCallback(() => setFailures((current) => current + 1), [])
+
+  useEffect(() => {
+    if (failures === 0 || gaveUp) return
+    const delay = MODEL_RETRY_DELAYS_MS[failures - 1] ?? 0
+    const timer = setTimeout(() => {
+      console.log(
+        `[item] retrying model load (${failures}/${MODEL_RETRY_DELAYS_MS.length}) ${url}`,
+      )
+      useGLTF.clear(url)
+      setEpoch((current) => current + 1)
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [failures, gaveUp, url])
+
+  useEffect(() => {
+    if (!gaveUp) return
+    markSettled()
+    useViewer.getState().reportItemLoadFailure(node.id, url)
+    return () => useViewer.getState().clearItemLoadFailure(node.id)
+  }, [gaveUp, markSettled, node.id, url])
+
+  if (gaveUp) return <BrokenItemFallback node={node} />
+
+  return (
+    <ErrorBoundary fallback={<PreviewModel node={node} />} onError={handleError} resetKey={epoch}>
+      <Suspense fallback={<PreviewModel node={node} />}>
+        <ModelRenderer markSettled={markSettled} node={node} />
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
+
 export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
 
   useRegistry(storeNode.id, storeNode.type, ref)
+
+  // "Settled" = the model resolved, terminally failed (skipped), or was never
+  // expected. `ItemSystem` holds the dirty mark until then, so scene-ready
+  // (and headless bakes) wait for real item content instead of exporting the
+  // loading placeholder.
+  const markSettled = useCallback(() => {
+    const group = ref.current as (Group & { userData: Record<string, unknown> }) | null
+    if (group) group.userData.itemModelSettled = true
+  }, [])
 
   // Merge live drag overrides so the mesh transforms in real time during a
   // drag (e.g. the in-world rotate gizmo). The handle writes the in-flight
@@ -217,17 +285,17 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   const roomClearPreview =
     (node as ItemNode & { roomClearPreview?: unknown }).roomClearPreview === true
 
+  useEffect(() => {
+    if (roomClearPreview) markSettled()
+  }, [roomClearPreview, markSettled])
+
   const content = (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
       {roomClearPreview ? (
         <ClearPreviewModel node={node} />
       ) : (
         <>
-          <ErrorBoundary fallback={<BrokenItemFallback node={node} />}>
-            <Suspense fallback={<PreviewModel node={node} />}>
-              <ModelRenderer node={node} />
-            </Suspense>
-          </ErrorBoundary>
+          <ModelWithRetry markSettled={markSettled} node={node} />
           {node.children?.map((childId) => (
             <NodeRenderer key={childId} nodeId={childId} />
           ))}
@@ -262,6 +330,9 @@ function getPreviewMaterial(shading: RenderShading): Material {
 
 const PreviewModel = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
+  const isExporting = useViewer((s) => s.isExporting)
+  // Loading placeholder — must never land in an exported GLB.
+  if (isExporting) return null
   return (
     <mesh material={getPreviewMaterial(shading)} position-y={node.asset.dimensions[1] / 2}>
       <boxGeometry
@@ -296,10 +367,16 @@ const multiplyScales = (
   b: [number, number, number],
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
-const ModelRenderer = ({ node }: { node: ItemNode }) => {
+const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled?: () => void }) => {
   const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
+
+  // Mounting past the suspense gate means the GLB resolved — the item's build
+  // work is done (`ItemSystem` may clear its dirty mark, scene-ready may fire).
+  useEffect(() => {
+    markSettled?.()
+  }, [markSettled])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
