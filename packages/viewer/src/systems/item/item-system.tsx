@@ -53,6 +53,13 @@ export const ItemSystem = () => {
         }
       }
 
+      // Hold the mark until the model settles (loaded, terminally failed, or
+      // never expected — see ItemRenderer.markSettled). Registration alone
+      // isn't "built": clearing then would let scene-ready fire while GLBs are
+      // still downloading and a bake would export loading placeholders.
+      const settled = (mesh.userData as { itemModelSettled?: boolean }).itemModelSettled
+      if (!settled) return
+
       clearDirty(id as AnyNodeId)
     })
   }, 2)
