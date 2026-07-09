@@ -28,7 +28,7 @@ import {
 
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
-const DEFAULT_WALL_COLOR = '#f2f0ed'
+const DEFAULT_WALL_COLOR = '#e9e7e3'
 
 const WALL_HIGHLIGHT_PROFILES = {
   delete: {

@@ -32,10 +32,10 @@ export const SCENE_THEMES: SceneTheme[] = [
     background: '#ffffff',
     ground: '#f4f4f2',
     ambient: { color: '#ffffff', intensity: 0.15 },
-    hemi: { sky: '#ffffff', ground: '#aaa49a', intensity: 0.6 },
+    hemi: { sky: '#ffffff', ground: '#aaa49a', intensity: 0.45 },
     lights: [
       { position: [10, 10, 10], color: '#ffffff', intensity: 4, castShadow: true },
-      { position: [-10, 10, -10], color: '#ffffff', intensity: 0.75 },
+      { position: [-10, 10, -10], color: '#ffffff', intensity: 0.6 },
     ],
     toneMappingExposure: 0.9,
     clayTints: {
@@ -97,7 +97,7 @@ export const SCENE_THEMES: SceneTheme[] = [
     ambient: { color: '#eef0ef', intensity: 1.1 },
     hemi: { sky: '#f4f5f3', ground: '#bcbfbb', intensity: 0.9 },
     lights: [{ position: [12, 28, 10], color: '#f4f5f3', intensity: 0.8, castShadow: true }],
-    toneMappingExposure: 0.95,
+    toneMappingExposure: 0.9,
     clayTints: {
       wall: '#dedfdc',
       floor: '#cdcec9',
@@ -118,7 +118,7 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [16, 24, 12], color: '#e6efff', intensity: 1.8, castShadow: true },
       { position: [-12, 10, -8], color: '#9fb6d8', intensity: 0.4 },
     ],
-    toneMappingExposure: 0.95,
+    toneMappingExposure: 0.9,
     clayTints: {
       wall: '#9fb6d2',
       floor: '#8ba2c2',
@@ -160,7 +160,7 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [-14, 22, -10], color: '#a4b6e8', intensity: 1.4, castShadow: true },
       { position: [14, 6, 8], color: '#ffb070', intensity: 0.9 },
     ],
-    toneMappingExposure: 1.1,
+    toneMappingExposure: 0.9,
     clayTints: {
       wall: '#c5b9cf',
       floor: '#ad9fbb',
@@ -202,7 +202,7 @@ export const SCENE_THEMES: SceneTheme[] = [
       { position: [16, 22, 12], color: '#fff6d8', intensity: 3, castShadow: true },
       { position: [-12, 10, -8], color: '#bfe0c2', intensity: 0.5 },
     ],
-    toneMappingExposure: 0.95,
+    toneMappingExposure: 0.9,
     clayTints: {
       wall: '#eef0e6',
       floor: '#d8ddc6',

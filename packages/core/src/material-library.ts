@@ -1948,11 +1948,13 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     label: 'White',
     category: 'colors',
     description: 'Clean painted finish',
-    previewColor: '#ffffff',
+    // Real white paint reflects ~80%; a literal #ffffff albedo kills GI/shadow
+    // contrast, so "white" is clamped to ≈0.83 linear.
+    previewColor: '#e9e9e9',
     preset: {
       maps: {},
       mapProperties: {
-        color: '#ffffff',
+        color: '#e9e9e9',
         roughness: 0.9,
         metalness: 0,
         repeatX: 1,
@@ -1980,11 +1982,11 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     label: 'Soft White',
     category: 'colors',
     description: 'Warm off-white painted finish',
-    previewColor: '#f2eee6',
+    previewColor: '#ebe7df',
     preset: {
       maps: {},
       mapProperties: {
-        color: '#f2eee6',
+        color: '#ebe7df',
         roughness: 0.9,
         metalness: 0,
         repeatX: 1,

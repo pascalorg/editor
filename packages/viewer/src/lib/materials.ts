@@ -30,14 +30,16 @@ export const CLAY_PALETTE: Record<SurfaceRole, string> = {
   furnishing: '#d2ccbe',
 }
 
+// Albedos are clamped to ≈0.83 linear (max channel #eb): real white paint
+// reflects ~80%, and pure-white albedo kills GI/shadow contrast.
 export const WHITE_PALETTE: Record<SurfaceRole, string> = {
-  wall: '#f4f3ef',
-  floor: '#ece9e2',
-  ceiling: '#fbfaf6',
+  wall: '#ebeae6',
+  floor: '#e7e4dd',
+  ceiling: '#ebeae6',
   roof: '#dedbd2',
-  joinery: '#e8e5dc',
+  joinery: '#e5e2d9',
   glazing: '#dbe8ee',
-  furnishing: '#efede7',
+  furnishing: '#e9e7e1',
 }
 
 export const MONO_PALETTE: Record<SurfaceRole, string> = {
@@ -614,11 +616,11 @@ export function createSurfaceRoleMaterial(
 }
 
 export function baseMaterial(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('base', '#f2f0ed', 0.5, shading)
+  return cachedDefaultMaterial('base', '#e9e7e3', 0.5, shading)
 }
 
 export function DEFAULT_WALL_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('wall', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('wall', '#e9e6e0', 0.9, shading)
 }
 
 export function DEFAULT_SLAB_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
@@ -658,7 +660,7 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
 }
 
 export function DEFAULT_CEILING_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('ceiling', '#f5f5dc', 0.95, shading)
+  return cachedDefaultMaterial('ceiling', '#ebebd3', 0.95, shading)
 }
 
 export function DEFAULT_ROOF_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
@@ -666,11 +668,11 @@ export function DEFAULT_ROOF_MATERIAL(shading: RenderShading = 'rendered'): THRE
 }
 
 export function DEFAULT_SHELF_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('shelf', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('shelf', '#e9e6e0', 0.9, shading)
 }
 
 export function DEFAULT_STAIR_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('stair', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('stair', '#e9e6e0', 0.9, shading)
 }
 
 export function disposeMaterial(material: THREE.Material): void {

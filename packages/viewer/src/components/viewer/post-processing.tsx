@@ -18,8 +18,10 @@ import {
   premultiplyAlpha,
   renderOutput,
   sample,
+  saturation,
   time,
   uniform,
+  vec3,
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
@@ -31,17 +33,25 @@ import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
+// Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
+// highlights off gently but reads flat on its own; a mild mid-gray-pivot
+// contrast + saturation lift restores the punch. Rendered shading only.
+export const GRADE_PARAMS = {
+  contrast: 1.05,
+  saturation: 1.1,
+}
+
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 1,
-  stepCount: 4,
-  radius: 1,
+  sliceCount: 2,
+  stepCount: 6,
+  radius: 1.6,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
-  aoIntensity: 1.5,
-  giIntensity: 0,
+  aoIntensity: 1.7,
+  giIntensity: 2,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
   useTemporalFiltering: false,
@@ -441,6 +451,17 @@ const PostProcessingPasses = ({
           }),
           sceneColor.a,
         )
+      }
+
+      // Scene-referred grade (contrast around mid-gray + saturation) before the
+      // pipeline's output tone mapping. Kept out of solid/schematic shading so
+      // the flat presets stay exact.
+      if (shading === 'rendered') {
+        const gradedRgb = saturation(
+          sceneColor.rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+          GRADE_PARAMS.saturation,
+        )
+        sceneColor = vec4(gradedRgb, sceneColor.a)
       }
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
