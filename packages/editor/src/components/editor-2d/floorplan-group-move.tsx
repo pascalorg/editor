@@ -272,7 +272,9 @@ export function startFloorplanGroupMove(
     removeListeners()
     if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
     useAlignmentGuides.getState().clear()
-    useViewer.getState().setInputDragging(false)
+    // Deferred so a canvas pointerup later in this same dispatch still sees
+    // the drag as active (split view — see onUp).
+    setTimeout(() => useViewer.getState().setInputDragging(false), 0)
     useInteractionScope
       .getState()
       .endIf((sc) => sc.kind === 'handle-drag' && sc.handle === GROUP_MOVE_DRAG_LABEL)
@@ -292,12 +294,12 @@ export function startFloorplanGroupMove(
     applyMove(e, session)
   }
 
-  // Capture phase + stopPropagation: this pointerup belongs to the gesture —
-  // in split view a release over the 3D canvas would otherwise synthesize a
-  // selection click there (`use-node-events` fires one on every pointerup).
+  // Capture-phase registration: in split view the release can land over the
+  // 3D canvas, whose use-node-events synthesizes a selection click on every
+  // pointerup — suppressed while `inputDragging` is raised, which teardown
+  // therefore lowers on a 0ms timer (after this event's dispatch).
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
-    e.stopPropagation()
     if (!session) {
       removeListeners()
       opts.onClickFallthrough?.()
@@ -485,17 +487,18 @@ export function startFloorplanGroupRotate(event: {
   const teardown = () => {
     removeListeners()
     if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
-    useViewer.getState().setInputDragging(false)
+    // Deferred so a canvas pointerup later in this same dispatch still sees
+    // the drag as active (split view — see onUp).
+    setTimeout(() => useViewer.getState().setInputDragging(false), 0)
     useInteractionScope
       .getState()
       .endIf((sc) => sc.kind === 'handle-drag' && sc.handle === GROUP_ROTATE_DRAG_LABEL)
     useFloorplanGroupDrag.getState().setRotation(null)
   }
 
-  // Capture ownership — see the drag session's onUp.
+  // Capture registration + deferred inputDragging — see the drag session.
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
-    e.stopPropagation()
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
     const overrides = useLiveNodeOverrides.getState()

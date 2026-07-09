@@ -368,9 +368,13 @@ export function startGroupPickUp(
 
   const onPointerUp = (e: PointerEvent) => {
     if (commitPointerId === null || e.pointerId !== commitPointerId) return
-    e.preventDefault()
-    e.stopPropagation()
     commitPointerId = null
+    // Raise `inputDragging` through this event's dispatch so the canvas's
+    // use-node-events suppresses the selection click it synthesizes on every
+    // pointerup (stopPropagation would also break the window bubble
+    // listeners that clear the box-select pointer suppression).
+    useViewer.getState().setInputDragging(true)
+    setTimeout(() => useViewer.getState().setInputDragging(false), 0)
     commit()
   }
 

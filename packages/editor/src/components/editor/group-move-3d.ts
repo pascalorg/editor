@@ -283,7 +283,9 @@ export function armGroupMove3d(args: {
     removeListeners()
     if (domElement.style.cursor === 'grabbing') domElement.style.cursor = ''
     useAlignmentGuides.getState().clear()
-    useViewer.getState().setInputDragging(false)
+    // Deferred so the canvas pointerup later in this same dispatch still sees
+    // the drag as active (see onUp).
+    setTimeout(() => useViewer.getState().setInputDragging(false), 0)
     useInteractionScope
       .getState()
       .endIf((sc) => sc.kind === 'handle-drag' && sc.handle === GROUP_MOVE_DRAG_LABEL)
@@ -303,19 +305,23 @@ export function armGroupMove3d(args: {
     applyMove(e, session)
   }
 
-  // Capture phase + stopPropagation: this pointerup belongs to the gesture.
-  // If it reached the canvas, `use-node-events` would synthesize a selection
-  // click from the release (it fires on EVERY pointerup) — collapsing the
-  // multi-selection either before the pick-up starts or after a drag commit.
+  // Registered in CAPTURE phase so this runs before the canvas handlers:
+  // `use-node-events` synthesizes a selection click on EVERY pointerup,
+  // suppressed only while `inputDragging` is set — so the gesture must keep
+  // it raised through this event's dispatch (released on a 0ms timer) or the
+  // release re-routes selection to whatever sits under the cursor. Plain
+  // stopPropagation would ALSO kill the window bubble listeners that clear
+  // the box-select pointer suppression, leaving the marquee dead.
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
-    e.stopPropagation()
     if (!session) {
       // Plain click — enter the group pick-up, parity with the single-item
       // click-to-move. Eat the click so the selection manager's click
       // handling doesn't collapse the multi-selection underneath it.
       removeListeners()
       swallowNextClick()
+      useViewer.getState().setInputDragging(true)
+      setTimeout(() => useViewer.getState().setInputDragging(false), 0)
       startGroupPickUp()
       return
     }
