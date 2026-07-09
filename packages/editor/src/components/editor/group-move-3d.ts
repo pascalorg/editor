@@ -32,6 +32,8 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
+  participantExtents,
+  rotateGroupSnapshots,
   translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
@@ -85,6 +87,7 @@ export function armGroupMove3d(args: {
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    restCenter: Vec2
     plane: Plane
     startLocal: Vector3
     frameInv: ReturnType<typeof levelFrame>['inverse']
@@ -150,12 +153,19 @@ export function armGroupMove3d(args: {
       nodeId,
       handle: GROUP_MOVE_DRAG_LABEL,
     })
+    // Rotation pivot for mid-drag R/T — the participant DATA extents' center.
+    const ext = participantExtents(starts)
+    const restCenter: Vec2 = ext
+      ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2]
+      : [0, 0]
+
     return {
       starts,
       links,
       affectedIds,
       candidates,
       restAnchors,
+      restCenter,
       plane,
       startLocal,
       frameInv,
@@ -199,6 +209,10 @@ export function armGroupMove3d(args: {
       useAlignmentGuides.getState().clear()
     }
 
+    applyDelta(s, dx, dz)
+  }
+
+  const applyDelta = (s: Session, dx: number, dz: number) => {
     // Ticker on each delta change — parity with the single-node move SFX.
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
@@ -226,6 +240,26 @@ export function armGroupMove3d(args: {
     useLiveNodeOverrides.getState().setMany(entries)
     // The 2D dashed group bbox rides the same delta in split view.
     useFloorplanGroupDrag.getState().set([dx, dz])
+  }
+
+  // Mid-drag R/T: rotate the SNAPSHOTS around the rest pivot and re-apply the
+  // current delta — the carried group turns exactly like the idle keyboard
+  // rotate, and the commit stays a single updateNodes.
+  const rotateSession = (s: Session, direction: 1 | -1) => {
+    const rotated = rotateGroupSnapshots(
+      s.starts,
+      s.links,
+      { x: s.restCenter[0], z: s.restCenter[1] },
+      -direction * (Math.PI / 4),
+    )
+    s.starts = rotated.starts
+    s.links = rotated.links
+    const ext = participantExtents(rotated.starts)
+    if (ext) {
+      s.restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
+    }
+    sfxEmitter.emit('sfx:item-rotate')
+    applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
 
   const clearLivePreviews = (s: Session) => {
@@ -319,9 +353,18 @@ export function armGroupMove3d(args: {
     cancel()
   }
 
-  // Capture phase so the drag's Escape wins over the global `use-keyboard`
-  // Escape arm, which would otherwise clear the multi-selection mid-cancel.
+  // Capture phase so the drag's Escape / R / T win over the global
+  // `use-keyboard` arms, which would otherwise act on stale store state
+  // (or clear the multi-selection) mid-session.
   const onKeyDown = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase()
+    if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (!session) return
+      e.preventDefault()
+      e.stopPropagation()
+      rotateSession(session, key === 'r' ? 1 : -1)
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()

@@ -61,7 +61,11 @@ import useInteractionScope, {
 import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
-import { FloorplanGroupSelectionBox, startFloorplanGroupMove } from '../floorplan-group-move'
+import {
+  FloorplanGroupSelectionBox,
+  startFloorplanGroupMove,
+  startFloorplanGroupRotate,
+} from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -691,6 +695,21 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     [startGroupMoveDrag],
   )
 
+  // Corner rotate handles on the dashed selection box — 15° steps, Shift
+  // free, mirroring the 3D group rotate gizmo.
+  const handleGroupBoxRotatePointerDown = useCallback(
+    (event: ReactPointerEvent<SVGGElement>) => {
+      if (event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (useEditor.getState().mode === 'delete') return
+      if (startFloorplanGroupRotate(event)) {
+        event.preventDefault()
+        suppressBoxSelectForPointer(event)
+      }
+    },
+    [],
+  )
+
   const handleEntryPointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {
       if (startDirectMoveDrag(id, event)) return
@@ -1214,6 +1233,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           as the group's whole-area drag handle. */}
       <FloorplanGroupSelectionBox
         onPointerDown={handleGroupBoxPointerDown}
+        onRotatePointerDown={handleGroupBoxRotatePointerDown}
         palette={palette}
         unitsPerPixel={unitsPerPixel}
       />

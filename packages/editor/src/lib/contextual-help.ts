@@ -61,6 +61,7 @@ const SHIFT_KEY = 'Shift'
 const CLICK = 'Click'
 const ALT_KEY = 'Alt'
 const ROTATE_KEYS = 'R / T'
+const ESC_KEY = 'Esc'
 
 export function resolveSelectModeHelpHints({
   selectedCount,
@@ -97,6 +98,7 @@ export function resolveSelectModeHelpHints({
       label: 'Add or remove objects from the selection',
       active: commandPressed || shiftPressed,
     })
+    hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)' })
     return hints
   }
 

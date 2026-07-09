@@ -134,8 +134,12 @@ export function GroupSelectionBox3D() {
     if (armed) event.stopPropagation()
   }
 
-  const handlePointerEnter = () => {
-    if (gl.domElement.style.cursor === '') gl.domElement.style.cursor = 'move'
+  // Set on move (not just enter): the canvas may carry an app default
+  // cursor, and member hovers inside the box write theirs — keep 'move'
+  // asserted across the whole volume, except while a drag shows 'grabbing'.
+  const applyMoveCursor = () => {
+    const cursor = gl.domElement.style.cursor
+    if (cursor !== 'move' && cursor !== 'grabbing') gl.domElement.style.cursor = 'move'
   }
   const handlePointerLeave = () => {
     if (gl.domElement.style.cursor === 'move') gl.domElement.style.cursor = ''
@@ -153,8 +157,9 @@ export function GroupSelectionBox3D() {
       {/* Invisible whole-volume hit target — the box IS the drag handle. */}
       <mesh
         onPointerDown={handlePointerDown}
-        onPointerEnter={handlePointerEnter}
+        onPointerEnter={applyMoveCursor}
         onPointerLeave={handlePointerLeave}
+        onPointerMove={applyMoveCursor}
       >
         <boxGeometry args={box.size} />
         <meshBasicMaterial depthWrite={false} opacity={0} transparent />

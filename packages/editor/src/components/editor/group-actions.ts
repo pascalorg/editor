@@ -32,6 +32,8 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
+  participantExtents,
+  rotateGroupSnapshots,
   translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
@@ -87,8 +89,9 @@ export function startGroupPickUp(
     ? participantIds
     : expandToComponent(participantIds, nodes, levelId)
   const collected = collectParticipants(fullIds, nodes, levelId)
-  const starts = collected.starts
-  const links = opts.scopeToSelection ? [] : collected.links
+  // Mutable: mid-carry R/T rotates these snapshots in place.
+  let starts = collected.starts
+  let links = opts.scopeToSelection ? [] : collected.links
   if (starts.length === 0) return false
   const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
@@ -130,6 +133,8 @@ export function startGroupPickUp(
     }
   }
   if (!Number.isFinite(minX)) return false
+  // Rotation pivot for mid-carry R/T; stable across the whole pick-up.
+  const restCenter: [number, number] = [(minX + maxX) / 2, (minZ + maxZ) / 2]
   // Ground plane for the 3D surface: the meshes' base when available, floor
   // level otherwise. Placements live in the level frame, so both surfaces
   // resolve into it before measuring.
@@ -143,7 +148,7 @@ export function startGroupPickUp(
     if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
   }
   const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-  const restAnchors = bboxCornerAnchors('group-move', minX, minZ, maxX, maxZ)
+  let restAnchors = bboxCornerAnchors('group-move', minX, minZ, maxX, maxZ)
 
   // Cursor → level-frame plan point, whichever surface the pointer is over.
   const ndc = new Vector2()
@@ -223,6 +228,10 @@ export function startGroupPickUp(
       useAlignmentGuides.getState().clear()
     }
 
+    applyDelta(dx, dz)
+  }
+
+  const applyDelta = (dx: number, dz: number) => {
     if (!lastDelta || lastDelta[0] !== dx || lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
       lastDelta = [dx, dz]
@@ -248,6 +257,26 @@ export function startGroupPickUp(
     }
     useLiveNodeOverrides.getState().setMany(entries)
     useFloorplanGroupDrag.getState().set([dx, dz])
+  }
+
+  // Mid-carry R/T: rotate the SNAPSHOTS around the rest pivot and re-apply
+  // the current delta — the carried group turns exactly like the idle
+  // keyboard rotate, and the placement stays a single updateNodes.
+  const rotateCarried = (direction: 1 | -1) => {
+    const rotated = rotateGroupSnapshots(
+      starts,
+      links,
+      { x: restCenter[0], z: restCenter[1] },
+      -direction * (Math.PI / 4),
+    )
+    starts = rotated.starts
+    links = rotated.links
+    const ext = participantExtents(rotated.starts)
+    if (ext) {
+      restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
+    }
+    sfxEmitter.emit('sfx:item-rotate')
+    applyDelta(lastDelta?.[0] ?? 0, lastDelta?.[1] ?? 0)
   }
 
   const clearLivePreviews = () => {
@@ -330,6 +359,13 @@ export function startGroupPickUp(
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase()
+    if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      rotateCarried(key === 'r' ? 1 : -1)
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()

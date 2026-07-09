@@ -78,6 +78,7 @@ describe('resolveSelectModeHelpHints', () => {
         label: 'Add or remove objects from the selection',
         active: false,
       },
+      { keys: ['Esc'], label: 'Clear the selection (or click outside)' },
     ])
   })
 

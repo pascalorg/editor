@@ -87,6 +87,12 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['R', 'T'],
         action: 'Rotate a multi-selection ±45° around its center',
+        note: 'Also works mid-move while carrying the selection.',
+      },
+      {
+        keys: ['Esc'],
+        action: 'Clear the selection',
+        note: 'Clicking empty space does the same.',
       },
     ],
   },

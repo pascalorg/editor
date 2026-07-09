@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   bboxCornerAnchors,
   collectAlignmentAnchors,
+  DEFAULT_ANGLE_STEP,
   type FloorplanPalette,
   pauseSceneHistory,
   pauseSpaceDetection,
@@ -17,7 +18,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
-import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
+import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -34,6 +35,9 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
+  participantExtents,
+  rotateGroupPatches,
+  rotateGroupSnapshots,
   translateGroupPatches,
   type Vec2,
 } from '../editor/group-transform-shared'
@@ -96,6 +100,7 @@ export function startFloorplanGroupMove(
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    restCenter: Vec2
     lastDelta: Vec2 | null
   }
   let session: Session | null = null
@@ -152,7 +157,12 @@ export function startFloorplanGroupMove(
       nodeId,
       handle: GROUP_MOVE_DRAG_LABEL,
     })
-    return { starts, links, affectedIds, candidates, restAnchors, lastDelta: null }
+    // Rotation pivot for mid-drag R/T — the participant DATA extents' center
+    // (stable across the drag; rotations re-seed around the same point).
+    const ext = participantExtents(starts)
+    const restCenter: Vec2 = ext ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2] : [0, 0]
+
+    return { starts, links, affectedIds, candidates, restAnchors, restCenter, lastDelta: null }
   }
 
   const applyMove = (e: PointerEvent, s: Session) => {
@@ -183,6 +193,10 @@ export function startFloorplanGroupMove(
       useAlignmentGuides.getState().clear()
     }
 
+    applyDelta(s, dx, dz)
+  }
+
+  const applyDelta = (s: Session, dx: number, dz: number) => {
     // Ticker on each delta change — parity with the 3D group move's SFX.
     if (!s.lastDelta || s.lastDelta[0] !== dx || s.lastDelta[1] !== dz) {
       sfxEmitter.emit('sfx:grid-snap')
@@ -209,6 +223,26 @@ export function startFloorplanGroupMove(
     }
     useLiveNodeOverrides.getState().setMany(entries)
     useFloorplanGroupDrag.getState().set([dx, dz])
+  }
+
+  // Mid-drag R/T: rotate the SNAPSHOTS around the rest pivot and re-apply the
+  // current delta — the carried group turns exactly like the idle keyboard
+  // rotate, and the commit stays a single updateNodes.
+  const rotateSession = (s: Session, direction: 1 | -1) => {
+    const rotated = rotateGroupSnapshots(
+      s.starts,
+      s.links,
+      { x: s.restCenter[0], z: s.restCenter[1] },
+      -direction * (Math.PI / 4),
+    )
+    s.starts = rotated.starts
+    s.links = rotated.links
+    const ext = participantExtents(rotated.starts)
+    if (ext) {
+      s.restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
+    }
+    sfxEmitter.emit('sfx:item-rotate')
+    applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
 
   const clearLivePreviews = (s: Session) => {
@@ -304,6 +338,14 @@ export function startFloorplanGroupMove(
   // Escape arm (registered earlier on window in the bubble phase), which
   // would otherwise clear the multi-selection mid-cancel.
   const onKeyDown = (e: KeyboardEvent) => {
+    const key = e.key.toLowerCase()
+    if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (!session) return
+      e.preventDefault()
+      e.stopPropagation()
+      rotateSession(session, key === 'r' ? 1 : -1)
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()
@@ -326,7 +368,162 @@ export function startFloorplanGroupMove(
   return true
 }
 
+/**
+ * 2D group rotate, driven from the dashed selection box's corner handles —
+ * the floor-plan sibling of the 3D `GroupRotateHandle`. The group spins
+ * rigidly around its data-extents center; 15° increments by default, Shift
+ * for free rotation, one `updateNodes` on release (one undo step).
+ */
+export function startFloorplanGroupRotate(event: {
+  clientX: number
+  clientY: number
+  pointerId: number
+}): boolean {
+  const { selectedIds, levelId } = useViewer.getState().selection
+  if (selectedIds.length < 2) return false
+  const nodes = useScene.getState().nodes
+  const participantIds = selectedIds.filter(
+    (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+  )
+  if (participantIds.length === 0) return false
+  const fullIds = expandToComponent(participantIds, nodes, levelId)
+  const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+  if (starts.length === 0) return false
+  const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+  const ext = participantExtents(starts)
+  if (!ext) return false
+  const pivot = { x: (ext.minX + ext.maxX) / 2, z: (ext.minZ + ext.maxZ) / 2 }
+  const startPlan = clientToPlan(event.clientX, event.clientY)
+  if (!startPlan) return false
+  // Bearing around the pivot in the plan frame — the same atan2 x→z sense
+  // `rotateGroupPatches` orbits in.
+  const angleOf = (p: readonly [number, number]) => Math.atan2(p[1] - pivot.z, p[0] - pivot.x)
+  const initialAngle = angleOf(startPlan)
+  const pointerId = event.pointerId
+
+  for (const id of affectedIds) {
+    useLiveTransforms.getState().clear(id)
+  }
+  document.body.style.cursor = 'grabbing'
+  sfxEmitter.emit('sfx:item-pick')
+  swallowNextClick()
+  useViewer.getState().setInputDragging(true)
+  pauseSceneHistory(useScene)
+  useInteractionScope.getState().begin({
+    kind: 'handle-drag',
+    nodeId: (participantIds[0] ?? '') as AnyNodeId,
+    handle: GROUP_ROTATE_DRAG_LABEL,
+  })
+
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return
+    const plan = clientToPlan(e.clientX, e.clientY)
+    if (!plan) return
+    let delta = angleOf([plan[0], plan[1]]) - initialAngle
+    while (delta > Math.PI) delta -= 2 * Math.PI
+    while (delta < -Math.PI) delta += 2 * Math.PI
+    // 15° increments by default; Shift rotates freely — the same contract
+    // as the 3D group rotate gizmo (and the HUD hint its scope surfaces).
+    if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+
+    const entries = rotateGroupPatches(starts, links, pivot, delta)
+    const patchById = new Map(entries)
+    const liveTransforms = useLiveTransforms.getState()
+    for (const start of starts) {
+      if (start.kind === 'scalar') {
+        const patch = patchById.get(start.id)
+        if (patch) {
+          liveTransforms.set(start.id, {
+            position: patch.position as [number, number, number],
+            rotation: patch.rotation as number,
+          })
+        }
+      }
+      useScene.getState().markDirty(start.id)
+    }
+    for (const l of links) {
+      useScene.getState().markDirty(l.id)
+    }
+    useLiveNodeOverrides.getState().setMany(entries)
+  }
+
+  const clearLivePreviews = () => {
+    const overrides = useLiveNodeOverrides.getState()
+    const liveTransforms = useLiveTransforms.getState()
+    for (const id of affectedIds) {
+      overrides.clear(id)
+      liveTransforms.clear(id)
+      useScene.getState().markDirty(id)
+    }
+  }
+
+  const removeListeners = () => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onPointerCancel)
+    window.removeEventListener('keydown', onKeyDown, true)
+  }
+
+  // History resume pairs one-to-one with the pause above, on the commit and
+  // cancel paths only.
+  const teardown = () => {
+    removeListeners()
+    if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
+    useViewer.getState().setInputDragging(false)
+    useInteractionScope
+      .getState()
+      .endIf((sc) => sc.kind === 'handle-drag' && sc.handle === GROUP_ROTATE_DRAG_LABEL)
+  }
+
+  const onUp = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return
+    swallowNextClick()
+    sfxEmitter.emit('sfx:item-place')
+    const overrides = useLiveNodeOverrides.getState()
+    const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
+    for (const id of affectedIds) {
+      const patch = overrides.get(id)
+      if (patch) updates.push({ id, data: patch as Partial<AnyNode> })
+    }
+    // One tracked set = one undo step; rigid rotations must not re-create
+    // the room's auto floors/ceilings (see the move sessions).
+    pauseSpaceDetection()
+    resumeSceneHistory(useScene)
+    if (updates.length > 0) useScene.getState().updateNodes(updates)
+    resumeSpaceDetection()
+    clearLivePreviews()
+    teardown()
+  }
+
+  const cancel = () => {
+    clearLivePreviews()
+    resumeSceneHistory(useScene)
+    teardown()
+  }
+
+  const onPointerCancel = (e: PointerEvent) => {
+    if (e.pointerId !== pointerId) return
+    cancel()
+  }
+
+  // Capture phase so Escape wins over the global `use-keyboard` arm.
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    swallowNextClick()
+    cancel()
+  }
+
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onPointerCancel)
+  window.addEventListener('keydown', onKeyDown, true)
+  return true
+}
+
 const GROUP_BOX_CURSOR_STYLE = { cursor: 'move' } as const
+const GROUP_BOX_ROTATE_CURSOR_STYLE = { cursor: 'grab' } as const
 
 /**
  * Dashed bounding box around the current multi-selection's transformable
@@ -342,10 +539,12 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   palette,
   unitsPerPixel,
   onPointerDown,
+  onRotatePointerDown,
 }: {
   palette: FloorplanPalette | undefined
   unitsPerPixel: number
   onPointerDown?: (event: ReactPointerEvent<SVGGElement>) => void
+  onRotatePointerDown?: (event: ReactPointerEvent<SVGGElement>) => void
 }) {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const levelId = useViewer((s) => s.selection.levelId)
@@ -413,6 +612,38 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
         x={box.x - pad}
         y={box.z - pad}
       />
+      {/* Corner rotate handles — the 2D counterpart of the 3D rotate gizmo:
+          drag a corner to spin the group (15° steps, Shift = free). */}
+      {interactive && onRotatePointerDown
+        ? (
+            [
+              [box.x - pad, box.z - pad],
+              [box.x + box.width + pad, box.z - pad],
+              [box.x + box.width + pad, box.z + box.depth + pad],
+              [box.x - pad, box.z + box.depth + pad],
+            ] as Array<[number, number]>
+          ).map(([cx, cz], index) => (
+            <g
+              data-group-rotate-handle
+              key={`corner-${index}`}
+              onPointerDown={(event) => {
+                event.stopPropagation()
+                onRotatePointerDown(event)
+              }}
+              style={GROUP_BOX_ROTATE_CURSOR_STYLE}
+            >
+              <circle cx={cx} cy={cz} fill="transparent" r={8 * unitsPerPixel} />
+              <circle
+                cx={cx}
+                cy={cz}
+                fill="#ffffff"
+                r={3.2 * unitsPerPixel}
+                stroke={stroke}
+                strokeWidth={1.2 * unitsPerPixel}
+              />
+            </g>
+          ))
+        : null}
     </g>
   )
 })

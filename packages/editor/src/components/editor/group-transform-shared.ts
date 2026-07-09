@@ -340,6 +340,85 @@ export function rotateGroupPatches(
   return patches
 }
 
+// Rotate the SNAPSHOTS themselves (same math as `rotateGroupPatches`, but
+// producing new snapshot shapes instead of node patches). Lets an in-flight
+// group move re-seed its rest state after a mid-drag R/T: subsequent
+// translate patches then place the rotated layout at the live delta.
+export function rotateGroupSnapshots(
+  starts: ParticipantStart[],
+  links: LinkedNeighbor[],
+  center: { x: number; z: number },
+  delta: number,
+): { starts: ParticipantStart[]; links: LinkedNeighbor[] } {
+  const cos = Math.cos(delta)
+  const sin = Math.sin(delta)
+  const rot = (x: number, z: number): Vec2 => {
+    const dx = x - center.x
+    const dz = z - center.z
+    return [center.x + dx * cos - dz * sin, center.z + dx * sin + dz * cos]
+  }
+  const rotatedStarts = starts.map((s): ParticipantStart => {
+    if (s.kind === 'endpoint') {
+      return { ...s, start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) }
+    }
+    if (s.kind === 'polygon') {
+      return {
+        ...s,
+        polygon: s.polygon.map(([x, z]) => rot(x, z)),
+        holes: s.holes ? s.holes.map((hole) => hole.map(([x, z]) => rot(x, z))) : null,
+      }
+    }
+    const [px, pz] = rot(s.position[0], s.position[2])
+    const position: Vec3 = [px, s.position[1], pz]
+    if (s.kind === 'vec3') {
+      return { ...s, position, rotation: [s.rotation[0], s.rotation[1] - delta, s.rotation[2]] }
+    }
+    return { ...s, position, rotation: s.rotation - delta }
+  })
+  // Only the welded (linked) endpoints follow the rotation; the far ends
+  // stay put, exactly like the per-tick patch path.
+  const rotatedLinks = links.map(
+    (l): LinkedNeighbor => ({
+      ...l,
+      start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
+      end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
+    }),
+  )
+  return { starts: rotatedStarts, links: rotatedLinks }
+}
+
+// Level-frame XZ extents of the participant DATA — the mesh-free sibling of
+// `computeGroupBox`, used when meshes aren't mounted yet and to re-seed
+// alignment anchors after a mid-drag rotation.
+export function participantExtents(
+  starts: ParticipantStart[],
+): { minX: number; minZ: number; maxX: number; maxZ: number } | null {
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  const reach = (x: number, z: number) => {
+    minX = Math.min(minX, x)
+    minZ = Math.min(minZ, z)
+    maxX = Math.max(maxX, x)
+    maxZ = Math.max(maxZ, z)
+  }
+  for (const s of starts) {
+    if (s.kind === 'endpoint') {
+      reach(s.start[0], s.start[1])
+      reach(s.end[0], s.end[1])
+    } else if (s.kind === 'polygon') {
+      for (const [x, z] of s.polygon) {
+        reach(x, z)
+      }
+    } else {
+      reach(s.position[0], s.position[2])
+    }
+  }
+  if (!Number.isFinite(minX)) return null
+  return { minX, minZ, maxX, maxZ }
+}
+
 // Rigid group slide: shift every participant (and each linked neighbour's
 // shared endpoint) by the same level-frame XZ delta. Y and rotations untouched.
 export function translateGroupPatches(
