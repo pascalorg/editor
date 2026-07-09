@@ -77,16 +77,8 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     sceneMaterials,
   )
   const extraMaterials = useMemo(
-    () =>
-      createWallExtraSlotMaterials(
-        node,
-        shading,
-        textures,
-        sceneMaterials,
-        baseMaterials[1]!,
-        baseMaterials[2]!,
-      ),
-    [baseMaterials, node, sceneMaterials, shading, textures],
+    () => createWallExtraSlotMaterials(node, shading, textures, sceneMaterials),
+    [node, sceneMaterials, shading, textures],
   )
   useEffect(
     () => () => {

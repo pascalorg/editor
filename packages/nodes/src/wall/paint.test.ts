@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { WallNode } from '@pascal-app/core'
-import { resolveWallRole } from './paint'
+import { sceneRegistry, type WallNode } from '@pascal-app/core'
+import { BoxGeometry, Mesh, MeshBasicMaterial, Object3D, Ray, Vector3 } from 'three'
+import { resolveWallRole, wallPaint } from './paint'
 
 const baseWall: WallNode = {
   object: 'node',
@@ -158,5 +159,51 @@ describe('resolveWallRole', () => {
         localPosition: [1, 0.2, 0.05],
       }),
     ).toBe('interior')
+  })
+
+  test('uses direct trim slot hits and exposes trim default materials', () => {
+    expect(
+      resolveWallRole({
+        node: baseWall,
+        hitObject: { userData: { slotId: 'crownInterior' } },
+        materialIndex: null,
+        normal: undefined,
+        localPosition: undefined,
+      }),
+    ).toBe('crownInterior')
+
+    expect(
+      wallPaint.getEffectiveMaterial?.({
+        node: baseWall,
+        role: 'crownInterior',
+        nodes: { [baseWall.id]: baseWall },
+      }),
+    ).toEqual({ material: undefined, materialPreset: 'library:preset-white' })
+  })
+
+  test('prefers trim child ray hits over the broad wall face role', () => {
+    const root = new Object3D()
+    const trim = new Mesh(new BoxGeometry(1, 1, 0.08), new MeshBasicMaterial())
+    trim.userData.slotId = 'crownInterior'
+    root.add(trim)
+    root.updateMatrixWorld(true)
+    sceneRegistry.nodes.set(baseWall.id, root)
+
+    try {
+      expect(
+        resolveWallRole({
+          node: baseWall,
+          hitObject: { userData: {} },
+          materialIndex: 1,
+          normal: [0, 0, 1],
+          localPosition: [0, 1, 0.05],
+          ray: new Ray(new Vector3(0, 0, 1), new Vector3(0, 0, -1)),
+        }),
+      ).toBe('crownInterior')
+    } finally {
+      sceneRegistry.nodes.delete(baseWall.id)
+      trim.geometry.dispose()
+      ;(trim.material as MeshBasicMaterial).dispose()
+    }
   })
 })

@@ -3,9 +3,17 @@ import {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getWallFaceBandConfig,
+  WALL_CHAIR_RAIL_DEFAULT,
+  WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  WALL_CROWN_DEFAULT,
+  WALL_CROWN_SLOT_DEFAULT,
   WALL_FACE_BAND_DEFAULT,
+  WALL_SKIRTING_DEFAULT,
+  WALL_SKIRTING_SLOT_DEFAULT,
+  WALL_SURFACE_SLOT_DEFAULTS,
   WallFaceBandConfig,
   type WallNode,
+  WallTrimConfig,
 } from './wall'
 
 describe('wall face bands', () => {
@@ -147,5 +155,30 @@ describe('wall face bands', () => {
     } as Pick<WallNode, 'faceBands' | 'slots'>)
 
     expect(patch.slots).toEqual({})
+  })
+})
+
+describe('wall trim profiles', () => {
+  test('uses curated defaults while preserving legacy profile values', () => {
+    expect(WALL_SKIRTING_DEFAULT.profile).toBe('flat')
+    expect(WALL_CROWN_DEFAULT.profile).toBe('flat')
+    expect(WALL_CHAIR_RAIL_DEFAULT.profile).toBe('flat')
+
+    expect(WallTrimConfig.parse({ profile: 'flat' }).profile).toBe('flat')
+    expect(WallTrimConfig.parse({ profile: 'crown-layered' }).profile).toBe('crown-layered')
+    expect(WallTrimConfig.parse({ profile: 'triangle' }).profile).toBe('triangle')
+  })
+
+  test('declares separate default materials for each trim family', () => {
+    expect(WALL_SKIRTING_SLOT_DEFAULT).toBe('library:preset-softwhite')
+    expect(WALL_CROWN_SLOT_DEFAULT).toBe('library:preset-white')
+    expect(WALL_CHAIR_RAIL_SLOT_DEFAULT).toBe('library:preset-cream')
+
+    expect(WALL_SURFACE_SLOT_DEFAULTS.skirtingInterior).toBe(WALL_SKIRTING_SLOT_DEFAULT)
+    expect(WALL_SURFACE_SLOT_DEFAULTS.skirtingExterior).toBe(WALL_SKIRTING_SLOT_DEFAULT)
+    expect(WALL_SURFACE_SLOT_DEFAULTS.crownInterior).toBe(WALL_CROWN_SLOT_DEFAULT)
+    expect(WALL_SURFACE_SLOT_DEFAULTS.crownExterior).toBe(WALL_CROWN_SLOT_DEFAULT)
+    expect(WALL_SURFACE_SLOT_DEFAULTS.chairRailInterior).toBe(WALL_CHAIR_RAIL_SLOT_DEFAULT)
+    expect(WALL_SURFACE_SLOT_DEFAULTS.chairRailExterior).toBe(WALL_CHAIR_RAIL_SLOT_DEFAULT)
   })
 })

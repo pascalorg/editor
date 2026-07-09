@@ -9,7 +9,25 @@ import { WindowNode } from './window'
 export const WallTreatmentSide = z.enum(['interior', 'exterior', 'both'])
 export type WallTreatmentSide = z.infer<typeof WallTreatmentSide>
 
-export const WallTrimProfile = z.enum(['flat', 'bevel', 'triangle', 'cove', 'bullnose'])
+export const WallTrimProfile = z.enum([
+  'flat',
+  'bevel',
+  'triangle',
+  'cove',
+  'bullnose',
+  'base-modern',
+  'base-colonial',
+  'base-shoe',
+  'base-ogee',
+  'crown-cove',
+  'crown-ogee',
+  'crown-craftsman',
+  'crown-layered',
+  'rail-rounded',
+  'rail-ogee',
+  'rail-picture',
+  'rail-stepped',
+])
 export type WallTrimProfile = z.infer<typeof WallTrimProfile>
 
 export const WallTrimConfig = z.object({
@@ -25,25 +43,25 @@ export type WallTrimConfig = z.infer<typeof WallTrimConfig>
 export const WALL_SKIRTING_DEFAULT: WallTrimConfig = {
   enabled: false,
   sides: 'both',
-  height: 0.1,
-  proud: 0.015,
+  height: 0.12,
+  proud: 0.02,
   profile: 'flat',
 }
 
 export const WALL_CROWN_DEFAULT: WallTrimConfig = {
   enabled: false,
   sides: 'both',
-  height: 0.08,
-  proud: 0.04,
-  profile: 'cove',
+  height: 0.12,
+  proud: 0.055,
+  profile: 'flat',
 }
 
 export const WALL_CHAIR_RAIL_DEFAULT: WallTrimConfig = {
   enabled: false,
   sides: 'both',
-  height: 0.04,
-  proud: 0.018,
-  profile: 'bullnose',
+  height: 0.055,
+  proud: 0.026,
+  profile: 'flat',
   offsetY: 0.9,
 }
 
@@ -78,6 +96,10 @@ export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
   upperHeight: 0.61,
 }
 
+export const WALL_SKIRTING_SLOT_DEFAULT = 'library:preset-softwhite'
+export const WALL_CROWN_SLOT_DEFAULT = 'library:preset-white'
+export const WALL_CHAIR_RAIL_SLOT_DEFAULT = 'library:preset-cream'
+
 export const WALL_SURFACE_SLOT_DEFAULTS = {
   interior: 'library:concrete-drywall',
   exterior: 'library:concrete-drywall',
@@ -89,12 +111,12 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
   middleExterior: 'library:concrete-drywall',
   upperExterior: 'library:concrete-drywall',
   topExterior: 'library:concrete-drywall',
-  skirtingInterior: 'library:concrete-drywall',
-  skirtingExterior: 'library:concrete-drywall',
-  crownInterior: 'library:concrete-drywall',
-  crownExterior: 'library:concrete-drywall',
-  chairRailInterior: 'library:concrete-drywall',
-  chairRailExterior: 'library:concrete-drywall',
+  skirtingInterior: WALL_SKIRTING_SLOT_DEFAULT,
+  skirtingExterior: WALL_SKIRTING_SLOT_DEFAULT,
+  crownInterior: WALL_CROWN_SLOT_DEFAULT,
+  crownExterior: WALL_CROWN_SLOT_DEFAULT,
+  chairRailInterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  chairRailExterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
 } as const
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS

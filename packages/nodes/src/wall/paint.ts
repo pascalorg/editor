@@ -17,7 +17,7 @@ import {
   type WallSurfaceSide,
   type WallSurfaceSlotId,
 } from '@pascal-app/core'
-import type { Material, Mesh } from 'three'
+import { type Material, type Mesh, type Object3D, type Ray, Raycaster } from 'three'
 import {
   buildSlotPreviewMaterial,
   createSlotPaintCapability,
@@ -43,10 +43,28 @@ const WALL_INDEX_SLOT = new Map<number, WallSurfaceSlotId>(
     slotId as WallSurfaceSlotId,
   ]),
 )
+const wallSlotRaycaster = new Raycaster()
 
 function resolveSideFromMaterialIndex(materialIndex: number | null): WallSurfaceSide | null {
   const slotId = materialIndex === null ? undefined : WALL_INDEX_SLOT.get(materialIndex)
   if (slotId) return getWallSurfaceSideFromBandSlot(slotId)
+  return null
+}
+
+function resolveWallSlotByRay(node: WallNode, ray: Ray | undefined): WallSurfaceSlotId | null {
+  if (!ray) return null
+  const root = sceneRegistry.nodes.get(node.id as AnyNodeId)
+  if (!root) return null
+
+  wallSlotRaycaster.ray.copy(ray)
+  const hits = wallSlotRaycaster.intersectObject(root, true)
+  for (const hit of hits) {
+    const slotId = (hit.object as Object3D).userData?.slotId
+    if (typeof slotId === 'string' && WALL_SLOT_IDS.has(slotId)) {
+      return slotId as WallSurfaceSlotId
+    }
+  }
+
   return null
 }
 
@@ -67,12 +85,16 @@ export function resolveWallRole(args: {
   materialIndex: number | null
   normal: readonly [number, number, number] | undefined
   localPosition: readonly [number, number, number] | undefined
+  ray?: Ray
 }): string | null {
-  const { node, hitObject, materialIndex, normal, localPosition } = args
+  const { node, hitObject, materialIndex, normal, localPosition, ray } = args
   const directSlotId = hitObject?.userData?.slotId
   if (typeof directSlotId === 'string' && WALL_SLOT_IDS.has(directSlotId)) {
     return directSlotId
   }
+
+  const raySlotId = resolveWallSlotByRay(node, ray)
+  if (raySlotId) return raySlotId
 
   const indexedSlotId = materialIndex === null ? undefined : WALL_INDEX_SLOT.get(materialIndex)
   const indexedSide = resolveSideFromMaterialIndex(materialIndex)
@@ -160,17 +182,24 @@ function applyWallPreview(args: PaintPreviewArgs): (() => void) | null {
  */
 export const wallPaint: PaintCapability = createSlotPaintCapability({
   roomScope: true,
-  resolveRole: ({ node, hitObject, materialIndex, normal, localPosition }) =>
+  resolveRole: ({ node, hitObject, materialIndex, normal, localPosition, ray }) =>
     resolveWallRole({
       node: node as WallNode,
       hitObject: hitObject as { userData?: { slotId?: unknown } } | undefined,
       materialIndex,
       normal,
       localPosition,
+      ray,
     }),
   applyPreview: applyWallPreview,
   legacyEffective: (node: AnyNode, role: string) => {
     const side = getWallSurfaceSideFromBandSlot(role)
+    if (!side && role in WALL_SURFACE_SLOT_DEFAULTS) {
+      return {
+        material: undefined,
+        materialPreset: WALL_SURFACE_SLOT_DEFAULTS[role as WallSurfaceSlotId],
+      }
+    }
     if (!side) return null
 
     const sideRef = (node as WallNode).slots?.[side]

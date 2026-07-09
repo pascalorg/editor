@@ -29,29 +29,6 @@ const CURVE_SEGMENTS = 24
 const MIN_SLICE_PROUD = 0.0005
 const EPS = 1e-6
 
-const TRIM_PROFILE_SAMPLES: Record<
-  WallTrimProfile,
-  { samples: number; fn: (t: number) => number }
-> = {
-  flat: { samples: 1, fn: () => 1 },
-  bevel: {
-    samples: 6,
-    fn: (t) => (t < 0.65 ? 1 : 1 - ((t - 0.65) / 0.35) * 0.6),
-  },
-  triangle: {
-    samples: 8,
-    fn: (t) => Math.max(0, 1 - t),
-  },
-  cove: {
-    samples: 10,
-    fn: (t) => Math.sqrt(Math.max(0, 1 - t * t)),
-  },
-  bullnose: {
-    samples: 12,
-    fn: (t) => Math.sqrt(Math.max(0, 1 - (2 * t - 1) * (2 * t - 1))),
-  },
-}
-
 type OpeningLike = {
   type: string
   width?: number
@@ -70,30 +47,214 @@ type WallTreatmentSlotId =
   | 'crownExterior'
   | 'chairRailInterior'
   | 'chairRailExterior'
+type TrimProfileDefinition = {
+  samples: number
+  proudAt: (t: number) => number
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value))
+}
+
+function eased(value: number) {
+  const t = clamp01(value)
+  return t * t * (3 - 2 * t)
+}
+
+const TRIM_PROFILES: Record<TrimKind, Partial<Record<WallTrimProfile, TrimProfileDefinition>>> = {
+  skirting: {
+    flat: {
+      samples: 8,
+      proudAt: (t) => (t < 0.72 ? 0.62 : 0.9),
+    },
+    bevel: {
+      samples: 10,
+      proudAt: (t) => 0.48 + 0.42 * eased(t),
+    },
+    triangle: {
+      samples: 10,
+      proudAt: (t) => 0.32 + 0.68 * (1 - t),
+    },
+    cove: {
+      samples: 12,
+      proudAt: (t) => 0.45 + 0.42 * Math.sin(t * Math.PI * 0.5),
+    },
+    bullnose: {
+      samples: 12,
+      proudAt: (t) => 0.35 + 0.65 * Math.sin(Math.PI * t),
+    },
+    'base-modern': {
+      samples: 10,
+      proudAt: (t) => {
+        if (t < 0.16) return 0.85
+        if (t < 0.72) return 0.58
+        if (t < 0.9) return 1
+        return 0.62
+      },
+    },
+    'base-colonial': {
+      samples: 14,
+      proudAt: (t) => {
+        if (t < 0.16) return 0.82
+        if (t < 0.55) return 0.52
+        const capT = (t - 0.55) / 0.45
+        return 0.58 + 0.4 * Math.sin(capT * Math.PI)
+      },
+    },
+    'base-shoe': {
+      samples: 14,
+      proudAt: (t) => {
+        const quarterRound = Math.sqrt(Math.max(0, 1 - t * t))
+        return 0.28 + 0.72 * quarterRound
+      },
+    },
+    'base-ogee': {
+      samples: 16,
+      proudAt: (t) => {
+        const ogee = 0.5 - 0.5 * Math.cos(Math.PI * t)
+        const bead = 0.16 * Math.sin(2 * Math.PI * t)
+        return clamp01(0.42 + 0.5 * ogee + bead)
+      },
+    },
+  },
+  crown: {
+    flat: {
+      samples: 8,
+      proudAt: (t) => (t < 0.2 ? 0.52 : t < 0.82 ? 0.78 : 1),
+    },
+    bevel: {
+      samples: 10,
+      proudAt: (t) => 0.45 + 0.55 * eased(t),
+    },
+    triangle: {
+      samples: 10,
+      proudAt: (t) => 0.35 + 0.65 * t,
+    },
+    cove: {
+      samples: 14,
+      proudAt: (t) => 0.46 + 0.45 * Math.sin(t * Math.PI * 0.5),
+    },
+    bullnose: {
+      samples: 14,
+      proudAt: (t) => 0.38 + 0.62 * Math.sin(Math.PI * t * 0.5),
+    },
+    'crown-cove': {
+      samples: 16,
+      proudAt: (t) => {
+        if (t < 0.12) return 0.48
+        if (t > 0.9) return 1
+        return 0.46 + 0.48 * Math.sin(((t - 0.12) / 0.78) * Math.PI * 0.5)
+      },
+    },
+    'crown-ogee': {
+      samples: 18,
+      proudAt: (t) => {
+        const sCurve = 0.5 - 0.5 * Math.cos(Math.PI * t)
+        const reverse = 0.18 * Math.sin(2 * Math.PI * (t - 0.12))
+        return clamp01(0.42 + 0.55 * sCurve + reverse)
+      },
+    },
+    'crown-craftsman': {
+      samples: 10,
+      proudAt: (t) => {
+        if (t < 0.16) return 0.48
+        if (t < 0.4) return 0.88
+        if (t < 0.78) return 0.64
+        return 1
+      },
+    },
+    'crown-layered': {
+      samples: 14,
+      proudAt: (t) => {
+        if (t < 0.12) return 0.46
+        if (t < 0.28) return 0.82
+        if (t < 0.48) return 0.56
+        if (t < 0.72) return 0.9
+        return 1
+      },
+    },
+  },
+  chairRail: {
+    flat: {
+      samples: 8,
+      proudAt: (t) => (t < 0.18 || t > 0.82 ? 0.58 : 0.95),
+    },
+    bevel: {
+      samples: 10,
+      proudAt: (t) => 0.45 + 0.45 * Math.sin(Math.PI * t),
+    },
+    triangle: {
+      samples: 10,
+      proudAt: (t) => 0.35 + 0.65 * (1 - Math.abs(2 * t - 1)),
+    },
+    cove: {
+      samples: 12,
+      proudAt: (t) => 0.42 + 0.42 * Math.sin(Math.PI * t),
+    },
+    bullnose: {
+      samples: 14,
+      proudAt: (t) => 0.34 + 0.66 * Math.sin(Math.PI * t),
+    },
+    'rail-rounded': {
+      samples: 14,
+      proudAt: (t) => 0.34 + 0.66 * Math.sin(Math.PI * t),
+    },
+    'rail-ogee': {
+      samples: 16,
+      proudAt: (t) => {
+        const center = Math.sin(Math.PI * t)
+        const twist = 0.14 * Math.sin(2 * Math.PI * t)
+        return clamp01(0.36 + 0.58 * center + twist)
+      },
+    },
+    'rail-picture': {
+      samples: 12,
+      proudAt: (t) => {
+        if (t < 0.18) return 0.48
+        if (t < 0.4) return 0.92
+        if (t < 0.74) return 0.58
+        return 1
+      },
+    },
+    'rail-stepped': {
+      samples: 10,
+      proudAt: (t) => {
+        if (t < 0.22) return 0.55
+        if (t < 0.78) return 1
+        return 0.62
+      },
+    },
+  },
+}
 
 const TRIM_KIND_CONFIG: Record<
   TrimKind,
   {
     defaultConfig: WallTrimConfig
     slots: Record<WallSide, WallTreatmentSlotId>
-    flipProfile: boolean
   }
 > = {
   skirting: {
     defaultConfig: WALL_SKIRTING_DEFAULT,
     slots: { interior: 'skirtingInterior', exterior: 'skirtingExterior' },
-    flipProfile: false,
   },
   crown: {
     defaultConfig: WALL_CROWN_DEFAULT,
     slots: { interior: 'crownInterior', exterior: 'crownExterior' },
-    flipProfile: true,
   },
   chairRail: {
     defaultConfig: WALL_CHAIR_RAIL_DEFAULT,
     slots: { interior: 'chairRailInterior', exterior: 'chairRailExterior' },
-    flipProfile: false,
   },
+}
+
+function resolveTrimProfile(kind: TrimKind, trim: WallTrimConfig) {
+  const defaultProfile = TRIM_KIND_CONFIG[kind].defaultConfig.profile
+  return (
+    TRIM_PROFILES[kind][trim.profile] ??
+    TRIM_PROFILES[kind][defaultProfile] ??
+    TRIM_PROFILES[kind].flat
+  )
 }
 
 function resolveTreatmentSideSign(node: WallNode, side: WallSide) {
@@ -275,26 +436,24 @@ function buildTrimGeometry(
 
   const thickness = getWallThickness(node)
   const inner = buildSidePolyline(node, side, thickness / 2)
-  const fullOuter = buildSidePolyline(node, side, thickness / 2 + trim.proud)
-  if (inner.length < 2 || fullOuter.length < 2) return null
+  if (inner.length < 2) return null
 
   const openingRanges = trimOpeningRanges(node, childrenNodes, yBottom, height)
   const fullRanges: Array<[number, number]> = [[inner[0]!.x, inner[inner.length - 1]!.x]]
   const runs = subtractOpeningRanges(fullRanges, openingRanges)
   if (runs.length === 0) return null
 
-  const profile = TRIM_PROFILE_SAMPLES[trim.profile]
-  if (!profile) return null
   const slices: THREE.BufferGeometry[] = []
+  const profile = resolveTrimProfile(kind, trim)
+  if (!profile) return null
   const sliceHeight = height / profile.samples
 
   for (const [runStart, runEnd] of runs) {
     const innerRun = clipPolyline(inner, runStart, runEnd)
     if (innerRun.length < 2) continue
     for (let index = 0; index < profile.samples; index += 1) {
-      const tRaw = (index + 0.5) / profile.samples
-      const t = TRIM_KIND_CONFIG[kind].flipProfile ? 1 - tRaw : tRaw
-      const proud = Math.max(MIN_SLICE_PROUD, trim.proud * profile.fn(t))
+      const t = (index + 0.5) / profile.samples
+      const proud = Math.max(MIN_SLICE_PROUD, trim.proud * profile.proudAt(t))
       const outerRun = buildSidePolyline(node, side, thickness / 2 + proud)
       const outerClipped = clipPolyline(outerRun, runStart, runEnd)
       if (outerClipped.length < 2) continue
@@ -333,22 +492,9 @@ function resolveWallSlotMaterial(
 export function createWallExtraSlotMaterials(
   node: WallNode,
   shading: RenderShading,
-  textures: boolean,
+  _textures: boolean,
   sceneMaterials: SceneMaterials,
-  interiorFallback: THREE.Material,
-  exteriorFallback: THREE.Material,
 ) {
-  if (!textures) {
-    return {
-      skirtingInterior: interiorFallback,
-      skirtingExterior: exteriorFallback,
-      crownInterior: interiorFallback,
-      crownExterior: exteriorFallback,
-      chairRailInterior: interiorFallback,
-      chairRailExterior: exteriorFallback,
-    } satisfies Record<WallTreatmentSlotId, THREE.Material>
-  }
-
   return {
     skirtingInterior: resolveWallSlotMaterial(node, 'skirtingInterior', shading, sceneMaterials),
     skirtingExterior: resolveWallSlotMaterial(node, 'skirtingExterior', shading, sceneMaterials),

@@ -16,6 +16,7 @@ import {
   WALL_FACE_BAND_DEFAULT,
   WALL_SKIRTING_DEFAULT,
   type WallNode,
+  type WallTrimProfile,
 } from '@pascal-app/core'
 import {
   ActionButton,
@@ -34,6 +35,35 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
+
+type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
+
+const WALL_TRIM_PROFILE_OPTIONS: Record<
+  WallTrimKey,
+  Array<{ label: string; value: WallTrimProfile }>
+> = {
+  skirting: [
+    { label: 'Flat', value: 'flat' },
+    { label: 'Modern', value: 'base-modern' },
+    { label: 'Colonial', value: 'base-colonial' },
+    { label: 'Shoe', value: 'base-shoe' },
+    { label: 'Ogee', value: 'base-ogee' },
+  ],
+  crown: [
+    { label: 'Flat', value: 'flat' },
+    { label: 'Cove', value: 'crown-cove' },
+    { label: 'Ogee', value: 'crown-ogee' },
+    { label: 'Craft', value: 'crown-craftsman' },
+    { label: 'Layered', value: 'crown-layered' },
+  ],
+  chairRail: [
+    { label: 'Flat', value: 'flat' },
+    { label: 'Round', value: 'rail-rounded' },
+    { label: 'Ogee', value: 'rail-ogee' },
+    { label: 'Picture', value: 'rail-picture' },
+    { label: 'Step', value: 'rail-stepped' },
+  ],
+}
 
 export default function WallPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -389,7 +419,7 @@ function WallTrimSection({
   node: WallNode
   onUpdate: (updates: Partial<WallNode>) => void
   title: string
-  trimKey: 'skirting' | 'crown' | 'chairRail'
+  trimKey: WallTrimKey
   trimValue: NonNullable<WallNode['skirting']>
   unit: 'metric' | 'imperial'
   unitLabel: string
@@ -402,6 +432,10 @@ function WallTrimSection({
         ...patch,
       },
     } as Partial<WallNode>)
+  const profileOptions = WALL_TRIM_PROFILE_OPTIONS[trimKey]
+  const selectedProfile = profileOptions.some((option) => option.value === trimValue.profile)
+    ? trimValue.profile
+    : profileOptions[0]!.value
 
   return (
     <PanelSection title={title}>
@@ -423,15 +457,9 @@ function WallTrimSection({
             value={trimValue.sides}
           />
           <SegmentedControl
-            onChange={(next) => updateTrim({ profile: next as any })}
-            options={[
-              { label: 'Flat', value: 'flat' },
-              { label: 'Bevel', value: 'bevel' },
-              { label: 'Triangle', value: 'triangle' },
-              { label: 'Cove', value: 'cove' },
-              { label: 'Bullnose', value: 'bullnose' },
-            ]}
-            value={trimValue.profile}
+            onChange={(next) => updateTrim({ profile: next })}
+            options={profileOptions}
+            value={selectedProfile}
           />
           <SliderControl
             label="Height"
