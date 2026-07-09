@@ -49,9 +49,11 @@ const WALL_BAND_SLOT_MATERIAL_INDEX: Record<WallSurfaceSlotId, number> = {
   lowerInterior: 3,
   middleInterior: 4,
   upperInterior: 5,
-  lowerExterior: 6,
-  middleExterior: 7,
-  upperExterior: 8,
+  topInterior: 6,
+  lowerExterior: 7,
+  middleExterior: 8,
+  upperExterior: 9,
+  topExterior: 10,
   skirtingInterior: 0,
   skirtingExterior: 0,
   crownInterior: 0,
@@ -442,7 +444,13 @@ function splitGeometryAtHorizontalPlanes(
 function getWallBandSplitPlanes(wall: WallNode): number[] {
   const bands = getWallFaceBandConfig(wall)
   if (!bands.enabled) return []
-  return [bands.lowerTop, bands.middleTop].filter((plane) => plane > WALL_BAND_SPLIT_EPSILON)
+  const planes = [bands.lowerTop]
+  if (bands.count >= 3) planes.push(bands.middleTop)
+  if (bands.count >= 4) planes.push(bands.upperTop)
+  return planes.filter(
+    (plane) =>
+      plane > WALL_BAND_SPLIT_EPSILON && plane < (wall.height ?? 2.5) - WALL_BAND_SPLIT_EPSILON,
+  )
 }
 
 // ============================================================================

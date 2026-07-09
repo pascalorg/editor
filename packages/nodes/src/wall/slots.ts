@@ -27,6 +27,11 @@ export function wallSlots(): SlotDeclaration[] {
       default: WALL_SURFACE_SLOT_DEFAULTS.upperInterior,
     },
     {
+      slotId: 'topInterior',
+      label: 'Top band (interior)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.topInterior,
+    },
+    {
       slotId: 'lowerExterior',
       label: 'Lower band (exterior)',
       default: WALL_SURFACE_SLOT_DEFAULTS.lowerExterior,
@@ -40,6 +45,11 @@ export function wallSlots(): SlotDeclaration[] {
       slotId: 'upperExterior',
       label: 'Upper band (exterior)',
       default: WALL_SURFACE_SLOT_DEFAULTS.upperExterior,
+    },
+    {
+      slotId: 'topExterior',
+      label: 'Top band (exterior)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.topExterior,
     },
     {
       slotId: 'skirtingInterior',

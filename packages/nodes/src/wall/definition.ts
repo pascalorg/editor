@@ -26,7 +26,7 @@ import { wallSlots } from './slots'
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',

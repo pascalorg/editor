@@ -418,9 +418,11 @@ export function getWallMaterialHash(
     lowerInterior: wallSlotMaterialSignature(wallNode, 'lowerInterior', sceneMaterials),
     middleInterior: wallSlotMaterialSignature(wallNode, 'middleInterior', sceneMaterials),
     upperInterior: wallSlotMaterialSignature(wallNode, 'upperInterior', sceneMaterials),
+    topInterior: wallSlotMaterialSignature(wallNode, 'topInterior', sceneMaterials),
     lowerExterior: wallSlotMaterialSignature(wallNode, 'lowerExterior', sceneMaterials),
     middleExterior: wallSlotMaterialSignature(wallNode, 'middleExterior', sceneMaterials),
     upperExterior: wallSlotMaterialSignature(wallNode, 'upperExterior', sceneMaterials),
+    topExterior: wallSlotMaterialSignature(wallNode, 'topExterior', sceneMaterials),
   })
 }
 
@@ -466,11 +468,13 @@ export function getMaterialsForWall(
         resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'topInterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
+        resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
       ]
-    : Array.from({ length: 9 }, () => wallRoleMaterial)
+    : Array.from({ length: 11 }, () => wallRoleMaterial)
 
   const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
@@ -488,9 +492,11 @@ export function getMaterialsForWall(
         'lowerInterior',
         'middleInterior',
         'upperInterior',
+        'topInterior',
         'lowerExterior',
         'middleExterior',
         'upperExterior',
+        'topExterior',
       ] as WallSurfaceSlotId[]
     ).map((slotId) =>
       createInvisibleWallMaterial(
@@ -517,9 +523,11 @@ export function getMaterialsForWall(
         'lowerInterior',
         'middleInterior',
         'upperInterior',
+        'topInterior',
         'lowerExterior',
         'middleExterior',
         'upperExterior',
+        'topExterior',
       ] as WallSurfaceSlotId[]
     ).map((slotId) =>
       createTranslucentWallMaterial(

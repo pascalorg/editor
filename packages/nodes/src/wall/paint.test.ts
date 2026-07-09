@@ -14,7 +14,7 @@ const baseWall: WallNode = {
   end: [4, 0],
   height: 2.5,
   thickness: 0.1,
-  faceBands: { enabled: true, lowerHeight: 0.9, middleHeight: 0.12 },
+  faceBands: { enabled: true, count: 3, lowerHeight: 0.9, middleHeight: 0.12, upperHeight: 0.61 },
   frontSide: 'interior',
   backSide: 'exterior',
 }
@@ -52,7 +52,13 @@ describe('resolveWallRole', () => {
   test('uses adjusted band heights from the wall config', () => {
     const wall = {
       ...baseWall,
-      faceBands: { enabled: true, lowerHeight: 1.2, middleHeight: 0.2 },
+      faceBands: {
+        enabled: true,
+        count: 3,
+        lowerHeight: 1.2,
+        middleHeight: 0.2,
+        upperHeight: 0.61,
+      },
     }
 
     expect(
@@ -77,7 +83,13 @@ describe('resolveWallRole', () => {
   test('falls back to whole-side roles when bands are disabled', () => {
     const wall = {
       ...baseWall,
-      faceBands: { enabled: false, lowerHeight: 0.9, middleHeight: 0.12 },
+      faceBands: {
+        enabled: false,
+        count: 1,
+        lowerHeight: 0.9,
+        middleHeight: 0.12,
+        upperHeight: 0.61,
+      },
     }
 
     expect(
@@ -88,6 +100,52 @@ describe('resolveWallRole', () => {
         localPosition: [1, 0.2, 0.05],
       }),
     ).toBe('interior')
+  })
+
+  test('maps four wall bands to lower, middle, upper, and top slots', () => {
+    const wall = {
+      ...baseWall,
+      faceBands: {
+        enabled: true,
+        count: 4,
+        lowerHeight: 0.5,
+        middleHeight: 0.5,
+        upperHeight: 0.5,
+      },
+    }
+
+    expect(
+      resolveWallRole({
+        node: wall,
+        materialIndex: 1,
+        normal: [0, 0, 1],
+        localPosition: [1, 0.2, 0.05],
+      }),
+    ).toBe('lowerInterior')
+    expect(
+      resolveWallRole({
+        node: wall,
+        materialIndex: 1,
+        normal: [0, 0, 1],
+        localPosition: [1, 0.7, 0.05],
+      }),
+    ).toBe('middleInterior')
+    expect(
+      resolveWallRole({
+        node: wall,
+        materialIndex: 1,
+        normal: [0, 0, 1],
+        localPosition: [1, 1.2, 0.05],
+      }),
+    ).toBe('upperInterior')
+    expect(
+      resolveWallRole({
+        node: wall,
+        materialIndex: 1,
+        normal: [0, 0, 1],
+        localPosition: [1, 1.8, 0.05],
+      }),
+    ).toBe('topInterior')
   })
 
   test('falls back to whole-side roles by default', () => {

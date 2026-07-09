@@ -199,6 +199,7 @@ export type {
 } from './nodes/wall'
 export {
   buildEnabledWallFaceBandPatch,
+  buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
   getWallBandSlotId,
   getWallFaceBandConfig,

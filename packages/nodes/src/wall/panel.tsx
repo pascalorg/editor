@@ -3,10 +3,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  buildEnabledWallFaceBandPatch,
+  buildWallFaceBandCountPatch,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
+  getWallFaceBandConfig,
   normalizeWallCurveOffset,
   useLiveNodeOverrides,
   useScene,
@@ -141,7 +142,6 @@ export default function WallPanel() {
   const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
   const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
   const wallHeightMeters = node.height ?? 2.5
-  const faceBands = { ...WALL_FACE_BAND_DEFAULT, ...(node.faceBands ?? {}) }
 
   const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
   const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
@@ -222,7 +222,6 @@ export default function WallPanel() {
       </PanelSection>
 
       <WallFaceBandSection
-        bands={faceBands}
         node={node}
         onUpdate={handleUpdate}
         unit={unit}
@@ -277,78 +276,101 @@ export default function WallPanel() {
 }
 
 function WallFaceBandSection({
-  bands,
   node,
   onUpdate,
   unit,
   unitLabel,
   wallHeightMeters,
 }: {
-  bands: NonNullable<WallNode['faceBands']>
   node: WallNode
   onUpdate: (updates: Partial<WallNode>) => void
   unit: 'metric' | 'imperial'
   unitLabel: string
   wallHeightMeters: number
 }) {
-  const lowerHeight = Math.max(0, Math.min(wallHeightMeters, bands.lowerHeight))
-  const middleHeight = Math.max(0, Math.min(wallHeightMeters - lowerHeight, bands.middleHeight))
+  const bandConfig = getWallFaceBandConfig(node)
+  const bandCount = bandConfig.count
+  const lowerHeight = bandConfig.lowerHeight
+  const middleHeight = bandConfig.middleHeight
+  const upperHeight = bandConfig.upperHeight
   const updateBands = (patch: Partial<NonNullable<WallNode['faceBands']>>) =>
     onUpdate({
       faceBands: {
-        ...bands,
+        ...WALL_FACE_BAND_DEFAULT,
+        ...(node.faceBands ?? {}),
+        enabled: bandCount > 1,
+        count: bandCount,
         ...patch,
       },
     })
 
   return (
     <PanelSection title="Wall bands">
-      <ActionGroup>
-        <ActionButton
-          label={bands.enabled ? 'Disable bands' : 'Enable bands'}
-          onClick={() => {
-            if (bands.enabled) updateBands({ enabled: false })
-            else onUpdate(buildEnabledWallFaceBandPatch(node))
-          }}
+      <SliderControl
+        label="Bands"
+        max={4}
+        min={1}
+        onChange={(value) => onUpdate(buildWallFaceBandCountPatch(node, Math.round(value)))}
+        precision={0}
+        step={1}
+        value={bandCount}
+      />
+      {bandCount >= 2 && (
+        <SliderControl
+          label="Lower"
+          max={metersToLinearUnit(wallHeightMeters, unit)}
+          min={metersToLinearUnit(0, unit)}
+          onChange={(value) =>
+            updateBands({
+              lowerHeight: linearControlValueToMeters(value, unit, {
+                maxMeters: wallHeightMeters,
+                minMeters: 0,
+              }),
+            })
+          }
+          precision={2}
+          step={0.01}
+          unit={unitLabel}
+          value={metersToLinearUnit(lowerHeight, unit)}
         />
-      </ActionGroup>
-      {bands.enabled && (
-        <>
-          <SliderControl
-            label="Middle"
-            max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight), unit)}
-            min={metersToLinearUnit(0, unit)}
-            onChange={(value) =>
-              updateBands({
-                middleHeight: linearControlValueToMeters(value, unit, {
-                  maxMeters: Math.max(0, wallHeightMeters - lowerHeight),
-                  minMeters: 0,
-                }),
-              })
-            }
-            precision={2}
-            step={0.01}
-            unit={unitLabel}
-            value={metersToLinearUnit(middleHeight, unit)}
-          />
-          <SliderControl
-            label="Lower"
-            max={metersToLinearUnit(wallHeightMeters, unit)}
-            min={metersToLinearUnit(0, unit)}
-            onChange={(value) =>
-              updateBands({
-                lowerHeight: linearControlValueToMeters(value, unit, {
-                  maxMeters: wallHeightMeters,
-                  minMeters: 0,
-                }),
-              })
-            }
-            precision={2}
-            step={0.01}
-            unit={unitLabel}
-            value={metersToLinearUnit(lowerHeight, unit)}
-          />
-        </>
+      )}
+      {bandCount >= 3 && (
+        <SliderControl
+          label="Middle"
+          max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight), unit)}
+          min={metersToLinearUnit(0, unit)}
+          onChange={(value) =>
+            updateBands({
+              middleHeight: linearControlValueToMeters(value, unit, {
+                maxMeters: Math.max(0, wallHeightMeters - lowerHeight),
+                minMeters: 0,
+              }),
+            })
+          }
+          precision={2}
+          step={0.01}
+          unit={unitLabel}
+          value={metersToLinearUnit(middleHeight, unit)}
+        />
+      )}
+      {bandCount >= 4 && (
+        <SliderControl
+          label="Upper"
+          max={metersToLinearUnit(Math.max(0, wallHeightMeters - lowerHeight - middleHeight), unit)}
+          min={metersToLinearUnit(0, unit)}
+          onChange={(value) =>
+            updateBands({
+              upperHeight: linearControlValueToMeters(value, unit, {
+                maxMeters: Math.max(0, wallHeightMeters - lowerHeight - middleHeight),
+                minMeters: 0,
+              }),
+            })
+          }
+          precision={2}
+          step={0.01}
+          unit={unitLabel}
+          value={metersToLinearUnit(upperHeight, unit)}
+        />
       )}
     </PanelSection>
   )

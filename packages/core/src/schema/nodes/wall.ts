@@ -53,17 +53,29 @@ export const WALL_TRIM_DEFAULTS = {
   chairRail: WALL_CHAIR_RAIL_DEFAULT,
 } as const
 
-export const WallFaceBandConfig = z.object({
+const WallFaceBandConfigShape = z.object({
   enabled: z.boolean().default(false),
+  count: z.number().int().min(1).max(4).default(1),
   lowerHeight: z.number().default(0.84),
   middleHeight: z.number().default(0.61),
+  upperHeight: z.number().default(0.61),
 })
+
+export const WallFaceBandConfig = z.preprocess((value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value) && !('count' in value)) {
+    const enabled = (value as { enabled?: unknown }).enabled === true
+    return { ...value, count: enabled ? 3 : 1 }
+  }
+  return value
+}, WallFaceBandConfigShape)
 export type WallFaceBandConfig = z.infer<typeof WallFaceBandConfig>
 
 export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
   enabled: false,
+  count: 1,
   lowerHeight: 0.84,
   middleHeight: 0.61,
+  upperHeight: 0.61,
 }
 
 export const WALL_SURFACE_SLOT_DEFAULTS = {
@@ -72,9 +84,11 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
   lowerInterior: 'library:concrete-drywall',
   middleInterior: 'library:concrete-drywall',
   upperInterior: 'library:concrete-drywall',
+  topInterior: 'library:concrete-drywall',
   lowerExterior: 'library:concrete-drywall',
   middleExterior: 'library:concrete-drywall',
   upperExterior: 'library:concrete-drywall',
+  topExterior: 'library:concrete-drywall',
   skirtingInterior: 'library:concrete-drywall',
   skirtingExterior: 'library:concrete-drywall',
   crownInterior: 'library:concrete-drywall',
@@ -135,14 +149,16 @@ export const WallNode = BaseNode.extend({
 export type WallNode = z.infer<typeof WallNode>
 
 export type WallSurfaceSide = 'interior' | 'exterior'
-export type WallFaceBand = 'lower' | 'middle' | 'upper'
+export type WallFaceBand = 'lower' | 'middle' | 'upper' | 'top'
 export type WallBandSurfaceSlotId =
   | 'lowerInterior'
   | 'middleInterior'
   | 'upperInterior'
+  | 'topInterior'
   | 'lowerExterior'
   | 'middleExterior'
   | 'upperExterior'
+  | 'topExterior'
 
 // Declared default appearance for an unpainted wall face in colored mode —
 // visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
@@ -157,17 +173,22 @@ export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
 export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands'>) {
   const wallHeight = wall.height ?? 2.5
   const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
-  const lowerHeight = Math.max(0, Math.min(wallHeight, raw.lowerHeight))
-  const middleHeight = raw.enabled
-    ? Math.max(0, Math.min(wallHeight - lowerHeight, raw.middleHeight))
-    : 0
+  const count = raw.enabled ? Math.max(1, Math.min(4, Math.round(raw.count ?? 3))) : 1
+  const lowerHeight = count >= 2 ? Math.max(0, Math.min(wallHeight, raw.lowerHeight)) : 0
+  const middleHeight =
+    count >= 3 ? Math.max(0, Math.min(wallHeight - lowerHeight, raw.middleHeight)) : 0
+  const upperHeight =
+    count >= 4 ? Math.max(0, Math.min(wallHeight - lowerHeight - middleHeight, raw.upperHeight)) : 0
 
   return {
-    enabled: raw.enabled,
+    enabled: raw.enabled && count > 1,
+    count,
     lowerHeight,
     middleHeight,
+    upperHeight,
     lowerTop: lowerHeight,
     middleTop: lowerHeight + middleHeight,
+    upperTop: lowerHeight + middleHeight + upperHeight,
   }
 }
 
@@ -179,6 +200,8 @@ export function getWallFaceBandForHeight(
   if (!bands.enabled) return 'upper'
   if (y < bands.lowerTop) return 'lower'
   if (y < bands.middleTop) return 'middle'
+  if (bands.count >= 4 && y < bands.upperTop) return 'upper'
+  if (bands.count >= 4) return 'top'
   return 'upper'
 }
 
@@ -191,20 +214,48 @@ export function getWallBandSlotId(
 }
 
 const WALL_FACE_BAND_SLOTS_BY_SIDE = {
-  interior: ['lowerInterior', 'middleInterior', 'upperInterior'],
-  exterior: ['lowerExterior', 'middleExterior', 'upperExterior'],
+  interior: ['lowerInterior', 'middleInterior', 'upperInterior', 'topInterior'],
+  exterior: ['lowerExterior', 'middleExterior', 'upperExterior', 'topExterior'],
 } as const satisfies Record<WallSurfaceSide, readonly WallBandSurfaceSlotId[]>
 
-export function buildEnabledWallFaceBandPatch(
+function getWallFaceBandSlotsForCount(
+  side: WallSurfaceSide,
+  count: number,
+): readonly WallBandSurfaceSlotId[] {
+  if (count <= 1) return []
+  if (side === 'interior') {
+    if (count === 2) return ['lowerInterior', 'upperInterior']
+    if (count === 3) return ['lowerInterior', 'middleInterior', 'upperInterior']
+    return ['lowerInterior', 'middleInterior', 'upperInterior', 'topInterior']
+  }
+
+  if (count === 2) return ['lowerExterior', 'upperExterior']
+  if (count === 3) return ['lowerExterior', 'middleExterior', 'upperExterior']
+  return ['lowerExterior', 'middleExterior', 'upperExterior', 'topExterior']
+}
+
+export function buildWallFaceBandCountPatch(
   wall: Pick<WallNode, 'faceBands' | 'slots'>,
+  count: number,
 ): Pick<WallNode, 'faceBands' | 'slots'> {
   const slots = { ...(wall.slots ?? {}) }
+  const nextCount = Math.max(1, Math.min(4, Math.round(count)))
+  const previousCount = wall.faceBands?.enabled
+    ? Math.max(1, Math.min(4, Math.round(wall.faceBands.count ?? 3)))
+    : 1
 
   for (const side of ['interior', 'exterior'] as const) {
     const sourceRef = slots[side]
+    const activeSlots = new Set(getWallFaceBandSlotsForCount(side, nextCount))
+    const previouslyActiveSlots = new Set(getWallFaceBandSlotsForCount(side, previousCount))
     for (const slotId of WALL_FACE_BAND_SLOTS_BY_SIDE[side]) {
-      if (sourceRef) slots[slotId] = sourceRef
-      else delete slots[slotId]
+      if (activeSlots.has(slotId)) {
+        const wasActive = previouslyActiveSlots.has(slotId)
+        if (sourceRef && (!slots[slotId] || !wasActive)) slots[slotId] = sourceRef
+        else if (!sourceRef && !wasActive) delete slots[slotId]
+      } else {
+        delete slots[slotId]
+      }
     }
   }
 
@@ -212,20 +263,38 @@ export function buildEnabledWallFaceBandPatch(
     faceBands: {
       ...WALL_FACE_BAND_DEFAULT,
       ...(wall.faceBands ?? {}),
-      enabled: true,
-      lowerHeight: WALL_FACE_BAND_DEFAULT.lowerHeight,
-      middleHeight: WALL_FACE_BAND_DEFAULT.middleHeight,
+      enabled: nextCount > 1,
+      count: nextCount,
+      lowerHeight: wall.faceBands?.lowerHeight ?? WALL_FACE_BAND_DEFAULT.lowerHeight,
+      middleHeight: wall.faceBands?.middleHeight ?? WALL_FACE_BAND_DEFAULT.middleHeight,
+      upperHeight: wall.faceBands?.upperHeight ?? WALL_FACE_BAND_DEFAULT.upperHeight,
     },
     slots,
   }
 }
 
+export function buildEnabledWallFaceBandPatch(
+  wall: Pick<WallNode, 'faceBands' | 'slots'>,
+): Pick<WallNode, 'faceBands' | 'slots'> {
+  return buildWallFaceBandCountPatch(wall, 2)
+}
+
 export function getWallSurfaceSideFromBandSlot(slotId: string): WallSurfaceSide | null {
   if (slotId === 'interior' || slotId === 'exterior') return slotId
-  if (slotId === 'lowerInterior' || slotId === 'middleInterior' || slotId === 'upperInterior') {
+  if (
+    slotId === 'lowerInterior' ||
+    slotId === 'middleInterior' ||
+    slotId === 'upperInterior' ||
+    slotId === 'topInterior'
+  ) {
     return 'interior'
   }
-  if (slotId === 'lowerExterior' || slotId === 'middleExterior' || slotId === 'upperExterior') {
+  if (
+    slotId === 'lowerExterior' ||
+    slotId === 'middleExterior' ||
+    slotId === 'upperExterior' ||
+    slotId === 'topExterior'
+  ) {
     return 'exterior'
   }
   return null
