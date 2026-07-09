@@ -1,4 +1,12 @@
-import { type AnyNode, type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  nodeRegistry,
+  pauseSpaceDetection,
+  resumeSpaceDetection,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Vector3 } from 'three'
@@ -71,9 +79,13 @@ function rotateGroupSelection(direction: 1 | -1): boolean {
   // steppedRotation sense.
   const delta = -direction * (Math.PI / 4)
   const patches = rotateGroupPatches(starts, links, { x: localCenter.x, z: localCenter.z }, delta)
+  // Space detection stays out: a rigid rotation of existing walls must not
+  // re-create the room's auto floors/ceilings at the new bearing.
+  pauseSpaceDetection()
   useScene
     .getState()
     .updateNodes(patches.map(([id, data]) => ({ id, data: data as Partial<AnyNode> })))
+  resumeSpaceDetection()
   sfxEmitter.emit('sfx:item-rotate')
   return true
 }

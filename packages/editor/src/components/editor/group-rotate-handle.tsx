@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
+  pauseSpaceDetection,
+  resumeSpaceDetection,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -324,8 +326,12 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       const updates = commitFromOverrides()
       // Resume before the commit so the single batched `updateNodes` is the
       // one tracked set — collapsing the whole group rotation into one undo.
+      // Space detection stays out: a rigid rotation of existing walls must
+      // not re-create the room's auto floors/ceilings at the new bearing.
+      pauseSpaceDetection()
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
+      resumeSpaceDetection()
       clearLivePreviews()
       cleanup()
     }

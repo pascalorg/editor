@@ -4,8 +4,10 @@ import {
   bboxCornerAnchors,
   collectAlignmentAnchors,
   pauseSceneHistory,
+  pauseSpaceDetection,
   resolveAlignment,
   resumeSceneHistory,
+  resumeSpaceDetection,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -286,8 +288,14 @@ export function startGroupPickUp(
       const patch = overrides.get(id)
       if (patch) updates.push({ id, data: patch as Partial<AnyNode> })
     }
+    // Group transforms move existing structure rigidly — the wall-driven room
+    // auto-detection must not re-create floors/ceilings for the walls' new
+    // positions (that belongs to wall building/editing). Paused around the
+    // commit; the sync rolls its baseline forward for paused changes.
+    pauseSpaceDetection()
     resumeSceneHistory(useScene)
     if (updates.length > 0) useScene.getState().updateNodes(updates)
+    resumeSpaceDetection()
     clearLivePreviews()
     teardown()
   }
