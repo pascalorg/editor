@@ -148,6 +148,19 @@ const getCaptureNumber = (capture: JsonObject | null, key: string): number | nul
   return typeof value === 'number' ? value : null
 }
 
+const getCaptureReviewModes = (bundle: JsonObject | null): JsonValue[] | null => {
+  const value = bundle?.reviewModes
+  return Array.isArray(value) ? value : null
+}
+
+const getCaptureReviewModeLabels = (reviewModes: JsonValue[] | null): string[] | null => {
+  if (!reviewModes) return null
+  const labels = reviewModes
+    .map((mode) => (isJsonObject(mode) && typeof mode.label === 'string' ? mode.label : null))
+    .filter((label): label is string => Boolean(label))
+  return labels.length > 0 ? labels : null
+}
+
 const buildCaptureReferences = (nodes: Record<string, SceneNode>): JsonObject[] => {
   const capturesByKey = new Map<string, JsonObject & { nodes: JsonObject[] }>()
 
@@ -165,6 +178,8 @@ const buildCaptureReferences = (nodes: Record<string, SceneNode>): JsonObject[] 
       ? pascalCaptureObject.bundle
       : null
     const artifacts = bundle && isJsonObject(bundle.artifacts) ? bundle.artifacts : null
+    const reviewModes = getCaptureReviewModes(bundle)
+    const reviewModeLabels = getCaptureReviewModeLabels(reviewModes)
 
     const existing = capturesByKey.get(captureKey) ?? {
       captureId,
@@ -176,6 +191,8 @@ const buildCaptureReferences = (nodes: Record<string, SceneNode>): JsonObject[] 
       artifactTotalFiles: getCaptureNumber(source, 'artifactTotalFiles'),
       artifactTotalBytes: getCaptureNumber(source, 'artifactTotalBytes'),
       artifacts: artifacts ?? null,
+      reviewModes: reviewModes ?? null,
+      reviewModeLabels: reviewModeLabels ?? null,
       pascalCapture: pascalCapture ?? null,
       nodes: [],
     }
@@ -185,6 +202,10 @@ const buildCaptureReferences = (nodes: Record<string, SceneNode>): JsonObject[] 
     }
     if (!existing.artifacts && artifacts) {
       existing.artifacts = artifacts
+    }
+    if (!existing.reviewModes && reviewModes) {
+      existing.reviewModes = reviewModes
+      existing.reviewModeLabels = reviewModeLabels ?? null
     }
     existing.nodes.push({
       nodeId: id,
@@ -293,6 +314,11 @@ const buildSceneGraphValue = (
     ...value,
     detachedNodes: detachedNodeIds.map((id) => buildNode(id, new Set())),
   }
+}
+
+export const __settingsPanelCaptureTestHooks = {
+  buildCaptureReferences,
+  buildSceneGraphValue,
 }
 
 export interface ProjectVisibility {
