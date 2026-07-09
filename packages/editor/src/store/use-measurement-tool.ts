@@ -55,6 +55,12 @@ export type MeasurementCursor = {
   view: MeasurementView
 }
 
+export type MeasurementSnapTarget = {
+  label: string
+  point: MeasurementPoint
+  view: MeasurementView
+}
+
 export type PersistedMeasurements = {
   version: 1
   segments: MeasurementSegment[]
@@ -71,6 +77,7 @@ type MeasurementToolState = {
   draft: MeasurementDraft | null
   angleDraft: MeasurementAngleDraft | null
   cursor: MeasurementCursor | null
+  snapTarget: MeasurementSnapTarget | null
   mode: MeasurementMode
   selectedId: string | null
   begin: (view: MeasurementView, start: MeasurementPoint) => void
@@ -80,6 +87,7 @@ type MeasurementToolState = {
   updateAngle: (point: MeasurementPoint) => void
   commitAngle: (point?: MeasurementPoint) => void
   setCursor: (view: MeasurementView, point: MeasurementPoint | null) => void
+  setSnapTarget: (target: MeasurementSnapTarget | null) => void
   setMode: (mode: MeasurementMode) => void
   selectMeasurement: (id: string | null) => void
   removeMeasurement: (id: string) => void
@@ -250,6 +258,7 @@ export function hydrateMeasurements(value: unknown) {
     cursor: null,
     draft: null,
     selectedId: null,
+    snapTarget: null,
   })
 }
 
@@ -261,6 +270,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   draft: null,
   angleDraft: null,
   cursor: null,
+  snapTarget: null,
   mode: 'distance',
   selectedId: null,
   begin: (view, start) => set({ draft: { start, end: null, view }, selectedId: null }),
@@ -359,7 +369,9 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
 
       return { cursor: { point, view } }
     }),
-  setMode: (mode) => set({ angleDraft: null, draft: null, mode, selectedId: null }),
+  setSnapTarget: (target) => set({ snapTarget: target }),
+  setMode: (mode) =>
+    set({ angleDraft: null, draft: null, mode, selectedId: null, snapTarget: null }),
   selectMeasurement: (id) => set({ selectedId: id }),
   removeMeasurement: (id) =>
     set((state) => ({
@@ -438,7 +450,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       selectedId: id,
     }))
   },
-  cancelDraft: () => set({ angleDraft: null, draft: null }),
+  cancelDraft: () => set({ angleDraft: null, draft: null, snapTarget: null }),
   clear: () =>
     set({
       angleDraft: null,
@@ -449,5 +461,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       perimeters: [],
       selectedId: null,
       segments: [],
+      snapTarget: null,
     }),
 }))

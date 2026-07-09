@@ -43,6 +43,7 @@ import {
   type MeasurementPerimeter,
   type MeasurementPoint,
   type MeasurementSegment,
+  type MeasurementSnapTarget,
   useMeasurementTool,
 } from '../../../store/use-measurement-tool'
 
@@ -399,9 +400,15 @@ function nodeMeasurementAnchors(node: AnyNode): MeasurementPoint[] {
   return boxAnchors
 }
 
-function resolveNodeMeasurementSnap(node: AnyNode, point: MeasurementPoint): MeasurementPoint {
+function resolveNodeMeasurementSnap(
+  node: AnyNode,
+  point: MeasurementPoint,
+): {
+  point: MeasurementPoint
+  target: MeasurementSnapTarget | null
+} {
   const anchors = nodeMeasurementAnchors(node)
-  if (anchors.length === 0) return point
+  if (anchors.length === 0) return { point, target: null }
 
   const maxDistanceSq = MEASUREMENT_SURFACE_SNAP_RADIUS * MEASUREMENT_SURFACE_SNAP_RADIUS
   let closest: MeasurementPoint | null = null
@@ -415,7 +422,10 @@ function resolveNodeMeasurementSnap(node: AnyNode, point: MeasurementPoint): Mea
     }
   }
 
-  return closest ?? point
+  return {
+    point: closest ?? point,
+    target: closest ? { label: 'Snap', point: closest, view: '3d' } : null,
+  }
 }
 
 export function handleMeasurementGridMove3D(
@@ -427,6 +437,7 @@ export function handleMeasurementGridMove3D(
   if (shouldIgnoreGridEvent()) return
   const measurement = useMeasurementTool.getState()
   const rawPoint = measurementPointFromGridEvent(event)
+  measurement.setSnapTarget(null)
   const point =
     event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
       ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
@@ -449,6 +460,7 @@ export function handleMeasurementGridClick3D(
   if (shouldIgnoreGridEvent()) return
   const measurement = useMeasurementTool.getState()
   const rawPoint = measurementPointFromGridEvent(event)
+  measurement.setSnapTarget(null)
   const point =
     event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
       ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
@@ -478,15 +490,17 @@ export function handleMeasurementNodeClick3D(event: NodeEvent): void {
   event.stopPropagation()
 
   const measurement = useMeasurementTool.getState()
-  const rawPoint = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
+  const snap = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
+  const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
   const point =
-    event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
-      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '3d')
-      : rawPoint
+    isAxisLocked && measurement.draft
+      ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '3d')
+      : snap.point
   const quickMeasure = Boolean(
     event.nativeEvent.altKey || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
   )
   measurement.setCursor('3d', point)
+  measurement.setSnapTarget(isAxisLocked ? null : snap.target)
   if (event.nativeEvent.shiftKey && measurement.draft?.view === '3d') {
     measurement.commit(point)
     return
@@ -559,6 +573,19 @@ function MeasurementCursor3D({ point }: { point: MeasurementPoint }) {
         renderOrder={1001}
         scale={[MEASUREMENT_CURSOR_WIDTH, MEASUREMENT_CURSOR_SIZE, MEASUREMENT_CURSOR_WIDTH]}
       />
+    </group>
+  )
+}
+
+function MeasurementSnapTarget3D({ target }: { target: MeasurementSnapTarget }) {
+  return (
+    <group position={target.point}>
+      <MeasurementCursor3D point={[0, 0, 0]} />
+      <Html center distanceFactor={12} position={[0, MEASUREMENT_CURSOR_SIZE + 0.08, 0]}>
+        <span className="pointer-events-none whitespace-nowrap rounded-full border border-sky-400/60 bg-background/90 px-2 py-1 font-semibold text-[10px] text-sky-700 shadow-sm backdrop-blur dark:text-sky-300">
+          {target.label}
+        </span>
+      </Html>
     </group>
   )
 }
@@ -809,6 +836,7 @@ export function MeasurementTool() {
   const draft = useMeasurementTool((state) => state.draft)
   const angleDraft = useMeasurementTool((state) => state.angleDraft)
   const cursor = useMeasurementTool((state) => state.cursor)
+  const snapTarget = useMeasurementTool((state) => state.snapTarget)
   const selectedId = useMeasurementTool((state) => state.selectedId)
   const lastSurfaceEventAtRef = useRef(0)
 
@@ -840,9 +868,15 @@ export function MeasurementTool() {
 
     const handleNodeMove = (event: NodeEvent) => {
       noteSurfaceEvent()
-      const point = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
+      const snap = resolveNodeMeasurementSnap(event.node, measurementPointFromNodeEvent(event))
       const measurement = useMeasurementTool.getState()
+      const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '3d'
+      const point =
+        isAxisLocked && measurement.draft
+          ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '3d')
+          : snap.point
       measurement.setCursor('3d', point)
+      measurement.setSnapTarget(isAxisLocked ? null : snap.target)
       if (measurement.angleDraft) {
         measurement.updateAngle(point)
         return
@@ -977,6 +1011,7 @@ export function MeasurementTool() {
           />
         ))}
       {draftAngle ? <MeasurementAngle3D angle={draftAngle} draft isSelected /> : null}
+      {snapTarget?.view === '3d' ? <MeasurementSnapTarget3D target={snapTarget} /> : null}
       {cursor?.view === '3d' ? <MeasurementCursor3D point={cursor.point} /> : null}
     </>
   )

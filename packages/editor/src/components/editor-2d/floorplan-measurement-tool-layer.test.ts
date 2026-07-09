@@ -128,6 +128,11 @@ describe('floorplan measurement grid handlers', () => {
       start: [0, 0, 0],
       view: '2d',
     })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      label: 'Endpoint',
+      point: [0, 0, 0],
+      view: '2d',
+    })
   })
 
   test('snaps the committed 2D endpoint to nearby wall anchors', () => {
@@ -140,6 +145,18 @@ describe('floorplan measurement grid handlers', () => {
     expect(useMeasurementTool.getState().segments[0]).toMatchObject({
       start: [0, 0, 0],
       end: [4, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('shows 2D snap target feedback while moving before first placement', () => {
+    seedScene([wallNode()])
+
+    handleFloorplanMeasurementGridMove(gridEvent([2.04, 0, 0.04]))
+
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      label: 'Midpoint',
+      point: [2, 0, 0],
       view: '2d',
     })
   })

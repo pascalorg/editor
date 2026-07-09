@@ -69,6 +69,7 @@ describe('useMeasurementTool', () => {
     measurement.begin('2d', [0, 0, 0])
     measurement.update([0, 0, 2])
     measurement.setCursor('2d', [0, 0, 2])
+    measurement.setSnapTarget({ label: 'Endpoint', point: [0, 0, 2], view: '2d' })
 
     measurement.clear()
 
@@ -81,6 +82,7 @@ describe('useMeasurementTool', () => {
       perimeters: [],
       selectedId: null,
       segments: [],
+      snapTarget: null,
     })
   })
 
@@ -94,6 +96,7 @@ describe('useMeasurementTool', () => {
     expect(useMeasurementTool.getState().mode).toBe('angle')
     expect(useMeasurementTool.getState().draft).toBeNull()
     expect(useMeasurementTool.getState().angleDraft).toBeNull()
+    expect(useMeasurementTool.getState().snapTarget).toBeNull()
     expect(useMeasurementTool.getState().segments).toHaveLength(1)
     expect(useMeasurementTool.getState().selectedId).toBeNull()
   })

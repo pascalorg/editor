@@ -40,6 +40,7 @@ import {
   type MeasurementPerimeter,
   type MeasurementPoint,
   type MeasurementSegment,
+  type MeasurementSnapTarget,
   useMeasurementTool,
 } from '../../store/use-measurement-tool'
 import {
@@ -79,42 +80,57 @@ function squaredPlanDistance(a: MeasurementPoint, b: MeasurementPoint): number {
   return dx * dx + dz * dz
 }
 
-function wallMeasurementAnchors(node: WallNode): MeasurementPoint[] {
+type FloorplanSnapAnchor = {
+  label: string
+  point: MeasurementPoint
+}
+
+function wallMeasurementAnchors(node: WallNode): FloorplanSnapAnchor[] {
   const midpoint = getWallCurveFrameAt(node, 0.5).point
   return [
-    [node.start[0], 0, node.start[1]],
-    [midpoint.x, 0, midpoint.y],
-    [node.end[0], 0, node.end[1]],
+    { label: 'Endpoint', point: [node.start[0], 0, node.start[1]] },
+    { label: 'Midpoint', point: [midpoint.x, 0, midpoint.y] },
+    { label: 'Endpoint', point: [node.end[0], 0, node.end[1]] },
   ]
 }
 
-function fenceMeasurementAnchors(node: FenceNode): MeasurementPoint[] {
+function fenceMeasurementAnchors(node: FenceNode): FloorplanSnapAnchor[] {
   const midpoint = getFenceCenterlineFrameAt(node, 0.5).point
-  const pathAnchors = node.path?.map((point) => [point[0], 0, point[1]] as MeasurementPoint) ?? []
+  const pathAnchors =
+    node.path?.map((point) => ({
+      label: 'Path point',
+      point: [point[0], 0, point[1]] as MeasurementPoint,
+    })) ?? []
   return [
-    [node.start[0], 0, node.start[1]],
+    { label: 'Endpoint', point: [node.start[0], 0, node.start[1]] },
     ...pathAnchors,
-    [midpoint.x, 0, midpoint.y],
-    [node.end[0], 0, node.end[1]],
+    { label: 'Midpoint', point: [midpoint.x, 0, midpoint.y] },
+    { label: 'Endpoint', point: [node.end[0], 0, node.end[1]] },
   ]
 }
 
-function surfaceMeasurementAnchors(node: SlabNode | CeilingNode | ZoneNode): MeasurementPoint[] {
+function surfaceMeasurementAnchors(node: SlabNode | CeilingNode | ZoneNode): FloorplanSnapAnchor[] {
   const centroid = polygonAreaAndCentroid(node.polygon).centroid
   const edgeMidpoints = node.polygon.map((point, index) => {
     const next = node.polygon[(index + 1) % node.polygon.length] ?? point
-    return [(point[0] + next[0]) / 2, 0, (point[1] + next[1]) / 2] as MeasurementPoint
+    return {
+      label: 'Edge midpoint',
+      point: [(point[0] + next[0]) / 2, 0, (point[1] + next[1]) / 2] as MeasurementPoint,
+    }
   })
   return [
-    ...node.polygon.map((point) => [point[0], 0, point[1]] as MeasurementPoint),
+    ...node.polygon.map((point) => ({
+      label: 'Vertex',
+      point: [point[0], 0, point[1]] as MeasurementPoint,
+    })),
     ...edgeMidpoints,
-    [centroid.x, 0, centroid.y],
+    { label: 'Center', point: [centroid.x, 0, centroid.y] },
   ]
 }
 
 function rectangleMeasurementAnchors(
   polygon: ReadonlyArray<{ x: number; y: number }>,
-): MeasurementPoint[] {
+): FloorplanSnapAnchor[] {
   if (polygon.length === 0) return []
   const centroid = {
     x: polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length,
@@ -122,17 +138,23 @@ function rectangleMeasurementAnchors(
   }
   const edgeMidpoints = polygon.map((point, index) => {
     const next = polygon[(index + 1) % polygon.length] ?? point
-    return [(point.x + next.x) / 2, 0, (point.y + next.y) / 2] as MeasurementPoint
+    return {
+      label: 'Edge midpoint',
+      point: [(point.x + next.x) / 2, 0, (point.y + next.y) / 2] as MeasurementPoint,
+    }
   })
 
   return [
-    ...polygon.map((point) => [point.x, 0, point.y] as MeasurementPoint),
+    ...polygon.map((point) => ({
+      label: 'Corner',
+      point: [point.x, 0, point.y] as MeasurementPoint,
+    })),
     ...edgeMidpoints,
-    [centroid.x, 0, centroid.y],
+    { label: 'Center', point: [centroid.x, 0, centroid.y] },
   ]
 }
 
-function itemMeasurementAnchors(node: ItemNode): MeasurementPoint[] {
+function itemMeasurementAnchors(node: ItemNode): FloorplanSnapAnchor[] {
   const sceneNodes = useScene.getState().nodes
   const transform = getItemFloorplanTransform(node, new Map(Object.entries(sceneNodes)), new Map())
   if (!transform) return []
@@ -142,7 +164,7 @@ function itemMeasurementAnchors(node: ItemNode): MeasurementPoint[] {
   return rectangleMeasurementAnchors(polygon)
 }
 
-function columnMeasurementAnchors(node: ColumnNode): MeasurementPoint[] {
+function columnMeasurementAnchors(node: ColumnNode): FloorplanSnapAnchor[] {
   const polygon = getRotatedRectanglePolygon(
     { x: node.position[0], y: node.position[2] },
     node.width,
@@ -152,7 +174,7 @@ function columnMeasurementAnchors(node: ColumnNode): MeasurementPoint[] {
   return rectangleMeasurementAnchors(polygon)
 }
 
-function elevatorMeasurementAnchors(node: ElevatorNode): MeasurementPoint[] {
+function elevatorMeasurementAnchors(node: ElevatorNode): FloorplanSnapAnchor[] {
   const polygon = getRotatedRectanglePolygon(
     { x: node.position[0], y: node.position[2] },
     node.shaftWidth ?? node.width,
@@ -227,9 +249,12 @@ function elevatorLengthSegment(node: ElevatorNode): {
   return rectangleLengthSegment(polygon, width, depth)
 }
 
-function resolveFloorplanMeasurementSnap(point: MeasurementPoint): MeasurementPoint {
+function resolveFloorplanMeasurementSnap(point: MeasurementPoint): {
+  point: MeasurementPoint
+  target: MeasurementSnapTarget | null
+} {
   const maxDistanceSq = FLOORPLAN_MEASUREMENT_SNAP_RADIUS * FLOORPLAN_MEASUREMENT_SNAP_RADIUS
-  let closest: MeasurementPoint | null = null
+  let closest: FloorplanSnapAnchor | null = null
   let closestDistanceSq = maxDistanceSq
 
   for (const node of Object.values(useScene.getState().nodes)) {
@@ -250,7 +275,7 @@ function resolveFloorplanMeasurementSnap(point: MeasurementPoint): MeasurementPo
     if (!anchors) continue
 
     for (const anchor of anchors) {
-      const distanceSq = squaredPlanDistance(point, anchor)
+      const distanceSq = squaredPlanDistance(point, anchor.point)
       if (distanceSq <= closestDistanceSq) {
         closest = anchor
         closestDistanceSq = distanceSq
@@ -258,7 +283,10 @@ function resolveFloorplanMeasurementSnap(point: MeasurementPoint): MeasurementPo
     }
   }
 
-  return closest ?? point
+  return {
+    point: closest?.point ?? point,
+    target: closest ? { label: closest.label, point: closest.point, view: '2d' } : null,
+  }
 }
 
 function polygonAreaAndCentroid(polygon: ReadonlyArray<readonly [number, number]>): {
@@ -639,6 +667,67 @@ function PerimeterMeasurementLabel({
   )
 }
 
+function FloorplanSnapTargetMarker({
+  sceneRotationDeg,
+  target,
+}: {
+  sceneRotationDeg: number
+  target: MeasurementSnapTarget
+}) {
+  const x = target.point[0]
+  const y = target.point[2]
+
+  return (
+    <g className="floorplan-measurement-snap-target" pointerEvents="none">
+      <circle
+        cx={x}
+        cy={y}
+        fill="rgba(14, 165, 233, 0.16)"
+        r={0.11}
+        stroke="rgb(14, 165, 233)"
+        strokeWidth={1.3}
+        vectorEffect="non-scaling-stroke"
+      />
+      <line
+        stroke="rgb(14, 165, 233)"
+        strokeLinecap="round"
+        strokeWidth={1.1}
+        vectorEffect="non-scaling-stroke"
+        x1={x - 0.16}
+        x2={x + 0.16}
+        y1={y}
+        y2={y}
+      />
+      <line
+        stroke="rgb(14, 165, 233)"
+        strokeLinecap="round"
+        strokeWidth={1.1}
+        vectorEffect="non-scaling-stroke"
+        x1={x}
+        x2={x}
+        y1={y - 0.16}
+        y2={y + 0.16}
+      />
+      <text
+        dominantBaseline="central"
+        fill="rgb(14, 165, 233)"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+        fontSize={0.13}
+        fontWeight="700"
+        paintOrder="stroke"
+        stroke="rgba(255, 255, 255, 0.85)"
+        strokeWidth={0.035}
+        textAnchor="start"
+        transform={`rotate(${-sceneRotationDeg} ${x + 0.2} ${y - 0.18})`}
+        x={x + 0.2}
+        y={y - 0.18}
+      >
+        {target.label}
+      </text>
+    </g>
+  )
+}
+
 function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
   const target = event.target instanceof Element ? event.target : null
   const entry = target?.closest('[data-node-id]')
@@ -671,11 +760,13 @@ function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
 export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
   const measurement = useMeasurementTool.getState()
-  const rawPoint = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
   const point =
-    event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
-      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '2d')
-      : rawPoint
+    isAxisLocked && measurement.draft
+      ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
+      : snap.point
+  measurement.setSnapTarget(isAxisLocked ? null : snap.target)
   setMeasurementCursorPoint(point)
   if (measurement.angleDraft) {
     measurement.updateAngle(point)
@@ -688,11 +779,13 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
 export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
   const measurement = useMeasurementTool.getState()
-  const rawPoint = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
+  const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
   const point =
-    event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
-      ? axisLockedMeasurementPoint(measurement.draft.start, rawPoint, '2d')
-      : rawPoint
+    isAxisLocked && measurement.draft
+      ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
+      : snap.point
+  measurement.setSnapTarget(isAxisLocked ? null : snap.target)
   if (event.nativeEvent.shiftKey && measurement.draft?.view === '2d') {
     measurement.commit(point)
     return
@@ -726,6 +819,7 @@ export function FloorplanMeasurementToolLayer({
   const draft = useMeasurementTool((state) => state.draft)
   const angleDraft = useMeasurementTool((state) => state.angleDraft)
   const selectedId = useMeasurementTool((state) => state.selectedId)
+  const snapTarget = useMeasurementTool((state) => state.snapTarget)
 
   useEffect(() => {
     if (!active) return
@@ -874,6 +968,9 @@ export function FloorplanMeasurementToolLayer({
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
         />
+      ) : null}
+      {snapTarget?.view === '2d' ? (
+        <FloorplanSnapTargetMarker sceneRotationDeg={sceneRotationDeg} target={snapTarget} />
       ) : null}
     </>
   )

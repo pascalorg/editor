@@ -142,6 +142,11 @@ describe('measurement 3D grid handlers', () => {
       start: [0, 0, 0],
       view: '3d',
     })
+    expect(useMeasurementTool.getState().snapTarget).toMatchObject({
+      label: 'Snap',
+      point: [0, 0, 0],
+      view: '3d',
+    })
   })
 
   test('snaps the committed 3D surface endpoint to nearby surface anchors', () => {
@@ -217,6 +222,15 @@ describe('measurement 3D grid handlers', () => {
     handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas, () => true)
 
     expect(useMeasurementTool.getState().draft).toBeNull()
+  })
+
+  test('clears 3D snap target feedback on grid movement', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+
+    handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
+    handleMeasurementGridMove3D(gridEvent([1, 0, 1], canvas), canvas)
+
+    expect(useMeasurementTool.getState().snapTarget).toBeNull()
   })
 
   test('adds 3D surface area in area mode', () => {
