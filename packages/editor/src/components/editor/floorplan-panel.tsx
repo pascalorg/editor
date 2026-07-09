@@ -5181,7 +5181,11 @@ export function FloorplanPanel({
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
   const floorplanSceneRotationDeg =
     FLOORPLAN_VIEW_ROTATION_DEG + floorplanUserRotationDeg - buildingRotationDeg
-  latestFloorplanUserRotationDegRef.current = floorplanUserRotationDeg
+  // Only sync ref from state when floorplan is open (state is source of truth).
+  // When hidden, the imperative 3D path owns the ref and must not be clobbered.
+  if (isFloorplanOpenRef.current) {
+    latestFloorplanUserRotationDegRef.current = floorplanUserRotationDeg
+  }
 
   // Draft START points stay in panel state (set per click). The live END points
   // are the per-move hot values — they live in `useFloorplanDraftPreview` so a
@@ -6543,6 +6547,8 @@ export function FloorplanPanel({
   )
 
   useEffect(() => {
+    if (!isFloorplanOpen) return
+
     const pose = useEditor.getState().navigationSyncPose
     if (!pose) {
       return
@@ -6550,12 +6556,9 @@ export function FloorplanPanel({
 
     latestNavigationSyncPoseRef.current = pose
     if (pose.source === '3d') {
-      // Re-runs when the panel reopens (`isFloorplanOpen`) so the viewport
-      // catches up to the camera after the per-frame sync was skipped while
-      // hidden; a no-op while closed (the sync early-returns).
       syncFloorplanViewportToNavigationPose(pose)
     }
-  }, [syncFloorplanViewportToNavigationPose])
+  }, [syncFloorplanViewportToNavigationPose, isFloorplanOpen])
 
   useEffect(() => {
     return useEditor.subscribe((state) => {
@@ -6585,6 +6588,16 @@ export function FloorplanPanel({
       }
     })
   }, [syncFloorplanViewportToNavigationPose])
+
+  // When the panel is hidden the imperative path owns the compass needle.
+  // React re-renders can overwrite the needle's inline transform with stale
+  // state; this layout effect restores the authoritative ref value before
+  // the browser paints so the needle never visibly snaps to a stale angle.
+  useLayoutEffect(() => {
+    if (!isFloorplanOpen && compassNeedleRef.current) {
+      compassNeedleRef.current.style.transform = `rotate(${latestFloorplanUserRotationDegRef.current}deg)`
+    }
+  })
 
   useEffect(() => {
     const host = viewportHostRef.current
