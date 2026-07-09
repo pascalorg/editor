@@ -15,6 +15,7 @@ import {
   expandToComponent,
   levelFrame,
 } from './group-transform-shared'
+import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
 // Matches the 2D dashed selection box's stroke.
 const BOX_COLOR = '#3b82f6'
@@ -49,6 +50,8 @@ export function GroupSelectionBox3D() {
     [selectedIds, levelId, nodes],
   )
 
+  // Re-measure once the meshes settle after a scene change (undo included).
+  const meshEpoch = useMeshSettleEpoch(nodes)
   const box = useMemo(() => {
     if (participantIds.length === 0) return null
     const fullIds = expandToComponent(participantIds, nodes, levelId)
@@ -66,7 +69,8 @@ export function GroupSelectionBox3D() {
       ],
       center,
     }
-  }, [participantIds, nodes, levelId])
+    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
+  }, [participantIds, nodes, levelId, meshEpoch])
 
   // Dashed wireframe. Built per box size (rare — selection / commit changes)
   // because LineDashedMaterial measures dashes along the line, so scaling a

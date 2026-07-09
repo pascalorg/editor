@@ -137,6 +137,11 @@ import {
   markBoxSelectHandled,
 } from '../tools/select/box-select-state'
 import {
+  type Point2 as MarqueePoint2,
+  polygonsIntersect as marqueePolygonsIntersect,
+  segmentIntersectsPolygon as marqueeSegmentIntersectsPolygon,
+} from '../tools/select/marquee-geometry'
+import {
   createScreenRectangleSelectionElement,
   hideScreenRectangleSelectionElement,
   intersectScreenRects,
@@ -903,6 +908,35 @@ function getSelectionModifierKeys(event?: {
   }
 }
 
+const isMarqueeVec2 = (v: unknown): v is [number, number] =>
+  Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number')
+const isMarqueeVec2Array = (v: unknown): v is [number, number][] =>
+  Array.isArray(v) && v.length > 0 && v.every(isMarqueeVec2)
+
+/** The screen marquee mapped into plan coordinates through the scene CTM —
+ *  a quad (rotated views give a rotated quad, so tests stay exact). */
+function screenRectToPlanQuad(rect: ScreenRect, scene: SVGGElement): MarqueePoint2[] | null {
+  const svg = scene.ownerSVGElement
+  const ctm = scene.getScreenCTM()
+  if (!(svg && ctm)) return null
+  const inverse = ctm.inverse()
+  const corners: [number, number][] = [
+    [rect.minX, rect.minY],
+    [rect.maxX, rect.minY],
+    [rect.maxX, rect.maxY],
+    [rect.minX, rect.maxY],
+  ]
+  const quad: MarqueePoint2[] = []
+  for (const [x, y] of corners) {
+    const pt = svg.createSVGPoint()
+    pt.x = x
+    pt.y = y
+    const plan = pt.matrixTransform(inverse)
+    quad.push([plan.x, plan.y])
+  }
+  return quad
+}
+
 function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement): string[] {
   const scene = svg.querySelector<SVGGElement>('[data-floorplan-scene]')
   if (!scene) {
@@ -914,7 +948,32 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     return []
   }
 
-  const candidateIdSet = new Set(candidateIds)
+  // Plan-footprint membership for the data kinds — walls/fences by their
+  // segment, slab/ceiling/zone by their polygon — exact under rotated
+  // geometry AND rotated views. The DOM-rect fallback below is an
+  // axis-aligned screen AABB, which inflates around anything diagonal.
+  const planQuad = screenRectToPlanQuad(rect, scene)
+  const sceneNodes = useScene.getState().nodes
+  const dataTested = new Set<string>()
+  const hitIdsFromData = new Set<string>()
+  if (planQuad) {
+    for (const id of candidateIds) {
+      const node = sceneNodes[id as AnyNodeId] as
+        | { start?: unknown; end?: unknown; polygon?: unknown }
+        | undefined
+      if (!node) continue
+      const { start, end, polygon } = node
+      if (isMarqueeVec2(start) && isMarqueeVec2(end)) {
+        dataTested.add(id)
+        if (marqueeSegmentIntersectsPolygon(start, end, planQuad)) hitIdsFromData.add(id)
+      } else if (isMarqueeVec2Array(polygon)) {
+        dataTested.add(id)
+        if (marqueePolygonsIntersect(polygon, planQuad)) hitIdsFromData.add(id)
+      }
+    }
+  }
+
+  const candidateIdSet = new Set(candidateIds.filter((id) => !dataTested.has(id)))
   const hitIds = new Set<string>()
   const baseElementsById = new Map<string, SVGGraphicsElement[]>()
   const fallbackElementsById = new Map<string, SVGGraphicsElement[]>()
@@ -935,7 +994,7 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     }
   }
 
-  for (const id of candidateIds) {
+  for (const id of candidateIdSet) {
     const elements = baseElementsById.get(id) ?? fallbackElementsById.get(id) ?? []
     for (const element of elements) {
       const elementRect = element.getBoundingClientRect()
@@ -950,7 +1009,7 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
     }
   }
 
-  return candidateIds.filter((id) => hitIds.has(id))
+  return candidateIds.filter((id) => hitIds.has(id) || hitIdsFromData.has(id))
 }
 
 function swallowNextFloorplanScreenSelectionClick() {

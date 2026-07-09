@@ -12,6 +12,7 @@ import useInteractionScope, { useMovingNode } from '../../store/use-interaction-
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from './group-actions'
 import { classifyParticipant, computeGroupBox, expandToComponent } from './group-transform-shared'
 import { NodeActionMenu } from './node-action-menu'
+import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
 // Matches the single-node FloatingActionMenu's zoom-compensation constants.
 const REF_ORTHO_ZOOM = 50
@@ -57,6 +58,7 @@ export function GroupFloatingActionMenu() {
   // World anchor above the group bbox. Depends on the scene (post-commit
   // positions), not the camera, and the menu hides during drags — so a
   // memo keyed on selection + nodes is enough, no per-frame box traversal.
+  const meshEpoch = useMeshSettleEpoch(nodes)
   const anchor = useMemo(() => {
     if (participantIds.length === 0) return null
     const fullIds = expandToComponent(participantIds, nodes, levelId)
@@ -67,7 +69,8 @@ export function GroupFloatingActionMenu() {
       box.max.y + MENU_Y_OFFSET,
       (box.min.z + box.max.z) / 2,
     )
-  }, [participantIds, nodes, levelId])
+    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
+  }, [participantIds, nodes, levelId, meshEpoch])
 
   useFrame((state) => {
     // Scale the HTML pill with camera zoom / distance so it feels anchored to

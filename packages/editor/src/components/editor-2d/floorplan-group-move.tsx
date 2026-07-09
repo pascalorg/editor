@@ -42,6 +42,7 @@ import {
   type Vec2,
 } from '../editor/group-transform-shared'
 import { swallowNextClick } from '../editor/handles/use-handle-drag'
+import { useMeshSettleEpoch } from '../editor/use-mesh-settle-epoch'
 
 // 2D sibling of the 3D body-drag group move (`group-move-3d.ts`): dragging
 // any selected element of a multi-selection slides the whole selection
@@ -604,6 +605,10 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
     }
   }, [])
 
+  // `meshEpoch` re-runs the measurement once the meshes settle after a scene
+  // change (undo/redo included) — `computeGroupBox` reads mesh world bounds,
+  // which lag the `nodes` commit by a frame or two.
+  const meshEpoch = useMeshSettleEpoch(nodes)
   const box = useMemo(() => {
     if (selectedIds.length < 2 || !levelId) return null
     const participantIds = selectedIds.filter(
@@ -622,7 +627,8 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
       width: Math.abs(max.x - min.x),
       depth: Math.abs(max.z - min.z),
     }
-  }, [selectedIds, levelId, nodes])
+    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
+  }, [selectedIds, levelId, nodes, meshEpoch])
 
   if (!box || movingNode || mode === 'delete') return null
 

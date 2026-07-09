@@ -45,6 +45,7 @@ import {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
 /**
  * Group-rotate gizmo. When 2+ transformable nodes in the active level frame are
@@ -66,6 +67,8 @@ export function GroupRotateHandle() {
   // Re-derive participants whenever the scene mutates (e.g. after a commit).
   // Drags only touch `useLiveNodeOverrides`, so this does not fire mid-drag.
   const nodes = useScene((s) => s.nodes)
+  // Re-measure the pivot/corner once the meshes settle after a scene change.
+  const meshEpoch = useMeshSettleEpoch(nodes)
 
   const participantIds = useMemo(
     () =>
@@ -94,10 +97,10 @@ export function GroupRotateHandle() {
 
   if (!shouldRender) return null
   // Remount when the moving set changes so the rest pivot re-seeds cleanly.
-  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} />
+  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} meshEpoch={meshEpoch} />
 }
 
-function GroupRotateHandleInner({ ids }: { ids: string[] }) {
+function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: number }) {
   const { camera, raycaster, gl, scene } = useThree()
   const arrowGeometry = useMemo(() => createRotateArrowHandleGeometry(), [])
   const hitGeometry = useMemo(() => createRotateArrowHitAreaGeometry(), [])
@@ -137,7 +140,8 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       box.max.z + CORNER_OFFSET,
     )
     return { pivot, corner }
-  }, [ids])
+    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
+  }, [ids, meshEpoch])
 
   if (!rest) return null
   const active = isDragging && frozenRest.current ? frozenRest.current : rest

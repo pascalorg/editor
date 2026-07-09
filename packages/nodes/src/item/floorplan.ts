@@ -185,6 +185,9 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   })
 
   const isSelected = ctx.viewState?.selected ?? false
+  // Marquee preview — the about-to-be-selected tint every other kind shows.
+  const isHighlighted = ctx.viewState?.highlighted ?? false
+  const showSelection = isSelected || isHighlighted
   const isMoving = ctx.viewState?.moving ?? false
   const selectedStroke = ctx.viewState?.palette?.selectedStroke ?? '#3b82f6'
   const floorPlanUrl = node.asset.floorPlanUrl
@@ -204,8 +207,8 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       // Selected items read as selected: palette stroke + heavier weight
       // (the move dot used to be the only cue, and it hides in
       // multi-selections).
-      stroke: isSelected ? selectedStroke : '#92400e',
-      strokeWidth: isSelected ? 0.035 : 0.012,
+      stroke: showSelection ? selectedStroke : '#92400e',
+      strokeWidth: showSelection ? 0.035 : 0.012,
       opacity: 0.85,
     },
   ]
@@ -229,14 +232,14 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   // Selection ring ABOVE the thumbnail — the base polygon's selected stroke
   // sits underneath the image, so re-draw it on top. `fill: none` keeps the
   // ring click-through; the base polygon owns hit-testing.
-  if (isSelected && floorPlanUrl) {
+  if (showSelection && floorPlanUrl) {
     children.push({
       kind: 'polygon',
       points,
       fill: 'none',
       stroke: selectedStroke,
       strokeWidth: 0.035,
-      opacity: 0.95,
+      opacity: isSelected ? 0.95 : 0.7,
     })
   }
   // Move handle — orange dot at the item center. Only when selected and not
