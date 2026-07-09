@@ -320,6 +320,48 @@ describe('group transform participants', () => {
     })
   })
 
+  test('polygon hosts carry their attached positioned children (ceiling items)', () => {
+    const nodes = {
+      building_test: { id: 'building_test', type: 'building', children: ['level_test'] },
+      level_test: {
+        id: 'level_test',
+        type: 'level',
+        parentId: 'building_test',
+        children: ['ceiling_test'],
+      },
+      ceiling_test: {
+        id: 'ceiling_test',
+        type: 'ceiling',
+        parentId: 'level_test',
+        children: ['item_lamp'],
+        polygon: [
+          [0, 0],
+          [2, 0],
+          [2, 2],
+          [0, 2],
+        ],
+      },
+      item_lamp: {
+        id: 'item_lamp',
+        type: 'item',
+        parentId: 'ceiling_test',
+        position: [1, 2.4, 1],
+        rotation: [0, 0.5, 0],
+      },
+    } as unknown as Record<string, AnyNode>
+
+    // The lamp itself is not level-parented, so it is not an independent
+    // participant — it rides its host ceiling.
+    expect(classifyParticipant(nodes.item_lamp, 'level_test', nodes)).toBeNull()
+
+    const { starts } = collectParticipants(['ceiling_test'], nodes, 'level_test')
+    expect(starts.map((s) => s.id).sort()).toEqual(['ceiling_test', 'item_lamp'])
+
+    const moved = translateGroupPatches(starts, [], 2, 1)
+    const lampPatch = Object.fromEntries(moved).item_lamp as { position: [number, number, number] }
+    expect(lampPatch.position).toEqual([3, 2.4, 2])
+  })
+
   test('supports legacy level-parented elevators already loaded in the editor', () => {
     const nodes = {
       building_test: {

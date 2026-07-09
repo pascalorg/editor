@@ -78,18 +78,27 @@ function getParticipantScalarRotation(node: AnyNode): number | null {
   return sceneRegistry.nodes.get(node.id)?.rotation.y ?? 0
 }
 
+// Shape-only classification of a positioned placement (no level-scope check).
+// Used for polygon hosts' attached children, whose parent is the host rather
+// than the level.
+function classifyPlacementShape(node: AnyNode): 'vec3' | 'scalar' | null {
+  const p = getParticipantPosition(node)
+  const r = (node as { rotation?: unknown }).rotation
+  if (isVec3(p) && isVec3(r)) return 'vec3'
+  if (isVec3(p) && getParticipantScalarRotation(node) !== null) return 'scalar'
+  return null
+}
+
 export function classifyParticipant(
   node: AnyNode | undefined,
   levelId: string | null,
   sceneNodes: Record<string, AnyNode | undefined>,
 ): ParticipantKind | null {
   if (!node || !isInGroupTransformScope(node, levelId, sceneNodes)) return null
-  const p = getParticipantPosition(node)
-  const r = (node as { rotation?: unknown }).rotation
+  const shape = classifyPlacementShape(node)
+  if (shape) return shape
   const start = (node as { start?: unknown }).start
   const end = (node as { end?: unknown }).end
-  if (isVec3(p) && isVec3(r)) return 'vec3'
-  if (isVec3(p) && getParticipantScalarRotation(node) !== null) return 'scalar'
   if (isVec2(start) && isVec2(end)) return 'endpoint'
   if (isVec2Array((node as { polygon?: unknown }).polygon)) return 'polygon'
   return null
@@ -167,6 +176,46 @@ export function collectParticipants(
           ? n.holes.map((hole) => hole.map(([x, z]) => [x, z] as Vec2))
           : null,
       })
+    }
+  }
+
+  // Polygon hosts (slab/ceiling) rebuild their geometry from vertices rather
+  // than transforming a group, so — unlike wall children, which ride the wall
+  // mesh — their attached children (ceiling-mounted items) must transform
+  // explicitly. Their positions are stored in the level frame (the host group
+  // sits at the origin), so the same rigid patches apply.
+  const includedIds = new Set<string>(starts.map((s) => s.id))
+  for (const s of [...starts]) {
+    if (s.kind !== 'polygon') continue
+    const host = sceneNodes[s.id]
+    const childIds = (host as { children?: string[] } | undefined)?.children
+    if (!Array.isArray(childIds)) continue
+    for (const childId of childIds) {
+      if (includedIds.has(childId)) continue
+      const child = sceneNodes[childId]
+      if (!child) continue
+      const shape = classifyPlacementShape(child)
+      const position = child ? getParticipantPosition(child) : null
+      if (!(shape && position)) continue
+      if (shape === 'vec3') {
+        const c = child as AnyNode & { rotation: Vec3 }
+        starts.push({
+          id: childId as AnyNodeId,
+          kind: 'vec3',
+          position: [position[0], position[1], position[2]],
+          rotation: [c.rotation[0], c.rotation[1], c.rotation[2]],
+        })
+      } else {
+        const rotation = getParticipantScalarRotation(child)
+        if (rotation === null) continue
+        starts.push({
+          id: childId as AnyNodeId,
+          kind: 'scalar',
+          position: [position[0], position[1], position[2]],
+          rotation,
+        })
+      }
+      includedIds.add(childId)
     }
   }
 
