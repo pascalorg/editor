@@ -9,6 +9,7 @@ import type {
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
+import { PCSSShadowFilter } from '../../lib/pcss'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
@@ -152,6 +153,11 @@ export function Lights() {
         // Resize the ortho frustum to the fitted bounds. The shadow camera is
         // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
+        if (light.shadow && (light.shadow as any).filterNode == null) {
+          // PCSS: contact-hardening penumbra instead of the renderer's
+          // uniform PCF blur. Assigned once per shadow instance.
+          ;(light.shadow as any).filterNode = PCSSShadowFilter
+        }
         if (cam) {
           // Shadow-caster-only geometry (hidden roofs/levels in cutaway views)
           // is visible to the shadow pass alone — see lib/shadow-only.ts.
@@ -253,7 +259,7 @@ export function Lights() {
           shadow-bias={-0.002}
           shadow-mapSize={[2048, 2048]}
           shadow-normalBias={0.3}
-          shadow-radius={1.5}
+          shadow-radius={4}
         >
           {light.castShadow && !SHADOWS_DISABLED && shadows ? (
             <orthographicCamera
