@@ -366,6 +366,13 @@ export function startGroupPickUp(
       rotateCarried(key === 'r' ? 1 : -1)
       return
     }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Deleting mid-carry: put the group down first (revert), then let the
+      // global Delete arm remove the selection — no dangling carry. The
+      // duplicate flow's onCancel already discards the clones instead.
+      cancel()
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()

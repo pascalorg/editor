@@ -365,6 +365,12 @@ export function armGroupMove3d(args: {
       rotateSession(session, key === 'r' ? 1 : -1)
       return
     }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Deleting mid-move: revert the session first, then let the global
+      // Delete arm remove the selection — no dangling carry.
+      cancel()
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()

@@ -54,15 +54,19 @@ import { swallowNextClick } from '../editor/handles/use-handle-drag'
 // Same engage threshold as the layer's Cmd-drag direct move.
 const DRAG_THRESHOLD_PX = 4
 
-// Live plan-frame drag delta, published so the dashed group bbox overlay
-// rides along without re-rendering the whole registry layer per tick.
+// Live plan-frame drag delta / rotation, published so the dashed group bbox
+// overlay rides along without re-rendering the whole registry layer per tick.
 type FloorplanGroupDragState = {
   delta: Vec2 | null
+  rotation: { pivotX: number; pivotZ: number; angle: number } | null
   set: (delta: Vec2 | null) => void
+  setRotation: (rotation: FloorplanGroupDragState['rotation']) => void
 }
 export const useFloorplanGroupDrag = create<FloorplanGroupDragState>((set) => ({
   delta: null,
+  rotation: null,
   set: (delta) => set({ delta }),
+  setRotation: (rotation) => set({ rotation }),
 }))
 
 /**
@@ -346,6 +350,12 @@ export function startFloorplanGroupMove(
       rotateSession(session, key === 'r' ? 1 : -1)
       return
     }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Deleting mid-move: revert the session first, then let the global
+      // Delete arm remove the selection — no dangling carry.
+      cancel()
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()
@@ -445,6 +455,8 @@ export function startFloorplanGroupRotate(event: {
       useScene.getState().markDirty(l.id)
     }
     useLiveNodeOverrides.getState().setMany(entries)
+    // The dashed box spins with the group for live feedback.
+    useFloorplanGroupDrag.getState().setRotation({ pivotX: pivot.x, pivotZ: pivot.z, angle: delta })
   }
 
   const clearLivePreviews = () => {
@@ -473,6 +485,7 @@ export function startFloorplanGroupRotate(event: {
     useInteractionScope
       .getState()
       .endIf((sc) => sc.kind === 'handle-drag' && sc.handle === GROUP_ROTATE_DRAG_LABEL)
+    useFloorplanGroupDrag.getState().setRotation(null)
   }
 
   const onUp = (e: PointerEvent) => {
@@ -508,6 +521,11 @@ export function startFloorplanGroupRotate(event: {
 
   // Capture phase so Escape wins over the global `use-keyboard` arm.
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Deleting mid-rotate: revert first, then let the global Delete arm run.
+      cancel()
+      return
+    }
     if (e.key !== 'Escape') return
     e.preventDefault()
     e.stopPropagation()
@@ -523,7 +541,14 @@ export function startFloorplanGroupRotate(event: {
 }
 
 const GROUP_BOX_CURSOR_STYLE = { cursor: 'move' } as const
-const GROUP_BOX_ROTATE_CURSOR_STYLE = { cursor: 'grab' } as const
+// Curved-arrow rotate cursor (no native CSS equivalent) — black glyph with a
+// white halo so it reads on light and dark plans; falls back to `grab`.
+const ROTATE_CURSOR_SVG = encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></g><g fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></g></svg>',
+)
+const GROUP_BOX_ROTATE_CURSOR_STYLE = {
+  cursor: `url("data:image/svg+xml,${ROTATE_CURSOR_SVG}") 11 11, grab`,
+} as const
 
 /**
  * Dashed bounding box around the current multi-selection's transformable
@@ -550,6 +575,7 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   const levelId = useViewer((s) => s.selection.levelId)
   const nodes = useScene((s) => s.nodes)
   const delta = useFloorplanGroupDrag((s) => s.delta)
+  const liveRotation = useFloorplanGroupDrag((s) => s.rotation)
   const movingNode = useMovingNode()
   const mode = useEditor((s) => s.mode)
 
@@ -594,13 +620,21 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   const pad = 6 * unitsPerPixel
   const stroke = palette?.selectedStroke ?? '#3b82f6'
   const interactive = !modifierHeld && !!onPointerDown
+  // Mid-gesture the box rides the live delta (group move) or spins around the
+  // rotation pivot (corner rotate) — SVG rotate() is degrees around a plan
+  // point, and positive matches the atan2 x→z sense on the y-down plan.
+  const transform = liveRotation
+    ? `rotate(${(liveRotation.angle * 180) / Math.PI} ${liveRotation.pivotX} ${liveRotation.pivotZ})`
+    : delta
+      ? `translate(${delta[0]} ${delta[1]})`
+      : undefined
   return (
     <g
       data-group-selection-box
       onPointerDown={interactive ? onPointerDown : undefined}
       pointerEvents={interactive ? 'auto' : 'none'}
       style={interactive ? GROUP_BOX_CURSOR_STYLE : undefined}
-      transform={delta ? `translate(${delta[0]} ${delta[1]})` : undefined}
+      transform={transform}
     >
       <rect
         fill="transparent"
