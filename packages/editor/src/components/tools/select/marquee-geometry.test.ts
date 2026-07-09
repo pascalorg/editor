@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { convexHull2D, type Point2, rectIntersectsHull, type ScreenRect } from './marquee-geometry'
+import {
+  convexHull2D,
+  type Point2,
+  polygonsIntersect,
+  rectIntersectsHull,
+  type ScreenRect,
+  segmentIntersectsPolygon,
+} from './marquee-geometry'
 
 const rect = (minX: number, minY: number, maxX: number, maxY: number): ScreenRect => ({
   minX,
@@ -94,5 +101,61 @@ describe('rectIntersectsHull', () => {
   test('single projected point matches only when inside the rect', () => {
     expect(rectIntersectsHull(rect(0, 0, 2, 2), [[1, 1]])).toBe(true)
     expect(rectIntersectsHull(rect(0, 0, 2, 2), [[3, 3]])).toBe(false)
+  })
+})
+
+describe('segmentIntersectsPolygon', () => {
+  const quad: Point2[] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ]
+  test('crossing segment matches', () => {
+    expect(segmentIntersectsPolygon([-1, 2], [5, 2], quad)).toBe(true)
+  })
+  test('fully inside matches', () => {
+    expect(segmentIntersectsPolygon([1, 1], [2, 2], quad)).toBe(true)
+  })
+  test('outside segment does not match', () => {
+    expect(segmentIntersectsPolygon([5, 5], [7, 8], quad)).toBe(false)
+  })
+})
+
+describe('polygonsIntersect', () => {
+  const quad: Point2[] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ]
+  test('overlapping polygons match', () => {
+    expect(
+      polygonsIntersect(quad, [
+        [3, 3],
+        [6, 3],
+        [6, 6],
+        [3, 6],
+      ]),
+    ).toBe(true)
+  })
+  test('containment matches both ways', () => {
+    const inner: Point2[] = [
+      [1, 1],
+      [2, 1],
+      [2, 2],
+    ]
+    expect(polygonsIntersect(quad, inner)).toBe(true)
+    expect(polygonsIntersect(inner, quad)).toBe(true)
+  })
+  test('a rotated diamond beside the quad does not match', () => {
+    expect(
+      polygonsIntersect(quad, [
+        [7, 2],
+        [9, 0],
+        [11, 2],
+        [9, 4],
+      ]),
+    ).toBe(false)
   })
 })

@@ -1,8 +1,17 @@
-import { sceneRegistry, type ZoneNode } from '@pascal-app/core'
+import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
-import { Box3, type Camera, Matrix4, type Object3D, Vector3 } from 'three'
+import {
+  Box3,
+  type Camera,
+  Matrix4,
+  type Object3D,
+  Plane,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
@@ -10,7 +19,13 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from './box-select-state'
-import { convexHull2D, type Point2, rectIntersectsHull } from './marquee-geometry'
+import {
+  convexHull2D,
+  type Point2,
+  polygonsIntersect,
+  rectIntersectsHull,
+  segmentIntersectsPolygon,
+} from './marquee-geometry'
 import { PlaneBoxSelectTool } from './plane-box-select-tool'
 import {
   createScreenRectangleSelectionElement,
@@ -30,6 +45,10 @@ const tempInvWorld = new Matrix4()
 const tempRelMatrix = new Matrix4()
 const tempWorldPoint = new Vector3()
 const tempScreenPoint = new Vector3()
+const tempNDC = new Vector2()
+const tempPlane = new Plane()
+const tempRaycaster = new Raycaster()
+const UP = new Vector3(0, 1, 0)
 const boxCorners = [
   new Vector3(),
   new Vector3(),
@@ -139,6 +158,46 @@ function isObjectVisible(object: Object3D): boolean {
   return true
 }
 
+const isVec2 = (v: unknown): v is [number, number] =>
+  Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number')
+const isVec2Array = (v: unknown): v is [number, number][] =>
+  Array.isArray(v) && v.length > 0 && v.every(isVec2)
+
+/**
+ * The marquee rect projected onto the active level's floor plane, in the
+ * LEVEL frame — a convex quad (perspective keeps rect convexity). Null when
+ * any corner ray misses the plane (camera near the horizon); callers fall
+ * back to the screen-hull test then.
+ */
+function marqueeGroundQuad(rect: ScreenRect, camera: Camera, canvasRect: DOMRect): Point2[] | null {
+  const levelId = useViewer.getState().selection.levelId
+  const levelObject = levelId ? sceneRegistry.nodes.get(levelId) : null
+  if (!levelObject) return null
+  levelObject.updateWorldMatrix(true, false)
+  tempInvWorld.copy(levelObject.matrixWorld).invert()
+  levelObject.getWorldPosition(tempWorldPoint)
+  tempPlane.set(UP, -tempWorldPoint.y)
+
+  const corners: [number, number][] = [
+    [rect.minX, rect.minY],
+    [rect.maxX, rect.minY],
+    [rect.maxX, rect.maxY],
+    [rect.minX, rect.maxY],
+  ]
+  const quad: Point2[] = []
+  for (const [cx, cy] of corners) {
+    tempNDC.set(
+      ((cx - canvasRect.left) / canvasRect.width) * 2 - 1,
+      -((cy - canvasRect.top) / canvasRect.height) * 2 + 1,
+    )
+    tempRaycaster.setFromCamera(tempNDC, camera)
+    if (!tempRaycaster.ray.intersectPlane(tempPlane, tempWorldPoint)) return null
+    tempWorldPoint.applyMatrix4(tempInvWorld)
+    quad.push([tempWorldPoint.x, tempWorldPoint.z])
+  }
+  return quad
+}
+
 function collectNodeIdsInScreenRect(
   rect: ScreenRect,
   camera: Camera,
@@ -147,9 +206,35 @@ function collectNodeIdsInScreenRect(
   const canvasRect = canvas.getBoundingClientRect()
   const result: string[] = []
 
+  // Plan-footprint membership for the data kinds (walls / fences by their
+  // segment, slabs / ceilings / zones by their polygon) — exact under any
+  // rotation, matching the plane-marquee tool's semantics. Kinds whose
+  // placement lives in mesh transforms (items, columns, …) intersect the
+  // marquee with their oriented bbox projected to a screen hull instead.
+  const quad = marqueeGroundQuad(rect, camera, canvasRect)
+  const nodes = useScene.getState().nodes
+
   for (const id of collectSelectableCandidateIds()) {
     const object = sceneRegistry.nodes.get(id)
     if (!object || !isObjectVisible(object)) continue
+
+    if (quad) {
+      const node = nodes[id as keyof typeof nodes] as
+        | { start?: unknown; end?: unknown; polygon?: unknown }
+        | undefined
+      if (node) {
+        const { start, end, polygon } = node
+        if (isVec2(start) && isVec2(end)) {
+          if (segmentIntersectsPolygon(start, end, quad)) result.push(id)
+          continue
+        }
+        if (isVec2Array(polygon)) {
+          if (polygonsIntersect(polygon, quad)) result.push(id)
+          continue
+        }
+      }
+    }
+
     const hull = getObjectScreenHull(object, camera, canvasRect)
     if (hull && rectIntersectsHull(rect, hull)) {
       result.push(id)

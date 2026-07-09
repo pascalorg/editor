@@ -89,6 +89,37 @@ function segmentsIntersect(a1: Point2, a2: Point2, b1: Point2, b2: Point2): bool
   return false
 }
 
+/** Segment vs polygon (general, possibly concave): endpoint containment or
+ *  any edge crossing. */
+export function segmentIntersectsPolygon(
+  a: Point2,
+  b: Point2,
+  polygon: readonly Point2[],
+): boolean {
+  if (polygon.length === 0) return false
+  if (polygon.length === 1) return false
+  if (polygon.length >= 3 && (pointInPolygon(a, polygon) || pointInPolygon(b, polygon))) return true
+  for (let i = 0; i < polygon.length; i++) {
+    if (segmentsIntersect(a, b, polygon[i]!, polygon[(i + 1) % polygon.length]!)) return true
+  }
+  return false
+}
+
+/** Polygon vs polygon (general): containment either way or any edge crossing. */
+export function polygonsIntersect(a: readonly Point2[], b: readonly Point2[]): boolean {
+  if (a.length === 0 || b.length === 0) return false
+  if (a.length >= 3 && b.some((p) => pointInPolygon(p, a))) return true
+  if (b.length >= 3 && a.some((p) => pointInPolygon(p, b))) return true
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i]!
+    const a2 = a[(i + 1) % a.length]!
+    for (let j = 0; j < b.length; j++) {
+      if (segmentsIntersect(a1, a2, b[j]!, b[(j + 1) % b.length]!)) return true
+    }
+  }
+  return false
+}
+
 /**
  * Does the axis-aligned marquee rect intersect the (convex) hull polygon?
  * Covers all cases: hull vertex inside the rect, rect fully inside the hull,
