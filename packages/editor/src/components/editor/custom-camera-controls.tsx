@@ -392,6 +392,20 @@ export const CustomCameraControls = () => {
   }, [camera, raycaster])
 
   useEffect(() => {
+    // Dev-only: deterministic camera poses for screenshot/automation tooling.
+    // A getter, not a snapshot — drei recreates the impl when the default
+    // camera changes, so a captured instance goes stale.
+    if (process.env.NODE_ENV !== 'development') return
+    const w = window as typeof window & {
+      __pascalCameraControls?: (() => CameraControlsImpl | null) | null
+    }
+    w.__pascalCameraControls = () => controls.current
+    return () => {
+      w.__pascalCameraControls = null
+    }
+  }, [])
+
+  useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
     let targetY = 0
     if (currentLevelId) {
