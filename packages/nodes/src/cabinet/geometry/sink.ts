@@ -9,33 +9,13 @@ import {
   BoxGeometry,
   CylinderGeometry,
   Group,
+  type Material,
   Mesh,
-  MeshStandardMaterial,
   SphereGeometry,
   TorusGeometry,
 } from 'three'
 import type { SinkLayout } from '../stack'
 import { createWorldScaleBoxGeometry, stampSlot } from './shared'
-
-export const sinkBasinMaterial = new MeshStandardMaterial({
-  color: '#c7cbcf',
-  metalness: 0.85,
-  roughness: 0.3,
-})
-export const sinkFaucetMaterial = new MeshStandardMaterial({
-  color: '#b8bcc0',
-  metalness: 0.9,
-  roughness: 0.22,
-})
-export const sinkDrainMaterial = new MeshStandardMaterial({
-  color: '#7d8288',
-  metalness: 0.88,
-  roughness: 0.35,
-})
-
-for (const material of [sinkBasinMaterial, sinkFaucetMaterial, sinkDrainMaterial]) {
-  material.userData.__pascalCachedMaterial = true
-}
 
 const BASIN_WALL = 0.012
 const BASIN_DEPTH = 0.19
@@ -130,6 +110,7 @@ function addBasinShell(
   centerZ: number,
   rimY: number,
   name: string,
+  applianceMaterial: Material,
 ) {
   const x = centerX + bowl.centerX
   const bottomY = rimY - BASIN_DEPTH
@@ -169,7 +150,7 @@ function addBasinShell(
   ]
   for (const wall of walls) {
     const mesh = stampSlot(
-      new Mesh(createWorldScaleBoxGeometry(...wall.size), sinkBasinMaterial),
+      new Mesh(createWorldScaleBoxGeometry(...wall.size), applianceMaterial),
       'appliance',
     )
     mesh.name = `${name}-basin-${wall.suffix}`
@@ -180,7 +161,7 @@ function addBasinShell(
   }
 
   const drain = stampSlot(
-    new Mesh(new CylinderGeometry(0.024, 0.024, 0.004, 24), sinkDrainMaterial),
+    new Mesh(new CylinderGeometry(0.024, 0.024, 0.004, 24), applianceMaterial),
     'appliance',
   )
   drain.name = `${name}-drain`
@@ -190,7 +171,7 @@ function addBasinShell(
   const trap = stampSlot(
     new Mesh(
       new CylinderGeometry(0.02, 0.02, Math.max(0.05, BASIN_DEPTH * 0.7), 16),
-      sinkDrainMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -209,7 +190,14 @@ const FAUCET_TUBE_RADIUS = 0.0125
 const FAUCET_ARC_RADIUS = 0.105
 const FAUCET_RISER_TOP = 0.305
 
-function addFaucetHandle(group: Group, x: number, y: number, z: number, name: string) {
+function addFaucetHandle(
+  group: Group,
+  x: number,
+  y: number,
+  z: number,
+  name: string,
+  applianceMaterial: Material,
+) {
   const handle = new Group()
   handle.name = `${name}-faucet-handle`
   handle.position.set(x, y, z)
@@ -219,7 +207,7 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
   const rootInset = 0.022
 
   const saddle = stampSlot(
-    new Mesh(new SphereGeometry(barrelRadius * 1.08, 24, 14), sinkFaucetMaterial),
+    new Mesh(new SphereGeometry(barrelRadius * 1.08, 24, 14), applianceMaterial),
     'appliance',
   )
   saddle.name = `${name}-faucet-handle-saddle`
@@ -231,7 +219,7 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
   const barrel = stampSlot(
     new Mesh(
       new CylinderGeometry(barrelRadius, barrelRadius, barrelLength + rootInset, 28),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -245,7 +233,7 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
   const endCap = stampSlot(
     new Mesh(
       new CylinderGeometry(barrelRadius * 1.03, barrelRadius * 1.03, endCapThickness, 28),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -259,7 +247,7 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
   const pinHeight = 0.072
   const pinX = barrelLength - 0.012
   const pin = stampSlot(
-    new Mesh(new CylinderGeometry(pinRadius, pinRadius, pinHeight, 14), sinkFaucetMaterial),
+    new Mesh(new CylinderGeometry(pinRadius, pinRadius, pinHeight, 14), applianceMaterial),
     'appliance',
   )
   pin.name = `${name}-faucet-handle-pin`
@@ -269,7 +257,7 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
 
   const pinCapHeight = 0.003
   const pinCap = stampSlot(
-    new Mesh(new CylinderGeometry(pinRadius, pinRadius, pinCapHeight, 14), sinkFaucetMaterial),
+    new Mesh(new CylinderGeometry(pinRadius, pinRadius, pinCapHeight, 14), applianceMaterial),
     'appliance',
   )
   pinCap.name = `${name}-faucet-handle-pin-tip`
@@ -280,17 +268,21 @@ function addFaucetHandle(group: Group, x: number, y: number, z: number, name: st
   group.add(handle)
 }
 
-function addFaucet(group: Group, x: number, z: number, rimY: number, name: string) {
+function addFaucet(
+  group: Group,
+  x: number,
+  z: number,
+  rimY: number,
+  name: string,
+  applianceMaterial: Material,
+) {
   const bodyTopY = rimY + FAUCET_BODY_HEIGHT
   const riserTopY = rimY + FAUCET_RISER_TOP
   const reach = FAUCET_ARC_RADIUS * 2
 
   // Round base flare where the body meets the countertop.
   const flare = stampSlot(
-    new Mesh(
-      new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, 0.032, 0.008, 28),
-      sinkFaucetMaterial,
-    ),
+    new Mesh(new CylinderGeometry(FAUCET_BODY_RADIUS + 0.002, 0.032, 0.008, 28), applianceMaterial),
     'appliance',
   )
   flare.name = `${name}-faucet-escutcheon`
@@ -302,7 +294,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const body = stampSlot(
     new Mesh(
       new CylinderGeometry(FAUCET_BODY_RADIUS, FAUCET_BODY_RADIUS, FAUCET_BODY_HEIGHT, 28),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -313,7 +305,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
 
   // Domed shoulder capping the body.
   const shoulder = stampSlot(
-    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 24, 16), sinkFaucetMaterial),
+    new Mesh(new SphereGeometry(FAUCET_BODY_RADIUS, 24, 16), applianceMaterial),
     'appliance',
   )
   shoulder.name = `${name}-faucet-shoulder`
@@ -327,7 +319,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const collar = stampSlot(
     new Mesh(
       new CylinderGeometry(FAUCET_TUBE_RADIUS, FAUCET_BODY_RADIUS * 0.62, collarHeight, 20),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -341,7 +333,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const riser = stampSlot(
     new Mesh(
       new CylinderGeometry(FAUCET_TUBE_RADIUS, FAUCET_TUBE_RADIUS, riserLength, 18),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -355,7 +347,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const gooseneck = stampSlot(
     new Mesh(
       new TorusGeometry(FAUCET_ARC_RADIUS, FAUCET_TUBE_RADIUS, 14, 32, Math.PI),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -372,7 +364,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const downTube = stampSlot(
     new Mesh(
       new CylinderGeometry(FAUCET_TUBE_RADIUS, FAUCET_TUBE_RADIUS, downTubeLength, 18),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -390,7 +382,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
         seamHeight,
         18,
       ),
-      sinkDrainMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -403,7 +395,7 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
   const sprayHead = stampSlot(
     new Mesh(
       new CylinderGeometry(FAUCET_TUBE_RADIUS + 0.0005, 0.019, headLength, 20),
-      sinkFaucetMaterial,
+      applianceMaterial,
     ),
     'appliance',
   )
@@ -414,14 +406,21 @@ function addFaucet(group: Group, x: number, z: number, rimY: number, name: strin
 
   const faceHeight = 0.008
   const sprayFace = stampSlot(
-    new Mesh(new CylinderGeometry(0.019, 0.018, faceHeight, 20), sinkDrainMaterial),
+    new Mesh(new CylinderGeometry(0.019, 0.018, faceHeight, 20), applianceMaterial),
     'appliance',
   )
   sprayFace.name = `${name}-faucet-aerator`
   sprayFace.position.set(x, headTopY - headLength - faceHeight / 2, spoutZ)
   group.add(sprayFace)
 
-  addFaucetHandle(group, x + FAUCET_BODY_RADIUS - 0.016, rimY + FAUCET_BODY_HEIGHT * 0.76, z, name)
+  addFaucetHandle(
+    group,
+    x + FAUCET_BODY_RADIUS - 0.016,
+    rimY + FAUCET_BODY_HEIGHT * 0.76,
+    z,
+    name,
+    applianceMaterial,
+  )
 }
 
 /**
@@ -439,15 +438,16 @@ export function addSinkCompartment(
   rimY: number,
   countertopThickness: number,
   index: number,
+  applianceMaterial: Material,
 ) {
   const name = `cabinet-sink-${index}`
   for (const [bowlIndex, bowl] of bowls.entries()) {
-    addBasinShell(group, bowl, centerX, centerZ, rimY, `${name}-${bowlIndex}`)
+    addBasinShell(group, bowl, centerX, centerZ, rimY, `${name}-${bowlIndex}`, applianceMaterial)
   }
 
   const bowlsMinX = Math.min(...bowls.map((bowl) => bowl.centerX - bowl.width / 2))
   const bowlsMaxX = Math.max(...bowls.map((bowl) => bowl.centerX + bowl.width / 2))
   const faucetX = centerX + (bowlsMinX + bowlsMaxX) / 2
   const faucetZ = centerZ - bowls[0]!.depth / 2 - FAUCET_SETBACK
-  addFaucet(group, faucetX, faucetZ, rimY + countertopThickness, name)
+  addFaucet(group, faucetX, faucetZ, rimY + countertopThickness, name, applianceMaterial)
 }

@@ -285,7 +285,16 @@ export function buildCabinetGeometry(
         : parentRun?.withCountertop
           ? parentRun.countertopThickness
           : 0.02
-    addSinkCompartment(group, sinkBowlSpecs, 0, 0, topY, slabThickness, sinkRow.index)
+    addSinkCompartment(
+      group,
+      sinkBowlSpecs,
+      0,
+      0,
+      topY,
+      slabThickness,
+      sinkRow.index,
+      materials.appliance,
+    )
     const falseFrontHeight = Math.min(
       Math.max(0.01, carcassHeight - frontGap * 2),
       SINK_FALSE_FRONT_HEIGHT,

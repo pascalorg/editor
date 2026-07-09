@@ -2335,6 +2335,42 @@ describe('buildCabinetGeometry — sink compartments', () => {
     expect(findMeshByName(group, 'cabinet-sink-1-faucet-handle-pin')).toBeDefined()
   })
 
+  test('sink appliance paint persists onto faucet and basin after rebuild', () => {
+    const ctx: GeometryContext = {
+      ...geometryContext({ children: [] }),
+      materials: {
+        mat_sink: {
+          id: 'mat_sink',
+          name: 'Painted sink',
+          material: {
+            properties: {
+              color: '#ff3366',
+              roughness: 0.4,
+              metalness: 0.1,
+            },
+          },
+        },
+      } as GeometryContext['materials'],
+    }
+    const group = buildCabinetGeometry(
+      sinkModule({ slots: { appliance: 'scene:mat_sink' } }),
+      ctx,
+      'rendered',
+      true,
+    )
+    const paintedMeshes = [
+      findMeshByName(group, 'cabinet-sink-1-0-basin-bottom'),
+      findMeshByName(group, 'cabinet-sink-1-0-drain'),
+      findMeshByName(group, 'cabinet-sink-1-faucet-base'),
+      findMeshByName(group, 'cabinet-sink-1-faucet-handle-barrel'),
+    ]
+
+    for (const mesh of paintedMeshes) {
+      const material = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material
+      expect(material.color.getHexString()).toBe('ff3366')
+    }
+  })
+
   test('sink module keeps a top false front in front of the basin', () => {
     const node = sinkModule()
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)

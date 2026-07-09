@@ -13,7 +13,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import { FrontSide, type Group, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -223,19 +223,7 @@ export const GeometrySystem = () => {
 
       disposeChildren(group)
       for (const child of [...built.children]) {
-        // Tag every child the builder produced so a subsequent rebuild
-        // can dispose only THIS rebuild's outputs and leave React-
-        // mounted siblings (hosted items inside a shelf / slab / etc.)
-        // alone. Without this, a parent rebuild triggered by a child
-        // event (e.g. an item reparenting onto a shelf calls
-        // `dirtyNodes.add(parent)` in `ItemRenderer`'s effect) would
-        // wipe ALL of the parent group's children — including the
-        // freshly-mounted item — leaving the item in scene state but
-        // invisible.
-        ;(child as { userData?: Record<string, unknown> }).userData = {
-          ...(child as { userData?: Record<string, unknown> }).userData,
-          __fromGeometry: true,
-        }
+        markGeometryBuildOutput(child)
         group.add(child)
       }
       rebuiltGeometry = true
@@ -406,6 +394,18 @@ export default GeometrySystem
 export type GeometryBuildCacheEntry = {
   group: Group
   key: string
+}
+
+export function markGeometryBuildOutput(child: Object3D): void {
+  // Tag the builder subtree so paint previews can reach nested meshes (for
+  // example a cabinet sink faucet handle), while disposal still removes only
+  // top-level builder children from the registered group.
+  child.traverse((object) => {
+    object.userData = {
+      ...object.userData,
+      __fromGeometry: true,
+    }
+  })
 }
 
 export function shouldReuseGeometryBuild(
