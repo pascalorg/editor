@@ -457,9 +457,11 @@ type GuideHandleHintAnchor = {
 function FloorplanCompassButton({
   northRotationDeg,
   onAlignNorth,
+  needleRef,
 }: {
   northRotationDeg: number
   onAlignNorth: () => void
+  needleRef?: React.RefObject<SVGSVGElement | null>
 }) {
   return (
     <Tooltip>
@@ -480,7 +482,8 @@ function FloorplanCompassButton({
           <span className="relative flex h-6 w-6 items-center justify-center rounded-full bg-[#b8b8b8] shadow-inner dark:bg-neutral-700">
             <svg
               aria-hidden="true"
-              className="h-6 w-6 transition-transform duration-150 ease-out"
+              className="h-6 w-6"
+              ref={needleRef}
               style={{ transform: `rotate(${northRotationDeg}deg)` }}
               viewBox="0 0 48 48"
             >
@@ -5078,6 +5081,7 @@ export function FloorplanPanel({
   const latestNavigationSyncPoseRef = useRef<NavigationSyncPose | null>(
     useEditor.getState().navigationSyncPose,
   )
+  const compassNeedleRef = useRef<SVGSVGElement | null>(null)
   const levelId = useViewer((state) => state.selection.levelId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -6563,6 +6567,20 @@ export function FloorplanPanel({
       latestNavigationSyncPoseRef.current = pose
 
       if (pose.source === '3d') {
+        if (!isFloorplanOpenRef.current) {
+          // Panel hidden — drive the compass needle imperatively without
+          // triggering React state (setViewport) that would re-render the
+          // full floorplan SVG every camera frame.
+          const nextDeg = floorplanRotationFromCameraAzimuth(
+            pose.azimuth,
+            latestFloorplanUserRotationDegRef.current,
+          )
+          latestFloorplanUserRotationDegRef.current = nextDeg
+          if (compassNeedleRef.current) {
+            compassNeedleRef.current.style.transform = `rotate(${nextDeg}deg)`
+          }
+          return
+        }
         syncFloorplanViewportToNavigationPose(pose)
       }
     })
@@ -7345,6 +7363,25 @@ export function FloorplanPanel({
   )
 
   const alignFloorplanViewToNorth = useCallback(() => {
+    if (!isFloorplanOpenRef.current) {
+      // Panel hidden — derive from the live 3D camera pose and publish
+      // directly. The compass animates via the imperative subscription as
+      // the 3D camera transitions.
+      const pose = latestNavigationSyncPoseRef.current
+      if (!pose) return
+      const currentRotation = latestFloorplanUserRotationDegRef.current
+      const northAzimuth = cameraAzimuthFromFloorplanRotation(
+        nearestEquivalentDegrees(0, currentRotation),
+      )
+      useEditor.getState().publishNavigationSyncPose({
+        source: '2d',
+        target: [...pose.target],
+        azimuth: northAzimuth,
+        viewWidth: pose.viewWidth,
+      })
+      return
+    }
+
     const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
     if (!currentViewport) {
       return
@@ -10761,6 +10798,7 @@ export function FloorplanPanel({
           (compassHost ? (
             createPortal(
               <FloorplanCompassButton
+                needleRef={compassNeedleRef}
                 northRotationDeg={floorplanUserRotationDeg}
                 onAlignNorth={alignFloorplanViewToNorth}
               />,
@@ -10768,6 +10806,7 @@ export function FloorplanPanel({
             )
           ) : (
             <FloorplanCompassButton
+              needleRef={compassNeedleRef}
               northRotationDeg={floorplanUserRotationDeg}
               onAlignNorth={alignFloorplanViewToNorth}
             />

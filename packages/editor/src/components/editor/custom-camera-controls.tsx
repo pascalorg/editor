@@ -369,10 +369,15 @@ export const CustomCameraControls = () => {
   const lastPublishedNavigationSync = useRef<NavigationCameraPoseSnapshot | null>(null)
   const pendingFloorplanNavigationPose = useRef<PendingNavigationCameraPoseSnapshot | null>(null)
   const lastApplied2dNavigationRevision = useRef(0)
+  const savedSmoothTimeRef = useRef<number | null>(null)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
   const clearPendingFloorplanNavigationPose = useCallback(() => {
     pendingFloorplanNavigationPose.current = null
+    if (savedSmoothTimeRef.current !== null && controls.current) {
+      controls.current.smoothTime = savedSmoothTimeRef.current
+      savedSmoothTimeRef.current = null
+    }
   }, [])
 
   const camera = useThree((state) => state.camera)
@@ -478,6 +483,13 @@ export const CustomCameraControls = () => {
           Math.abs(viewWidthUpdate.viewWidth - pose.viewWidth) >=
           NAVIGATION_SYNC_VIEW_WIDTH_EPSILON,
       }
+      // Match 3D settle time to 2D exponential decay (τ=90ms). SmoothDamp's
+      // effective time constant is smoothTime/2, so smoothTime=0.18 gives
+      // τ≈90ms and visual convergence in ~350-400ms, matching the 2D panel.
+      if (savedSmoothTimeRef.current === null) {
+        savedSmoothTimeRef.current = control.smoothTime
+      }
+      control.smoothTime = 0.18
       control.moveTo(pose.target[0], pose.target[1], pose.target[2], true)
       control.rotateTo(targetAzimuth, control.polarAngle, true)
       applyCameraViewWidth(control, viewWidthUpdate)
@@ -500,6 +512,10 @@ export const CustomCameraControls = () => {
       ) {
         lastPublishedNavigationSync.current = pendingFloorplanPose
         pendingFloorplanNavigationPose.current = null
+        if (savedSmoothTimeRef.current !== null && controls.current) {
+          controls.current.smoothTime = savedSmoothTimeRef.current
+          savedSmoothTimeRef.current = null
+        }
         if (pendingFloorplanPose.publishOnComplete) {
           useEditor.getState().publishNavigationSyncPose({
             source: '3d',
