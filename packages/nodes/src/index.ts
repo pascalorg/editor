@@ -116,7 +116,13 @@ export const builtinPlugin: Plugin = {
 
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
-export { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
+export {
+  type CabinetPlacementType,
+  cabinetDefinition,
+  cabinetModuleDefinition,
+  useCabinetPlacementStatus,
+  useCabinetPlacementType,
+} from './cabinet'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'

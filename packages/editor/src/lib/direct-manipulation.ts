@@ -7,6 +7,7 @@ import {
   hasRegistry3DMoveTool,
   isMovable,
   nodeRegistry,
+  resolveSelectionProxyId,
   type SceneApi,
   useScene,
 } from '@pascal-app/core'
@@ -61,6 +62,16 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   // run locked behind its selection proxy) can opt out of direct move.
   if (nodeRegistry.get(node.type)?.affordanceTools?.move) return true
   return isMovable(node)
+}
+
+export function resolveDirectManipulationNode(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): AnyNode {
+  const target = nodes[resolveSelectionProxyId(node, nodes)] ?? node
+  const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
+  const parent = parentFrame?.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
+  return parent && canDirectRotateNode(parent) ? parent : target
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {

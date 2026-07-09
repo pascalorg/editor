@@ -37,6 +37,7 @@ import {
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
   snapDirectRotationDelta,
@@ -545,7 +546,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
       if (event.button !== 2 || !(event.metaKey || event.ctrlKey)) return false
 
-      const node = useScene.getState().nodes[id]
+      const sceneNodes = useScene.getState().nodes
+      const selectedNode = sceneNodes[id]
+      const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
       if (!node || !canDirectRotateNode(node)) return false
       const selectedIds = useViewer.getState().selection.selectedIds
       if (!selectedIds.includes(id)) return false

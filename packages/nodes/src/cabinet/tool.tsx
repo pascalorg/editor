@@ -28,8 +28,6 @@ import {
   PlacementBox,
   publishPlacementSurface,
   triggerSFX,
-  useCabinetPlacementStatus,
-  useCabinetPlacementType,
   useEditor,
   useFacingPose,
   usePlacementPreview,
@@ -67,6 +65,8 @@ import {
   cabinetRunFootprint,
 } from './definition'
 import { buildCabinetGeometry } from './geometry'
+import useCabinetPlacementStatus from './placement-status'
+import useCabinetPlacementType from './placement-type'
 import { cabinetPresetById } from './presets'
 import { runLocalToPlan } from './run-layout'
 import { addCabinetModuleSide, addCornerRun, previewCornerAdditionLayout } from './run-ops'

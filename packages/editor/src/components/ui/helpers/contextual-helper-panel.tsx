@@ -14,7 +14,6 @@ import {
   type SnapContext,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
-import useCabinetPlacementType from '../../../store/use-cabinet-placement-type'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import { ShortcutToken } from '../primitives/shortcut-token'
@@ -278,25 +277,6 @@ function FenceContinuationChips() {
   )
 }
 
-function CabinetTypeChip() {
-  const type = useCabinetPlacementType((s) => s.type)
-  const cycleType = useCabinetPlacementType((s) => s.cycleType)
-  const label = type === 'island' ? 'Island' : 'Cabinet'
-
-  return (
-    <ChipRow
-      ariaLabel={`Cabinet type: ${label}`}
-      label={`Type: ${label}`}
-      onClick={() => {
-        cycleType()
-        sfxEmitter.emit('sfx:item-rotate')
-      }}
-      shortcut="I"
-      tooltip="Cabinet type — click or press I to toggle"
-    />
-  )
-}
-
 const PAINT_SCOPE_ICONS: Record<PaintScope, string> = {
   single: 'lucide:square',
   object: 'lucide:box',
@@ -377,7 +357,6 @@ export function ContextualHelperPanel({
     <div className={CONTAINER_CLASS}>
       {snapContext ? <SnappingChips context={snapContext} /> : null}
       {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
-      {continuationContext === 'cabinet' ? <CabinetTypeChip /> : null}
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />
       ) : null}

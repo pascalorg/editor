@@ -99,6 +99,12 @@ export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
 export const WALL_SKIRTING_SLOT_DEFAULT = 'library:preset-softwhite'
 export const WALL_CROWN_SLOT_DEFAULT = 'library:preset-white'
 export const WALL_CHAIR_RAIL_SLOT_DEFAULT = 'library:preset-cream'
+export const WALL_FACE_BAND_SOLID_SLOT_DEFAULTS = {
+  lower: 'library:preset-white',
+  middle: 'library:preset-lightgrey',
+  upper: 'library:preset-greige',
+  top: 'library:preset-softwhite',
+} as const satisfies Record<WallFaceBand, string>
 
 export const WALL_SURFACE_SLOT_DEFAULTS = {
   interior: 'library:concrete-drywall',
@@ -256,6 +262,13 @@ function getWallFaceBandSlotsForCount(
   return ['lowerExterior', 'middleExterior', 'upperExterior', 'topExterior']
 }
 
+function getWallFaceBandDefaultSlot(slotId: WallBandSurfaceSlotId): string {
+  if (slotId.startsWith('lower')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower
+  if (slotId.startsWith('middle')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle
+  if (slotId.startsWith('top')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.top
+  return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper
+}
+
 export function buildWallFaceBandCountPatch(
   wall: Pick<WallNode, 'faceBands' | 'slots'>,
   count: number,
@@ -267,14 +280,12 @@ export function buildWallFaceBandCountPatch(
     : 1
 
   for (const side of ['interior', 'exterior'] as const) {
-    const sourceRef = slots[side]
     const activeSlots = new Set(getWallFaceBandSlotsForCount(side, nextCount))
     const previouslyActiveSlots = new Set(getWallFaceBandSlotsForCount(side, previousCount))
     for (const slotId of WALL_FACE_BAND_SLOTS_BY_SIDE[side]) {
       if (activeSlots.has(slotId)) {
         const wasActive = previouslyActiveSlots.has(slotId)
-        if (sourceRef && (!slots[slotId] || !wasActive)) slots[slotId] = sourceRef
-        else if (!sourceRef && !wasActive) delete slots[slotId]
+        if (!wasActive || !slots[slotId]) slots[slotId] = getWallFaceBandDefaultSlot(slotId)
       } else {
         delete slots[slotId]
       }

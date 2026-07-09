@@ -2,6 +2,7 @@ import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/cor
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { steppedRotation } from '../components/tools/item/placement-math'
+import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
@@ -341,7 +342,9 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const sceneNodes = useScene.getState().nodes
+          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
           if (node?.type === 'door') {
             e.preventDefault()
             useScene.getState().updateNode(node.id, {
@@ -409,7 +412,9 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const sceneNodes = useScene.getState().nodes
+          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
           if (node?.type === 'door') {
             // Door's open/close moved to E; T is a no-op for doors so
             // it doesn't free-rotate a wall-bound node by π/4.

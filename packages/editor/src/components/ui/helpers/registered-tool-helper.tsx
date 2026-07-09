@@ -1,7 +1,6 @@
 import type { ToolHint } from '@pascal-app/core'
 import type { ContinuationContext } from '../../../lib/continuation'
 import type { SnapContext } from '../../../lib/snapping-mode'
-import useCabinetPlacementStatus from '../../../store/use-cabinet-placement-status'
 import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
@@ -28,13 +27,11 @@ export function RegisteredToolHelper({
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
-  const cabinetPlacementBlocked = useCabinetPlacementStatus((s) => s.blocked)
   // Some hints are replaced by live contextual chips, so keep the generic
   // registry renderer from duplicating stale/static versions.
   const visible = hints.filter(
     (hint) =>
       !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
-      !(hint.key === 'I' && hint.label === 'Island mode') &&
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
   if (visible.length === 0 && !snapContext && !continuationContext) return null
@@ -44,11 +41,10 @@ export function RegisteredToolHelper({
         // Shift is a per-kind bypass for opening / zone / duct placement ("Free
         // place", "Free angle", …) — those flip to a bypassed state while held.
         const isBypassHint = hint.key === 'Shift'
-        const isCabinetForceHint = hint.key === 'Alt' && hint.label === 'Force place'
         return {
           keys: [hint.key],
           label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
-          active: (shiftPressed && isBypassHint) || (cabinetPlacementBlocked && isCabinetForceHint),
+          active: shiftPressed && isBypassHint,
         }
       })}
       continuationContext={continuationContext}

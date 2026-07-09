@@ -1,6 +1,4 @@
-// Ephemeral placement option for the cabinet tool. Shared between the
-// contextual helper chip and the kind-owned cabinet tool so "I" and click
-// toggles always show and mutate the same current value.
+// Ephemeral placement option for the cabinet tool.
 
 import { create } from 'zustand'
 

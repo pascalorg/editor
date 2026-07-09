@@ -8,6 +8,7 @@ import {
   WALL_CROWN_DEFAULT,
   WALL_CROWN_SLOT_DEFAULT,
   WALL_FACE_BAND_DEFAULT,
+  WALL_FACE_BAND_SOLID_SLOT_DEFAULTS,
   WALL_SKIRTING_DEFAULT,
   WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
@@ -77,7 +78,7 @@ describe('wall face bands', () => {
     })
   })
 
-  test('enabling bands seeds band slots from the current whole-wall face slots', () => {
+  test('enabling bands seeds visible solid-color band slots', () => {
     const patch = buildEnabledWallFaceBandPatch({
       faceBands: {
         enabled: false,
@@ -104,10 +105,10 @@ describe('wall face bands', () => {
     expect(patch.slots).toMatchObject({
       interior: 'library:interior-finish',
       exterior: 'scene:exterior-finish',
-      lowerInterior: 'library:interior-finish',
-      upperInterior: 'library:interior-finish',
-      lowerExterior: 'scene:exterior-finish',
-      upperExterior: 'scene:exterior-finish',
+      lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
     })
     expect(patch.slots?.middleInterior).toBeUndefined()
     expect(patch.slots?.middleExterior).toBeUndefined()
@@ -134,18 +135,18 @@ describe('wall face bands', () => {
 
     expect(patch.faceBands).toMatchObject({ enabled: true, count: 3 })
     expect(patch.slots).toMatchObject({
-      lowerInterior: 'library:interior-finish',
-      middleInterior: 'library:interior-finish',
-      upperInterior: 'library:interior-finish',
-      lowerExterior: 'scene:exterior-finish',
-      middleExterior: 'scene:exterior-finish',
-      upperExterior: 'scene:exterior-finish',
+      lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
     })
     expect(patch.slots?.topInterior).toBeUndefined()
     expect(patch.slots?.topExterior).toBeUndefined()
   })
 
-  test('enabling bands clears stale band slots when a side has no explicit slot', () => {
+  test('enabling bands replaces stale inactive band slots with solid-color defaults', () => {
     const patch = buildEnabledWallFaceBandPatch({
       slots: {
         lowerInterior: 'library:stale-lower',
@@ -154,7 +155,44 @@ describe('wall face bands', () => {
       },
     } as Pick<WallNode, 'faceBands' | 'slots'>)
 
-    expect(patch.slots).toEqual({})
+    expect(patch.slots).toEqual({
+      lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+    })
+    expect(patch.slots?.middleInterior).toBeUndefined()
+    expect(patch.slots?.middleExterior).toBeUndefined()
+  })
+
+  test('increasing band count paints newly active bands with the solid palette', () => {
+    const patch = buildWallFaceBandCountPatch(
+      {
+        faceBands: {
+          enabled: true,
+          count: 2,
+          lowerHeight: 0.2,
+          middleHeight: 0.3,
+          upperHeight: 0.61,
+        },
+        slots: {
+          lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+          upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+          lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+          upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+        },
+      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      3,
+    )
+
+    expect(patch.slots).toMatchObject({
+      lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+      lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
+      middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
+      upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
+    })
   })
 })
 

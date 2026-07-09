@@ -371,11 +371,6 @@ export {
 } from './lib/world-grid-snap'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
-export { default as useCabinetPlacementStatus } from './store/use-cabinet-placement-status'
-export {
-  type CabinetPlacementType,
-  default as useCabinetPlacementType,
-} from './store/use-cabinet-placement-type'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
 export type {
   CaptureMode,
