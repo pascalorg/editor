@@ -261,7 +261,7 @@ export function startFloorplanGroupMove(
 
   const removeListeners = () => {
     window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointerup', onUp, true)
     window.removeEventListener('pointercancel', onPointerCancel)
     window.removeEventListener('keydown', onKeyDown, true)
   }
@@ -292,8 +292,12 @@ export function startFloorplanGroupMove(
     applyMove(e, session)
   }
 
+  // Capture phase + stopPropagation: this pointerup belongs to the gesture —
+  // in split view a release over the 3D canvas would otherwise synthesize a
+  // selection click there (`use-node-events` fires one on every pointerup).
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
+    e.stopPropagation()
     if (!session) {
       removeListeners()
       opts.onClickFallthrough?.()
@@ -364,7 +368,7 @@ export function startFloorplanGroupMove(
   }
 
   window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointerup', onUp, true)
   window.addEventListener('pointercancel', onPointerCancel)
   window.addEventListener('keydown', onKeyDown, true)
 
@@ -471,7 +475,7 @@ export function startFloorplanGroupRotate(event: {
 
   const removeListeners = () => {
     window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointerup', onUp, true)
     window.removeEventListener('pointercancel', onPointerCancel)
     window.removeEventListener('keydown', onKeyDown, true)
   }
@@ -488,8 +492,10 @@ export function startFloorplanGroupRotate(event: {
     useFloorplanGroupDrag.getState().setRotation(null)
   }
 
+  // Capture ownership — see the drag session's onUp.
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
+    e.stopPropagation()
     swallowNextClick()
     sfxEmitter.emit('sfx:item-place')
     const overrides = useLiveNodeOverrides.getState()
@@ -534,7 +540,7 @@ export function startFloorplanGroupRotate(event: {
   }
 
   window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointerup', onUp, true)
   window.addEventListener('pointercancel', onPointerCancel)
   window.addEventListener('keydown', onKeyDown, true)
   return true

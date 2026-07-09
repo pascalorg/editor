@@ -292,6 +292,7 @@ export function startGroupPickUp(
   const removeListeners = () => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerdown', onPointerDown, true)
+    window.removeEventListener('pointerup', onPointerUp, true)
     window.removeEventListener('keydown', onKeyDown, true)
     window.removeEventListener('contextmenu', onContextMenu, true)
   }
@@ -342,6 +343,13 @@ export function startGroupPickUp(
 
   // Capture phase: commit before the press reaches selection / tools, so the
   // drop click can't also select whatever lands under the cursor.
+  // The placement gesture: the press over a tracked surface is claimed in
+  // capture phase and the commit runs on ITS pointerup, also claimed — the
+  // canvas never sees either, so `use-node-events` cannot synthesize a
+  // selection click from the release (which would re-select whatever sits
+  // under the cursor and break the multi-selection).
+  let commitPointerId: number | null = null
+
   const onPointerDown = (e: PointerEvent) => {
     if (e.button === 2) {
       e.preventDefault()
@@ -355,6 +363,14 @@ export function startGroupPickUp(
     if (!resolvePlanPoint(e)) return
     e.preventDefault()
     e.stopPropagation()
+    commitPointerId = e.pointerId
+  }
+
+  const onPointerUp = (e: PointerEvent) => {
+    if (commitPointerId === null || e.pointerId !== commitPointerId) return
+    e.preventDefault()
+    e.stopPropagation()
+    commitPointerId = null
     commit()
   }
 
@@ -386,6 +402,7 @@ export function startGroupPickUp(
 
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerdown', onPointerDown, true)
+  window.addEventListener('pointerup', onPointerUp, true)
   window.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('contextmenu', onContextMenu, true)
   return true

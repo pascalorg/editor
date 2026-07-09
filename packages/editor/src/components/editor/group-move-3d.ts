@@ -155,9 +155,7 @@ export function armGroupMove3d(args: {
     })
     // Rotation pivot for mid-drag R/T — the participant DATA extents' center.
     const ext = participantExtents(starts)
-    const restCenter: Vec2 = ext
-      ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2]
-      : [0, 0]
+    const restCenter: Vec2 = ext ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2] : [0, 0]
 
     return {
       starts,
@@ -274,7 +272,7 @@ export function armGroupMove3d(args: {
 
   const removeListeners = () => {
     window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointerup', onUp, true)
     window.removeEventListener('pointercancel', onPointerCancel)
     window.removeEventListener('keydown', onKeyDown, true)
   }
@@ -305,8 +303,13 @@ export function armGroupMove3d(args: {
     applyMove(e, session)
   }
 
+  // Capture phase + stopPropagation: this pointerup belongs to the gesture.
+  // If it reached the canvas, `use-node-events` would synthesize a selection
+  // click from the release (it fires on EVERY pointerup) — collapsing the
+  // multi-selection either before the pick-up starts or after a drag commit.
   const onUp = (e: PointerEvent) => {
     if (e.pointerId !== pointerId) return
+    e.stopPropagation()
     if (!session) {
       // Plain click — enter the group pick-up, parity with the single-item
       // click-to-move. Eat the click so the selection manager's click
@@ -379,7 +382,7 @@ export function armGroupMove3d(args: {
   }
 
   window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointerup', onUp, true)
   window.addEventListener('pointercancel', onPointerCancel)
   window.addEventListener('keydown', onKeyDown, true)
   return true
