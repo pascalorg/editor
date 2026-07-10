@@ -155,7 +155,11 @@ export function EditorCommands() {
             measurement.perimeters.length > 0 ||
             measurement.angles.length > 0 ||
             measurement.draft !== null ||
-            measurement.angleDraft !== null
+            measurement.angleDraft !== null ||
+            measurement.polygonDraft !== null ||
+            measurement.previewArea !== null ||
+            measurement.previewPerimeter !== null ||
+            measurement.previewSegment !== null
           )
         },
         execute: () =>

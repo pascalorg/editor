@@ -119,6 +119,45 @@ describe('useMeasurementTool', () => {
     expect(useMeasurementTool.getState().segments).toHaveLength(1)
   })
 
+  test('cancelDraft preserves committed measurements while clearing transient state', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [0, 0, 0], [1, 0, 0])
+    measurement.begin('2d', [2, 0, 0])
+    measurement.update([3, 0, 0])
+    measurement.setCursor('2d', [3, 0, 0])
+    measurement.setSnapTarget({ label: 'Grid', point: [3, 0, 0], view: '2d' })
+    measurement.setPreviewSegment({
+      id: 'measurement-preview',
+      start: [4, 0, 0],
+      end: [5, 0, 0],
+      view: '2d',
+    })
+    measurement.setPreviewArea({
+      id: 'measurement-area-preview',
+      areaSquareMeters: 4,
+      labelPoint: [0, 0, 0],
+      view: '2d',
+    })
+    measurement.setPreviewPerimeter({
+      id: 'measurement-perimeter-preview',
+      labelPoint: [0, 0, 0],
+      lengthMeters: 8,
+      view: '2d',
+    })
+
+    measurement.cancelDraft()
+
+    expect(useMeasurementTool.getState()).toMatchObject({
+      cursor: null,
+      draft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      snapTarget: null,
+    })
+    expect(useMeasurementTool.getState().segments).toHaveLength(1)
+  })
+
   test('updates an active draft length along its current direction', () => {
     const measurement = useMeasurementTool.getState()
     measurement.begin('3d', [0, 0, 0])
@@ -156,6 +195,23 @@ describe('useMeasurementTool', () => {
 
     measurement.updateAngleDegrees(45)
     measurement.commitAngle()
+
+    const angle = useMeasurementTool.getState().angles[0]
+    expect(angle?.first).toEqual([1, 0, 0])
+    expect(angle?.vertex).toEqual([0, 0, 0])
+    expect(angle?.second[0]).toBeCloseTo(Math.SQRT1_2)
+    expect(angle?.second[1]).toBeCloseTo(0)
+    expect(angle?.second[2]).toBeCloseTo(Math.SQRT1_2)
+  })
+
+  test('updates a persistent angle measurement to an exact angle', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.beginAngle('3d', [1, 0, 0])
+    measurement.commitAngle([0, 0, 0])
+    measurement.commitAngle([0, 0, 1])
+    const angleId = useMeasurementTool.getState().angles[0]!.id
+
+    measurement.updateAngleMeasurementDegrees(angleId, 45)
 
     const angle = useMeasurementTool.getState().angles[0]
     expect(angle?.first).toEqual([1, 0, 0])
@@ -239,6 +295,39 @@ describe('useMeasurementTool', () => {
     expect(afterDelete.selectedId).toBeNull()
   })
 
+  test('commits freeform polygon drafts as area or perimeter measurements', () => {
+    const measurement = useMeasurementTool.getState()
+
+    measurement.setMode('area')
+    measurement.beginPolygon('2d', [0, 0, 0])
+    measurement.addPolygonPoint([4, 0, 0])
+    measurement.addPolygonPoint([4, 0, 3])
+    measurement.commitPolygon()
+
+    expect(useMeasurementTool.getState().areas[0]).toMatchObject({
+      areaSquareMeters: 6,
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+      ],
+      labelPoint: [2.6666666666666665, 0, 1],
+      view: '2d',
+    })
+
+    measurement.setMode('perimeter')
+    measurement.beginPolygon('3d', [0, 0, 0])
+    measurement.addPolygonPoint([4, 0, 0])
+    measurement.addPolygonPoint([4, 0, 3])
+    measurement.commitPolygon()
+
+    expect(useMeasurementTool.getState().perimeters[0]).toMatchObject({
+      lengthMeters: 12,
+      labelPoint: [2.6666666666666665, 0, 1],
+      view: '3d',
+    })
+  })
+
   test('clear removes drafts, cursor, selection, and all measurement collections', () => {
     const measurement = useMeasurementTool.getState()
     measurement.addSegment('2d', [0, 0, 0], [1, 0, 0])
@@ -285,7 +374,11 @@ describe('useMeasurementTool', () => {
   test('serializes and hydrates committed measurements without transient draft state', () => {
     const measurement = useMeasurementTool.getState()
     measurement.addSegment('2d', [0, 0, 0], [1, 0, 0])
-    measurement.addArea('3d', [0.5, 0, 0.5], 6)
+    measurement.addArea('3d', [0.5, 0, 0.5], 6, [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 1],
+    ])
     measurement.addPerimeter('3d', [0.5, 0, 0.5], 10)
     measurement.beginAngle('2d', [1, 0, 0])
     measurement.commitAngle([0, 0, 0])
@@ -317,7 +410,17 @@ describe('useMeasurementTool', () => {
         { id: 'bad-segment', start: [0, 0], end: [1, 0, 0], view: '2d' },
       ],
       areas: [
-        { id: 'measurement-area-2', areaSquareMeters: 8, labelPoint: [0, 0, 0], view: '3d' },
+        {
+          id: 'measurement-area-2',
+          areaSquareMeters: 8,
+          boundaryPoints: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1],
+          ],
+          labelPoint: [0, 0, 0],
+          view: '3d',
+        },
         { id: 'bad-area', areaSquareMeters: Number.NaN, labelPoint: [0, 0, 0], view: '3d' },
       ],
       perimeters: [
@@ -349,6 +452,11 @@ describe('useMeasurementTool', () => {
 
     expect(persisted.segments).toHaveLength(1)
     expect(persisted.areas).toHaveLength(1)
+    expect(persisted.areas[0]?.boundaryPoints).toEqual([
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 0, 1],
+    ])
     expect(persisted.perimeters).toHaveLength(1)
     expect(persisted.angles).toHaveLength(1)
   })

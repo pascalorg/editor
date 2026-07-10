@@ -108,6 +108,7 @@ export function HelperManager() {
   const measurementMode = useMeasurementTool((s) => s.mode)
   const measurementDraft = useMeasurementTool((s) => s.draft)
   const measurementAngleDraft = useMeasurementTool((s) => s.angleDraft)
+  const measurementPolygonDraft = useMeasurementTool((s) => s.polygonDraft)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
   const selectedNodes = useScene(
@@ -219,6 +220,7 @@ export function HelperManager() {
           draftActive: Boolean(measurementDraft),
           mode: measurementMode,
           modifierPressed: modifiers.alt || modifiers.command,
+          polygonDraftActive: Boolean(measurementPolygonDraft),
           shiftPressed: modifiers.shift,
         })}
       />

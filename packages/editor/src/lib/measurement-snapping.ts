@@ -93,7 +93,13 @@ export function measurementSnapKindFromLabel(label: string): MeasurementSnapKind
   if (normalized.includes('surface')) return 'surface'
   if (normalized.includes('measurement')) return 'measurement'
   if (normalized.includes('intersection')) return 'intersection'
-  if (normalized.includes('parallel') || normalized.includes('perpendicular')) return 'guide'
+  if (
+    normalized.includes('parallel') ||
+    normalized.includes('perpendicular') ||
+    normalized.includes('polar') ||
+    normalized.includes('guide')
+  )
+    return 'guide'
   if (normalized.includes('grid')) return 'grid'
   if (normalized.includes('midpoint')) return 'midpoint'
   if (normalized.includes('endpoint')) return 'endpoint'
@@ -977,12 +983,10 @@ export function collectPlanMeasurementSnapGeometry(
 
 export function collectCommittedMeasurementSnapGeometry(
   segments: ReadonlyArray<MeasurementSegment>,
-  view: MeasurementView,
 ): MeasurementSnapGeometry {
   const geometry: MeasurementSnapGeometry = { anchors: [], segments: [] }
 
   for (const segment of segments) {
-    if (segment.view !== view) continue
     const midpoint: MeasurementPoint = [
       (segment.start[0] + segment.end[0]) / 2,
       (segment.start[1] + segment.end[1]) / 2,
@@ -1113,12 +1117,63 @@ export function resolvePlanMeasurementConstraint(
   if (cursorLengthSq < EPSILON) return { point, target: null }
 
   const maxDistanceSq = options.radiusMeters * options.radiusMeters
-  let closest: {
+  type MeasurementConstraintGuideCandidate = {
     guideLine: { end: MeasurementPoint; start: MeasurementPoint }
     label: string
     point: MeasurementPoint
     score: number
-  } | null = null
+  }
+  let closest: MeasurementConstraintGuideCandidate | null = null
+
+  const considerGuideDirection = (
+    label: string,
+    direction: { x: number; z: number },
+    scoreBias = 0,
+    minDistanceSq = 0,
+  ) => {
+    const projectionLength = cursorDx * direction.x + cursorDz * direction.z
+    const constrainedPoint: MeasurementPoint = [
+      start[0] + direction.x * projectionLength,
+      point[1],
+      start[2] + direction.z * projectionLength,
+    ]
+    const distanceSq = planDistanceSq(point, constrainedPoint)
+    if (minDistanceSq > 0 && distanceSq <= minDistanceSq) return
+    if (distanceSq > maxDistanceSq) return
+    const score = distanceSq + scoreBias
+    if (!closest || score < closest.score) {
+      const guideLength = Math.max(Math.sqrt(cursorLengthSq), options.radiusMeters * 3)
+      closest = {
+        guideLine: {
+          start: [
+            start[0] - direction.x * guideLength,
+            start[1],
+            start[2] - direction.z * guideLength,
+          ],
+          end: [
+            start[0] + direction.x * guideLength,
+            start[1],
+            start[2] + direction.z * guideLength,
+          ],
+        },
+        label,
+        point: constrainedPoint,
+        score,
+      }
+    }
+  }
+
+  const diagonal = Math.SQRT1_2
+  const polarGuideBias = options.radiusMeters * options.radiusMeters * 4
+  const polarDirections = [
+    { label: 'Polar guide 0°', x: 1, z: 0 },
+    { label: 'Polar guide 90°', x: 0, z: 1 },
+    { label: 'Polar guide 45°', x: diagonal, z: diagonal },
+    { label: 'Polar guide 135°', x: -diagonal, z: diagonal },
+  ]
+  for (const direction of polarDirections) {
+    considerGuideDirection(direction.label, direction, polarGuideBias, EPSILON)
+  }
 
   for (const segment of geometry.segments) {
     const segmentKind = segment.kind ?? measurementSnapKindFromLabel(segment.label)
@@ -1138,46 +1193,24 @@ export function resolvePlanMeasurementConstraint(
     ]
 
     for (const direction of unitDirections) {
-      const projectionLength = cursorDx * direction.x + cursorDz * direction.z
-      const constrainedPoint: MeasurementPoint = [
-        start[0] + direction.x * projectionLength,
-        point[1],
-        start[2] + direction.z * projectionLength,
-      ]
-      const distanceSq = planDistanceSq(point, constrainedPoint)
-      if (distanceSq > maxDistanceSq) continue
-      const score = distanceSq + (direction.label === 'Perpendicular' ? 0 : EPSILON)
-      if (!closest || score < closest.score) {
-        const guideLength = Math.max(Math.sqrt(cursorLengthSq), options.radiusMeters * 3)
-        closest = {
-          guideLine: {
-            start: [
-              start[0] - direction.x * guideLength,
-              start[1],
-              start[2] - direction.z * guideLength,
-            ],
-            end: [
-              start[0] + direction.x * guideLength,
-              start[1],
-              start[2] + direction.z * guideLength,
-            ],
-          },
-          label: direction.label,
-          point: constrainedPoint,
-          score,
-        }
-      }
+      considerGuideDirection(
+        direction.label,
+        direction,
+        direction.label === 'Perpendicular' ? 0 : EPSILON,
+      )
     }
   }
 
+  const resolvedClosest = closest as MeasurementConstraintGuideCandidate | null
+
   return {
-    point: closest?.point ?? point,
-    target: closest
+    point: resolvedClosest?.point ?? point,
+    target: resolvedClosest
       ? {
-          kind: measurementSnapKindFromLabel(closest.label),
-          guideLine: closest.guideLine,
-          label: closest.label,
-          point: closest.point,
+          kind: measurementSnapKindFromLabel(resolvedClosest.label),
+          guideLine: resolvedClosest.guideLine,
+          label: resolvedClosest.label,
+          point: resolvedClosest.point,
           view: options.view,
         }
       : null,

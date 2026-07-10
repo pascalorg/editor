@@ -1,6 +1,12 @@
 'use client'
 
-import { type ForwardedRef, Fragment, forwardRef } from 'react'
+import {
+  type ComponentPropsWithoutRef,
+  type ForwardedRef,
+  Fragment,
+  type ReactNode,
+  forwardRef,
+} from 'react'
 
 // Canonical in-world dimension formatter — metric metres or imperial
 // feet/inches. Shared by every measurement readout so they read the same.
@@ -31,6 +37,30 @@ export interface DimensionPillPart {
   signed?: boolean
 }
 
+export const DIMENSION_PILL_SHELL_CLASS_NAME =
+  'flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur'
+
+export const DIMENSION_PILL_PRIMARY_CLASS_NAME = 'font-medium text-foreground'
+export const DIMENSION_PILL_MUTED_CLASS_NAME = 'text-muted-foreground'
+
+export function DimensionPillShell({
+  children,
+  className,
+  ...props
+}: {
+  children: ReactNode
+  className?: string
+} & ComponentPropsWithoutRef<'div'>) {
+  return (
+    <div
+      className={[DIMENSION_PILL_SHELL_CLASS_NAME, className].filter(Boolean).join(' ')}
+      {...props}
+    >
+      {children}
+    </div>
+  )
+}
+
 /**
  * Generic floating dimension pill: a row of `prefix value` readouts with the
  * active one emphasised. Styled to match the top-center floating info bar
@@ -51,7 +81,7 @@ export function DimensionPill({
   primaryRef?: ForwardedRef<HTMLSpanElement>
 }) {
   return (
-    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+    <DimensionPillShell>
       {parts.map((part, index) => {
         const text = part.signed
           ? `${part.value < 0 ? '-' : '+'}${formatMeasurement(Math.abs(part.value), unit)}`
@@ -59,13 +89,15 @@ export function DimensionPill({
         return (
           <Fragment key={part.key}>
             {index > 0 ? (
-              <span aria-hidden className="text-muted-foreground">
+              <span aria-hidden className={DIMENSION_PILL_MUTED_CLASS_NAME}>
                 ·
               </span>
             ) : null}
             <span
               className={
-                part.key === primary ? 'font-medium text-foreground' : 'text-muted-foreground'
+                part.key === primary
+                  ? DIMENSION_PILL_PRIMARY_CLASS_NAME
+                  : DIMENSION_PILL_MUTED_CLASS_NAME
               }
               ref={part.key === primary ? primaryRef : undefined}
             >
@@ -74,7 +106,7 @@ export function DimensionPill({
           </Fragment>
         )
       })}
-    </div>
+    </DimensionPillShell>
   )
 }
 

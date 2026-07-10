@@ -19,6 +19,7 @@ export type MeasurementSegment = {
 export type MeasurementArea = {
   id: string
   areaSquareMeters: number
+  boundaryPoints?: MeasurementPoint[]
   labelPoint: MeasurementPoint
   view: MeasurementView
 }
@@ -49,6 +50,12 @@ export type MeasurementAngleDraft = {
   first: MeasurementPoint
   vertex: MeasurementPoint | null
   second: MeasurementPoint | null
+  view: MeasurementView
+}
+
+export type MeasurementPolygonDraft = {
+  points: MeasurementPoint[]
+  cursor: MeasurementPoint | null
   view: MeasurementView
 }
 
@@ -115,6 +122,10 @@ type MeasurementToolState = {
   angles: MeasurementAngle[]
   draft: MeasurementDraft | null
   angleDraft: MeasurementAngleDraft | null
+  polygonDraft: MeasurementPolygonDraft | null
+  previewSegment: MeasurementSegment | null
+  previewArea: MeasurementArea | null
+  previewPerimeter: MeasurementPerimeter | null
   cursor: MeasurementCursor | null
   snapTarget: MeasurementSnapTarget | null
   mode: MeasurementMode
@@ -130,7 +141,15 @@ type MeasurementToolState = {
   beginAngle: (view: MeasurementView, first: MeasurementPoint) => void
   updateAngle: (point: MeasurementPoint) => void
   updateAngleDegrees: (degrees: number) => void
+  updateAngleMeasurementDegrees: (id: string, degrees: number) => void
   commitAngle: (point?: MeasurementPoint) => void
+  beginPolygon: (view: MeasurementView, point: MeasurementPoint) => void
+  updatePolygon: (point: MeasurementPoint) => void
+  addPolygonPoint: (point: MeasurementPoint) => void
+  commitPolygon: () => void
+  setPreviewSegment: (segment: MeasurementSegment | null) => void
+  setPreviewArea: (area: MeasurementArea | null) => void
+  setPreviewPerimeter: (perimeter: MeasurementPerimeter | null) => void
   setCursor: (view: MeasurementView, point: MeasurementPoint | null) => void
   setSnapTarget: (target: MeasurementSnapTarget | null) => void
   setMode: (mode: MeasurementMode) => void
@@ -156,7 +175,12 @@ type MeasurementToolState = {
     measuredDistanceMeters?: number,
   ) => void
   updateSegmentLength: (id: string, lengthMeters: number) => void
-  addArea: (view: MeasurementView, labelPoint: MeasurementPoint, areaSquareMeters: number) => void
+  addArea: (
+    view: MeasurementView,
+    labelPoint: MeasurementPoint,
+    areaSquareMeters: number,
+    boundaryPoints?: MeasurementPoint[],
+  ) => void
   addPerimeter: (view: MeasurementView, labelPoint: MeasurementPoint, lengthMeters: number) => void
   cancelDraft: () => void
   clear: () => void
@@ -196,6 +220,61 @@ export function axisLockedMeasurementPoint(
   return start.map((value, axis) =>
     axis === strongestAxis ? end[axis as keyof MeasurementPoint] : value,
   ) as MeasurementPoint
+}
+
+export function polygonPerimeterFromMeasurements(points: MeasurementPoint[]): number {
+  if (points.length < 2) return 0
+  return points.reduce((sum, point, index) => {
+    const next = points[(index + 1) % points.length] ?? point
+    return sum + Math.hypot(next[0] - point[0], next[2] - point[2])
+  }, 0)
+}
+
+export function polygonAreaAndLabelPointFromMeasurements(points: MeasurementPoint[]): {
+  areaSquareMeters: number
+  labelPoint: MeasurementPoint
+} {
+  if (points.length < 3) {
+    const fallback = points[0] ?? ([0, 0, 0] as MeasurementPoint)
+    return { areaSquareMeters: 0, labelPoint: fallback }
+  }
+
+  let cx = 0
+  let cz = 0
+  let area = 0
+  for (
+    let index = 0, previousIndex = points.length - 1;
+    index < points.length;
+    previousIndex = index++
+  ) {
+    const previous = points[previousIndex]!
+    const point = points[index]!
+    const factor = previous[0] * point[2] - point[0] * previous[2]
+    cx += (previous[0] + point[0]) * factor
+    cz += (previous[2] + point[2]) * factor
+    area += factor
+  }
+
+  area /= 2
+  if (Math.abs(area) < 1e-9) {
+    const average = points.reduce(
+      (sum, point) => [sum[0] + point[0], sum[1] + point[1], sum[2] + point[2]] as MeasurementPoint,
+      [0, 0, 0] as MeasurementPoint,
+    )
+    return {
+      areaSquareMeters: 0,
+      labelPoint: [
+        average[0] / points.length,
+        average[1] / points.length,
+        average[2] / points.length,
+      ],
+    }
+  }
+
+  return {
+    areaSquareMeters: Math.abs(area),
+    labelPoint: [cx / (6 * area), points[0]?.[1] ?? 0, cz / (6 * area)],
+  }
 }
 
 function isMeasurementView(value: unknown): value is MeasurementView {
@@ -292,7 +371,21 @@ export function normalizePersistedMeasurements(value: unknown): PersistedMeasure
     ) {
       return []
     }
-    return [{ id: area.id, areaSquareMeters: area.areaSquareMeters, labelPoint, view: area.view }]
+    const boundaryPoints = Array.isArray(area.boundaryPoints)
+      ? area.boundaryPoints.flatMap((point) => {
+          const normalized = normalizePoint(point)
+          return normalized ? [normalized] : []
+        })
+      : undefined
+    return [
+      {
+        id: area.id,
+        areaSquareMeters: area.areaSquareMeters,
+        boundaryPoints: boundaryPoints && boundaryPoints.length >= 3 ? boundaryPoints : undefined,
+        labelPoint,
+        view: area.view,
+      },
+    ]
   })
 
   const perimeters = (Array.isArray(source.perimeters) ? source.perimeters : []).flatMap(
@@ -354,6 +447,10 @@ export function hydrateMeasurements(value: unknown) {
     cursor: null,
     draggingSegmentEndpoint: null,
     draft: null,
+    polygonDraft: null,
+    previewArea: null,
+    previewPerimeter: null,
+    previewSegment: null,
     selectedId: null,
     snapTarget: null,
   })
@@ -366,6 +463,10 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   angles: [],
   draft: null,
   angleDraft: null,
+  polygonDraft: null,
+  previewSegment: null,
+  previewArea: null,
+  previewPerimeter: null,
   cursor: null,
   snapTarget: null,
   mode: 'distance',
@@ -375,7 +476,14 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   draggingSegmentEndpoint: null,
   selectedId: null,
   begin: (view, start, surfaceNormal) =>
-    set({ draft: { start, end: null, surfaceNormal, view }, selectedId: null }),
+    set({
+      draft: { start, end: null, surfaceNormal, view },
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      selectedId: null,
+    }),
   update: (end) => set((state) => (state.draft ? { draft: { ...state.draft, end } } : state)),
   updateDraftLength: (lengthMeters) => {
     if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-4)) return
@@ -398,7 +506,13 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
 
     const resolvedEnd = end ?? draft.end
     if (!resolvedEnd || distanceBetweenMeasurements(draft.start, resolvedEnd) < 1e-4) {
-      set({ draft: null })
+      set({
+        draft: null,
+        polygonDraft: null,
+        previewArea: null,
+        previewPerimeter: null,
+        previewSegment: null,
+      })
       return
     }
 
@@ -407,6 +521,9 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       draft: state.continuousMeasurement
         ? { start: resolvedEnd, end: null, view: draft.view }
         : null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
       selectedId: id,
       segments: [
         ...state.segments,
@@ -421,7 +538,15 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     }))
   },
   beginAngle: (view, first) =>
-    set({ angleDraft: { first, vertex: null, second: null, view }, draft: null, selectedId: null }),
+    set({
+      angleDraft: { first, vertex: null, second: null, view },
+      draft: null,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      selectedId: null,
+    }),
   updateAngle: (point) =>
     set((state) => {
       if (!state.angleDraft) return state
@@ -463,6 +588,41 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       return { angleDraft: { ...draft, second } }
     })
   },
+  updateAngleMeasurementDegrees: (id, degrees) => {
+    if (!(Number.isFinite(degrees) && degrees > 1e-4 && degrees < 360)) return
+    set((state) => ({
+      angles: state.angles.map((angle) => {
+        if (angle.id !== id) return angle
+        const firstVector: MeasurementPoint = [
+          angle.first[0] - angle.vertex[0],
+          angle.first[1] - angle.vertex[1],
+          angle.first[2] - angle.vertex[2],
+        ]
+        const secondVector: MeasurementPoint = [
+          angle.second[0] - angle.vertex[0],
+          angle.second[1] - angle.vertex[1],
+          angle.second[2] - angle.vertex[2],
+        ]
+        const firstUnit = normalizeVector(firstVector)
+        const secondLength = Math.hypot(secondVector[0], secondVector[1], secondVector[2])
+        if (!(firstUnit && secondLength > 1e-4)) return angle
+
+        const currentNormal = normalizeVector(crossVector(firstVector, secondVector))
+        const axis =
+          currentNormal ??
+          (angle.view === '2d' ? ([0, -1, 0] as MeasurementPoint) : ([0, 1, 0] as MeasurementPoint))
+        const rotated = rotateVectorAroundAxis(firstUnit, axis, (degrees * Math.PI) / 180)
+        return {
+          ...angle,
+          second: [
+            angle.vertex[0] + rotated[0] * secondLength,
+            angle.vertex[1] + rotated[1] * secondLength,
+            angle.vertex[2] + rotated[2] * secondLength,
+          ] as MeasurementPoint,
+        }
+      }),
+    }))
+  },
   commitAngle: (point) => {
     const angleDraft = get().angleDraft
     if (!angleDraft) return
@@ -503,6 +663,56 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       selectedId: id,
     }))
   },
+  beginPolygon: (view, point) =>
+    set({
+      angleDraft: null,
+      draft: null,
+      polygonDraft: { points: [point], cursor: null, view },
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      selectedId: null,
+    }),
+  updatePolygon: (point) =>
+    set((state) =>
+      state.polygonDraft ? { polygonDraft: { ...state.polygonDraft, cursor: point } } : state,
+    ),
+  addPolygonPoint: (point) =>
+    set((state) =>
+      state.polygonDraft
+        ? {
+            polygonDraft: {
+              ...state.polygonDraft,
+              cursor: null,
+              points: [...state.polygonDraft.points, point],
+            },
+          }
+        : state,
+    ),
+  commitPolygon: () => {
+    const { mode, polygonDraft } = get()
+    if (!polygonDraft || polygonDraft.points.length < 3) {
+      set({ polygonDraft: null, previewArea: null, previewPerimeter: null })
+      return
+    }
+
+    const { areaSquareMeters, labelPoint } = polygonAreaAndLabelPointFromMeasurements(
+      polygonDraft.points,
+    )
+    if (mode === 'area') {
+      get().addArea(polygonDraft.view, labelPoint, areaSquareMeters, polygonDraft.points)
+    } else if (mode === 'perimeter') {
+      get().addPerimeter(
+        polygonDraft.view,
+        labelPoint,
+        polygonPerimeterFromMeasurements(polygonDraft.points),
+      )
+    }
+    set({ polygonDraft: null, previewArea: null, previewPerimeter: null })
+  },
+  setPreviewSegment: (previewSegment) => set({ previewSegment }),
+  setPreviewArea: (previewArea) => set({ previewArea }),
+  setPreviewPerimeter: (previewPerimeter) => set({ previewPerimeter }),
   setCursor: (view, point) =>
     set((state) => {
       if (!point) {
@@ -523,7 +733,17 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     }),
   setSnapTarget: (target) => set({ snapTarget: target }),
   setMode: (mode) =>
-    set({ angleDraft: null, draft: null, mode, selectedId: null, snapTarget: null }),
+    set({
+      angleDraft: null,
+      draft: null,
+      mode,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      selectedId: null,
+      snapTarget: null,
+    }),
   setDisplayPrecision: (displayPrecision) => set({ displayPrecision }),
   setContinuousMeasurement: (continuousMeasurement) => set({ continuousMeasurement }),
   setSnapKindEnabled: (kind, enabled) =>
@@ -583,13 +803,17 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   },
   addSegment: (view, start, end, measuredDistanceMeters) => {
     if (distanceBetweenMeasurements(start, end) < 1e-4) {
-      set({ draft: null })
+      set({ draft: null, previewArea: null, previewPerimeter: null, previewSegment: null })
       return
     }
 
     const id = `measurement-${nextMeasurementId++}`
     set((state) => ({
       draft: null,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
       selectedId: id,
       segments: [
         ...state.segments,
@@ -620,21 +844,32 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       }),
     }))
   },
-  addArea: (view, labelPoint, areaSquareMeters) => {
+  addArea: (view, labelPoint, areaSquareMeters, boundaryPoints) => {
     if (!(Number.isFinite(areaSquareMeters) && areaSquareMeters > 1e-6)) {
-      set({ draft: null })
+      set({
+        draft: null,
+        polygonDraft: null,
+        previewArea: null,
+        previewPerimeter: null,
+        previewSegment: null,
+      })
       return
     }
 
     const id = `measurement-area-${nextMeasurementId++}`
     set((state) => ({
       draft: null,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
       selectedId: id,
       areas: [
         ...state.areas,
         {
           id,
           areaSquareMeters,
+          boundaryPoints,
           labelPoint,
           view,
         },
@@ -643,13 +878,23 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   },
   addPerimeter: (view, labelPoint, lengthMeters) => {
     if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-6)) {
-      set({ draft: null })
+      set({
+        draft: null,
+        polygonDraft: null,
+        previewArea: null,
+        previewPerimeter: null,
+        previewSegment: null,
+      })
       return
     }
 
     const id = `measurement-perimeter-${nextMeasurementId++}`
     set((state) => ({
       draft: null,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
       perimeters: [
         ...state.perimeters,
         {
@@ -663,7 +908,17 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     }))
   },
   cancelDraft: () =>
-    set({ angleDraft: null, draggingSegmentEndpoint: null, draft: null, snapTarget: null }),
+    set({
+      angleDraft: null,
+      cursor: null,
+      draggingSegmentEndpoint: null,
+      draft: null,
+      polygonDraft: null,
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
+      snapTarget: null,
+    }),
   clear: () =>
     set({
       angleDraft: null,
@@ -672,7 +927,11 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       cursor: null,
       draggingSegmentEndpoint: null,
       draft: null,
+      polygonDraft: null,
       perimeters: [],
+      previewArea: null,
+      previewPerimeter: null,
+      previewSegment: null,
       selectedId: null,
       segments: [],
       snapTarget: null,

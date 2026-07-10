@@ -108,7 +108,7 @@ describe('measurement snapping', () => {
     expect(result.target).toBeNull()
   })
 
-  test('exposes committed measurements only for the active view', () => {
+  test('exposes committed measurements from every view for cross-view snapping', () => {
     const segments: MeasurementSegment[] = [
       {
         id: '2d-measurement',
@@ -124,12 +124,12 @@ describe('measurement snapping', () => {
       },
     ]
 
-    const geometry = collectCommittedMeasurementSnapGeometry(segments, '2d')
+    const geometry = collectCommittedMeasurementSnapGeometry(segments)
 
-    expect(geometry.anchors).toHaveLength(3)
-    expect(geometry.segments).toHaveLength(1)
+    expect(geometry.anchors).toHaveLength(6)
+    expect(geometry.segments).toHaveLength(2)
     expect(geometry.anchors.every((anchor) => anchor.kind === 'measurement')).toBe(true)
-    expect(geometry.anchors.some((anchor) => anchor.point[1] === 1)).toBe(false)
+    expect(geometry.anchors.some((anchor) => anchor.point[1] === 1)).toBe(true)
   })
 
   test('collects surface opening hole snap geometry', () => {
@@ -376,6 +376,29 @@ describe('measurement snapping', () => {
     expect(parallel.target?.guideLine).toBeDefined()
     expect(perpendicular.point[0]).toBeCloseTo(1)
     expect(perpendicular.target?.kind).toBe('guide')
+  })
+
+  test('constrains active measurements to common polar guide angles without nearby geometry', () => {
+    const geometry: MeasurementSnapGeometry = {
+      anchors: [],
+      segments: [],
+    }
+
+    const diagonal = resolvePlanMeasurementConstraint([0, 0, 0], [1, 0, 1.08], geometry, {
+      radiusMeters: 0.15,
+      view: '2d',
+    })
+    const horizontal = resolvePlanMeasurementConstraint([0, 0, 0], [2, 0, 0.06], geometry, {
+      radiusMeters: 0.15,
+      view: '2d',
+    })
+
+    expect(diagonal.point[0]).toBeCloseTo(diagonal.point[2])
+    expect(diagonal.target?.kind).toBe('guide')
+    expect(diagonal.target?.label).toBe('Polar guide 45°')
+    expect(horizontal.point[2]).toBeCloseTo(0)
+    expect(horizontal.target?.kind).toBe('guide')
+    expect(horizontal.target?.label).toBe('Polar guide 0°')
   })
 
   test('does not constrain active measurements when guide snapping is disabled', () => {

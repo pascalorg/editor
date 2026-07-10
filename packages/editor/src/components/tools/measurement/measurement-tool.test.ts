@@ -4,19 +4,22 @@ import {
   type AnyNodeId,
   type GridEvent,
   type NodeEvent,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { BufferGeometry, Float32BufferAttribute, Mesh, Vector3 } from 'three'
+import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Mesh, Vector3 } from 'three'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
   type MeasurementSnapKind,
   useMeasurementTool,
 } from '../../../store/use-measurement-tool'
 import {
-  getMeasurementValuePillClassName,
+  getMeasurementAngleLayout3D,
+  getMeasurementAnnotationColors,
   handleMeasurementGridClick3D,
   handleMeasurementGridMove3D,
   handleMeasurementNodeClick3D,
+  handleMeasurementNodeMove3D,
   staggerMeasurementLabelLayouts3D,
 } from './measurement-tool'
 
@@ -27,6 +30,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   useScene.getState().clearScene()
+  sceneRegistry.nodes.clear()
   useMeasurementTool.getState().clear()
   useMeasurementTool.getState().setMode('distance')
   resetSnapSettings()
@@ -34,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useScene.getState().clearScene()
+  sceneRegistry.nodes.clear()
   useMeasurementTool.getState().clear()
   useMeasurementTool.getState().setMode('distance')
   resetSnapSettings()
@@ -44,6 +49,37 @@ function resetSnapSettings() {
     useMeasurementTool.getState().setSnapKindEnabled(kind as MeasurementSnapKind, enabled)
   }
 }
+
+test('builds 3D angle measurement arc layout in the measured plane', () => {
+  const layout = getMeasurementAngleLayout3D({
+    first: [1, 0, 0],
+    id: 'angle-layout-3d',
+    second: [0, 0, 1],
+    vertex: [0, 0, 0],
+    view: '3d',
+  })
+
+  expect(layout).not.toBeNull()
+  expect(layout?.arcSegments.length).toBeGreaterThanOrEqual(8)
+  expect(layout?.arcRadials).toHaveLength(2)
+  expect(layout?.arcRadials[0]?.start.toArray()).toEqual([0, 0, 0])
+  expect(layout?.arcRadials[0]?.end.x).toBeCloseTo(0.35)
+  expect(layout?.arcRadials[0]?.end.y).toBeCloseTo(0)
+  expect(layout?.arcRadials[0]?.end.z).toBeCloseTo(0)
+  expect(layout?.arcRadials[1]?.start.toArray()).toEqual([0, 0, 0])
+  expect(layout?.arcRadials[1]?.end.x).toBeCloseTo(0)
+  expect(layout?.arcRadials[1]?.end.y).toBeCloseTo(0)
+  expect(layout?.arcRadials[1]?.end.z).toBeCloseTo(0.35)
+  expect(layout?.arcSegments[0]?.start.x).toBeCloseTo(0.35)
+  expect(layout?.arcSegments[0]?.start.y).toBeCloseTo(0)
+  expect(layout?.arcSegments[0]?.start.z).toBeCloseTo(0)
+  expect(layout?.arcSegments.at(-1)?.end.x).toBeCloseTo(0)
+  expect(layout?.arcSegments.at(-1)?.end.y).toBeCloseTo(0)
+  expect(layout?.arcSegments.at(-1)?.end.z).toBeCloseTo(0.35)
+  expect(layout?.labelPosition.x).toBeCloseTo(0.417)
+  expect(layout?.labelPosition.y).toBeCloseTo(0)
+  expect(layout?.labelPosition.z).toBeCloseTo(0.417)
+})
 
 function gridEvent(
   localPosition: [number, number, number],
@@ -71,6 +107,7 @@ function nodeEvent(
     metaKey?: boolean
     normal?: [number, number, number]
     object?: NodeEvent['object']
+    onStopPropagation?: () => void
     shiftKey?: boolean
   } = {},
 ): NodeEvent {
@@ -81,7 +118,7 @@ function nodeEvent(
     normal: options.normal,
     faceIndex: options.faceIndex,
     object: options.object ?? ({} as never),
-    stopPropagation: () => {},
+    stopPropagation: options.onStopPropagation ?? (() => {}),
     nativeEvent: {
       altKey: options.altKey ?? false,
       ctrlKey: options.ctrlKey ?? false,
@@ -211,6 +248,20 @@ function windowNode(): AnyNode {
     position: [2, 1, 0],
     width: 1,
     height: 1,
+  } as never
+}
+
+function spawnNode(): AnyNode {
+  return {
+    id: 'spawn_measurement',
+    type: 'spawn',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [0, 0, 0],
+    rotation: 0,
   } as never
 }
 
@@ -361,33 +412,19 @@ function indexedTriangleMesh() {
 }
 
 describe('measurement 3D grid handlers', () => {
-  test('uses the shared floating pill visual language for 3D measurement values', () => {
-    const className = getMeasurementValuePillClassName({})
-
-    expect(className).toContain('rounded-full')
-    expect(className).toContain('border-border/60')
-    expect(className).toContain('bg-background/90')
-    expect(className).toContain('px-4')
-    expect(className).toContain('py-1.5')
-    expect(className).toContain('text-xs')
-    expect(className).toContain('tabular-nums')
-    expect(className).toContain('shadow-sm')
-    expect(className).toContain('backdrop-blur')
-  })
-
-  test('adds measurement value pill states without changing the base shape', () => {
-    const className = getMeasurementValuePillClassName({
-      draft: true,
-      interactive: true,
-      isSelected: false,
+  test('uses the wall-top measurement annotation colors in 3D', () => {
+    expect(getMeasurementAnnotationColors('light')).toEqual({
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      borderColor: 'rgba(139, 92, 246, 0.72)',
+      color: '#7c3aed',
+      shadowColor: '#ffffff',
     })
-
-    expect(className).toContain('rounded-full')
-    expect(className).toContain('pointer-events-auto')
-    expect(className).toContain('cursor-pointer')
-    expect(className).toContain('border-amber-500/60')
-    expect(className).toContain('text-amber-700')
-    expect(className).toContain('opacity-45')
+    expect(getMeasurementAnnotationColors('dark')).toEqual({
+      backgroundColor: 'rgba(24, 24, 27, 0.94)',
+      borderColor: 'rgba(139, 92, 246, 0.72)',
+      color: '#c4b5fd',
+      shadowColor: '#111111',
+    })
   })
 
   test('staggers overlapping 3D measurement value labels', () => {
@@ -844,7 +881,7 @@ describe('measurement 3D grid handlers', () => {
     expect(useMeasurementTool.getState().draft).toBeNull()
   })
 
-  test('shows 3D grid snap target feedback on grid movement', () => {
+  test('tracks 3D grid snap target on grid movement', () => {
     const canvas = new globalThis.HTMLCanvasElement()
 
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
@@ -1326,10 +1363,58 @@ describe('measurement 3D grid handlers', () => {
     expect(state.areas).toHaveLength(1)
     expect(state.areas[0]).toMatchObject({
       areaSquareMeters: 12,
+      boundaryPoints: [
+        [0, 0.02, 0],
+        [4, 0.02, 0],
+        [4, 0.02, 3],
+        [0, 0.02, 3],
+      ],
       labelPoint: [2, 0.05, 1.5],
       view: '3d',
     })
     expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('hovering a 3D surface previews area in area mode without saving it', () => {
+    useMeasurementTool.getState().setMode('area')
+
+    handleMeasurementNodeMove3D(nodeEvent(zoneNode(), [2, 0, 1.5]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewArea).toMatchObject({
+      areaSquareMeters: 12,
+      boundaryPoints: [
+        [0, 0.02, 0],
+        [4, 0.02, 0],
+        [4, 0.02, 3],
+        [0, 0.02, 3],
+      ],
+      view: '3d',
+    })
+    expect(state.areas).toHaveLength(0)
+  })
+
+  test('commits a freeform 3D area polygon by clicking the first point again', () => {
+    useMeasurementTool.getState().setMode('area')
+    const canvas = new globalThis.HTMLCanvasElement()
+
+    handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([4, 0, 0], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([4, 0, 3], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
+
+    const state = useMeasurementTool.getState()
+    expect(state.polygonDraft).toBeNull()
+    expect(state.areas).toHaveLength(1)
+    expect(state.areas[0]).toMatchObject({
+      areaSquareMeters: 6,
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+      ],
+      view: '3d',
+    })
   })
 
   test('adds 3D surface perimeter in perimeter mode', () => {
@@ -1345,6 +1430,37 @@ describe('measurement 3D grid handlers', () => {
       view: '3d',
     })
     expect(state.areas).toHaveLength(0)
+  })
+
+  test('hovering a 3D surface previews perimeter in perimeter mode without saving it', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    handleMeasurementNodeMove3D(nodeEvent(zoneNode(), [2, 0, 1.5]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewPerimeter).toMatchObject({
+      lengthMeters: 14,
+      view: '3d',
+    })
+    expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('commits a freeform 3D perimeter polygon by clicking the first point again', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+    const canvas = new globalThis.HTMLCanvasElement()
+
+    handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([4, 0, 0], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([4, 0, 3], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
+
+    const state = useMeasurementTool.getState()
+    expect(state.polygonDraft).toBeNull()
+    expect(state.perimeters).toHaveLength(1)
+    expect(state.perimeters[0]).toMatchObject({
+      lengthMeters: 12,
+      view: '3d',
+    })
   })
 
   test('alt-click on a 3D surface adds perimeter only', () => {
@@ -1363,6 +1479,114 @@ describe('measurement 3D grid handlers', () => {
       start: [2, 0, 0],
       view: '3d',
     })
+    expect(state.segments).toHaveLength(0)
+  })
+
+  test('hovering a 3D measurable wall previews its direct length without saving it', () => {
+    handleMeasurementNodeMove3D(nodeEvent(wallNode(), [2, 0, 0]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
+      measuredDistanceMeters: 4,
+      view: '3d',
+    })
+    expect(state.segments).toHaveLength(0)
+
+    const canvas = {} as HTMLCanvasElement
+    handleMeasurementGridMove3D(gridEvent([8, 0, 0], canvas), canvas)
+
+    expect(useMeasurementTool.getState().previewSegment).toBeNull()
+  })
+
+  test('hovering a rendered external asset owns the hover preview over the underlay', () => {
+    const node = spawnNode()
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    const canvas = {} as HTMLCanvasElement
+    let stopped = false
+    sceneRegistry.nodes.set(node.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(
+      nodeEvent(node, [0, 0, 0], {
+        object: mesh,
+        onStopPropagation: () => {
+          stopped = true
+        },
+      }),
+    )
+
+    const state = useMeasurementTool.getState()
+    expect(stopped).toBe(true)
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [-1, 0, -1.5],
+      end: [-1, 0, 1.5],
+      view: '3d',
+    })
+
+    handleMeasurementGridMove3D(gridEvent([2, 0, 1.5], canvas), canvas, () => true)
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [-1, 0, -1.5],
+      end: [-1, 0, 1.5],
+      view: '3d',
+    })
+  })
+
+  test('hovering a rendered external asset previews the edge under the cursor', () => {
+    const node = spawnNode()
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    sceneRegistry.nodes.set(node.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(nodeEvent(node, [0, 1, 1.5], { object: mesh }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 2,
+      start: [-1, 1, 1.5],
+      end: [1, 1, 1.5],
+      view: '3d',
+    })
+    expect(state.cursor).toEqual({ point: [0, 1, 1.5], view: '3d' })
+    expect(state.snapTarget).toBeNull()
+  })
+
+  test('hovering a rendered vertical side previews a surface-aligned height', () => {
+    const node = spawnNode()
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    sceneRegistry.nodes.set(node.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(nodeEvent(node, [1, 0.6, 0.2], { normal: [1, 0, 0], object: mesh }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 1,
+      start: [1, 0, 0.2],
+      end: [1, 1, 0.2],
+      view: '3d',
+    })
+  })
+
+  test('normal click after a 3D hover preview starts point-to-point drawing', () => {
+    const node = spawnNode()
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    sceneRegistry.nodes.set(node.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(nodeEvent(node, [0, 1, 1.5], { object: mesh }))
+    handleMeasurementNodeClick3D(nodeEvent(node, [0, 1, 1.5], { object: mesh }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.draft).toMatchObject({
+      start: [0, 1, 1.5],
+      view: '3d',
+    })
+    expect(state.previewSegment).toBeNull()
     expect(state.segments).toHaveLength(0)
   })
 
@@ -1403,6 +1627,24 @@ describe('measurement 3D grid handlers', () => {
       start: [0, 0, 0],
       end: [4, 0, 0],
       measuredDistanceMeters: 4,
+      view: '3d',
+    })
+  })
+
+  test('alt-click on a rendered external asset uses its bounding box length', () => {
+    const node = spawnNode()
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    sceneRegistry.nodes.set(node.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(node, [0, 0, 0], { altKey: true, object: mesh }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.segments).toHaveLength(1)
+    expect(state.segments[0]).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [-1, 0, -1.5],
+      end: [-1, 0, 1.5],
       view: '3d',
     })
   })

@@ -8,11 +8,13 @@ import {
   useMeasurementTool,
 } from '../../store/use-measurement-tool'
 import {
+  getFloorplanAngleMeasurementLayout,
   getFloorplanEndpointHandleMetrics,
-  getFloorplanSnapMarkerMetrics,
+  getFloorplanMeasurementColor,
   handleFloorplanMeasurementGridClick,
   handleFloorplanMeasurementGridMove,
   handleFloorplanMeasurementNodeClick2D,
+  previewFloorplanMeasurementNode2D,
   staggerFloorplanMeasurementLabels,
 } from './floorplan-measurement-tool-layer'
 import {
@@ -44,6 +46,28 @@ function resetSnapSettings() {
     useMeasurementTool.getState().setSnapKindEnabled(kind as MeasurementSnapKind, enabled)
   }
 }
+
+test('builds floorplan angle measurement as a wedge with a pill anchor', () => {
+  const layout = getFloorplanAngleMeasurementLayout({
+    first: [1, 0, 0],
+    id: 'angle-layout',
+    second: [0, 0, 1],
+    vertex: [0, 0, 0],
+    view: '2d',
+  })
+
+  expect(layout).not.toBeNull()
+  expect(layout?.wedgePath.startsWith('M 0 0 L 0.35 0')).toBe(true)
+  expect(layout?.arcPath.startsWith('M 0.35 0')).toBe(true)
+  expect(layout?.arcRadials).toHaveLength(2)
+  expect(layout?.arcRadials[0]).toEqual({ x1: 0, x2: 0.35, y1: 0, y2: 0 })
+  expect(layout?.arcRadials[1]?.x1).toBe(0)
+  expect(layout?.arcRadials[1]?.x2).toBeCloseTo(0)
+  expect(layout?.arcRadials[1]?.y1).toBe(0)
+  expect(layout?.arcRadials[1]?.y2).toBeCloseTo(0.35)
+  expect(layout?.label.x).toBeCloseTo(0.403)
+  expect(layout?.label.y).toBeCloseTo(0.403)
+})
 
 function gridEvent(
   localPosition: [number, number, number],
@@ -179,6 +203,59 @@ function windowNode(): AnyNode {
     position: [2, 1, 0],
     width: 1,
     height: 1,
+  } as never
+}
+
+function shelfNode(): AnyNode {
+  return {
+    id: 'shelf_measurement_2d',
+    type: 'shelf',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [2, 0, 3],
+    rotation: [0, 0, 0],
+    width: 2,
+    depth: 0.6,
+    height: 1.2,
+  } as never
+}
+
+function looseSkylightNode(): AnyNode {
+  return {
+    id: 'loose_skylight_measurement_2d',
+    type: 'skylight',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [5, 0, 6],
+    rotation: 0,
+    width: 0.9,
+    height: 1.2,
+  } as never
+}
+
+function solarPanelNode(): AnyNode {
+  return {
+    id: 'solar_panel_measurement_2d',
+    type: 'solar-panel',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [8, 0, 4],
+    rotation: 0,
+    rows: 2,
+    columns: 3,
+    panelWidth: 1,
+    panelHeight: 1.65,
+    gapX: 0.02,
+    gapY: 0.02,
   } as never
 }
 
@@ -329,6 +406,10 @@ function measurementOverlay(id: string, labelX: number, labelY: number) {
 }
 
 describe('floorplan measurement grid handlers', () => {
+  test('uses violet as the floorplan measurement color', () => {
+    expect(getFloorplanMeasurementColor()).toBe('#8b5cf6')
+  })
+
   test('renders linear measurement labels as zoom-stable pills', () => {
     const markup = renderToStaticMarkup(
       createElement(
@@ -351,48 +432,45 @@ describe('floorplan measurement grid handlers', () => {
       ),
     )
 
-    expect(markup).toContain('<rect')
-    expect(markup).toContain('fill="#ffffff"')
-    expect(markup).toContain('opacity="0.92"')
-    expect(markup).toContain('font-size="0.1"')
-    expect(markup).toContain('font-weight="600"')
+    expect(markup).toContain('<foreignObject')
+    expect(markup).toContain('rounded-full border border-border/60 bg-background/90')
+    expect(markup).toContain('px-4 py-1.5 text-xs tabular-nums')
+    expect(markup).toContain('font-medium text-foreground')
+    expect(markup).toContain('transform:scale(0.01)')
+    expect(markup).toContain('transform="translate(-0.39520000000000005 -0.14)"')
+    expect(markup).toContain('x="0" y="0"')
     expect(markup).toContain('12.34 m')
   })
 
   test('shares pill metrics across 2D measurement label types', () => {
     const metrics = getFloorplanMeasurementPillMetrics('12.34 m', 0.01)
 
-    expect(metrics.fontSize).toBe(0.1)
-    expect(metrics.height).toBeCloseTo(0.16)
-    expect(metrics.radius).toBeCloseTo(0.03)
-    expect(metrics.strokeWidth).toBeCloseTo(0.005)
-    expect(metrics.width).toBeCloseTo(0.554)
+    expect(metrics.fontSize).toBe(0.12)
+    expect(metrics.height).toBeCloseTo(0.28)
+    expect(metrics.pixelHeight).toBe(28)
+    expect(metrics.pixelWidth).toBeCloseTo(79.04)
+    expect(metrics.radius).toBeCloseTo(0.14)
+    expect(metrics.strokeWidth).toBeCloseTo(0.01)
+    expect(metrics.width).toBeCloseTo(0.7904)
   })
 
-  test('keeps snap marker glyph strokes readable while marker size follows zoom', () => {
-    expect(getFloorplanSnapMarkerMetrics(0.01)).toMatchObject({
-      labelFontSize: 0.1,
-      labelOffsetX: 0.14,
-      labelOffsetY: 0.24,
-      labelStrokeWidth: 0.025,
-      marker: 0.14,
-      markerHalf: 0.07,
-      markerStroke: 1.3,
-    })
-    const zoomedMetrics = getFloorplanSnapMarkerMetrics(0.05)
-    expect(zoomedMetrics.labelFontSize).toBeCloseTo(0.5)
-    expect(zoomedMetrics.marker).toBeCloseTo(0.7)
-    expect(zoomedMetrics.markerHalf).toBeCloseTo(0.35)
-    expect(zoomedMetrics.markerStroke).toBe(1.3)
+  test('keeps shared HTML pill dimensions stable across floorplan zoom', () => {
+    const base = getFloorplanMeasurementPillMetrics('12.34 m', 0.01)
+    const zoomed = getFloorplanMeasurementPillMetrics('12.34 m', 0.05)
+
+    expect(zoomed.pixelHeight).toBe(base.pixelHeight)
+    expect(zoomed.pixelWidth).toBe(base.pixelWidth)
+    expect(zoomed.height / 0.05).toBeCloseTo(base.height / 0.01)
+    expect(zoomed.width / 0.05).toBeCloseTo(base.width / 0.01)
   })
 
   test('keeps endpoint handle hit and visible radii tied to screen zoom', () => {
     expect(getFloorplanEndpointHandleMetrics(0.01, false)).toEqual({
-      handleRadius: 0.06,
+      handleRadius: 0.055,
       hitRadius: 0.16,
     })
     expect(getFloorplanEndpointHandleMetrics(0.01, true)).toEqual({
-      handleRadius: 0.08,
+      handleRadius: 0.07,
       hitRadius: 0.16,
     })
   })
@@ -525,7 +603,7 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
-  test('shows 2D snap target feedback while moving before first placement', () => {
+  test('tracks 2D snap target while moving before first placement', () => {
     seedScene([wallNode()])
 
     handleFloorplanMeasurementGridMove(gridEvent([2.04, 0, 0.04]))
@@ -1041,10 +1119,58 @@ describe('floorplan measurement grid handlers', () => {
     expect(state.areas).toHaveLength(1)
     expect(state.areas[0]).toMatchObject({
       areaSquareMeters: 12,
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+        [0, 0, 3],
+      ],
       labelPoint: [2, 0, 1.5],
       view: '2d',
     })
     expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('hovering a 2D surface previews area in area mode without saving it', () => {
+    useMeasurementTool.getState().setMode('area')
+
+    const handled = previewFloorplanMeasurementNode2D(zoneNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewArea).toMatchObject({
+      areaSquareMeters: 12,
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+        [0, 0, 3],
+      ],
+      view: '2d',
+    })
+    expect(state.areas).toHaveLength(0)
+  })
+
+  test('commits a freeform 2D area polygon by clicking the first point again', () => {
+    useMeasurementTool.getState().setMode('area')
+
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
+    handleFloorplanMeasurementGridClick(gridEvent([4, 0, 0]))
+    handleFloorplanMeasurementGridClick(gridEvent([4, 0, 3]))
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.polygonDraft).toBeNull()
+    expect(state.areas).toHaveLength(1)
+    expect(state.areas[0]).toMatchObject({
+      areaSquareMeters: 6,
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+      ],
+      view: '2d',
+    })
   })
 
   test('adds 2D surface perimeter in perimeter mode', () => {
@@ -1063,8 +1189,41 @@ describe('floorplan measurement grid handlers', () => {
     expect(state.areas).toHaveLength(0)
   })
 
+  test('hovering a 2D surface previews perimeter in perimeter mode without saving it', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    const handled = previewFloorplanMeasurementNode2D(zoneNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewPerimeter).toMatchObject({
+      lengthMeters: 14,
+      view: '2d',
+    })
+    expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('commits a freeform 2D perimeter polygon by clicking the first point again', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
+    handleFloorplanMeasurementGridClick(gridEvent([4, 0, 0]))
+    handleFloorplanMeasurementGridClick(gridEvent([4, 0, 3]))
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.polygonDraft).toBeNull()
+    expect(state.perimeters).toHaveLength(1)
+    expect(state.perimeters[0]).toMatchObject({
+      lengthMeters: 12,
+      view: '2d',
+    })
+  })
+
   test('alt-click on a 2D surface adds perimeter only', () => {
-    const handled = handleFloorplanMeasurementNodeClick2D(zoneNode() as never, { altKey: true })
+    const handled = handleFloorplanMeasurementNodeClick2D(zoneNode() as never, {
+      altKey: true,
+    })
 
     const state = useMeasurementTool.getState()
     expect(handled).toBe(true)
@@ -1079,8 +1238,28 @@ describe('floorplan measurement grid handlers', () => {
     expect(useMeasurementTool.getState().segments).toHaveLength(0)
   })
 
+  test('hovering a 2D measurable wall previews its direct length without saving it', () => {
+    const handled = previewFloorplanMeasurementNode2D(wallNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewSegment).toMatchObject({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
+      measuredDistanceMeters: 4,
+      view: '2d',
+    })
+    expect(state.segments).toHaveLength(0)
+
+    handleFloorplanMeasurementGridMove(gridEvent([8, 0, 0]))
+
+    expect(useMeasurementTool.getState().previewSegment).toBeNull()
+  })
+
   test('alt-click on a 2D measurable wall adds its length in distance mode', () => {
-    const handled = handleFloorplanMeasurementNodeClick2D(wallNode() as never, { altKey: true })
+    const handled = handleFloorplanMeasurementNodeClick2D(wallNode() as never, {
+      altKey: true,
+    })
 
     const state = useMeasurementTool.getState()
     expect(handled).toBe(true)
@@ -1094,7 +1273,9 @@ describe('floorplan measurement grid handlers', () => {
   })
 
   test('ctrl-click on a 2D measurable wall quick-adds its length without taking over drawing clicks', () => {
-    const handled = handleFloorplanMeasurementNodeClick2D(wallNode() as never, { ctrlKey: true })
+    const handled = handleFloorplanMeasurementNodeClick2D(wallNode() as never, {
+      ctrlKey: true,
+    })
 
     const state = useMeasurementTool.getState()
     expect(handled).toBe(true)
@@ -1108,8 +1289,101 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
+  test('alt-click on a 2D window adds its hosted opening width', () => {
+    seedScene([wallNode(), windowNode()])
+
+    const handled = handleFloorplanMeasurementNodeClick2D(windowNode() as never, { altKey: true })
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.segments).toHaveLength(1)
+    expect(state.segments[0]).toMatchObject({
+      start: [1.5, 0, 0],
+      end: [2.5, 0, 0],
+      measuredDistanceMeters: 1,
+      view: '2d',
+    })
+  })
+
+  test('hovering a 2D modular cabinet footprint previews its direct length', () => {
+    const handled = previewFloorplanMeasurementNode2D(shelfNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewSegment).toMatchObject({
+      start: [1, 0, 2.7],
+      end: [3, 0, 2.7],
+      measuredDistanceMeters: 2,
+      view: '2d',
+    })
+  })
+
+  test('hovering a 2D footprint previews the edge under the cursor', () => {
+    useMeasurementTool.getState().setSnapTarget({
+      kind: 'grid',
+      label: 'Grid',
+      point: [0, 0, 0],
+      view: '2d',
+    })
+
+    const handled = previewFloorplanMeasurementNode2D(shelfNode() as never, [2, 0, 3.3])
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewSegment).toMatchObject({
+      start: [3, 0, 3.3],
+      end: [1, 0, 3.3],
+      measuredDistanceMeters: 2,
+      view: '2d',
+    })
+    expect(state.cursor).toEqual({ point: [2, 0, 3.3], view: '2d' })
+    expect(state.snapTarget).toBeNull()
+  })
+
+  test('normal click after a 2D hover preview leaves drawing to the grid handler', () => {
+    previewFloorplanMeasurementNode2D(shelfNode() as never, [2, 0, 3.3])
+
+    const handled = handleFloorplanMeasurementNodeClick2D(shelfNode() as never, {
+      cursorPoint: [2, 0, 3.3],
+    })
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(false)
+    expect(state.draft).toBeNull()
+    expect(state.previewSegment).toMatchObject({
+      start: [3, 0, 3.3],
+      end: [1, 0, 3.3],
+      view: '2d',
+    })
+    expect(state.segments).toHaveLength(0)
+  })
+
+  test('hovering a 2D skylight footprint uses width by height as direct length', () => {
+    const handled = previewFloorplanMeasurementNode2D(looseSkylightNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewSegment?.measuredDistanceMeters).toBeCloseTo(1.2)
+    expect(state.previewSegment?.start).toEqual([5.45, 0, 5.4])
+    expect(state.previewSegment?.end).toEqual([5.45, 0, 6.6])
+  })
+
+  test('hovering a 2D solar array footprint uses its full panel grid dimensions', () => {
+    const handled = previewFloorplanMeasurementNode2D(solarPanelNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewSegment?.measuredDistanceMeters).toBeCloseTo(3.32)
+    expect(state.previewSegment?.start[0]).toBeCloseTo(9.52)
+    expect(state.previewSegment?.start[2]).toBeCloseTo(2.34)
+    expect(state.previewSegment?.end[0]).toBeCloseTo(9.52)
+    expect(state.previewSegment?.end[2]).toBeCloseTo(5.66)
+  })
+
   test('deleteSelected removes the selected 2D measurement', () => {
-    handleFloorplanMeasurementNodeClick2D(wallNode() as never, { altKey: true })
+    handleFloorplanMeasurementNodeClick2D(wallNode() as never, {
+      altKey: true,
+    })
 
     expect(useMeasurementTool.getState().segments).toHaveLength(1)
     useMeasurementTool.getState().deleteSelected()

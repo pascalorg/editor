@@ -58,6 +58,7 @@ export type MeasurementHelpContext = {
   draftActive: boolean
   mode: 'distance' | 'area' | 'perimeter' | 'angle'
   modifierPressed: boolean
+  polygonDraftActive?: boolean
   shiftPressed: boolean
 }
 
@@ -137,14 +138,18 @@ export function resolveMeasurementHelpHints({
   draftActive,
   mode,
   modifierPressed,
+  polygonDraftActive,
   shiftPressed,
 }: MeasurementHelpContext): ContextualShortcutHint[] {
   const hints: ContextualShortcutHint[] = []
 
   if (mode === 'area') {
-    hints.push({ keys: [CLICK], label: 'Measure surface area' })
+    hints.push({ keys: [CLICK], label: polygonDraftActive ? 'Place area point' : 'Measure area' })
   } else if (mode === 'perimeter') {
-    hints.push({ keys: [CLICK], label: 'Measure perimeter' })
+    hints.push({
+      keys: [CLICK],
+      label: polygonDraftActive ? 'Place perimeter point' : 'Measure perimeter',
+    })
   } else if (mode === 'angle' || angleDraftActive) {
     hints.push({
       keys: [CLICK],
@@ -167,6 +172,6 @@ export function resolveMeasurementHelpHints({
     })
   }
 
-  hints.push({ keys: [ESC_KEY], label: 'Clear measurements' })
+  hints.push({ keys: [ESC_KEY], label: 'Cancel measurement action' })
   return hints
 }

@@ -1,33 +1,105 @@
 'use client'
 
 import { memo, type PointerEvent } from 'react'
+import {
+  DIMENSION_PILL_PRIMARY_CLASS_NAME,
+  DimensionPillShell,
+} from '../../editor/measurement-pill'
 import { useFloorplanRender } from '../floorplan-render-context'
 
 const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
 const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
-const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX = 10
+const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX = 12
+const FLOORPLAN_MEASUREMENT_LABEL_LINE_HEIGHT_PX = 16
 const FLOORPLAN_MEASUREMENT_LABEL_OPACITY = 0.98
 const FLOORPLAN_MEASUREMENT_EXTENSION_DASH = '0.08 0.12'
 const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
 const FLOORPLAN_MEASUREMENT_LABEL_MIN_FONT_SIZE = 0.08
+const FLOORPLAN_MEASUREMENT_LABEL_PAD_X_PX = 16
+const FLOORPLAN_MEASUREMENT_LABEL_PAD_Y_PX = 6
 
 export function getFloorplanMeasurementPillMetrics(label: string, unitsPerPixel: number) {
+  const pixelWidth =
+    label.length * FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX * 0.56 +
+    FLOORPLAN_MEASUREMENT_LABEL_PAD_X_PX * 2
+  const pixelHeight =
+    FLOORPLAN_MEASUREMENT_LABEL_LINE_HEIGHT_PX + FLOORPLAN_MEASUREMENT_LABEL_PAD_Y_PX * 2
   const fontSize = Math.max(
     unitsPerPixel * FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX,
     FLOORPLAN_MEASUREMENT_LABEL_MIN_FONT_SIZE,
   )
-  const padX = unitsPerPixel * 6
-  const padY = unitsPerPixel * 3
+  const height = pixelHeight * unitsPerPixel
+  const padX = unitsPerPixel * FLOORPLAN_MEASUREMENT_LABEL_PAD_X_PX
+  const padY = unitsPerPixel * FLOORPLAN_MEASUREMENT_LABEL_PAD_Y_PX
+  const width = pixelWidth * unitsPerPixel
 
   return {
     fontSize,
-    height: fontSize + padY * 2,
+    height,
     padX,
     padY,
-    radius: unitsPerPixel * 3,
-    strokeWidth: unitsPerPixel * 0.5,
-    width: label.length * fontSize * 0.62 + padX * 2,
+    pixelHeight,
+    pixelWidth,
+    radius: height / 2,
+    strokeWidth: unitsPerPixel,
+    width,
   }
+}
+
+export function FloorplanMeasurementPillLabel({
+  isSelected,
+  label,
+  rotationDeg,
+  unitsPerPixel,
+  x,
+  y,
+}: {
+  isSelected: boolean
+  label: string
+  rotationDeg: number
+  unitsPerPixel: number
+  x: number
+  y: number
+}) {
+  const metrics = getFloorplanMeasurementPillMetrics(label, unitsPerPixel)
+
+  return (
+    <g opacity={isSelected ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY : 0.42}>
+      <g transform={`translate(${x} ${y}) rotate(${rotationDeg})`}>
+        <foreignObject
+          height={metrics.height}
+          requiredExtensions="http://www.w3.org/1999/xhtml"
+          transform={`translate(${-metrics.width / 2} ${-metrics.height / 2})`}
+          width={metrics.width}
+          x={0}
+          y={0}
+        >
+          <div
+            style={{
+              alignItems: 'center',
+              display: 'flex',
+              height: metrics.pixelHeight,
+              justifyContent: 'center',
+              transform: `scale(${unitsPerPixel})`,
+              transformOrigin: '0 0',
+              width: metrics.pixelWidth,
+            }}
+          >
+            <DimensionPillShell
+              style={{
+                boxSizing: 'border-box',
+                height: '100%',
+                justifyContent: 'center',
+                width: '100%',
+              }}
+            >
+              <span className={DIMENSION_PILL_PRIMARY_CLASS_NAME}>{label}</span>
+            </DimensionPillShell>
+          </div>
+        </foreignObject>
+      </g>
+    </g>
+  )
 }
 
 export type LinearMeasurementOverlay = {
@@ -189,11 +261,6 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
             measurement.labelAngleDeg + sceneRotationDeg,
           )
           const localLabelAngleDeg = screenLabelAngleDeg - sceneRotationDeg
-          const labelOpacity = measurement.isSelected
-            ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
-            : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
-          const labelMetrics = getFloorplanMeasurementPillMetrics(measurement.label, unitsPerPixel)
-
           return (
             <g
               className={className}
@@ -257,40 +324,14 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
                   />
                 </>
               ) : null}
-              <g
-                opacity={labelOpacity}
-                transform={`translate(${measurement.labelX} ${measurement.labelY}) rotate(${localLabelAngleDeg})`}
-              >
-                <rect
-                  fill={palette.measurementLabelBackground ?? '#ffffff'}
-                  height={labelMetrics.height}
-                  opacity={0.92}
-                  rx={labelMetrics.radius}
-                  ry={labelMetrics.radius}
-                  stroke={measurement.stroke ?? palette.measurementStroke}
-                  strokeWidth={labelMetrics.strokeWidth}
-                  vectorEffect="non-scaling-stroke"
-                  width={labelMetrics.width}
-                  x={-labelMetrics.width / 2}
-                  y={-labelMetrics.height / 2}
-                />
-                <text
-                  dominantBaseline="middle"
-                  fill={
-                    measurement.labelFill ??
-                    palette.measurementLabelText ??
-                    palette.measurementStroke
-                  }
-                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                  fontSize={labelMetrics.fontSize}
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x={0}
-                  y={0}
-                >
-                  {measurement.label}
-                </text>
-              </g>
+              <FloorplanMeasurementPillLabel
+                isSelected={measurement.isSelected ?? true}
+                label={measurement.label}
+                rotationDeg={localLabelAngleDeg}
+                unitsPerPixel={unitsPerPixel}
+                x={measurement.labelX}
+                y={measurement.labelY}
+              />
             </g>
           )
         })(),

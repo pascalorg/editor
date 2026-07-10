@@ -95,6 +95,7 @@ describe('resolveMeasurementHelpHints', () => {
         draftActive: false,
         mode: 'distance',
         modifierPressed: false,
+        polygonDraftActive: false,
         shiftPressed: false,
       }),
     ).toEqual([
@@ -109,7 +110,7 @@ describe('resolveMeasurementHelpHints', () => {
         label: 'Quick measure object',
         active: false,
       },
-      { keys: ['Esc'], label: 'Clear measurements' },
+      { keys: ['Esc'], label: 'Cancel measurement action' },
     ])
   })
 
@@ -120,6 +121,7 @@ describe('resolveMeasurementHelpHints', () => {
         draftActive: true,
         mode: 'distance',
         modifierPressed: false,
+        polygonDraftActive: false,
         shiftPressed: true,
       }),
     ).toContainEqual({
@@ -136,9 +138,10 @@ describe('resolveMeasurementHelpHints', () => {
         draftActive: false,
         mode: 'area',
         modifierPressed: false,
+        polygonDraftActive: false,
         shiftPressed: false,
       }),
-    ).toContainEqual({ keys: ['Click'], label: 'Measure surface area' })
+    ).toContainEqual({ keys: ['Click'], label: 'Measure area' })
 
     expect(
       resolveMeasurementHelpHints({
@@ -146,8 +149,33 @@ describe('resolveMeasurementHelpHints', () => {
         draftActive: false,
         mode: 'perimeter',
         modifierPressed: false,
+        polygonDraftActive: false,
         shiftPressed: false,
       }),
     ).toContainEqual({ keys: ['Click'], label: 'Measure perimeter' })
+  })
+
+  test('shows polygon continuation hints for active area and perimeter drafts', () => {
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: false,
+        mode: 'area',
+        modifierPressed: false,
+        polygonDraftActive: true,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({ keys: ['Click'], label: 'Place area point' })
+
+    expect(
+      resolveMeasurementHelpHints({
+        angleDraftActive: false,
+        draftActive: false,
+        mode: 'perimeter',
+        modifierPressed: false,
+        polygonDraftActive: true,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({ keys: ['Click'], label: 'Place perimeter point' })
   })
 })
