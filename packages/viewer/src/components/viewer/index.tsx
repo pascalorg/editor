@@ -249,11 +249,22 @@ function ToneMappingExposure() {
 }
 
 function hasPendingSceneBuildWork() {
-  const { dirtyNodes, nodes } = useScene.getState()
+  const { dirtyNodes, nodes, rootNodeIds } = useScene.getState()
 
   for (const id of dirtyNodes) {
     const node = nodes[id]
     if (!node) continue
+    // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
+    // them in `children`, or no parent and not a root) never render — every
+    // renderer enumerates the parent's `children` array — so no system will
+    // ever build them or clear their mark. They must not hold scene-ready
+    // hostage (observed in prod scene data: two dangling windows kept every
+    // bake of that scene waiting out the full readiness cap).
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const reachable = parent
+      ? (parent as { children?: string[] }).children?.includes(id) === true
+      : rootNodeIds.includes(id)
+    if (!reachable) continue
     const def = nodeRegistry.get(node.type)
     if (def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type)) {
       return true
@@ -272,13 +283,16 @@ function hasCommittedSceneRoot() {
 function SceneReadyTracker({
   onSceneReadyChange,
   sceneReadyKey,
+  sceneReadyMaxWaitMs,
 }: {
   onSceneReadyChange?: (ready: boolean) => void
   sceneReadyKey?: string | number | null
+  sceneReadyMaxWaitMs?: number
 }) {
   const readyRef = useRef(false)
   const settledFramesRef = useRef(0)
   const waitedFramesRef = useRef(0)
+  const waitStartRef = useRef<number | null>(null)
   const onSceneReadyChangeRef = useRef(onSceneReadyChange)
 
   useEffect(() => {
@@ -290,6 +304,7 @@ function SceneReadyTracker({
     readyRef.current = false
     settledFramesRef.current = 0
     waitedFramesRef.current = 0
+    waitStartRef.current = null
     onSceneReadyChangeRef.current?.(false)
   }, [sceneReadyKey])
 
@@ -297,10 +312,16 @@ function SceneReadyTracker({
     if (!(onSceneReadyChangeRef.current && !readyRef.current)) return
 
     waitedFramesRef.current += 1
-    if (
-      waitedFramesRef.current < SCENE_READY_MAX_WAIT_FRAMES &&
-      (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())
-    ) {
+    waitStartRef.current ??= performance.now()
+    // Give-up cap so a permanently-dirty node can't block readiness forever.
+    // The frame-count default assumes display-rate frames; a host whose frame
+    // cadence is decoupled from wall time (the headless bake page's timer-driven
+    // loop runs 180 frames in 3.6s — faster than a cold item download) passes
+    // `sceneReadyMaxWaitMs` to make the cap wall-clock instead.
+    const capReached = sceneReadyMaxWaitMs
+      ? performance.now() - waitStartRef.current >= sceneReadyMaxWaitMs
+      : waitedFramesRef.current >= SCENE_READY_MAX_WAIT_FRAMES
+    if (!capReached && (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())) {
       settledFramesRef.current = 0
       return
     }
@@ -346,6 +367,13 @@ interface ViewerProps {
   sceneReadyKey?: string | number | null
   onSceneReadyChange?: (ready: boolean) => void
   /**
+   * Wall-clock give-up cap for scene readiness, replacing the default
+   * frame-count cap. Set it on hosts whose frame cadence is decoupled from
+   * real time (the headless bake page's timer-driven loop runs the default
+   * 180-frame cap in ~3.6s — shorter than a cold item-model download).
+   */
+  sceneReadyMaxWaitMs?: number
+  /**
    * Skip the TSL post-processing pipeline (SSGI/denoise/ink/outline) and render
    * the scene directly. For headless/capture surfaces (the bake page) where
    * frame quality is irrelevant: on a software-rasterised worker the pipeline
@@ -379,6 +407,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
+    sceneReadyMaxWaitMs,
     disablePostFx = false,
   },
   ref,
@@ -527,7 +556,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       <ViewerCamera />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
-      <SceneReadyTracker onSceneReadyChange={onSceneReadyChange} sceneReadyKey={sceneReadyKey} />
+      <SceneReadyTracker
+        onSceneReadyChange={onSceneReadyChange}
+        sceneReadyKey={sceneReadyKey}
+        sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+      />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
