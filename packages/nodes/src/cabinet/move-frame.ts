@@ -1,10 +1,10 @@
 import type {
-  AlignmentGuide,
   AnyNode,
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
   MovableParentFrame,
+  ParentFrameSnapMatch,
 } from '@pascal-app/core'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './run-ops'
@@ -193,43 +193,32 @@ function planPoint(
   return { x, z }
 }
 
-function guideDistance(from: PlanPoint, to: PlanPoint): number {
-  return Math.hypot(to.x - from.x, to.z - from.z)
-}
-
-function makeGuide({
+function makeSnapMatch({
   axis,
   candidateNodeId,
-  coord,
   from,
   to,
 }: {
   axis: 'x' | 'z'
-  candidateNodeId: string
-  coord: number
+  candidateNodeId: AnyNodeId
   from: PlanPoint
   to: PlanPoint
-}): AlignmentGuide {
+}): ParentFrameSnapMatch {
   return {
     axis,
-    coord,
+    candidateNodeId,
     from,
     to,
-    anchor: from,
-    movingAnchorKind: 'corner',
-    candidateAnchorKind: 'corner',
-    candidateNodeId,
-    distance: guideDistance(from, to),
   }
 }
 
-function magneticSnapGuides(
+function magneticSnapMatches(
   node: AnyNode,
   parent: AnyNode,
   _local: readonly [number, number, number],
   snappedLocal: readonly [number, number, number],
   nodes: Readonly<Record<string, AnyNode>>,
-): AlignmentGuide[] {
+): ParentFrameSnapMatch[] {
   const run = parent as CabinetNodeType
   const moving = node as CabinetModuleNodeType
   const movingHalfWidth = moving.width / 2
@@ -238,10 +227,10 @@ function magneticSnapGuides(
   const movingMaxX = snappedLocal[0] + movingHalfWidth
   const movingMinZ = snappedLocal[2] - movingHalfDepth
   const movingMaxZ = snappedLocal[2] + movingHalfDepth
-  const guides: AlignmentGuide[] = []
+  const matches: ParentFrameSnapMatch[] = []
 
   for (const childId of run.children ?? []) {
-    if (guides.length >= 2) break
+    if (matches.length >= 2) break
     if (childId === node.id) continue
     const sibling = nodes[childId as AnyNodeId]
     if (sibling?.type !== 'cabinet-module') continue
@@ -254,7 +243,7 @@ function magneticSnapGuides(
     const siblingMaxZ = module.position[2] + siblingHalfDepth
 
     if (
-      guides.every((guide) => guide.axis !== 'x') &&
+      matches.every((match) => match.axis !== 'x') &&
       movingMinZ <= siblingMaxZ + MAGNETIC_THRESHOLD_M &&
       movingMaxZ >= siblingMinZ - MAGNETIC_THRESHOLD_M
     ) {
@@ -265,11 +254,10 @@ function magneticSnapGuides(
             ? movingMaxX
             : null
       if (sharedX !== null) {
-        guides.push(
-          makeGuide({
+        matches.push(
+          makeSnapMatch({
             axis: 'x',
             candidateNodeId: module.id,
-            coord: planPoint(parent, sharedX, snappedLocal[2], nodes).x,
             from: planPoint(parent, sharedX, Math.min(movingMinZ, siblingMinZ), nodes),
             to: planPoint(parent, sharedX, Math.max(movingMaxZ, siblingMaxZ), nodes),
           }),
@@ -278,7 +266,7 @@ function magneticSnapGuides(
     }
 
     if (
-      guides.every((guide) => guide.axis !== 'z') &&
+      matches.every((match) => match.axis !== 'z') &&
       movingMinX <= siblingMaxX + MAGNETIC_THRESHOLD_M &&
       movingMaxX >= siblingMinX - MAGNETIC_THRESHOLD_M
     ) {
@@ -291,11 +279,10 @@ function magneticSnapGuides(
               ? movingMaxZ
               : null
       if (sharedZ !== null) {
-        guides.push(
-          makeGuide({
+        matches.push(
+          makeSnapMatch({
             axis: 'z',
             candidateNodeId: module.id,
-            coord: planPoint(parent, snappedLocal[0], sharedZ, nodes).z,
             from: planPoint(parent, Math.min(movingMinX, siblingMinX), sharedZ, nodes),
             to: planPoint(parent, Math.max(movingMaxX, siblingMaxX), sharedZ, nodes),
           }),
@@ -304,7 +291,7 @@ function magneticSnapGuides(
     }
   }
 
-  return guides
+  return matches
 }
 
 export const cabinetModuleParentFrame: MovableParentFrame = {
@@ -314,7 +301,7 @@ export const cabinetModuleParentFrame: MovableParentFrame = {
   localToPlan,
   planToLocal,
   magneticSnap,
-  magneticSnapGuides,
+  magneticSnapMatches,
   // Module position isn't in the run's geometryKey, so a committed move must
   // bump the layout revision to re-flow spans/countertop — and re-anchor any
   // linked L-corner runs to the module's new edge.

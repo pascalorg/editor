@@ -3,23 +3,11 @@ import {
   type AnyNodeId,
   cloneNodesInto,
   collectSubtree,
-  findLevelAncestorId,
+  type DuplicableConfig,
+  nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { getPlacementMetadataRecord, stripPlacementMetadataFlags } from './placement-metadata'
-
-function stripDuplicatedCabinetMetadata(metadata: unknown): unknown {
-  const record = getPlacementMetadataRecord(stripPlacementMetadataFlags(metadata))
-  if (Object.keys(record).length === 0) return record
-
-  const {
-    cabinetCornerDerivedRun: _derived,
-    cabinetCornerSourceLink: _source,
-    nodeSelectionProxyId: _proxy,
-    ...rest
-  } = record
-  return rest
-}
 
 function cleanPlacementMetadata<N extends AnyNode>(node: N): N {
   return {
@@ -33,49 +21,16 @@ function parentIdOf(node: AnyNode): AnyNodeId | undefined {
   return parentId ?? undefined
 }
 
-function isCabinetNode(node: AnyNode | null | undefined): node is AnyNode & {
-  type: 'cabinet' | 'cabinet-module'
-  position: [number, number, number]
-  rotation: number
-} {
+function duplicableConfigFor(node: AnyNode): DuplicableConfig | null {
+  const duplicable = nodeRegistry.get(node.type)?.capabilities?.duplicable
+  return duplicable && typeof duplicable === 'object' ? duplicable : null
+}
+
+export function duplicatesAsFreshSubtree(node: AnyNode): boolean {
+  const children = (node as { children?: unknown }).children
   return (
-    (node?.type === 'cabinet' || node?.type === 'cabinet-module') &&
-    Array.isArray((node as { position?: unknown }).position) &&
-    typeof (node as { rotation?: unknown }).rotation === 'number'
+    duplicableConfigFor(node)?.subtree === true && Array.isArray(children) && children.length > 0
   )
-}
-
-function composeCabinetPose(
-  parentPosition: readonly [number, number, number],
-  parentRotation: number,
-  childPosition: readonly [number, number, number],
-  childRotation: number,
-) {
-  const cos = Math.cos(parentRotation)
-  const sin = Math.sin(parentRotation)
-  return {
-    position: [
-      parentPosition[0] + childPosition[0] * cos + childPosition[2] * sin,
-      parentPosition[1] + childPosition[1],
-      parentPosition[2] - childPosition[0] * sin + childPosition[2] * cos,
-    ] as [number, number, number],
-    rotation: parentRotation + childRotation,
-  }
-}
-
-function cabinetWorldPose(
-  node: AnyNode,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): { position: [number, number, number]; rotation: number } | null {
-  if (!isCabinetNode(node)) return null
-  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : null
-  if (isCabinetNode(parent)) {
-    const parentPose = cabinetWorldPose(parent, nodes)
-    return parentPose
-      ? composeCabinetPose(parentPose.position, parentPose.rotation, node.position, node.rotation)
-      : null
-  }
-  return { position: [...node.position], rotation: node.rotation }
 }
 
 /**
@@ -90,28 +45,33 @@ export function createFreshPlacementSubtree(
   const subtree = collectSubtree(scene.nodes, rootId)
   if (!subtree) return null
 
-  const parent = (subtree.root.parentId ? scene.nodes[subtree.root.parentId as AnyNodeId] : null) as
-    | AnyNode
-    | undefined
-  const nestedCabinetRun = subtree.root.type === 'cabinet' && isCabinetNode(parent)
-  const worldPose = nestedCabinetRun ? cabinetWorldPose(subtree.root, scene.nodes) : null
-  const levelId = nestedCabinetRun ? findLevelAncestorId(rootId, scene.nodes) : null
-  const root = {
+  const baseRoot = {
     ...subtree.root,
     ...rootPatch,
-    ...(worldPose ? { position: worldPose.position, rotation: worldPose.rotation } : null),
-    ...(levelId ? { parentId: levelId as AnyNodeId } : null),
+  } as AnyNode
+  const prepared = duplicableConfigFor(subtree.root)?.prepareSubtreeClone?.({
+    root: baseRoot,
+    descendants: subtree.descendants,
+    rootId,
+    rootPatch,
+    nodes: scene.nodes,
+  })
+  const preparedRoot = prepared?.root ?? baseRoot
+  const root = {
+    ...preparedRoot,
     metadata: {
-      ...getPlacementMetadataRecord(stripDuplicatedCabinetMetadata(subtree.root.metadata)),
-      ...getPlacementMetadataRecord(stripDuplicatedCabinetMetadata(rootPatch.metadata)),
+      ...getPlacementMetadataRecord(stripPlacementMetadataFlags(preparedRoot.metadata)),
       isNew: true,
     },
   } as AnyNode
-  const descendants = subtree.descendants.map((node) => ({
+  const descendants = (prepared?.descendants ?? subtree.descendants).map((node: AnyNode) => ({
     ...node,
-    metadata: stripDuplicatedCabinetMetadata(node.metadata),
+    metadata: stripPlacementMetadataFlags(node.metadata),
   })) as AnyNode[]
-  const parentId = parentIdOf(root)
+  const parentId =
+    prepared && Object.hasOwn(prepared, 'parentId')
+      ? (prepared.parentId ?? undefined)
+      : parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], {
     rootId,
     parentId,

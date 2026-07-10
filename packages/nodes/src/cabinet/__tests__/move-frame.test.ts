@@ -32,7 +32,7 @@ function module(
 }
 
 const magneticSnap = cabinetModuleParentFrame.magneticSnap!
-const magneticSnapGuides = cabinetModuleParentFrame.magneticSnapGuides!
+const magneticSnapMatches = cabinetModuleParentFrame.magneticSnapMatches!
 
 describe('cabinetModuleParentFrame.magneticSnap', () => {
   test('pulls a module flush against a sibling edge within the 8 cm threshold', () => {
@@ -147,27 +147,25 @@ describe('cabinetModuleParentFrame nested transforms', () => {
   })
 })
 
-describe('cabinetModuleParentFrame.magneticSnapGuides', () => {
-  test('emits side and depth guides for a module snapped to a sibling', () => {
+describe('cabinetModuleParentFrame.magneticSnapMatches', () => {
+  test('emits side and depth matches for a module snapped to a sibling', () => {
     const moving = module('cabinet-module_moving', [0.65, 0.1, 0])
     const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
     const { run, nodes } = runFixture([moving, sibling])
     const snapped = magneticSnap(moving, run, moving.position, nodes)
 
-    const guides = magneticSnapGuides(moving, run, moving.position, snapped, nodes)
+    const matches = magneticSnapMatches(moving, run, moving.position, snapped, nodes)
 
-    expect(guides.map((guide) => guide.axis).sort()).toEqual(['x', 'z'])
-    const sideGuide = guides.find((guide) => guide.axis === 'x')
-    expect(sideGuide?.coord).toBeCloseTo(0.3)
-    expect(sideGuide?.from.x).toBeCloseTo(0.3)
-    expect(sideGuide?.to.x).toBeCloseTo(0.3)
-    const depthGuide = guides.find((guide) => guide.axis === 'z')
-    expect(depthGuide?.coord).toBeCloseTo(0)
-    expect(depthGuide?.from.z).toBeCloseTo(0)
-    expect(depthGuide?.to.z).toBeCloseTo(0)
+    expect(matches.map((match) => match.axis).sort()).toEqual(['x', 'z'])
+    const sideMatch = matches.find((match) => match.axis === 'x')
+    expect(sideMatch?.from.x).toBeCloseTo(0.3)
+    expect(sideMatch?.to.x).toBeCloseTo(0.3)
+    const depthMatch = matches.find((match) => match.axis === 'z')
+    expect(depthMatch?.from.z).toBeCloseTo(0)
+    expect(depthMatch?.to.z).toBeCloseTo(0)
   })
 
-  test('projects guide endpoints through nested cabinet ancestors', () => {
+  test('projects match endpoints through nested cabinet ancestors', () => {
     const rootRun = CabinetNode.parse({
       id: 'cabinet_root-run',
       position: [4, 0, 3],
@@ -203,13 +201,13 @@ describe('cabinetModuleParentFrame.magneticSnapGuides', () => {
     ) as Record<string, AnyNode>
     const snapped = magneticSnap(moving, nestedRun, moving.position, nodes)
 
-    const guides = magneticSnapGuides(moving, nestedRun, moving.position, snapped, nodes)
-    const sideGuide = guides.find((guide) => guide.axis === 'x')
-    const localGuideStart = cabinetModuleParentFrame.localToPlan(nestedRun, [0.3, 0, -0.29], nodes)
+    const matches = magneticSnapMatches(moving, nestedRun, moving.position, snapped, nodes)
+    const sideMatch = matches.find((match) => match.axis === 'x')
+    const localMatchStart = cabinetModuleParentFrame.localToPlan(nestedRun, [0.3, 0, -0.29], nodes)
 
-    expect(sideGuide).toBeDefined()
-    expect(sideGuide?.from.x).toBeCloseTo(localGuideStart[0])
-    expect(sideGuide?.from.z).toBeCloseTo(localGuideStart[2])
-    expect(sideGuide?.from.x).not.toBeCloseTo(0.3)
+    expect(sideMatch).toBeDefined()
+    expect(sideMatch?.from.x).toBeCloseTo(localMatchStart[0])
+    expect(sideMatch?.from.z).toBeCloseTo(localMatchStart[2])
+    expect(sideMatch?.from.x).not.toBeCloseTo(0.3)
   })
 })

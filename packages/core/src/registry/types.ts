@@ -4,7 +4,6 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import type { AlignmentAnchor, AlignmentGuide } from '../services/alignment'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -1260,6 +1259,25 @@ export type McpOverrides = {
   semantic?: boolean
 }
 
+export type DuplicateSubtreeCloneArgs = {
+  root: AnyNode
+  descendants: AnyNode[]
+  rootId: AnyNodeId
+  rootPatch: Partial<AnyNode>
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+}
+
+export type DuplicateSubtreeCloneResult = {
+  root?: AnyNode
+  descendants?: AnyNode[]
+  parentId?: AnyNodeId | null
+}
+
+export type DuplicableConfig = {
+  subtree?: boolean
+  prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
+}
+
 // ─── Capabilities ────────────────────────────────────────────────────
 
 export type Capabilities = {
@@ -1270,7 +1288,7 @@ export type Capabilities = {
   cuttable?: CuttableConfig
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
-  duplicable?: boolean
+  duplicable?: boolean | DuplicableConfig
   deletable?: boolean
   groupable?: boolean
   selectable?: SelectableConfig
@@ -1720,16 +1738,6 @@ export type MovableParentFrame = {
    */
   floorplanLiveTransform?: (args: { node: AnyNode; live: LiveTransformLike }) => AnyNode
   /**
-   * Optional parent-frame alignment candidates in plan/world coordinates.
-   * Used by nested-frame kinds whose siblings are not level-scoped alignment
-   * candidates (cabinet modules inside a cabinet run).
-   */
-  alignmentCandidates?: (
-    node: AnyNode,
-    parent: AnyNode,
-    nodes: Readonly<Record<string, AnyNode>>,
-  ) => AlignmentAnchor[]
-  /**
    * Optional magnetic snap in the parent's local frame (e.g. a module edge
    * mating flush with a sibling module). Runs when magnetic snapping is
    * active; returns the (possibly unchanged) local position.
@@ -1740,14 +1748,14 @@ export type MovableParentFrame = {
     local: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
   ) => [number, number, number]
-  /** Optional visual guides for the parent-frame magnetic snap result. */
-  magneticSnapGuides?: (
+  /** Optional snap-line matches for the parent-frame magnetic snap result. */
+  magneticSnapMatches?: (
     node: AnyNode,
     parent: AnyNode,
     local: readonly [number, number, number],
     snappedLocal: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
-  ) => AlignmentGuide[]
+  ) => ParentFrameSnapMatch[]
   /**
    * Called after a move of the child commits, with the LIVE (post-commit)
    * child and parent. Lets the kind run derived-state maintenance the
@@ -1755,6 +1763,13 @@ export type MovableParentFrame = {
    * re-anchoring linked corner runs to the moved module's new edge).
    */
   onCommit?: (node: AnyNode, parent: AnyNode, sceneApi: SceneApi) => void
+}
+
+export type ParentFrameSnapMatch = {
+  axis: 'x' | 'z'
+  candidateNodeId: AnyNodeId
+  from: { x: number; z: number }
+  to: { x: number; z: number }
 }
 
 export type GroupMoveSnapArgs = {

@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
   CabinetModuleNode,
   CabinetNode,
+  findLevelAncestorId,
+  nodeRegistry,
+  registerNode,
   useScene,
 } from '@pascal-app/core'
+import { z } from 'zod'
 import { commitFreshPlacementSubtree, createFreshPlacementSubtree } from './fresh-planar-placement'
 
 type RafFn = (cb: (time: number) => void) => number
@@ -24,6 +29,56 @@ const CABINET_LEFT_ID = 'cabinet-module_original-left' as AnyNodeId
 const CABINET_RIGHT_ID = 'cabinet-module_original-right' as AnyNodeId
 const CABINET_CHILD_RUN_ID = 'cabinet_child-run' as AnyNodeId
 const CABINET_CHILD_MODULE_ID = 'cabinet-module_child-module' as AnyNodeId
+
+function registerCabinetClonePrepTestKind() {
+  if (nodeRegistry.has('cabinet')) return
+
+  registerNode({
+    kind: 'cabinet',
+    schemaVersion: 1,
+    schema: z.any() as never,
+    category: 'furnish',
+    defaults: () => ({}),
+    capabilities: {
+      duplicable: {
+        subtree: true,
+        prepareSubtreeClone: ({ root, descendants, rootId, nodes }) => {
+          const parent = root.parentId ? nodes[root.parentId as AnyNodeId] : null
+          if (root.type !== 'cabinet' || parent?.type !== 'cabinet') {
+            return { root, descendants }
+          }
+          const parentPosition = (parent as { position: [number, number, number] }).position
+          const parentRotation = (parent as { rotation: number }).rotation
+          const childPosition = (root as { position: [number, number, number] }).position
+          const childRotation = (root as { rotation: number }).rotation
+          const cos = Math.cos(parentRotation)
+          const sin = Math.sin(parentRotation)
+          const {
+            cabinetCornerDerivedRun: _derived,
+            nodeSelectionProxyId: _proxy,
+            ...metadata
+          } = (root.metadata ?? {}) as Record<string, unknown>
+          return {
+            root: {
+              ...root,
+              parentId: findLevelAncestorId(rootId, nodes),
+              position: [
+                parentPosition[0] + childPosition[0] * cos + childPosition[2] * sin,
+                parentPosition[1] + childPosition[1],
+                parentPosition[2] - childPosition[0] * sin + childPosition[2] * cos,
+              ],
+              rotation: parentRotation + childRotation,
+              metadata,
+            } as AnyNode,
+            descendants,
+            parentId: findLevelAncestorId(rootId, nodes),
+          }
+        },
+      },
+    },
+    renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+  } as AnyNodeDefinition)
+}
 
 function level(children: AnyNodeId[]): AnyNode {
   return {
@@ -190,6 +245,7 @@ describe('commitFreshPlacementSubtree', () => {
   })
 
   test('flattens duplicated nested cabinet runs into level coordinates before dragging', () => {
+    registerCabinetClonePrepTestKind()
     const parentRun = {
       id: CABINET_RUN_ID,
       type: 'cabinet',

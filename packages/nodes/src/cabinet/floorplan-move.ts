@@ -1,4 +1,5 @@
 import {
+  type AlignmentGuide,
   type AnyNode,
   type AnyNodeId,
   type CabinetModuleNode as CabinetModuleNodeType,
@@ -6,6 +7,7 @@ import {
   createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  type ParentFrameSnapMatch,
   type SceneApi,
   useLiveNodeOverrides,
   useScene,
@@ -22,6 +24,20 @@ import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './
 import { resolveCabinetModuleWallSnapLocal } from './wall-snap'
 
 type SceneUpdate = { id: AnyNodeId; data: Partial<AnyNode> }
+
+function alignmentGuideFromParentFrameMatch(match: ParentFrameSnapMatch): AlignmentGuide {
+  return {
+    axis: match.axis,
+    coord: match.axis === 'x' ? match.from.x : match.from.z,
+    from: match.from,
+    to: match.to,
+    anchor: match.from,
+    movingAnchorKind: 'corner',
+    candidateAnchorKind: 'corner',
+    candidateNodeId: match.candidateNodeId,
+    distance: Math.hypot(match.to.x - match.from.x, match.to.z - match.from.z),
+  }
+}
 
 function mergeSceneUpdate(
   updates: Map<AnyNodeId, Partial<AnyNode>>,
@@ -162,13 +178,15 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
           local = snapFn(node as AnyNode, run, local, useScene.getState().nodes)
           if (isAlignmentGuideActive()) {
             const guides =
-              cabinetModuleParentFrame.magneticSnapGuides?.(
-                node as AnyNode,
-                run,
-                preSnapLocal,
-                local,
-                useScene.getState().nodes,
-              ) ?? []
+              cabinetModuleParentFrame
+                .magneticSnapMatches?.(
+                  node as AnyNode,
+                  run,
+                  preSnapLocal,
+                  local,
+                  useScene.getState().nodes,
+                )
+                .map(alignmentGuideFromParentFrameMatch) ?? []
             if (guides.length > 0) useAlignmentGuides.getState().set(guides)
             else useAlignmentGuides.getState().clear()
           }

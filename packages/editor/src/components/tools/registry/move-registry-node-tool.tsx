@@ -3,6 +3,7 @@
 import '../../../three-types'
 
 import {
+  type AlignmentGuide,
   type AnyNode,
   type AnyNodeId,
   analyzePortConnectivity,
@@ -17,6 +18,7 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
+  type ParentFrameSnapMatch,
   type PortConnectivity,
   resolveAlignment,
   resolveConnectivityUpdates,
@@ -106,6 +108,20 @@ function movingDragBoundsAnchors(
   const center = offsetPlanPositionByLocalCenter([x, 0, z], bounds.center, rotationY)
   const aabb = footprintAABBFrom(center, bounds.size, rotationY)
   return bboxCornerAnchors(node.id, aabb.minX, aabb.minZ, aabb.maxX, aabb.maxZ)
+}
+
+function alignmentGuideFromParentFrameMatch(match: ParentFrameSnapMatch): AlignmentGuide {
+  return {
+    axis: match.axis,
+    coord: match.axis === 'x' ? match.from.x : match.from.z,
+    from: match.from,
+    to: match.to,
+    anchor: match.from,
+    movingAnchorKind: 'corner',
+    candidateAnchorKind: 'corner',
+    candidateNodeId: match.candidateNodeId,
+    distance: Math.hypot(match.to.x - match.from.x, match.to.z - match.from.z),
+  }
 }
 
 /**
@@ -674,14 +690,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           x = snappedPlanPosition[0]
           z = snappedPlanPosition[2]
         }
-        if (isAlignmentGuideActive() && parentFrame.magneticSnapGuides) {
-          const guides = parentFrame.magneticSnapGuides(
-            node,
-            frameParent,
-            preSnapPosition,
-            snappedPosition,
-            useScene.getState().nodes,
-          )
+        if (isAlignmentGuideActive() && parentFrame.magneticSnapMatches) {
+          const guides = parentFrame
+            .magneticSnapMatches(
+              node,
+              frameParent,
+              preSnapPosition,
+              snappedPosition,
+              useScene.getState().nodes,
+            )
+            .map(alignmentGuideFromParentFrameMatch)
           if (guides.length > 0) useAlignmentGuides.getState().set(guides)
         }
       }

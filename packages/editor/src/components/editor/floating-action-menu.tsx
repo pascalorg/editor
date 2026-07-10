@@ -42,7 +42,10 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import { createFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
+import {
+  createFreshPlacementSubtree,
+  duplicatesAsFreshSubtree,
+} from '../../lib/fresh-planar-placement'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
@@ -532,10 +535,7 @@ export function FloatingActionMenu() {
 
       useScene.temporal.getState().pause()
 
-      const hasSubtreeChildren =
-        Array.isArray((node as { children?: unknown }).children) &&
-        ((node as { children?: unknown[] }).children?.length ?? 0) > 0
-      if (hasSubtreeChildren && (node.type === 'cabinet' || node.type === 'cabinet-module')) {
+      if (duplicatesAsFreshSubtree(node as AnyNode)) {
         const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
         const draft = draftId ? useScene.getState().nodes[draftId] : null
         if (draft) {

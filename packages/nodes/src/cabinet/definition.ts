@@ -3,12 +3,14 @@ import type {
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
+  DuplicateSubtreeCloneArgs,
+  DuplicateSubtreeCloneResult,
   FloorPlacedFootprint,
   HandleDescriptor,
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
-import { selectionProxyIdFromMetadata } from '@pascal-app/core'
+import { findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -50,6 +52,11 @@ import {
 import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
+type CabinetDuplicableNode = AnyNode & {
+  type: 'cabinet' | 'cabinet-module'
+  position: [number, number, number]
+  rotation: number
+}
 type CabinetLocalBounds = {
   minX: number
   maxX: number
@@ -59,6 +66,86 @@ type CabinetLocalBounds = {
   maxZ: number
   size: [number, number, number]
   center: [number, number, number]
+}
+
+function isCabinetDuplicableNode(node: AnyNode | null | undefined): node is CabinetDuplicableNode {
+  return (
+    (node?.type === 'cabinet' || node?.type === 'cabinet-module') &&
+    Array.isArray((node as { position?: unknown }).position) &&
+    typeof (node as { rotation?: unknown }).rotation === 'number'
+  )
+}
+
+function stripCabinetDuplicateMetadata(metadata: unknown): Record<string, unknown> {
+  const {
+    cabinetCornerDerivedRun: _derived,
+    cabinetCornerSourceLink: _source,
+    nodeSelectionProxyId: _proxy,
+    ...rest
+  } = cabinetMetadataRecord(metadata as CabinetEditableNode['metadata'])
+  return rest
+}
+
+function cleanCabinetDuplicateNode<N extends AnyNode>(node: N): N {
+  return {
+    ...node,
+    metadata: stripCabinetDuplicateMetadata(node.metadata),
+  } as N
+}
+
+function composeCabinetDuplicatePose(
+  parentPosition: readonly [number, number, number],
+  parentRotation: number,
+  childPosition: readonly [number, number, number],
+  childRotation: number,
+) {
+  const cos = Math.cos(parentRotation)
+  const sin = Math.sin(parentRotation)
+  return {
+    position: [
+      parentPosition[0] + childPosition[0] * cos + childPosition[2] * sin,
+      parentPosition[1] + childPosition[1],
+      parentPosition[2] - childPosition[0] * sin + childPosition[2] * cos,
+    ] as [number, number, number],
+    rotation: parentRotation + childRotation,
+  }
+}
+
+function cabinetDuplicateWorldPose(
+  node: AnyNode,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+): { position: [number, number, number]; rotation: number } | null {
+  if (!isCabinetDuplicableNode(node)) return null
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : null
+  if (isCabinetDuplicableNode(parent)) {
+    const parentPose = cabinetDuplicateWorldPose(parent, nodes)
+    return parentPose
+      ? composeCabinetDuplicatePose(
+          parentPose.position,
+          parentPose.rotation,
+          node.position,
+          node.rotation,
+        )
+      : null
+  }
+  return { position: [...node.position], rotation: node.rotation }
+}
+
+function prepareCabinetSubtreeClone(args: DuplicateSubtreeCloneArgs): DuplicateSubtreeCloneResult {
+  const parent = args.root.parentId ? args.nodes[args.root.parentId as AnyNodeId] : null
+  const nestedRun = args.root.type === 'cabinet' && isCabinetDuplicableNode(parent)
+  const worldPose = nestedRun ? cabinetDuplicateWorldPose(args.root, args.nodes) : null
+  const levelId = nestedRun ? findLevelAncestorId(args.rootId, args.nodes) : null
+  const root = {
+    ...cleanCabinetDuplicateNode(args.root),
+    ...(worldPose ? { position: worldPose.position, rotation: worldPose.rotation } : null),
+    ...(levelId ? { parentId: levelId as AnyNodeId } : null),
+  } as AnyNode
+  return {
+    root,
+    descendants: args.descendants.map((node) => cleanCabinetDuplicateNode(node)),
+    parentId: levelId ? (levelId as AnyNodeId) : undefined,
+  }
 }
 
 function appendCabinetFloorPlacedFootprints(
@@ -856,7 +943,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
           : null,
     },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
-    duplicable: true,
+    duplicable: { subtree: true, prepareSubtreeClone: prepareCabinetSubtreeClone },
     deletable: true,
     surfaces: {
       top: {
@@ -1037,7 +1124,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
           : null,
     },
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
-    duplicable: true,
+    duplicable: { subtree: true, prepareSubtreeClone: prepareCabinetSubtreeClone },
     deletable: true,
     floorPlaced: {
       applies: (node) => !hasCabinetParentId(node as CabinetModuleNodeType),
