@@ -109,12 +109,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const material = new MeshLambertNodeMaterial({ color: bgColor })
     const center = vec2(fadeBounds.cx, fadeBounds.cz)
     const dist = positionWorld.xz.sub(center).length()
-    const fade = smoothstep(
-      float(fadeBounds.radius * 1.05),
-      float(fadeBounds.radius * 5),
-      dist,
+    const fade = smoothstep(float(fadeBounds.radius * 1.05), float(fadeBounds.radius * 5), dist)
+    // Dissolve, not tint: the albedo (lighting response, incl. shadows) fades
+    // to black while an emissive term fades up to the raw background colour —
+    // so the far end is literally the backdrop, with no lit-vs-flat seam.
+    material.colorNode = mix(color(bgColor), color('#000000'), fade)
+    ;(material as unknown as { emissiveNode: unknown }).emissiveNode = mix(
+      color('#000000'),
+      color(backgroundColor),
+      fade,
     )
-    material.colorNode = mix(color(bgColor), color(backgroundColor), fade)
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2

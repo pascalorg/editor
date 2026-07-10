@@ -33,9 +33,9 @@ export const SCENE_THEMES: SceneTheme[] = [
     id: 'studio',
     name: 'Studio',
     appearance: 'light',
-    background: '#ffffff',
-    backgroundSky: '#e7edf3',
-    ground: '#f4f4f2',
+    background: '#fbfbfa',
+    backgroundSky: '#dde7ef',
+    ground: '#e9e7e2',
     ambient: { color: '#ffffff', intensity: 0.15 },
     hemi: { sky: '#ffffff', ground: '#aaa49a', intensity: 0.45 },
     lights: [

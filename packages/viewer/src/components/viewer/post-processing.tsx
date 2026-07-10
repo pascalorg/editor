@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, type Object3D, UnsignedByteType } from 'three'
+import { Color, Layers, Matrix4, type Object3D, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
@@ -46,14 +46,14 @@ export const GRADE_PARAMS = {
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 2,
+  sliceCount: 1,
   stepCount: 6,
   radius: 1.6,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
   aoIntensity: 1.5,
-  giIntensity: 1,
+  giIntensity: 0,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
   useTemporalFiltering: false,
@@ -65,6 +65,7 @@ export const SSGI_BAKE_PARAMS = {
   ...SSGI_PARAMS,
   sliceCount: 3,
   stepCount: 8,
+  giIntensity: 1,
 }
 
 // Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
@@ -171,6 +172,11 @@ const PostProcessingPasses = ({
   const bgSkyUniform = useRef(uniform(new Color(initSky)))
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
+  // Scene-camera matrices for the backdrop: the pipeline's fullscreen quad has
+  // its own camera, so the sky gradient reconstructs each pixel's world-space
+  // view ray from these to find the true horizon (dir.y = 0).
+  const camProjInvUniform = useRef(uniform(new Matrix4()))
+  const camWorldUniform = useRef(uniform(new Matrix4()))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
@@ -439,12 +445,14 @@ const PostProcessingPasses = ({
           denoisePass.index.value = 0
           denoisePass.radius.value = 5
           ao = (denoisePass as any).r
-          // The GI bounce is composited additively, so its sampling noise reads
-          // as grain on lit surfaces — denoise it like the AO.
-          const giDenoise = denoise(vec4(gi, float(1)), scenePassDepth, sceneNormal, camera)
-          giDenoise.index.value = 1
-          giDenoise.radius.value = 5
-          gi = (giDenoise as any).rgb
+          if (SSGI_PARAMS.giIntensity > 0) {
+            // The GI bounce is composited additively, so its sampling noise
+            // reads as grain on lit surfaces — denoise it like the AO.
+            const giDenoise = denoise(vec4(gi, float(1)), scenePassDepth, sceneNormal, camera)
+            giDenoise.index.value = 1
+            giDenoise.radius.value = 5
+            gi = (giDenoise as any).rgb
+          }
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
@@ -477,13 +485,13 @@ const PostProcessingPasses = ({
 
       // Scene-referred grade (contrast around mid-gray + saturation) before the
       // pipeline's output tone mapping. Kept out of solid/schematic shading so
-      // the flat presets stay exact.
+      // the flat presets stay exact. The same transform is applied to the
+      // backdrop below so geometry that fades to the background colour (the
+      // horizon disc) matches it exactly.
+      const gradeRgb = (rgb: any) =>
+        saturation(rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18), GRADE_PARAMS.saturation)
       if (shading === 'rendered') {
-        const gradedRgb = saturation(
-          sceneColor.rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
-          GRADE_PARAMS.saturation,
-        )
-        sceneColor = vec4(gradedRgb, sceneColor.a)
+        sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
@@ -532,11 +540,28 @@ const PostProcessingPasses = ({
       // compressed into the upper half so everything below mid-screen is pure
       // horizon colour — the infinite-ground disc fades to that same colour,
       // so the two meet seamlessly wherever the horizon lands.
-      const bgGradient = mix(
-        bgSkyUniform.current,
+      // World-space view ray per pixel → sky above the true horizon
+      // (dir.y = 0), pure background at/below it. The horizon disc fades to
+      // the same background colour, so backdrop and ground meet seamlessly
+      // exactly where the disc vanishes.
+      const ndc = vec4(
+        screenUV.x.mul(2).sub(1),
+        float(1).sub(screenUV.y).mul(2).sub(1),
+        1,
+        1,
+      ) as any
+      const viewRay = (camProjInvUniform.current as any).mul(ndc)
+      const worldDir = (camWorldUniform.current as any)
+        .mul(vec4(viewRay.xyz, 0))
+        .xyz.normalize()
+      let bgGradient = mix(
         bgUniform.current,
-        smoothstep(float(0), float(0.5), screenUV.y),
-      )
+        bgSkyUniform.current,
+        smoothstep(float(0.0), float(0.35), worldDir.y),
+      ) as any
+      if (shading === 'rendered') {
+        bgGradient = gradeRgb(bgGradient)
+      }
       const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
@@ -622,6 +647,8 @@ const PostProcessingPasses = ({
     bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
     bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyUniform.current.value.copy(bgSkyCurrent.current)
+    camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
+    camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
     inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
 
