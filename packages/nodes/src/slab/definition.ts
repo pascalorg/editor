@@ -4,6 +4,7 @@ import {
   pointInPolygon2D,
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
+import { surfaceMeasurement } from '../shared/measurement'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -163,6 +164,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     slots: () => slabSlots(),
     paint: slabPaint,
   },
+  measurement: surfaceMeasurement(),
 
   relations: {
     hosts: ['item'],
@@ -172,8 +174,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   parametrics: slabParametrics,
   handles: slabHandles,
 
-  // Stage D: kind-owned placement tool. Multi-click polygon drawing
-  // with 15° angle snap (Shift to defeat).
+  // Stage D: kind-owned placement tool. Multi-click polygon drawing.
   tool: () => import('./tool'),
 
   // Stage D — all four slab drag-affordances live in this folder.

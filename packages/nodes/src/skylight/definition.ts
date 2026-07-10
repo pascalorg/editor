@@ -6,6 +6,7 @@ import {
   SkylightNode as SkylightNodeSchema,
   type SkylightNode as SkylightNodeType,
 } from '@pascal-app/core'
+import { roofHostedRectangleMeasurement } from '../shared/measurement'
 import { buildSkylightFloorplan } from './floorplan'
 import {
   closeSkylightOpenState,
@@ -245,6 +246,10 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
         buildSkylightRoofCut(node as SkylightNodeType, hostSegment as RoofSegmentNode),
     },
   },
+  measurement: roofHostedRectangleMeasurement(
+    (node) => ({ width: node.width, depth: node.height }),
+    { center: 'Skylight center', edge: 'Skylight edge', vertex: 'Skylight corner' },
+  ),
 
   parametrics: skylightParametrics,
   handles: skylightHandles,

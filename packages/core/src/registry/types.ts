@@ -766,6 +766,69 @@ export type SnapProfile = 'item' | 'structural'
  */
 export type BakePolicy = 'static' | 'strip' | 'replace'
 
+export type MeasurementDefinitionPoint = readonly [number, number, number]
+
+export type MeasurementDefinitionSnapKind =
+  | 'center'
+  | 'edge'
+  | 'endpoint'
+  | 'grid'
+  | 'guide'
+  | 'intersection'
+  | 'measurement'
+  | 'midpoint'
+  | 'surface'
+  | 'vertex'
+
+export type MeasurementDefinitionSnapAnchor = {
+  kind?: MeasurementDefinitionSnapKind
+  label: string
+  point: MeasurementDefinitionPoint
+  priority?: number
+}
+
+export type MeasurementDefinitionSnapSegment = {
+  kind?: MeasurementDefinitionSnapKind
+  label: string
+  sourceId?: string
+  start: MeasurementDefinitionPoint
+  end: MeasurementDefinitionPoint
+  priority?: number
+}
+
+export type MeasurementDefinitionSnapGeometry = {
+  anchors?: MeasurementDefinitionSnapAnchor[]
+  segments?: MeasurementDefinitionSnapSegment[]
+}
+
+export type MeasurementDefinitionDirectLength = {
+  end: MeasurementDefinitionPoint
+  measuredDistanceMeters: number
+  start: MeasurementDefinitionPoint
+}
+
+export type MeasurementDefinitionArea = {
+  areaSquareMeters: number
+  boundaryPoints?: ReadonlyArray<MeasurementDefinitionPoint>
+  labelPoint: MeasurementDefinitionPoint
+}
+
+export type MeasurementDefinitionPerimeter = {
+  labelPoint: MeasurementDefinitionPoint
+  lengthMeters: number
+}
+
+export type MeasurementDefinition<N> = {
+  area?: (node: N, ctx: GeometryContext) => MeasurementDefinitionArea | null
+  directLength?: (
+    node: N,
+    ctx: GeometryContext,
+    cursorPoint?: MeasurementDefinitionPoint | null,
+  ) => MeasurementDefinitionDirectLength | null
+  perimeter?: (node: N, ctx: GeometryContext) => MeasurementDefinitionPerimeter | null
+  snapGeometry?: (node: N, ctx: GeometryContext) => MeasurementDefinitionSnapGeometry | null
+}
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -810,6 +873,12 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   migrate?: Record<number, (old: unknown) => unknown>
 
   capabilities: Capabilities
+  /**
+   * Per-kind geometry for editor measurement tools. This keeps measurement
+   * snapping, direct length, area, and perimeter behavior registry-driven:
+   * editor tools call this hook instead of branching on concrete node kinds.
+   */
+  measurement?: MeasurementDefinition<z.infer<S>>
   relations?: Relations
   parametrics?: ParametricDescriptor<z.infer<S>>
 

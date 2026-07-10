@@ -139,7 +139,6 @@ export function resolveMeasurementHelpHints({
   mode,
   modifierPressed,
   polygonDraftActive,
-  shiftPressed,
 }: MeasurementHelpContext): ContextualShortcutHint[] {
   const hints: ContextualShortcutHint[] = []
 
@@ -159,11 +158,6 @@ export function resolveMeasurementHelpHints({
     hints.push({
       keys: [CLICK],
       label: draftActive ? 'Finish length' : 'Start length',
-    })
-    hints.push({
-      keys: [SHIFT_KEY, CLICK],
-      label: draftActive ? 'Lock to axis and finish' : 'Start angle',
-      active: shiftPressed,
     })
     hints.push({
       keys: [[ALT_KEY, COMMAND_KEY], CLICK],

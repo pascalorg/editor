@@ -8,7 +8,7 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import {
@@ -57,7 +57,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     'property-line': SiteBoundaryEditor,
   },
   structure: {
-    measurement: MeasurementTool,
     roof: RoofTool,
     stair: StairTool,
     zone: ZoneTool,
@@ -104,6 +103,8 @@ export const ToolManager: React.FC = () => {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
+  const unit = useViewer((state) => state.unit)
+  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
 
@@ -327,6 +328,13 @@ export const ToolManager: React.FC = () => {
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
+        {!movingNode && showBuildTool && tool === 'measurement' ? (
+          <MeasurementTool
+            appearance={appearance}
+            buildingId={(buildingId as AnyNodeId | null) ?? null}
+            unit={unit}
+          />
+        ) : null}
         {!movingNode && BuildToolComponent && tool !== 'elevator' ? <BuildToolComponent /> : null}
         {/* Figma-style alignment guides published by the move / placement
             tools above. Lives inside the building-local group so the

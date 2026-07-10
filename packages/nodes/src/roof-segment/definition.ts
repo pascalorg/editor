@@ -6,6 +6,7 @@ import {
   RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofSegmentNode as RoofSegmentNodeType,
 } from '@pascal-app/core'
+import { roofSegmentMeasurement } from '../shared/measurement'
 import { buildRoofSegmentFloorplan } from './floorplan'
 import {
   roofSegmentMoveTarget,
@@ -287,6 +288,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
     duplicable: true,
     deletable: true,
   },
+  measurement: roofSegmentMeasurement(),
 
   // Bespoke move shared with roof / stair / stair-segment via
   // `shared/move-roof-tool` — routed through `MoveTool`'s registry-

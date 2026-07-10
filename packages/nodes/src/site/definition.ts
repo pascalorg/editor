@@ -1,4 +1,5 @@
 import { type NodeDefinition, SiteNode as SiteNodeSchema } from '@pascal-app/core'
+import { siteMeasurement } from '../shared/measurement'
 import { siteParametrics } from './parametrics'
 import { SiteNode } from './schema'
 
@@ -28,6 +29,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
     deletable: false,
     presettable: false,
   },
+  measurement: siteMeasurement(),
 
   parametrics: siteParametrics,
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.

@@ -4,8 +4,8 @@ import {
   type ComponentPropsWithoutRef,
   type ForwardedRef,
   Fragment,
-  type ReactNode,
   forwardRef,
+  type ReactNode,
 } from 'react'
 
 // Canonical in-world dimension formatter — metric metres or imperial

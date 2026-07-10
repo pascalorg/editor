@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import { wallHostedOpeningMeasurement } from '../shared/measurement'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
@@ -199,6 +200,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     slots: () => windowSlots(),
     paint: windowPaint,
   },
+  measurement: wallHostedOpeningMeasurement(),
 
   parametrics: windowParametrics,
   handles: windowHandles,

@@ -1,27 +1,10 @@
 import {
   type AnyNode,
-  type CeilingNode,
-  type ColumnNode,
-  type DoorNode,
-  type ElevatorNode,
-  type FenceNode,
-  getDutchRoofMetrics,
-  getFenceCenterlineFrameAt,
-  getScaledDimensions,
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  type ItemNode,
+  type AnyNodeId,
+  type GeometryContext,
+  type MeasurementDefinitionSnapGeometry,
   nodeAlignmentAnchors,
-  type RoofNode,
-  type RoofSegmentNode,
-  type SlabNode,
-  type StairNode,
-  sampleFenceCenterline,
-  sampleWallCenterline,
-  stairFootprintAABB,
-  type WallNode,
-  type WindowNode,
-  type ZoneNode,
+  nodeRegistry,
 } from '@pascal-app/core'
 import type {
   MeasurementPoint,
@@ -31,8 +14,6 @@ import type {
   MeasurementSnapTarget,
   MeasurementView,
 } from '../store/use-measurement-tool'
-import { getRotatedRectanglePolygon } from './floorplan/geometry'
-import { getItemFloorplanTransform } from './floorplan/items'
 
 export type MeasurementSnapAnchor = {
   kind?: MeasurementSnapKind
@@ -227,7 +208,7 @@ function addGenericPolygonGeometry(geometry: MeasurementSnapGeometry, node: AnyN
   if (!polygon) return false
 
   const y = genericPolygonElevation(node)
-  const labelPrefix = node.type === 'site' ? 'Property line' : 'Polygon'
+  const labelPrefix = 'Polygon'
   addPolygonGeometry(
     geometry,
     polygon,
@@ -412,402 +393,46 @@ function addPathGeometry(geometry: MeasurementSnapGeometry, node: AnyNode) {
   return true
 }
 
-type RoofPlanPoint = readonly [number, number]
-type RoofPlanSegment = readonly [RoofPlanPoint, RoofPlanPoint]
-
-function rotatePlanPoint(x: number, z: number, rotation: number): PlanPoint {
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
+function measurementGeometryContext(
+  node: AnyNode,
+  nodesById: Readonly<Record<string, AnyNode>>,
+): GeometryContext {
+  const childIds = (node as { children?: readonly AnyNodeId[] }).children ?? []
   return {
-    x: x * cos + z * sin,
-    y: -x * sin + z * cos,
+    children: childIds.flatMap((id: AnyNodeId) => {
+      const child = nodesById[id]
+      return child ? [child] : []
+    }),
+    parent: node.parentId ? (nodesById[node.parentId] ?? null) : null,
+    resolve: <N = AnyNode>(id: AnyNodeId) => nodesById[id] as N | undefined,
+    siblings: node.parentId
+      ? Object.values(nodesById).filter(
+          (candidate) => candidate.parentId === node.parentId && candidate.id !== node.id,
+        )
+      : [],
   }
 }
 
-function roofSegmentPlanFrame(
-  segment: RoofSegmentNode,
-  nodesById: Readonly<Record<string, AnyNode>>,
-): { center: PlanPoint; rotation: number } {
-  const roof = segment.parentId ? nodesById[segment.parentId] : null
-  const parentRoof = roof?.type === 'roof' ? (roof as RoofNode) : null
-  const parentPosition = parentRoof?.position ?? [0, 0, 0]
-  const parentRotation = parentRoof?.rotation ?? 0
-  const offset = rotatePlanPoint(segment.position[0], segment.position[2], parentRotation)
-  return {
-    center: {
-      x: parentPosition[0] + offset.x,
-      y: parentPosition[2] + offset.y,
-    },
-    rotation: parentRotation + segment.rotation,
-  }
-}
-
-function roofHostedSegment(
-  node: AnyNode,
-  nodesById: Readonly<Record<string, AnyNode>>,
-): RoofSegmentNode | null {
-  const explicitId = (node as { roofSegmentId?: unknown }).roofSegmentId
-  const candidateId = typeof explicitId === 'string' ? explicitId : node.parentId
-  if (!candidateId) return null
-  const candidate = nodesById[candidateId]
-  return candidate?.type === 'roof-segment' ? (candidate as RoofSegmentNode) : null
-}
-
-function addRoofHostedRectangleGeometry(
+function addDefinitionSnapGeometry(
   geometry: MeasurementSnapGeometry,
-  node: AnyNode,
-  nodesById: Readonly<Record<string, AnyNode>>,
-  width: number,
-  depth: number,
-  labels: {
-    center: string
-    edge: string
-    vertex: string
-  },
-) {
-  if (!(Number.isFinite(width) && Number.isFinite(depth) && width > EPSILON && depth > EPSILON)) {
-    return false
-  }
-
-  const position = (node as { position?: unknown }).position
-  if (!Array.isArray(position) || position.length < 3) return false
-  const [x, y, z] = position
-  if (!(typeof x === 'number' && typeof y === 'number' && typeof z === 'number')) return false
-
-  const segment = roofHostedSegment(node, nodesById)
-  if (!segment) return false
-  const frame = roofSegmentPlanFrame(segment, nodesById)
-  const centerOffset = rotatePlanPoint(x, z, frame.rotation)
-  const center = {
-    x: frame.center.x + centerOffset.x,
-    y: frame.center.y + centerOffset.y,
-  }
-  const localRotation = (node as { rotation?: unknown }).rotation
-  const rotation = frame.rotation + (typeof localRotation === 'number' ? localRotation : 0)
-  addPolygonGeometry(
-    geometry,
-    getRotatedRectanglePolygon(center, width, depth, rotation).map((point) => [point.x, point.y]),
-    y,
-    labels.vertex,
-    labels.edge,
-    labels.center,
-  )
-  return true
-}
-
-function addRoofAccessoryGeometry(
-  geometry: MeasurementSnapGeometry,
-  node: AnyNode,
-  nodesById: Readonly<Record<string, AnyNode>>,
+  contribution: MeasurementDefinitionSnapGeometry,
 ): boolean {
-  switch (node.type) {
-    case 'box-vent':
-      return addRoofHostedRectangleGeometry(
-        geometry,
-        node,
-        nodesById,
-        (node as { width: number }).width,
-        (node as { depth: number }).depth,
-        {
-          center: 'Roof accessory center',
-          edge: 'Roof accessory edge',
-          vertex: 'Roof accessory corner',
-        },
-      )
-    case 'chimney':
-      return addRoofHostedRectangleGeometry(
-        geometry,
-        node,
-        nodesById,
-        (node as { width: number }).width,
-        (node as { depth: number }).depth,
-        { center: 'Chimney center', edge: 'Chimney edge', vertex: 'Chimney corner' },
-      )
-    case 'skylight':
-      return addRoofHostedRectangleGeometry(
-        geometry,
-        node,
-        nodesById,
-        (node as { width: number }).width,
-        (node as { height: number }).height,
-        { center: 'Skylight center', edge: 'Skylight edge', vertex: 'Skylight corner' },
-      )
-    case 'solar-panel': {
-      const solar = node as {
-        columns: number
-        gapX: number
-        gapY: number
-        panelHeight: number
-        panelWidth: number
-        rows: number
-      }
-      const width = solar.columns * solar.panelWidth + Math.max(0, solar.columns - 1) * solar.gapX
-      const depth = solar.rows * solar.panelHeight + Math.max(0, solar.rows - 1) * solar.gapY
-      return addRoofHostedRectangleGeometry(geometry, node, nodesById, width, depth, {
-        center: 'Solar array center',
-        edge: 'Solar array edge',
-        vertex: 'Solar array corner',
-      })
-    }
-    case 'ridge-vent':
-      return addRoofHostedRectangleGeometry(
-        geometry,
-        node,
-        nodesById,
-        (node as { length: number }).length,
-        (node as { width: number }).width,
-        { center: 'Ridge vent center', edge: 'Ridge vent edge', vertex: 'Ridge vent corner' },
-      )
-    case 'gutter':
-      return addRoofHostedRectangleGeometry(
-        geometry,
-        node,
-        nodesById,
-        (node as { length: number }).length,
-        (node as { size: number }).size,
-        { center: 'Gutter center', edge: 'Gutter edge', vertex: 'Gutter corner' },
-      )
-    default:
-      return false
-  }
-}
-
-function roofSegmentPlanLinework(node: RoofSegmentNode): {
-  breaks: RoofPlanSegment[]
-  hips: RoofPlanSegment[]
-  ridges: RoofPlanSegment[]
-  slope: { head: RoofPlanPoint; tail: RoofPlanPoint } | null
-} {
-  const hw = node.width / 2
-  const hd = node.depth / 2
-  const ridges: RoofPlanSegment[] = []
-  const hips: RoofPlanSegment[] = []
-  const breaks: RoofPlanSegment[] = []
-  let slope: { head: RoofPlanPoint; tail: RoofPlanPoint } | null = null
-
-  const e1: RoofPlanPoint = [-hw, hd]
-  const e2: RoofPlanPoint = [hw, hd]
-  const e3: RoofPlanPoint = [hw, -hd]
-  const e4: RoofPlanPoint = [-hw, -hd]
-
-  const pushHip = () => {
-    if (Math.abs(node.width - node.depth) < 0.01) {
-      const peak: RoofPlanPoint = [0, 0]
-      hips.push([e1, peak], [e2, peak], [e3, peak], [e4, peak])
-    } else if (node.width >= node.depth) {
-      const r1: RoofPlanPoint = [-hw + hd, 0]
-      const r2: RoofPlanPoint = [hw - hd, 0]
-      ridges.push([r1, r2])
-      hips.push([e1, r1], [e4, r1], [e2, r2], [e3, r2])
-    } else {
-      const r1: RoofPlanPoint = [0, hd - hw]
-      const r2: RoofPlanPoint = [0, -hd + hw]
-      ridges.push([r1, r2])
-      hips.push([e1, r1], [e2, r1], [e3, r2], [e4, r2])
-    }
-  }
-
-  switch (node.roofType) {
-    case 'flat':
-      break
-    case 'gable':
-      ridges.push([
-        [-hw, 0],
-        [hw, 0],
-      ])
-      break
-    case 'shed':
-      slope = { tail: [0, -hd * 0.55], head: [0, hd * 0.55] }
-      break
-    case 'hip':
-      pushHip()
-      break
-    case 'gambrel': {
-      const mz = hd * node.gambrelLowerWidthRatio
-      ridges.push([
-        [-hw, 0],
-        [hw, 0],
-      ])
-      breaks.push(
-        [
-          [-hw, mz],
-          [hw, mz],
-        ],
-        [
-          [-hw, -mz],
-          [hw, -mz],
-        ],
-      )
-      break
-    }
-    case 'mansard': {
-      const inset = Math.min(node.width, node.depth) * node.mansardSteepWidthRatio
-      if (hw - inset > 0.02 && hd - inset > 0.02) {
-        const w1: RoofPlanPoint = [-hw + inset, hd - inset]
-        const w2: RoofPlanPoint = [hw - inset, hd - inset]
-        const w3: RoofPlanPoint = [hw - inset, -hd + inset]
-        const w4: RoofPlanPoint = [-hw + inset, -hd + inset]
-        breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
-        hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
-      } else {
-        pushHip()
-      }
-      break
-    }
-    case 'dutch': {
-      const metrics = getDutchRoofMetrics(node)
-      if (!(metrics.waistHalfX > 0.02 && metrics.waistHalfZ > 0.02)) {
-        pushHip()
-        break
-      }
-
-      const w1: RoofPlanPoint = [-metrics.waistHalfX, metrics.waistHalfZ]
-      const w2: RoofPlanPoint = [metrics.waistHalfX, metrics.waistHalfZ]
-      const w3: RoofPlanPoint = [metrics.waistHalfX, -metrics.waistHalfZ]
-      const w4: RoofPlanPoint = [-metrics.waistHalfX, -metrics.waistHalfZ]
-      hips.push([e1, w1], [e2, w2], [e3, w3], [e4, w4])
-      breaks.push([w1, w2], [w2, w3], [w3, w4], [w4, w1])
-      ridges.push([metrics.ridgeStart, metrics.ridgeEnd])
-      break
-    }
-  }
-
-  return { breaks, hips, ridges, slope }
-}
-
-function addRoofPlanSegment(
-  geometry: MeasurementSnapGeometry,
-  segment: RoofPlanSegment,
-  toPlan: (point: RoofPlanPoint) => MeasurementPoint,
-  label: string,
-  sourceId: string,
-) {
-  const start = toPlan(segment[0])
-  const end = toPlan(segment[1])
+  const anchors = contribution.anchors ?? []
+  const segments = contribution.segments ?? []
   geometry.anchors.push(
-    { label: `${label} endpoint`, kind: 'endpoint', point: start, priority: 0 },
-    {
-      label: `${label} midpoint`,
-      kind: 'midpoint',
-      point: [(start[0] + end[0]) / 2, 0, (start[2] + end[2]) / 2],
-      priority: 1,
-    },
-    { label: `${label} endpoint`, kind: 'endpoint', point: end, priority: 0 },
+    ...anchors.map((anchor) => ({
+      ...anchor,
+      point: [...anchor.point] as MeasurementPoint,
+    })),
   )
-  geometry.segments.push({
-    label: `${label} edge`,
-    kind: 'edge',
-    sourceId,
-    start,
-    end,
-    priority: 3,
-  })
-}
-
-function addRoofSegmentGeometry(
-  geometry: MeasurementSnapGeometry,
-  segment: RoofSegmentNode,
-  nodesById: Readonly<Record<string, AnyNode>>,
-) {
-  const { center, rotation } = roofSegmentPlanFrame(segment, nodesById)
-  const footprint = getRotatedRectanglePolygon(center, segment.width, segment.depth, rotation)
-  addPolygonGeometry(
-    geometry,
-    footprint.map((point) => [point.x, point.y]),
-    0,
-    'Roof eave corner',
-    'Roof eave edge',
-    'Roof center',
+  geometry.segments.push(
+    ...segments.map((segment) => ({
+      ...segment,
+      start: [...segment.start] as MeasurementPoint,
+      end: [...segment.end] as MeasurementPoint,
+    })),
   )
-
-  const toPlan = ([localX, localZ]: RoofPlanPoint): MeasurementPoint => {
-    const offsetPoint = rotatePlanPoint(localX, localZ, rotation)
-    return [center.x + offsetPoint.x, 0, center.y + offsetPoint.y]
-  }
-  const linework = roofSegmentPlanLinework(segment)
-  for (const ridge of linework.ridges) {
-    addRoofPlanSegment(geometry, ridge, toPlan, 'Roof ridge', `${segment.id}:ridge`)
-  }
-  for (const hip of linework.hips) {
-    addRoofPlanSegment(geometry, hip, toPlan, 'Roof hip', `${segment.id}:hip`)
-  }
-  for (const roofBreak of linework.breaks) {
-    addRoofPlanSegment(geometry, roofBreak, toPlan, 'Roof break', `${segment.id}:break`)
-  }
-  if (linework.slope) {
-    addRoofPlanSegment(
-      geometry,
-      [linework.slope.tail, linework.slope.head],
-      toPlan,
-      'Roof slope',
-      `${segment.id}:slope`,
-    )
-  }
-}
-
-function addSampledCenterlineSegments(
-  geometry: MeasurementSnapGeometry,
-  points: ReadonlyArray<PlanPoint>,
-  label: string,
-  sourceId: string,
-) {
-  for (let index = 1; index < points.length; index += 1) {
-    const startPoint = points[index - 1]!
-    const endPoint = points[index]!
-    geometry.segments.push({
-      label,
-      kind: 'edge',
-      sourceId,
-      start: [startPoint.x, 0, startPoint.y],
-      end: [endPoint.x, 0, endPoint.y],
-      priority: 3,
-    })
-  }
-}
-
-function openingPlanPoint(
-  opening: DoorNode | WindowNode,
-  wallById: ReadonlyMap<string, WallNode>,
-  offsetMeters = 0,
-): MeasurementPoint | null {
-  if (!opening.wallId) return null
-  const wall = wallById.get(opening.wallId)
-  if (!wall) return null
-
-  const wallLength = Math.max(getWallCurveLength(wall), EPSILON)
-  const t = Math.max(0, Math.min(1, (opening.position[0] + offsetMeters) / wallLength))
-  const frame = getWallCurveFrameAt(wall, t)
-  const sideOffset = opening.position[2] ?? 0
-  return [
-    frame.point.x + frame.normal.x * sideOffset,
-    0,
-    frame.point.y + frame.normal.y * sideOffset,
-  ]
-}
-
-function addOpeningGeometry(
-  geometry: MeasurementSnapGeometry,
-  opening: DoorNode | WindowNode,
-  wallById: ReadonlyMap<string, WallNode>,
-) {
-  const center = openingPlanPoint(opening, wallById)
-  const start = openingPlanPoint(opening, wallById, -opening.width / 2)
-  const end = openingPlanPoint(opening, wallById, opening.width / 2)
-  if (!(center && start && end)) return
-
-  geometry.anchors.push(
-    { label: 'Opening endpoint', kind: 'endpoint', point: start, priority: 0 },
-    { label: 'Opening center', kind: 'center', point: center, priority: 0 },
-    { label: 'Opening endpoint', kind: 'endpoint', point: end, priority: 0 },
-  )
-  geometry.segments.push({
-    label: 'Opening edge',
-    kind: 'edge',
-    sourceId: opening.id,
-    start,
-    end,
-    priority: 2,
-  })
+  return anchors.length > 0 || segments.length > 0
 }
 
 function lineIntersection2D(
@@ -855,119 +480,17 @@ export function collectPlanMeasurementSnapGeometry(
     string,
     AnyNode
   >
-  const wallById = new Map(
-    nodes.flatMap((node) => (node.type === 'wall' ? [[node.id, node as WallNode]] : [])),
-  )
 
   for (const node of nodes) {
-    if (node.type === 'wall') {
-      const wall = node as WallNode
-      const start: MeasurementPoint = [wall.start[0], 0, wall.start[1]]
-      const end: MeasurementPoint = [wall.end[0], 0, wall.end[1]]
-      const midpoint = getWallCurveFrameAt(wall, 0.5).point
-      geometry.anchors.push(
-        { label: 'Endpoint', kind: 'endpoint', point: start, priority: 0 },
-        { label: 'Midpoint', kind: 'midpoint', point: [midpoint.x, 0, midpoint.y], priority: 1 },
-        { label: 'Endpoint', kind: 'endpoint', point: end, priority: 0 },
-      )
-      addSampledCenterlineSegments(
-        geometry,
-        sampleWallCenterline(wall, CURVE_SNAP_SEGMENTS),
-        'Wall edge',
-        wall.id,
-      )
-    } else if (node.type === 'fence') {
-      const fence = node as FenceNode
-      const start: MeasurementPoint = [fence.start[0], 0, fence.start[1]]
-      const end: MeasurementPoint = [fence.end[0], 0, fence.end[1]]
-      const midpoint = getFenceCenterlineFrameAt(fence, 0.5).point
-      geometry.anchors.push(
-        { label: 'Endpoint', kind: 'endpoint', point: start, priority: 0 },
-        ...((fence.path ?? []).map((point) => ({
-          kind: 'vertex',
-          label: 'Path point',
-          point: [point[0], 0, point[1]] as MeasurementPoint,
-          priority: 0,
-        })) as MeasurementSnapAnchor[]),
-        { label: 'Midpoint', kind: 'midpoint', point: [midpoint.x, 0, midpoint.y], priority: 1 },
-        { label: 'Endpoint', kind: 'endpoint', point: end, priority: 0 },
-      )
-      addSampledCenterlineSegments(
-        geometry,
-        sampleFenceCenterline(fence, CURVE_SNAP_SEGMENTS),
-        'Fence edge',
-        fence.id,
-      )
-    } else if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-      const surface = node as SlabNode | CeilingNode | ZoneNode
-      const y =
-        surface.type === 'ceiling'
-          ? surface.height
-          : surface.type === 'slab'
-            ? surface.elevation
-            : 0
-      addPolygonGeometry(geometry, surface.polygon, y, 'Vertex', 'Edge', 'Center')
-      const holes = 'holes' in surface ? (surface.holes ?? []) : []
-      for (const hole of holes) {
-        addPolygonGeometry(
-          geometry,
-          hole,
-          y,
-          'Surface opening vertex',
-          'Surface opening edge',
-          'Surface opening center',
-        )
-      }
-    } else if (node.type === 'item') {
-      const sceneNodeMap = new Map(nodes.map((entry) => [entry.id, entry]))
-      const transform = getItemFloorplanTransform(node as ItemNode, sceneNodeMap, new Map())
-      if (!transform) continue
-      const [width, , depth] = getScaledDimensions(node as ItemNode)
-      addRectangleGeometry(
-        geometry,
-        getRotatedRectanglePolygon(transform.position, width, depth, transform.rotation),
-      )
-    } else if (node.type === 'column') {
-      const column = node as ColumnNode
-      addRectangleGeometry(
-        geometry,
-        getRotatedRectanglePolygon(
-          { x: column.position[0], y: column.position[2] },
-          column.width,
-          column.depth,
-          column.rotation,
-        ),
-      )
-    } else if (node.type === 'elevator') {
-      const elevator = node as ElevatorNode
-      addRectangleGeometry(
-        geometry,
-        getRotatedRectanglePolygon(
-          { x: elevator.position[0], y: elevator.position[2] },
-          elevator.shaftWidth ?? elevator.width,
-          elevator.shaftDepth ?? elevator.depth,
-          elevator.rotation,
-        ),
-      )
-    } else if (node.type === 'stair') {
-      const stairAABB = stairFootprintAABB(node as StairNode, nodesById)
-      if (stairAABB) {
-        addPlanAABBGeometry(geometry, stairAABB, {
-          center: 'Stair center',
-          edge: 'Stair edge',
-          vertex: 'Stair corner',
-        })
-      }
-    } else if (node.type === 'roof-segment') {
-      addRoofSegmentGeometry(geometry, node as RoofSegmentNode, nodesById)
-    } else if (node.type === 'door' || node.type === 'window') {
-      addOpeningGeometry(geometry, node as DoorNode | WindowNode, wallById)
-    } else {
-      if (addRoofAccessoryGeometry(geometry, node, nodesById)) continue
-      if (addGenericPolygonGeometry(geometry, node)) continue
-      if (addPathGeometry(geometry, node)) continue
-      addAlignmentAnchorGeometry(geometry, node, nodesById)
-    }
+    const measurement = nodeRegistry.get(node.type)?.measurement
+    const contributed = measurement?.snapGeometry?.(
+      node as never,
+      measurementGeometryContext(node, nodesById),
+    )
+    if (contributed && addDefinitionSnapGeometry(geometry, contributed)) continue
+    if (addGenericPolygonGeometry(geometry, node)) continue
+    if (addPathGeometry(geometry, node)) continue
+    addAlignmentAnchorGeometry(geometry, node, nodesById)
   }
 
   for (let i = 0; i < geometry.segments.length; i += 1) {

@@ -101,11 +101,6 @@ describe('resolveMeasurementHelpHints', () => {
     ).toEqual([
       { keys: ['Click'], label: 'Start length' },
       {
-        keys: ['Shift', 'Click'],
-        label: 'Start angle',
-        active: false,
-      },
-      {
         keys: [['Alt', 'Cmd/Ctrl'], 'Click'],
         label: 'Quick measure object',
         active: false,
@@ -114,7 +109,7 @@ describe('resolveMeasurementHelpHints', () => {
     ])
   })
 
-  test('shows axis lock while a length draft is active', () => {
+  test('does not use Shift as a measurement mode shortcut while a length draft is active', () => {
     expect(
       resolveMeasurementHelpHints({
         angleDraftActive: false,
@@ -124,11 +119,11 @@ describe('resolveMeasurementHelpHints', () => {
         polygonDraftActive: false,
         shiftPressed: true,
       }),
-    ).toContainEqual({
-      keys: ['Shift', 'Click'],
-      label: 'Lock to axis and finish',
-      active: true,
-    })
+    ).toEqual([
+      { keys: ['Click'], label: 'Finish length' },
+      { keys: [['Alt', 'Cmd/Ctrl'], 'Click'], label: 'Quick measure object', active: false },
+      { keys: ['Esc'], label: 'Cancel measurement action' },
+    ])
   })
 
   test('shows direct surface hints for area and perimeter modes', () => {

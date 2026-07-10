@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { beforeAll, describe, expect, test } from 'bun:test'
 import type { MeasurementSegment } from '../store/use-measurement-tool'
 import {
   collectCommittedMeasurementSnapGeometry,
@@ -8,6 +8,11 @@ import {
   resolvePlanMeasurementConstraint,
   resolvePlanMeasurementSnap,
 } from './measurement-snapping'
+import { registerMeasurementTestNodes } from './register-measurement-test-nodes'
+
+beforeAll(() => {
+  registerMeasurementTestNodes()
+})
 
 describe('measurement snapping', () => {
   test('prefers semantic snap priority over a closer grid point', () => {

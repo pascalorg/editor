@@ -392,6 +392,7 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
   return handles
 }
 
+import { stairMeasurement } from '../shared/measurement'
 import {
   computeStairSegmentFloorStackTransforms,
   getStairFloorPlacedFootprints,
@@ -463,6 +464,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     slots: (node) => stairSlots(node as StairNodeType),
     paint: stairPaint,
   },
+  measurement: stairMeasurement(),
 
   // Bespoke move shared with roof / roof-segment / stair-segment via
   // `shared/move-roof-tool` — routed through `MoveTool`'s registry-

@@ -8,6 +8,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Mesh, Vector3 } from 'three'
+import { registerMeasurementTestNodes } from '../../../lib/register-measurement-test-nodes'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
   type MeasurementSnapKind,
@@ -26,6 +27,7 @@ import {
 beforeAll(() => {
   class TestCanvas {}
   globalThis.HTMLCanvasElement = TestCanvas as never
+  registerMeasurementTestNodes()
 })
 
 beforeEach(() => {
@@ -533,7 +535,7 @@ describe('measurement 3D grid handlers', () => {
     })
   })
 
-  test('shift locks the 3D draft endpoint to the strongest axis while drawing', () => {
+  test('shift does not axis-lock the 3D draft endpoint while drawing', () => {
     const canvas = new globalThis.HTMLCanvasElement()
 
     handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
@@ -542,7 +544,7 @@ describe('measurement 3D grid handlers', () => {
 
     expect(useMeasurementTool.getState().segments[0]).toMatchObject({
       start: [0, 0, 0],
-      end: [0, 0, 5],
+      end: [1, 2, 5],
       view: '3d',
     })
   })
@@ -572,13 +574,13 @@ describe('measurement 3D grid handlers', () => {
     })
   })
 
-  test('shift locks the committed 3D surface endpoint after snapping', () => {
+  test('shift does not axis-lock the committed 3D surface endpoint after snapping', () => {
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [3.92, 0, 2.92], { shiftKey: true }))
 
     expect(useMeasurementTool.getState().segments[0]).toMatchObject({
       start: [0, 0, 0],
-      end: [4, 0, 0],
+      end: [4, 0, 3],
       view: '3d',
     })
   })

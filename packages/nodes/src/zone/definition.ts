@@ -1,4 +1,5 @@
 import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import { surfaceMeasurement } from '../shared/measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
@@ -36,6 +37,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     // reusable presets independent of their site context.
     presettable: false,
   },
+  measurement: surfaceMeasurement(),
 
   parametrics: zoneParametrics,
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.

@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { wallMeasurement } from '../shared/measurement'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
@@ -65,6 +66,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // `wallPaint`; migrating those into `node.slots` is a later step.
     slots: () => wallSlots(),
   },
+  measurement: wallMeasurement(),
 
   relations: {
     hosts: ['door', 'window', 'item'],

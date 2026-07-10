@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:te
 import { type AnyNode, type AnyNodeId, type GridEvent, useScene } from '@pascal-app/core'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { registerMeasurementTestNodes } from '../../lib/register-measurement-test-nodes'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
   type MeasurementSnapKind,
@@ -25,6 +26,7 @@ import {
 beforeAll(() => {
   class TestCanvas {}
   globalThis.HTMLCanvasElement = TestCanvas as never
+  registerMeasurementTestNodes()
 })
 
 beforeEach(() => {
@@ -545,14 +547,14 @@ describe('floorplan measurement grid handlers', () => {
     })
   })
 
-  test('shift locks the 2D draft endpoint to horizontal or vertical while drawing', () => {
+  test('shift does not axis-lock the 2D draft endpoint while drawing', () => {
     handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
     handleFloorplanMeasurementGridMove(gridEvent([1, 0, 4], { shiftKey: true }))
     handleFloorplanMeasurementGridClick(gridEvent([1, 0, 4], { shiftKey: true }))
 
     expect(useMeasurementTool.getState().segments[0]).toMatchObject({
       start: [0, 0, 0],
-      end: [0, 0, 4],
+      end: [1, 0, 4],
       view: '2d',
     })
   })

@@ -5,6 +5,7 @@ import {
   isSplineFence,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { fenceMeasurement } from '../shared/measurement'
 import { buildFenceFloorplan } from './floorplan'
 import {
   fenceControlPointAffordance,
@@ -243,6 +244,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     // and `createFenceOnCurrentLevel`).
     drawTool: true,
   },
+  measurement: fenceMeasurement(),
 
   relations: {
     linkedBy: 'endpoint-match',

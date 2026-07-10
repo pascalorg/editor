@@ -3,6 +3,7 @@ import type {
   HandleDescriptor,
   NodeDefinition,
 } from '@pascal-app/core'
+import { surfaceMeasurement } from '../shared/measurement'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -110,6 +111,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     slots: () => ceilingSlots(),
     paint: ceilingPaint,
   },
+  measurement: surfaceMeasurement(),
 
   relations: {
     hosts: ['item'],

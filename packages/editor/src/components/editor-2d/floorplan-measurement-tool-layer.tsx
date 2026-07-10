@@ -3,30 +3,22 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type CeilingNode,
-  type ColumnNode,
-  type ElevatorNode,
   emitter,
-  type FenceNode,
+  type GeometryContext,
   type GridEvent,
-  getFenceCenterlineLength,
-  getScaledDimensions,
-  getWallCurveLength,
-  type ItemNode,
-  type SlabNode,
+  type MeasurementDefinitionArea,
+  type MeasurementDefinitionDirectLength,
+  type MeasurementDefinitionPerimeter,
+  nodeRegistry,
   useScene,
-  type WallNode,
-  type ZoneNode,
 } from '@pascal-app/core'
 import { type PointerEvent, useEffect, useMemo } from 'react'
 import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { getRotatedRectanglePolygon } from '../../lib/floorplan/geometry'
-import { getItemFloorplanTransform } from '../../lib/floorplan/items'
 import {
   collectCommittedMeasurementSnapGeometry,
   collectPlanMeasurementSnapGeometry,
   mergeMeasurementSnapGeometry,
-  polygonAreaAndCentroid,
   resolvePlanMeasurementConstraint,
   resolvePlanMeasurementSnap,
 } from '../../lib/measurement-snapping'
@@ -40,7 +32,6 @@ import {
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import useInteractionScope from '../../store/use-interaction-scope'
 import {
-  axisLockedMeasurementPoint,
   distanceBetweenMeasurements,
   isDraggingMeasurementEndpoint,
   type MeasurementAngle,
@@ -197,47 +188,6 @@ function rectangleLengthSegment(
   return closestPlanSegmentToPoint(segments, cursorPoint)
 }
 
-function itemLengthSegment(
-  node: ItemNode,
-  cursorPoint: MeasurementPoint | null,
-): DirectLengthSegment | null {
-  const sceneNodes = useScene.getState().nodes
-  const transform = getItemFloorplanTransform(node, new Map(Object.entries(sceneNodes)), new Map())
-  if (!transform) return null
-
-  const [width, , depth] = getScaledDimensions(node)
-  const polygon = getRotatedRectanglePolygon(transform.position, width, depth, transform.rotation)
-  return rectangleLengthSegment(polygon, width, depth, cursorPoint)
-}
-
-function columnLengthSegment(
-  node: ColumnNode,
-  cursorPoint: MeasurementPoint | null,
-): DirectLengthSegment | null {
-  const polygon = getRotatedRectanglePolygon(
-    { x: node.position[0], y: node.position[2] },
-    node.width,
-    node.depth,
-    node.rotation,
-  )
-  return rectangleLengthSegment(polygon, node.width, node.depth, cursorPoint)
-}
-
-function elevatorLengthSegment(
-  node: ElevatorNode,
-  cursorPoint: MeasurementPoint | null,
-): DirectLengthSegment | null {
-  const width = node.shaftWidth ?? node.width
-  const depth = node.shaftDepth ?? node.depth
-  const polygon = getRotatedRectanglePolygon(
-    { x: node.position[0], y: node.position[2] },
-    width,
-    depth,
-    node.rotation,
-  )
-  return rectangleLengthSegment(polygon, width, depth, cursorPoint)
-}
-
 function nodeRotationY(node: AnyNode): number {
   const rotation = 'rotation' in node ? node.rotation : 0
   if (typeof rotation === 'number') return rotation
@@ -245,38 +195,69 @@ function nodeRotationY(node: AnyNode): number {
   return 0
 }
 
-function wallHostedOpeningLengthSegment(node: AnyNode): {
-  end: MeasurementPoint
-  measuredDistanceMeters: number
-  start: MeasurementPoint
-} | null {
-  if (!(node.type === 'door' || node.type === 'window')) return null
-  const hostId =
-    ('wallId' in node && typeof node.wallId === 'string' ? node.wallId : null) ??
-    (typeof node.parentId === 'string' ? node.parentId : null)
-  const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : null
-  if (host?.type !== 'wall') return null
-
-  const dx = host.end[0] - host.start[0]
-  const dz = host.end[1] - host.start[1]
-  const hostLength = Math.hypot(dx, dz)
-  if (hostLength < 1e-4) return null
-  const position = Array.isArray(node.position) ? node.position : [hostLength / 2, 0, 0]
-  const positionAlongWall = typeof position[0] === 'number' ? position[0] : hostLength / 2
-  const width = 'width' in node && typeof node.width === 'number' ? node.width : 0
-  if (width < 1e-4) return null
-
-  const dirX = dx / hostLength
-  const dirZ = dz / hostLength
-  const centerX = host.start[0] + dirX * positionAlongWall
-  const centerZ = host.start[1] + dirZ * positionAlongWall
-  const halfWidth = width / 2
-
+function measurementGeometryContextForNode(node: AnyNode): GeometryContext {
+  const nodes = useScene.getState().nodes
+  const childIds = (node as { children?: readonly AnyNodeId[] }).children ?? []
   return {
-    start: [centerX - dirX * halfWidth, 0, centerZ - dirZ * halfWidth],
-    end: [centerX + dirX * halfWidth, 0, centerZ + dirZ * halfWidth],
-    measuredDistanceMeters: width,
+    children: childIds.flatMap((id: AnyNodeId) => {
+      const child = nodes[id as AnyNodeId]
+      return child ? [child] : []
+    }),
+    parent: node.parentId ? (nodes[node.parentId as AnyNodeId] ?? null) : null,
+    resolve: <N = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+    siblings: node.parentId
+      ? Object.values(nodes).filter(
+          (candidate) => candidate.parentId === node.parentId && candidate.id !== node.id,
+        )
+      : [],
   }
+}
+
+function definitionPoint(point: readonly [number, number, number]): MeasurementPoint {
+  return [...point] as MeasurementPoint
+}
+
+function definitionPlanPoint(point: readonly [number, number, number]): MeasurementPoint {
+  return [point[0], 0, point[2]]
+}
+
+function registryMeasurementForNode(node: AnyNode) {
+  return nodeRegistry.get(node.type)?.measurement
+}
+
+function directLengthFromDefinition(
+  node: AnyNode,
+  cursorPoint: MeasurementPoint | null,
+): DirectLengthSegment | null {
+  const directLength = registryMeasurementForNode(node)?.directLength?.(
+    node as never,
+    measurementGeometryContextForNode(node),
+    cursorPoint,
+  ) as MeasurementDefinitionDirectLength | null | undefined
+  if (!directLength) return null
+  return {
+    start: definitionPoint(directLength.start),
+    end: definitionPoint(directLength.end),
+    measuredDistanceMeters: directLength.measuredDistanceMeters,
+  }
+}
+
+function areaFromDefinition(node: AnyNode): MeasurementDefinitionArea | null {
+  return (
+    (registryMeasurementForNode(node)?.area?.(
+      node as never,
+      measurementGeometryContextForNode(node),
+    ) as MeasurementDefinitionArea | null | undefined) ?? null
+  )
+}
+
+function perimeterFromDefinition(node: AnyNode): MeasurementDefinitionPerimeter | null {
+  return (
+    (registryMeasurementForNode(node)?.perimeter?.(
+      node as never,
+      measurementGeometryContextForNode(node),
+    ) as MeasurementDefinitionPerimeter | null | undefined) ?? null
+  )
 }
 
 function numericNodeProperty(node: AnyNode, key: string): number | null {
@@ -285,12 +266,11 @@ function numericNodeProperty(node: AnyNode, key: string): number | null {
 }
 
 function genericPlanBoxDimensions(node: AnyNode): readonly [number, number] | null {
-  if (node.type === 'solar-panel') {
-    const rows = numericNodeProperty(node, 'rows')
-    const columns = numericNodeProperty(node, 'columns')
-    const panelWidth = numericNodeProperty(node, 'panelWidth')
-    const panelHeight = numericNodeProperty(node, 'panelHeight')
-    if (!(rows && columns && panelWidth && panelHeight)) return null
+  const rows = numericNodeProperty(node, 'rows')
+  const columns = numericNodeProperty(node, 'columns')
+  const panelWidth = numericNodeProperty(node, 'panelWidth')
+  const panelHeight = numericNodeProperty(node, 'panelHeight')
+  if (rows && columns && panelWidth && panelHeight) {
     const gapX = numericNodeProperty(node, 'gapX') ?? 0
     const gapY = numericNodeProperty(node, 'gapY') ?? 0
     return [
@@ -363,43 +343,6 @@ function resolveFloorplanMeasurementConstraint(
       view: '2d',
     },
   )
-}
-
-function surfaceAreaMeasurement(node: SlabNode | CeilingNode | ZoneNode): {
-  areaSquareMeters: number
-  boundaryPoints: MeasurementPoint[]
-  labelPoint: MeasurementPoint
-} {
-  const outer = polygonAreaAndCentroid(node.polygon)
-  const holes = 'holes' in node ? node.holes : []
-  const holesArea = holes.reduce((sum, hole) => sum + polygonAreaAndCentroid(hole).area, 0)
-
-  return {
-    areaSquareMeters: Math.max(0, outer.area - holesArea),
-    boundaryPoints: node.polygon.map((point): MeasurementPoint => [point[0], 0, point[1]]),
-    labelPoint: [outer.centroid.x, 0, outer.centroid.y],
-  }
-}
-
-function polygonPerimeter(polygon: ReadonlyArray<readonly [number, number]>): number {
-  return polygon.reduce((sum, point, index) => {
-    const next = polygon[(index + 1) % polygon.length] ?? point
-    return sum + Math.hypot(next[0] - point[0], next[1] - point[1])
-  }, 0)
-}
-
-function surfacePerimeterMeasurement(node: SlabNode | CeilingNode | ZoneNode): {
-  labelPoint: MeasurementPoint
-  lengthMeters: number
-} {
-  const outer = polygonAreaAndCentroid(node.polygon)
-  const holes = 'holes' in node ? node.holes : []
-  const holesLength = holes.reduce((sum, hole) => sum + polygonPerimeter(hole), 0)
-
-  return {
-    labelPoint: [outer.centroid.x, 0, outer.centroid.y],
-    lengthMeters: polygonPerimeter(node.polygon) + holesLength,
-  }
 }
 
 function toOverlay(
@@ -526,28 +469,12 @@ export function staggerFloorplanMeasurementLabels(
   })
 }
 
-function nodeEndpointSegment(node: WallNode | FenceNode): {
-  end: MeasurementPoint
-  measuredDistanceMeters: number
-  start: MeasurementPoint
-} {
-  return {
-    start: [node.start[0], 0, node.start[1]],
-    end: [node.end[0], 0, node.end[1]],
-    measuredDistanceMeters:
-      node.type === 'wall' ? getWallCurveLength(node) : getFenceCenterlineLength(node),
-  }
-}
-
 function directLengthSegmentFromNode(
   node: AnyNode,
   cursorPoint: MeasurementPoint | null = null,
 ): DirectLengthSegment | null {
-  if (node.type === 'wall' || node.type === 'fence') return nodeEndpointSegment(node)
-  if (node.type === 'door' || node.type === 'window') return wallHostedOpeningLengthSegment(node)
-  if (node.type === 'item') return itemLengthSegment(node, cursorPoint)
-  if (node.type === 'column') return columnLengthSegment(node, cursorPoint)
-  if (node.type === 'elevator') return elevatorLengthSegment(node, cursorPoint)
+  const contributed = directLengthFromDefinition(node, cursorPoint)
+  if (contributed) return contributed
   return genericPlanBoxLengthSegment(node, cursorPoint)
 }
 
@@ -560,24 +487,30 @@ export function handleFloorplanMeasurementNodeClick2D(
     ctrlKey?: boolean
     cursorPoint?: MeasurementPoint | null
     metaKey?: boolean
-    shiftKey?: boolean
   } = {},
 ): boolean {
   const measurementMode = useMeasurementTool.getState().mode
   const quickMeasure = Boolean(options.altKey || options.ctrlKey || options.metaKey)
-  if (options.shiftKey || measurementMode === 'angle') return false
+  if (measurementMode === 'angle') return false
 
-  if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-    if (quickMeasure || measurementMode === 'perimeter') {
-      const perimeter = surfacePerimeterMeasurement(node)
-      useMeasurementTool.getState().addPerimeter('2d', perimeter.labelPoint, perimeter.lengthMeters)
-      return true
-    }
-    if (measurementMode === 'area') {
-      const area = surfaceAreaMeasurement(node)
+  const perimeter = perimeterFromDefinition(node)
+  const area = areaFromDefinition(node)
+  if (perimeter || area) {
+    if (perimeter && (quickMeasure || measurementMode === 'perimeter')) {
       useMeasurementTool
         .getState()
-        .addArea('2d', area.labelPoint, area.areaSquareMeters, area.boundaryPoints)
+        .addPerimeter('2d', definitionPlanPoint(perimeter.labelPoint), perimeter.lengthMeters)
+      return true
+    }
+    if (area && measurementMode === 'area') {
+      useMeasurementTool
+        .getState()
+        .addArea(
+          '2d',
+          definitionPlanPoint(area.labelPoint),
+          area.areaSquareMeters,
+          (area.boundaryPoints ?? []).map(definitionPlanPoint),
+        )
       return true
     }
   }
@@ -609,34 +542,34 @@ export function previewFloorplanMeasurementNode2D(
     return false
   }
   if (measurement.mode === 'area') {
-    if (!(node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone')) {
+    const area = areaFromDefinition(node)
+    if (!area) {
       measurement.setPreviewArea(null)
       return false
     }
-    const area = surfaceAreaMeasurement(node)
     measurement.setPreviewSegment(null)
     measurement.setPreviewPerimeter(null)
     measurement.setPreviewArea({
       id: 'measurement-area-preview',
       areaSquareMeters: area.areaSquareMeters,
-      boundaryPoints: area.boundaryPoints,
-      labelPoint: area.labelPoint,
+      boundaryPoints: (area.boundaryPoints ?? []).map(definitionPlanPoint),
+      labelPoint: definitionPlanPoint(area.labelPoint),
       view: '2d',
     })
     return true
   }
 
   if (measurement.mode === 'perimeter') {
-    if (!(node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone')) {
+    const perimeter = perimeterFromDefinition(node)
+    if (!perimeter) {
       measurement.setPreviewPerimeter(null)
       return false
     }
-    const perimeter = surfacePerimeterMeasurement(node)
     measurement.setPreviewSegment(null)
     measurement.setPreviewArea(null)
     measurement.setPreviewPerimeter({
       id: 'measurement-perimeter-preview',
-      labelPoint: perimeter.labelPoint,
+      labelPoint: definitionPlanPoint(perimeter.labelPoint),
       lengthMeters: perimeter.lengthMeters,
       view: '2d',
     })
@@ -1071,7 +1004,6 @@ function handleFloorplanMeasurementGeometryClick(event: MouseEvent): boolean {
     ctrlKey: event.ctrlKey,
     cursorPoint: floorplanPointFromClientPoint(event.clientX, event.clientY),
     metaKey: event.metaKey,
-    shiftKey: event.shiftKey,
   })
 }
 
@@ -1130,18 +1062,12 @@ function resolveFloorplanEditablePoint(event: GridEvent): {
       : drag.endpoint === 'end'
         ? (segment?.start ?? null)
         : null
-  const constrained =
-    !event.nativeEvent.shiftKey && anchor
-      ? resolveFloorplanMeasurementConstraint(anchor, snap.point)
-      : null
-  const point =
-    event.nativeEvent.shiftKey && anchor
-      ? axisLockedMeasurementPoint(anchor, snap.point, '2d')
-      : (constrained?.point ?? snap.point)
+  const constrained = anchor ? resolveFloorplanMeasurementConstraint(anchor, snap.point) : null
+  const point = constrained?.point ?? snap.point
 
   return {
     point,
-    target: event.nativeEvent.shiftKey ? null : (constrained?.target ?? snap.target),
+    target: constrained?.target ?? snap.target,
   }
 }
 
@@ -1222,16 +1148,12 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
     return
   }
   const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
-  const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
   const constrained =
-    !isAxisLocked && measurement.draft?.view === '2d'
+    measurement.draft?.view === '2d'
       ? resolveFloorplanMeasurementConstraint(measurement.draft.start, snap.point)
       : null
-  const point =
-    isAxisLocked && measurement.draft
-      ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
-      : (constrained?.point ?? snap.point)
-  measurement.setSnapTarget(isAxisLocked ? null : (constrained?.target ?? snap.target))
+  const point = constrained?.point ?? snap.point
+  measurement.setSnapTarget(constrained?.target ?? snap.target)
   setMeasurementCursorPoint(point)
   if (measurement.angleDraft) {
     measurement.updateAngle(point)
@@ -1265,21 +1187,13 @@ export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
     return
   }
   const snap = resolveFloorplanMeasurementSnap(pointFromGridEvent(event))
-  const isAxisLocked = event.nativeEvent.shiftKey && measurement.draft?.view === '2d'
   const constrained =
-    !isAxisLocked && measurement.draft?.view === '2d'
+    measurement.draft?.view === '2d'
       ? resolveFloorplanMeasurementConstraint(measurement.draft.start, snap.point)
       : null
-  const point =
-    isAxisLocked && measurement.draft
-      ? axisLockedMeasurementPoint(measurement.draft.start, snap.point, '2d')
-      : (constrained?.point ?? snap.point)
-  measurement.setSnapTarget(isAxisLocked ? null : (constrained?.target ?? snap.target))
-  if (event.nativeEvent.shiftKey && measurement.draft?.view === '2d') {
-    measurement.commit(point)
-    return
-  }
-  if (event.nativeEvent.shiftKey || measurement.mode === 'angle' || measurement.angleDraft) {
+  const point = constrained?.point ?? snap.point
+  measurement.setSnapTarget(constrained?.target ?? snap.target)
+  if (measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)
     } else {
@@ -1412,16 +1326,10 @@ export function FloorplanMeasurementToolLayer({
   }, [active, displayPrecision, draft, previewSegment, segments, selectedId, unit, unitsPerPixel])
 
   const areaMeasurements = active
-    ? [
-        ...areas,
-        ...(previewArea?.view === '2d' ? [previewArea] : []),
-      ]
+    ? [...areas, ...(previewArea?.view === '2d' ? [previewArea] : [])]
     : []
   const perimeterMeasurements = active
-    ? [
-        ...perimeters,
-        ...(previewPerimeter?.view === '2d' ? [previewPerimeter] : []),
-      ]
+    ? [...perimeters, ...(previewPerimeter?.view === '2d' ? [previewPerimeter] : [])]
     : []
   const angleMeasurements = active ? angles : []
   const draftAngle =
