@@ -129,7 +129,11 @@ function collectQuickActionNodes(
  * Hidden while in a move state (so we don't show buttons over a ghost).
  */
 export function FloorplanRegistryActionMenu() {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+  // Sole selection only — a multi-selection gets the group menu
+  // (`FloorplanGroupActionMenu`), whose actions target the whole selection.
+  const selectedId = useViewer((s) =>
+    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
+  ) as AnyNodeId | undefined
   const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)

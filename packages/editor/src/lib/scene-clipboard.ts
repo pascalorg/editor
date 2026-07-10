@@ -202,9 +202,8 @@ function remapNodeReferences(
   return AnyNode.parse(clone)
 }
 
-export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
+function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
   const scene = useScene.getState()
-  const ids = selectedIds ?? (useViewer.getState().selection.selectedIds as AnyNodeId[])
   const selectedIdSet = new Set(ids)
   const promotedIds = ids.map((id) => {
     const node = scene.nodes[id]
@@ -221,7 +220,7 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
   })
 
   if (rootIds.length === 0) {
-    return false
+    return null
   }
 
   const subtreeIds = new Set<AnyNodeId>()
@@ -229,7 +228,7 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
     collectSubtreeIds(scene.nodes, rootId, subtreeIds)
   }
 
-  clipboardPayload = {
+  return {
     copiedAt: Date.now(),
     nodes: [...subtreeIds]
       .map((id) => scene.nodes[id])
@@ -237,15 +236,45 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
       .map((node) => JSON.parse(JSON.stringify(node)) as AnyNode),
     rootIds,
   }
+}
+
+export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
+  const ids = selectedIds ?? (useViewer.getState().selection.selectedIds as AnyNodeId[])
+  const payload = buildClipboardPayload(ids)
+  if (!payload) return false
+
+  clipboardPayload = payload
   notifySubscribers()
 
   return true
 }
 
+/**
+ * Clone the given nodes (subtrees included, ids remapped) onto the target /
+ * active level in place — the same copy + paste pipeline in one step, WITHOUT
+ * touching the user's editor clipboard. Selects the clones. Used by the group
+ * action menu's Duplicate.
+ */
+export function duplicateNodesToLevel(
+  ids: AnyNodeId[],
+  targetLevelId?: AnyNodeId,
+): PasteResult | null {
+  const payload = buildClipboardPayload(ids)
+  if (!payload) return null
+  return applyClipboardPayloadToLevel(payload, targetLevelId)
+}
+
 export function pasteEditorClipboardToLevel(targetLevelId?: AnyNodeId): PasteResult | null {
-  const payload = clipboardPayload
+  if (!clipboardPayload) return null
+  return applyClipboardPayloadToLevel(clipboardPayload, targetLevelId)
+}
+
+function applyClipboardPayloadToLevel(
+  payload: ClipboardPayload,
+  targetLevelId?: AnyNodeId,
+): PasteResult | null {
   const targetLevel = getPasteTargetLevel(targetLevelId)
-  if (!payload || !targetLevel) return null
+  if (!targetLevel) return null
 
   const scene = useScene.getState()
   const idMap = new Map<AnyNodeId, AnyNodeId>()
