@@ -1,16 +1,24 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, type AnyNodeId, type GridEvent, useScene } from '@pascal-app/core'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
   type MeasurementSnapKind,
   useMeasurementTool,
 } from '../../store/use-measurement-tool'
 import {
+  getFloorplanEndpointHandleMetrics,
+  getFloorplanSnapMarkerMetrics,
   handleFloorplanMeasurementGridClick,
   handleFloorplanMeasurementGridMove,
   handleFloorplanMeasurementNodeClick2D,
   staggerFloorplanMeasurementLabels,
 } from './floorplan-measurement-tool-layer'
+import {
+  FloorplanMeasurementsLayer,
+  getFloorplanMeasurementPillMetrics,
+} from './renderers/floorplan-measurements-layer'
 
 beforeAll(() => {
   class TestCanvas {}
@@ -321,6 +329,74 @@ function measurementOverlay(id: string, labelX: number, labelY: number) {
 }
 
 describe('floorplan measurement grid handlers', () => {
+  test('renders linear measurement labels as zoom-stable pills', () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        'svg',
+        null,
+        createElement(FloorplanMeasurementsLayer, {
+          className: 'floorplan-measurement-tool',
+          measurements: [
+            {
+              ...measurementOverlay('12.34 m', 1, 1),
+              isSelected: true,
+              label: '12.34 m',
+            },
+          ],
+          palette: {
+            measurementStroke: 'rgb(14, 165, 233)',
+          },
+          sceneRotationDeg: 0,
+        }),
+      ),
+    )
+
+    expect(markup).toContain('<rect')
+    expect(markup).toContain('fill="#ffffff"')
+    expect(markup).toContain('opacity="0.92"')
+    expect(markup).toContain('font-size="0.1"')
+    expect(markup).toContain('font-weight="600"')
+    expect(markup).toContain('12.34 m')
+  })
+
+  test('shares pill metrics across 2D measurement label types', () => {
+    const metrics = getFloorplanMeasurementPillMetrics('12.34 m', 0.01)
+
+    expect(metrics.fontSize).toBe(0.1)
+    expect(metrics.height).toBeCloseTo(0.16)
+    expect(metrics.radius).toBeCloseTo(0.03)
+    expect(metrics.strokeWidth).toBeCloseTo(0.005)
+    expect(metrics.width).toBeCloseTo(0.554)
+  })
+
+  test('keeps snap marker glyph strokes readable while marker size follows zoom', () => {
+    expect(getFloorplanSnapMarkerMetrics(0.01)).toMatchObject({
+      labelFontSize: 0.1,
+      labelOffsetX: 0.14,
+      labelOffsetY: 0.24,
+      labelStrokeWidth: 0.025,
+      marker: 0.14,
+      markerHalf: 0.07,
+      markerStroke: 1.3,
+    })
+    const zoomedMetrics = getFloorplanSnapMarkerMetrics(0.05)
+    expect(zoomedMetrics.labelFontSize).toBeCloseTo(0.5)
+    expect(zoomedMetrics.marker).toBeCloseTo(0.7)
+    expect(zoomedMetrics.markerHalf).toBeCloseTo(0.35)
+    expect(zoomedMetrics.markerStroke).toBe(1.3)
+  })
+
+  test('keeps endpoint handle hit and visible radii tied to screen zoom', () => {
+    expect(getFloorplanEndpointHandleMetrics(0.01, false)).toEqual({
+      handleRadius: 0.06,
+      hitRadius: 0.16,
+    })
+    expect(getFloorplanEndpointHandleMetrics(0.01, true)).toEqual({
+      handleRadius: 0.08,
+      hitRadius: 0.16,
+    })
+  })
+
   test('staggers overlapping 2D measurement labels', () => {
     const overlays = staggerFloorplanMeasurementLabels([
       measurementOverlay('a', 1, 1),

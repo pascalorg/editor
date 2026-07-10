@@ -13,6 +13,8 @@ import {
   useMeasurementTool,
 } from '../../../store/use-measurement-tool'
 import {
+  getMeasurementSnapLabelPosition3D,
+  getMeasurementValuePillClassName,
   handleMeasurementGridClick3D,
   handleMeasurementGridMove3D,
   handleMeasurementNodeClick3D,
@@ -360,6 +362,39 @@ function indexedTriangleMesh() {
 }
 
 describe('measurement 3D grid handlers', () => {
+  test('uses the shared floating pill visual language for 3D measurement values', () => {
+    const className = getMeasurementValuePillClassName({})
+
+    expect(className).toContain('rounded-full')
+    expect(className).toContain('border-border/60')
+    expect(className).toContain('bg-background/90')
+    expect(className).toContain('px-4')
+    expect(className).toContain('py-1.5')
+    expect(className).toContain('text-xs')
+    expect(className).toContain('tabular-nums')
+    expect(className).toContain('shadow-sm')
+    expect(className).toContain('backdrop-blur')
+  })
+
+  test('adds measurement value pill states without changing the base shape', () => {
+    const className = getMeasurementValuePillClassName({
+      draft: true,
+      interactive: true,
+      isSelected: false,
+    })
+
+    expect(className).toContain('rounded-full')
+    expect(className).toContain('pointer-events-auto')
+    expect(className).toContain('cursor-pointer')
+    expect(className).toContain('border-amber-500/60')
+    expect(className).toContain('text-amber-700')
+    expect(className).toContain('opacity-45')
+  })
+
+  test('lifts 3D snap labels above the snap cursor', () => {
+    expect(getMeasurementSnapLabelPosition3D()).toEqual([0, 0.42, 0])
+  })
+
   test('staggers overlapping 3D measurement labels', () => {
     const layouts = staggerMeasurementLabelLayouts3D([
       {

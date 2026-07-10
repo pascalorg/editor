@@ -1,13 +1,34 @@
 'use client'
 
 import { memo, type PointerEvent } from 'react'
+import { useFloorplanRender } from '../floorplan-render-context'
 
 const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
 const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
-const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE = 0.15
+const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX = 10
 const FLOORPLAN_MEASUREMENT_LABEL_OPACITY = 0.98
 const FLOORPLAN_MEASUREMENT_EXTENSION_DASH = '0.08 0.12'
 const FLOORPLAN_MEASUREMENT_END_TICK = 0.18
+const FLOORPLAN_MEASUREMENT_LABEL_MIN_FONT_SIZE = 0.08
+
+export function getFloorplanMeasurementPillMetrics(label: string, unitsPerPixel: number) {
+  const fontSize = Math.max(
+    unitsPerPixel * FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX,
+    FLOORPLAN_MEASUREMENT_LABEL_MIN_FONT_SIZE,
+  )
+  const padX = unitsPerPixel * 6
+  const padY = unitsPerPixel * 3
+
+  return {
+    fontSize,
+    height: fontSize + padY * 2,
+    padX,
+    padY,
+    radius: unitsPerPixel * 3,
+    strokeWidth: unitsPerPixel * 0.5,
+    width: label.length * fontSize * 0.62 + padX * 2,
+  }
+}
 
 export type LinearMeasurementOverlay = {
   dashedExtensions?: boolean
@@ -30,6 +51,8 @@ export type LinearMeasurementOverlay = {
 }
 
 type FloorplanMeasurementPalette = {
+  measurementLabelBackground?: string
+  measurementLabelText?: string
   measurementStroke: string
 }
 
@@ -151,10 +174,13 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
   palette,
   sceneRotationDeg = 0,
 }: FloorplanMeasurementsLayerProps) {
+  const renderContext = useFloorplanRender()
+
   if (measurements.length === 0) {
     return null
   }
 
+  const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
   return (
     <>
       {measurements.map((measurement) =>
@@ -163,6 +189,10 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
             measurement.labelAngleDeg + sceneRotationDeg,
           )
           const localLabelAngleDeg = screenLabelAngleDeg - sceneRotationDeg
+          const labelOpacity = measurement.isSelected
+            ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
+            : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
+          const labelMetrics = getFloorplanMeasurementPillMetrics(measurement.label, unitsPerPixel)
 
           return (
             <g
@@ -227,24 +257,40 @@ export const FloorplanMeasurementsLayer = memo(function FloorplanMeasurementsLay
                   />
                 </>
               ) : null}
-              <text
-                dominantBaseline="central"
-                fill={measurement.labelFill ?? palette.measurementStroke}
-                fillOpacity={
-                  measurement.isSelected
-                    ? FLOORPLAN_MEASUREMENT_LABEL_OPACITY
-                    : FLOORPLAN_MEASUREMENT_LABEL_OPACITY * 0.4
-                }
-                fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-                fontSize={FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE}
-                fontWeight="600"
-                textAnchor="middle"
-                transform={`rotate(${localLabelAngleDeg} ${measurement.labelX} ${measurement.labelY}) translate(0, -0.04)`}
-                x={measurement.labelX}
-                y={measurement.labelY}
+              <g
+                opacity={labelOpacity}
+                transform={`translate(${measurement.labelX} ${measurement.labelY}) rotate(${localLabelAngleDeg})`}
               >
-                {measurement.label}
-              </text>
+                <rect
+                  fill={palette.measurementLabelBackground ?? '#ffffff'}
+                  height={labelMetrics.height}
+                  opacity={0.92}
+                  rx={labelMetrics.radius}
+                  ry={labelMetrics.radius}
+                  stroke={measurement.stroke ?? palette.measurementStroke}
+                  strokeWidth={labelMetrics.strokeWidth}
+                  vectorEffect="non-scaling-stroke"
+                  width={labelMetrics.width}
+                  x={-labelMetrics.width / 2}
+                  y={-labelMetrics.height / 2}
+                />
+                <text
+                  dominantBaseline="middle"
+                  fill={
+                    measurement.labelFill ??
+                    palette.measurementLabelText ??
+                    palette.measurementStroke
+                  }
+                  fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                  fontSize={labelMetrics.fontSize}
+                  fontWeight="600"
+                  textAnchor="middle"
+                  x={0}
+                  y={0}
+                >
+                  {measurement.label}
+                </text>
+              </g>
             </g>
           )
         })(),

@@ -66,6 +66,7 @@ const MEASUREMENT_END_TICK = 0.28
 const MEASUREMENT_LABEL_LIFT = 0.08
 const MEASUREMENT_CURSOR_SIZE = 0.18
 const MEASUREMENT_CURSOR_WIDTH = 0.018
+const MEASUREMENT_SNAP_LABEL_LIFT = 0.42
 const MEASUREMENT_ENDPOINT_HANDLE_SIZE = 0.16
 const MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE = 0.34
 const MEASUREMENT_LABEL_COLLISION_CELL = 0.45
@@ -82,6 +83,15 @@ const measurementMaterial = new MeshBasicNodeMaterial({
   color: MEASUREMENT_COLOR,
   depthTest: false,
   depthWrite: false,
+  opacity: 0.95,
+  toneMapped: false,
+  transparent: true,
+})
+const mutedMeasurementMaterial = new MeshBasicNodeMaterial({
+  color: MEASUREMENT_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 0.38,
   toneMapped: false,
   transparent: true,
 })
@@ -89,6 +99,7 @@ const draftMeasurementMaterial = new MeshBasicNodeMaterial({
   color: MEASUREMENT_DRAFT_COLOR,
   depthTest: false,
   depthWrite: false,
+  opacity: 0.98,
   toneMapped: false,
   transparent: true,
 })
@@ -1089,14 +1100,16 @@ function MeasurementSnapTarget3D({ target }: { target: MeasurementSnapTarget }) 
       ) : null}
       <group position={target.point}>
         <MeasurementCursor3D kind={target.kind} point={[0, 0, 0]} />
-        <Html center distanceFactor={12} position={[0, MEASUREMENT_CURSOR_SIZE + 0.08, 0]}>
-          <span className="pointer-events-none whitespace-nowrap rounded-full border border-sky-400/60 bg-background/90 px-2 py-1 font-semibold text-[10px] text-sky-700 shadow-sm backdrop-blur dark:text-sky-300">
-            {target.label}
-          </span>
+        <Html center distanceFactor={12} position={getMeasurementSnapLabelPosition3D()}>
+          <MeasurementValuePill draft>{target.label}</MeasurementValuePill>
         </Html>
       </group>
     </>
   )
+}
+
+export function getMeasurementSnapLabelPosition3D(): [number, number, number] {
+  return [0, MEASUREMENT_SNAP_LABEL_LIFT, 0]
 }
 
 function MeasurementArea3D({
@@ -1162,17 +1175,33 @@ function MeasurementValuePill({
 }) {
   return (
     <span
-      className={cn(
-        'pointer-events-none whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-1.5 font-medium text-foreground text-xs tabular-nums shadow-sm backdrop-blur',
-        'transition-[border-color,box-shadow,color,opacity]',
-        onPointerDown && 'pointer-events-auto cursor-pointer',
-        draft && 'border-amber-500/55 text-amber-700 shadow-amber-500/10 dark:text-amber-300',
-        !isSelected && 'opacity-45',
-      )}
+      className={getMeasurementValuePillClassName({
+        draft,
+        interactive: Boolean(onPointerDown),
+        isSelected,
+      })}
       onPointerDown={onPointerDown}
     >
       {children}
     </span>
+  )
+}
+
+export function getMeasurementValuePillClassName({
+  draft = false,
+  interactive = false,
+  isSelected = true,
+}: {
+  draft?: boolean
+  interactive?: boolean
+  isSelected?: boolean
+}) {
+  return cn(
+    'pointer-events-none whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 font-medium text-xs text-foreground tabular-nums shadow-sm backdrop-blur',
+    'transition-[border-color,color,opacity]',
+    interactive && 'pointer-events-auto cursor-pointer',
+    draft && 'border-amber-500/60 text-amber-700 dark:text-amber-300',
+    !isSelected && 'opacity-45',
   )
 }
 
@@ -1298,7 +1327,11 @@ function MeasurementLine3D({
 
   if (distance < 1e-4) return null
 
-  const material = draft ? draftMeasurementMaterial : measurementMaterial
+  const material = draft
+    ? draftMeasurementMaterial
+    : isSelected
+      ? measurementMaterial
+      : mutedMeasurementMaterial
 
   return (
     <group>

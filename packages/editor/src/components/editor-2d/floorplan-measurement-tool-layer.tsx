@@ -52,8 +52,10 @@ import {
   type MeasurementSnapTarget,
   useMeasurementTool,
 } from '../../store/use-measurement-tool'
+import { useFloorplanRender } from './floorplan-render-context'
 import {
   FloorplanMeasurementsLayer,
+  getFloorplanMeasurementPillMetrics,
   type LinearMeasurementOverlay,
 } from './renderers/floorplan-measurements-layer'
 
@@ -67,12 +69,35 @@ type FloorplanMeasurementToolLayerProps = {
 }
 
 const FLOORPLAN_MEASUREMENT_SNAP_RADIUS = 0.25
-const FLOORPLAN_AREA_LABEL_FONT_SIZE = 0.18
-const FLOORPLAN_ANGLE_LABEL_FONT_SIZE = 0.16
-const FLOORPLAN_ENDPOINT_HANDLE_RADIUS = 0.08
-const FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS = 0.18
+const FLOORPLAN_ENDPOINT_HANDLE_RADIUS_PX = 6
+const FLOORPLAN_ENDPOINT_HANDLE_ACTIVE_RADIUS_PX = 8
+const FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS_PX = 16
 const FLOORPLAN_LABEL_COLLISION_CELL = 0.35
 const FLOORPLAN_LABEL_STAGGER_STEP = 0.22
+
+export function getFloorplanSnapMarkerMetrics(unitsPerPixel: number) {
+  const marker = unitsPerPixel * 14
+  return {
+    labelFontSize: Math.max(unitsPerPixel * 10, 0.08),
+    labelOffsetX: unitsPerPixel * 14,
+    labelOffsetY: unitsPerPixel * 24,
+    labelStrokeWidth: unitsPerPixel * 2.5,
+    marker,
+    markerHalf: marker / 2,
+    markerStroke: 1.3,
+  }
+}
+
+export function getFloorplanEndpointHandleMetrics(unitsPerPixel: number, activeHandle: boolean) {
+  return {
+    handleRadius:
+      unitsPerPixel *
+      (activeHandle
+        ? FLOORPLAN_ENDPOINT_HANDLE_ACTIVE_RADIUS_PX
+        : FLOORPLAN_ENDPOINT_HANDLE_RADIUS_PX),
+    hitRadius: unitsPerPixel * FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS_PX,
+  }
+}
 
 function isFloorplanEvent(event: GridEvent): boolean {
   const target = event.nativeEvent?.target
@@ -390,6 +415,59 @@ function normalizeAngleDelta(delta: number): number {
   return normalized
 }
 
+function MeasurementPillLabel2D({
+  isSelected,
+  label,
+  palette,
+  rotationDeg,
+  unitsPerPixel,
+  x,
+  y,
+}: {
+  isSelected: boolean
+  label: string
+  palette: FloorplanMeasurementToolLayerProps['palette'] & {
+    measurementLabelBackground?: string
+    measurementLabelText?: string
+  }
+  rotationDeg: number
+  unitsPerPixel: number
+  x: number
+  y: number
+}) {
+  const metrics = getFloorplanMeasurementPillMetrics(label, unitsPerPixel)
+
+  return (
+    <g opacity={isSelected ? 0.98 : 0.42} transform={`translate(${x} ${y}) rotate(${rotationDeg})`}>
+      <rect
+        fill={palette.measurementLabelBackground ?? '#ffffff'}
+        height={metrics.height}
+        opacity={0.92}
+        rx={metrics.radius}
+        ry={metrics.radius}
+        stroke={palette.measurementStroke}
+        strokeWidth={metrics.strokeWidth}
+        vectorEffect="non-scaling-stroke"
+        width={metrics.width}
+        x={-metrics.width / 2}
+        y={-metrics.height / 2}
+      />
+      <text
+        dominantBaseline="middle"
+        fill={palette.measurementLabelText ?? palette.measurementStroke}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+        fontSize={metrics.fontSize}
+        fontWeight="600"
+        textAnchor="middle"
+        x={0}
+        y={0}
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
 function AngleMeasurementLabel({
   angle,
   displayPrecision,
@@ -397,6 +475,7 @@ function AngleMeasurementLabel({
   onPointerDown,
   palette,
   sceneRotationDeg,
+  unitsPerPixel,
 }: {
   angle: MeasurementAngle
   displayPrecision: MeasurementDisplayPrecision
@@ -404,6 +483,7 @@ function AngleMeasurementLabel({
   onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
   sceneRotationDeg: number
+  unitsPerPixel: number
 }) {
   const vertex = { x: angle.vertex[0], y: angle.vertex[2] }
   const first = { x: angle.first[0], y: angle.first[2] }
@@ -432,6 +512,12 @@ function AngleMeasurementLabel({
     x: vertex.x + Math.cos(labelAngle) * labelRadius,
     y: vertex.y + Math.sin(labelAngle) * labelRadius,
   }
+  const labelText = formatAngleMeasurement(
+    angleBetweenMeasurements(angle.first, angle.vertex, angle.second),
+    {
+      precision: displayPrecision,
+    },
+  )
   const strokeOpacity = isSelected ? 0.95 : 0.38
 
   return (
@@ -472,22 +558,15 @@ function AngleMeasurementLabel({
         strokeWidth={1.35}
         vectorEffect="non-scaling-stroke"
       />
-      <text
-        dominantBaseline="central"
-        fill={palette.measurementStroke}
-        fillOpacity={isSelected ? 0.98 : 0.4}
-        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-        fontSize={FLOORPLAN_ANGLE_LABEL_FONT_SIZE}
-        fontWeight="700"
-        textAnchor="middle"
-        transform={`rotate(${-sceneRotationDeg} ${label.x} ${label.y})`}
+      <MeasurementPillLabel2D
+        isSelected={isSelected}
+        label={labelText}
+        palette={palette}
+        rotationDeg={-sceneRotationDeg}
+        unitsPerPixel={unitsPerPixel}
         x={label.x}
         y={label.y}
-      >
-        {formatAngleMeasurement(angleBetweenMeasurements(angle.first, angle.vertex, angle.second), {
-          precision: displayPrecision,
-        })}
-      </text>
+      />
     </g>
   )
 }
@@ -500,6 +579,7 @@ function AreaMeasurementLabel({
   palette,
   sceneRotationDeg,
   unit,
+  unitsPerPixel,
 }: {
   area: MeasurementArea
   displayPrecision: MeasurementDisplayPrecision
@@ -508,7 +588,10 @@ function AreaMeasurementLabel({
   palette: FloorplanMeasurementToolLayerProps['palette']
   sceneRotationDeg: number
   unit: LinearUnit
+  unitsPerPixel: number
 }) {
+  const label = formatAreaMeasurement(area.areaSquareMeters, unit, { precision: displayPrecision })
+
   return (
     <g
       className="floorplan-measurement-tool"
@@ -516,19 +599,15 @@ function AreaMeasurementLabel({
       pointerEvents="auto"
       style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0.4, userSelect: 'none' }}
     >
-      <text
-        dominantBaseline="central"
-        fill={palette.measurementStroke}
-        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-        fontSize={FLOORPLAN_AREA_LABEL_FONT_SIZE}
-        fontWeight="700"
-        textAnchor="middle"
-        transform={`rotate(${-sceneRotationDeg} ${area.labelPoint[0]} ${area.labelPoint[2]})`}
+      <MeasurementPillLabel2D
+        isSelected={isSelected}
+        label={label}
+        palette={palette}
+        rotationDeg={-sceneRotationDeg}
+        unitsPerPixel={unitsPerPixel}
         x={area.labelPoint[0]}
         y={area.labelPoint[2]}
-      >
-        {formatAreaMeasurement(area.areaSquareMeters, unit, { precision: displayPrecision })}
-      </text>
+      />
     </g>
   )
 }
@@ -541,6 +620,7 @@ function PerimeterMeasurementLabel({
   perimeter,
   sceneRotationDeg,
   unit,
+  unitsPerPixel,
 }: {
   displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
@@ -549,7 +629,12 @@ function PerimeterMeasurementLabel({
   perimeter: MeasurementPerimeter
   sceneRotationDeg: number
   unit: LinearUnit
+  unitsPerPixel: number
 }) {
+  const label = `P ${formatLinearMeasurement(perimeter.lengthMeters, unit, {
+    precision: displayPrecision,
+  })}`
+
   return (
     <g
       className="floorplan-measurement-tool"
@@ -557,19 +642,15 @@ function PerimeterMeasurementLabel({
       pointerEvents="auto"
       style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0.4, userSelect: 'none' }}
     >
-      <text
-        dominantBaseline="central"
-        fill={palette.measurementStroke}
-        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
-        fontSize={FLOORPLAN_AREA_LABEL_FONT_SIZE}
-        fontWeight="700"
-        textAnchor="middle"
-        transform={`rotate(${-sceneRotationDeg} ${perimeter.labelPoint[0]} ${perimeter.labelPoint[2]}) translate(0, 0.2)`}
+      <MeasurementPillLabel2D
+        isSelected={isSelected}
+        label={label}
+        palette={palette}
+        rotationDeg={-sceneRotationDeg}
+        unitsPerPixel={unitsPerPixel}
         x={perimeter.labelPoint[0]}
-        y={perimeter.labelPoint[2]}
-      >
-        {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit, { precision: displayPrecision })}`}
-      </text>
+        y={perimeter.labelPoint[2] + unitsPerPixel * 12}
+      />
     </g>
   )
 }
@@ -577,25 +658,36 @@ function PerimeterMeasurementLabel({
 function FloorplanSnapTargetMarker({
   sceneRotationDeg,
   target,
+  unitsPerPixel,
 }: {
   sceneRotationDeg: number
   target: MeasurementSnapTarget
+  unitsPerPixel: number
 }) {
   const x = target.point[0]
   const y = target.point[2]
   const kind = target.kind ?? 'vertex'
+  const {
+    labelFontSize,
+    labelOffsetX,
+    labelOffsetY,
+    labelStrokeWidth,
+    marker,
+    markerHalf,
+    markerStroke,
+  } = getFloorplanSnapMarkerMetrics(unitsPerPixel)
   const glyph = (() => {
     if (kind === 'grid') {
       return (
         <rect
           fill="rgba(14, 165, 233, 0.12)"
-          height={0.22}
+          height={marker}
           stroke="rgb(14, 165, 233)"
-          strokeWidth={1.3}
+          strokeWidth={markerStroke}
           vectorEffect="non-scaling-stroke"
-          width={0.22}
-          x={x - 0.11}
-          y={y - 0.11}
+          width={marker}
+          x={x - markerHalf}
+          y={y - markerHalf}
         />
       )
     }
@@ -605,22 +697,22 @@ function FloorplanSnapTargetMarker({
           <line
             stroke="rgb(14, 165, 233)"
             strokeLinecap="round"
-            strokeWidth={1.45}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
-            x1={x - 0.14}
-            x2={x + 0.14}
-            y1={y - 0.14}
-            y2={y + 0.14}
+            x1={x - markerHalf}
+            x2={x + markerHalf}
+            y1={y - markerHalf}
+            y2={y + markerHalf}
           />
           <line
             stroke="rgb(14, 165, 233)"
             strokeLinecap="round"
-            strokeWidth={1.45}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
-            x1={x - 0.14}
-            x2={x + 0.14}
-            y1={y + 0.14}
-            y2={y - 0.14}
+            x1={x - markerHalf}
+            x2={x + markerHalf}
+            y1={y + markerHalf}
+            y2={y - markerHalf}
           />
         </>
       )
@@ -630,10 +722,10 @@ function FloorplanSnapTargetMarker({
         <line
           stroke="rgb(14, 165, 233)"
           strokeLinecap="round"
-          strokeWidth={1.8}
+          strokeWidth={markerStroke * 1.2}
           vectorEffect="non-scaling-stroke"
-          x1={x - 0.2}
-          x2={x + 0.2}
+          x1={x - marker}
+          x2={x + marker}
           y1={y}
           y2={y}
         />
@@ -642,11 +734,11 @@ function FloorplanSnapTargetMarker({
     if (kind === 'midpoint') {
       return (
         <path
-          d={`M ${x} ${y - 0.15} L ${x + 0.15} ${y + 0.12} L ${x - 0.15} ${y + 0.12} Z`}
+          d={`M ${x} ${y - markerHalf} L ${x + markerHalf} ${y + markerHalf * 0.8} L ${x - markerHalf} ${y + markerHalf * 0.8} Z`}
           fill="rgba(14, 165, 233, 0.14)"
           stroke="rgb(14, 165, 233)"
           strokeLinejoin="round"
-          strokeWidth={1.25}
+          strokeWidth={markerStroke}
           vectorEffect="non-scaling-stroke"
         />
       )
@@ -658,12 +750,12 @@ function FloorplanSnapTargetMarker({
             cx={x}
             cy={y}
             fill="rgba(14, 165, 233, 0.14)"
-            r={0.13}
+            r={markerHalf}
             stroke="rgb(14, 165, 233)"
-            strokeWidth={1.25}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
           />
-          <circle cx={x} cy={y} fill="rgb(14, 165, 233)" r={0.035} />
+          <circle cx={x} cy={y} fill="rgb(14, 165, 233)" r={markerHalf * 0.28} />
         </>
       )
     }
@@ -672,25 +764,25 @@ function FloorplanSnapTargetMarker({
         <>
           <line
             stroke="rgb(14, 165, 233)"
-            strokeDasharray="0.08 0.06"
+            strokeDasharray={`${unitsPerPixel * 5} ${unitsPerPixel * 4}`}
             strokeLinecap="round"
-            strokeWidth={1.2}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
-            x1={x - 0.22}
-            x2={x + 0.22}
+            x1={x - marker}
+            x2={x + marker}
             y1={y}
             y2={y}
           />
           <line
             stroke="rgb(14, 165, 233)"
-            strokeDasharray="0.08 0.06"
+            strokeDasharray={`${unitsPerPixel * 5} ${unitsPerPixel * 4}`}
             strokeLinecap="round"
-            strokeWidth={1.2}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
             x1={x}
             x2={x}
-            y1={y - 0.22}
-            y2={y + 0.22}
+            y1={y - marker}
+            y2={y + marker}
           />
         </>
       )
@@ -702,18 +794,18 @@ function FloorplanSnapTargetMarker({
             cx={x}
             cy={y}
             fill="rgba(14, 165, 233, 0.1)"
-            r={0.14}
+            r={markerHalf}
             stroke="rgb(14, 165, 233)"
-            strokeWidth={1.15}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
           />
           <circle
             cx={x}
             cy={y}
             fill="none"
-            r={0.07}
+            r={markerHalf * 0.55}
             stroke="rgb(14, 165, 233)"
-            strokeWidth={1.15}
+            strokeWidth={markerStroke}
             vectorEffect="non-scaling-stroke"
           />
         </>
@@ -722,11 +814,11 @@ function FloorplanSnapTargetMarker({
 
     return (
       <path
-        d={`M ${x} ${y - 0.16} L ${x + 0.16} ${y} L ${x} ${y + 0.16} L ${x - 0.16} ${y} Z`}
+        d={`M ${x} ${y - markerHalf} L ${x + markerHalf} ${y} L ${x} ${y + markerHalf} L ${x - markerHalf} ${y} Z`}
         fill="rgba(14, 165, 233, 0.14)"
         stroke="rgb(14, 165, 233)"
         strokeLinejoin="round"
-        strokeWidth={1.25}
+        strokeWidth={markerStroke}
         vectorEffect="non-scaling-stroke"
       />
     )
@@ -737,10 +829,10 @@ function FloorplanSnapTargetMarker({
       {target.guideLine ? (
         <line
           stroke="rgb(14, 165, 233)"
-          strokeDasharray="0.12 0.08"
+          strokeDasharray={`${unitsPerPixel * 8} ${unitsPerPixel * 5}`}
           strokeLinecap="round"
           strokeOpacity={0.75}
-          strokeWidth={1}
+          strokeWidth={markerStroke}
           vectorEffect="non-scaling-stroke"
           x1={target.guideLine.start[0]}
           x2={target.guideLine.end[0]}
@@ -753,15 +845,15 @@ function FloorplanSnapTargetMarker({
         dominantBaseline="central"
         fill="rgb(14, 165, 233)"
         fontFamily="ui-sans-serif, system-ui, sans-serif"
-        fontSize={0.13}
+        fontSize={labelFontSize}
         fontWeight="700"
         paintOrder="stroke"
         stroke="rgba(255, 255, 255, 0.85)"
-        strokeWidth={0.035}
+        strokeWidth={labelStrokeWidth}
         textAnchor="start"
-        transform={`rotate(${-sceneRotationDeg} ${x + 0.2} ${y - 0.18})`}
-        x={x + 0.2}
-        y={y - 0.18}
+        transform={`rotate(${-sceneRotationDeg} ${x + labelOffsetX} ${y - labelOffsetY})`}
+        x={x + labelOffsetX}
+        y={y - labelOffsetY}
       >
         {target.label}
       </text>
@@ -915,6 +1007,7 @@ export function FloorplanMeasurementToolLayer({
   sceneRotationDeg,
   unit,
 }: FloorplanMeasurementToolLayerProps) {
+  const renderContext = useFloorplanRender()
   const segments = useMeasurementTool((state) => state.segments)
   const areas = useMeasurementTool((state) => state.areas)
   const perimeters = useMeasurementTool((state) => state.perimeters)
@@ -925,6 +1018,7 @@ export function FloorplanMeasurementToolLayer({
   const selectedId = useMeasurementTool((state) => state.selectedId)
   const snapTarget = useMeasurementTool((state) => state.snapTarget)
   const draggingSegmentEndpoint = useMeasurementTool((state) => state.draggingSegmentEndpoint)
+  const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
 
   useEffect(() => {
     if (!active) return
@@ -1061,6 +1155,7 @@ export function FloorplanMeasurementToolLayer({
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
           unit={unit}
+          unitsPerPixel={unitsPerPixel}
         />
       ))}
       {perimeterMeasurements.map((perimeter) => (
@@ -1073,6 +1168,7 @@ export function FloorplanMeasurementToolLayer({
           perimeter={perimeter}
           sceneRotationDeg={sceneRotationDeg}
           unit={unit}
+          unitsPerPixel={unitsPerPixel}
         />
       ))}
       {angleMeasurements.map((angle) => (
@@ -1084,6 +1180,7 @@ export function FloorplanMeasurementToolLayer({
           onPointerDown={handleMeasurementPointerDown}
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
         />
       ))}
       {draftAngle ? (
@@ -1094,10 +1191,15 @@ export function FloorplanMeasurementToolLayer({
           onPointerDown={handleMeasurementPointerDown}
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
         />
       ) : null}
       {snapTarget?.view === '2d' ? (
-        <FloorplanSnapTargetMarker sceneRotationDeg={sceneRotationDeg} target={snapTarget} />
+        <FloorplanSnapTargetMarker
+          sceneRotationDeg={sceneRotationDeg}
+          target={snapTarget}
+          unitsPerPixel={unitsPerPixel}
+        />
       ) : null}
       {selectedSegment ? (
         <g className="floorplan-measurement-endpoint-handles" pointerEvents="auto">
@@ -1107,6 +1209,10 @@ export function FloorplanMeasurementToolLayer({
               draggingSegmentEndpoint,
               selectedSegment.id,
               endpoint,
+            )
+            const { handleRadius, hitRadius } = getFloorplanEndpointHandleMetrics(
+              unitsPerPixel,
+              activeHandle,
             )
             return (
               <g
@@ -1118,22 +1224,13 @@ export function FloorplanMeasurementToolLayer({
                 }
                 style={{ cursor: activeHandle ? 'grabbing' : 'grab' }}
               >
-                <circle
-                  cx={point[0]}
-                  cy={point[2]}
-                  fill="transparent"
-                  r={FLOORPLAN_ENDPOINT_HANDLE_HIT_RADIUS}
-                />
+                <circle cx={point[0]} cy={point[2]} fill="transparent" r={hitRadius} />
                 <circle
                   cx={point[0]}
                   cy={point[2]}
                   fill={activeHandle ? 'rgb(245, 158, 11)' : 'rgb(14, 165, 233)'}
                   pointerEvents="none"
-                  r={
-                    activeHandle
-                      ? FLOORPLAN_ENDPOINT_HANDLE_RADIUS * 1.35
-                      : FLOORPLAN_ENDPOINT_HANDLE_RADIUS
-                  }
+                  r={handleRadius}
                   stroke="white"
                   strokeWidth={activeHandle ? 1.8 : 1.4}
                   vectorEffect="non-scaling-stroke"
