@@ -7,7 +7,7 @@
 //   z=D ┌──────────────────────────────┐
 //       │ private band: bedrooms/study │  ← exterior windows
 //       ├──────────────────────────────┤
-//       │ corridor (1.15m, full width) │  ← only when ≥2 private rooms
+//       │ corridor (profile width)     │  ← only when ≥2 private rooms
 //       ├──────────────────────────────┤
 //       │ public band: kitchen│dining│HUB (living / living_kitchen)
 //   z=0 └──────────────────────────────┘  ← entry door side
@@ -30,40 +30,47 @@
 // ---------------------------------------------------------------------------
 
 import {
-  DEFAULT_ROOM_AREAS,
   defaultRequiresWindow,
   longestExteriorEdge,
   polygonArea,
   sharedBoundaryLength,
+  type IssueL10n,
   type LayoutIntent,
   type LayoutPlan,
   type LayoutPlanRoom,
   type RoomType,
 } from './layout-plan'
+import {
+  DEFAULT_NORM_PROFILE,
+  quantizeAreaSqm,
+  type NormProfile,
+  type PartitionParams,
+  type ScoringParams,
+} from './norms/profile'
 
 export type PartitionResult =
   | { ok: true; plan: LayoutPlan; notes: string[] }
-  | { ok: false; reason: string }
+  // `reason` is the canonical zh text; `l10n` re-renders it per language and
+  // `details` carries the top rejection obstacles as separate lines.
+  | {
+      ok: false
+      reason: string
+      l10n?: IssueL10n
+      details?: Array<{ message: string; l10n?: IssueL10n }>
+    }
 
-export const CORRIDOR_WIDTH_M = 1.15
-const MAX_ROOM_ASPECT = 3.0
-const MAX_FOOTPRINT_ASPECT = 2.2
-const MIN_DOOR_EDGE_M = 0.9
 // Column/carve minimum interior widths by room type.
 const SMALL_MIN_WIDTH_TYPES: ReadonlySet<RoomType> = new Set([
   'bathroom', 'storage', 'entry', 'balcony',
 ])
-function minWidthFor(type: RoomType): number {
-  return SMALL_MIN_WIDTH_TYPES.has(type) ? 1.5 : 1.8
+function minWidthFor(type: RoomType, p: PartitionParams): number {
+  return SMALL_MIN_WIDTH_TYPES.has(type) ? p.minRoomWidthSmallM : p.minRoomWidthDefaultM
 }
 
 const PRIVATE_TYPES: ReadonlySet<RoomType> = new Set([
   'bedroom', 'study', 'balcony', 'other',
 ])
 const CARVE_TYPES: ReadonlySet<RoomType> = new Set(['bathroom', 'storage', 'entry'])
-// Public rooms small enough to carve into the hub when their full-depth
-// column would come out too narrow.
-const CARVEABLE_PUBLIC_MAX_SQM = 9
 
 type NormRoom = {
   id: string
@@ -136,14 +143,18 @@ const CARVE_CORNER_PREFERENCE: Partial<Record<RoomType, Corner[]>> = {
 
 // --- normalization ----------------------------------------------------------
 
-function normalizeRooms(intent: LayoutIntent): NormRoom[] {
+function normalizeRooms(intent: LayoutIntent, profile: NormProfile): NormRoom[] {
   return intent.rooms.map(room => ({
     id: room.id,
     name: room.name,
     type: room.type,
-    area: room.targetAreaSqm !== undefined && room.targetAreaSqm > 0
-      ? room.targetAreaSqm
-      : DEFAULT_ROOM_AREAS[room.type],
+    // J7: target areas snap to the profile's 帖 grid (no-op when off).
+    area: quantizeAreaSqm(
+      room.targetAreaSqm !== undefined && room.targetAreaSqm > 0
+        ? room.targetAreaSqm
+        : profile.defaultRoomAreas[room.type],
+      profile.areaQuantization,
+    ),
     window: room.requiresExteriorWindow ?? defaultRequiresWindow(room.type),
   }))
 }
@@ -151,7 +162,8 @@ function normalizeRooms(intent: LayoutIntent): NormRoom[] {
 // --- candidate layout construction ------------------------------------------
 
 type Candidate = { plan: LayoutPlan; penalty: number; notes: string[] }
-type Attempt = Candidate | { reject: string }
+type Reject = { reject: string; l10n?: IssueL10n }
+type Attempt = Candidate | Reject
 
 type CarveSpec = { room: NormRoom; hostId: string }
 
@@ -160,26 +172,38 @@ type CarveSpec = { room: NormRoom; hostId: string }
 function placeCarves(
   hostRect: Rect,
   carves: Array<{ room: NormRoom; area: number }>,
-): { notches: Notch[]; rects: Map<string, { rect: Rect; corner: Corner }> } | { reject: string } {
+  p: PartitionParams,
+): { notches: Notch[]; rects: Map<string, { rect: Rect; corner: Corner }> } | Reject {
   const hostW = hostRect.x1 - hostRect.x0
   const hostD = hostRect.z1 - hostRect.z0
   const used = new Map<Corner, Notch>()
   const rects = new Map<string, { rect: Rect; corner: Corner }>()
   for (const { room, area } of carves) {
-    const minW = minWidthFor(room.type)
+    const minW = minWidthFor(room.type, p)
     // Aim for a slightly-deeper-than-square carve, capped by the host.
-    let d = Math.min(Math.max(Math.sqrt(area * 1.2), 1.4), Math.min(2.4, hostD - MIN_DOOR_EDGE_M))
-    if (d <= 0) return { reject: `房间「${room.name}」无法嵌入宿主（宿主进深不足）` }
+    let d = Math.min(Math.max(Math.sqrt(area * 1.2), 1.4), Math.min(2.4, hostD - p.minDoorEdgeM))
+    if (d <= 0) {
+      return {
+        reject: `房间「${room.name}」无法嵌入宿主（宿主进深不足）`,
+        l10n: { id: 'planCarveHostTooShallow', params: { room: room.name } },
+      }
+    }
     let w = area / d
     if (w < minW) {
       w = minW
       d = area / w
     }
-    if (d < 1.2 || d > hostD - MIN_DOOR_EDGE_M) {
-      return { reject: `房间「${room.name}」按面积 ${round2(area)}㎡ 嵌入宿主后进深不合理` }
+    if (d < 1.2 || d > hostD - p.minDoorEdgeM) {
+      return {
+        reject: `房间「${room.name}」按面积 ${round2(area)}㎡ 嵌入宿主后进深不合理`,
+        l10n: { id: 'planCarveDepthUnreasonable', params: { room: room.name, area: round2(area) } },
+      }
     }
-    if (w > hostW - MIN_DOOR_EDGE_M) {
-      return { reject: `房间「${room.name}」嵌入后宿主剩余宽度不足` }
+    if (w > hostW - p.minDoorEdgeM) {
+      return {
+        reject: `房间「${room.name}」嵌入后宿主剩余宽度不足`,
+        l10n: { id: 'planCarveHostWidthInsufficient', params: { room: room.name } },
+      }
     }
     w = round2(w)
     d = round2(d)
@@ -190,26 +214,31 @@ function placeCarves(
     for (const corner of [...preferences, ...allCorners]) {
       if (used.has(corner)) continue
       const candidate: Notch = { corner, w, d }
-      if (!cornerFits(candidate, used, hostW, hostD)) continue
+      if (!cornerFits(candidate, used, hostW, hostD, p.minDoorEdgeM)) continue
       used.set(corner, candidate)
       rects.set(room.id, { rect: notchRect(hostRect, candidate), corner })
       placed = true
       break
     }
-    if (!placed) return { reject: `房间「${room.name}」在宿主的四个角都放不下` }
+    if (!placed) {
+      return {
+        reject: `房间「${room.name}」在宿主的四个角都放不下`,
+        l10n: { id: 'planCarveNoCorner', params: { room: room.name } },
+      }
+    }
   }
   return { notches: [...used.values()], rects }
 }
 
-function cornerFits(notch: Notch, used: Map<Corner, Notch>, hostW: number, hostD: number): boolean {
-  if (notch.w > hostW - MIN_DOOR_EDGE_M || notch.d > hostD - MIN_DOOR_EDGE_M) return false
+function cornerFits(notch: Notch, used: Map<Corner, Notch>, hostW: number, hostD: number, minDoorEdgeM: number): boolean {
+  if (notch.w > hostW - minDoorEdgeM || notch.d > hostD - minDoorEdgeM) return false
   const [vert, horiz] = notch.corner.split('-') as ['top' | 'bottom', 'left' | 'right']
   for (const other of used.values()) {
     const [oVert, oHoriz] = other.corner.split('-') as ['top' | 'bottom', 'left' | 'right']
     // Same horizontal edge (both top / both bottom): widths must leave a gap.
-    if (vert === oVert && notch.w + other.w > hostW - MIN_DOOR_EDGE_M) return false
+    if (vert === oVert && notch.w + other.w > hostW - minDoorEdgeM) return false
     // Same vertical edge (both left / both right): depths must leave a gap.
-    if (horiz === oHoriz && notch.d + other.d > hostD - MIN_DOOR_EDGE_M) return false
+    if (horiz === oHoriz && notch.d + other.d > hostD - minDoorEdgeM) return false
   }
   return true
 }
@@ -243,66 +272,167 @@ function aspectOf(rect: Rect): number {
   return Math.max(w, d) / Math.min(w, d)
 }
 
+// Candidate scoring (LAYOUT_STRATEGY_DESIGN.md §3.6) — the one ruler every
+// topology's candidates are compared with. Lower is better.
+export function scoreCandidate(
+  candidate: { footprintW: number; footprintD: number; roomAspects: number[]; corridorRatio: number },
+  s: ScoringParams,
+): number {
+  const { footprintW: w, footprintD: d } = candidate
+  const footprintAspect = Math.max(w, d) / Math.min(w, d)
+  let penalty = Math.abs(footprintAspect - s.idealFootprintAspect) * s.footprintAspectWeight
+  for (const ratio of candidate.roomAspects) {
+    penalty += Math.max(0, ratio - s.roomAspectSoft) * s.roomAspectExcessWeight
+  }
+  penalty += Math.max(0, candidate.corridorRatio - s.corridorShareSoft) * s.corridorShareExcessWeight
+  return penalty
+}
+
 // --- main entry point ---------------------------------------------------------
 
-export function partitionLayout(intent: LayoutIntent): PartitionResult {
+// The strategy fields the partitioner consumes (LAYOUT_STRATEGY_DESIGN.md §2
+// step ③). StrategyDecision satisfies this structurally; a plain object works
+// for tests.
+export type PartitionStrategyHint = {
+  typology?: 'studio' | 'standard_band' | 'narrow_lot' | 'tanoji' | 'l_shape'
+  footprintHint?: { widthM: number; depthM: number }
+}
+
+export function partitionLayout(
+  intent: LayoutIntent,
+  profile: NormProfile = DEFAULT_NORM_PROFILE,
+  strategy?: PartitionStrategyHint,
+): PartitionResult {
   if (!(intent.targetTotalAreaSqm > 0)) {
-    return { ok: false, reason: 'targetTotalAreaSqm 必须为正数' }
+    return {
+      ok: false,
+      reason: 'targetTotalAreaSqm 必须为正数',
+      l10n: { id: 'planTotalAreaInvalid', params: {} },
+    }
   }
   if (intent.rooms.length === 0) {
-    return { ok: false, reason: 'rooms 为空，无法分区' }
+    return { ok: false, reason: 'rooms 为空，无法分区', l10n: { id: 'planRoomsEmpty', params: {} } }
   }
   const ids = new Set(intent.rooms.map(r => r.id))
   if (ids.size !== intent.rooms.length) {
-    return { ok: false, reason: 'rooms 中存在重复 id' }
+    return { ok: false, reason: 'rooms 中存在重复 id', l10n: { id: 'planDuplicateRoomIds', params: {} } }
   }
 
-  const rooms = normalizeRooms(intent)
+  const rooms = normalizeRooms(intent, profile)
 
   if (rooms.length === 1) return singleRoomPlan(intent, rooms[0]!)
 
+  const p = profile.partition
+  const s = profile.scoring
   const hub = pickHub(rooms)
   const attempts: Attempt[] = []
-  const base = Math.sqrt(intent.targetTotalAreaSqm)
   const carveOptions = hub
     ? [false, true]
     : [false]
-  for (let step = 0; step <= 32; step++) {
-    const W = round2(base * (0.7 + (0.8 * step) / 32))
-    for (const carveSmallPublic of carveOptions) {
-      attempts.push(
-        hub
-          ? tryBandLayout(intent, rooms, hub, W, carveSmallPublic)
-          : tryCorridorHubLayout(intent, rooms, W),
-      )
+  if (strategy?.typology === 'narrow_lot' && hub) {
+    // Linear topology (§3.2). With a lot hint the footprint is fixed; without
+    // one, slender aspect ratios are searched up to the narrow-lot cap.
+    // Hub-less narrow lots fall through to the standard path below —
+    // corridor-hub is already linear.
+    const geometries: Array<{ W: number; D: number }> = []
+    const hint = strategy.footprintHint
+    if (hint) {
+      geometries.push({
+        W: round2(Math.min(hint.widthM, hint.depthM)),
+        D: round2(Math.max(hint.widthM, hint.depthM)),
+      })
+    } else {
+      const area = intent.targetTotalAreaSqm
+      for (let step = 0; step <= 6; step++) {
+        const aspect = 2.4 + ((p.maxFootprintAspectNarrowLot - 2.4) * step) / 6
+        const depth = Math.sqrt(area * aspect)
+        geometries.push({ W: round2(area / depth), D: round2(depth) })
+      }
+    }
+    for (const geo of geometries) {
+      for (const carveSmallPublic of carveOptions) {
+        attempts.push(tryNarrowLotLayout(intent, rooms, hub, geo.W, geo.D, carveSmallPublic, p, s))
+      }
+    }
+  } else if (strategy?.typology === 'l_shape') {
+    // L-shape is a site constraint (§3.2): only L candidates — silently
+    // falling back to a rectangle would violate the stated lot. No hub means
+    // no L layout; fail explicitly so the correction loop can add one.
+    if (!hub) {
+      return {
+        ok: false,
+        reason: 'L 形拓扑需要一间公共枢纽（客厅或一体客餐厨）',
+        l10n: { id: 'planLShapeNeedsHub', params: {} },
+      }
+    }
+    // The main wing wants to be wider than a square footprint, so the width
+    // search starts higher; wing proportions are searched alongside.
+    const base = Math.sqrt(intent.targetTotalAreaSqm)
+    for (let step = 0; step <= 8; step++) {
+      const W = round2(base * (0.9 + (0.6 * step) / 8))
+      for (const wingFrac of [0.35, 0.45, 0.55]) {
+        for (const carveSmallPublic of carveOptions) {
+          attempts.push(tryLShapeLayout(intent, rooms, hub, W, wingFrac, carveSmallPublic, p, s))
+        }
+      }
+    }
+  } else {
+    // 田の字 is the preferred topology for its band (§3.2): use it whenever
+    // ANY candidate survives, fall back to the band search only when none
+    // does — pure score competition would let the band's larger feasible
+    // range crowd the preference out every time.
+    const base = Math.sqrt(intent.targetTotalAreaSqm)
+    if (strategy?.typology === 'tanoji' && hub) {
+      for (let step = 0; step <= 32; step++) {
+        const W = round2(base * (0.7 + (0.8 * step) / 32))
+        attempts.push(tryTanojiLayout(intent, rooms, hub, W, p, s))
+      }
+    }
+    if (!attempts.some(attempt => !('reject' in attempt))) {
+      for (let step = 0; step <= 32; step++) {
+        const W = round2(base * (0.7 + (0.8 * step) / 32))
+        for (const carveSmallPublic of carveOptions) {
+          attempts.push(
+            hub
+              ? tryBandLayout(intent, rooms, hub, W, carveSmallPublic, p, s)
+              : tryCorridorHubLayout(intent, rooms, W, p, s),
+          )
+        }
+      }
     }
   }
 
   let best: Candidate | null = null
-  const rejectCounts = new Map<string, number>()
+  const rejectCounts = new Map<string, { count: number; l10n?: IssueL10n }>()
   for (const attempt of attempts) {
     if ('reject' in attempt) {
-      rejectCounts.set(attempt.reject, (rejectCounts.get(attempt.reject) ?? 0) + 1)
+      const entry = rejectCounts.get(attempt.reject)
+      if (entry) entry.count++
+      else rejectCounts.set(attempt.reject, { count: 1, l10n: attempt.l10n })
       continue
     }
     if (!best || attempt.penalty < best.penalty) best = attempt
   }
   if (!best) {
     const topReasons = [...rejectCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 3)
-      .map(([reason]) => reason)
     return {
       ok: false,
-      reason: `在 ${intent.targetTotalAreaSqm}㎡ 内找不到满足最小宽度/长宽比约束的布局。主要障碍：${topReasons.join('；')}。`
+      reason: `在 ${intent.targetTotalAreaSqm}㎡ 内找不到满足最小宽度/长宽比约束的布局，主要障碍如下。`
         + '建议：增大总面积、减少房间数量，或调低个别房间的目标面积。',
+      l10n: { id: 'planPartitionInfeasible', params: { totalArea: intent.targetTotalAreaSqm } },
+      details: topReasons.map(([message, entry]) => ({
+        message,
+        ...(entry.l10n ? { l10n: entry.l10n } : {}),
+      })),
     }
   }
   const notes = [...best.notes]
   for (const pair of intent.adjacency ?? []) {
     const a = best.plan.rooms.find(r => r.id === pair.a)
     const b = best.plan.rooms.find(r => r.id === pair.b)
-    if (a && b && sharedBoundaryLength(a.polygon, b.polygon) < MIN_DOOR_EDGE_M) {
+    if (a && b && sharedBoundaryLength(a.polygon, b.polygon) < p.minDoorEdgeM) {
       notes.push(`邻接意愿 ${pair.a}↔${pair.b} 在 v1 带状布局中未能满足`)
     }
   }
@@ -314,6 +444,50 @@ function pickHub(rooms: NormRoom[]): NormRoom | null {
     ?? rooms.find(r => r.type === 'living')
     ?? rooms.find(r => r.type === 'hallway')
     ?? null
+}
+
+// Carve assignment shared by the band and narrow-lot topologies: first
+// bathroom into the hub (door onto circulation), extra bathrooms as en-suites
+// of the biggest bedrooms, storage/entry into the hub, and — when enabled —
+// small kitchen/dining embedded into the hub.
+function assignCarves(
+  others: NormRoom[],
+  hub: NormRoom,
+  carveSmallPublic: boolean,
+  p: PartitionParams,
+): { carveSpecs: CarveSpec[]; notes: string[] } {
+  const notes: string[] = []
+  const carveSpecs: CarveSpec[] = []
+  const bedroomsByArea = [...others.filter(r => r.type === 'bedroom')].sort((a, b) => b.area - a.area)
+  const ensuiteHosts = new Set<string>()
+  let bathIndex = 0
+  for (const room of others) {
+    if (room.type === 'bathroom') {
+      if (bathIndex === 0) {
+        carveSpecs.push({ room, hostId: hub.id })
+      } else {
+        const host = bedroomsByArea.find(b => !ensuiteHosts.has(b.id))
+        if (host) {
+          ensuiteHosts.add(host.id)
+          carveSpecs.push({ room, hostId: host.id })
+          notes.push(`卫生间「${room.name}」作为「${host.name}」的套内卫生间`)
+        } else {
+          carveSpecs.push({ room, hostId: hub.id })
+        }
+      }
+      bathIndex++
+    } else if (room.type === 'storage' || room.type === 'entry') {
+      carveSpecs.push({ room, hostId: hub.id })
+    } else if (
+      carveSmallPublic
+      && (room.type === 'kitchen' || room.type === 'dining')
+      && room.area <= p.carveablePublicMaxSqm
+    ) {
+      carveSpecs.push({ room, hostId: hub.id })
+      notes.push(`「${room.name}」以开放/嵌入形式并入「${hub.name}」一侧`)
+    }
+  }
+  return { carveSpecs, notes }
 }
 
 function singleRoomPlan(intent: LayoutIntent, room: NormRoom): PartitionResult {
@@ -343,46 +517,15 @@ function tryBandLayout(
   hub: NormRoom,
   W: number,
   carveSmallPublic: boolean,
+  p: PartitionParams,
+  s: ScoringParams,
 ): Attempt {
-  const notes: string[] = []
   const others = rooms.filter(r => r.id !== hub.id)
   const privates = others.filter(r => PRIVATE_TYPES.has(r.type))
   const corridorRoom = others.find(r => r.type === 'hallway') ?? null
   const corridorNeeded = privates.length >= 2
 
-  // --- carve assignment ---
-  const carveSpecs: CarveSpec[] = []
-  const bedroomsByArea = [...privates.filter(r => r.type === 'bedroom')].sort((a, b) => b.area - a.area)
-  const ensuiteHosts = new Set<string>()
-  let bathIndex = 0
-  for (const room of others) {
-    if (room.type === 'bathroom') {
-      // First bathroom is the shared one (hub host, door onto circulation);
-      // extra bathrooms become en-suites of the biggest bedrooms.
-      if (bathIndex === 0) {
-        carveSpecs.push({ room, hostId: hub.id })
-      } else {
-        const host = bedroomsByArea.find(b => !ensuiteHosts.has(b.id))
-        if (host) {
-          ensuiteHosts.add(host.id)
-          carveSpecs.push({ room, hostId: host.id })
-          notes.push(`卫生间「${room.name}」作为「${host.name}」的套内卫生间`)
-        } else {
-          carveSpecs.push({ room, hostId: hub.id })
-        }
-      }
-      bathIndex++
-    } else if (room.type === 'storage' || room.type === 'entry') {
-      carveSpecs.push({ room, hostId: hub.id })
-    } else if (
-      carveSmallPublic
-      && (room.type === 'kitchen' || room.type === 'dining')
-      && room.area <= CARVEABLE_PUBLIC_MAX_SQM
-    ) {
-      carveSpecs.push({ room, hostId: hub.id })
-      notes.push(`「${room.name}」以开放/嵌入形式并入「${hub.name}」一侧`)
-    }
-  }
+  const { carveSpecs, notes } = assignCarves(others, hub, carveSmallPublic, p)
   const carvedIds = new Set(carveSpecs.map(c => c.room.id))
 
   const publicColumns = others.filter(r =>
@@ -391,12 +534,15 @@ function tryBandLayout(
   const privateColumns = privates.filter(r => !carvedIds.has(r.id))
 
   // --- area scaling to hit the total ---
-  const corridorArea = corridorNeeded ? CORRIDOR_WIDTH_M * W : 0
+  const corridorArea = corridorNeeded ? p.corridorWidthM * W : 0
   const roomAreaSum = rooms.reduce((sum, r) => sum + r.area, 0)
     - (corridorNeeded && corridorRoom ? corridorRoom.area : 0)
   const scale = (intent.targetTotalAreaSqm - corridorArea) / roomAreaSum
   if (scale < 0.7 || scale > 1.6) {
-    return { reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）` }
+    return {
+      reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）`,
+      l10n: { id: 'planAreaScaleMismatch', params: { scalePercent: Math.round(scale * 100) } },
+    }
   }
   if (Math.abs(scale - 1) > 0.25) {
     notes.push(`房间面积整体缩放 ${Math.round(scale * 100)}% 以匹配总面积 ${intent.targetTotalAreaSqm}㎡`)
@@ -437,12 +583,12 @@ function tryBandLayout(
   const upperArea = upperBand.reduce((sum, r) => sum + columnArea(r), 0)
   const dLower = round2(lowerArea / W)
   const dUpper = upperArea > 0 ? round2(upperArea / W) : 0
-  const corridorD = corridorNeeded ? CORRIDOR_WIDTH_M : 0
+  const corridorD = corridorNeeded ? p.corridorWidthM : 0
   const zLowerTop = dLower
   const zUpperBottom = round2(dLower + corridorD)
   const D = round2(zUpperBottom + dUpper)
-  if (Math.max(W, D) / Math.min(W, D) > MAX_FOOTPRINT_ASPECT) {
-    return { reject: '外轮廓过于狭长' }
+  if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspect) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
   }
 
   const rectById = new Map<string, Rect>()
@@ -457,11 +603,17 @@ function tryBandLayout(
   for (const room of [...lowerBand, ...upperBand]) {
     const rect = rectById.get(room.id)!
     const width = rect.x1 - rect.x0
-    if (width < minWidthFor(room.type)) {
-      return { reject: `房间「${room.name}」按比例分宽后过窄` }
+    if (width < minWidthFor(room.type, p)) {
+      return {
+        reject: `房间「${room.name}」按比例分宽后过窄`,
+        l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+      }
     }
-    if (aspectOf(rect) > MAX_ROOM_ASPECT) {
-      return { reject: `房间「${room.name}」长宽比超限` }
+    if (aspectOf(rect) > p.maxRoomAspect) {
+      return {
+        reject: `房间「${room.name}」长宽比超限`,
+        l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+      }
     }
   }
 
@@ -477,7 +629,7 @@ function tryBandLayout(
       planRooms.push(planRoom(room, rectPolygon(rect)))
       continue
     }
-    const placed = placeCarves(rect, carves)
+    const placed = placeCarves(rect, carves, p)
     if ('reject' in placed) return placed
     planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
     for (const { room: carve } of carves) {
@@ -502,7 +654,10 @@ function tryBandLayout(
   } else if (corridorRoom) {
     // Explicit hallway but no corridor needed — it stayed a normal column.
     if (!rectById.has(corridorRoom.id)) {
-      return { reject: '户型无需走廊，但 Intent 中的走廊房间未能布置' }
+      return {
+        reject: '户型无需走廊，但 Intent 中的走廊房间未能布置',
+        l10n: { id: 'planCorridorUnplaceable', params: {} },
+      }
     }
   }
 
@@ -543,7 +698,7 @@ function tryBandLayout(
   const footprintSize = { width: W, depth: D }
   const canHostEntryDoor = (roomId: string): boolean => {
     const polygon = planRooms.find(room => room.id === roomId)?.polygon
-    return polygon !== undefined && longestExteriorEdge(polygon, footprintSize) >= MIN_DOOR_EDGE_M
+    return polygon !== undefined && longestExteriorEdge(polygon, footprintSize) >= p.minDoorEdgeM
   }
   const entryCandidates = [
     others.find(r => r.type === 'entry')?.id,
@@ -560,15 +715,571 @@ function tryBandLayout(
   }
 
   // --- score ---
-  const footprintAspect = Math.max(W, D) / Math.min(W, D)
-  let penalty = Math.abs(footprintAspect - 1.35) * 6
-  for (const room of [...lowerBand, ...upperBand]) {
-    penalty += Math.max(0, aspectOf(rectById.get(room.id)!) - 2.2) * 8
+  const penalty = scoreCandidate({
+    footprintW: W,
+    footprintD: D,
+    roomAspects: [...lowerBand, ...upperBand].map(room => aspectOf(rectById.get(room.id)!)),
+    corridorRatio: corridorNeeded ? (corridorD * W) / (W * D) : 0,
+  }, s)
+  return { plan, penalty, notes }
+}
+
+// --- narrow-lot linear layout (S3, LAYOUT_STRATEGY_DESIGN.md §3.2) -----------
+// Lot short side W across x, long side D along z. The hub (LDK/living) sits
+// full-width at the entry end (z=0) with service rooms carved in; the other
+// rooms stack along the depth — publics first so the kitchen keeps the wet
+// zone near the hub, privates toward the quiet far end — served by a
+// longitudinal corridor strip on the right side. With ≤1 stacked room the
+// corridor is skipped and the room connects to the hub directly.
+
+function tryNarrowLotLayout(
+  intent: LayoutIntent,
+  rooms: NormRoom[],
+  hub: NormRoom,
+  W: number,
+  D: number,
+  carveSmallPublic: boolean,
+  p: PartitionParams,
+  s: ScoringParams,
+): Attempt {
+  if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspectNarrowLot) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
   }
+  const others = rooms.filter(r => r.id !== hub.id)
+  const { carveSpecs, notes } = assignCarves(others, hub, carveSmallPublic, p)
+  notes.unshift('狭长地块：线性拓扑，房间沿长边排布')
+  const carvedIds = new Set(carveSpecs.map(c => c.room.id))
+  const corridorRoom = others.find(r => r.type === 'hallway') ?? null
+
+  const stackable = others.filter(r => !carvedIds.has(r.id) && r.id !== corridorRoom?.id)
+  const stacked = [
+    ...stackable.filter(r => !PRIVATE_TYPES.has(r.type) && r.type === 'kitchen'),
+    ...stackable.filter(r => !PRIVATE_TYPES.has(r.type) && r.type !== 'kitchen'),
+    ...stackable.filter(r => PRIVATE_TYPES.has(r.type)),
+  ]
+  const corridorNeeded = stacked.length >= 2
+  const stackW = corridorNeeded ? round2(W - p.corridorWidthM) : W
+  if (corridorNeeded && stackW < p.minRoomWidthDefaultM) {
+    return {
+      reject: '狭长地块扣除走廊后房间宽度不足',
+      l10n: { id: 'planNarrowLotWidthInsufficient', params: {} },
+    }
+  }
+
+  // Column areas (room + its carves), then the uniform scale that makes rooms
+  // plus corridor fill W×D exactly. The corridor runs from the hub's top edge
+  // to the far end, so its area depends on the (scaled) hub depth:
+  //   scale·(hubCol + stackedCols) + corrW·(D − scale·hubCol/W) = W·D
+  const carvesByHost = new Map<string, NormRoom[]>()
+  for (const spec of carveSpecs) {
+    const list = carvesByHost.get(spec.hostId) ?? []
+    list.push(spec.room)
+    carvesByHost.set(spec.hostId, list)
+  }
+  const colArea = (room: NormRoom) =>
+    room.area + (carvesByHost.get(room.id) ?? []).reduce((sum, r) => sum + r.area, 0)
+  const hubCol = colArea(hub)
+  const stackedCols = stacked.reduce((sum, r) => sum + colArea(r), 0)
+  const scale = corridorNeeded
+    ? (W * D - p.corridorWidthM * D) / (hubCol + stackedCols - (p.corridorWidthM * hubCol) / W)
+    : (W * D) / (hubCol + stackedCols)
+  if (scale < 0.7 || scale > 1.6) {
+    return {
+      reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）`,
+      l10n: { id: 'planAreaScaleMismatch', params: { scalePercent: Math.round(scale * 100) } },
+    }
+  }
+  if (Math.abs(scale - 1) > 0.25) {
+    notes.push(`房间面积整体缩放 ${Math.round(scale * 100)}% 以匹配地块 ${round2(W * D)}㎡`)
+  }
+
+  // --- geometry ---
+  const hubD = round2((scale * hubCol) / W)
+  const rectById = new Map<string, Rect>()
+  rectById.set(hub.id, { x0: 0, z0: 0, x1: W, z1: hubD })
+  let z = hubD
+  for (let i = 0; i < stacked.length; i++) {
+    const room = stacked[i]!
+    const z1 = i === stacked.length - 1 ? D : round2(z + (scale * colArea(room)) / stackW)
+    rectById.set(room.id, { x0: 0, z0: z, x1: stackW, z1 })
+    z = z1
+  }
+
+  // Stacked segments fail by being too shallow, not too narrow — check the
+  // short dimension, not just the column width.
+  for (const room of [hub, ...stacked]) {
+    const rect = rectById.get(room.id)!
+    const minSide = Math.min(rect.x1 - rect.x0, rect.z1 - rect.z0)
+    if (minSide < minWidthFor(room.type, p)) {
+      return {
+        reject: `房间「${room.name}」按比例分宽后过窄`,
+        l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+      }
+    }
+    if (aspectOf(rect) > p.maxRoomAspect) {
+      return {
+        reject: `房间「${room.name}」长宽比超限`,
+        l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+      }
+    }
+  }
+
+  // --- carve placement & polygon assembly ---
+  const planRooms: LayoutPlanRoom[] = []
+  const connections: Array<{ from: string; to: string }> = []
+  for (const room of [hub, ...stacked]) {
+    const rect = rectById.get(room.id)!
+    const carves = (carvesByHost.get(room.id) ?? []).map(r => ({ room: r, area: scale * r.area }))
+    if (carves.length === 0) {
+      planRooms.push(planRoom(room, rectPolygon(rect)))
+      continue
+    }
+    const placed = placeCarves(rect, carves, p)
+    if ('reject' in placed) return placed
+    planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
+    for (const { room: carve } of carves) {
+      planRooms.push(planRoom(carve, rectPolygon(placed.rects.get(carve.id)!.rect)))
+      // Every carve opens into its host: the corridor strip only borders part
+      // of the hub's top edge, so corner-based "opens to corridor" from the
+      // band layout doesn't transfer.
+      connections.push({ from: carve.id, to: room.id })
+    }
+  }
+
+  // --- corridor & connections ---
+  const corridorId = corridorRoom?.id ?? 'corridor-auto'
   if (corridorNeeded) {
-    const corridorRatio = (corridorD * W) / (W * D)
-    penalty += Math.max(0, corridorRatio - 0.15) * 120
+    planRooms.push({
+      id: corridorId,
+      name: corridorRoom?.name ?? '走廊',
+      type: 'hallway',
+      polygon: rectPolygon({ x0: stackW, z0: hubD, x1: W, z1: D }),
+      requiresExteriorWindow: false,
+    })
+    notes.push(corridorRoom
+      ? `「${corridorRoom.name}」作为纵向走廊，面积由布局决定`
+      : '自动添加纵向走廊作为动线（基础设施）')
+    connections.push({ from: hub.id, to: corridorId })
+    for (const room of stacked) connections.push({ from: room.id, to: corridorId })
+  } else {
+    if (corridorRoom) {
+      return {
+        reject: '户型无需走廊，但 Intent 中的走廊房间未能布置',
+        l10n: { id: 'planCorridorUnplaceable', params: {} },
+      }
+    }
+    for (const room of stacked) connections.push({ from: room.id, to: hub.id })
   }
+
+  // --- entry room (same priority as band: 玄关 > 走廊 > 枢纽) ---
+  const footprintSize = { width: W, depth: D }
+  const canHostEntryDoor = (roomId: string): boolean => {
+    const polygon = planRooms.find(room => room.id === roomId)?.polygon
+    return polygon !== undefined && longestExteriorEdge(polygon, footprintSize) >= p.minDoorEdgeM
+  }
+  const entryCandidates = [
+    others.find(r => r.type === 'entry')?.id,
+    corridorNeeded ? corridorId : undefined,
+    hub.id,
+  ].filter((id): id is string => Boolean(id))
+  const entryRoomId = entryCandidates.find(canHostEntryDoor) ?? hub.id
+
+  const plan: LayoutPlan = {
+    footprint: { width: W, depth: D },
+    entry: { roomId: entryRoomId },
+    rooms: planRooms,
+    connections: dedupeConnections(connections),
+  }
+  const corridorArea = corridorNeeded ? p.corridorWidthM * (D - hubD) : 0
+  const penalty = scoreCandidate({
+    footprintW: W,
+    footprintD: D,
+    roomAspects: [hub, ...stacked].map(room => aspectOf(rectById.get(room.id)!)),
+    corridorRatio: corridorArea / (W * D),
+  }, s)
+  return { plan, penalty, notes }
+}
+
+// --- 田の字 layout (S4) -------------------------------------------------------
+// The dominant Japanese apartment plan: 玄関 into a central vertical corridor,
+// wing rooms on both sides, LDK full-width at the far end (windows on three
+// sides). A PREFERENCE topology — its candidates compete with the band ones
+// on the shared scorer.
+//
+//   z=D ┌─────────────────────────┐
+//       │        LDK (hub)        │
+//       ├────────┬─────┬──────────┤
+//       │ wing L │ 廊  │ wing R   │  cells stacked per side, service low
+//       │ wing L2│ 下  │ wing R2  │
+//       ├────────┤     ├──────────┤
+//   z=0 └────────┴玄関─┴──────────┘  entry door at the corridor's street end
+function tryTanojiLayout(
+  intent: LayoutIntent,
+  rooms: NormRoom[],
+  hub: NormRoom,
+  W: number,
+  p: PartitionParams,
+  s: ScoringParams,
+): Attempt {
+  const others = rooms.filter(r => r.id !== hub.id)
+  const corridorRoom = others.find(r => r.type === 'hallway') ?? null
+  const entryRoom = others.find(r => r.type === 'entry') ?? null
+  const sideRooms = others.filter(r => r.id !== corridorRoom?.id && r.id !== entryRoom?.id)
+  if (sideRooms.length < 2) {
+    return { reject: '田の字拓扑需要至少两间侧翼房间', l10n: { id: 'planTanojiTooFewRooms', params: {} } }
+  }
+  const corrW = p.corridorWidthM
+  const usable = round2(W - corrW)
+  if (usable < 2 * p.minRoomWidthDefaultM) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
+  }
+
+  // Greedy area balance into the two wings (largest first, lighter wing).
+  const sorted = [...sideRooms].sort((a, b) => b.area - a.area)
+  const wings: [NormRoom[], NormRoom[]] = [[], []]
+  const wingAreas = [0, 0]
+  for (const room of sorted) {
+    const target = wingAreas[0]! <= wingAreas[1]! ? 0 : 1
+    wings[target]!.push(room)
+    wingAreas[target]! += room.area
+  }
+  const sidesSum = wingAreas[0]! + wingAreas[1]!
+
+  // Total = scale·hub (full-width top) + full-width wing band below it, whose
+  // depth is set by the scaled wing areas over the usable (non-corridor)
+  // width. The entry cell lives inside the corridor column.
+  const scale = intent.targetTotalAreaSqm / (hub.area + (sidesSum * W) / usable)
+  if (scale < 0.7 || scale > 1.6) {
+    return {
+      reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）`,
+      l10n: { id: 'planAreaScaleMismatch', params: { scalePercent: Math.round(scale * 100) } },
+    }
+  }
+  const sideD = round2((scale * sidesSum) / usable)
+  const hubD = round2((scale * hub.area) / W)
+  const D = round2(sideD + hubD)
+  if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspect) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
+  }
+  const entryD = entryRoom ? round2((scale * entryRoom.area) / corrW) : 0
+  if (entryRoom && entryD < 0.9) {
+    return { reject: '玄关占用后中央走廊长度不足', l10n: { id: 'planTanojiCorridorTooShort', params: {} } }
+  }
+  if (sideD - entryD < 1.2) {
+    return { reject: '玄关占用后中央走廊长度不足', l10n: { id: 'planTanojiCorridorTooShort', params: {} } }
+  }
+
+  const leftW = round2((usable * wingAreas[0]!) / sidesSum)
+  const xCorr0 = leftW
+  const xCorr1 = round2(leftW + corrW)
+  const rectById = new Map<string, Rect>()
+  rectById.set(hub.id, { x0: 0, z0: sideD, x1: W, z1: D })
+  // Per wing: service rooms at the bottom (near the entry), private on top
+  // (near the hub); depths proportional, last cell pinned to sideD.
+  const wingBounds: Array<[number, number]> = [[0, xCorr0], [xCorr1, W]]
+  for (const [wingIndex, wingRooms] of wings.entries()) {
+    const [x0, x1] = wingBounds[wingIndex]!
+    const ordered = [
+      ...wingRooms.filter(r => !PRIVATE_TYPES.has(r.type)),
+      ...wingRooms.filter(r => PRIVATE_TYPES.has(r.type)),
+    ]
+    const colW = x1 - x0
+    let z = 0
+    for (let i = 0; i < ordered.length; i++) {
+      const room = ordered[i]!
+      const z1 = i === ordered.length - 1 ? sideD : round2(z + (scale * room.area) / colW)
+      rectById.set(room.id, { x0, z0: z, x1, z1 })
+      z = z1
+    }
+  }
+  if (entryRoom) rectById.set(entryRoom.id, { x0: xCorr0, z0: 0, x1: xCorr1, z1: entryD })
+
+  // Wing cells fail by being too shallow as often as too narrow — check the
+  // short side, like the narrow-lot stack. The 玄関 cell only skips the
+  // min-WIDTH check (its width IS the corridor width; a 0.9–1.2m 玄関 is
+  // standard) — its aspect ratio is still enforced below.
+  if (entryRoom && entryD / corrW > p.maxRoomAspect) {
+    return {
+      reject: `房间「${entryRoom.name}」长宽比超限`,
+      l10n: { id: 'planRoomAspectExceeded', params: { room: entryRoom.name } },
+    }
+  }
+  for (const room of [hub, ...sideRooms]) {
+    const rect = rectById.get(room.id)!
+    const minSide = Math.min(rect.x1 - rect.x0, rect.z1 - rect.z0)
+    if (minSide < minWidthFor(room.type, p)) {
+      return {
+        reject: `房间「${room.name}」按比例分宽后过窄`,
+        l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+      }
+    }
+    if (aspectOf(rect) > p.maxRoomAspect) {
+      return {
+        reject: `房间「${room.name}」长宽比超限`,
+        l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+      }
+    }
+  }
+
+  const notes: string[] = ['田の字拓扑：中央縦走廊、尽头 LDK']
+  const planRooms: LayoutPlanRoom[] = []
+  const connections: Array<{ from: string; to: string }> = []
+  for (const room of [hub, ...sideRooms, ...(entryRoom ? [entryRoom] : [])]) {
+    planRooms.push(planRoom(room, rectPolygon(rectById.get(room.id)!)))
+  }
+  const corridorId = corridorRoom?.id ?? 'corridor-auto'
+  planRooms.push({
+    id: corridorId,
+    name: corridorRoom?.name ?? '走廊',
+    type: 'hallway',
+    polygon: rectPolygon({ x0: xCorr0, z0: entryD, x1: xCorr1, z1: sideD }),
+    requiresExteriorWindow: false,
+  })
+  notes.push(corridorRoom
+    ? `「${corridorRoom.name}」作为中央走廊，面积由布局决定`
+    : '自动添加中央走廊作为动线（基础设施）')
+  connections.push({ from: hub.id, to: corridorId })
+  // The corridor column only spans z∈[entryD, sideD]; a SERVICE cell sitting
+  // beside the 玄関 (below entryD) opens into the 玄関 instead — walking
+  // through the genkan to a bathroom is normal in tight plans, but private
+  // rooms (bedroom/study) must reach the corridor proper.
+  for (const room of sideRooms) {
+    const rect = rectById.get(room.id)!
+    const corridorOverlap = Math.min(rect.z1, sideD) - Math.max(rect.z0, entryD)
+    if (corridorOverlap >= p.minDoorEdgeM) {
+      connections.push({ from: room.id, to: corridorId })
+    } else if (
+      entryRoom
+      && !PRIVATE_TYPES.has(room.type)
+      && Math.min(rect.z1, entryD) - rect.z0 >= p.minDoorEdgeM
+    ) {
+      connections.push({ from: room.id, to: entryRoom.id })
+    } else {
+      return {
+        reject: `房间「${room.name}」够不着中央走廊或玄关，无法开门`,
+        l10n: { id: 'planTanojiCellUnreachable', params: { room: room.name } },
+      }
+    }
+  }
+  if (entryRoom) connections.push({ from: entryRoom.id, to: corridorId })
+
+  const footprintSize = { width: W, depth: D }
+  const canHostEntryDoor = (roomId: string): boolean => {
+    const polygon = planRooms.find(room => room.id === roomId)?.polygon
+    return polygon !== undefined && longestExteriorEdge(polygon, footprintSize) >= p.minDoorEdgeM
+  }
+  const entryCandidates = [entryRoom?.id, corridorId, hub.id]
+    .filter((id): id is string => Boolean(id))
+  const entryRoomId = entryCandidates.find(canHostEntryDoor) ?? hub.id
+
+  const plan: LayoutPlan = {
+    footprint: { width: W, depth: D },
+    entry: { roomId: entryRoomId },
+    rooms: planRooms,
+    connections: dedupeConnections(connections),
+  }
+  const penalty = scoreCandidate({
+    footprintW: W,
+    footprintD: D,
+    roomAspects: [hub, ...sideRooms].map(room => aspectOf(rectById.get(room.id)!)),
+    corridorRatio: (corrW * (sideD - entryD)) / (W * D),
+  }, s)
+  return { plan, penalty, notes }
+}
+
+// --- L-shape layout (S5) ------------------------------------------------------
+// Two rectangular wings: the main wing (bottom, full width W×Da) holds the hub
+// at its LEFT end plus the public columns, with bathroom/storage/entry carved
+// into the hub; the side wing (top-left, Wb×Db) stacks the private rooms, with
+// its own corridor strip on the inner edge when it holds ≥2 rooms. The
+// footprint carries the true L polygon (LayoutFootprint.polygon).
+//
+//   z=D ┌────────┬─┐
+//       │ bed B2 │廊│            wing B (x∈[0,Wb])
+//       │ bed B1 │下│
+//    Da ├────────┴─┴───────────┐
+//       │ HUB(LDK) │ k │ dining│  main wing (z∈[0,Da])
+//   z=0 └──────────┴───┴───────┘
+function tryLShapeLayout(
+  intent: LayoutIntent,
+  rooms: NormRoom[],
+  hub: NormRoom,
+  W: number,
+  wingFrac: number,
+  carveSmallPublic: boolean,
+  p: PartitionParams,
+  s: ScoringParams,
+): Attempt {
+  const others = rooms.filter(r => r.id !== hub.id)
+  const corridorRoom = others.find(r => r.type === 'hallway') ?? null
+  const { carveSpecs, notes } = assignCarves(others, hub, carveSmallPublic, p)
+  notes.unshift('L 形拓扑：主翼公区 + 侧翼私区')
+  const carvedIds = new Set(carveSpecs.map(c => c.room.id))
+  const wingRooms = others.filter(r =>
+    !carvedIds.has(r.id) && r.id !== corridorRoom?.id && PRIVATE_TYPES.has(r.type))
+  if (wingRooms.length === 0) {
+    return { reject: 'L 形拓扑需要至少一间侧翼房间', l10n: { id: 'planLShapeTooFewRooms', params: {} } }
+  }
+  const mainColumns = others.filter(r =>
+    !carvedIds.has(r.id) && r.id !== corridorRoom?.id && !PRIVATE_TYPES.has(r.type))
+
+  const corridorNeeded = wingRooms.length >= 2
+  const corrW = corridorNeeded ? p.corridorWidthM : 0
+  const Wb = round2(W * wingFrac)
+  const stackWb = round2(Wb - corrW)
+  if (stackWb < p.minRoomWidthDefaultM) {
+    return { reject: 'L 形侧翼的宽度或深度不合理', l10n: { id: 'planLShapeWingInfeasible', params: {} } }
+  }
+
+  const carvesByHost = new Map<string, NormRoom[]>()
+  for (const spec of carveSpecs) {
+    const list = carvesByHost.get(spec.hostId) ?? []
+    list.push(spec.room)
+    carvesByHost.set(spec.hostId, list)
+  }
+  const colArea = (room: NormRoom) =>
+    room.area + (carvesByHost.get(room.id) ?? []).reduce((sum, r) => sum + r.area, 0)
+  const mainSum = colArea(hub) + mainColumns.reduce((sum, r) => sum + colArea(r), 0)
+  const wingSum = wingRooms.reduce((sum, r) => sum + colArea(r), 0)
+
+  // target = scale·(main + wing) + corridor strip (corrW × Db, Db from the
+  // scaled wing areas over the stack width).
+  const scale = intent.targetTotalAreaSqm
+    / (mainSum + wingSum * (1 + (corridorNeeded ? corrW / stackWb : 0)))
+  if (scale < 0.7 || scale > 1.6) {
+    return {
+      reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）`,
+      l10n: { id: 'planAreaScaleMismatch', params: { scalePercent: Math.round(scale * 100) } },
+    }
+  }
+  const Da = round2((scale * mainSum) / W)
+  const Db = round2((scale * wingSum) / stackWb)
+  const D = round2(Da + Db)
+  if (Da < 1.8 || Db < 1.5) {
+    return { reject: 'L 形侧翼的宽度或深度不合理', l10n: { id: 'planLShapeWingInfeasible', params: {} } }
+  }
+  if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspect) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
+  }
+
+  // Main wing: hub leftmost (the side wing sits above it), publics rightward.
+  const rectById = new Map<string, Rect>()
+  const mainRects = columnRects(
+    [hub, ...mainColumns].map(room => ({ area: colArea(room) })),
+    { x0: 0, z0: 0, x1: W, z1: Da },
+  )
+  ;[hub, ...mainColumns].forEach((room, i) => rectById.set(room.id, mainRects[i]!))
+  const hubRect = rectById.get(hub.id)!
+  // The wing (incl. its corridor strip) must sit fully above the hub so the
+  // corridor's bottom edge opens into it.
+  if (hubRect.x1 - hubRect.x0 < Wb) {
+    return { reject: 'L 形侧翼的宽度或深度不合理', l10n: { id: 'planLShapeWingInfeasible', params: {} } }
+  }
+  // Wing stack: private rooms bottom-up, last pinned to D.
+  let z = Da
+  for (let i = 0; i < wingRooms.length; i++) {
+    const room = wingRooms[i]!
+    const z1 = i === wingRooms.length - 1 ? D : round2(z + (scale * colArea(room)) / stackWb)
+    rectById.set(room.id, { x0: 0, z0: z, x1: stackWb, z1 })
+    z = z1
+  }
+
+  for (const room of [hub, ...mainColumns, ...wingRooms]) {
+    const rect = rectById.get(room.id)!
+    const minSide = Math.min(rect.x1 - rect.x0, rect.z1 - rect.z0)
+    if (minSide < minWidthFor(room.type, p)) {
+      return {
+        reject: `房间「${room.name}」按比例分宽后过窄`,
+        l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+      }
+    }
+    if (aspectOf(rect) > p.maxRoomAspect) {
+      return {
+        reject: `房间「${room.name}」长宽比超限`,
+        l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+      }
+    }
+  }
+
+  // --- carve placement & polygon assembly ---
+  const planRooms: LayoutPlanRoom[] = []
+  const connections: Array<{ from: string; to: string }> = []
+  for (const room of [hub, ...mainColumns, ...wingRooms]) {
+    const rect = rectById.get(room.id)!
+    const carves = (carvesByHost.get(room.id) ?? []).map(r => ({ room: r, area: scale * r.area }))
+    if (carves.length === 0) {
+      planRooms.push(planRoom(room, rectPolygon(rect)))
+      continue
+    }
+    const placed = placeCarves(rect, carves, p)
+    if ('reject' in placed) return placed
+    planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
+    for (const { room: carve } of carves) {
+      planRooms.push(planRoom(carve, rectPolygon(placed.rects.get(carve.id)!.rect)))
+      connections.push({ from: carve.id, to: room.id })
+    }
+  }
+
+  // Main-wing publics chain toward the hub (leftward neighbor).
+  const mainOrder = [hub, ...mainColumns]
+  for (let i = 1; i < mainOrder.length; i++) {
+    connections.push({ from: mainOrder[i]!.id, to: mainOrder[i - 1]!.id })
+  }
+
+  const corridorId = corridorRoom?.id ?? 'corridor-auto'
+  if (corridorNeeded) {
+    planRooms.push({
+      id: corridorId,
+      name: corridorRoom?.name ?? '走廊',
+      type: 'hallway',
+      polygon: rectPolygon({ x0: stackWb, z0: Da, x1: Wb, z1: D }),
+      requiresExteriorWindow: false,
+    })
+    notes.push(corridorRoom
+      ? `「${corridorRoom.name}」作为侧翼走廊，面积由布局决定`
+      : '自动添加侧翼走廊作为动线（基础设施）')
+    connections.push({ from: hub.id, to: corridorId })
+    for (const room of wingRooms) connections.push({ from: room.id, to: corridorId })
+  } else {
+    if (corridorRoom) {
+      return {
+        reject: '户型无需走廊，但 Intent 中的走廊房间未能布置',
+        l10n: { id: 'planCorridorUnplaceable', params: {} },
+      }
+    }
+    // Single wing room opens straight into the hub across the junction edge.
+    connections.push({ from: wingRooms[0]!.id, to: hub.id })
+  }
+
+  const footprint = {
+    width: W,
+    depth: D,
+    polygon: [[0, 0], [W, 0], [W, Da], [Wb, Da], [Wb, D], [0, D]] as Array<[number, number]>,
+  }
+  const canHostEntryDoor = (roomId: string): boolean => {
+    const polygon = planRooms.find(room => room.id === roomId)?.polygon
+    return polygon !== undefined && longestExteriorEdge(polygon, footprint) >= p.minDoorEdgeM
+  }
+  const entryCandidates = [
+    others.find(r => r.type === 'entry')?.id,
+    corridorNeeded ? corridorId : undefined,
+    hub.id,
+  ].filter((id): id is string => Boolean(id))
+  const entryRoomId = entryCandidates.find(canHostEntryDoor) ?? hub.id
+
+  const plan: LayoutPlan = {
+    footprint,
+    entry: { roomId: entryRoomId },
+    rooms: planRooms,
+    connections: dedupeConnections(connections),
+  }
+  const lArea = W * Da + Wb * Db
+  const penalty = scoreCandidate({
+    footprintW: W,
+    footprintD: D,
+    roomAspects: [hub, ...mainColumns, ...wingRooms].map(room => aspectOf(rectById.get(room.id)!)),
+    corridorRatio: corridorNeeded ? (corrW * Db) / lArea : 0,
+  }, s)
   return { plan, penalty, notes }
 }
 
@@ -580,13 +1291,18 @@ function tryCorridorHubLayout(
   intent: LayoutIntent,
   rooms: NormRoom[],
   W: number,
+  p: PartitionParams,
+  s: ScoringParams,
 ): Attempt {
   const notes: string[] = ['户型无公共房型，自动添加走廊作为动线枢纽（基础设施）']
-  const corridorArea = CORRIDOR_WIDTH_M * W
+  const corridorArea = p.corridorWidthM * W
   const roomAreaSum = rooms.reduce((sum, r) => sum + r.area, 0)
   const scale = (intent.targetTotalAreaSqm - corridorArea) / roomAreaSum
   if (scale < 0.7 || scale > 1.6) {
-    return { reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）` }
+    return {
+      reject: `总面积与房间面积之和不匹配（需整体缩放到 ${Math.round(scale * 100)}%）`,
+      l10n: { id: 'planAreaScaleMismatch', params: { scalePercent: Math.round(scale * 100) } },
+    }
   }
 
   // Greedy balanced split into the two bands (largest first, lighter band).
@@ -601,10 +1317,10 @@ function tryCorridorHubLayout(
 
   const dLower = round2(bandAreas[0]! / W)
   const dUpper = round2(bandAreas[1]! / W)
-  const zUpperBottom = round2(dLower + CORRIDOR_WIDTH_M)
+  const zUpperBottom = round2(dLower + p.corridorWidthM)
   const D = round2(zUpperBottom + dUpper)
-  if (Math.max(W, D) / Math.min(W, D) > MAX_FOOTPRINT_ASPECT) {
-    return { reject: '外轮廓过于狭长' }
+  if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspect) {
+    return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
   }
 
   const planRooms: LayoutPlanRoom[] = []
@@ -618,11 +1334,17 @@ function tryCorridorHubLayout(
     const rects = columnRects(bandRooms.map(r => ({ area: r.area * scale })), bandRects[bandIndex]!)
     for (const [i, room] of bandRooms.entries()) {
       const rect = rects[i]!
-      if (rect.x1 - rect.x0 < minWidthFor(room.type)) {
-        return { reject: `房间「${room.name}」按比例分宽后过窄` }
+      if (rect.x1 - rect.x0 < minWidthFor(room.type, p)) {
+        return {
+          reject: `房间「${room.name}」按比例分宽后过窄`,
+          l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+        }
       }
-      if (aspectOf(rect) > MAX_ROOM_ASPECT) {
-        return { reject: `房间「${room.name}」长宽比超限` }
+      if (aspectOf(rect) > p.maxRoomAspect) {
+        return {
+          reject: `房间「${room.name}」长宽比超限`,
+          l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+        }
       }
       planRooms.push(planRoom(room, rectPolygon(rect)))
       connections.push({ from: room.id, to: 'corridor-auto' })
@@ -642,9 +1364,12 @@ function tryCorridorHubLayout(
     rooms: planRooms,
     connections: dedupeConnections(connections),
   }
-  const corridorRatio = corridorArea / (W * D)
-  const footprintAspect = Math.max(W, D) / Math.min(W, D)
-  const penalty = Math.abs(footprintAspect - 1.35) * 6 + Math.max(0, corridorRatio - 0.15) * 120
+  const penalty = scoreCandidate({
+    footprintW: W,
+    footprintD: D,
+    roomAspects: [],
+    corridorRatio: corridorArea / (W * D),
+  }, s)
   return { plan, penalty, notes }
 }
 

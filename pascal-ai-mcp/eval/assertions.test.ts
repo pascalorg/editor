@@ -126,6 +126,20 @@ describe('assertAllRoomsReachable', () => {
   })
 })
 
+describe('assertAdjacency merged open space', () => {
+  test('connected passes when one zone matches both types (case-08 客厅厨房一体)', () => {
+    const zones = [zone('lk', '客厅厨房一体', 0, 0, 6, 4), zone('bed', '卧室1', 6, 0, 10, 4)]
+    const r = assertAdjacency(zones, [], { a: '客厅', b: '厨房', relation: 'connected' })
+    expect(r.status).toBe('pass')
+    expect(r.actual).toContain('合并')
+  })
+  test('ensuite is NOT satisfied by a merged zone', () => {
+    const zones = [zone('mixed', '主卧卫生间', 0, 0, 4, 3)]
+    const r = assertAdjacency(zones, [], { a: '卧室', b: '卫生间', relation: 'ensuite' })
+    expect(r.status).not.toBe('pass')
+  })
+})
+
 describe('assertAdjacency ensuite', () => {
   // bedroom [0,4]x[0,3], bath [4,6]x[0,3], living [6,10]x[0,3]
   const zones = [zone('bed', '主卧', 0, 0, 4, 3), zone('bath', '卫生间', 4, 0, 6, 3), zone('liv', '客厅', 6, 0, 10, 3)]

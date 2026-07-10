@@ -3,6 +3,8 @@ import { evaluateCompletionGates, type GateFailure, type GateReport, type GateWa
 import type { AppConfig } from './config'
 import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
 import { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
+import { resolveNormProfile } from './norms/profile'
+import { deriveBriefFacts, deriveStrategy } from './strategy'
 import {
   classifyRoomTypeByName,
   ROOM_NAME_PATTERNS,
@@ -11,7 +13,7 @@ import {
 } from './lang/room-vocab'
 import { executeFurniturePlan } from './furniture-executor'
 import { computeLayoutQuality } from './layout-metrics'
-import type { LayoutPlan, RoomType } from './layout-plan'
+import type { IssueL10n, LayoutPlan, RoomType } from './layout-plan'
 import { PascalMcpClient } from './mcp'
 import { OpenAiCompatibleClient, type RequestHooks } from './openai-compatible'
 import { buildLayoutPlan, type PlanBuildResult } from './plan-builder'
@@ -529,9 +531,13 @@ export class PascalAiAgent {
       let planned = await this.buildPlanForSession(session)
       if (!planned.ok) {
         session.phase = 'failed'
+        const { failures, failuresL10n } = planned
         const reply = t(session.language, 'planRejected', {
           rounds: planned.modelCalls,
-          list: planned.failures.map(failure => `- ${failure}`).join('\n'),
+          list: failures
+            .map((failure, index) =>
+              `- ${renderPlanFailure(failure, failuresL10n[index] ?? null, session.language ?? 'en')}`)
+            .join('\n'),
         })
         session.messages.push({ role: 'assistant', content: reply })
         return { session, reply, next: 'finish' }
@@ -1328,10 +1334,18 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
     const temperature = llmGeometry
       ? this.config.aiTemperatureGeometry
       : this.config.aiTemperatureIntent
+    const profile = resolveNormProfile(this.config.normProfile)
+    const briefSummary = session.summary || formatSummary(session.brief)
+    const targets = buildPlanTargets(session.brief)
+    // Deterministic strategy decision (LAYOUT_STRATEGY_DESIGN.md §2) —
+    // persisted on the session so modify turns and eval reports can see what
+    // was decided and why.
+    const strategy = deriveStrategy(deriveBriefFacts(briefSummary), targets, profile)
+    session.strategy = strategy
     const result = await buildLayoutPlan(
       {
-        briefSummary: session.summary || formatSummary(session.brief),
-        targets: buildPlanTargets(session.brief),
+        briefSummary,
+        targets,
       },
       async (messages, tag) => {
         this.throwIfCancelled(session.sessionId)
@@ -1342,6 +1356,8 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
       },
       {
         llmGeometry,
+        profile,
+        strategy,
         ...(priorFailures?.length ? { priorFailures } : {}),
       },
     )
@@ -2254,6 +2270,19 @@ function buildCompletionReply(args: {
     parts.push(describeFurnitureIssues(args.furnitureIssues, lang))
   }
   return `${parts.join('\n\n')}${t(lang, 'remainingIssuesHint', {})}${generalNote}`
+}
+
+// Plan-stage failures (partitioner/validator, via PlanBuildFailure) carry an
+// aligned l10n ref; re-render per language, zh/无模板 falls back to the
+// canonical zh text.
+function renderPlanFailure(message: string, l10n: IssueL10n | null, lang: Lang): string {
+  if (lang === 'zh' || !l10n) return message
+  try {
+    const render = issueText as (l: Lang, id: string, params: unknown) => string
+    return render(lang, l10n.id, l10n.params)
+  } catch {
+    return message
+  }
 }
 
 // Gate failures carry {id, params}; re-render in the reply language, falling

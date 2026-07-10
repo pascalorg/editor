@@ -11,10 +11,10 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { LayoutIntent, LayoutPlan } from '../src/layout-plan'
 import { longestSharedEdge, polygonArea, polygonBounds } from '../src/layout-plan'
-import { partitionLayout } from '../src/layout-partitioner'
+import { partitionLayout, type PartitionStrategyHint } from '../src/layout-partitioner'
 import { validateLayoutPlan } from '../src/plan-validator'
 
-const INTENTS: Array<{ slug: string; title: string; intent: LayoutIntent }> = [
+const INTENTS: Array<{ slug: string; title: string; intent: LayoutIntent; strategy?: PartitionStrategyHint }> = [
   {
     slug: '01-single-room',
     title: '单间 20㎡',
@@ -91,6 +91,52 @@ const INTENTS: Array<{ slug: string; title: string; intent: LayoutIntent }> = [
       ],
     },
   },
+  {
+    slug: '07-narrow-lot',
+    title: '狭长地块两居 5×18m（case-06）',
+    intent: {
+      targetTotalAreaSqm: 90,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 26 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 16 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 8 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+      ],
+    },
+    strategy: { typology: 'narrow_lot', footprintHint: { widthM: 5, depthM: 18 } },
+  },
+  {
+    slug: '08-tanoji',
+    title: '田の字 2LDK 62㎡',
+    intent: {
+      targetTotalAreaSqm: 62,
+      rooms: [
+        { id: 'ldk-1', name: 'LDK', type: 'living_kitchen', targetAreaSqm: 26 },
+        { id: 'bedroom-1', name: '洋室1', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'bedroom-2', name: '洋室2', type: 'bedroom', targetAreaSqm: 10 },
+        { id: 'bath-1', name: '浴室', type: 'bathroom', targetAreaSqm: 4 },
+        { id: 'entry-1', name: '玄関', type: 'entry', targetAreaSqm: 2.5 },
+      ],
+    },
+    strategy: { typology: 'tanoji' },
+  },
+  {
+    slug: '09-l-shape',
+    title: 'L 形三居 95㎡',
+    intent: {
+      targetTotalAreaSqm: 95,
+      rooms: [
+        { id: 'ldk-1', name: 'LDK', type: 'living_kitchen', targetAreaSqm: 30 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 15 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'bedroom-3', name: '客卧', type: 'bedroom', targetAreaSqm: 10 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+        { id: 'storage-1', name: '储物间', type: 'storage', targetAreaSqm: 3 },
+      ],
+    },
+    strategy: { typology: 'l_shape' },
+  },
 ]
 
 const FILL: Record<string, string> = {
@@ -161,8 +207,8 @@ function renderSvg(title: string, plan: LayoutPlan): string {
 const outDir = process.argv[2] ?? join(import.meta.dir, '..', 'layout-previews')
 mkdirSync(outDir, { recursive: true })
 
-for (const { slug, title, intent } of INTENTS) {
-  const result = partitionLayout(intent)
+for (const { slug, title, intent, strategy } of INTENTS) {
+  const result = partitionLayout(intent, undefined, strategy)
   console.log(`\n=== ${title} ===`)
   if (!result.ok) {
     console.log(`✗ 分区失败：${result.reason}`)

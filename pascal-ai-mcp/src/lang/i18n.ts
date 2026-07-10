@@ -414,6 +414,139 @@ export const ISSUE = {
     p => `寝室「${p.room}」に必須の家具がありません：${p.label}`,
     p => `Bedroom "${p.room}" is missing required furniture: ${p.label}`,
   ),
+  // --- plan-stage failures (partitioner rejects / validator fatals) --------
+  // zh canonical text lives at the producer (correction prompts stay zh);
+  // these templates re-render the same facts for the planRejected reply.
+  planTotalAreaInvalid: def<Record<string, never>>(
+    () => '无法分区：targetTotalAreaSqm 必须为正数',
+    () => '間取りを分割できません：targetTotalAreaSqm は正の数である必要があります',
+    () => 'Cannot partition the layout: targetTotalAreaSqm must be a positive number',
+  ),
+  planRoomsEmpty: def<Record<string, never>>(
+    () => '无法分区：房间清单为空',
+    () => '間取りを分割できません：部屋リストが空です',
+    () => 'Cannot partition the layout: the room list is empty',
+  ),
+  planDuplicateRoomIds: def<Record<string, never>>(
+    () => '无法分区：房间清单中存在重复 id',
+    () => '間取りを分割できません：部屋リストに重複した id があります',
+    () => 'Cannot partition the layout: duplicate room ids in the room list',
+  ),
+  planPartitionInfeasible: def<{ totalArea: number }>(
+    p => `在 ${p.totalArea}㎡ 内找不到满足最小宽度/长宽比约束的布局，主要障碍如下。建议：增大总面积、减少房间数量，或调低个别房间的目标面积`,
+    p => `${p.totalArea}㎡ の中で最小幅・縦横比の制約を満たす間取りが見つかりませんでした。主な障害は以下のとおりです。総面積を増やす、部屋数を減らす、または一部の部屋の目標面積を下げることをご検討ください`,
+    p => `No layout satisfying the minimum-width/aspect-ratio constraints fits in ${p.totalArea}㎡; the main obstacles are listed below. Consider increasing the total area, reducing the room count, or lowering some target areas`,
+  ),
+  planCarveHostTooShallow: def<{ room: string }>(
+    p => `房间「${p.room}」无法嵌入宿主（宿主进深不足）`,
+    p => `部屋「${p.room}」を組み込めません（受け入れ側の奥行きが不足）`,
+    p => `Room "${p.room}" cannot be embedded — the host room is not deep enough`,
+  ),
+  planCarveDepthUnreasonable: def<{ room: string; area: number }>(
+    p => `房间「${p.room}」按面积 ${p.area}㎡ 嵌入宿主后进深不合理`,
+    p => `部屋「${p.room}」を面積 ${p.area}㎡ で組み込むと奥行きが不適切になります`,
+    p => `Embedding room "${p.room}" at ${p.area}㎡ gives it an unreasonable depth`,
+  ),
+  planCarveHostWidthInsufficient: def<{ room: string }>(
+    p => `房间「${p.room}」嵌入后宿主剩余宽度不足`,
+    p => `部屋「${p.room}」を組み込むと、受け入れ側の残り幅が不足します`,
+    p => `Embedding room "${p.room}" leaves the host room too narrow`,
+  ),
+  planCarveNoCorner: def<{ room: string }>(
+    p => `房间「${p.room}」在宿主的四个角都放不下`,
+    p => `部屋「${p.room}」は受け入れ側のどの角にも収まりません`,
+    p => `Room "${p.room}" does not fit in any corner of its host room`,
+  ),
+  planAreaScaleMismatch: def<{ scalePercent: number }>(
+    p => `总面积与房间面积之和不匹配（需整体缩放到 ${p.scalePercent}%）`,
+    p => `総面積と各部屋の面積の合計が一致しません（全体を ${p.scalePercent}% に縮尺する必要があります）`,
+    p => `The total area does not match the sum of room areas (would require scaling everything to ${p.scalePercent}%)`,
+  ),
+  planFootprintTooSlender: def<Record<string, never>>(
+    () => '外轮廓过于狭长',
+    () => '外形が細長すぎます',
+    () => 'The footprint is too elongated',
+  ),
+  planNarrowLotWidthInsufficient: def<Record<string, never>>(
+    () => '狭长地块扣除走廊后房间宽度不足',
+    () => '細長い敷地で廊下を除くと部屋の幅が不足します',
+    () => 'On the narrow lot, rooms become too narrow once the corridor is deducted',
+  ),
+  planTanojiTooFewRooms: def<Record<string, never>>(
+    () => '田の字拓扑需要至少两间侧翼房间',
+    () => '田の字プランには側翼の部屋が最低 2 室必要です',
+    () => 'A 田の字 (grid) layout needs at least two wing rooms',
+  ),
+  planTanojiCellUnreachable: def<{ room: string }>(
+    p => `房间「${p.room}」够不着中央走廊或玄关，无法开门`,
+    p => `部屋「${p.room}」が中央廊下にも玄関にも接しておらず、ドアを設けられません`,
+    p => `Room "${p.room}" touches neither the central corridor nor the 玄関 — no door can be placed`,
+  ),
+  planTanojiCorridorTooShort: def<Record<string, never>>(
+    () => '玄关占用后中央走廊长度不足',
+    () => '玄関を配置すると中央廊下の長さが不足します',
+    () => 'The central corridor becomes too short once the 玄関 is placed',
+  ),
+  planLShapeNeedsHub: def<Record<string, never>>(
+    () => 'L 形拓扑需要一间公共枢纽（客厅或一体客餐厨）',
+    () => 'L 字プランには共用のハブ（リビングまたは LDK）が必要です',
+    () => 'An L-shaped layout needs a public hub room (living or LDK)',
+  ),
+  planLShapeTooFewRooms: def<Record<string, never>>(
+    () => 'L 形拓扑需要至少一间侧翼房间',
+    () => 'L 字プランには側翼の部屋が最低 1 室必要です',
+    () => 'An L-shaped layout needs at least one wing room',
+  ),
+  planLShapeWingInfeasible: def<Record<string, never>>(
+    () => 'L 形侧翼的宽度或深度不合理',
+    () => 'L 字の翼部分の幅または奥行きが不適切です',
+    () => "The L-shape wing's width or depth is unreasonable",
+  ),
+  planRoomTooNarrow: def<{ room: string }>(
+    p => `房间「${p.room}」按比例分宽后过窄`,
+    p => `部屋「${p.room}」は比例配分すると幅が狭すぎます`,
+    p => `Room "${p.room}" becomes too narrow after proportional width allocation`,
+  ),
+  planRoomAspectExceeded: def<{ room: string }>(
+    p => `房间「${p.room}」长宽比超限`,
+    p => `部屋「${p.room}」の縦横比が上限を超えています`,
+    p => `Room "${p.room}" exceeds the aspect-ratio limit`,
+  ),
+  planCorridorUnplaceable: def<Record<string, never>>(
+    () => '户型无需走廊，但 Intent 中的走廊房间未能布置',
+    () => 'この間取りに廊下は不要ですが、Intent にある廊下の部屋を配置できませんでした',
+    () => 'The layout needs no corridor, but the hallway room in the intent could not be placed',
+  ),
+  planFootprintAreaDeviation: def<{ actual: string; target: number; percent: number; limit: number }>(
+    p => `footprint 面积 ${p.actual}㎡ 偏离目标 ${p.target}㎡ 达 ${p.percent}%（上限 ±${p.limit}%）`,
+    p => `外形面積 ${p.actual}㎡ が目標 ${p.target}㎡ から ${p.percent}% 乖離しています（許容 ±${p.limit}%）`,
+    p => `Footprint area ${p.actual}㎡ deviates ${p.percent}% from the ${p.target}㎡ target (limit ±${p.limit}%)`,
+  ),
+  planRoomCountMismatch: def<{ type: string; actual: number; expected: number }>(
+    p => `房型「${p.type}」数量 ${p.actual} 不等于 brief 要求的 ${p.expected}`,
+    p => `部屋タイプ「${p.type}」の数 ${p.actual} が要件の ${p.expected} と一致しません`,
+    p => `Room type "${p.type}" count ${p.actual} does not match the required ${p.expected}`,
+  ),
+  planRoomAreaOutOfBand: def<{ room: string; area: string; min: number; max: number }>(
+    p => `房间「${p.room}」面积 ${p.area}㎡ 超出该房型合理区间 ${p.min}–${p.max}㎡`,
+    p => `部屋「${p.room}」の面積 ${p.area}㎡ が、この部屋タイプの妥当な範囲 ${p.min}–${p.max}㎡ を外れています`,
+    p => `Room "${p.room}" at ${p.area}㎡ is outside the reasonable range ${p.min}–${p.max}㎡ for its type`,
+  ),
+  planRoomTooSlender: def<{ room: string; ratio: string }>(
+    p => `房间「${p.room}」长宽比约 ${p.ratio}:1，过于狭长`,
+    p => `部屋「${p.room}」の縦横比は約 ${p.ratio}:1 で、細長すぎます`,
+    p => `Room "${p.room}" has an aspect ratio of ~${p.ratio}:1 — too elongated`,
+  ),
+  planCirculationShareHigh: def<{ percent: number; limit: number }>(
+    p => `纯通行空间占比 ${p.percent}% 超过上限 ${p.limit}%`,
+    p => `通行専用スペースの割合 ${p.percent}% が上限 ${p.limit}% を超えています`,
+    p => `Pure circulation space at ${p.percent}% exceeds the ${p.limit}% limit`,
+  ),
+  planWindowRoomNoExterior: def<{ room: string; min: number }>(
+    p => `房间「${p.room}」需要外窗，但没有 ≥${p.min}m 的外墙边`,
+    p => `部屋「${p.room}」には外窓が必要ですが、${p.min}m 以上の外壁がありません`,
+    p => `Room "${p.room}" requires an exterior window but has no exterior wall segment ≥${p.min}m`,
+  ),
   totalAreaOff: def<{ target: number; actual: number; deviation: number; tolerance: number }>(
     p => `总面积不符：需求约 ${p.target}㎡，当前所有房间实际覆盖约 ${p.actual}㎡（偏差 ${p.deviation}%，允许 ±${p.tolerance}%）。请整体调整建筑外轮廓和房间划分来贴近目标总面积，不要只微调单个房间`,
     p => `延床面積が要件と一致しません：要件は約 ${p.target}㎡、現在は約 ${p.actual}㎡（偏差 ${p.deviation}%、許容 ±${p.tolerance}%）。個々の部屋の微調整ではなく、外形と間取り全体を調整してください`,

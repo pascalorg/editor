@@ -18,12 +18,15 @@
 import {
   parseLayoutIntent,
   ROOM_TYPES,
+  type IssueL10n,
   type LayoutIntent,
   type LayoutPlan,
   type RoomType,
 } from './layout-plan'
 import { partitionLayout } from './layout-partitioner'
+import { DEFAULT_NORM_PROFILE, type NormProfile } from './norms/profile'
 import { validateLayoutPlan, type PlanTargets, type PlanValidation } from './plan-validator'
+import { applyStrategy, strategyPromptLines, type StrategyDecision } from './strategy'
 import type { ChatMessage } from './types'
 
 // One plain-text completion (no tools). The agent wires this to its model
@@ -38,6 +41,11 @@ export type PlanBuildOptions = {
   // Rebuild path (§5 失败分流): acceptance failures from the previous build,
   // quoted into the FIRST prompt so the replan avoids them from round one.
   priorFailures?: string[]
+  // Market/regulation parameters for the partitioner (NORMS_PROFILE_DESIGN.md).
+  profile?: NormProfile
+  // Strategy decision (LAYOUT_STRATEGY_DESIGN.md): injected into the Intent
+  // prompt and enforced on the parsed intent before partitioning.
+  strategy?: StrategyDecision
 }
 
 export type PlanBuildSuccess = {
@@ -51,7 +59,11 @@ export type PlanBuildSuccess = {
 export type PlanBuildFailure = {
   ok: false
   // Last round's blocking findings, for the failure reply / eval report.
+  // zh canonical (correction prompts quote these verbatim).
   failures: string[]
+  // Aligned with `failures`: template refs so the planRejected reply can
+  // re-render each line in the user's language; null = zh passthrough.
+  failuresL10n: Array<IssueL10n | null>
   modelCalls: number
 }
 
@@ -122,12 +134,19 @@ export function parseLayoutPlanJson(raw: string): { plan: LayoutPlan | null; err
   }
   const value = data as Record<string, unknown>
   const errors: string[] = []
-  const footprint = value.footprint as { width?: unknown; depth?: unknown } | undefined
+  const footprint = value.footprint as { width?: unknown; depth?: unknown; polygon?: unknown } | undefined
   const width = typeof footprint?.width === 'number' ? footprint.width : undefined
   const depth = typeof footprint?.depth === 'number' ? footprint.depth : undefined
   if (width === undefined || depth === undefined || width <= 0 || depth <= 0) {
     errors.push('footprint.width/depth 缺失或不是正数')
   }
+  // Optional non-rectangular outline (S5) — keep it, or the validator loses
+  // the very shape it's supposed to check against.
+  const footprintPolygon = Array.isArray(footprint?.polygon)
+    ? footprint.polygon.filter((point): point is [number, number] =>
+        Array.isArray(point) && point.length === 2
+        && typeof point[0] === 'number' && typeof point[1] === 'number')
+    : []
   const entryRoomId = (value.entry as { roomId?: unknown } | undefined)?.roomId
   if (typeof entryRoomId !== 'string' || !entryRoomId) errors.push('entry.roomId 缺失')
   const roomsRaw = Array.isArray(value.rooms) ? value.rooms : []
@@ -166,7 +185,11 @@ export function parseLayoutPlanJson(raw: string): { plan: LayoutPlan | null; err
   if (errors.length > 0 || rooms.length === 0) return { plan: null, errors }
   return {
     plan: {
-      footprint: { width: width!, depth: depth! },
+      footprint: {
+        width: width!,
+        depth: depth!,
+        ...(footprintPolygon.length >= 4 ? { polygon: footprintPolygon } : {}),
+      },
       entry: { roomId: entryRoomId as string },
       rooms,
       connections,
@@ -186,6 +209,7 @@ export async function buildLayoutPlan(
 ): Promise<PlanBuildResult> {
   const maxRounds = options.maxRounds ?? DEFAULT_MAX_ROUNDS
   const llmGeometry = options.llmGeometry === true
+  const profile = options.profile ?? DEFAULT_NORM_PROFILE
   const messages: ChatMessage[] = [
     { role: 'system', content: llmGeometry ? PLAN_SYSTEM_PROMPT : INTENT_SYSTEM_PROMPT },
     {
@@ -198,6 +222,7 @@ export async function buildLayoutPlan(
         inputs.targets.requiredRooms?.length
           ? `必须包含的房型：${inputs.targets.requiredRooms.map(r => `${r.type}×${r.count}`).join('、')}`
           : undefined,
+        options.strategy && !llmGeometry ? strategyPromptLines(options.strategy) : undefined,
         options.priorFailures?.length
           ? `上一次按规划建成的场景验收失败，原因如下，这次规划必须规避：\n${options.priorFailures.map(f => `- ${f}`).join('\n')}`
           : undefined,
@@ -207,46 +232,86 @@ export async function buildLayoutPlan(
 
   let modelCalls = 0
   let lastFailures: string[] = []
+  let lastFailuresL10n: Array<IssueL10n | null> = []
   for (let round = 0; round < maxRounds; round++) {
     modelCalls++
     const reply = await complete(messages, `plan:${llmGeometry ? 'geometry' : 'intent'}:${round}`)
     messages.push({ role: 'assistant', content: reply })
 
     const attempt = llmGeometry
-      ? evaluateGeometryReply(reply, inputs.targets)
-      : evaluateIntentReply(reply, inputs.targets)
+      ? evaluateGeometryReply(reply, inputs.targets, profile)
+      : evaluateIntentReply(reply, inputs.targets, profile, options.strategy)
     if (attempt.ok) return { ...attempt.result, modelCalls }
 
     lastFailures = attempt.failures
+    lastFailuresL10n = attempt.failuresL10n
     messages.push({ role: 'user', content: correctionPrompt(attempt.failures) })
   }
-  return { ok: false, failures: lastFailures, modelCalls }
+  return { ok: false, failures: lastFailures, failuresL10n: lastFailuresL10n, modelCalls }
 }
 
 type Attempt =
   | { ok: true; result: Omit<PlanBuildSuccess, 'modelCalls'> }
-  | { ok: false; failures: string[] }
+  | { ok: false; failures: string[]; failuresL10n: Array<IssueL10n | null> }
 
-function evaluateIntentReply(reply: string, targets: PlanTargets): Attempt {
-  const { intent, errors } = parseLayoutIntent(reply)
-  if (!intent) return { ok: false, failures: errors.length > 0 ? errors : ['LayoutIntent 解析失败'] }
+const noL10n = (failures: string[]): Array<IssueL10n | null> => failures.map(() => null)
+
+function evaluateIntentReply(
+  reply: string,
+  targets: PlanTargets,
+  profile: NormProfile,
+  strategy?: StrategyDecision,
+): Attempt {
+  const parsed = parseLayoutIntent(reply)
+  const errors = parsed.errors
+  if (!parsed.intent) {
+    const failures = errors.length > 0 ? errors : ['LayoutIntent 解析失败']
+    return { ok: false, failures, failuresL10n: noL10n(failures) }
+  }
+  // Tier-1 strategy enforcement (LAYOUT_STRATEGY_DESIGN.md §4): silent
+  // deterministic corrections instead of a model correction round. The
+  // applied intent is what gets partitioned AND what the caller persists.
+  const applied = strategy ? applyStrategy(parsed.intent, strategy) : { intent: parsed.intent, notes: [] }
+  const intent = applied.intent
   // Recoverable parse defects (dropped fields, renamed ids) don't block on
   // their own — the partitioned plan is judged on its merits below.
-  const partition = partitionLayout(intent)
+  const partition = partitionLayout(intent, profile, strategy)
   if (!partition.ok) {
-    return { ok: false, failures: [...errors, `分区器无法排布该意图：${partition.reason}`] }
+    const details = partition.details ?? []
+    return {
+      ok: false,
+      failures: [
+        ...errors,
+        `分区器无法排布该意图：${partition.reason}`,
+        ...details.map(detail => detail.message),
+      ],
+      failuresL10n: [
+        ...noL10n(errors),
+        partition.l10n ?? null,
+        ...details.map(detail => detail.l10n ?? null),
+      ],
+    }
   }
-  const validation = validateLayoutPlan(partition.plan, targets)
+  const validation = validateLayoutPlan(partition.plan, targets, profile)
   if (validation.fatal.length > 0) {
-    return { ok: false, failures: [...errors, ...validation.fatal] }
+    return {
+      ok: false,
+      failures: [...errors, ...validation.fatal],
+      failuresL10n: [...noL10n(errors), ...validation.fatalL10n],
+    }
   }
-  return { ok: true, result: { ok: true, intent, plan: partition.plan, validation } }
+  const plan = applied.notes.length > 0
+    ? { ...partition.plan, notes: [...(partition.plan.notes ?? []), ...applied.notes] }
+    : partition.plan
+  return { ok: true, result: { ok: true, intent, plan, validation } }
 }
 
-function evaluateGeometryReply(reply: string, targets: PlanTargets): Attempt {
+function evaluateGeometryReply(reply: string, targets: PlanTargets, profile: NormProfile): Attempt {
   const { plan, errors } = parseLayoutPlanJson(reply)
-  if (!plan) return { ok: false, failures: errors }
-  const validation = validateLayoutPlan(plan, targets)
-  if (validation.fatal.length > 0) return { ok: false, failures: validation.fatal }
+  if (!plan) return { ok: false, failures: errors, failuresL10n: noL10n(errors) }
+  const validation = validateLayoutPlan(plan, targets, profile)
+  if (validation.fatal.length > 0) {
+    return { ok: false, failures: validation.fatal, failuresL10n: validation.fatalL10n }
+  }
   return { ok: true, result: { ok: true, intent: null, plan, validation } }
 }

@@ -44,8 +44,22 @@ export type LayoutPlanRoom = {
   requiresExteriorWindow: boolean
 }
 
+// Template id + params for re-rendering a plan-stage failure in the reply
+// language (same pattern as GateFailureL10n; ids live in src/lang/i18n.ts
+// ISSUE). The zh message stays canonical for correction prompts.
+export type IssueL10n = { id: string; params: Record<string, string | number | boolean> }
+
+// Building outline. `width`/`depth` are always the bounding box; `polygon`
+// (batch S5, §10.2) describes a non-rectangular outline — axis-aligned,
+// counter-clockwise, tiled exactly by the plan's rooms. Absent = rectangle.
+export type LayoutFootprint = {
+  width: number
+  depth: number
+  polygon?: Array<[number, number]>
+}
+
 export type LayoutPlan = {
-  footprint: { width: number; depth: number }
+  footprint: LayoutFootprint
   entry: { roomId: string }
   rooms: LayoutPlanRoom[]
   connections: Array<{ from: string; to: string; type: 'door' }>
@@ -366,7 +380,8 @@ export function sharedBoundarySegments(
   return segments
 }
 
-export function footprintBoundary(footprint: { width: number; depth: number }): Segment[] {
+export function footprintBoundary(footprint: LayoutFootprint): Segment[] {
+  if (footprint.polygon) return polygonEdges(footprint.polygon)
   const { width: w, depth: d } = footprint
   return [
     { start: [0, 0], end: [w, 0] },
@@ -376,12 +391,17 @@ export function footprintBoundary(footprint: { width: number; depth: number }): 
   ]
 }
 
+// Ground area of the outline (polygon-aware).
+export function footprintArea(footprint: LayoutFootprint): number {
+  return footprint.polygon ? polygonArea(footprint.polygon) : footprint.width * footprint.depth
+}
+
 // Longest contiguous run of a polygon edge lying on the footprint boundary —
 // the wall segment available for a window (validator check #8) or the entry
 // door (check #11).
 export function longestExteriorEdge(
   polygon: Array<[number, number]>,
-  footprint: { width: number; depth: number },
+  footprint: LayoutFootprint,
 ): number {
   let best = 0
   for (const edge of polygonEdges(polygon)) {
@@ -428,6 +448,41 @@ function segmentsProperlyIntersect(a: Segment, b: Segment): boolean {
 // for axis-aligned polygons (no cell straddles an edge), and works for any
 // footprint shape — which is why the validator can keep using it when the
 // footprint later becomes an L-shaped polygon (batch B).
+
+// Intersection area of two axis-aligned polygons, via the same
+// vertex-compressed grid (exact for axis-aligned shapes). Lets the validator
+// prove every room lies INSIDE a non-rectangular footprint — the coverage
+// check alone can't see a room sitting in the L-notch (union only grows).
+export function polygonIntersectionArea(
+  a: Array<[number, number]>,
+  b: Array<[number, number]>,
+): number {
+  const xs = new Set<number>()
+  const zs = new Set<number>()
+  for (const polygon of [a, b]) {
+    for (const [x, z] of polygon) {
+      xs.add(x)
+      zs.add(z)
+    }
+  }
+  const xList = [...xs].sort((p, q) => p - q)
+  const zList = [...zs].sort((p, q) => p - q)
+  let area = 0
+  for (let i = 0; i + 1 < xList.length; i++) {
+    const cx = (xList[i]! + xList[i + 1]!) / 2
+    const cellW = xList[i + 1]! - xList[i]!
+    if (cellW < AXIS_EPSILON) continue
+    for (let j = 0; j + 1 < zList.length; j++) {
+      const cz = (zList[j]! + zList[j + 1]!) / 2
+      const cellD = zList[j + 1]! - zList[j]!
+      if (cellD < AXIS_EPSILON) continue
+      if (pointInPolygon(cx, cz, a) && pointInPolygon(cx, cz, b)) {
+        area += cellW * cellD
+      }
+    }
+  }
+  return area
+}
 
 export type GridAnalysis = {
   unionArea: number

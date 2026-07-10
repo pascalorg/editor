@@ -132,7 +132,12 @@ export async function callWithRetry(
   return null
 }
 
-function footprintPolygon(footprint: { width: number; depth: number }): Array<[number, number]> {
+function footprintPolygon(
+  footprint: { width: number; depth: number; polygon?: Array<[number, number]> },
+): Array<[number, number]> {
+  // S5: non-rectangular outlines carry their true polygon — exterior-wall
+  // detection (windows/entry door) must follow it, not the bounding box.
+  if (footprint.polygon) return footprint.polygon
   return [[0, 0], [footprint.width, 0], [footprint.width, footprint.depth], [0, footprint.depth]]
 }
 

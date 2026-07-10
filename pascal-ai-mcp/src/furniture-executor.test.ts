@@ -155,6 +155,70 @@ describe('executeFurniturePlan', () => {
     expect(violations.filter(v => v.itemId === wardrobe.itemId)).toEqual([])
   })
 
+  // Replica of eval case-03's kitchen (3.75×2.4, door on the north wall):
+  // checklist order places the 1.55m sink first, which fragments the only
+  // wall long enough for the 2.5m stove. Hardest-first packing must place
+  // all three.
+  test('kitchen packs the 2.5m stove before sink and fridge (case-03 regression)', async () => {
+    const kitchen: FurnitureRoom = {
+      id: 'kitchen-1',
+      name: '厨房',
+      type: 'kitchen',
+      polygon: [[3.36, 0], [7.11, 0], [7.11, 2.4], [3.36, 2.4]],
+      zoneId: 'zone-kitchen',
+    }
+    const kitchenWalls = [
+      { id: 'k-south', start: [3.36, 0] as [number, number], end: [7.11, 0] as [number, number], openings: [] },
+      { id: 'k-east', start: [7.11, 0] as [number, number], end: [7.11, 2.4] as [number, number], openings: [] },
+      {
+        id: 'k-north',
+        start: [3.36, 2.4] as [number, number],
+        end: [7.11, 2.4] as [number, number],
+        openings: [{ type: 'door', position: [1.875, 1.05, 0] as [number, number, number], width: 0.9 }],
+      },
+      { id: 'k-west', start: [3.36, 2.4] as [number, number], end: [3.36, 0] as [number, number], openings: [] },
+    ]
+    const { callMcp } = makeMockMcp({
+      walls: kitchenWalls as never,
+      catalog: {
+        'kitchen sink': [{ id: 'kitchen-sink-counter', name: 'Kitchen Sink Counter', dimensions: [1.55, 1.0955, 0.6] }],
+        stove: [{ id: 'kitchen-countertop-stove-03', name: 'Kitchen Countertop Stove 03', dimensions: [2.5, 1, 0.9] }],
+        fridge: [{ id: 'fridge-compact', name: 'Compact Fridge', dimensions: [0.5048, 0.8334, 0.5223] }],
+      },
+    })
+    const report = await executeFurniturePlan({ rooms: [kitchen], levelId: 'level-1', callMcp })
+    expect(report.missing).toEqual([])
+    expect(report.placed.map(p => p.label).sort()).toEqual(['水槽柜', '灶台', '冰箱'].sort())
+    // Stove placed first — its wall claim precedes the sink's.
+    expect(report.placed[0]!.label).toBe('灶台')
+  })
+
+  // Replica of eval case-05's 小厨房 (1.89×2.27): every stove spec is wider
+  // than the longest wall — the report must name the catalog gap, not the
+  // generic "crowded room" reason.
+  test('a stove wider than every wall reports the catalog gap (case-05 diagnosis)', async () => {
+    const tinyKitchen: FurnitureRoom = {
+      id: 'kitchen-tiny',
+      name: '小厨房',
+      type: 'kitchen',
+      polygon: [[4.59, 0], [6.48, 0], [6.48, 2.27], [4.59, 2.27]],
+      zoneId: 'zone-kitchen',
+    }
+    const { callMcp } = makeMockMcp({
+      walls: [] as never,
+      catalog: {
+        'kitchen sink': [{ id: 'kitchen-sink-counter', name: 'Kitchen Sink Counter', dimensions: [1.55, 1.0955, 0.6] }],
+        stove: [{ id: 'kitchen-countertop-stove-03', name: 'Kitchen Countertop Stove 03', dimensions: [2.5, 1, 0.9] }],
+        fridge: [{ id: 'fridge-compact', name: 'Compact Fridge', dimensions: [0.5048, 0.8334, 0.5223] }],
+      },
+    })
+    const report = await executeFurniturePlan({ rooms: [tinyKitchen], levelId: 'level-1', callMcp })
+    const stove = report.missing.find(m => m.label === '灶台')
+    expect(stove?.reason).toContain('超过房间最长墙')
+    // Sink and fridge still land despite the stove failing.
+    expect(report.placed.map(p => p.label).sort()).toEqual(['水槽柜', '冰箱'].sort())
+  })
+
   test('catalog miss reports missing with a reason', async () => {
     const { callMcp } = makeMockMcp({ catalog: {} })
     const report = await executeFurniturePlan({ rooms: [bedroom], levelId: 'level-1', callMcp })

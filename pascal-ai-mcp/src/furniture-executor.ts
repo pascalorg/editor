@@ -9,8 +9,11 @@
 // room polygon, 8cm gap to other furniture, out of every door's clearance
 // rectangle. Candidates are tried smallest-footprint-first (compact variants
 // win by construction), so "换更小规格重试" is the loop's normal order, not
-// a special case. Whatever still doesn't fit lands in `missing` — reported,
-// never silently dropped.
+// a special case. Within a room, requirements are packed hardest-first
+// (largest minimal spec first): a 2.5m 灶台 must claim a long wall before the
+// sink and fridge fragment it — checklist order alone strands the stove.
+// Whatever still doesn't fit lands in `missing` — reported, never silently
+// dropped.
 // ---------------------------------------------------------------------------
 
 import { findMissingFurniture, type FurnitureRequirement } from './furniture-checklist'
@@ -321,6 +324,10 @@ export async function executeFurniturePlan(options: {
 
   for (const room of roomsBySize) {
     const requirements = findMissingFurniture(room.type, existingByRoom.get(room.id) ?? [])
+    // Resolve every requirement's candidates before placing anything, then
+    // pack hardest-first: the requirement whose SMALLEST candidate is largest
+    // has the fewest valid spots, so it picks walls first.
+    const resolved: Array<{ requirement: FurnitureRequirement; candidates: Array<{ optionLabel: string; candidate: CatalogCandidate }> }> = []
     for (const requirement of requirements) {
       let candidates = candidateCache.get(requirement.key)
       if (!candidates) {
@@ -331,6 +338,12 @@ export async function executeFurniturePlan(options: {
         missing.push({ room: room.name, label: requirement.label, reason: '目录中检索不到匹配资产' })
         continue
       }
+      resolved.push({ requirement, candidates })
+    }
+    const minFootprint = (candidates: Array<{ candidate: CatalogCandidate }>) =>
+      Math.min(...candidates.slice(0, MAX_CANDIDATES).map(({ candidate }) => candidate.dimensions[0] * candidate.dimensions[2]))
+    resolved.sort((a, b) => minFootprint(b.candidates) - minFootprint(a.candidates))
+    for (const { requirement, candidates } of resolved) {
       let done = false
       for (const { candidate } of candidates.slice(0, MAX_CANDIDATES)) {
         const spot = findWallPlacement({
@@ -374,10 +387,20 @@ export async function executeFurniturePlan(options: {
         break
       }
       if (!done) {
+        // Distinguish "the room got crowded" from "no catalog spec can ever
+        // stand in this room" — the latter is a catalog/partition problem the
+        // scan cannot solve, and the report must say so.
+        const longestEdge = Math.max(...room.polygon.map(([x, z], i) => {
+          const [nx, nz] = room.polygon[(i + 1) % room.polygon.length]!
+          return Math.hypot(nx - x, nz - z)
+        }))
+        const minWidth = Math.min(...candidates.slice(0, MAX_CANDIDATES).map(({ candidate }) => candidate.dimensions[0]))
         missing.push({
           room: room.name,
           label: requirement.label,
-          reason: '所有候选规格都放不进剩余空间（贴墙扫描无合法位置）',
+          reason: minWidth + 2 * BOUNDS_SLACK_M > longestEdge
+            ? `最小候选规格宽 ${minWidth.toFixed(2)}m，超过房间最长墙 ${longestEdge.toFixed(2)}m（目录缺更紧凑规格）`
+            : '所有候选规格都放不进剩余空间（贴墙扫描无合法位置）',
         })
       }
     }

@@ -181,3 +181,14 @@ describe('parseLayoutPlanJson', () => {
     expect(errors.length).toBeGreaterThanOrEqual(2)
   })
 })
+
+test('parseLayoutPlanJson keeps a non-rectangular footprint polygon (S5)', () => {
+  const { plan, errors } = parseLayoutPlanJson(JSON.stringify({
+    footprint: { width: 8, depth: 8, polygon: [[0, 0], [8, 0], [8, 4], [4, 4], [4, 8], [0, 8]] },
+    entry: { roomId: 'a' },
+    rooms: [{ id: 'a', name: '客厅', type: 'living', polygon: [[0, 0], [8, 0], [8, 4], [0, 4]] }],
+    connections: [],
+  }))
+  expect(errors).toEqual([])
+  expect(plan?.footprint.polygon).toHaveLength(6)
+})

@@ -40,6 +40,9 @@ export type AppConfig = {
   maxModelCallsPerSession: number
   usableConfidence: number
   partialConfidence: number
+  // Market/regulation profile id (NORMS_PROFILE_DESIGN.md §1); unknown ids
+  // resolve to the default profile.
+  normProfile: string
 }
 
 export function loadConfig(): AppConfig {
@@ -127,6 +130,7 @@ export function loadConfig(): AppConfig {
     maxModelCallsPerSession: parseIntWithDefault(process.env.AI_MAX_MODEL_CALLS_PER_SESSION, 1000),
     usableConfidence: parseBoundedFloat(process.env.AI_USABLE_CONFIDENCE, 0.8),
     partialConfidence: parseBoundedFloat(process.env.AI_PARTIAL_CONFIDENCE, 0.5),
+    normProfile: process.env.PASCAL_NORM_PROFILE?.trim() || 'default',
   }
 }
 

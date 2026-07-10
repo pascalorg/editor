@@ -1,4 +1,5 @@
 import type { LayoutIntent, LayoutPlan, RoomType } from './layout-plan'
+import type { StrategyDecision } from './strategy'
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
@@ -199,6 +200,9 @@ export type WorkflowSession = {
   // and so eval reports can compare plan vs as-built.
   layoutIntent?: LayoutIntent
   layoutPlan?: LayoutPlan
+  // Deterministic strategy decision the plan was built under
+  // (LAYOUT_STRATEGY_DESIGN.md §2) — persisted for modify turns and eval.
+  strategy?: StrategyDecision
   // Authoritative zoneId→RoomType mapping recorded when the deterministic
   // executor builds the plan's rooms. Lets the gates/diagnostics use real
   // types instead of guessing from names — which makes room names

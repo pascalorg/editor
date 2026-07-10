@@ -370,6 +370,22 @@ export function assertAdjacency(
     return { name, status: 'fail', reason: `缺少 ${spec.a} 或 ${spec.b}`, expected: spec.relation }
   }
 
+  // A single zone matching both types is a merged open space（如「客厅厨房一体」
+  // / living_kitchen，策略层 §3.3 开放式合并）— the strongest form of
+  // connection/adjacency. Not applicable to ensuite, which is about a
+  // door-graph relationship between two distinct rooms.
+  if (spec.relation !== 'ensuite') {
+    const merged = aZones.find(a => bZones.some(b => b.id === a.id))
+    if (merged) {
+      return {
+        name,
+        status: 'pass',
+        expected: spec.relation === 'adjacent' ? `${spec.a} 与 ${spec.b} 相邻` : `${spec.a} 与 ${spec.b} 有门/开口直连`,
+        actual: `「${merged.name || merged.id}」为合并开放空间`,
+      }
+    }
+  }
+
   if (spec.relation === 'adjacent') {
     // Share a boundary (wall or open), regardless of a door.
     const ok = aZones.some(a =>
