@@ -49,11 +49,18 @@ const MEASUREMENT_MODES: Array<{
 const DISPLAY_PRECISIONS: Array<{
   id: MeasurementDisplayPrecision
   label: string
+  title: string
 }> = [
-  { id: 'coarse', label: '.0' },
-  { id: 'standard', label: '.00' },
-  { id: 'fine', label: '.000' },
+  { id: 'coarse', label: '0.1', title: '1 decimal place' },
+  { id: 'standard', label: '0.01', title: '2 decimal places' },
+  { id: 'fine', label: '0.001', title: '3 decimal places' },
 ]
+
+const nextDisplayPrecision: Record<MeasurementDisplayPrecision, MeasurementDisplayPrecision> = {
+  coarse: 'standard',
+  standard: 'fine',
+  fine: 'coarse',
+}
 
 const SNAP_CONTROLS: Array<{
   id: MeasurementSnapKind
@@ -259,39 +266,43 @@ export function MeasurementHistoryPanel({
           )
         })}
       </div>
-      <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_2.25rem] gap-1 border-border/50 border-b p-2">
-        {DISPLAY_PRECISIONS.map((entry) => {
-          const active = displayPrecision === entry.id
-          return (
-            <button
-              aria-label={`${entry.id} measurement precision`}
-              className={`h-8 rounded-md font-mono text-xs transition-colors ${
-                active ? 'bg-sky-500/15 text-sky-600' : 'text-muted-foreground hover:bg-muted'
-              }`}
-              key={entry.id}
-              onClick={() => useMeasurementTool.getState().setDisplayPrecision(entry.id)}
-              title={`${entry.id} precision`}
-              type="button"
-            >
-              {entry.label}
-            </button>
-          )
-        })}
-        <button
-          aria-label="Toggle chained measurements"
-          className={`grid h-8 place-items-center rounded-md transition-colors ${
-            continuousMeasurement
-              ? 'bg-sky-500/15 text-sky-600'
-              : 'text-muted-foreground hover:bg-muted'
-          }`}
-          onClick={() =>
-            useMeasurementTool.getState().setContinuousMeasurement(!continuousMeasurement)
-          }
-          title="Chained measurements"
-          type="button"
-        >
-          <Link2 className="h-4 w-4" />
-        </button>
+      <div className="grid gap-1.5 border-border/50 border-b p-2">
+        <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+          <div className="min-w-0 font-medium text-xs">Precision</div>
+          <button
+            aria-label="Cycle measurement display precision"
+            className="h-8 min-w-20 rounded-md border border-border/60 bg-muted/40 px-3 text-center font-mono text-xs transition-colors hover:bg-muted"
+            onClick={() =>
+              useMeasurementTool
+                .getState()
+                .setDisplayPrecision(nextDisplayPrecision[displayPrecision])
+            }
+            title={DISPLAY_PRECISIONS.find((entry) => entry.id === displayPrecision)?.title}
+            type="button"
+          >
+            {DISPLAY_PRECISIONS.find((entry) => entry.id === displayPrecision)?.label}
+          </button>
+        </div>
+        <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+          <div className="min-w-0 font-medium text-xs">Chained measurements</div>
+          <button
+            aria-pressed={continuousMeasurement}
+            aria-label={`${continuousMeasurement ? 'Disable' : 'Enable'} chained measurements`}
+            className={`flex h-8 min-w-20 items-center justify-center gap-1.5 rounded-md border border-border/60 px-3 font-medium text-xs transition-colors ${
+              continuousMeasurement
+                ? 'bg-sky-500/15 text-sky-600'
+                : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+            onClick={() =>
+              useMeasurementTool.getState().setContinuousMeasurement(!continuousMeasurement)
+            }
+            title="Chained measurements"
+            type="button"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            {continuousMeasurement ? 'On' : 'Off'}
+          </button>
+        </div>
       </div>
       <div className="border-border/50 border-b p-2">
         <div className="mb-1 grid grid-cols-3 gap-1">

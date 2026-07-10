@@ -66,7 +66,6 @@ const MEASUREMENT_END_TICK = 0.28
 const MEASUREMENT_LABEL_LIFT = 0.08
 const MEASUREMENT_CURSOR_SIZE = 0.18
 const MEASUREMENT_CURSOR_WIDTH = 0.018
-const MEASUREMENT_SNAP_LABEL_LIFT = 0.42
 const MEASUREMENT_ENDPOINT_HANDLE_SIZE = 0.16
 const MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE = 0.34
 const MEASUREMENT_LABEL_COLLISION_CELL = 0.45
@@ -1100,16 +1099,9 @@ function MeasurementSnapTarget3D({ target }: { target: MeasurementSnapTarget }) 
       ) : null}
       <group position={target.point}>
         <MeasurementCursor3D kind={target.kind} point={[0, 0, 0]} />
-        <Html center distanceFactor={12} position={getMeasurementSnapLabelPosition3D()}>
-          <MeasurementValuePill draft>{target.label}</MeasurementValuePill>
-        </Html>
       </group>
     </>
   )
-}
-
-export function getMeasurementSnapLabelPosition3D(): [number, number, number] {
-  return [0, MEASUREMENT_SNAP_LABEL_LIFT, 0]
 }
 
 function MeasurementArea3D({
@@ -1466,7 +1458,6 @@ function MeasurementAngle3D({
 }
 
 export function MeasurementTool() {
-  const unit = useViewer((state) => state.unit)
   const canvas = useThree((state) => state.gl.domElement)
   const segments = useMeasurementTool((state) => state.segments)
   const areas = useMeasurementTool((state) => state.areas)

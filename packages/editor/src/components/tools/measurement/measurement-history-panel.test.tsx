@@ -21,5 +21,7 @@ describe('MeasurementHistoryPanel', () => {
     expect(markup).toContain('Reset measurement snap kinds')
     expect(markup).toContain('Endpoint snaps')
     expect(markup).toContain('Surface distance snaps')
+    expect(markup).toContain('Cycle measurement display precision')
+    expect(markup).toContain('Chained measurements')
   })
 })

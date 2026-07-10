@@ -13,7 +13,6 @@ import {
   useMeasurementTool,
 } from '../../../store/use-measurement-tool'
 import {
-  getMeasurementSnapLabelPosition3D,
   getMeasurementValuePillClassName,
   handleMeasurementGridClick3D,
   handleMeasurementGridMove3D,
@@ -391,11 +390,7 @@ describe('measurement 3D grid handlers', () => {
     expect(className).toContain('opacity-45')
   })
 
-  test('lifts 3D snap labels above the snap cursor', () => {
-    expect(getMeasurementSnapLabelPosition3D()).toEqual([0, 0.42, 0])
-  })
-
-  test('staggers overlapping 3D measurement labels', () => {
+  test('staggers overlapping 3D measurement value labels', () => {
     const layouts = staggerMeasurementLabelLayouts3D([
       {
         id: 'a',
