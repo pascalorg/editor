@@ -217,10 +217,10 @@ const MODEL_RETRY_DELAYS_MS = [1_000, 3_000]
  */
 const ModelWithRetry = ({
   node,
-  setSettled,
+  settleControl,
 }: {
   node: ItemNode
-  setSettled: (value: boolean) => void
+  settleControl: SettleControl
 }) => {
   // `failures` counts boundary catches; `epoch` bumps after each cache clear
   // to reset the boundary and re-mount the loader. The retry timer is owned by
@@ -236,9 +236,14 @@ const ModelWithRetry = ({
 
   const handleError = useCallback(() => setFailures((current) => current + 1), [])
 
+  // Un-settle ONLY when the URL actually changed. A cached model mounts in the
+  // SAME commit as this wrapper, and React runs child effects first — a blind
+  // `settle(false)` here would clobber the child's just-written settled flag
+  // and the item would stay "pending" forever (observed on the bake worker,
+  // whose shared warm HTTP cache makes most models mount synchronously).
   useEffect(() => {
-    setSettled(false)
-  }, [setSettled])
+    settleControl.unsettleForUrl(url)
+  }, [settleControl, url])
 
   useEffect(() => {
     if (failures === 0 || gaveUp) return
@@ -251,7 +256,7 @@ const ModelWithRetry = ({
     return () => clearTimeout(timer)
   }, [failures, gaveUp, url])
 
-  const markSettled = useCallback(() => setSettled(true), [setSettled])
+  const markSettled = useCallback(() => settleControl.settle(url), [settleControl, url])
 
   useEffect(() => {
     if (!gaveUp) return
@@ -271,6 +276,15 @@ const ModelWithRetry = ({
   )
 }
 
+type SettleControl = {
+  /** The model for `url` is resolved (or terminally skipped) — build work done. */
+  settle: (url: string) => void
+  /** A load for `url` is starting; drop the settled flag unless it was already
+   *  settled for this same URL (a cached model settles in the same commit,
+   *  child-effect-first — that write must win). */
+  unsettleForUrl: (url: string) => void
+}
+
 export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   const ref = useRef<Group>(null!)
 
@@ -281,10 +295,24 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
   // (and headless bakes) wait for real item content instead of exporting the
   // loading placeholder. A model swap un-settles (ModelWithRetry's mount
   // effect via its URL key) so the replacement load is awaited too.
-  const setSettled = useCallback((value: boolean) => {
-    const group = ref.current as (Group & { userData: Record<string, unknown> }) | null
-    if (group) group.userData.itemModelSettled = value
-  }, [])
+  const settleControl = useMemo<SettleControl>(
+    () => ({
+      settle: (url) => {
+        const group = ref.current as (Group & { userData: Record<string, unknown> }) | null
+        if (!group) return
+        group.userData.itemModelSettled = true
+        group.userData.itemModelSettledUrl = url
+      },
+      unsettleForUrl: (url) => {
+        const group = ref.current as (Group & { userData: Record<string, unknown> }) | null
+        if (!group) return
+        if (group.userData.itemModelSettled && group.userData.itemModelSettledUrl === url) return
+        group.userData.itemModelSettled = false
+        group.userData.itemModelSettledUrl = url
+      },
+    }),
+    [],
+  )
 
   // Merge live drag overrides so the mesh transforms in real time during a
   // drag (e.g. the in-world rotate gizmo). The handle writes the in-flight
@@ -300,8 +328,8 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     (node as ItemNode & { roomClearPreview?: unknown }).roomClearPreview === true
 
   useEffect(() => {
-    if (roomClearPreview) setSettled(true)
-  }, [roomClearPreview, setSettled])
+    if (roomClearPreview) settleControl.settle('room-clear-preview')
+  }, [roomClearPreview, settleControl])
 
   const content = (
     <group position={node.position} ref={ref} rotation={node.rotation} visible={node.visible}>
@@ -309,7 +337,11 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
         <ClearPreviewModel node={node} />
       ) : (
         <>
-          <ModelWithRetry key={node.asset.src ?? 'no-src'} node={node} setSettled={setSettled} />
+          <ModelWithRetry
+            key={node.asset.src ?? 'no-src'}
+            node={node}
+            settleControl={settleControl}
+          />
           {node.children?.map((childId) => (
             <NodeRenderer key={childId} nodeId={childId} />
           ))}
