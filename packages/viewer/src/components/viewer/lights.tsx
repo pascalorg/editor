@@ -13,6 +13,17 @@ import { PCSSShadowFilter } from '../../lib/pcss'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
+// Opt-in PCSS (`?enable=pcss`): contact-hardening penumbra, but its per-pixel
+// dither needs a TAA to resolve and ~3× the taps to smooth — too grainy/hot
+// for the interactive default. Kept wired for experiments and bake-time use.
+const PCSS_ENABLED =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('enable') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('pcss')
+
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
 // (which doubles draw calls for every shadow-casting mesh) so you can
 // isolate how much of the baseline GPU cost is shadows vs. raw geometry.
@@ -153,9 +164,7 @@ export function Lights() {
         // Resize the ortho frustum to the fitted bounds. The shadow camera is
         // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
-        if (light.shadow && (light.shadow as any).filterNode == null) {
-          // PCSS: contact-hardening penumbra instead of the renderer's
-          // uniform PCF blur. Assigned once per shadow instance.
+        if (PCSS_ENABLED && light.shadow && (light.shadow as any).filterNode == null) {
           ;(light.shadow as any).filterNode = PCSSShadowFilter
         }
         if (cam) {

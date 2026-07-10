@@ -66,6 +66,12 @@ export function inkedEdges({
   const nL = colorToDirection(normalTex.sample(uvN.sub(vec2(px.x, 0)))).normalize()
   const nU = colorToDirection(normalTex.sample(uvN.add(vec2(0, px.y)))).normalize()
   const nD = colorToDirection(normalTex.sample(uvN.sub(vec2(0, px.y)))).normalize()
+  // Ink is a near/mid-field affordance: fade it out with raw depth so the
+  // horizon (the infinite ground disc vanishing against the backdrop) and
+  // other far-field depth cliffs never draw a line across the sky junction.
+  // ~full ink below ≈150 m, none beyond ≈350 m (perspective near 0.1/far 1000).
+  const distanceFade = float(1).sub(smoothstep(float(0.9994), float(0.9998), dC))
+
   const nDiff = max(
     max(float(1).sub(nC.dot(nR)), float(1).sub(nC.dot(nL))),
     max(float(1).sub(nC.dot(nU)), float(1).sub(nC.dot(nD))),
@@ -74,6 +80,6 @@ export function inkedEdges({
 
   // TSL's typed overloads are finicky across versions; the runtime is proven in
   // the aesthetic sandbox, so cast at the mask/mix boundary.
-  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity), float(1))
+  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity).mul(distanceFade), float(1))
   return (mix as any)(sceneRgb, inkColor, edgeMask)
 }

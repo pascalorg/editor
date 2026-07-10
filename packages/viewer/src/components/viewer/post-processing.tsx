@@ -489,7 +489,10 @@ const PostProcessingPasses = ({
       // backdrop below so geometry that fades to the background colour (the
       // horizon disc) matches it exactly.
       const gradeRgb = (rgb: any) =>
-        saturation(rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18), GRADE_PARAMS.saturation)
+        saturation(
+          rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+          GRADE_PARAMS.saturation,
+        )
       if (shading === 'rendered') {
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
@@ -551,9 +554,7 @@ const PostProcessingPasses = ({
         1,
       ) as any
       const viewRay = (camProjInvUniform.current as any).mul(ndc)
-      const worldDir = (camWorldUniform.current as any)
-        .mul(vec4(viewRay.xyz, 0))
-        .xyz.normalize()
+      const worldDir = (camWorldUniform.current as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
       let bgGradient = mix(
         bgUniform.current,
         bgSkyUniform.current,
