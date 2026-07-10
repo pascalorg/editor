@@ -32,6 +32,24 @@ export function getLinearUnitLabel(unit: LinearUnit): string {
   return unit === 'imperial' ? 'ft' : 'm'
 }
 
+const SQUARE_FEET_PER_SQUARE_METER = FEET_PER_METER * FEET_PER_METER
+
+export function squareMetersToAreaUnit(squareMeters: number, unit: LinearUnit): number {
+  return unit === 'imperial' ? squareMeters * SQUARE_FEET_PER_SQUARE_METER : squareMeters
+}
+
+export function getAreaUnitLabel(unit: LinearUnit): string {
+  return unit === 'imperial' ? 'ft²' : 'm²'
+}
+
+export function formatAreaLabel(
+  squareMeters: number,
+  unit: LinearUnit,
+  fractionDigits = 1,
+): string {
+  return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(fractionDigits)}${getAreaUnitLabel(unit)}`
+}
+
 export function formatLinearMeasurement(meters: number, unit: LinearUnit): string {
   if (!Number.isFinite(meters)) return '--'
 

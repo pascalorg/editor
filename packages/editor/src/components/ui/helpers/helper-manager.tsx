@@ -162,11 +162,16 @@ export function HelperManager() {
     return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
   }
 
-  // Group-move drag: the drag resolves to the 'item' snap context (see
-  // `snapContextOf`), so surface the snapping chips — mode + grid step, with
-  // their Shift / Ctrl cycle shortcuts — for the duration.
+  // Group-move drag / pick-up: the drag resolves to the 'item' snap context
+  // (see `snapContextOf`), so surface the snapping chips — mode + grid step,
+  // with their Shift / Ctrl cycle shortcuts — plus the mid-move R/T rotate.
   if (activeHandleDrag?.label === GROUP_MOVE_DRAG_LABEL) {
-    return <ContextualHelperPanel hints={[]} snapContext={snapContext} />
+    return (
+      <ContextualHelperPanel
+        hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
+        snapContext={snapContext}
+      />
+    )
   }
 
   // Reshaping a node's geometry (endpoint / curve / polygon corner). Checked

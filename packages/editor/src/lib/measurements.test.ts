@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  formatAreaLabel,
   formatLinearMeasurement,
+  getAreaUnitLabel,
   getLinearUnitLabel,
   linearControlValueToMeters,
   linearUnitToMeters,
   metersToLinearUnit,
+  squareMetersToAreaUnit,
 } from './measurements'
 
 describe('linear measurements', () => {
@@ -71,5 +74,24 @@ describe('linear measurements', () => {
   test('returns the display label for numeric controls', () => {
     expect(getLinearUnitLabel('metric')).toBe('m')
     expect(getLinearUnitLabel('imperial')).toBe('ft')
+  })
+})
+
+describe('area measurements', () => {
+  test('converts square meters to the active area unit', () => {
+    expect(squareMetersToAreaUnit(0, 'imperial')).toBe(0)
+    expect(squareMetersToAreaUnit(12.5, 'metric')).toBe(12.5)
+    expect(squareMetersToAreaUnit(1, 'imperial')).toBeCloseTo(10.7639)
+  })
+
+  test('returns the display label for area readouts', () => {
+    expect(getAreaUnitLabel('metric')).toBe('m²')
+    expect(getAreaUnitLabel('imperial')).toBe('ft²')
+  })
+
+  test('formats an area label with value and unit', () => {
+    expect(formatAreaLabel(12.34, 'metric')).toBe('12.3m²')
+    expect(formatAreaLabel(1, 'imperial')).toBe('10.8ft²')
+    expect(formatAreaLabel(12.34, 'metric', 2)).toBe('12.34m²')
   })
 })

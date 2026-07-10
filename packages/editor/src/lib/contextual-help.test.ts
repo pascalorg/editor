@@ -58,6 +58,30 @@ describe('resolveSelectModeHelpHints', () => {
     })
   })
 
+  test('multi-selection advertises the group move + rotate gestures', () => {
+    const hints = resolveSelectModeHelpHints({
+      selectedCount: 3,
+      hasMovableSelection: true,
+      hasRotatableSelection: true,
+      commandPressed: false,
+      shiftPressed: false,
+    })
+
+    expect(hints).toEqual([
+      {
+        keys: ['Left click'],
+        label: 'Click or drag the selection to move it as one',
+      },
+      { keys: ['R / T'], label: 'Rotate the selection ±45°' },
+      {
+        keys: [['Cmd/Ctrl', 'Shift'], 'Left click'],
+        label: 'Add or remove objects from the selection',
+        active: false,
+      },
+      { keys: ['Esc'], label: 'Clear the selection (or click outside)' },
+    ])
+  })
+
   test('holding a modifier keeps the same rows and only lights the selection one', () => {
     // Guides/snapping are governed by the snapping mode (Shift toggles it),
     // so no modifier-specific "freely / with guides / bypass" variants exist.

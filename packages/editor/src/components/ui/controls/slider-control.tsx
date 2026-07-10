@@ -329,7 +329,16 @@ export function SliderControl({
               type="text"
               value={inputValue}
             />
-            {displayUnit && <span className="ml-[1px] text-muted-foreground">{displayUnit}</span>}
+            {displayUnit && (
+              <span
+                className={cn(
+                  'ml-[1px] transition-opacity duration-150',
+                  hint ? 'opacity-0' : 'text-muted-foreground/40',
+                )}
+              >
+                {displayUnit}
+              </span>
+            )}
           </>
         ) : (
           <div
