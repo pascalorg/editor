@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
+  CircleGeometry,
   Float32BufferAttribute,
   type Group,
   Path,
@@ -28,6 +29,10 @@ import { color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
+
+// The horizon disc is presentation-only — clicks must fall through to the
+// real site polygon / grid, so its raycast is a no-op.
+const noopRaycast = () => {}
 
 /**
  * Creates simple line geometry for site boundary
@@ -87,27 +92,40 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
   // keeps it tucked behind the grid/slab as before.
-  //
-  // The ground fill fades radially into the theme background toward the lot
-  // boundary so the scene reads as a deliberate presentation vignette instead
-  // of a hard-edged plate floating on the backdrop.
   const groundMaterial = useMemo(() => {
     const material = new MeshLambertNodeMaterial({ color: bgColor })
-    if (fadeBounds) {
-      const center = vec2(fadeBounds.cx, fadeBounds.cz)
-      const dist = positionWorld.xz.sub(center).length()
-      const fade = smoothstep(
-        float(fadeBounds.radius * 0.45),
-        float(fadeBounds.radius * 0.98),
-        dist,
-      )
-      material.colorNode = mix(color(bgColor), color(backgroundColor), fade)
-    }
     material.polygonOffset = true
     material.polygonOffsetFactor = 1
     material.polygonOffsetUnits = 1
     return material
+  }, [bgColor])
+
+  // Presentation horizon: a large ground disc under the lot, in the same
+  // theme ground colour, fading radially into the theme background so the
+  // scene sits on an "infinite" plane that dissolves into the sky instead of
+  // a hard-edged plate floating on the backdrop. Never pickable.
+  const horizonMaterial = useMemo(() => {
+    if (!fadeBounds) return null
+    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    const center = vec2(fadeBounds.cx, fadeBounds.cz)
+    const dist = positionWorld.xz.sub(center).length()
+    const fade = smoothstep(
+      float(fadeBounds.radius * 1.05),
+      float(fadeBounds.radius * 5),
+      dist,
+    )
+    material.colorNode = mix(color(bgColor), color(backgroundColor), fade)
+    material.polygonOffset = true
+    material.polygonOffsetFactor = 2
+    material.polygonOffsetUnits = 2
+    return material
   }, [bgColor, backgroundColor, fadeBounds])
+
+  const horizonGeometry = useMemo(() => {
+    if (!fadeBounds) return null
+    return new CircleGeometry(Math.max(fadeBounds.radius * 8, 400), 64)
+  }, [fadeBounds])
+  useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
 
   // Cache slab polygon references to keep the selector stable across unrelated store updates
   const slabPolygonsCache = useRef<[number, number][][]>([])
@@ -202,6 +220,18 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           geometry={groundGeometry}
           material={groundMaterial}
           position={[0, -0.05, 0]}
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+        />
+      )}
+
+      {/* Infinite-ground presentation disc fading into the sky at the horizon */}
+      {horizonGeometry && horizonMaterial && fadeBounds && (
+        <mesh
+          geometry={horizonGeometry}
+          material={horizonMaterial}
+          position={[fadeBounds.cx, -0.07, fadeBounds.cz]}
+          raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}
         />

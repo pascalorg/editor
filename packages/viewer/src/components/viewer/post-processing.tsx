@@ -20,6 +20,7 @@ import {
   sample,
   saturation,
   screenUV,
+  smoothstep,
   time,
   uniform,
   vec3,
@@ -45,13 +46,13 @@ export const GRADE_PARAMS = {
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
   enabled: true,
-  sliceCount: 1,
+  sliceCount: 2,
   stepCount: 6,
   radius: 1.6,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
-  aoIntensity: 1.7,
+  aoIntensity: 1.5,
   giIntensity: 1,
   useLinearThickness: false,
   useScreenSpaceSampling: true,
@@ -62,7 +63,8 @@ export const SSGI_PARAMS = {
 // time doesn't matter — the interactive editor stays on SSGI_PARAMS.
 export const SSGI_BAKE_PARAMS = {
   ...SSGI_PARAMS,
-  sliceCount: 2,
+  sliceCount: 3,
+  stepCount: 8,
 }
 
 // Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
@@ -435,13 +437,13 @@ const PostProcessingPasses = ({
           const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
-          denoisePass.radius.value = 4
+          denoisePass.radius.value = 5
           ao = (denoisePass as any).r
           // The GI bounce is composited additively, so its sampling noise reads
           // as grain on lit surfaces — denoise it like the AO.
           const giDenoise = denoise(vec4(gi, float(1)), scenePassDepth, sceneNormal, camera)
           giDenoise.index.value = 1
-          giDenoise.radius.value = 4
+          giDenoise.radius.value = 5
           gi = (giDenoise as any).rgb
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
@@ -526,9 +528,15 @@ const PostProcessingPasses = ({
         )
       }
 
-      // Backdrop: vertical sky gradient (theme zenith at the top of the screen,
-      // horizon colour at the bottom) behind the scene content.
-      const bgGradient = mix(bgSkyUniform.current, bgUniform.current, screenUV.y)
+      // Backdrop: vertical sky gradient (theme zenith at the top of the screen)
+      // compressed into the upper half so everything below mid-screen is pure
+      // horizon colour — the infinite-ground disc fades to that same colour,
+      // so the two meet seamlessly wherever the horizon lands.
+      const bgGradient = mix(
+        bgSkyUniform.current,
+        bgUniform.current,
+        smoothstep(float(0), float(0.5), screenUV.y),
+      )
       const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.

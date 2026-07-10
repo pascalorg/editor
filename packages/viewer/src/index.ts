@@ -38,7 +38,8 @@ export { GlbWalkthroughController } from './components/viewer/glb-walkthrough-co
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
-  SSGI_BAKE_PARAMS, SSGI_PARAMS,
+  SSGI_BAKE_PARAMS,
+  SSGI_PARAMS,
 } from './components/viewer/post-processing'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export { WalkthroughControls } from './components/viewer/walkthrough-controls'

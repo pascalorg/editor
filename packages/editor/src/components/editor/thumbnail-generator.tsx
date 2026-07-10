@@ -1,7 +1,12 @@
 'use client'
 
 import { emitter, sceneRegistry } from '@pascal-app/core'
-import { GRID_LAYER, SSGI_BAKE_PARAMS, snapLevelsToTruePositions, useViewer } from '@pascal-app/viewer'
+import {
+  GRID_LAYER,
+  SSGI_BAKE_PARAMS,
+  snapLevelsToTruePositions,
+  useViewer,
+} from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
