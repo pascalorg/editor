@@ -10,7 +10,13 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { isGridSnapActive, isMagneticSnapActive, useEditor } from '@pascal-app/editor'
+import {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { cabinetModuleParentFrame } from './move-frame'
 import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './run-ops'
 import { resolveCabinetModuleWallSnapLocal } from './wall-snap'
@@ -142,11 +148,30 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
         return
       }
 
-      let local = cabinetModuleParentFrame.planToLocal(run, planX, originalLocal[1], planZ)
-      if (isMagneticSnapActive()) {
+      let local = cabinetModuleParentFrame.planToLocal(
+        run,
+        planX,
+        originalLocal[1],
+        planZ,
+        useScene.getState().nodes,
+      )
+      if (isMagneticSnapActive() || isGridSnapActive()) {
         const snapFn = cabinetModuleParentFrame.magneticSnap
         if (snapFn) {
+          const preSnapLocal = local
           local = snapFn(node as AnyNode, run, local, useScene.getState().nodes)
+          if (isAlignmentGuideActive()) {
+            const guides =
+              cabinetModuleParentFrame.magneticSnapGuides?.(
+                node as AnyNode,
+                run,
+                preSnapLocal,
+                local,
+                useScene.getState().nodes,
+              ) ?? []
+            if (guides.length > 0) useAlignmentGuides.getState().set(guides)
+            else useAlignmentGuides.getState().clear()
+          }
         }
       }
       // Wall attachment snap — 2D parity with the 3D move tool's
@@ -173,6 +198,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
     commit() {
       const scene = useScene.getState()
       useLiveNodeOverrides.getState().clear(moduleId)
+      useAlignmentGuides.getState().clear()
       if (!run) {
         scene.updateNodes([{ id: moduleId, data: { position: lastLocal } }])
         return

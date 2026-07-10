@@ -18,6 +18,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { createFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
@@ -289,6 +290,21 @@ export function FloorplanRegistryActionMenu() {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
+    const hasSubtreeChildren =
+      Array.isArray((node as { children?: unknown }).children) &&
+      ((node as { children?: unknown[] }).children?.length ?? 0) > 0
+    if (hasSubtreeChildren && (node.type === 'cabinet' || node.type === 'cabinet-module')) {
+      const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+      const draft = draftId ? useScene.getState().nodes[draftId] : null
+      if (draft) {
+        setMovingNode(draft as never)
+        setMovingNodeOrigin('2d')
+        useScene.temporal.getState().resume()
+        return
+      }
+      useScene.temporal.getState().resume()
+      return
+    }
     const cloned = structuredClone(node) as AnyNode & { id?: AnyNodeId }
     delete (cloned as { id?: AnyNodeId }).id
     const prevMeta =

@@ -321,12 +321,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const [valid, setValid] = useState(true)
   const previewRotationY = useCallback(
     (rotationY = rotationRef.current) =>
-      parentFrame && frameParent ? parentFrame.parentRotationY(frameParent) + rotationY : rotationY,
+      parentFrame && frameParent
+        ? parentFrame.parentRotationY(frameParent, useScene.getState().nodes) + rotationY
+        : rotationY,
     [parentFrame, frameParent],
   )
   const visualPositionFor = useCallback(
     (position: [number, number, number], rotationY = rotationRef.current) => {
-      if (parentFrame && frameParent) return parentFrame.localToPlan(frameParent, position)
+      if (parentFrame && frameParent) {
+        return parentFrame.localToPlan(frameParent, position, useScene.getState().nodes)
+      }
       return getFloorStackPreviewPosition({
         node,
         position,
@@ -343,7 +347,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   const canonicalPositionFromPlan = useCallback(
     (planX: number, localY: number, planZ: number): [number, number, number] =>
       parentFrame && frameParent
-        ? parentFrame.planToLocal(frameParent, planX, localY, planZ)
+        ? parentFrame.planToLocal(frameParent, planX, localY, planZ, useScene.getState().nodes)
         : [planX, localY, planZ],
     [parentFrame, frameParent],
   )
@@ -652,7 +656,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       }
 
       let position = canonicalPositionFromPlan(x, originalPosition[1], z)
-      if (magnetic && parentFrame?.magneticSnap && frameParent) {
+      if ((magnetic || isGridSnapActive()) && parentFrame?.magneticSnap && frameParent) {
+        const preSnapPosition = position
         const snappedPosition = parentFrame.magneticSnap(
           node,
           frameParent,
@@ -668,6 +673,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           const snappedPlanPosition = getVisualPosition(position)
           x = snappedPlanPosition[0]
           z = snappedPlanPosition[2]
+        }
+        if (isAlignmentGuideActive() && parentFrame.magneticSnapGuides) {
+          const guides = parentFrame.magneticSnapGuides(
+            node,
+            frameParent,
+            preSnapPosition,
+            snappedPosition,
+            useScene.getState().nodes,
+          )
+          if (guides.length > 0) useAlignmentGuides.getState().set(guides)
         }
       }
       const visualPosition = getVisualPosition(position)

@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { AlignmentAnchor, AlignmentGuide } from '../services/alignment'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -1699,16 +1700,18 @@ export type MovableParentFrame = {
   /** The parent node owning the local frame; `null` → move in plan frame. */
   resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => AnyNode | null
   /** Parent's Y rotation, composed onto the child's preview rotation. */
-  parentRotationY: (parent: AnyNode) => number
+  parentRotationY: (parent: AnyNode, nodes?: Readonly<Record<string, AnyNode>>) => number
   localToPlan: (
     parent: AnyNode,
     local: readonly [number, number, number],
+    nodes?: Readonly<Record<string, AnyNode>>,
   ) => [number, number, number]
   planToLocal: (
     parent: AnyNode,
     planX: number,
     localY: number,
     planZ: number,
+    nodes?: Readonly<Record<string, AnyNode>>,
   ) => [number, number, number]
   /**
    * Optional 2D live-transform projection. Used by the floor-plan layer for
@@ -1716,6 +1719,16 @@ export type MovableParentFrame = {
    * be treated as a level-frame / floor-placed position.
    */
   floorplanLiveTransform?: (args: { node: AnyNode; live: LiveTransformLike }) => AnyNode
+  /**
+   * Optional parent-frame alignment candidates in plan/world coordinates.
+   * Used by nested-frame kinds whose siblings are not level-scoped alignment
+   * candidates (cabinet modules inside a cabinet run).
+   */
+  alignmentCandidates?: (
+    node: AnyNode,
+    parent: AnyNode,
+    nodes: Readonly<Record<string, AnyNode>>,
+  ) => AlignmentAnchor[]
   /**
    * Optional magnetic snap in the parent's local frame (e.g. a module edge
    * mating flush with a sibling module). Runs when magnetic snapping is
@@ -1727,6 +1740,14 @@ export type MovableParentFrame = {
     local: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
   ) => [number, number, number]
+  /** Optional visual guides for the parent-frame magnetic snap result. */
+  magneticSnapGuides?: (
+    node: AnyNode,
+    parent: AnyNode,
+    local: readonly [number, number, number],
+    snappedLocal: readonly [number, number, number],
+    nodes: Readonly<Record<string, AnyNode>>,
+  ) => AlignmentGuide[]
   /**
    * Called after a move of the child commits, with the LIVE (post-commit)
    * child and parent. Lets the kind run derived-state maintenance the

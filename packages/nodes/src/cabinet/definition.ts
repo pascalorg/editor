@@ -1056,6 +1056,14 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       },
       collides: true,
     },
+    dragBounds: (node) => {
+      const n = node as CabinetModuleNodeType
+      const height = cabinetTotalHeight(n)
+      return {
+        size: [n.width, height, n.depth] as [number, number, number],
+        center: [0, height / 2, 0] as [number, number, number],
+      }
+    },
     paint: cabinetPaint,
     sceneAction: cabinetSceneAction,
     slots: () => cabinetSlots(),

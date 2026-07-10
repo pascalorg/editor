@@ -1,4 +1,5 @@
 import type {
+  AlignmentGuide,
   AnyNode,
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
@@ -10,6 +11,9 @@ import { bumpCabinetRunLayoutRevision, syncCornerRunsFromSourceModule } from './
 
 /** Matches the generic move tool's Figma-alignment pull (8 cm). */
 const MAGNETIC_THRESHOLD_M = 0.08
+const GUIDE_EPSILON_M = 1e-4
+type PlanTransform = { position: [number, number, number]; rotation: number }
+type PlanPoint = { x: number; z: number }
 
 function runParent(
   node: AnyNode,
@@ -20,11 +24,67 @@ function runParent(
   return parent?.type === 'cabinet' ? (parent as CabinetNodeType) : null
 }
 
+function isCabinetFrameNode(
+  node: AnyNode | undefined,
+): node is CabinetNodeType | CabinetModuleNodeType {
+  return node?.type === 'cabinet' || node?.type === 'cabinet-module'
+}
+
+function nodeRotationY(node: CabinetNodeType | CabinetModuleNodeType): number {
+  const rotation = (node as { rotation?: unknown }).rotation
+  if (typeof rotation === 'number') return rotation
+  if (Array.isArray(rotation)) return (rotation[1] as number | undefined) ?? 0
+  return 0
+}
+
+function composePlanTransform(parent: PlanTransform, child: PlanTransform): PlanTransform {
+  const cos = Math.cos(parent.rotation)
+  const sin = Math.sin(parent.rotation)
+  const [x, y, z] = child.position
+  return {
+    position: [
+      parent.position[0] + x * cos + z * sin,
+      parent.position[1] + y,
+      parent.position[2] - x * sin + z * cos,
+    ],
+    rotation: parent.rotation + child.rotation,
+  }
+}
+
+function frameWorldTransform(
+  node: CabinetNodeType | CabinetModuleNodeType,
+  nodes?: Readonly<Record<string, AnyNode>>,
+  visited = new Set<string>(),
+): PlanTransform {
+  const own: PlanTransform = {
+    position: [...node.position] as [number, number, number],
+    rotation: nodeRotationY(node),
+  }
+  if (!nodes || !node.parentId || visited.has(node.id)) return own
+  visited.add(node.id)
+  const parent = nodes[node.parentId]
+  if (!isCabinetFrameNode(parent)) return own
+  return composePlanTransform(frameWorldTransform(parent, nodes, visited), own)
+}
+
 function localToPlan(
   parent: AnyNode,
   local: readonly [number, number, number],
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): [number, number, number] {
-  return runLocalToPlan(parent as CabinetNodeType, local)
+  const run = parent as CabinetNodeType
+  if (!nodes || !run.parentId || !isCabinetFrameNode(nodes[run.parentId])) {
+    return runLocalToPlan(run, local)
+  }
+  const transform = frameWorldTransform(run, nodes)
+  const cos = Math.cos(transform.rotation)
+  const sin = Math.sin(transform.rotation)
+  const [lx, ly, lz] = local
+  return [
+    transform.position[0] + lx * cos + lz * sin,
+    transform.position[1] + ly,
+    transform.position[2] - lx * sin + lz * cos,
+  ]
 }
 
 function planToLocal(
@@ -32,8 +92,18 @@ function planToLocal(
   planX: number,
   localY: number,
   planZ: number,
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): [number, number, number] {
-  return planToRunLocal(parent as CabinetNodeType, planX, localY, planZ)
+  const run = parent as CabinetNodeType
+  if (!nodes || !run.parentId || !isCabinetFrameNode(nodes[run.parentId])) {
+    return planToRunLocal(run, planX, localY, planZ)
+  }
+  const transform = frameWorldTransform(run, nodes)
+  const dx = planX - transform.position[0]
+  const dz = planZ - transform.position[2]
+  const cos = Math.cos(transform.rotation)
+  const sin = Math.sin(transform.rotation)
+  return [dx * cos - dz * sin, localY, dx * sin + dz * cos]
 }
 
 /**
@@ -113,12 +183,138 @@ function magneticSnap(
   return [local[0] + bestDeltaX, local[1], local[2] + bestDeltaZ]
 }
 
+function planPoint(
+  parent: AnyNode,
+  localX: number,
+  localZ: number,
+  nodes: Readonly<Record<string, AnyNode>>,
+): PlanPoint {
+  const [x, , z] = localToPlan(parent, [localX, 0, localZ], nodes)
+  return { x, z }
+}
+
+function guideDistance(from: PlanPoint, to: PlanPoint): number {
+  return Math.hypot(to.x - from.x, to.z - from.z)
+}
+
+function makeGuide({
+  axis,
+  candidateNodeId,
+  coord,
+  from,
+  to,
+}: {
+  axis: 'x' | 'z'
+  candidateNodeId: string
+  coord: number
+  from: PlanPoint
+  to: PlanPoint
+}): AlignmentGuide {
+  return {
+    axis,
+    coord,
+    from,
+    to,
+    anchor: from,
+    movingAnchorKind: 'corner',
+    candidateAnchorKind: 'corner',
+    candidateNodeId,
+    distance: guideDistance(from, to),
+  }
+}
+
+function magneticSnapGuides(
+  node: AnyNode,
+  parent: AnyNode,
+  _local: readonly [number, number, number],
+  snappedLocal: readonly [number, number, number],
+  nodes: Readonly<Record<string, AnyNode>>,
+): AlignmentGuide[] {
+  const run = parent as CabinetNodeType
+  const moving = node as CabinetModuleNodeType
+  const movingHalfWidth = moving.width / 2
+  const movingHalfDepth = moving.depth / 2
+  const movingMinX = snappedLocal[0] - movingHalfWidth
+  const movingMaxX = snappedLocal[0] + movingHalfWidth
+  const movingMinZ = snappedLocal[2] - movingHalfDepth
+  const movingMaxZ = snappedLocal[2] + movingHalfDepth
+  const guides: AlignmentGuide[] = []
+
+  for (const childId of run.children ?? []) {
+    if (guides.length >= 2) break
+    if (childId === node.id) continue
+    const sibling = nodes[childId as AnyNodeId]
+    if (sibling?.type !== 'cabinet-module') continue
+    const module = sibling as CabinetModuleNodeType
+    const siblingHalfWidth = module.width / 2
+    const siblingHalfDepth = module.depth / 2
+    const siblingMinX = module.position[0] - siblingHalfWidth
+    const siblingMaxX = module.position[0] + siblingHalfWidth
+    const siblingMinZ = module.position[2] - siblingHalfDepth
+    const siblingMaxZ = module.position[2] + siblingHalfDepth
+
+    if (
+      guides.every((guide) => guide.axis !== 'x') &&
+      movingMinZ <= siblingMaxZ + MAGNETIC_THRESHOLD_M &&
+      movingMaxZ >= siblingMinZ - MAGNETIC_THRESHOLD_M
+    ) {
+      const sharedX =
+        Math.abs(movingMinX - siblingMaxX) <= GUIDE_EPSILON_M
+          ? movingMinX
+          : Math.abs(movingMaxX - siblingMinX) <= GUIDE_EPSILON_M
+            ? movingMaxX
+            : null
+      if (sharedX !== null) {
+        guides.push(
+          makeGuide({
+            axis: 'x',
+            candidateNodeId: module.id,
+            coord: planPoint(parent, sharedX, snappedLocal[2], nodes).x,
+            from: planPoint(parent, sharedX, Math.min(movingMinZ, siblingMinZ), nodes),
+            to: planPoint(parent, sharedX, Math.max(movingMaxZ, siblingMaxZ), nodes),
+          }),
+        )
+      }
+    }
+
+    if (
+      guides.every((guide) => guide.axis !== 'z') &&
+      movingMinX <= siblingMaxX + MAGNETIC_THRESHOLD_M &&
+      movingMaxX >= siblingMinX - MAGNETIC_THRESHOLD_M
+    ) {
+      const sharedZ =
+        Math.abs(snappedLocal[2] - module.position[2]) <= GUIDE_EPSILON_M
+          ? snappedLocal[2]
+          : Math.abs(movingMinZ - siblingMinZ) <= GUIDE_EPSILON_M
+            ? movingMinZ
+            : Math.abs(movingMaxZ - siblingMaxZ) <= GUIDE_EPSILON_M
+              ? movingMaxZ
+              : null
+      if (sharedZ !== null) {
+        guides.push(
+          makeGuide({
+            axis: 'z',
+            candidateNodeId: module.id,
+            coord: planPoint(parent, snappedLocal[0], sharedZ, nodes).z,
+            from: planPoint(parent, Math.min(movingMinX, siblingMinX), sharedZ, nodes),
+            to: planPoint(parent, Math.max(movingMaxX, siblingMaxX), sharedZ, nodes),
+          }),
+        )
+      }
+    }
+  }
+
+  return guides
+}
+
 export const cabinetModuleParentFrame: MovableParentFrame = {
   resolveParent: runParent,
-  parentRotationY: (parent) => (parent as CabinetNodeType).rotation,
+  parentRotationY: (parent, nodes) =>
+    frameWorldTransform(parent as CabinetNodeType, nodes).rotation,
   localToPlan,
   planToLocal,
   magneticSnap,
+  magneticSnapGuides,
   // Module position isn't in the run's geometryKey, so a committed move must
   // bump the layout revision to re-flow spans/countertop — and re-anchor any
   // linked L-corner runs to the module's new edge.
