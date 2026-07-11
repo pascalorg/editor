@@ -785,6 +785,10 @@ export type MeasurementDefinitionSnapAnchor = {
   label: string
   point: MeasurementDefinitionPoint
   priority?: number
+  targetLine?: {
+    end: MeasurementDefinitionPoint
+    start: MeasurementDefinitionPoint
+  }
 }
 
 export type MeasurementDefinitionSnapSegment = {

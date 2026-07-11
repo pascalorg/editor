@@ -76,12 +76,16 @@ function addPolygonSnapGeometry(
 ) {
   const points = polygon.map((point) => [point[0], y, point[1]] as MeasurementDefinitionPoint)
   const centroid = polygonAreaAndCentroid(polygon).centroid
-  for (const point of points) {
-    geometry.anchors.push({ label: labels.vertex, kind: 'vertex', point, priority: 0 })
-  }
   for (let index = 0; index < points.length; index += 1) {
     const start = points[index]!
     const end = points[(index + 1) % points.length]!
+    geometry.anchors.push({
+      label: labels.vertex,
+      kind: 'vertex',
+      point: start,
+      priority: 0,
+      targetLine: { end, start },
+    })
     geometry.anchors.push({
       label: 'Edge midpoint',
       kind: 'midpoint',
@@ -108,12 +112,16 @@ function addRectangleSnapGeometry(
     y: polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length,
   }
   const points = polygon.map((point) => [point.x, 0, point.y] as MeasurementDefinitionPoint)
-  for (const point of points) {
-    geometry.anchors.push({ label: labels.vertex, kind: 'vertex', point, priority: 0 })
-  }
   for (let index = 0; index < points.length; index += 1) {
     const start = points[index]!
     const end = points[(index + 1) % points.length]!
+    geometry.anchors.push({
+      label: labels.vertex,
+      kind: 'vertex',
+      point: start,
+      priority: 0,
+      targetLine: { end, start },
+    })
     geometry.anchors.push({
       label: 'Edge midpoint',
       kind: 'midpoint',
@@ -424,11 +432,7 @@ function surfaceMeasurement(): MeasurementDefinition<TestNode> {
       const y = node.type === 'ceiling' ? node.height : node.type === 'slab' ? node.elevation : 0
       return {
         areaSquareMeters: Math.max(0, outer.area - holesArea),
-        boundaryPoints: boundary.map((point: [number, number]) => [
-          point[0],
-          y + 0.02,
-          point[1],
-        ]),
+        boundaryPoints: boundary.map((point: [number, number]) => [point[0], y + 0.02, point[1]]),
         labelPoint: [outer.centroid.x, y + 0.05, outer.centroid.y],
       }
     },
@@ -441,11 +445,7 @@ function surfaceMeasurement(): MeasurementDefinition<TestNode> {
       }, 0)
       const y = node.type === 'ceiling' ? node.height : node.type === 'slab' ? node.elevation : 0
       return {
-        boundaryPoints: boundary.map((point: [number, number]) => [
-          point[0],
-          y + 0.02,
-          point[1],
-        ]),
+        boundaryPoints: boundary.map((point: [number, number]) => [point[0], y + 0.02, point[1]]),
         labelPoint: [outer.centroid.x, y + 0.05, outer.centroid.y],
         lengthMeters: polygonPerimeter(boundary) + holesLength,
       }

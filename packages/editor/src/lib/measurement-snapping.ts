@@ -435,6 +435,12 @@ function addDefinitionSnapGeometry(
     ...anchors.map((anchor) => ({
       ...anchor,
       point: [...anchor.point] as MeasurementPoint,
+      targetLine: anchor.targetLine
+        ? {
+            end: [...anchor.targetLine.end] as MeasurementPoint,
+            start: [...anchor.targetLine.start] as MeasurementPoint,
+          }
+        : undefined,
     })),
   )
   geometry.segments.push(

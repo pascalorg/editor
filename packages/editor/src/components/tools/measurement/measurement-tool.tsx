@@ -3,13 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
   emitter,
   type GeometryContext,
   type GridEvent,
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  getWallThickness,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionDirectLength,
   type MeasurementDefinitionPerimeter,
@@ -93,8 +89,6 @@ const MEASUREMENT_SURFACE_SNAP_RADIUS = 0.25
 const MEASUREMENT_GRID_SNAP_RADIUS = 0.25
 const MEASUREMENT_NODE_SNAP_PRIORITY_BUCKET = 1_000
 const MEASUREMENT_PLAN_SNAP_Y_TOLERANCE = 1e-5
-const MEASUREMENT_WALL_SIDE_NORMAL_Y_THRESHOLD = 0.7
-const MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON = 0.05
 const SURFACE_EVENT_SUPPRESSION_MS = 80
 const MEASUREMENT_IGNORED_NODE_TYPES = new Set(['site'])
 type MeasurementAppearance = 'dark' | 'light'
@@ -345,6 +339,7 @@ function definitionPoint(point: readonly [number, number, number]): MeasurementP
 
 function directLengthFromDefinition(
   node: AnyNode,
+  buildingId: AnyNodeId | null,
   hitPoint: MeasurementPoint | null,
   hitNormal: MeasurementPoint | null,
 ): DirectLengthSegment | null {
@@ -355,11 +350,11 @@ function directLengthFromDefinition(
     hitNormal,
   ) as MeasurementDefinitionDirectLength | null | undefined
   if (!directLength) return null
-  return {
+  return alignVerticalDefinitionLengthToRenderedBase(node, buildingId, {
     start: definitionPoint(directLength.start),
     end: definitionPoint(directLength.end),
     measuredDistanceMeters: directLength.measuredDistanceMeters,
-  }
+  })
 }
 
 function areaFromDefinition(node: AnyNode): MeasurementDefinitionArea | null {
@@ -399,6 +394,12 @@ function snapAnchorsFromDefinition(node: AnyNode): MeasurementSnapAnchor[] {
   return (geometry?.anchors ?? []).map((anchor) => ({
     ...anchor,
     point: definitionPoint(anchor.point),
+    targetLine: anchor.targetLine
+      ? {
+          end: definitionPoint(anchor.targetLine.end),
+          start: definitionPoint(anchor.targetLine.start),
+        }
+      : undefined,
   }))
 }
 
@@ -429,122 +430,35 @@ type DirectLengthSegment = {
   start: MeasurementPoint
 }
 
-type MeasurementWallNode = Extract<AnyNode, { type: 'wall' }>
-
-function isMeasurementWallNode(node: AnyNode): node is MeasurementWallNode {
-  return node.type === 'wall'
-}
-
-function closestPointOnPlanSegment(
-  point: { x: number; y: number },
-  start: { x: number; y: number },
-  end: { x: number; y: number },
-): { distanceSq: number; t: number } {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const lengthSq = dx * dx + dy * dy
-  if (lengthSq < 1e-9) {
-    const ox = point.x - start.x
-    const oy = point.y - start.y
-    return { distanceSq: ox * ox + oy * oy, t: 0 }
-  }
-
-  const t = Math.max(
-    0,
-    Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq),
-  )
-  const projected = { x: start.x + dx * t, y: start.y + dy * t }
-  const ox = point.x - projected.x
-  const oy = point.y - projected.y
-  return { distanceSq: ox * ox + oy * oy, t }
-}
-
-function wallFaceAnchorForMeasurement(
-  node: MeasurementWallNode,
-  cursorPoint: MeasurementPoint,
-  cursorNormal: MeasurementPoint | null,
-): MeasurementPoint {
-  const planPoint = { x: cursorPoint[0], y: cursorPoint[2] }
-  const sampleCount = Math.max(32, Math.ceil(getWallCurveLength(node) / 0.25))
-  let best: {
-    distanceSq: number
-    frameT: number
-  } | null = null
-  let previous = getWallCurveFrameAt(node, 0).point
-
-  for (let index = 1; index <= sampleCount; index += 1) {
-    const current = getWallCurveFrameAt(node, index / sampleCount).point
-    const projected = closestPointOnPlanSegment(planPoint, previous, current)
-    if (!best || projected.distanceSq < best.distanceSq) {
-      best = {
-        distanceSq: projected.distanceSq,
-        frameT: (index - 1 + projected.t) / sampleCount,
-      }
-    }
-    previous = current
-  }
-
-  const frame = getWallCurveFrameAt(node, best?.frameT ?? 0)
-  const signedCursorOffset =
-    (planPoint.x - frame.point.x) * frame.normal.x + (planPoint.y - frame.point.y) * frame.normal.y
-  const normalPlanLength = cursorNormal ? Math.hypot(cursorNormal[0], cursorNormal[2]) : 0
-  const normalSide =
-    cursorNormal && normalPlanLength > 1e-6
-      ? Math.sign(
-          (cursorNormal[0] / normalPlanLength) * frame.normal.x +
-            (cursorNormal[2] / normalPlanLength) * frame.normal.y,
-        )
-      : 0
-  const cursorSide = Math.sign(signedCursorOffset)
-  const side = normalSide || cursorSide || 1
-  const offset = (getWallThickness(node) / 2) * side
-
-  return [
-    frame.point.x + frame.normal.x * offset,
-    cursorPoint[1],
-    frame.point.y + frame.normal.y * offset,
-  ]
-}
-
-function semanticWallLengthSegment(
+function alignVerticalDefinitionLengthToRenderedBase(
   node: AnyNode,
   buildingId: AnyNodeId | null,
-  hitPoint: MeasurementPoint | null,
-  hitNormal: MeasurementPoint | null,
-): DirectLengthSegment | null {
-  if (!isMeasurementWallNode(node)) return null
+  segment: DirectLengthSegment,
+): DirectLengthSegment {
+  const dx = segment.end[0] - segment.start[0]
+  const dz = segment.end[2] - segment.start[2]
+  if (Math.hypot(dx, dz) > 1e-6) return segment
 
-  const height = node.height ?? DEFAULT_WALL_HEIGHT
-  const normalY = hitNormal ? Math.abs(hitNormal[1]) : null
-  const isSideNormal = normalY !== null && normalY < MEASUREMENT_WALL_SIDE_NORMAL_Y_THRESHOLD
-  const isWallSideHover =
-    !hitNormal &&
-    hitPoint &&
-    hitPoint[1] > MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON &&
-    hitPoint[1] < height - MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON
-  if (hitPoint && (isSideNormal || isWallSideHover)) {
-    const anchor = wallFaceAnchorForMeasurement(node, hitPoint, hitNormal)
-    const wallObject = sceneRegistry.nodes.get(node.id as AnyNodeId)
-    const wallGeometry = (wallObject as { geometry?: BufferGeometry } | undefined)?.geometry
-    if (wallGeometry && !wallGeometry.boundingBox) wallGeometry.computeBoundingBox()
-    const wallWorldBase = wallObject?.localToWorld(
-      new Vector3(0, wallGeometry?.boundingBox?.min.y ?? 0, 0),
-    )
-    const renderedBaseY = wallWorldBase
-      ? worldToBuildingLocal([wallWorldBase.x, wallWorldBase.y, wallWorldBase.z], buildingId)[1]
-      : 0
-    const baseY = Math.abs(renderedBaseY) < 1e-6 ? 0 : renderedBaseY
-    return {
-      start: [anchor[0], baseY, anchor[2]],
-      end: [anchor[0], baseY + height, anchor[2]],
-      measuredDistanceMeters: height,
-    }
+  const object = sceneRegistry.nodes.get(node.id as AnyNodeId)
+  if (!object) return segment
+
+  const geometry = (object as { geometry?: unknown }).geometry
+  let localBaseY = 0
+  if (geometry instanceof BufferGeometry) {
+    if (!geometry.boundingBox) geometry.computeBoundingBox()
+    localBaseY = geometry.boundingBox?.min.y ?? 0
   }
 
+  const baseWorld = object.localToWorld(new Vector3(0, localBaseY, 0))
+  const renderedBaseY = worldToBuildingLocal([baseWorld.x, baseWorld.y, baseWorld.z], buildingId)[1]
+  const segmentBaseY = Math.min(segment.start[1], segment.end[1])
+  const offsetY = renderedBaseY - segmentBaseY
+  if (Math.abs(offsetY) < 1e-6) return segment
+
   return {
-    start: [node.start[0], 0, node.start[1]],
-    end: [node.end[0], 0, node.end[1]],
-    measuredDistanceMeters: getWallCurveLength(node),
+    ...segment,
+    start: [segment.start[0], segment.start[1] + offsetY, segment.start[2]],
+    end: [segment.end[0], segment.end[1] + offsetY, segment.end[2]],
   }
 }
 
@@ -744,9 +658,7 @@ function directLengthSegmentFromNode(
   hitPoint: MeasurementPoint | null = null,
   hitNormal: MeasurementPoint | null = null,
 ): DirectLengthSegment | null {
-  const wallSegment = semanticWallLengthSegment(node, buildingId, hitPoint, hitNormal)
-  if (wallSegment) return wallSegment
-  const contributed = directLengthFromDefinition(node, hitPoint, hitNormal)
+  const contributed = directLengthFromDefinition(node, buildingId, hitPoint, hitNormal)
   if (contributed) return contributed
   const snapSegment = snapGeometryLengthSegmentFromNode(node, hitPoint)
   if (snapSegment) return snapSegment

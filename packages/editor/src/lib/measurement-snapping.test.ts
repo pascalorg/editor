@@ -180,6 +180,18 @@ describe('measurement snapping', () => {
       ),
     ).toBe(true)
     expect(
+      geometry.anchors.find(
+        (anchor) =>
+          anchor.kind === 'vertex' &&
+          anchor.label === 'Surface opening vertex' &&
+          anchor.point[0] === 1 &&
+          anchor.point[2] === 1,
+      )?.targetLine,
+    ).toEqual({
+      start: [1, 0, 1],
+      end: [2, 0, 1],
+    })
+    expect(
       geometry.segments.some(
         (segment) =>
           segment.kind === 'edge' &&
