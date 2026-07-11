@@ -52,6 +52,10 @@ describe('measurement snapping', () => {
 
     expect(result.point).toEqual([2, 0, 0])
     expect(result.target?.kind).toBe('edge')
+    expect(result.target?.targetLine).toEqual({
+      start: [0, 0, 0],
+      end: [4, 0, 0],
+    })
   })
 
   test('uses grid as fallback when no geometry is close enough', () => {

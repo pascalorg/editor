@@ -3,9 +3,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  DEFAULT_WALL_HEIGHT,
   emitter,
   type GeometryContext,
   type GridEvent,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  getWallThickness,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionDirectLength,
   type MeasurementDefinitionPerimeter,
@@ -16,9 +20,20 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { type PointerEvent, type ReactNode, useEffect, useMemo, useRef } from 'react'
-import { Box3, BoxGeometry, BufferGeometry, Quaternion, SphereGeometry, Vector3 } from 'three'
+import {
+  Box3,
+  BoxGeometry,
+  BufferGeometry,
+  CircleGeometry,
+  type Group,
+  Quaternion,
+  RingGeometry,
+  SphereGeometry,
+  TorusGeometry,
+  Vector3,
+} from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
@@ -61,10 +76,12 @@ import {
 
 const MEASUREMENT_COLOR = 0x8b_5c_f6
 const MEASUREMENT_LINE_WIDTH = 0.018
+const MEASUREMENT_PERIMETER_BOUNDARY_WIDTH = MEASUREMENT_LINE_WIDTH * 0.75
 const MEASUREMENT_END_TICK = 0.28
 const MEASUREMENT_LABEL_LIFT = 0.08
 const MEASUREMENT_CURSOR_SIZE = 0.18
 const MEASUREMENT_CURSOR_WIDTH = 0.018
+const MEASUREMENT_SNAP_COLOR = 0xff_ff_ff
 const MEASUREMENT_ENDPOINT_HANDLE_SIZE = 0.16
 const MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE = 0.34
 const MEASUREMENT_LABEL_COLLISION_CELL = 0.45
@@ -76,11 +93,17 @@ const MEASUREMENT_SURFACE_SNAP_RADIUS = 0.25
 const MEASUREMENT_GRID_SNAP_RADIUS = 0.25
 const MEASUREMENT_NODE_SNAP_PRIORITY_BUCKET = 1_000
 const MEASUREMENT_PLAN_SNAP_Y_TOLERANCE = 1e-5
+const MEASUREMENT_WALL_SIDE_NORMAL_Y_THRESHOLD = 0.7
+const MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON = 0.05
 const SURFACE_EVENT_SUPPRESSION_MS = 80
+const MEASUREMENT_IGNORED_NODE_TYPES = new Set(['site'])
 type MeasurementAppearance = 'dark' | 'light'
 
 const dashGeometry = new BoxGeometry(1, 1, 1)
 const endpointHandleGeometry = new SphereGeometry(0.5, 24, 16)
+const endpointHandleHexGeometry = new CircleGeometry(0.5, 6)
+const endpointHandleHexRingGeometry = new RingGeometry(0.5, 0.62, 6)
+const snapTargetRingGeometry = new TorusGeometry(0.5, 0.02, 8, 36)
 const MEASUREMENT_BAR_AXIS = new Vector3(1, 0, 0)
 const measurementMaterial = new MeshBasicNodeMaterial({
   color: MEASUREMENT_COLOR,
@@ -138,13 +161,47 @@ const endpointHandleHitMaterial = new MeshBasicNodeMaterial({
   toneMapped: false,
   transparent: true,
 })
+const snapTargetRingMaterial = new MeshBasicNodeMaterial({
+  color: MEASUREMENT_SNAP_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 0.68,
+  toneMapped: false,
+  transparent: true,
+})
+const snapTargetLineMaterial = new MeshBasicNodeMaterial({
+  color: MEASUREMENT_SNAP_COLOR,
+  depthTest: false,
+  depthWrite: false,
+  opacity: 0.5,
+  toneMapped: false,
+  transparent: true,
+})
 
 function measurableNodeKinds(): string[] {
   return Array.from(nodeRegistry.entries()).flatMap(([kind, def]) =>
-    def.measurement || def.floorplan || def.renderer || def.geometry || def.capabilities.selectable
+    !MEASUREMENT_IGNORED_NODE_TYPES.has(kind) &&
+    (def.measurement ||
+      def.floorplan ||
+      def.renderer ||
+      def.geometry ||
+      def.capabilities.selectable)
       ? [kind]
       : [],
   )
+}
+
+function isIgnoredMeasurementNode(node: AnyNode): boolean {
+  return MEASUREMENT_IGNORED_NODE_TYPES.has(node.type)
+}
+
+function clearTransientMeasurementHover() {
+  const measurement = useMeasurementTool.getState()
+  measurement.setCursor('3d', null)
+  measurement.setSnapTarget(null)
+  measurement.setPreviewArea(null)
+  measurement.setPreviewPerimeter(null)
+  measurement.setPreviewSegment(null)
 }
 
 export function getMeasurementAnnotationColors(appearance: 'dark' | 'light') {
@@ -289,11 +346,13 @@ function definitionPoint(point: readonly [number, number, number]): MeasurementP
 function directLengthFromDefinition(
   node: AnyNode,
   hitPoint: MeasurementPoint | null,
+  hitNormal: MeasurementPoint | null,
 ): DirectLengthSegment | null {
   const directLength = registryMeasurementForNode(node)?.directLength?.(
     node as never,
     measurementGeometryContextForNode(node),
     hitPoint,
+    hitNormal,
   ) as MeasurementDefinitionDirectLength | null | undefined
   if (!directLength) return null
   return {
@@ -319,6 +378,17 @@ function perimeterFromDefinition(node: AnyNode): MeasurementDefinitionPerimeter 
       measurementGeometryContextForNode(node),
     ) as MeasurementDefinitionPerimeter | null | undefined) ?? null
   )
+}
+
+function perimeterBoundaryPointsFromDefinition3D(
+  node: AnyNode,
+  perimeter: MeasurementDefinitionPerimeter,
+): MeasurementPoint[] {
+  const boundaryPoints =
+    (perimeter.boundaryPoints?.length ?? 0) >= 3
+      ? perimeter.boundaryPoints
+      : areaFromDefinition(node)?.boundaryPoints
+  return (boundaryPoints ?? []).map(definitionPoint)
 }
 
 function snapAnchorsFromDefinition(node: AnyNode): MeasurementSnapAnchor[] {
@@ -359,6 +429,125 @@ type DirectLengthSegment = {
   start: MeasurementPoint
 }
 
+type MeasurementWallNode = Extract<AnyNode, { type: 'wall' }>
+
+function isMeasurementWallNode(node: AnyNode): node is MeasurementWallNode {
+  return node.type === 'wall'
+}
+
+function closestPointOnPlanSegment(
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+): { distanceSq: number; t: number } {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq < 1e-9) {
+    const ox = point.x - start.x
+    const oy = point.y - start.y
+    return { distanceSq: ox * ox + oy * oy, t: 0 }
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq),
+  )
+  const projected = { x: start.x + dx * t, y: start.y + dy * t }
+  const ox = point.x - projected.x
+  const oy = point.y - projected.y
+  return { distanceSq: ox * ox + oy * oy, t }
+}
+
+function wallFaceAnchorForMeasurement(
+  node: MeasurementWallNode,
+  cursorPoint: MeasurementPoint,
+  cursorNormal: MeasurementPoint | null,
+): MeasurementPoint {
+  const planPoint = { x: cursorPoint[0], y: cursorPoint[2] }
+  const sampleCount = Math.max(32, Math.ceil(getWallCurveLength(node) / 0.25))
+  let best: {
+    distanceSq: number
+    frameT: number
+  } | null = null
+  let previous = getWallCurveFrameAt(node, 0).point
+
+  for (let index = 1; index <= sampleCount; index += 1) {
+    const current = getWallCurveFrameAt(node, index / sampleCount).point
+    const projected = closestPointOnPlanSegment(planPoint, previous, current)
+    if (!best || projected.distanceSq < best.distanceSq) {
+      best = {
+        distanceSq: projected.distanceSq,
+        frameT: (index - 1 + projected.t) / sampleCount,
+      }
+    }
+    previous = current
+  }
+
+  const frame = getWallCurveFrameAt(node, best?.frameT ?? 0)
+  const signedCursorOffset =
+    (planPoint.x - frame.point.x) * frame.normal.x + (planPoint.y - frame.point.y) * frame.normal.y
+  const normalPlanLength = cursorNormal ? Math.hypot(cursorNormal[0], cursorNormal[2]) : 0
+  const normalSide =
+    cursorNormal && normalPlanLength > 1e-6
+      ? Math.sign(
+          (cursorNormal[0] / normalPlanLength) * frame.normal.x +
+            (cursorNormal[2] / normalPlanLength) * frame.normal.y,
+        )
+      : 0
+  const cursorSide = Math.sign(signedCursorOffset)
+  const side = normalSide || cursorSide || 1
+  const offset = (getWallThickness(node) / 2) * side
+
+  return [
+    frame.point.x + frame.normal.x * offset,
+    cursorPoint[1],
+    frame.point.y + frame.normal.y * offset,
+  ]
+}
+
+function semanticWallLengthSegment(
+  node: AnyNode,
+  buildingId: AnyNodeId | null,
+  hitPoint: MeasurementPoint | null,
+  hitNormal: MeasurementPoint | null,
+): DirectLengthSegment | null {
+  if (!isMeasurementWallNode(node)) return null
+
+  const height = node.height ?? DEFAULT_WALL_HEIGHT
+  const normalY = hitNormal ? Math.abs(hitNormal[1]) : null
+  const isSideNormal = normalY !== null && normalY < MEASUREMENT_WALL_SIDE_NORMAL_Y_THRESHOLD
+  const isWallSideHover =
+    !hitNormal &&
+    hitPoint &&
+    hitPoint[1] > MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON &&
+    hitPoint[1] < height - MEASUREMENT_WALL_SIDE_HEIGHT_EPSILON
+  if (hitPoint && (isSideNormal || isWallSideHover)) {
+    const anchor = wallFaceAnchorForMeasurement(node, hitPoint, hitNormal)
+    const wallObject = sceneRegistry.nodes.get(node.id as AnyNodeId)
+    const wallGeometry = (wallObject as { geometry?: BufferGeometry } | undefined)?.geometry
+    if (wallGeometry && !wallGeometry.boundingBox) wallGeometry.computeBoundingBox()
+    const wallWorldBase = wallObject?.localToWorld(
+      new Vector3(0, wallGeometry?.boundingBox?.min.y ?? 0, 0),
+    )
+    const renderedBaseY = wallWorldBase
+      ? worldToBuildingLocal([wallWorldBase.x, wallWorldBase.y, wallWorldBase.z], buildingId)[1]
+      : 0
+    const baseY = Math.abs(renderedBaseY) < 1e-6 ? 0 : renderedBaseY
+    return {
+      start: [anchor[0], baseY, anchor[2]],
+      end: [anchor[0], baseY + height, anchor[2]],
+      measuredDistanceMeters: height,
+    }
+  }
+
+  return {
+    start: [node.start[0], 0, node.start[1]],
+    end: [node.end[0], 0, node.end[1]],
+    measuredDistanceMeters: getWallCurveLength(node),
+  }
+}
+
 function distancePointToMeasurementSegmentSq(
   point: MeasurementPoint,
   start: MeasurementPoint,
@@ -390,6 +579,44 @@ function distancePointToMeasurementSegmentSq(
   return ox * ox + oy * oy + oz * oz
 }
 
+function projectPointToMeasurementSegment(
+  point: MeasurementPoint,
+  start: MeasurementPoint,
+  end: MeasurementPoint,
+): MeasurementPoint | null {
+  const sx = start[0]
+  const sy = start[1]
+  const sz = start[2]
+  const dx = end[0] - sx
+  const dy = end[1] - sy
+  const dz = end[2] - sz
+  const lengthSq = dx * dx + dy * dy + dz * dz
+  if (lengthSq < 1e-8) return null
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - sx) * dx + (point[1] - sy) * dy + (point[2] - sz) * dz) / lengthSq),
+  )
+  return [sx + dx * t, sy + dy * t, sz + dz * t]
+}
+
+function snapTargetFromPreviewSegment3D(
+  point: MeasurementPoint,
+  segment: DirectLengthSegment,
+): MeasurementSnapTarget | null {
+  const projected = projectPointToMeasurementSegment(point, segment.start, segment.end)
+  if (!projected) return null
+  return {
+    kind: 'edge',
+    label: 'Preview edge',
+    point: projected,
+    targetLine: {
+      end: segment.end,
+      start: segment.start,
+    },
+    view: '3d',
+  }
+}
+
 function closestSegmentToPoint(
   segments: DirectLengthSegment[],
   point: MeasurementPoint | null,
@@ -409,6 +636,24 @@ function closestSegmentToPoint(
     }
     return segmentDistanceSq < closestDistanceSq ? segment : closest
   })
+}
+
+function snapGeometryLengthSegmentFromNode(
+  node: AnyNode,
+  hitPoint: MeasurementPoint | null,
+): DirectLengthSegment | null {
+  if (!hitPoint) return null
+  const geometry = registryMeasurementForNode(node)?.snapGeometry?.(
+    node as never,
+    measurementGeometryContextForNode(node),
+  ) as MeasurementDefinitionSnapGeometry | null | undefined
+  const segments = (geometry?.segments ?? []).flatMap((segment) => {
+    const start = definitionPoint(segment.start)
+    const end = definitionPoint(segment.end)
+    const measuredDistanceMeters = distanceBetweenMeasurements(start, end)
+    return measuredDistanceMeters >= 1e-4 ? [{ start, end, measuredDistanceMeters }] : []
+  })
+  return closestSegmentToPoint(segments, hitPoint)
 }
 
 function renderedBoundingBoxLengthSegment(
@@ -499,8 +744,12 @@ function directLengthSegmentFromNode(
   hitPoint: MeasurementPoint | null = null,
   hitNormal: MeasurementPoint | null = null,
 ): DirectLengthSegment | null {
-  const contributed = directLengthFromDefinition(node, hitPoint)
+  const wallSegment = semanticWallLengthSegment(node, buildingId, hitPoint, hitNormal)
+  if (wallSegment) return wallSegment
+  const contributed = directLengthFromDefinition(node, hitPoint, hitNormal)
   if (contributed) return contributed
+  const snapSegment = snapGeometryLengthSegmentFromNode(node, hitPoint)
+  if (snapSegment) return snapSegment
   return renderedBoundingBoxLengthSegment(node, buildingId, hitPoint, hitNormal)
 }
 
@@ -519,12 +768,14 @@ function surfaceAreaMeasurementFromNode(node: AnyNode): {
 }
 
 function surfacePerimeterMeasurementFromNode(node: AnyNode): {
+  boundaryPoints: MeasurementPoint[]
   labelPoint: MeasurementPoint
   lengthMeters: number
 } | null {
   const perimeter = perimeterFromDefinition(node)
   if (!perimeter) return null
   return {
+    boundaryPoints: perimeterBoundaryPointsFromDefinition3D(node, perimeter),
     labelPoint: definitionPoint(perimeter.labelPoint),
     lengthMeters: perimeter.lengthMeters,
   }
@@ -562,6 +813,10 @@ type MeshSnapCandidate = {
   kind: 'center' | 'edge' | 'vertex'
   label: string
   localPoint: Vector3
+  localTargetLine?: {
+    end: Vector3
+    start: Vector3
+  }
   priority: number
 }
 
@@ -589,7 +844,15 @@ function meshSnapCandidatesFromEvent(event: NodeEvent): MeshSnapCandidate[] {
   const edges = triangleEdges.flatMap(([start, end]) => {
     const projection = projectVectorToSegment(localHit, start, end)
     return projection
-      ? [{ kind: 'edge' as const, label: 'Mesh edge', localPoint: projection, priority: 2 }]
+      ? [
+          {
+            kind: 'edge' as const,
+            label: 'Mesh edge',
+            localPoint: projection,
+            localTargetLine: { end, start },
+            priority: 2,
+          },
+        ]
       : []
   })
   const faceCenter = vertices[0]
@@ -599,10 +862,11 @@ function meshSnapCandidatesFromEvent(event: NodeEvent): MeshSnapCandidate[] {
     .multiplyScalar(1 / 3)
 
   return [
-    ...vertices.map((localPoint) => ({
+    ...vertices.map((localPoint, index) => ({
       kind: 'vertex' as const,
       label: 'Mesh vertex',
       localPoint,
+      localTargetLine: { start: localPoint, end: vertices[(index + 1) % vertices.length]! },
       priority: 0,
     })),
     { kind: 'center' as const, label: 'Face center', localPoint: faceCenter, priority: 1 },
@@ -685,6 +949,20 @@ function resolveNodeMeasurementSnap(
       label: candidate.label,
       point: measurementPointFromObjectLocalPoint(event.object, candidate.localPoint, buildingId),
       priority: candidate.priority,
+      targetLine: candidate.localTargetLine
+        ? {
+            end: measurementPointFromObjectLocalPoint(
+              event.object,
+              candidate.localTargetLine.end,
+              buildingId,
+            ),
+            start: measurementPointFromObjectLocalPoint(
+              event.object,
+              candidate.localTargetLine.start,
+              buildingId,
+            ),
+          }
+        : undefined,
     })),
     ...nodeMeasurementAnchors(event.node, buildingId).map((anchor) => ({
       ...anchor,
@@ -725,6 +1003,7 @@ function resolveNodeMeasurementSnap(
           kind: closest.kind ?? measurementSnapKindFromLabel(closest.label),
           label: closest.label,
           point: closest.point,
+          targetLine: closest.targetLine,
           view: '3d',
         }
       : null,
@@ -777,6 +1056,7 @@ function updatePolygonMeasurementPreview3D(): void {
     measurement.setPreviewArea({
       id: 'measurement-area-preview',
       areaSquareMeters,
+      boundaryPoints: points,
       labelPoint,
       view: '3d',
     })
@@ -787,6 +1067,7 @@ function updatePolygonMeasurementPreview3D(): void {
     measurement.setPreviewArea(null)
     measurement.setPreviewPerimeter({
       id: 'measurement-perimeter-preview',
+      boundaryPoints: points,
       labelPoint,
       lengthMeters: polygonPerimeterFromMeasurements(points),
       view: '3d',
@@ -866,6 +1147,7 @@ export function handleMeasurementGridClick3D(
   if (!isCanvasEvent(event, canvas)) return
   if (shouldIgnoreGridEvent()) return
   const measurement = useMeasurementTool.getState()
+  if (measurement.consumeSuppressedPlacementClick()) return
   if (measurement.draggingSegmentEndpoint) {
     const resolved = resolveGridEditablePoint3D(event)
     measurement.updateSegmentEndpoint(
@@ -888,13 +1170,14 @@ export function handleMeasurementGridClick3D(
       ? resolveGridMeasurementConstraint3D(measurement.draft.start, snap.point)
       : null
   const point = constrained?.point ?? snap.point
-  measurement.setSnapTarget(constrained?.target ?? snap.target)
+  const target = constrained?.target ?? snap.target
+  measurement.setSnapTarget(target)
   measurement.setCursor('3d', point)
   if (measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)
     } else {
-      measurement.beginAngle('3d', point)
+      measurement.beginAngle('3d', point, target?.targetLine ?? null)
     }
     return
   }
@@ -911,6 +1194,15 @@ export function handleMeasurementNodeClick3D(
   event: NodeEvent,
   buildingId: AnyNodeId | null = null,
 ): void {
+  if (useMeasurementTool.getState().consumeSuppressedPlacementClick()) {
+    event.stopPropagation()
+    return
+  }
+  if (isIgnoredMeasurementNode(event.node)) {
+    clearTransientMeasurementHover()
+    return
+  }
+
   event.stopPropagation()
 
   const measurement = useMeasurementTool.getState()
@@ -936,7 +1228,7 @@ export function handleMeasurementNodeClick3D(
     if (measurement.angleDraft) {
       measurement.commitAngle(point)
     } else {
-      measurement.beginAngle('3d', point)
+      measurement.beginAngle('3d', point, snap.target?.targetLine ?? null)
     }
     return
   }
@@ -945,7 +1237,12 @@ export function handleMeasurementNodeClick3D(
     if (quickMeasure || measurement.mode === 'perimeter') {
       const perimeter = surfacePerimeterMeasurementFromNode(event.node)
       if (perimeter) {
-        measurement.addPerimeter('3d', perimeter.labelPoint, perimeter.lengthMeters)
+        measurement.addPerimeter(
+          '3d',
+          perimeter.labelPoint,
+          perimeter.lengthMeters,
+          perimeter.boundaryPoints,
+        )
         return
       }
     }
@@ -998,6 +1295,11 @@ export function handleMeasurementNodeMove3D(
   event: NodeEvent,
   buildingId: AnyNodeId | null = null,
 ): void {
+  if (isIgnoredMeasurementNode(event.node)) {
+    clearTransientMeasurementHover()
+    return
+  }
+
   event.stopPropagation()
 
   const rawPoint = measurementPointFromNodeEvent(event, buildingId)
@@ -1081,6 +1383,7 @@ export function handleMeasurementNodeMove3D(
       perimeter
         ? {
             id: 'measurement-perimeter-preview',
+            boundaryPoints: perimeter.boundaryPoints,
             labelPoint: perimeter.labelPoint,
             lengthMeters: perimeter.lengthMeters,
             view: '3d',
@@ -1096,9 +1399,10 @@ export function handleMeasurementNodeMove3D(
     measurement.mode === 'distance'
       ? directLengthSegmentFromNode(event.node, buildingId, rawPoint, surfaceNormal)
       : null
-  if (preview) {
-    measurement.setCursor('3d', rawPoint)
-    measurement.setSnapTarget(null)
+  const previewTarget = preview ? snapTargetFromPreviewSegment3D(rawPoint, preview) : null
+  if (previewTarget && !snap.target) {
+    measurement.setCursor('3d', previewTarget.point)
+    measurement.setSnapTarget(previewTarget)
   }
   measurement.setPreviewSegment(
     preview
@@ -1142,11 +1446,121 @@ function MeasurementSnapTarget3D({
   appearance: MeasurementAppearance
   target: MeasurementSnapTarget
 }) {
+  const dotMaterial =
+    appearance === 'dark' ? darkDraftMeasurementMaterial : draftMeasurementMaterial
+  const kind = target.kind ?? 'vertex'
+  const targetLine = target.guideLine ?? target.targetLine
+  const targetLineHighlight = targetLine
+    ? measurementSnapLineHighlight3D(targetLine, target.point, kind === 'guide' ? 1.6 : 0.9)
+    : null
+  const tick =
+    targetLineHighlight && kind === 'edge'
+      ? measurementSnapEdgeTick3D(targetLineHighlight, MEASUREMENT_CURSOR_SIZE * 0.82)
+      : null
+  const ringScale =
+    kind === 'grid'
+      ? MEASUREMENT_CURSOR_SIZE * 1.14
+      : kind === 'measurement'
+        ? MEASUREMENT_CURSOR_SIZE * 1.62
+        : MEASUREMENT_CURSOR_SIZE * 1.48
+
   return (
-    <group position={target.point}>
-      <MeasurementCursor3D appearance={appearance} point={[0, 0, 0]} />
+    <group>
+      {targetLineHighlight ? (
+        <MeasurementBar3D
+          end={new Vector3(...targetLineHighlight.end)}
+          material={snapTargetLineMaterial}
+          start={new Vector3(...targetLineHighlight.start)}
+          width={MEASUREMENT_LINE_WIDTH * (kind === 'guide' ? 0.34 : 0.42)}
+        />
+      ) : null}
+      {tick ? (
+        <MeasurementBar3D
+          end={new Vector3(...tick.end)}
+          material={snapTargetLineMaterial}
+          start={new Vector3(...tick.start)}
+          width={MEASUREMENT_LINE_WIDTH * 0.34}
+        />
+      ) : null}
+      <group position={target.point}>
+        {kind === 'measurement' ? (
+          <mesh
+            geometry={snapTargetRingGeometry}
+            layers={EDITOR_LAYER}
+            material={snapTargetRingMaterial}
+            renderOrder={1001}
+            rotation={[Math.PI / 2, 0, 0]}
+            scale={MEASUREMENT_CURSOR_SIZE * 1.84}
+          />
+        ) : null}
+        <mesh
+          geometry={snapTargetRingGeometry}
+          layers={EDITOR_LAYER}
+          material={snapTargetRingMaterial}
+          renderOrder={1002}
+          rotation={[Math.PI / 2, 0, 0]}
+          scale={ringScale}
+        />
+        <mesh
+          geometry={endpointHandleGeometry}
+          layers={EDITOR_LAYER}
+          material={dotMaterial}
+          renderOrder={1003}
+          scale={MEASUREMENT_CURSOR_SIZE * 0.46}
+        />
+      </group>
     </group>
   )
+}
+
+function measurementSnapLineHighlight3D(
+  line: { end: MeasurementPoint; start: MeasurementPoint },
+  point: MeasurementPoint,
+  maxLength: number,
+): { end: MeasurementPoint; start: MeasurementPoint } | null {
+  const direction = new Vector3(
+    line.end[0] - line.start[0],
+    line.end[1] - line.start[1],
+    line.end[2] - line.start[2],
+  )
+  const length = direction.length()
+  if (length < 1e-6) return null
+  const half = Math.min(length, maxLength) / 2
+  direction.normalize()
+  const center = new Vector3(...point)
+  const start = center.clone().add(direction.clone().multiplyScalar(-half))
+  const end = center.clone().add(direction.clone().multiplyScalar(half))
+  return {
+    start: [start.x, start.y, start.z],
+    end: [end.x, end.y, end.z],
+  }
+}
+
+function measurementSnapEdgeTick3D(
+  line: { end: MeasurementPoint; start: MeasurementPoint },
+  halfLength: number,
+): { end: MeasurementPoint; start: MeasurementPoint } | null {
+  const direction = new Vector3(
+    line.end[0] - line.start[0],
+    line.end[1] - line.start[1],
+    line.end[2] - line.start[2],
+  )
+  if (direction.lengthSq() < 1e-8) return null
+  direction.normalize()
+  const normal = new Vector3(0, 1, 0).cross(direction)
+  if (normal.lengthSq() < 1e-8) normal.set(1, 0, 0)
+  normal.normalize()
+  const center = new Vector3(
+    (line.start[0] + line.end[0]) / 2,
+    (line.start[1] + line.end[1]) / 2,
+    (line.start[2] + line.end[2]) / 2,
+  )
+  const start = center.clone().add(normal.clone().multiplyScalar(-halfLength))
+  const end = center.clone().add(normal.clone().multiplyScalar(halfLength))
+  return {
+    start: [start.x, start.y, start.z],
+    end: [end.x, end.y, end.z],
+  }
 }
 
 function selectMeasurementMaterial({
@@ -1187,7 +1601,12 @@ function MeasurementArea3D({
 
   return (
     <group>
-      <AreaMeasurementBoundary3D area={area} material={material} />
+      <MeasurementBoundary3D
+        id={area.id}
+        material={material}
+        points={area.boundaryPoints}
+        width={MEASUREMENT_LINE_WIDTH * 1.35}
+      />
       <Html
         center
         position={area.labelPoint}
@@ -1205,14 +1624,19 @@ function MeasurementArea3D({
   )
 }
 
-function AreaMeasurementBoundary3D({
-  area,
+function MeasurementBoundary3D({
+  extendBy = 0,
+  id,
   material,
+  points,
+  width,
 }: {
-  area: MeasurementArea
+  extendBy?: number
+  id: string
   material: MeshBasicNodeMaterial
+  points?: MeasurementPoint[]
+  width: number
 }) {
-  const points = area.boundaryPoints
   if (!points || points.length < 3) return null
 
   return (
@@ -1220,13 +1644,14 @@ function AreaMeasurementBoundary3D({
       {points.map((point, index) => {
         const next = points[(index + 1) % points.length]
         if (!next) return null
+        const segment = extendedMeasurementBoundarySegment(point, next, extendBy)
         return (
           <MeasurementBar3D
-            end={new Vector3(...next)}
-            key={`${area.id}-boundary-${index}`}
+            end={new Vector3(...segment.end)}
+            key={`${id}-boundary-${index}`}
             material={material}
-            start={new Vector3(...point)}
-            width={MEASUREMENT_LINE_WIDTH * 1.35}
+            start={new Vector3(...segment.start)}
+            width={width}
           />
         )
       })}
@@ -1234,33 +1659,67 @@ function AreaMeasurementBoundary3D({
   )
 }
 
+function extendedMeasurementBoundarySegment(
+  start: MeasurementPoint,
+  end: MeasurementPoint,
+  extendBy: number,
+): { end: MeasurementPoint; start: MeasurementPoint } {
+  if (extendBy <= 1e-6) return { end, start }
+  const direction = new Vector3(end[0] - start[0], end[1] - start[1], end[2] - start[2])
+  if (direction.lengthSq() < 1e-8) return { end, start }
+  direction.normalize().multiplyScalar(extendBy)
+  return {
+    start: [start[0] - direction.x, start[1] - direction.y, start[2] - direction.z],
+    end: [end[0] + direction.x, end[1] + direction.y, end[2] + direction.z],
+  }
+}
+
 function MeasurementPerimeter3D({
+  appearance,
   displayPrecision,
   isSelected,
   onSelect,
   perimeter,
   unit,
 }: {
+  appearance: MeasurementAppearance
   displayPrecision: ReturnType<typeof useMeasurementTool.getState>['displayPrecision']
   isSelected: boolean
   onSelect: (id: string, event: PointerEvent<HTMLElement>) => void
   perimeter: MeasurementPerimeter
   unit: LinearUnit
 }) {
+  const isDark = appearance === 'dark'
+  const material = selectMeasurementMaterial({
+    draft: perimeter.id.includes('preview'),
+    isDark,
+    isSelected,
+  })
+  const boundaryPoints = perimeter.boundaryPoints
+
   return (
-    <Html
-      center
-      position={perimeter.labelPoint}
-      style={{ pointerEvents: 'none', userSelect: 'none' }}
-      zIndexRange={[100, 0]}
-    >
-      <MeasurementValueLabel
-        isSelected={isSelected}
-        onPointerDown={(event) => onSelect(perimeter.id, event)}
+    <group>
+      <MeasurementBoundary3D
+        extendBy={MEASUREMENT_PERIMETER_BOUNDARY_WIDTH / 2}
+        id={perimeter.id}
+        material={material}
+        points={boundaryPoints}
+        width={MEASUREMENT_PERIMETER_BOUNDARY_WIDTH}
+      />
+      <Html
+        center
+        position={perimeter.labelPoint}
+        style={{ pointerEvents: 'none', userSelect: 'none' }}
+        zIndexRange={[100, 0]}
       >
-        {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit, { precision: displayPrecision })}`}
-      </MeasurementValueLabel>
-    </Html>
+        <MeasurementValueLabel
+          isSelected={isSelected}
+          onPointerDown={(event) => onSelect(perimeter.id, event)}
+        >
+          {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit, { precision: displayPrecision })}`}
+        </MeasurementValueLabel>
+      </Html>
+    </group>
   )
 }
 
@@ -1399,16 +1858,25 @@ export function getMeasurementAngleLayout3D(angle: MeasurementAngle) {
   firstDirection.normalize()
   secondDirection.normalize()
   const radians = firstDirection.angleTo(secondDirection)
-  if (radians < 1e-4) return null
+  const radius = Math.max(
+    MEASUREMENT_ANGLE_ARC_MIN_RADIUS,
+    Math.min(MEASUREMENT_ANGLE_ARC_MAX_RADIUS, firstLength * 0.35, secondLength * 0.35),
+  )
+  if (radians < 1e-4) {
+    return {
+      arcRadials: [],
+      arcSegments: [],
+      labelPosition: vertex
+        .clone()
+        .add(firstDirection.clone().multiplyScalar(radius + 0.24))
+        .add(new Vector3(0, 0.18, 0)),
+    }
+  }
 
   const normal = firstDirection.clone().cross(secondDirection)
   if (normal.lengthSq() < 1e-8) return null
   normal.normalize()
 
-  const radius = Math.max(
-    MEASUREMENT_ANGLE_ARC_MIN_RADIUS,
-    Math.min(MEASUREMENT_ANGLE_ARC_MAX_RADIUS, firstLength * 0.35, secondLength * 0.35),
-  )
   const sampleCount = Math.max(8, Math.ceil((radians / Math.PI) * MEASUREMENT_ANGLE_ARC_SEGMENTS))
   const points = Array.from({ length: sampleCount + 1 }, (_, index) => {
     const t = index / sampleCount
@@ -1507,45 +1975,96 @@ function MeasurementEndpointHandles3D({
     { endpoint: 'start', point: segment.start },
     { endpoint: 'end', point: segment.end },
   ]
+  const material = selectMeasurementMaterial({ draft: false, isDark, isSelected: true })
+  const activeMaterial = selectMeasurementMaterial({ draft: true, isDark, isSelected: true })
 
   return (
     <group>
       {handles.map(({ endpoint, point }) => {
         const activeHandle = isDraggingMeasurementEndpoint(draggingEndpoint, segment.id, endpoint)
-        const handleSize = activeHandle
-          ? MEASUREMENT_ENDPOINT_HANDLE_SIZE * 1.35
-          : MEASUREMENT_ENDPOINT_HANDLE_SIZE
         return (
-          <group key={endpoint} position={point}>
-            <mesh
-              geometry={dashGeometry}
-              layers={EDITOR_LAYER}
-              material={endpointHandleHitMaterial}
-              onPointerDown={(event) => {
-                event.stopPropagation()
-                useMeasurementTool.getState().startSegmentEndpointDrag(segment.id, endpoint)
-              }}
-              renderOrder={1003}
-              scale={[
-                MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
-                MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
-                MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
-              ]}
-            />
-            <mesh
-              geometry={endpointHandleGeometry}
-              layers={EDITOR_LAYER}
-              material={selectMeasurementMaterial({
-                draft: activeHandle,
-                isDark,
-                isSelected: true,
-              })}
-              renderOrder={1002}
-              scale={[handleSize, handleSize, handleSize]}
-            />
-          </group>
+          <MeasurementEndpointHandle3D
+            active={activeHandle}
+            endpoint={endpoint}
+            key={endpoint}
+            material={activeHandle ? activeMaterial : material}
+            point={point}
+            segmentId={segment.id}
+          />
         )
       })}
+    </group>
+  )
+}
+
+function MeasurementEndpointHandle3D({
+  active,
+  endpoint,
+  material,
+  point,
+  segmentId,
+}: {
+  active: boolean
+  endpoint: MeasurementSegmentEndpoint
+  material: MeshBasicNodeMaterial
+  point: MeasurementPoint
+  segmentId: string
+}) {
+  const { camera } = useThree()
+  const billboardRef = useRef<Group>(null)
+  const parentWorldQuaternionRef = useRef(new Quaternion())
+  const handleSize = active
+    ? MEASUREMENT_ENDPOINT_HANDLE_SIZE * 1.35
+    : MEASUREMENT_ENDPOINT_HANDLE_SIZE
+  const ringSize = handleSize * 1.16
+
+  useFrame(() => {
+    const billboard = billboardRef.current
+    if (!billboard) return
+    const parent = billboard.parent
+    if (parent) {
+      parent.getWorldQuaternion(parentWorldQuaternionRef.current)
+      billboard.quaternion
+        .copy(parentWorldQuaternionRef.current.invert())
+        .multiply(camera.quaternion)
+      return
+    }
+    billboard.quaternion.copy(camera.quaternion)
+  })
+
+  return (
+    <group position={point}>
+      <mesh
+        geometry={dashGeometry}
+        layers={EDITOR_LAYER}
+        material={endpointHandleHitMaterial}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          useMeasurementTool.getState().startSegmentEndpointDrag(segmentId, endpoint)
+        }}
+        renderOrder={1003}
+        scale={[
+          MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
+          MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
+          MEASUREMENT_ENDPOINT_HANDLE_HIT_SIZE,
+        ]}
+      />
+      <group ref={billboardRef}>
+        <mesh
+          geometry={endpointHandleHexRingGeometry}
+          layers={EDITOR_LAYER}
+          material={material}
+          renderOrder={1002}
+          scale={[ringSize, ringSize, ringSize]}
+        />
+        <mesh
+          geometry={endpointHandleHexGeometry}
+          layers={EDITOR_LAYER}
+          material={material}
+          renderOrder={1003}
+          scale={[handleSize, handleSize, handleSize]}
+        />
+      </group>
     </group>
   )
 }
@@ -1685,15 +2204,25 @@ export function MeasurementTool({
       handleMeasurementGridClick3D(event, canvas, shouldIgnoreGridEvent)
     }
     const handlePointerUp = () => {
-      useMeasurementTool.getState().endSegmentEndpointDrag()
+      const measurement = useMeasurementTool.getState()
+      if (!measurement.draggingSegmentEndpoint) return
+      measurement.endSegmentEndpointDrag({ suppressNextClick: true })
     }
 
     const handleNodeMove = (event: NodeEvent) => {
+      if (isIgnoredMeasurementNode(event.node)) {
+        handleMeasurementNodeMove3D(event, buildingId)
+        return
+      }
       noteSurfaceEvent()
       handleMeasurementNodeMove3D(event, buildingId)
     }
 
     const handleNodeClick = (event: NodeEvent) => {
+      if (isIgnoredMeasurementNode(event.node)) {
+        handleMeasurementNodeClick3D(event, buildingId)
+        return
+      }
       noteSurfaceEvent()
       handleMeasurementNodeClick3D(event, buildingId)
     }
@@ -1862,6 +2391,7 @@ export function MeasurementTool({
       ) : null}
       {perimeters.map((perimeter) => (
         <MeasurementPerimeter3D
+          appearance={appearance}
           displayPrecision={displayPrecision}
           isSelected={selectedId ? selectedId === perimeter.id : true}
           key={perimeter.id}
@@ -1872,6 +2402,7 @@ export function MeasurementTool({
       ))}
       {previewPerimeter?.view === '3d' ? (
         <MeasurementPerimeter3D
+          appearance={appearance}
           displayPrecision={displayPrecision}
           isSelected
           onSelect={handleSelectMeasurement}

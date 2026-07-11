@@ -20,6 +20,10 @@ export type MeasurementSnapAnchor = {
   label: string
   point: MeasurementPoint
   priority?: number
+  targetLine?: {
+    end: MeasurementPoint
+    start: MeasurementPoint
+  }
 }
 
 export type MeasurementSnapSegment = {
@@ -154,12 +158,16 @@ function addPolygonGeometry(
   const centroid = polygonAreaAndCentroid(polygon).centroid
   const points = polygon.map((point) => [point[0], y, point[1]] as MeasurementPoint)
 
-  for (const point of points) {
-    geometry.anchors.push({ label: vertexLabel, kind: 'vertex', point, priority: 0 })
-  }
   for (let index = 0; index < points.length; index += 1) {
     const start = points[index]!
     const end = points[(index + 1) % points.length]!
+    geometry.anchors.push({
+      label: vertexLabel,
+      kind: 'vertex',
+      point: start,
+      priority: 0,
+      targetLine: { end, start },
+    })
     geometry.anchors.push({
       label: 'Edge midpoint',
       kind: 'midpoint',
@@ -247,12 +255,16 @@ function addRectangleGeometry(
     y: polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length,
   }
   const points = polygon.map((point) => [point.x, 0, point.y] as MeasurementPoint)
-  for (const point of points) {
-    geometry.anchors.push({ label: 'Corner', kind: 'vertex', point, priority: 0 })
-  }
   for (let index = 0; index < points.length; index += 1) {
     const start = points[index]!
     const end = points[(index + 1) % points.length]!
+    geometry.anchors.push({
+      label: 'Corner',
+      kind: 'vertex',
+      point: start,
+      priority: 0,
+      targetLine: { end, start },
+    })
     geometry.anchors.push({
       label: 'Edge midpoint',
       kind: 'midpoint',
@@ -592,6 +604,10 @@ export function resolvePlanMeasurementSnap(
       label: segment.label,
       point: projection,
       priority: segment.priority,
+      targetLine: {
+        end: segment.end,
+        start: segment.start,
+      },
     })
   }
 
@@ -614,6 +630,7 @@ export function resolvePlanMeasurementSnap(
           kind: closest.kind ?? measurementSnapKindFromLabel(closest.label),
           label: closest.label,
           point: closest.point,
+          targetLine: closest.targetLine,
           view: options.view,
         }
       : null,

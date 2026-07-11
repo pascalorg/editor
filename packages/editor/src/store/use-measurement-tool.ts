@@ -1,7 +1,15 @@
 'use client'
 
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type GeometryContext,
+  type MeasurementDefinitionArea,
+  type MeasurementDefinitionPerimeter,
+  nodeRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { create } from 'zustand'
-import { angleBetweenMeasurements } from '../lib/measurements'
 
 export type MeasurementPoint = [number, number, number]
 export type MeasurementView = '2d' | '3d'
@@ -26,6 +34,7 @@ export type MeasurementArea = {
 
 export type MeasurementPerimeter = {
   id: string
+  boundaryPoints?: MeasurementPoint[]
   labelPoint: MeasurementPoint
   lengthMeters: number
   view: MeasurementView
@@ -48,6 +57,10 @@ export type MeasurementDraft = {
 
 export type MeasurementAngleDraft = {
   first: MeasurementPoint
+  referenceLine?: {
+    end: MeasurementPoint
+    start: MeasurementPoint
+  }
   vertex: MeasurementPoint | null
   second: MeasurementPoint | null
   view: MeasurementView
@@ -72,6 +85,10 @@ export type MeasurementSnapTarget = {
   kind?: MeasurementSnapKind
   label: string
   point: MeasurementPoint
+  targetLine?: {
+    end: MeasurementPoint
+    start: MeasurementPoint
+  }
   view: MeasurementView
 }
 
@@ -133,12 +150,17 @@ type MeasurementToolState = {
   continuousMeasurement: boolean
   enabledSnapKinds: MeasurementSnapSettings
   draggingSegmentEndpoint: DraggingMeasurementSegmentEndpoint | null
+  suppressNextPlacementClick: boolean
   selectedId: string | null
   begin: (view: MeasurementView, start: MeasurementPoint, surfaceNormal?: MeasurementPoint) => void
   update: (end: MeasurementPoint) => void
   updateDraftLength: (lengthMeters: number) => void
   commit: (end?: MeasurementPoint, measuredDistanceMeters?: number) => void
-  beginAngle: (view: MeasurementView, first: MeasurementPoint) => void
+  beginAngle: (
+    view: MeasurementView,
+    first: MeasurementPoint,
+    referenceLine?: { end: MeasurementPoint; start: MeasurementPoint } | null,
+  ) => void
   updateAngle: (point: MeasurementPoint) => void
   updateAngleDegrees: (degrees: number) => void
   updateAngleMeasurementDegrees: (id: string, degrees: number) => void
@@ -165,7 +187,8 @@ type MeasurementToolState = {
     endpoint: MeasurementSegmentEndpoint,
     point: MeasurementPoint,
   ) => void
-  endSegmentEndpointDrag: () => void
+  endSegmentEndpointDrag: (options?: { suppressNextClick?: boolean }) => void
+  consumeSuppressedPlacementClick: () => boolean
   removeMeasurement: (id: string) => void
   deleteSelected: () => void
   addSegment: (
@@ -181,12 +204,19 @@ type MeasurementToolState = {
     areaSquareMeters: number,
     boundaryPoints?: MeasurementPoint[],
   ) => void
-  addPerimeter: (view: MeasurementView, labelPoint: MeasurementPoint, lengthMeters: number) => void
+  addPerimeter: (
+    view: MeasurementView,
+    labelPoint: MeasurementPoint,
+    lengthMeters: number,
+    boundaryPoints?: MeasurementPoint[],
+  ) => void
   cancelDraft: () => void
   clear: () => void
 }
 
 let nextMeasurementId = 1
+const PERIMETER_BACKFILL_LABEL_TOLERANCE_METERS = 0.05
+const PERIMETER_BACKFILL_LENGTH_TOLERANCE_METERS = 1e-3
 
 export function distanceBetweenMeasurements(a: MeasurementPoint, b: MeasurementPoint): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
@@ -288,6 +318,115 @@ function normalizePoint(value: unknown): MeasurementPoint | null {
   return point as MeasurementPoint
 }
 
+function measurementGeometryContextForNode(node: AnyNode): GeometryContext {
+  const nodes = useScene.getState().nodes
+  const childIds = (node as { children?: readonly AnyNodeId[] }).children ?? []
+  return {
+    children: childIds.flatMap((id: AnyNodeId) => {
+      const child = nodes[id as AnyNodeId]
+      return child ? [child] : []
+    }),
+    parent: node.parentId ? (nodes[node.parentId as AnyNodeId] ?? null) : null,
+    resolve: <N = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+    siblings: node.parentId
+      ? Object.values(nodes).filter(
+          (candidate) => candidate.parentId === node.parentId && candidate.id !== node.id,
+        )
+      : [],
+  }
+}
+
+function definitionPoint(point: readonly [number, number, number]): MeasurementPoint {
+  return [...point] as MeasurementPoint
+}
+
+function definitionPlanPoint(point: readonly [number, number, number]): MeasurementPoint {
+  return [point[0], 0, point[2]]
+}
+
+function perimeterFromCurrentSceneNode(node: AnyNode): MeasurementDefinitionPerimeter | null {
+  return (
+    (nodeRegistry
+      .get(node.type)
+      ?.measurement?.perimeter?.(node as never, measurementGeometryContextForNode(node)) as
+      | MeasurementDefinitionPerimeter
+      | null
+      | undefined) ?? null
+  )
+}
+
+function areaFromCurrentSceneNode(node: AnyNode): MeasurementDefinitionArea | null {
+  return (
+    (nodeRegistry
+      .get(node.type)
+      ?.measurement?.area?.(node as never, measurementGeometryContextForNode(node)) as
+      | MeasurementDefinitionArea
+      | null
+      | undefined) ?? null
+  )
+}
+
+function measurementDistance(a: MeasurementPoint, b: MeasurementPoint): number {
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+}
+
+function perimeterBoundaryForView(
+  perimeter: MeasurementDefinitionPerimeter,
+  area: MeasurementDefinitionArea | null,
+  view: MeasurementView,
+): MeasurementPoint[] {
+  const boundaryPoints =
+    (perimeter.boundaryPoints?.length ?? 0) >= 3 ? perimeter.boundaryPoints : area?.boundaryPoints
+  return (boundaryPoints ?? []).map((point) =>
+    view === '2d' ? definitionPlanPoint(point) : definitionPoint(point),
+  )
+}
+
+function perimeterLabelForView(
+  perimeter: MeasurementDefinitionPerimeter,
+  view: MeasurementView,
+): MeasurementPoint {
+  return view === '2d'
+    ? definitionPlanPoint(perimeter.labelPoint)
+    : definitionPoint(perimeter.labelPoint)
+}
+
+function backfillPerimeterBoundaryPoints(
+  perimeters: MeasurementPerimeter[],
+): MeasurementPerimeter[] {
+  if (perimeters.every((perimeter) => (perimeter.boundaryPoints?.length ?? 0) >= 3)) {
+    return perimeters
+  }
+
+  const candidates = Object.values(useScene.getState().nodes).flatMap((node) => {
+    const perimeter = perimeterFromCurrentSceneNode(node)
+    return perimeter ? [{ area: areaFromCurrentSceneNode(node), perimeter }] : []
+  })
+  if (candidates.length === 0) return perimeters
+
+  return perimeters.map((perimeter) => {
+    if ((perimeter.boundaryPoints?.length ?? 0) >= 3) return perimeter
+    const match = candidates.find(({ perimeter: definition }) => {
+      if (
+        Math.abs(definition.lengthMeters - perimeter.lengthMeters) >
+        PERIMETER_BACKFILL_LENGTH_TOLERANCE_METERS
+      ) {
+        return false
+      }
+      return (
+        measurementDistance(
+          perimeterLabelForView(definition, perimeter.view),
+          perimeter.labelPoint,
+        ) <= PERIMETER_BACKFILL_LABEL_TOLERANCE_METERS
+      )
+    })
+    if (!match) return perimeter
+
+    const boundaryPoints = perimeterBoundaryForView(match.perimeter, match.area, perimeter.view)
+    return boundaryPoints.length >= 3 ? { ...perimeter, boundaryPoints } : perimeter
+  })
+}
+
 function normalizeVector(vector: MeasurementPoint): MeasurementPoint | null {
   const length = Math.hypot(vector[0], vector[1], vector[2])
   if (length < 1e-8) return null
@@ -316,6 +455,59 @@ function rotateVectorAroundAxis(
     vector[1] * cos + cross[1] * sin + axis[1] * dot * (1 - cos),
     vector[2] * cos + cross[2] * sin + axis[2] * dot * (1 - cos),
   ]
+}
+
+function angleReferencePointFromLine(
+  vertex: MeasurementPoint,
+  target: MeasurementPoint | null | undefined,
+  referenceLine: { end: MeasurementPoint; start: MeasurementPoint } | null | undefined,
+): MeasurementPoint | null {
+  if (!referenceLine) return null
+  const dx = referenceLine.end[0] - referenceLine.start[0]
+  const dy = referenceLine.end[1] - referenceLine.start[1]
+  const dz = referenceLine.end[2] - referenceLine.start[2]
+  const lineLength = Math.hypot(dx, dy, dz)
+  if (lineLength < 1e-8) return null
+
+  const referenceLength = target ? Math.max(1, distanceBetweenMeasurements(vertex, target)) : 1
+  let ux = dx / lineLength
+  let uy = dy / lineLength
+  let uz = dz / lineLength
+  if (target) {
+    const tx = target[0] - vertex[0]
+    const ty = target[1] - vertex[1]
+    const tz = target[2] - vertex[2]
+    if (tx * ux + ty * uy + tz * uz < 0) {
+      ux *= -1
+      uy *= -1
+      uz *= -1
+    }
+  }
+
+  return [
+    vertex[0] + ux * referenceLength,
+    vertex[1] + uy * referenceLength,
+    vertex[2] + uz * referenceLength,
+  ]
+}
+
+export function gridReferencePointForAngle(
+  vertex: MeasurementPoint,
+  target?: MeasurementPoint | null,
+): MeasurementPoint {
+  const length = target ? Math.max(1, distanceBetweenMeasurements(vertex, target)) : 1
+  return [vertex[0] + length, vertex[1], vertex[2]]
+}
+
+export function referencePointForAngle(
+  vertex: MeasurementPoint,
+  target?: MeasurementPoint | null,
+  referenceLine?: { end: MeasurementPoint; start: MeasurementPoint } | null,
+): MeasurementPoint {
+  return (
+    angleReferencePointFromLine(vertex, target, referenceLine) ??
+    gridReferencePointForAngle(vertex, target)
+  )
 }
 
 function readMeasurementIdNumber(id: string): number {
@@ -401,9 +593,16 @@ export function normalizePersistedMeasurements(value: unknown): PersistedMeasure
       ) {
         return []
       }
+      const boundaryPoints = Array.isArray(perimeter.boundaryPoints)
+        ? perimeter.boundaryPoints.flatMap((point) => {
+            const normalized = normalizePoint(point)
+            return normalized ? [normalized] : []
+          })
+        : undefined
       return [
         {
           id: perimeter.id,
+          boundaryPoints: boundaryPoints && boundaryPoints.length >= 3 ? boundaryPoints : undefined,
           labelPoint,
           lengthMeters: perimeter.lengthMeters,
           view: perimeter.view,
@@ -439,7 +638,11 @@ export function serializeMeasurements(): PersistedMeasurements {
 }
 
 export function hydrateMeasurements(value: unknown) {
-  const measurements = normalizePersistedMeasurements(value)
+  const normalized = normalizePersistedMeasurements(value)
+  const measurements: PersistedMeasurements = {
+    ...normalized,
+    perimeters: backfillPerimeterBoundaryPoints(normalized.perimeters),
+  }
   syncNextMeasurementId(measurements)
   useMeasurementTool.setState({
     ...measurements,
@@ -453,6 +656,7 @@ export function hydrateMeasurements(value: unknown) {
     previewSegment: null,
     selectedId: null,
     snapTarget: null,
+    suppressNextPlacementClick: false,
   })
 }
 
@@ -474,6 +678,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   continuousMeasurement: false,
   enabledSnapKinds: DEFAULT_MEASUREMENT_SNAP_SETTINGS,
   draggingSegmentEndpoint: null,
+  suppressNextPlacementClick: false,
   selectedId: null,
   begin: (view, start, surfaceNormal) =>
     set({
@@ -537,9 +742,15 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       ],
     }))
   },
-  beginAngle: (view, first) =>
+  beginAngle: (view, vertex, referenceLine) =>
     set({
-      angleDraft: { first, vertex: null, second: null, view },
+      angleDraft: {
+        first: referencePointForAngle(vertex, null, referenceLine),
+        referenceLine: referenceLine ?? undefined,
+        vertex,
+        second: null,
+        view,
+      },
       draft: null,
       polygonDraft: null,
       previewArea: null,
@@ -552,12 +763,20 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       if (!state.angleDraft) return state
       return {
         angleDraft: state.angleDraft.vertex
-          ? { ...state.angleDraft, second: point }
+          ? {
+              ...state.angleDraft,
+              first: referencePointForAngle(
+                state.angleDraft.vertex,
+                point,
+                state.angleDraft.referenceLine,
+              ),
+              second: point,
+            }
           : { ...state.angleDraft, vertex: point },
       }
     }),
   updateAngleDegrees: (degrees) => {
-    if (!(Number.isFinite(degrees) && degrees > 1e-4 && degrees < 360)) return
+    if (!(Number.isFinite(degrees) && degrees >= 0 && degrees < 360)) return
     set((state) => {
       const draft = state.angleDraft
       if (!(draft?.vertex && draft.second)) return state
@@ -589,7 +808,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     })
   },
   updateAngleMeasurementDegrees: (id, degrees) => {
-    if (!(Number.isFinite(degrees) && degrees > 1e-4 && degrees < 360)) return
+    if (!(Number.isFinite(degrees) && degrees >= 0 && degrees < 360)) return
     set((state) => ({
       angles: state.angles.map((angle) => {
         if (angle.id !== id) return angle
@@ -638,10 +857,10 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     }
 
     const second = point ?? angleDraft.second
+    const first = referencePointForAngle(angleDraft.vertex, second, angleDraft.referenceLine)
     if (
       !second ||
-      distanceBetweenMeasurements(angleDraft.vertex, second) < 1e-4 ||
-      angleBetweenMeasurements(angleDraft.first, angleDraft.vertex, second) < 1e-4
+      distanceBetweenMeasurements(angleDraft.vertex, second) < 1e-4
     ) {
       set({ angleDraft: null })
       return
@@ -654,7 +873,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         ...state.angles,
         {
           id,
-          first: angleDraft.first,
+          first,
           vertex: angleDraft.vertex!,
           second,
           view: angleDraft.view,
@@ -706,6 +925,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         polygonDraft.view,
         labelPoint,
         polygonPerimeterFromMeasurements(polygonDraft.points),
+        polygonDraft.points,
       )
     }
     set({ polygonDraft: null, previewArea: null, previewPerimeter: null })
@@ -774,7 +994,11 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     })),
   selectMeasurement: (id) => set({ selectedId: id }),
   startSegmentEndpointDrag: (id, endpoint) =>
-    set({ draggingSegmentEndpoint: { endpoint, id }, selectedId: id }),
+    set({
+      draggingSegmentEndpoint: { endpoint, id },
+      selectedId: id,
+      suppressNextPlacementClick: false,
+    }),
   updateSegmentEndpoint: (id, endpoint, point) =>
     set((state) => ({
       segments: state.segments.map((segment) =>
@@ -787,7 +1011,16 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           : segment,
       ),
     })),
-  endSegmentEndpointDrag: () => set({ draggingSegmentEndpoint: null }),
+  endSegmentEndpointDrag: (options) =>
+    set({
+      draggingSegmentEndpoint: null,
+      suppressNextPlacementClick: Boolean(options?.suppressNextClick),
+    }),
+  consumeSuppressedPlacementClick: () => {
+    const shouldSuppress = get().suppressNextPlacementClick
+    if (shouldSuppress) set({ suppressNextPlacementClick: false })
+    return shouldSuppress
+  },
   removeMeasurement: (id) =>
     set((state) => ({
       areas: state.areas.filter((area) => area.id !== id),
@@ -876,7 +1109,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       ],
     }))
   },
-  addPerimeter: (view, labelPoint, lengthMeters) => {
+  addPerimeter: (view, labelPoint, lengthMeters, boundaryPoints) => {
     if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-6)) {
       set({
         draft: null,
@@ -899,6 +1132,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         ...state.perimeters,
         {
           id,
+          boundaryPoints,
           labelPoint,
           lengthMeters,
           view,
@@ -918,6 +1152,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       previewPerimeter: null,
       previewSegment: null,
       snapTarget: null,
+      suppressNextPlacementClick: false,
     }),
   clear: () =>
     set({
@@ -935,5 +1170,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       selectedId: null,
       segments: [],
       snapTarget: null,
+      suppressNextPlacementClick: false,
     }),
 }))

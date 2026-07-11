@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { type AnyNode, useScene } from '@pascal-app/core'
+import { registerMeasurementTestNodes } from '../lib/register-measurement-test-nodes'
 import {
   axisLockedMeasurementPoint,
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
@@ -9,7 +11,12 @@ import {
   useMeasurementTool,
 } from './use-measurement-tool'
 
+beforeAll(() => {
+  registerMeasurementTestNodes()
+})
+
 afterEach(() => {
+  useScene.getState().clearScene()
   useMeasurementTool.getState().clear()
   useMeasurementTool.getState().setContinuousMeasurement(false)
   useMeasurementTool.getState().setDisplayPrecision('standard')
@@ -19,6 +26,24 @@ afterEach(() => {
       .setSnapKindEnabled(kind as keyof typeof DEFAULT_MEASUREMENT_SNAP_SETTINGS, enabled)
   }
 })
+
+function zoneNode(): AnyNode {
+  return {
+    id: 'measurement_store_zone',
+    type: 'surface-perimeter-without-boundary',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ],
+  } as never
+}
 
 describe('useMeasurementTool', () => {
   test('isDraggingMeasurementEndpoint identifies only the active handle', () => {
@@ -189,8 +214,7 @@ describe('useMeasurementTool', () => {
 
   test('updates an active angle draft to an exact angle', () => {
     const measurement = useMeasurementTool.getState()
-    measurement.beginAngle('2d', [1, 0, 0])
-    measurement.commitAngle([0, 0, 0])
+    measurement.beginAngle('2d', [0, 0, 0])
     measurement.updateAngle([0, 0, 1])
 
     measurement.updateAngleDegrees(45)
@@ -206,8 +230,7 @@ describe('useMeasurementTool', () => {
 
   test('updates a persistent angle measurement to an exact angle', () => {
     const measurement = useMeasurementTool.getState()
-    measurement.beginAngle('3d', [1, 0, 0])
-    measurement.commitAngle([0, 0, 0])
+    measurement.beginAngle('3d', [0, 0, 0])
     measurement.commitAngle([0, 0, 1])
     const angleId = useMeasurementTool.getState().angles[0]!.id
 
@@ -275,8 +298,7 @@ describe('useMeasurementTool', () => {
     measurement.addSegment('3d', [0, 0, 0], [2, 0, 0], 2)
     measurement.addArea('3d', [1, 0, 1], 12)
     measurement.addPerimeter('3d', [1, 0, 1], 14)
-    measurement.beginAngle('3d', [1, 0, 0])
-    measurement.commitAngle([0, 0, 0])
+    measurement.beginAngle('3d', [0, 0, 0])
     measurement.commitAngle([0, 0, 1])
 
     const beforeDelete = useMeasurementTool.getState()
@@ -333,8 +355,7 @@ describe('useMeasurementTool', () => {
     measurement.addSegment('2d', [0, 0, 0], [1, 0, 0])
     measurement.addArea('2d', [0, 0, 0], 8)
     measurement.addPerimeter('2d', [0, 0, 0], 12)
-    measurement.beginAngle('2d', [1, 0, 0])
-    measurement.commitAngle([0, 0, 0])
+    measurement.beginAngle('2d', [0, 0, 0])
     measurement.updateAngle([0, 0, 1])
     measurement.begin('2d', [0, 0, 0])
     measurement.update([0, 0, 2])
@@ -380,8 +401,7 @@ describe('useMeasurementTool', () => {
       [1, 0, 1],
     ])
     measurement.addPerimeter('3d', [0.5, 0, 0.5], 10)
-    measurement.beginAngle('2d', [1, 0, 0])
-    measurement.commitAngle([0, 0, 0])
+    measurement.beginAngle('2d', [0, 0, 0])
     measurement.commitAngle([0, 0, 1])
     measurement.begin('2d', [0, 0, 0])
     measurement.update([0, 0, 2])
@@ -401,6 +421,53 @@ describe('useMeasurementTool', () => {
       segments: persisted.segments,
     })
     expect(useMeasurementTool.getState().angles).toEqual(persisted.angles)
+  })
+
+  test('hydrates legacy surface perimeters with display boundary points', () => {
+    const zone = zoneNode()
+    useScene.getState().setScene({ [zone.id]: zone } as never, [zone.id] as never)
+
+    hydrateMeasurements({
+      version: 1,
+      segments: [],
+      areas: [],
+      perimeters: [
+        {
+          id: 'measurement-perimeter-legacy-2d',
+          labelPoint: [2, 0, 1.5],
+          lengthMeters: 14,
+          view: '2d',
+        },
+        {
+          id: 'measurement-perimeter-legacy-3d',
+          labelPoint: [2, 0.05, 1.5],
+          lengthMeters: 14,
+          view: '3d',
+        },
+      ],
+      angles: [],
+    })
+
+    expect(useMeasurementTool.getState().perimeters).toMatchObject([
+      {
+        boundaryPoints: [
+          [0, 0, 0],
+          [4, 0, 0],
+          [4, 0, 3],
+          [0, 0, 3],
+        ],
+        id: 'measurement-perimeter-legacy-2d',
+      },
+      {
+        boundaryPoints: [
+          [0, 0.02, 0],
+          [4, 0.02, 0],
+          [4, 0.02, 3],
+          [0, 0.02, 3],
+        ],
+        id: 'measurement-perimeter-legacy-3d',
+      },
+    ])
   })
 
   test('normalizes invalid persisted measurement entries', () => {

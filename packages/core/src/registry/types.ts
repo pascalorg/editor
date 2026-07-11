@@ -814,6 +814,7 @@ export type MeasurementDefinitionArea = {
 }
 
 export type MeasurementDefinitionPerimeter = {
+  boundaryPoints?: ReadonlyArray<MeasurementDefinitionPoint>
   labelPoint: MeasurementDefinitionPoint
   lengthMeters: number
 }
@@ -824,6 +825,7 @@ export type MeasurementDefinition<N> = {
     node: N,
     ctx: GeometryContext,
     cursorPoint?: MeasurementDefinitionPoint | null,
+    cursorNormal?: MeasurementDefinitionPoint | null,
   ) => MeasurementDefinitionDirectLength | null
   perimeter?: (node: N, ctx: GeometryContext) => MeasurementDefinitionPerimeter | null
   snapGeometry?: (node: N, ctx: GeometryContext) => MeasurementDefinitionSnapGeometry | null

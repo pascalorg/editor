@@ -44,6 +44,10 @@ export const sceneRegistry = {
   // Master lookup: ID -> Object3D
   nodes: new Map<string, THREE.Object3D>(),
 
+  // Reverse ownership lookup used to keep nested R3F events attached to the
+  // closest registered scene node instead of bubbling into container nodes.
+  nodeIds: new WeakMap<THREE.Object3D, string>(),
+
   // Categorized lookups: Kind -> Set of IDs. Backed by a Proxy so any kind
   // gets a Set on first touch — no hardcoded list.
   byType: byTypeProxy,
@@ -51,6 +55,7 @@ export const sceneRegistry = {
   /** Remove all entries. Call when unloading a scene to prevent stale 3D refs. */
   clear() {
     this.nodes.clear()
+    this.nodeIds = new WeakMap<THREE.Object3D, string>()
     for (const set of byTypeStore.values()) {
       set.clear()
     }
@@ -64,6 +69,7 @@ export function useRegistry(id: string, type: string, ref: React.RefObject<THREE
 
     // 1. Add to master map
     sceneRegistry.nodes.set(id, obj)
+    sceneRegistry.nodeIds.set(obj, id)
 
     // 2. Add to type-specific set — Proxy auto-creates on first access.
     sceneRegistry.byType[type]!.add(id)
@@ -71,6 +77,7 @@ export function useRegistry(id: string, type: string, ref: React.RefObject<THREE
     // 3. Cleanup when component unmounts
     return () => {
       sceneRegistry.nodes.delete(id)
+      sceneRegistry.nodeIds.delete(obj)
       sceneRegistry.byType[type]!.delete(id)
     }
   }, [id, type, ref])

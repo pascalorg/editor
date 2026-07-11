@@ -19,17 +19,22 @@ import type {
   ZoneNode,
 } from '@pascal-app/core'
 import {
+  DEFAULT_WALL_HEIGHT,
   getDutchRoofMetrics,
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
+  getRenderableSlabPolygon,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallThickness,
   sampleFenceCenterline,
   sampleWallCenterline,
   stairFootprintAABB,
 } from '@pascal-app/core'
 
 const CURVE_SNAP_SEGMENTS = 32
+const WALL_SIDE_NORMAL_Y_THRESHOLD = 0.7
+const WALL_SIDE_HEIGHT_EPSILON = 0.05
 
 type SurfaceNode = SlabNode | CeilingNode | ZoneNode
 type PlanPoint = { x: number; y: number }
@@ -75,6 +80,10 @@ function surfaceY(node: SurfaceNode): number {
   if (node.type === 'ceiling') return node.height
   if (node.type === 'slab') return node.elevation
   return 0
+}
+
+function surfaceBoundaryPolygon(node: SurfaceNode): Array<[number, number]> {
+  return node.type === 'slab' ? getRenderableSlabPolygon(node) : node.polygon
 }
 
 function addPolygonSnapGeometry(
@@ -181,13 +190,152 @@ function rotatedRectanglePolygon(
   })
 }
 
+function closestPointOnSegment(
+  point: PlanPoint,
+  start: PlanPoint,
+  end: PlanPoint,
+): { distanceSq: number; t: number } {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq < 1e-9) {
+    const ox = point.x - start.x
+    const oy = point.y - start.y
+    return { distanceSq: ox * ox + oy * oy, t: 0 }
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq),
+  )
+  const projected = { x: start.x + dx * t, y: start.y + dy * t }
+  const ox = point.x - projected.x
+  const oy = point.y - projected.y
+  return { distanceSq: ox * ox + oy * oy, t }
+}
+
+function wallFaceAnchor(
+  node: WallNode,
+  cursorPoint: MeasurementDefinitionPoint,
+  cursorNormal?: MeasurementDefinitionPoint | null,
+): MeasurementDefinitionPoint {
+  const planPoint = { x: cursorPoint[0], y: cursorPoint[2] }
+  const sampleCount = Math.max(CURVE_SNAP_SEGMENTS, Math.ceil(getWallCurveLength(node) / 0.25))
+  let best: {
+    distanceSq: number
+    frameT: number
+  } | null = null
+  let previous = getWallCurveFrameAt(node, 0).point
+
+  for (let index = 1; index <= sampleCount; index += 1) {
+    const current = getWallCurveFrameAt(node, index / sampleCount).point
+    const projected = closestPointOnSegment(planPoint, previous, current)
+    if (!best || projected.distanceSq < best.distanceSq) {
+      best = {
+        distanceSq: projected.distanceSq,
+        frameT: (index - 1 + projected.t) / sampleCount,
+      }
+    }
+    previous = current
+  }
+
+  const frame = getWallCurveFrameAt(node, best?.frameT ?? 0)
+  const signedCursorOffset =
+    (planPoint.x - frame.point.x) * frame.normal.x + (planPoint.y - frame.point.y) * frame.normal.y
+  const normalPlanLength = cursorNormal ? Math.hypot(cursorNormal[0], cursorNormal[2]) : 0
+  const normalSide =
+    cursorNormal && normalPlanLength > 1e-6
+      ? Math.sign(
+          (cursorNormal[0] / normalPlanLength) * frame.normal.x +
+            (cursorNormal[2] / normalPlanLength) * frame.normal.y,
+        )
+      : 0
+  const cursorSide = Math.sign(signedCursorOffset)
+  const side = normalSide || cursorSide || 1
+  const offset = (getWallThickness(node) / 2) * side
+
+  return [
+    frame.point.x + frame.normal.x * offset,
+    cursorPoint[1],
+    frame.point.y + frame.normal.y * offset,
+  ]
+}
+
+function fenceFaceAnchor(
+  node: FenceNode,
+  cursorPoint: MeasurementDefinitionPoint,
+  cursorNormal?: MeasurementDefinitionPoint | null,
+): MeasurementDefinitionPoint {
+  const planPoint = { x: cursorPoint[0], y: cursorPoint[2] }
+  const sampleCount = Math.max(
+    CURVE_SNAP_SEGMENTS,
+    Math.ceil(getFenceCenterlineLength(node) / 0.25),
+  )
+  let best: {
+    distanceSq: number
+    frameT: number
+  } | null = null
+  let previous = getFenceCenterlineFrameAt(node, 0).point
+
+  for (let index = 1; index <= sampleCount; index += 1) {
+    const current = getFenceCenterlineFrameAt(node, index / sampleCount).point
+    const projected = closestPointOnSegment(planPoint, previous, current)
+    if (!best || projected.distanceSq < best.distanceSq) {
+      best = {
+        distanceSq: projected.distanceSq,
+        frameT: (index - 1 + projected.t) / sampleCount,
+      }
+    }
+    previous = current
+  }
+
+  const frame = getFenceCenterlineFrameAt(node, best?.frameT ?? 0)
+  const signedCursorOffset =
+    (planPoint.x - frame.point.x) * frame.normal.x + (planPoint.y - frame.point.y) * frame.normal.y
+  const normalPlanLength = cursorNormal ? Math.hypot(cursorNormal[0], cursorNormal[2]) : 0
+  const normalSide =
+    cursorNormal && normalPlanLength > 1e-6
+      ? Math.sign(
+          (cursorNormal[0] / normalPlanLength) * frame.normal.x +
+            (cursorNormal[2] / normalPlanLength) * frame.normal.y,
+        )
+      : 0
+  const cursorSide = Math.sign(signedCursorOffset)
+  const side = normalSide || cursorSide || 1
+  const offset = ((node.thickness ?? 0.08) / 2) * side
+
+  return [
+    frame.point.x + frame.normal.x * offset,
+    cursorPoint[1],
+    frame.point.y + frame.normal.y * offset,
+  ]
+}
+
 export function wallMeasurement(): MeasurementDefinition<WallNode> {
   return {
-    directLength: (node) => ({
-      start: [node.start[0], 0, node.start[1]],
-      end: [node.end[0], 0, node.end[1]],
-      measuredDistanceMeters: getWallCurveLength(node),
-    }),
+    directLength: (node, _ctx, cursorPoint, cursorNormal) => {
+      const height = node.height ?? DEFAULT_WALL_HEIGHT
+      const normalY = cursorNormal ? Math.abs(cursorNormal[1]) : null
+      const isSideNormal = normalY !== null && normalY < WALL_SIDE_NORMAL_Y_THRESHOLD
+      const isWallSideHover =
+        !cursorNormal &&
+        cursorPoint &&
+        cursorPoint[1] > WALL_SIDE_HEIGHT_EPSILON &&
+        cursorPoint[1] < height - WALL_SIDE_HEIGHT_EPSILON
+      if (cursorPoint && (isSideNormal || isWallSideHover)) {
+        const anchor = wallFaceAnchor(node, cursorPoint, cursorNormal)
+        return {
+          start: [anchor[0], 0, anchor[2]],
+          end: [anchor[0], height, anchor[2]],
+          measuredDistanceMeters: height,
+        }
+      }
+      return {
+        start: [node.start[0], 0, node.start[1]],
+        end: [node.end[0], 0, node.end[1]],
+        measuredDistanceMeters: getWallCurveLength(node),
+      }
+    },
     snapGeometry: (node) => {
       const midpoint = getWallCurveFrameAt(node, 0.5).point
       const geometry: Required<MeasurementDefinitionSnapGeometry> = {
@@ -228,11 +376,29 @@ export function wallMeasurement(): MeasurementDefinition<WallNode> {
 
 export function fenceMeasurement(): MeasurementDefinition<FenceNode> {
   return {
-    directLength: (node) => ({
-      start: [node.start[0], 0, node.start[1]],
-      end: [node.end[0], 0, node.end[1]],
-      measuredDistanceMeters: getFenceCenterlineLength(node),
-    }),
+    directLength: (node, _ctx, cursorPoint, cursorNormal) => {
+      const height = node.height ?? 1.8
+      const normalY = cursorNormal ? Math.abs(cursorNormal[1]) : null
+      const isSideNormal = normalY !== null && normalY < WALL_SIDE_NORMAL_Y_THRESHOLD
+      const isFenceSideHover =
+        !cursorNormal &&
+        cursorPoint &&
+        cursorPoint[1] > WALL_SIDE_HEIGHT_EPSILON &&
+        cursorPoint[1] < height - WALL_SIDE_HEIGHT_EPSILON
+      if (cursorPoint && (isSideNormal || isFenceSideHover)) {
+        const anchor = fenceFaceAnchor(node, cursorPoint, cursorNormal)
+        return {
+          start: [anchor[0], 0, anchor[2]],
+          end: [anchor[0], height, anchor[2]],
+          measuredDistanceMeters: height,
+        }
+      }
+      return {
+        start: [node.start[0], 0, node.start[1]],
+        end: [node.end[0], 0, node.end[1]],
+        measuredDistanceMeters: getFenceCenterlineLength(node),
+      }
+    },
     snapGeometry: (node) => {
       const midpoint = getFenceCenterlineFrameAt(node, 0.5).point
       const geometry: Required<MeasurementDefinitionSnapGeometry> = {
@@ -280,30 +446,33 @@ export function fenceMeasurement(): MeasurementDefinition<FenceNode> {
 export function surfaceMeasurement<N extends SurfaceNode>(): MeasurementDefinition<N> {
   return {
     area: (node) => {
-      const outer = polygonAreaAndCentroid(node.polygon)
+      const boundary = surfaceBoundaryPolygon(node)
+      const outer = polygonAreaAndCentroid(boundary)
       const holes = 'holes' in node ? node.holes : []
       const holesArea = holes.reduce((sum, hole) => sum + polygonAreaAndCentroid(hole).area, 0)
       const y = surfaceY(node)
       return {
         areaSquareMeters: Math.max(0, outer.area - holesArea),
-        boundaryPoints: node.polygon.map((point) => [point[0], y + 0.02, point[1]]),
+        boundaryPoints: boundary.map((point) => [point[0], y + 0.02, point[1]]),
         labelPoint: [outer.centroid.x, y + 0.05, outer.centroid.y],
       } satisfies MeasurementDefinitionArea
     },
     perimeter: (node) => {
-      const outer = polygonAreaAndCentroid(node.polygon)
+      const boundary = surfaceBoundaryPolygon(node)
+      const outer = polygonAreaAndCentroid(boundary)
       const holes = 'holes' in node ? node.holes : []
       const holesLength = holes.reduce((sum, hole) => sum + polygonPerimeter(hole), 0)
       const y = surfaceY(node)
       return {
+        boundaryPoints: boundary.map((point) => [point[0], y + 0.02, point[1]]),
         labelPoint: [outer.centroid.x, y + 0.05, outer.centroid.y],
-        lengthMeters: polygonPerimeter(node.polygon) + holesLength,
+        lengthMeters: polygonPerimeter(boundary) + holesLength,
       } satisfies MeasurementDefinitionPerimeter
     },
     snapGeometry: (node) => {
       const y = surfaceY(node)
       const geometry: Required<MeasurementDefinitionSnapGeometry> = { anchors: [], segments: [] }
-      addPolygonSnapGeometry(geometry, node.polygon, y, {
+      addPolygonSnapGeometry(geometry, surfaceBoundaryPolygon(node), y, {
         center: 'Center',
         edge: 'Edge',
         vertex: 'Vertex',
@@ -578,10 +747,21 @@ export function roofHostedRectangleMeasurement<
 export function wallHostedOpeningMeasurement<
   N extends DoorNode | WindowNode,
 >(): MeasurementDefinition<N> {
-  const directLength = (
-    node: N,
-    ctx: GeometryContext,
-  ): MeasurementDefinitionDirectLength | null => {
+  type OpeningFrame = {
+    bottomY: number
+    centerX: number
+    centerZ: number
+    dirX: number
+    dirZ: number
+    host: WallNode
+    leftS: number
+    normalX: number
+    normalZ: number
+    rightS: number
+    topY: number
+  }
+
+  const openingFrame = (node: N, ctx: GeometryContext): OpeningFrame | null => {
     const hostId = node.wallId ?? node.parentId
     const host = hostId ? ctx.resolve<WallNode>(hostId as never) : undefined
     if (host?.type !== 'wall') return null
@@ -589,19 +769,119 @@ export function wallHostedOpeningMeasurement<
     const dx = host.end[0] - host.start[0]
     const dz = host.end[1] - host.start[1]
     const hostLength = Math.hypot(dx, dz)
-    if (hostLength < 1e-4 || node.width < 1e-4) return null
+    if (hostLength < 1e-4 || node.width < 1e-4 || node.height < 1e-4) return null
 
-    const positionAlongWall = node.position[0]
-    const positionY = 0
     const dirX = dx / hostLength
     const dirZ = dz / hostLength
-    const centerX = host.start[0] + dirX * positionAlongWall
-    const centerZ = host.start[1] + dirZ * positionAlongWall
+    const centerS = node.position[0]
+    const centerX = host.start[0] + dirX * centerS
+    const centerZ = host.start[1] + dirZ * centerS
     const halfWidth = node.width / 2
+    const centerY = node.position[1]
 
     return {
-      start: [centerX - dirX * halfWidth, positionY, centerZ - dirZ * halfWidth],
-      end: [centerX + dirX * halfWidth, positionY, centerZ + dirZ * halfWidth],
+      bottomY: centerY - node.height / 2,
+      centerX,
+      centerZ,
+      dirX,
+      dirZ,
+      host,
+      leftS: centerS - halfWidth,
+      normalX: -dirZ,
+      normalZ: dirX,
+      rightS: centerS + halfWidth,
+      topY: centerY + node.height / 2,
+    }
+  }
+
+  const pointFromFrame = (
+    frame: OpeningFrame,
+    alongWall: number,
+    y: number,
+    faceOffset: number,
+  ): MeasurementDefinitionPoint => [
+    frame.host.start[0] + frame.dirX * alongWall + frame.normalX * faceOffset,
+    y,
+    frame.host.start[1] + frame.dirZ * alongWall + frame.normalZ * faceOffset,
+  ]
+
+  const faceOffsetFromCursor = (
+    node: N,
+    frame: OpeningFrame,
+    cursorPoint: MeasurementDefinitionPoint,
+  ): number => {
+    const offset =
+      (cursorPoint[0] - frame.centerX) * frame.normalX +
+      (cursorPoint[2] - frame.centerZ) * frame.normalZ
+    return Math.abs(offset) > 1e-6 ? offset : (node.position[2] ?? 0)
+  }
+
+  const closestOpeningEdge = (
+    node: N,
+    frame: OpeningFrame,
+    cursorPoint: MeasurementDefinitionPoint,
+  ): MeasurementDefinitionDirectLength => {
+    const faceOffset = faceOffsetFromCursor(node, frame, cursorPoint)
+    const cursorS =
+      (cursorPoint[0] - frame.host.start[0]) * frame.dirX +
+      (cursorPoint[2] - frame.host.start[1]) * frame.dirZ
+    const cursorY = cursorPoint[1]
+    const horizontalDistanceSq = (edgeY: number) => {
+      const clampedS = Math.max(frame.leftS, Math.min(frame.rightS, cursorS))
+      const ds = cursorS - clampedS
+      const dy = cursorY - edgeY
+      return ds * ds + dy * dy
+    }
+    const verticalDistanceSq = (edgeS: number) => {
+      const clampedY = Math.max(frame.bottomY, Math.min(frame.topY, cursorY))
+      const ds = cursorS - edgeS
+      const dy = cursorY - clampedY
+      return ds * ds + dy * dy
+    }
+    const candidates = [
+      {
+        distanceSq: horizontalDistanceSq(frame.bottomY),
+        end: pointFromFrame(frame, frame.rightS, frame.bottomY, faceOffset),
+        measuredDistanceMeters: node.width,
+        start: pointFromFrame(frame, frame.leftS, frame.bottomY, faceOffset),
+      },
+      {
+        distanceSq: horizontalDistanceSq(frame.topY),
+        end: pointFromFrame(frame, frame.rightS, frame.topY, faceOffset),
+        measuredDistanceMeters: node.width,
+        start: pointFromFrame(frame, frame.leftS, frame.topY, faceOffset),
+      },
+      {
+        distanceSq: verticalDistanceSq(frame.leftS),
+        end: pointFromFrame(frame, frame.leftS, frame.topY, faceOffset),
+        measuredDistanceMeters: node.height,
+        start: pointFromFrame(frame, frame.leftS, frame.bottomY, faceOffset),
+      },
+      {
+        distanceSq: verticalDistanceSq(frame.rightS),
+        end: pointFromFrame(frame, frame.rightS, frame.topY, faceOffset),
+        measuredDistanceMeters: node.height,
+        start: pointFromFrame(frame, frame.rightS, frame.bottomY, faceOffset),
+      },
+    ]
+    return candidates.reduce((best, candidate) =>
+      candidate.distanceSq < best.distanceSq ? candidate : best,
+    )
+  }
+
+  const directLength = (
+    node: N,
+    ctx: GeometryContext,
+    cursorPoint?: MeasurementDefinitionPoint | null,
+  ): MeasurementDefinitionDirectLength | null => {
+    const frame = openingFrame(node, ctx)
+    if (!frame) return null
+
+    if (cursorPoint) return closestOpeningEdge(node, frame, cursorPoint)
+
+    return {
+      start: pointFromFrame(frame, frame.leftS, 0, node.position[2] ?? 0),
+      end: pointFromFrame(frame, frame.rightS, 0, node.position[2] ?? 0),
       measuredDistanceMeters: node.width,
     }
   }

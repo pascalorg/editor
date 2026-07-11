@@ -103,6 +103,14 @@ function zoneNode(): AnyNode {
   } as never
 }
 
+function areaOutlinedPerimeterNode(): AnyNode {
+  return {
+    ...zoneNode(),
+    id: 'area_outlined_perimeter_measurement_2d',
+    type: 'surface-perimeter-without-boundary',
+  } as never
+}
+
 function slabWithHoleNode(): AnyNode {
   return {
     id: 'slab_measurement_hole_2d',
@@ -543,6 +551,26 @@ describe('floorplan measurement grid handlers', () => {
     expect(useMeasurementTool.getState().snapTarget).toMatchObject({
       kind: 'endpoint',
       point: [4, 0, 0],
+      view: '2d',
+    })
+  })
+
+  test('does not start a new 2D measurement from the click after endpoint drag release', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [1, 0, 1], [2, 0, 1], 1)
+    const segmentId = useMeasurementTool.getState().segments[0]!.id
+
+    measurement.startSegmentEndpointDrag(segmentId, 'end')
+    handleFloorplanMeasurementGridMove(gridEvent([3, 0, 1]))
+    measurement.endSegmentEndpointDrag({ suppressNextClick: true })
+    handleFloorplanMeasurementGridClick(gridEvent([3, 0, 1]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.segments).toHaveLength(1)
+    expect(state.draft).toBeNull()
+    expect(state.segments[0]).toMatchObject({
+      end: [3, 0, 1],
+      start: [1, 0, 1],
       view: '2d',
     })
   })
@@ -1070,14 +1098,28 @@ describe('floorplan measurement grid handlers', () => {
     seedScene([wallNode()])
     useMeasurementTool.getState().setMode('angle')
 
-    handleFloorplanMeasurementGridClick(gridEvent([0.08, 0, 0.06]))
     handleFloorplanMeasurementGridClick(gridEvent([2.06, 0, 0.04]))
     handleFloorplanMeasurementGridClick(gridEvent([3.92, 0, 0.05]))
 
     expect(useMeasurementTool.getState().angles[0]).toMatchObject({
-      first: [0, 0, 0],
       vertex: [2, 0, 0],
       second: [4, 0, 0],
+      view: '2d',
+    })
+    expect(useMeasurementTool.getState().angles[0]?.first).toEqual([4, 0, 0])
+  })
+
+  test('uses the adjacent 2D corner edge as the angle reference', () => {
+    seedScene([zoneNode()])
+    useMeasurementTool.getState().setMode('angle')
+
+    handleFloorplanMeasurementGridClick(gridEvent([0.06, 0, 0.04]))
+    handleFloorplanMeasurementGridClick(gridEvent([0, 0, 3]))
+
+    expect(useMeasurementTool.getState().angles[0]).toMatchObject({
+      first: [3, 0, 0],
+      vertex: [0, 0, 0],
+      second: [0, 0, 3],
       view: '2d',
     })
   })
@@ -1086,7 +1128,6 @@ describe('floorplan measurement grid handlers', () => {
     const measurement = useMeasurementTool.getState()
     measurement.setMode('angle')
 
-    handleFloorplanMeasurementGridClick(gridEvent([1, 0, 0]))
     handleFloorplanMeasurementGridClick(gridEvent([0, 0, 0]))
     handleFloorplanMeasurementGridMove(gridEvent([0, 0, 1]))
     handleFloorplanMeasurementGridClick(gridEvent([0, 0, 1]))
@@ -1184,6 +1225,12 @@ describe('floorplan measurement grid handlers', () => {
     expect(handled).toBe(true)
     expect(state.perimeters).toHaveLength(1)
     expect(state.perimeters[0]).toMatchObject({
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+        [0, 0, 3],
+      ],
       labelPoint: [2, 0, 1.5],
       lengthMeters: 14,
       view: '2d',
@@ -1199,10 +1246,35 @@ describe('floorplan measurement grid handlers', () => {
     const state = useMeasurementTool.getState()
     expect(handled).toBe(true)
     expect(state.previewPerimeter).toMatchObject({
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+        [0, 0, 3],
+      ],
       lengthMeters: 14,
       view: '2d',
     })
     expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('2D perimeter reuses the area outline when its perimeter has no boundary points', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    const handled = previewFloorplanMeasurementNode2D(areaOutlinedPerimeterNode() as never)
+
+    const state = useMeasurementTool.getState()
+    expect(handled).toBe(true)
+    expect(state.previewPerimeter).toMatchObject({
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+        [0, 0, 3],
+      ],
+      lengthMeters: 14,
+      view: '2d',
+    })
   })
 
   test('commits a freeform 2D perimeter polygon by clicking the first point again', () => {
@@ -1217,6 +1289,11 @@ describe('floorplan measurement grid handlers', () => {
     expect(state.polygonDraft).toBeNull()
     expect(state.perimeters).toHaveLength(1)
     expect(state.perimeters[0]).toMatchObject({
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+      ],
       lengthMeters: 12,
       view: '2d',
     })
@@ -1339,7 +1416,15 @@ describe('floorplan measurement grid handlers', () => {
       view: '2d',
     })
     expect(state.cursor).toEqual({ point: [2, 0, 3.3], view: '2d' })
-    expect(state.snapTarget).toBeNull()
+    expect(state.snapTarget).toMatchObject({
+      kind: 'edge',
+      point: [2, 0, 3.3],
+      targetLine: {
+        start: [3, 0, 3.3],
+        end: [1, 0, 3.3],
+      },
+      view: '2d',
+    })
   })
 
   test('normal click after a 2D hover preview leaves drawing to the grid handler', () => {

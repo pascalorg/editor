@@ -4,6 +4,7 @@ import {
   type EventSuffix,
   emitter,
   type NodeEvent,
+  sceneRegistry,
 } from '@pascal-app/core'
 import type { ThreeEvent } from '@react-three/fiber'
 import useViewer from '../store/use-viewer'
@@ -15,8 +16,19 @@ import useViewer from '../store/use-viewer'
 // shape, `NodeEvent<T>` adapts the bus payload to that shape.
 type NodeByKind<K extends AnyNodeType> = Extract<AnyNode, { type: K }>
 
+function ownsRaycastHit(node: AnyNode, object: ThreeEvent<PointerEvent>['object']): boolean {
+  let current: typeof object | null = object
+  while (current) {
+    const ownerId = sceneRegistry.nodeIds.get(current)
+    if (ownerId) return ownerId === node.id
+    current = current.parent
+  }
+  return true
+}
+
 export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: K) {
   const emit = (suffix: EventSuffix, e: ThreeEvent<PointerEvent>) => {
+    if (!ownsRaycastHit(node, e.object)) return
     const eventKey = `${type}:${suffix}` as `${K}:${EventSuffix}`
     const localPoint = e.object.worldToLocal(e.point.clone())
     const payload: NodeEvent<NodeByKind<K>> = {

@@ -7,10 +7,11 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Mesh, Vector3 } from 'three'
+import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Group, Mesh, Vector3 } from 'three'
 import { registerMeasurementTestNodes } from '../../../lib/register-measurement-test-nodes'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
+  type MeasurementPoint,
   type MeasurementSnapKind,
   useMeasurementTool,
 } from '../../../store/use-measurement-tool'
@@ -148,6 +149,14 @@ function zoneNode(): AnyNode {
   } as never
 }
 
+function areaOutlinedPerimeterNode(): AnyNode {
+  return {
+    ...zoneNode(),
+    id: 'area_outlined_perimeter_measurement_3d',
+    type: 'surface-perimeter-without-boundary',
+  } as never
+}
+
 function slabWithHoleNode(): AnyNode {
   return {
     id: 'slab_measurement_hole',
@@ -250,6 +259,22 @@ function windowNode(): AnyNode {
     position: [2, 1, 0],
     width: 1,
     height: 1,
+  } as never
+}
+
+function doorNode(): AnyNode {
+  return {
+    id: 'door_measurement',
+    type: 'door',
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    wallId: 'wall_measurement',
+    position: [2, 1.05, 0],
+    width: 0.9,
+    height: 2.1,
   } as never
 }
 
@@ -513,6 +538,48 @@ describe('measurement 3D grid handlers', () => {
     })
   })
 
+  test('does not start a new 3D measurement from the click after endpoint drag release', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('3d', [1, 0, 1], [2, 0, 1], 1)
+    const segmentId = useMeasurementTool.getState().segments[0]!.id
+
+    measurement.startSegmentEndpointDrag(segmentId, 'end')
+    handleMeasurementGridMove3D(gridEvent([3, 0, 1], canvas), canvas)
+    measurement.endSegmentEndpointDrag({ suppressNextClick: true })
+    handleMeasurementGridClick3D(gridEvent([3, 0, 1], canvas), canvas)
+
+    const state = useMeasurementTool.getState()
+    expect(state.segments).toHaveLength(1)
+    expect(state.draft).toBeNull()
+    expect(state.segments[0]).toMatchObject({
+      end: [3, 0, 1],
+      start: [1, 0, 1],
+      view: '3d',
+    })
+  })
+
+  test('does not start a new 3D measurement from a node click after endpoint drag release', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('3d', [1, 0, 1], [2, 0, 1], 1)
+    const segmentId = useMeasurementTool.getState().segments[0]!.id
+
+    measurement.startSegmentEndpointDrag(segmentId, 'end')
+    handleMeasurementGridMove3D(gridEvent([3, 0, 1], canvas), canvas)
+    measurement.endSegmentEndpointDrag({ suppressNextClick: true })
+    handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.segments).toHaveLength(1)
+    expect(state.draft).toBeNull()
+    expect(state.segments[0]).toMatchObject({
+      end: [3, 0, 1],
+      start: [1, 0, 1],
+      view: '3d',
+    })
+  })
+
   test('drags a saved 3D surface measurement endpoint through surface snapping', () => {
     const measurement = useMeasurementTool.getState()
     measurement.addSegment('3d', [1, 0, 1], [2, 0, 1], 1)
@@ -588,14 +655,58 @@ describe('measurement 3D grid handlers', () => {
   test('snaps 3D angle points to nearby surface anchors', () => {
     useMeasurementTool.getState().setMode('angle')
 
-    handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [0.08, 0, 0.06]))
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [2.02, 0, 1.52]))
     handleMeasurementNodeClick3D(nodeEvent(zoneNode(), [3.92, 0, 2.92]))
 
     expect(useMeasurementTool.getState().angles[0]).toMatchObject({
-      first: [0, 0, 0],
       vertex: [2, 0, 1.5],
       second: [4, 0, 3],
+      view: '3d',
+    })
+    expect(useMeasurementTool.getState().angles[0]?.first[0]).toBeCloseTo(4.5)
+    expect(useMeasurementTool.getState().angles[0]?.first[1]).toBeCloseTo(0)
+    expect(useMeasurementTool.getState().angles[0]?.first[2]).toBeCloseTo(1.5)
+  })
+
+  test('uses a 3D grid edge projection as the angle reference', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+    seedScene([wallNode()])
+    useMeasurementTool.getState().setMode('angle')
+
+    handleMeasurementGridClick3D(gridEvent([2, 0, 0.05], canvas), canvas)
+    handleMeasurementGridClick3D(gridEvent([2, 0, 2], canvas), canvas)
+
+    expect(useMeasurementTool.getState().angles[0]).toMatchObject({
+      first: [4, 0, 0],
+      vertex: [2, 0, 0],
+      second: [2, 0, 2],
+      view: '3d',
+    })
+  })
+
+  test('uses the adjacent 3D mesh edge as the angle reference at a vertex', () => {
+    const mesh = triangleMesh()
+    useMeasurementTool.getState().setMode('angle')
+
+    handleMeasurementNodeClick3D(
+      nodeEvent(zoneNode(), [0.04, 0.02, 0], {
+        faceIndex: 0,
+        localPosition: [0.04, 0.02, 0],
+        object: mesh,
+      }),
+    )
+    handleMeasurementNodeClick3D(
+      nodeEvent(zoneNode(), [0, 1, 0], {
+        faceIndex: 0,
+        localPosition: [0, 1, 0],
+        object: mesh,
+      }),
+    )
+
+    expect(useMeasurementTool.getState().angles[0]).toMatchObject({
+      first: [1, 0, 0],
+      vertex: [0, 0, 0],
+      second: [0, 1, 0],
       view: '3d',
     })
   })
@@ -666,6 +777,10 @@ describe('measurement 3D grid handlers', () => {
       kind: 'edge',
       label: 'Mesh edge',
       point: [0.5, 0, 0],
+      targetLine: {
+        start: [0, 0, 0],
+        end: [1, 0, 0],
+      },
       view: '3d',
     })
   })
@@ -850,7 +965,6 @@ describe('measurement 3D grid handlers', () => {
     const measurement = useMeasurementTool.getState()
     measurement.setMode('angle')
 
-    handleMeasurementGridClick3D(gridEvent([1, 0, 0], canvas), canvas)
     handleMeasurementGridClick3D(gridEvent([0, 0, 0], canvas), canvas)
     handleMeasurementGridMove3D(gridEvent([0, 1, 0], canvas), canvas)
     handleMeasurementGridClick3D(gridEvent([0, 1, 0], canvas), canvas)
@@ -1427,11 +1541,46 @@ describe('measurement 3D grid handlers', () => {
     const state = useMeasurementTool.getState()
     expect(state.perimeters).toHaveLength(1)
     expect(state.perimeters[0]).toMatchObject({
+      boundaryPoints: [
+        [0, 0.02, 0],
+        [4, 0.02, 0],
+        [4, 0.02, 3],
+        [0, 0.02, 3],
+      ],
       labelPoint: [2, 0.05, 1.5],
       lengthMeters: 14,
       view: '3d',
     })
     expect(state.areas).toHaveLength(0)
+  })
+
+  test('draws 3D slab perimeter on the rendered slab edge', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    handleMeasurementNodeClick3D(nodeEvent(slabWithHoleNode(), [2, 0, 2]))
+
+    const perimeter = useMeasurementTool.getState().perimeters[0]
+    expect(perimeter).toMatchObject({
+      view: '3d',
+    })
+    expect(perimeter?.boundaryPoints).toHaveLength(4)
+    const boundaryPoints = perimeter?.boundaryPoints
+    expect(boundaryPoints).toBeDefined()
+    const expectedBoundaryPoints: MeasurementPoint[] = [
+      [4.05, 0.02, -0.05],
+      [4.05, 0.02, 4.05],
+      [-0.05, 0.02, 4.05],
+      [-0.05, 0.02, -0.05],
+    ]
+    expectedBoundaryPoints.forEach((point, index) => {
+      expect(boundaryPoints![index]?.[0]).toBeCloseTo(point[0])
+      expect(boundaryPoints![index]?.[1]).toBeCloseTo(point[1])
+      expect(boundaryPoints![index]?.[2]).toBeCloseTo(point[2])
+    })
+    expect(perimeter?.labelPoint[0]).toBeCloseTo(2)
+    expect(perimeter?.labelPoint[1]).toBeCloseTo(0.05)
+    expect(perimeter?.labelPoint[2]).toBeCloseTo(2)
+    expect(perimeter?.lengthMeters).toBeCloseTo(20.4)
   })
 
   test('hovering a 3D surface previews perimeter in perimeter mode without saving it', () => {
@@ -1441,10 +1590,34 @@ describe('measurement 3D grid handlers', () => {
 
     const state = useMeasurementTool.getState()
     expect(state.previewPerimeter).toMatchObject({
+      boundaryPoints: [
+        [0, 0.02, 0],
+        [4, 0.02, 0],
+        [4, 0.02, 3],
+        [0, 0.02, 3],
+      ],
       lengthMeters: 14,
       view: '3d',
     })
     expect(state.perimeters).toHaveLength(0)
+  })
+
+  test('3D perimeter reuses the area outline when its perimeter has no boundary points', () => {
+    useMeasurementTool.getState().setMode('perimeter')
+
+    handleMeasurementNodeMove3D(nodeEvent(areaOutlinedPerimeterNode(), [2, 0, 1.5]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewPerimeter).toMatchObject({
+      boundaryPoints: [
+        [0, 0.02, 0],
+        [4, 0.02, 0],
+        [4, 0.02, 3],
+        [0, 0.02, 3],
+      ],
+      lengthMeters: 14,
+      view: '3d',
+    })
   })
 
   test('commits a freeform 3D perimeter polygon by clicking the first point again', () => {
@@ -1460,6 +1633,11 @@ describe('measurement 3D grid handlers', () => {
     expect(state.polygonDraft).toBeNull()
     expect(state.perimeters).toHaveLength(1)
     expect(state.perimeters[0]).toMatchObject({
+      boundaryPoints: [
+        [0, 0, 0],
+        [4, 0, 0],
+        [4, 0, 3],
+      ],
       lengthMeters: 12,
       view: '3d',
     })
@@ -1500,6 +1678,205 @@ describe('measurement 3D grid handlers', () => {
     handleMeasurementGridMove3D(gridEvent([8, 0, 0], canvas), canvas)
 
     expect(useMeasurementTool.getState().previewSegment).toBeNull()
+  })
+
+  test('ignores the 3D site ground plane for measurement hover', () => {
+    handleMeasurementNodeMove3D(nodeEvent(siteNode(), [0, 0, 0]))
+
+    const state = useMeasurementTool.getState()
+    expect(state.cursor).toBeNull()
+    expect(state.previewSegment).toBeNull()
+    expect(state.previewArea).toBeNull()
+    expect(state.previewPerimeter).toBeNull()
+    expect(state.snapTarget).toBeNull()
+  })
+
+  test('hovering a 3D surface edge previews the edge under the cursor', () => {
+    handleMeasurementNodeMove3D(nodeEvent(zoneNode(), [4, 0, 1.5]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [4, 0, 0],
+      end: [4, 0, 3],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D roof ridge previews the actual roof line under the cursor', () => {
+    const roof = roofNode()
+    const segment = roofSegmentNode()
+    seedScene([roof, segment])
+
+    handleMeasurementNodeMove3D(nodeEvent(segment, [1, 0, 0]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 4,
+      start: [-2, 0, 0],
+      end: [2, 0, 0],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D stair footprint edge previews the edge under the cursor', () => {
+    const stair = stairNode()
+    const segment = stairSegmentNode()
+    seedScene([stair, segment])
+
+    handleMeasurementNodeMove3D(nodeEvent(stair, [0.5, 0, 1.5]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [0.5, 0, 0],
+      end: [0.5, 0, 3],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D fence side previews the fence height', () => {
+    const fence = { ...splineFenceNode(), height: 1.8, thickness: 0.08 } as AnyNode
+    seedScene([fence])
+
+    handleMeasurementNodeMove3D(nodeEvent(fence, [2, 0.9, 1]))
+
+    const preview = useMeasurementTool.getState().previewSegment
+    expect(preview?.measuredDistanceMeters).toBeCloseTo(1.8)
+    expect(preview?.start[1]).toBeCloseTo(0)
+    expect(preview?.end[1]).toBeCloseTo(1.8)
+    expect(preview?.view).toBe('3d')
+  })
+
+  test('hovering a 3D window side edge previews the opening height', () => {
+    const window = {
+      ...windowNode(),
+      position: [2, 1, 0],
+      width: 3,
+      height: 1,
+    } as AnyNode
+    seedScene([wallNode(), window])
+
+    handleMeasurementNodeMove3D(nodeEvent(window, [0.5, 1, 0.08]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 1,
+      start: [0.5, 0.5, 0.08],
+      end: [0.5, 1.5, 0.08],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D window bottom edge still previews the opening width', () => {
+    const window = {
+      ...windowNode(),
+      position: [2, 1, 0],
+      width: 3,
+      height: 1,
+    } as AnyNode
+    seedScene([wallNode(), window])
+
+    handleMeasurementNodeMove3D(nodeEvent(window, [2, 0.5, 0.08]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [0.5, 0.5, 0.08],
+      end: [3.5, 0.5, 0.08],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D door side edge previews the door height', () => {
+    const door = doorNode()
+    seedScene([wallNode(), door])
+
+    handleMeasurementNodeMove3D(nodeEvent(door, [2.45, 1.05, 0.08]))
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 2.1,
+      start: [2.45, 0, 0.08],
+      end: [2.45, 2.1, 0.08],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D wall side previews semantic wall height instead of rendered bounds', () => {
+    const wall = { ...wallNode(), height: 2.5, thickness: 0.2 } as AnyNode
+    const mesh = new Mesh(new BoxGeometry(4, 3.54, 0.2))
+    mesh.position.y = 1.77
+    sceneRegistry.nodes.set(wall.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(
+      nodeEvent(wall, [1.2, 1.4, 0.1], { normal: [0, 0, 1], object: mesh }),
+    )
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 2.5,
+      start: [1.2, 0, 0.1],
+      end: [1.2, 2.5, 0.1],
+      view: '3d',
+    })
+    expect(state.segments).toHaveLength(0)
+  })
+
+  test('hovering a 3D wall side anchors the preview to the wall face', () => {
+    const wall = { ...wallNode(), height: 2.5, thickness: 0.2 } as AnyNode
+    const mesh = new Mesh(new BoxGeometry(4, 3.54, 0.2))
+    mesh.position.y = 1.77
+    sceneRegistry.nodes.set(wall.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(
+      nodeEvent(wall, [1.2, 1.4, 0.34], { normal: [0, 0, 1], object: mesh }),
+    )
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 2.5,
+      start: [1.2, 0, 0.1],
+      end: [1.2, 2.5, 0.1],
+      view: '3d',
+    })
+  })
+
+  test('hovering a 3D wall side without a face normal still previews semantic wall height', () => {
+    const wall = { ...wallNode(), height: 2.5, thickness: 0.2 } as AnyNode
+    const mesh = new Mesh(new BoxGeometry(4, 3.54, 0.2))
+    mesh.position.y = 1.77
+    sceneRegistry.nodes.set(wall.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(nodeEvent(wall, [1.2, 1.4, 0.1], { object: mesh }))
+
+    const state = useMeasurementTool.getState()
+    expect(state.previewSegment).toMatchObject({
+      measuredDistanceMeters: 2.5,
+      start: [1.2, 0, 0.1],
+      end: [1.2, 2.5, 0.1],
+      view: '3d',
+    })
+  })
+
+  test('hovering an elevated 3D wall anchors semantic height to its rendered level', () => {
+    const wall = { ...wallNode(), height: 2.5, thickness: 0.2 } as AnyNode
+    const building = new Group()
+    const level = new Group()
+    const mesh = new Mesh(new BoxGeometry(4, 2.5, 0.2))
+    level.position.y = 5
+    mesh.position.y = 1.25
+    level.add(mesh)
+    building.add(level)
+    building.updateMatrixWorld(true)
+    sceneRegistry.nodes.set('building_measurement' as AnyNodeId, building)
+    sceneRegistry.nodes.set(wall.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeMove3D(
+      nodeEvent(wall, [1.2, 6.4, 0.1], { normal: [0, 0, 1], object: mesh }),
+      'building_measurement' as AnyNodeId,
+    )
+
+    expect(useMeasurementTool.getState().previewSegment).toMatchObject({
+      measuredDistanceMeters: 2.5,
+      start: [1.2, 5, 0.1],
+      end: [1.2, 7.5, 0.1],
+      view: '3d',
+    })
   })
 
   test('hovering a rendered external asset owns the hover preview over the underlay', () => {
@@ -1554,7 +1931,12 @@ describe('measurement 3D grid handlers', () => {
       view: '3d',
     })
     expect(state.cursor).toEqual({ point: [0, 1, 1.5], view: '3d' })
-    expect(state.snapTarget).toBeNull()
+    expect(state.snapTarget).toMatchObject({
+      kind: 'edge',
+      label: 'Box edge',
+      point: [0, 1, 1.5],
+      view: '3d',
+    })
   })
 
   test('hovering a rendered vertical side previews a surface-aligned height', () => {

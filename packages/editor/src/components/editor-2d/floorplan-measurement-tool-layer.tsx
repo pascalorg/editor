@@ -73,6 +73,8 @@ const FLOORPLAN_LABEL_COLLISION_CELL = 0.35
 const FLOORPLAN_LABEL_STAGGER_STEP = 0.22
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_GAP_PX = 4
 const FLOORPLAN_MEASUREMENT_COLOR = '#8b5cf6'
+const FLOORPLAN_SNAP_COLOR = '#ffffff'
+const FLOORPLAN_PERIMETER_BOUNDARY_STROKE_WIDTH = 1.2
 const FLOORPLAN_DEGENERATE_MEASUREMENT_MARKER_LENGTH = 0.32
 const FLOORPLAN_ANGLE_ARC_MIN_RADIUS = 0.2
 const FLOORPLAN_ANGLE_ARC_MAX_RADIUS = 0.7
@@ -144,6 +146,39 @@ function distancePlanPointToSegmentSq(
   const ox = px - cx
   const oz = pz - cz
   return ox * ox + oz * oz
+}
+
+function projectPlanPointToMeasurementSegment(
+  point: MeasurementPoint,
+  start: MeasurementPoint,
+  end: MeasurementPoint,
+): MeasurementPoint | null {
+  const sx = start[0]
+  const sz = start[2]
+  const dx = end[0] - sx
+  const dz = end[2] - sz
+  const lengthSq = dx * dx + dz * dz
+  if (lengthSq < 1e-8) return null
+  const t = Math.max(0, Math.min(1, ((point[0] - sx) * dx + (point[2] - sz) * dz) / lengthSq))
+  return [sx + dx * t, start[1] + (end[1] - start[1]) * t, sz + dz * t]
+}
+
+function snapTargetFromPreviewSegment2D(
+  point: MeasurementPoint,
+  segment: DirectLengthSegment,
+): MeasurementSnapTarget | null {
+  const projected = projectPlanPointToMeasurementSegment(point, segment.start, segment.end)
+  if (!projected) return null
+  return {
+    kind: 'edge',
+    label: 'Preview edge',
+    point: projected,
+    targetLine: {
+      end: segment.end,
+      start: segment.start,
+    },
+    view: '2d',
+  }
 }
 
 function closestPlanSegmentToPoint(
@@ -260,6 +295,17 @@ function perimeterFromDefinition(node: AnyNode): MeasurementDefinitionPerimeter 
   )
 }
 
+function perimeterBoundaryPointsFromDefinition2D(
+  node: AnyNode,
+  perimeter: MeasurementDefinitionPerimeter,
+): MeasurementPoint[] {
+  const boundaryPoints =
+    (perimeter.boundaryPoints?.length ?? 0) >= 3
+      ? perimeter.boundaryPoints
+      : areaFromDefinition(node)?.boundaryPoints
+  return (boundaryPoints ?? []).map(definitionPlanPoint)
+}
+
 function numericNodeProperty(node: AnyNode, key: string): number | null {
   const value = (node as Record<string, unknown>)[key]
   return typeof value === 'number' && Number.isFinite(value) && value > 1e-4 ? value : null
@@ -305,14 +351,21 @@ function genericPlanBoxLengthSegment(
   return rectangleLengthSegment(polygon, width, depth, cursorPoint)
 }
 
-function resolveFloorplanMeasurementSnap(point: MeasurementPoint): {
+function resolveFloorplanMeasurementSnap(
+  point: MeasurementPoint,
+  extraNodes: ReadonlyArray<AnyNode> = [],
+): {
   point: MeasurementPoint
   target: MeasurementSnapTarget | null
 } {
+  const sceneNodes = Object.values(useScene.getState().nodes)
+  const sceneNodeIds = new Set(sceneNodes.map((node) => node.id))
+  const nodes = [...sceneNodes, ...extraNodes.filter((node) => !sceneNodeIds.has(node.id))]
+
   return resolvePlanMeasurementSnap(
     point,
     mergeMeasurementSnapGeometry(
-      collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
+      collectPlanMeasurementSnapGeometry(nodes),
       collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments),
     ),
     {
@@ -499,7 +552,12 @@ export function handleFloorplanMeasurementNodeClick2D(
     if (perimeter && (quickMeasure || measurementMode === 'perimeter')) {
       useMeasurementTool
         .getState()
-        .addPerimeter('2d', definitionPlanPoint(perimeter.labelPoint), perimeter.lengthMeters)
+        .addPerimeter(
+          '2d',
+          definitionPlanPoint(perimeter.labelPoint),
+          perimeter.lengthMeters,
+          perimeterBoundaryPointsFromDefinition2D(node, perimeter),
+        )
       return true
     }
     if (area && measurementMode === 'area') {
@@ -569,6 +627,7 @@ export function previewFloorplanMeasurementNode2D(
     measurement.setPreviewArea(null)
     measurement.setPreviewPerimeter({
       id: 'measurement-perimeter-preview',
+      boundaryPoints: perimeterBoundaryPointsFromDefinition2D(node, perimeter),
       labelPoint: definitionPlanPoint(perimeter.labelPoint),
       lengthMeters: perimeter.lengthMeters,
       view: '2d',
@@ -592,8 +651,12 @@ export function previewFloorplanMeasurementNode2D(
   }
   measurement.setPreviewArea(null)
   measurement.setPreviewPerimeter(null)
-  measurement.setSnapTarget(null)
-  if (cursorPoint) measurement.setCursor('2d', cursorPoint)
+  const snap = cursorPoint ? resolveFloorplanMeasurementSnap(cursorPoint, [node]) : null
+  const previewTarget = cursorPoint ? snapTargetFromPreviewSegment2D(cursorPoint, segment) : null
+  const target =
+    snap?.target && snap.target.kind !== 'grid' ? snap.target : (previewTarget ?? snap?.target)
+  measurement.setSnapTarget(target ?? null)
+  if (cursorPoint) measurement.setCursor('2d', target?.point ?? cursorPoint)
   measurement.setPreviewSegment({
     id: 'measurement-preview',
     start: segment.start,
@@ -623,12 +686,27 @@ export function getFloorplanAngleMeasurementLayout(angle: MeasurementAngle) {
 
   const startAngle = Math.atan2(firstVector.y, firstVector.x)
   const delta = normalizeAngleDelta(Math.atan2(secondVector.y, secondVector.x) - startAngle)
-  if (Math.abs(delta) < 1e-4) return null
 
   const radius = Math.max(
     FLOORPLAN_ANGLE_ARC_MIN_RADIUS,
     Math.min(FLOORPLAN_ANGLE_ARC_MAX_RADIUS, firstLength * 0.35, secondLength * 0.35),
   )
+  if (Math.abs(delta) < 1e-4) {
+    const labelRadius = radius + 0.22
+    return {
+      arcPath: '',
+      arcRadials: [],
+      first,
+      label: {
+        x: vertex.x + Math.cos(startAngle) * labelRadius - Math.sin(startAngle) * 0.16,
+        y: vertex.y + Math.sin(startAngle) * labelRadius + Math.cos(startAngle) * 0.16,
+      },
+      second,
+      vertex,
+      wedgePath: '',
+    }
+  }
+
   const sampleCount = Math.max(
     8,
     Math.ceil((Math.abs(delta) / Math.PI) * FLOORPLAN_ANGLE_ARC_SEGMENTS),
@@ -847,10 +925,14 @@ function AreaMeasurementBoundary2D({
   isSelected,
   points,
   stroke,
+  strokeOpacity,
+  strokeWidth = 1.35,
 }: {
   isSelected: boolean
   points: MeasurementPoint[]
   stroke: string
+  strokeOpacity?: number
+  strokeWidth?: number
 }) {
   const polygonPoints = points.map((point) => `${point[0]},${point[2]}`).join(' ')
 
@@ -861,8 +943,8 @@ function AreaMeasurementBoundary2D({
       stroke={stroke}
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeOpacity={isSelected ? 0.95 : 0.55}
-      strokeWidth={1.35}
+      strokeOpacity={strokeOpacity ?? (isSelected ? 0.95 : 0.55)}
+      strokeWidth={strokeWidth}
       vectorEffect="non-scaling-stroke"
     />
   )
@@ -890,6 +972,8 @@ function PerimeterMeasurementLabel({
   const label = `P ${formatLinearMeasurement(perimeter.lengthMeters, unit, {
     precision: displayPrecision,
   })}`
+  const boundaryPoints = perimeter.boundaryPoints
+  const displayBoundaryPoints = boundaryPoints && boundaryPoints.length >= 3 ? boundaryPoints : null
 
   return (
     <g
@@ -898,6 +982,15 @@ function PerimeterMeasurementLabel({
       pointerEvents="auto"
       style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0.4, userSelect: 'none' }}
     >
+      {displayBoundaryPoints ? (
+        <AreaMeasurementBoundary2D
+          isSelected={isSelected}
+          points={displayBoundaryPoints}
+          stroke={palette.measurementStroke}
+          strokeOpacity={isSelected ? 0.98 : 0.68}
+          strokeWidth={FLOORPLAN_PERIMETER_BOUNDARY_STROKE_WIDTH}
+        />
+      ) : null}
       <MeasurementPillLabel2D
         isSelected={isSelected}
         label={label}
@@ -955,21 +1048,126 @@ function FloorplanSnapTargetMarker({
   const x = target.point[0]
   const y = target.point[2]
   const { markerHalf, markerStroke } = getFloorplanSnapMarkerMetrics(unitsPerPixel)
+  const kind = target.kind ?? 'vertex'
+  const targetLine = target.guideLine ?? target.targetLine
+  const targetLineHighlight = targetLine
+    ? floorplanSnapLineHighlight(targetLine, target.point, kind === 'guide' ? 1.6 : 0.9)
+    : null
+  const tick =
+    targetLineHighlight && kind === 'edge'
+      ? floorplanSnapEdgeTick(targetLineHighlight, markerHalf)
+      : null
+  const ringRadius =
+    kind === 'grid'
+      ? markerHalf * 0.58
+      : kind === 'measurement'
+        ? markerHalf * 0.78
+        : markerHalf * 0.68
+  const ringDash = kind === 'grid' ? '2 3' : undefined
+  const ringStrokeWidth = markerStroke * (kind === 'grid' ? 0.42 : 0.54)
 
   return (
     <g className="floorplan-measurement-snap-target" pointerEvents="none">
+      {targetLineHighlight ? (
+        <line
+          stroke={FLOORPLAN_SNAP_COLOR}
+          strokeDasharray={kind === 'guide' ? '4 4' : undefined}
+          strokeLinecap="round"
+          strokeOpacity={kind === 'guide' ? 0.5 : 0.58}
+          strokeWidth={markerStroke * 0.48}
+          vectorEffect="non-scaling-stroke"
+          x1={targetLineHighlight.start[0]}
+          x2={targetLineHighlight.end[0]}
+          y1={targetLineHighlight.start[2]}
+          y2={targetLineHighlight.end[2]}
+        />
+      ) : null}
+      {tick ? (
+        <line
+          stroke={FLOORPLAN_SNAP_COLOR}
+          strokeLinecap="round"
+          strokeOpacity={0.58}
+          strokeWidth={markerStroke * 0.42}
+          vectorEffect="non-scaling-stroke"
+          x1={tick.start[0]}
+          x2={tick.end[0]}
+          y1={tick.start[2]}
+          y2={tick.end[2]}
+        />
+      ) : null}
+      {kind === 'measurement' ? (
+        <circle
+          cx={x}
+          cy={y}
+          fill="none"
+          r={markerHalf * 0.98}
+          stroke={FLOORPLAN_SNAP_COLOR}
+          strokeOpacity={0.42}
+          strokeWidth={markerStroke * 0.44}
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : null}
       <circle
         cx={x}
         cy={y}
-        fill="rgba(139, 92, 246, 0.16)"
-        r={markerHalf * 0.72}
-        stroke={FLOORPLAN_MEASUREMENT_COLOR}
-        strokeWidth={markerStroke}
+        fill="none"
+        r={ringRadius}
+        stroke={FLOORPLAN_SNAP_COLOR}
+        strokeDasharray={ringDash}
+        strokeOpacity={kind === 'grid' ? 0.52 : 0.72}
+        strokeWidth={ringStrokeWidth}
         vectorEffect="non-scaling-stroke"
       />
       <circle cx={x} cy={y} fill={FLOORPLAN_MEASUREMENT_COLOR} r={markerHalf * 0.28} />
     </g>
   )
+}
+
+function floorplanSnapLineHighlight(
+  line: { end: MeasurementPoint; start: MeasurementPoint },
+  point: MeasurementPoint,
+  maxLength: number,
+): { end: MeasurementPoint; start: MeasurementPoint } | null {
+  const dx = line.end[0] - line.start[0]
+  const dz = line.end[2] - line.start[2]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return null
+  const half = Math.min(length, maxLength) / 2
+  const ux = dx / length
+  const uz = dz / length
+  return {
+    start: [point[0] - ux * half, point[1], point[2] - uz * half],
+    end: [point[0] + ux * half, point[1], point[2] + uz * half],
+  }
+}
+
+function floorplanSnapEdgeTick(
+  line: { end: MeasurementPoint; start: MeasurementPoint },
+  markerHalf: number,
+): { end: MeasurementPoint; start: MeasurementPoint } | null {
+  const dx = line.end[0] - line.start[0]
+  const dz = line.end[2] - line.start[2]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return null
+  const nx = -dz / length
+  const nz = dx / length
+  const half = markerHalf * 0.64
+  const point: MeasurementPoint = [
+    (line.start[0] + line.end[0]) / 2,
+    (line.start[1] + line.end[1]) / 2,
+    (line.start[2] + line.end[2]) / 2,
+  ]
+  return {
+    start: [point[0] - nx * half, point[1], point[2] - nz * half],
+    end: [point[0] + nx * half, point[1], point[2] + nz * half],
+  }
+}
+
+function floorplanHexHandlePoints(x: number, y: number, radius: number): string {
+  return Array.from({ length: 6 }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / 6
+    return `${x + Math.cos(angle) * radius},${y + Math.sin(angle) * radius}`
+  }).join(' ')
 }
 
 function floorplanPointFromClientPoint(clientX: number, clientY: number): MeasurementPoint | null {
@@ -1103,6 +1301,7 @@ function updatePolygonMeasurementPreview2D(): void {
     measurement.setPreviewArea(null)
     measurement.setPreviewPerimeter({
       id: 'measurement-perimeter-preview',
+      boundaryPoints: points,
       labelPoint,
       lengthMeters: polygonPerimeterFromMeasurements(points),
       view: '2d',
@@ -1171,6 +1370,7 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
 export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
   if (!isFloorplanEvent(event)) return
   const measurement = useMeasurementTool.getState()
+  if (measurement.consumeSuppressedPlacementClick()) return
   measurement.setPreviewArea(null)
   measurement.setPreviewPerimeter(null)
   measurement.setPreviewSegment(null)
@@ -1192,12 +1392,13 @@ export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
       ? resolveFloorplanMeasurementConstraint(measurement.draft.start, snap.point)
       : null
   const point = constrained?.point ?? snap.point
-  measurement.setSnapTarget(constrained?.target ?? snap.target)
+  const target = constrained?.target ?? snap.target
+  measurement.setSnapTarget(target)
   if (measurement.mode === 'angle' || measurement.angleDraft) {
     if (measurement.angleDraft) {
       measurement.commitAngle(point)
     } else {
-      measurement.beginAngle('2d', point)
+      measurement.beginAngle('2d', point, target?.targetLine ?? null)
     }
     return
   }
@@ -1285,7 +1486,9 @@ export function FloorplanMeasurementToolLayer({
       measurement.deleteSelected()
     }
     const handlePointerUp = () => {
-      useMeasurementTool.getState().endSegmentEndpointDrag()
+      const measurement = useMeasurementTool.getState()
+      if (!measurement.draggingSegmentEndpoint) return
+      measurement.endSegmentEndpointDrag({ suppressNextClick: true })
     }
 
     window.addEventListener('click', handleGeometryClick, true)
@@ -1454,23 +1657,19 @@ export function FloorplanMeasurementToolLayer({
                 style={{ cursor: activeHandle ? 'grabbing' : 'grab' }}
               >
                 <circle cx={point[0]} cy={point[2]} fill="transparent" r={hitRadius} />
-                <circle
-                  cx={point[0]}
-                  cy={point[2]}
+                <polygon
                   fill="rgba(139, 92, 246, 0.16)"
+                  points={floorplanHexHandlePoints(point[0], point[2], handleRadius * 1.85)}
                   pointerEvents="none"
-                  r={handleRadius * 1.85}
                   stroke={FLOORPLAN_MEASUREMENT_COLOR}
                   strokeOpacity={activeHandle ? 0.95 : 0.72}
                   strokeWidth={activeHandle ? 1.6 : 1.2}
                   vectorEffect="non-scaling-stroke"
                 />
-                <circle
-                  cx={point[0]}
-                  cy={point[2]}
+                <polygon
                   fill="#ffffff"
+                  points={floorplanHexHandlePoints(point[0], point[2], handleRadius)}
                   pointerEvents="none"
-                  r={handleRadius}
                   stroke={FLOORPLAN_MEASUREMENT_COLOR}
                   strokeWidth={activeHandle ? 1.7 : 1.35}
                   vectorEffect="non-scaling-stroke"
