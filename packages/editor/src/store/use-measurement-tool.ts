@@ -858,10 +858,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
 
     const second = point ?? angleDraft.second
     const first = referencePointForAngle(angleDraft.vertex, second, angleDraft.referenceLine)
-    if (
-      !second ||
-      distanceBetweenMeasurements(angleDraft.vertex, second) < 1e-4
-    ) {
+    if (!second || distanceBetweenMeasurements(angleDraft.vertex, second) < 1e-4) {
       set({ angleDraft: null })
       return
     }
