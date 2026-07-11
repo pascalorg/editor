@@ -70,6 +70,12 @@ export {
 } from './nodes/elevator'
 export { EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export {
+  FireplaceMaterialRole,
+  FireplaceNode,
+  FireplaceStyle,
+  FireStyle,
+} from './nodes/fireplace'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'

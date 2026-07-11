@@ -11,6 +11,7 @@ export type {
   ElevatorEvent,
   EventSuffix,
   FenceEvent,
+  FireplaceEvent,
   GridEvent,
   GuideEvent,
   GutterEvent,
