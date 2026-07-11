@@ -17,6 +17,7 @@ import type {
   ElevatorNode,
   EyebrowVentNode,
   FenceNode,
+  FireplaceNode,
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
@@ -86,6 +87,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
+export type FireplaceEvent = NodeEvent<FireplaceNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -254,6 +256,7 @@ type RoomPresetEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'fireplace', FireplaceEvent> &
   NodeEvents<'item', ItemEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &

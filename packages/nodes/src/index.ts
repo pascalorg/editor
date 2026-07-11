@@ -14,6 +14,7 @@ import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
+import { fireplaceDefinition } from './fireplace'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -71,6 +72,7 @@ export const builtinPlugin: Plugin = {
     doorDefinition as unknown as AnyNodeDefinition,
     windowDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
+    fireplaceDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,

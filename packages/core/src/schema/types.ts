@@ -14,6 +14,7 @@ import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
+import { FireplaceNode } from './nodes/fireplace'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -83,6 +84,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   PipeSegmentNode,
   PipeFittingNode,
   PipeTrapNode,
+  FireplaceNode,
 ])
 
 export type AnyNode = z.infer<typeof AnyNode>
