@@ -35,9 +35,14 @@ export function RegisteredToolHelper({
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
   if (visible.length === 0 && !snapContext && !continuationContext) return null
+  // Hints carrying a live-state `chip` render as mode chips next to the
+  // snapping / continuation rows; the rest stay static key rows.
+  const chipHints = visible.filter((hint) => hint.chip)
+  const staticHints = visible.filter((hint) => !hint.chip)
   return (
     <ContextualHelperPanel
-      hints={visible.map((hint) => {
+      chipHints={chipHints}
+      hints={staticHints.map((hint) => {
         // Shift is a per-kind bypass for opening / zone / duct placement ("Free
         // place", "Free angle", …) — those flip to a bypassed state while held.
         const isBypassHint = hint.key === 'Shift'

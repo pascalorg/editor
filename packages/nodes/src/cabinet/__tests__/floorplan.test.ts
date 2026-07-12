@@ -378,6 +378,7 @@ describe('buildCabinetFloorplan', () => {
     const contextNodes = cabinetFloorplanSiblingOverrides({
       nodeId: childRun.id,
       nodes,
+      liveTransforms: new Map(),
       liveOverrides: new Map([[sourceRun.id, { position: [3.2, 0, 4.4] }]]),
     })
 

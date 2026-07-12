@@ -20,6 +20,7 @@ import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import useCabinetPlacementType from './placement-type'
 import { cabinetQuickActions } from './quick-actions'
 import { moduleSideOpen } from './run-layout'
 import {
@@ -1047,7 +1048,18 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place cabinet' },
-    { key: 'I', label: 'Toggle cabinet / island' },
+    {
+      key: 'I',
+      label: 'Placement type',
+      chip: {
+        subscribe: (onChange) => useCabinetPlacementType.subscribe(onChange),
+        value: () => useCabinetPlacementType.getState().type,
+        cycle: () => void useCabinetPlacementType.getState().cycleType(),
+        labels: { cabinet: 'Type: Cabinet', island: 'Type: Island' },
+        icons: { cabinet: 'lucide:rectangle-horizontal', island: 'lucide:table-2' },
+        tooltip: 'Placement type — click or press I to toggle',
+      },
+    },
     { key: 'Alt', label: 'Force place' },
     { key: 'R / T', label: 'Rotate' },
     { key: 'Esc', label: 'Cancel run / exit' },

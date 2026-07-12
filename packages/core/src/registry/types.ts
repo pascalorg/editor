@@ -228,6 +228,30 @@ export type ToolHint = {
    * so the HUD reflects reality. Omit for always-shown hints.
    */
   minDraftVertices?: number
+  /**
+   * Render this hint as a live mode chip — like the snapping / continuation
+   * chips — instead of a static key row: the HUD shows the current value's
+   * label and clicking the row (or pressing `key`) cycles it. The kind owns
+   * the state (typically its own ephemeral store); `label` above becomes the
+   * fallback when the current value has no entry in `chip.labels`.
+   */
+  chip?: ToolHintChip
+}
+
+export type ToolHintChip = {
+  /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
+  subscribe: (onChange: () => void) => () => void
+  /** Current value token, resolved through `labels` / `icons` for display. */
+  value: () => string
+  /** Advance to the next value — the chip's click action. The keyboard path is
+   * the tool's own handler for the hint's `key`; both must hit the same store. */
+  cycle: () => void
+  /** value → chip row label, e.g. `{ cabinet: 'Type: Cabinet', island: 'Type: Island' }`. */
+  labels: Record<string, string>
+  /** value → iconify icon name. */
+  icons?: Record<string, string>
+  /** Hover tooltip, e.g. 'Placement type — click or press I to cycle'. */
+  tooltip?: string
 }
 
 export type FloorplanGeometry =

@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react'
-import { Fragment } from 'react'
+import type { ToolHint } from '@pascal-app/core'
+import { Fragment, useSyncExternalStore } from 'react'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
@@ -205,6 +206,26 @@ function SnappingChips({ context }: { context: SnapContext }) {
   )
 }
 
+// A kind-owned live mode chip declared on a `ToolHint` (`hint.chip`) — the
+// registry counterpart of the snapping / continuation chips above: shows the
+// current value's label, and clicking the row (or the hint's key, handled by
+// the tool itself) cycles it.
+function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHint['chip']> } }) {
+  const { chip } = hint
+  const value = useSyncExternalStore(chip.subscribe, chip.value, chip.value)
+  const label = chip.labels[value] ?? hint.label
+  return (
+    <ChipRow
+      ariaLabel={label}
+      icon={chip.icons?.[value]}
+      label={label}
+      onClick={chip.cycle}
+      shortcut={hint.key}
+      tooltip={chip.tooltip}
+    />
+  )
+}
+
 function ContinuationChip({ context }: { context: ContinuationContext }) {
   const mode = useEditor((s) => s.getContinuation(context))
   const cycleContinuation = useEditor((s) => s.cycleContinuation)
@@ -339,18 +360,28 @@ function PaintScopeChip() {
 
 export function ContextualHelperPanel({
   hints,
+  chipHints = [],
   snapContext = null,
   showPaintScope = false,
   continuationContext = null,
 }: {
   hints: ContextualShortcutHint[]
+  // Kind-owned live mode chips (`ToolHint.chip`), rendered alongside the
+  // snapping / continuation chips.
+  chipHints?: ToolHint[]
   // The active snapping context drives the snapping chips (which mode set). Null
   // → no snapping chips for this interaction.
   snapContext?: SnapContext | null
   showPaintScope?: boolean
   continuationContext?: ContinuationContext | null
 }) {
-  if (hints.length === 0 && !snapContext && !showPaintScope && !continuationContext)
+  if (
+    hints.length === 0 &&
+    chipHints.length === 0 &&
+    !snapContext &&
+    !showPaintScope &&
+    !continuationContext
+  )
     return null
 
   return (
@@ -360,6 +391,14 @@ export function ContextualHelperPanel({
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />
       ) : null}
+      {chipHints.map((hint) =>
+        hint.chip ? (
+          <ToolHintChipRow
+            hint={hint as ToolHint & { chip: NonNullable<ToolHint['chip']> }}
+            key={`${hint.key}:${hint.label}`}
+          />
+        ) : null,
+      )}
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div

@@ -136,5 +136,6 @@ export type {
   SurfacesConfig,
   SystemContribution,
   ToolHint,
+  ToolHintChip,
   Vec2,
 } from './types'
