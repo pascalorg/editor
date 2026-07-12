@@ -76,6 +76,7 @@ const _resizeOriginW = new Vector3()
 const _resizePositionW = new Vector3()
 const _resizeRay = new Ray()
 const _resizeRayW = new Vector3()
+const MEASUREMENT_SURFACE_EXCLUDE_USER_DATA = { measurementSurface: false }
 
 // Tilt that stands a flat XZ-plane move cross up into a node's facing plane
 // (its local XY = a wall face) for `plane: 'node-normal'` handles.
@@ -489,7 +490,7 @@ function NodeArrowHandlesForNode({
   })
 
   return createPortal(
-    <group ref={outerRef}>
+    <group ref={outerRef} userData={MEASUREMENT_SURFACE_EXCLUDE_USER_DATA}>
       {innerRideId !== null ? <group ref={innerRef}>{arrows}</group> : arrows}
     </group>,
     portalObject,

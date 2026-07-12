@@ -34,6 +34,7 @@ import {
   Grid2X2,
   Magnet,
   PenLine,
+  Ruler,
   SlidersHorizontal,
   Sparkles,
   SwatchBook,
@@ -279,6 +280,8 @@ const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/9
 function DisplayMenu() {
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
+  const showMeasurements = useViewer((state) => state.showMeasurements)
+  const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
   const unit = useViewer((state) => state.unit)
   const setUnit = useViewer((state) => state.setUnit)
   const cameraMode = useViewer((state) => state.cameraMode)
@@ -329,6 +332,17 @@ function DisplayMenu() {
           <Grid2X2 className="h-4 w-4" />
           <span>Grid</span>
           {showGrid ? (
+            <Eye className="ml-auto h-4 w-4 text-foreground" />
+          ) : (
+            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+        >
+          <Ruler className="h-4 w-4" />
+          <span>Measurements</span>
+          {showMeasurements ? (
             <Eye className="ml-auto h-4 w-4 text-foreground" />
           ) : (
             <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />

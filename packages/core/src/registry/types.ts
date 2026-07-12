@@ -60,6 +60,7 @@ export type GeometryContext = {
    */
   viewState?: {
     selected: boolean
+    unit: 'metric' | 'imperial'
     /** Marquee or programmatic highlight — shows selected chrome without keyboard focus. */
     highlighted: boolean
     /** Pointer-hovered. */
@@ -499,7 +500,8 @@ export type FloorplanGeometry =
     }
   /**
    * Centered length / distance label. Renders as a small rounded
-   * background plate with text, oriented along `angle` (radians). The
+   * background plate by default, or as outlined text when `appearance`
+   * is `'outlined'`, oriented along `angle` (radians). The
    * 2D layer flips the label upright when it would otherwise be upside
    * down. Use this for simple "what length am I?" badges (fence, item
    * width, draft preview).
@@ -511,6 +513,12 @@ export type FloorplanGeometry =
       text: string
       /** Rotation in radians. The renderer auto-flips to keep text upright. */
       angle: number
+      /** Keep the plate horizontal on screen instead of following a segment. */
+      screenUpright?: boolean
+      /** Perpendicular screen-pixel offset from the anchor segment. */
+      offsetPx?: number
+      /** Match map-style labels without changing the default editing badge. */
+      appearance?: 'plate' | 'outlined'
     }
   /**
    * Equal-spacing badge — a small accent pill marking one gap in a run of

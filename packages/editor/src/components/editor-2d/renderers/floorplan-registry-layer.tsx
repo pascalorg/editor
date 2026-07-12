@@ -70,6 +70,7 @@ import {
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
+import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
 /**
  * Registry-driven floor-plan layer.
@@ -214,6 +215,7 @@ type FloorplanEntryDescriptor = {
 type NodeDeps = {
   node: AnyNode
   live: LiveTransform | undefined
+  unit: 'metric' | 'imperial'
   selected: boolean
   highlighted: boolean
   hovered: boolean
@@ -279,6 +281,8 @@ const EMPTY_LIVE_OVERRIDES: Map<string, LiveNodeOverrides> = new Map()
 export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
+  const unit = useViewer((s) => s.unit)
+  const showMeasurements = useViewer((s) => s.showMeasurements)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
@@ -772,6 +776,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const pushEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
+      if (node.type === 'measurement' && !showMeasurements) return
       const dependsOnSiblingInputs = !!(
         def.floorplanDependsOnSiblings ||
         def.floorplanSiblingOverrides ||
@@ -838,7 +843,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [levelId, nodes])
+  }, [levelId, nodes, showMeasurements])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //
@@ -1196,6 +1201,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
+            unit={unit}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1245,6 +1251,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
+            unit={unit}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1317,6 +1324,7 @@ type FloorplanRegistryEntryProps = {
   setMovingNode: ReturnType<typeof useEditor.getState>['setMovingNode']
   setMovingNodeOrigin: ReturnType<typeof useEditor.getState>['setMovingNodeOrigin']
   siblingEpoch: number
+  unit: 'metric' | 'imperial'
   unitsPerPixel: number
   visibilityRootId: AnyNodeId | undefined
 }
@@ -1355,6 +1363,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   setMovingNode,
   setMovingNodeOrigin,
   siblingEpoch,
+  unit,
   unitsPerPixel,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
@@ -1453,6 +1462,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     palette,
     selected,
     siblingEpoch,
+    unit,
     visibilityRootId,
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
@@ -1516,6 +1526,7 @@ type BuildFloorplanEntryGeometryArgs = {
   palette: FloorplanPalette | undefined
   selected: boolean
   siblingEpoch: number
+  unit: 'metric' | 'imperial'
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -1537,6 +1548,7 @@ function buildFloorplanEntryGeometry({
   palette,
   selected,
   siblingEpoch,
+  unit,
   visibilityRootId,
 }: BuildFloorplanEntryGeometryArgs): CacheEntry | null {
   const def = nodeRegistry.get(node.type)
@@ -1559,6 +1571,7 @@ function buildFloorplanEntryGeometry({
   const deps: NodeDeps = {
     node,
     live,
+    unit,
     selected,
     highlighted,
     hovered,
@@ -1634,6 +1647,7 @@ function buildFloorplanEntryGeometry({
   )
   const viewState = {
     selected,
+    unit,
     highlighted,
     hovered,
     moving,
@@ -1649,6 +1663,7 @@ function buildFloorplanEntryGeometry({
         viewState: palette
           ? {
               selected,
+              unit,
               highlighted,
               hovered,
               moving,
@@ -2286,46 +2301,55 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
         // and flip by 180° if it falls outside (-90, 90] — that keeps
         // text reading left-to-right, top-to-bottom regardless of the
         // building's orientation.
-        let degrees = (g.angle * 180) / Math.PI
-        let screenDegrees = degrees + sceneRotationDeg
-        screenDegrees = ((((screenDegrees + 180) % 360) + 360) % 360) - 180
-        if (screenDegrees > 90) degrees -= 180
-        else if (screenDegrees <= -90) degrees += 180
+        const degrees = resolveFloorplanLabelAngle(g.angle, sceneRotationDeg, g.screenUpright)
 
-        const padX = unitsPerPixel * 6
-        const padY = unitsPerPixel * 3
-        const fontSize = Math.max(unitsPerPixel * 10, 0.08)
+        const labelUnitsPerPixel = Math.max(unitsPerPixel, 1e-6)
+        const outlined = g.appearance === 'outlined'
+        const padX = labelUnitsPerPixel * 6
+        const padY = labelUnitsPerPixel * 3
+        const fontSize = labelUnitsPerPixel * (outlined ? 12 : 10)
         // Rough text width approximation — SVG can't measure text without
         // the DOM. 6.2px per char at 10px font keeps the plate visually
         // balanced for the short length strings ("3.24m", "1'2\"", etc.).
-        const textWidth = g.text.length * unitsPerPixel * 6.2
+        const textWidth = g.text.length * labelUnitsPerPixel * 6.2
         const plateW = textWidth + padX * 2
         const plateH = fontSize + padY * 2
         return (
           <g
             key={keyHint}
             pointerEvents="none"
-            transform={`translate(${g.cx} ${g.cy}) rotate(${degrees})`}
+            transform={`translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * labelUnitsPerPixel})`}
           >
-            <rect
-              fill={palette.measurementLabelBackground}
-              height={plateH}
-              opacity={0.92}
-              rx={unitsPerPixel * 3}
-              ry={unitsPerPixel * 3}
-              stroke={palette.measurementStroke}
-              strokeWidth={unitsPerPixel * 0.5}
-              vectorEffect="non-scaling-stroke"
-              width={plateW}
-              x={-plateW / 2}
-              y={-plateH / 2}
-            />
+            {outlined ? null : (
+              <rect
+                fill={palette.measurementLabelBackground}
+                height={plateH}
+                opacity={0.92}
+                rx={labelUnitsPerPixel * 3}
+                ry={labelUnitsPerPixel * 3}
+                stroke={palette.measurementStroke}
+                strokeWidth={labelUnitsPerPixel * 0.5}
+                vectorEffect="non-scaling-stroke"
+                width={plateW}
+                x={-plateW / 2}
+                y={-plateH / 2}
+              />
+            )}
             <text
               dominantBaseline="middle"
-              fill={palette.measurementLabelText}
-              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              fill={outlined ? '#ffffff' : palette.measurementLabelText}
+              fontFamily={
+                outlined
+                  ? 'system-ui, -apple-system, sans-serif'
+                  : 'ui-monospace, SFMono-Regular, Menlo, monospace'
+              }
               fontSize={fontSize}
-              fontWeight={600}
+              fontWeight={outlined ? 500 : 600}
+              paintOrder={outlined ? 'stroke' : undefined}
+              stroke={outlined ? palette.measurementStroke : undefined}
+              strokeLinecap={outlined ? 'round' : undefined}
+              strokeLinejoin={outlined ? 'round' : undefined}
+              strokeWidth={outlined ? fontSize * 0.35 : undefined}
               textAnchor="middle"
               x={0}
               y={0}
@@ -2643,6 +2667,7 @@ export function buildContext(
   nodes: Record<string, AnyNode>,
   viewState: {
     selected: boolean
+    unit: 'metric' | 'imperial'
     highlighted: boolean
     hovered: boolean
     moving: boolean
@@ -2685,6 +2710,7 @@ export function buildContext(
     viewState: viewState.palette
       ? {
           selected: viewState.selected,
+          unit: viewState.unit,
           highlighted: viewState.highlighted,
           hovered: viewState.hovered,
           moving: viewState.moving,
@@ -2910,6 +2936,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
   const keys: Array<keyof NodeDeps> = [
     'node',
     'live',
+    'unit',
     'selected',
     'highlighted',
     'hovered',

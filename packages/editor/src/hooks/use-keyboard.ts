@@ -284,6 +284,17 @@ export const useKeyboard = ({
         useEditor.getState().setMode('build')
         // Set the zone tool explicitly so it never inherits a stale tool.
         useEditor.getState().setTool('zone')
+      } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        const editor = useEditor.getState()
+        editor.setPhase('structure')
+        editor.setStructureLayer('elements')
+        if (!editor.toolDefaults.measurement?.kind) {
+          editor.setToolDefaults('measurement', { kind: 'distance' })
+        }
+        editor.setMode('build')
+        editor.setTool('measurement')
       }
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
@@ -320,14 +331,14 @@ export const useKeyboard = ({
         if (result?.pastedIds.length) {
           sfxEmitter.emit('sfx:item-place')
         }
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        if (isVersionPreviewMode) return
-        e.preventDefault()
-        runUndo()
-      } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+      } else if (e.key.toLowerCase() === 'z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         runRedo()
+      } else if (e.key.toLowerCase() === 'z' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        runUndo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         const { buildingId, levelId } = useViewer.getState().selection

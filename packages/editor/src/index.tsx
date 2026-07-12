@@ -300,12 +300,22 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  measurementPolygonLabelAnchor,
+  triangulateMeasurementPolygon,
+} from './lib/measurement-label'
+export {
+  cubicMetersToVolumeUnit,
+  formatAreaLabel,
   formatLinearMeasurement,
+  formatVolumeLabel,
+  getAreaUnitLabel,
   getLinearUnitLabel,
+  getVolumeUnitLabel,
   type LinearUnit,
   linearControlValueToMeters,
   linearUnitToMeters,
   metersToLinearUnit,
+  squareMetersToAreaUnit,
 } from './lib/measurements'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
@@ -406,6 +416,19 @@ export {
   useMovingNode,
   useReshapingNode,
 } from './store/use-interaction-scope'
+export {
+  commitMeasurementDraft,
+  type MeasurementAxis,
+  type MeasurementAxisGuide,
+  type MeasurementDraftOwner,
+  type MeasurementDraftPayload,
+  type MeasurementDraftStage,
+  type MeasurementKind,
+  type MeasurementPoint,
+  type MeasurementSurfacePoint,
+  measurementPolygonMidpoints,
+  useMeasurementDraft,
+} from './store/use-measurement-draft'
 export {
   default as useOpeningGuides,
   type OpeningGuide3D,

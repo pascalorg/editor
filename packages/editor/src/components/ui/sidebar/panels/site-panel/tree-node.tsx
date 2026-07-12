@@ -155,6 +155,7 @@ const treeNodeByType: Record<
   wall: WallTreeNode,
   fence: FenceTreeNode,
   gutter: GutterTreeNode,
+  measurement: RegistryTreeNode,
   'ridge-vent': RegistryTreeNode,
   'turbine-vent': RegistryTreeNode,
   cupola: RegistryTreeNode,

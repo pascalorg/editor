@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "../../../styles/elevation.css";
 @source "../../../packages/editor/src";
+@source "../../../packages/nodes/src";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -6,6 +6,7 @@ import { ColumnNode } from './column'
 import { FenceNode } from './fence'
 import { GuideNode } from './guide'
 import { ItemNode } from './item'
+import { MeasurementNode } from './measurement'
 import { RoofNode } from './roof'
 import { ScanNode } from './scan'
 import { ShelfNode } from './shelf'
@@ -32,6 +33,7 @@ export const LevelNode = BaseNode.extend({
         StairNode.shape.id,
         ScanNode.shape.id,
         GuideNode.shape.id,
+        MeasurementNode.shape.id,
         SpawnNode.shape.id,
         ShelfNode.shape.id,
       ]),

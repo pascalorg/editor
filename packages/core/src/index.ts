@@ -18,6 +18,7 @@ export type {
   GutterEvent,
   ItemEvent,
   LevelEvent,
+  MeasurementEvent,
   NodeEvent,
   RidgeVentEvent,
   RoofEvent,
@@ -65,6 +66,16 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
+export {
+  areMeasurementPointsCoplanar,
+  MEASUREMENT_PLANAR_TOLERANCE,
+  measurementArea,
+  measurementAreaVector,
+  measurementCentroid,
+  measurementDistance,
+  measurementNormal,
+  measurementPrismVolume,
+} from './lib/measurement-geometry'
 export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,

@@ -22,6 +22,7 @@ import { itemDefinition } from './item'
 import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { liquidLineDefinition } from './liquid-line'
+import { measurementDefinition } from './measurement'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
@@ -88,6 +89,7 @@ export const builtinPlugin: Plugin = {
     levelDefinition as unknown as AnyNodeDefinition,
     guideDefinition as unknown as AnyNodeDefinition,
     scanDefinition as unknown as AnyNodeDefinition,
+    measurementDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
@@ -145,6 +147,7 @@ export { itemDefinition } from './item'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
 export { liquidLineDefinition, useLiquidLineToolOptions } from './liquid-line'
+export { measurementDefinition } from './measurement'
 export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'

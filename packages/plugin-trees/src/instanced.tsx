@@ -38,6 +38,7 @@ export interface Placeable {
 const DUMMY = new Object3D()
 const INSTANCE_MATRIX = new Matrix4()
 const NO_RAYCAST = () => {}
+const MEASUREMENT_SURFACE_USER_DATA = { measurementSurface: true }
 
 // Wind is a TSL vertex bend baked into the variant materials (see `wind-node.ts`)
 // — animated on the GPU, so the instance matrices here stay static.
@@ -262,6 +263,7 @@ function InstancedSubMesh<N extends Placeable>({
       frustumCulled={false}
       raycast={localSpace ? NO_RAYCAST : undefined}
       ref={ref}
+      userData={MEASUREMENT_SURFACE_USER_DATA}
     />
   )
 }

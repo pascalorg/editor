@@ -29,7 +29,7 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
-import { initSFXBus } from '../../lib/sfx-bus'
+import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
@@ -119,6 +119,7 @@ function initializeEditorRuntime(): () => void {
     unsubscribeSpaceDetection?.()
 
     spatialGridManager.clear()
+    disposeSFXBus()
 
     const outliner = useViewer.getState().outliner
     outliner.selectedObjects.length = 0

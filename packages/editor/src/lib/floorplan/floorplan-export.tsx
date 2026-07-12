@@ -61,6 +61,7 @@ type ExportLevel = { id: AnyNodeId; label: string }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
   const nodes = useScene.getState().nodes
+  const unit = useViewer.getState().unit
   const levels = resolveExportLevels(nodes)
   if (levels.length === 0) {
     console.warn('[floorplan-export] no level to export')
@@ -80,7 +81,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   let pageCount = 0
   try {
     for (const level of levels) {
-      const geometries = collectFloorplanGeometry(nodes, level.id, scope)
+      const geometries = collectFloorplanGeometry(nodes, level.id, scope, unit)
       if (geometries.length === 0) continue
 
       // Rotate the exported plan to the same north-up orientation the on-screen
@@ -253,6 +254,7 @@ function collectFloorplanGeometry(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
+  unit: 'metric' | 'imperial',
 ): { id: AnyNodeId; base: FloorplanGeometry }[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -297,7 +299,7 @@ function collectFloorplanGeometry(
       levelNodeIdsByType,
       levelDataCache,
     )
-    const ctx = buildContext(node, nodes, NEUTRAL_VIEW_STATE, levelData)
+    const ctx = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
     const geometry = builder(node, ctx)
     if (!geometry) continue
     const { base } = splitFloorplanOverlay(geometry)

@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  cubicMetersToVolumeUnit,
   formatAreaLabel,
   formatLinearMeasurement,
+  formatVolumeLabel,
   getAreaUnitLabel,
   getLinearUnitLabel,
+  getVolumeUnitLabel,
   linearControlValueToMeters,
   linearUnitToMeters,
   metersToLinearUnit,
@@ -93,5 +96,35 @@ describe('area measurements', () => {
     expect(formatAreaLabel(12.34, 'metric')).toBe('12.3m²')
     expect(formatAreaLabel(1, 'imperial')).toBe('10.8ft²')
     expect(formatAreaLabel(12.34, 'metric', 2)).toBe('12.34m²')
+  })
+
+  test('returns a placeholder for non-finite areas', () => {
+    expect(formatAreaLabel(NaN, 'metric')).toBe('--')
+    expect(formatAreaLabel(Infinity, 'imperial')).toBe('--')
+  })
+})
+
+describe('volume measurements', () => {
+  test('converts cubic meters to the active volume unit', () => {
+    expect(cubicMetersToVolumeUnit(0, 'imperial')).toBe(0)
+    expect(cubicMetersToVolumeUnit(12.5, 'metric')).toBe(12.5)
+    expect(cubicMetersToVolumeUnit(1, 'imperial')).toBeCloseTo(35.3147)
+  })
+
+  test('returns the display label for volume readouts', () => {
+    expect(getVolumeUnitLabel('metric')).toBe('m³')
+    expect(getVolumeUnitLabel('imperial')).toBe('ft³')
+  })
+
+  test('formats a volume label with value and unit', () => {
+    expect(formatVolumeLabel(12.34, 'metric')).toBe('12.3m³')
+    expect(formatVolumeLabel(1, 'imperial')).toBe('35.3ft³')
+    expect(formatVolumeLabel(12.34, 'metric', 2)).toBe('12.34m³')
+  })
+
+  test('returns a placeholder for non-finite volumes', () => {
+    expect(formatVolumeLabel(NaN, 'metric')).toBe('--')
+    expect(formatVolumeLabel(Infinity, 'imperial')).toBe('--')
+    expect(formatVolumeLabel(Number.NEGATIVE_INFINITY, 'metric')).toBe('--')
   })
 })

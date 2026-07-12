@@ -33,6 +33,7 @@ export function getLinearUnitLabel(unit: LinearUnit): string {
 }
 
 const SQUARE_FEET_PER_SQUARE_METER = FEET_PER_METER * FEET_PER_METER
+const CUBIC_FEET_PER_CUBIC_METER = SQUARE_FEET_PER_SQUARE_METER * FEET_PER_METER
 
 export function squareMetersToAreaUnit(squareMeters: number, unit: LinearUnit): number {
   return unit === 'imperial' ? squareMeters * SQUARE_FEET_PER_SQUARE_METER : squareMeters
@@ -47,7 +48,27 @@ export function formatAreaLabel(
   unit: LinearUnit,
   fractionDigits = 1,
 ): string {
+  if (!Number.isFinite(squareMeters)) return '--'
+
   return `${squareMetersToAreaUnit(squareMeters, unit).toFixed(fractionDigits)}${getAreaUnitLabel(unit)}`
+}
+
+export function cubicMetersToVolumeUnit(cubicMeters: number, unit: LinearUnit): number {
+  return unit === 'imperial' ? cubicMeters * CUBIC_FEET_PER_CUBIC_METER : cubicMeters
+}
+
+export function getVolumeUnitLabel(unit: LinearUnit): string {
+  return unit === 'imperial' ? 'ft³' : 'm³'
+}
+
+export function formatVolumeLabel(
+  cubicMeters: number,
+  unit: LinearUnit,
+  fractionDigits = 1,
+): string {
+  if (!Number.isFinite(cubicMeters)) return '--'
+
+  return `${cubicMetersToVolumeUnit(cubicMeters, unit).toFixed(fractionDigits)}${getVolumeUnitLabel(unit)}`
 }
 
 export function formatLinearMeasurement(meters: number, unit: LinearUnit): string {

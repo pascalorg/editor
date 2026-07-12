@@ -289,6 +289,7 @@ function SceneReadyTracker({
   sceneReadyKey?: string | number | null
   sceneReadyMaxWaitMs?: number
 }) {
+  const invalidate = useThree((state) => state.invalidate)
   const readyRef = useRef(false)
   const settledFramesRef = useRef(0)
   const waitedFramesRef = useRef(0)
@@ -306,7 +307,8 @@ function SceneReadyTracker({
     waitedFramesRef.current = 0
     waitStartRef.current = null
     onSceneReadyChangeRef.current?.(false)
-  }, [sceneReadyKey])
+    invalidate()
+  }, [invalidate, sceneReadyKey])
 
   useFrame(() => {
     if (!(onSceneReadyChangeRef.current && !readyRef.current)) return
@@ -323,11 +325,15 @@ function SceneReadyTracker({
       : waitedFramesRef.current >= SCENE_READY_MAX_WAIT_FRAMES
     if (!capReached && (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())) {
       settledFramesRef.current = 0
+      invalidate()
       return
     }
 
     settledFramesRef.current += 1
-    if (settledFramesRef.current < SCENE_READY_SETTLED_FRAMES) return
+    if (settledFramesRef.current < SCENE_READY_SETTLED_FRAMES) {
+      invalidate()
+      return
+    }
 
     readyRef.current = true
     onSceneReadyChangeRef.current(true)

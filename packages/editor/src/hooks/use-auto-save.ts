@@ -5,6 +5,11 @@ import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
+const STRUCTURAL_NODE_COUNT = 4
+
+export function isSuspiciousNodeDrop(previousNodeCount: number, currentNodeCount: number) {
+  return previousNodeCount > STRUCTURAL_NODE_COUNT && currentNodeCount <= STRUCTURAL_NODE_COUNT
+}
 
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
@@ -81,8 +86,7 @@ export function useAutoSave({
       // Guard: refuse to autosave if the scene went from populated to nearly empty.
       // This catches accidental full deletions before they're persisted.
       const currentNodeCount = Object.keys(nodes).length
-      const STRUCTURAL_NODE_COUNT = 4 // site + building + levels (empty scene skeleton)
-      if (lastNodeCount > STRUCTURAL_NODE_COUNT && currentNodeCount <= STRUCTURAL_NODE_COUNT) {
+      if (isSuspiciousNodeDrop(lastNodeCount, currentNodeCount)) {
         console.warn(
           `[autosave] Blocked: scene dropped from ${lastNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
         )
@@ -171,8 +175,18 @@ export function useAutoSave({
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
-      hasDirtyChangesRef.current = false
       const { nodes, rootNodeIds, collections, materials } = useScene.getState()
+      const currentNodeCount = Object.keys(nodes).length
+      if (isSuspiciousNodeDrop(lastNodeCount, currentNodeCount)) {
+        console.warn(
+          `[autosave] Blocked unload flush: scene dropped from ${lastNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
+        )
+        setSaveStatus('error')
+        return
+      }
+
+      hasDirtyChangesRef.current = false
+      lastNodeCount = currentNodeCount
       const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph, { keepalive: true }).catch(() => {})
