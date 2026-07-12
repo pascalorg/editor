@@ -25,6 +25,7 @@ import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
+import { GeometryDisposalFlushSystem } from '../../systems/geometry/geometry-disposal-flush'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
@@ -574,6 +575,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           <SceneRenderer />
         )}
 
+        {/* Single authoritative flush point for the deferred geometry-disposal
+            queue. Runs at a strongly negative frame priority so it drains the
+            queue before ANY rebuild system runs this frame, guaranteeing only
+            geometries dropped on a previous frame (already released by the
+            renderer) are disposed. See lib/deferred-dispose.ts. */}
+        <GeometryDisposalFlushSystem />
         {/* Generic slab-elevation lift for any kind that declares
             `capabilities.floorPlaced`. Runs at frame priority 1 so it
             lands its mesh.position.y override before the priority-2

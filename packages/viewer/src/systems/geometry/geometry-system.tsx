@@ -12,7 +12,8 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import { type BufferGeometry, FrontSide, type Group, type Material, type Mesh } from 'three'
+import { queueGeometryDispose } from '../../lib/deferred-dispose'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -105,6 +106,11 @@ export const GeometrySystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
+    // Geometries queued for disposal on a previous frame are flushed by the
+    // dedicated `GeometryDisposalFlushSystem`, which runs at a negative frame
+    // priority ahead of every rebuild system. Flushing here would risk
+    // disposing geometries queued by another system *this* frame, before the
+    // render pass (Sentry MONOREPO-EDITOR-DK/EG/EH).
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
 
@@ -308,8 +314,10 @@ function disposeChildren(group: Group) {
       ?.__fromGeometry
     if (!fromGeometry) continue
     group.remove(child)
-    const mesh = child as Partial<Mesh> & { geometry?: { dispose?: () => void } }
-    if (mesh.geometry?.dispose) mesh.geometry.dispose()
+    const mesh = child as Partial<Mesh> & { geometry?: BufferGeometry }
+    // Defer the outgoing geometry's dispose to the next frame — the WebGPU
+    // renderer still holds a RenderObject for it during this frame's render.
+    if (mesh.geometry) queueGeometryDispose(mesh.geometry)
     if ('material' in mesh) {
       const m = (mesh as { material: unknown }).material
       if (Array.isArray(m)) {
