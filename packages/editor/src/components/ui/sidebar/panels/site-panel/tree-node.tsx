@@ -1,4 +1,4 @@
-import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -126,6 +126,8 @@ const treeNodeByType: Record<
     isLast?: boolean
     nodeId: AnyNodeId
   }>,
+  cabinet: RegistryTreeNode,
+  'cabinet-module': RegistryTreeNode,
   'box-vent': RegistryTreeNode,
   ceiling: CeilingTreeNode,
   chimney: ChimneyTreeNode,
@@ -171,7 +173,15 @@ const treeNodeByType: Record<
 }
 
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
+  // Registry-driven row hiding (`def.tree.hidden`) — primitive boolean
+  // selector so unrelated scene updates don't re-render every row.
+  const shouldHide = useScene((state) => {
+    const node = state.nodes[nodeId]
+    if (!node) return false
+    return nodeRegistry.get(node.type)?.tree?.hidden?.(node, state.nodes) ?? false
+  })
   const nodeType = useScene((state) => state.nodes[nodeId]?.type)
+  if (shouldHide) return null
   if (!nodeType) return null
   const Component = treeNodeByType[nodeType]
   if (!Component) return null

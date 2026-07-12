@@ -61,7 +61,7 @@ type SelectionPath = {
 
 `setSelection` has a hierarchy guard: setting `levelId` without `buildingId` resets children. Use `resetSelection()` to clear everything.
 
-Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`. Regular click replaces it.
+Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`; `Shift + click` toggles the same way. Regular click replaces it.
 
 ---
 

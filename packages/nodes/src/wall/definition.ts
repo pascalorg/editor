@@ -26,7 +26,7 @@ import { wallSlots } from './slots'
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 1,
+  schemaVersion: 5,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -59,10 +59,10 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // preview through this entry rather than carrying a kind-name
     // arm.
     paint: wallPaint,
-    // Declared paintable slots (interior / exterior) with their default
-    // appearance — the same `{ slotId, label, default }` contract every other
-    // paintable kind exposes. Paint still writes the legacy inline fields via
-    // `wallPaint`; migrating those into `node.slots` is a later step.
+    // Declared paintable slots with their default appearance — the same
+    // `{ slotId, label, default }` contract every other paintable kind exposes.
+    // Paint still writes the legacy inline fields for base faces via
+    // `wallPaint`; migrating those fully into `node.slots` is a later step.
     slots: () => wallSlots(),
   },
 

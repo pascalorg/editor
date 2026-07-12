@@ -1,6 +1,14 @@
 import type { AssetInput } from '@pascal-app/core'
 
-export const CATALOG_ITEMS: AssetInput[] = [
+/**
+ * A catalog tile: the asset plus optional editor placement metadata.
+ * `tool` names the placement tool the tile arms (defaults to the generic
+ * `'item'` drop tool) — kinds drawn by their own registry tool (e.g. the
+ * modular cabinet) point at that tool id instead.
+ */
+export type CatalogItem = AssetInput & { tool?: string }
+
+export const CATALOG_ITEMS: CatalogItem[] = [
   {
     id: 'cactus',
     category: 'furniture',
@@ -436,6 +444,36 @@ export const CATALOG_ITEMS: AssetInput[] = [
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
     surface: { height: 0.48 },
+  },
+  {
+    id: 'cabinet',
+    tool: 'cabinet',
+    category: 'furniture',
+    name: 'Modular Cabinet',
+    tags: [
+      'cabinet',
+      'cupboard',
+      'storage',
+      'kitchen',
+      'pantry',
+      'wood',
+      'timber',
+      'modern',
+      'contemporary',
+      'minimalist',
+      'organization',
+      'furniture',
+    ],
+    thumbnail:
+      'https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/kitchen-cabinet/thumbnail.png',
+    src: 'https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/kitchen-cabinet/model.glb',
+    floorPlanUrl:
+      'https://byrpxoiotywskoojsrzd.supabase.co/storage/v1/object/public/items/system/kitchen-cabinet/floor-plan.png',
+    dimensions: [1.65, 1.09, 0.77],
+    offset: [0, 0.0004, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    surface: { height: 1.09 },
   },
   {
     id: 'sofa',

@@ -20,6 +20,7 @@ import { useEffect } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
 import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
+import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
@@ -119,6 +120,17 @@ export function FloorplanRegistryMoveOverlay() {
       pauseSceneHistory(useScene)
       let historyPaused = true
 
+      const clearLivePreviews = () => {
+        const liveTransforms = useLiveTransforms.getState()
+        const liveOverrides = useLiveNodeOverrides.getState()
+        const scene = useScene.getState()
+        for (const id of session.affectedIds) {
+          liveTransforms.clear(id)
+          liveOverrides.clear(id)
+          scene.markDirty(id)
+        }
+      }
+
       // The registry action menu's Move button portals to `document.body`,
       // so the trigger click's pointer-up happens OUTSIDE the floor-plan
       // scene and never reaches `onPointerUp` here. That means: the very
@@ -170,7 +182,11 @@ export function FloorplanRegistryMoveOverlay() {
         const moved = movedId ? useScene.getState().nodes[movedId] : undefined
         const pos = (moved as { position?: [number, number, number] } | undefined)?.position
         if (pos) {
-          const key = `${pos[0]},${pos[2]}`
+          const key = movementSfxStepKey({
+            coords: [pos[0], pos[2]],
+            gridSnapActive: isGridSnapActive(),
+            gridStep: useEditor.getState().gridSnapStep,
+          })
           if (key !== lastSnapKey) {
             lastSnapKey = key
             sfxEmitter.emit('sfx:grid-snap')
@@ -354,12 +370,7 @@ export function FloorplanRegistryMoveOverlay() {
             resumeSceneHistory(useScene)
             historyPaused = false
           }
-          const liveTransforms = useLiveTransforms.getState()
-          const liveOverrides = useLiveNodeOverrides.getState()
-          for (const id of session.affectedIds) {
-            liveTransforms.clear(id)
-            liveOverrides.clear(id)
-          }
+          clearLivePreviews()
           useAlignmentGuides.getState().clear()
           setMovingNode(null)
           return
@@ -376,12 +387,7 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveNodeOverrides`. Either way, leaving them in place
         // after Esc would freeze the 2D / 3D view at the cancelled
         // position.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
         // Restore selection cleared by the action menu's Move click.
         useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
         setMovingNode(null)
@@ -429,12 +435,7 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveTransforms`; wall sessions write to
         // `useLiveNodeOverrides`. In pure 2D view the corresponding 3D
         // tool's cleanup isn't there to clear them for us.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
         // Sessions that publish Figma-style alignment guides during `apply`
         // (item / shelf / column) leave them in the store; this cleanup runs
         // after every terminal path (commit + Esc both unmount via
@@ -452,6 +453,11 @@ export function FloorplanRegistryMoveOverlay() {
     // ── Path 2 — generic free-floating translate ────────────────────
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
+    const sceneNodes = useScene.getState().nodes as Record<string, AnyNode>
+    const relatedEntryIds = collectFloorplanMoveEntryIds(movingNode.id as AnyNodeId, sceneNodes)
+    const relatedEntries = Array.from(relatedEntryIds)
+      .map((id) => scene.querySelector(`[data-node-id="${id}"]`) as SVGGElement | null)
+      .filter((value): value is SVGGElement => value != null)
 
     // Polyline kinds (duct / pipe / lineset) carry a `path`, not a
     // `position` — translating a `position` here would write a field their
@@ -490,12 +496,12 @@ export function FloorplanRegistryMoveOverlay() {
     // so its untransformed bbox IS the world-space footprint. Cache the
     // moving entry's local bbox once (relative to originalPosition) and
     // derive anchors at any proposed (sx, sz) by translating it.
-    const movingLocalBBox = entry.getBBox()
+    const movingLocalBBox = unionFloorplanEntryBBox(relatedEntries)
     const candidateAnchors: AlignmentAnchor[] = []
     const allEntries = scene.querySelectorAll('[data-node-id]')
     for (const el of Array.from(allEntries)) {
       const otherId = el.getAttribute('data-node-id')
-      if (!otherId || otherId === movingNode.id) continue
+      if (!otherId || relatedEntryIds.has(otherId as AnyNodeId)) continue
       const b = (el as SVGGraphicsElement).getBBox()
       // Skip only fully-degenerate (point) entries. A thin run (duct / pipe /
       // lineset drawn as a line) has one zero dimension but is still a valid
@@ -595,9 +601,33 @@ export function FloorplanRegistryMoveOverlay() {
         useAlignmentGuides.getState().clear()
       }
 
+      // 3) Kind-owned attachment snap (cabinet → wall) — 2D parity with the
+      // 3D move tool's `groupMoveSnap` pass. An attach behavior, not an
+      // alignment guide, so it runs in every snapping mode except Off.
+      const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      if (groupMoveSnap && (isGridSnapActive() || isMagneticSnapActive())) {
+        const snappedPosition = groupMoveSnap({
+          node: movingNode,
+          candidatePosition: [finalX, originalPosition[1], finalZ],
+          movingIds: [movingNode.id as AnyNodeId],
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          levelId:
+            (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+            (movingNode.parentId as AnyNodeId | undefined) ??
+            null,
+        })
+        if (snappedPosition) {
+          finalX = snappedPosition[0]
+          finalZ = snappedPosition[2]
+          useAlignmentGuides.getState().clear()
+        }
+      }
+
       const dx = finalX - originalPosition[0]
       const dz = finalZ - originalPosition[2]
-      entry.setAttribute('transform', `translate(${dx} ${dz})`)
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.setAttribute('transform', `translate(${dx} ${dz})`)
+      }
       boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
       lastSnapped = [finalX, finalZ]
     }
@@ -633,7 +663,9 @@ export function FloorplanRegistryMoveOverlay() {
             : { path: nextPath }) as Partial<AnyNode>,
         )
         useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
-        entry.removeAttribute('transform')
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
         useAlignmentGuides.getState().clear()
         setMovingNode(null)
         swallowNextClick()
@@ -660,7 +692,9 @@ export function FloorplanRegistryMoveOverlay() {
         )
       }
       useViewer.getState().setSelection({ selectedIds: [selectedId] })
-      entry.removeAttribute('transform')
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
       useAlignmentGuides.getState().clear()
       setMovingNode(null)
       swallowNextClick()
@@ -677,7 +711,9 @@ export function FloorplanRegistryMoveOverlay() {
           useScene.getState().deleteNode(movingNode.id as AnyNodeId)
           if (wasTracking) temporal.resume()
         }
-        entry.removeAttribute('transform')
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
         useAlignmentGuides.getState().clear()
         setMovingNode(null)
       }
@@ -690,10 +726,14 @@ export function FloorplanRegistryMoveOverlay() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('keydown', onKey)
-      entry.removeAttribute('transform')
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
       // Always un-hide on teardown so a committed copy shows and a
       // never-revealed entry doesn't leak a hidden style onto a reused node.
-      entry.style.visibility = ''
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.style.visibility = ''
+      }
       boxEl.remove()
       useAlignmentGuides.getState().clear()
     }
@@ -743,6 +783,51 @@ function deepEqual(a: unknown, b: unknown): boolean {
     return true
   }
   return false
+}
+
+function collectFloorplanMoveEntryIds(
+  rootId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): Set<AnyNodeId> {
+  const root = nodes[rootId]
+  if (root?.type !== 'cabinet' && root?.type !== 'cabinet-module') {
+    return new Set([rootId])
+  }
+
+  const ids = new Set<AnyNodeId>()
+  const queue: AnyNodeId[] = [rootId]
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    if (ids.has(id)) continue
+    const node = nodes[id]
+    if (node?.type !== 'cabinet' && node?.type !== 'cabinet-module') continue
+    ids.add(id)
+    for (const childId of node.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type === 'cabinet' || child?.type === 'cabinet-module') {
+        queue.push(childId as AnyNodeId)
+      }
+    }
+  }
+  return ids
+}
+
+function unionFloorplanEntryBBox(entries: readonly SVGGraphicsElement[]): DOMRect {
+  const first = entries[0]?.getBBox()
+  if (!first) return new DOMRect(0, 0, 0, 0)
+
+  let minX = first.x
+  let minY = first.y
+  let maxX = first.x + first.width
+  let maxY = first.y + first.height
+  for (const entry of entries.slice(1)) {
+    const box = entry.getBBox()
+    minX = Math.min(minX, box.x)
+    minY = Math.min(minY, box.y)
+    maxX = Math.max(maxX, box.x + box.width)
+    maxY = Math.max(maxY, box.y + box.height)
+  }
+  return new DOMRect(minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY))
 }
 
 function swallowNextClick() {

@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type CeilingNode,
   ColumnNode,
+  createSceneApi,
   DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
@@ -20,8 +21,10 @@ import {
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
+  type NodeQuickAction,
   nodeRegistry,
   RoofSegmentNode,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   SpawnNode,
   StairNode,
@@ -38,6 +41,11 @@ import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import {
+  createFreshPlacementSubtree,
+  duplicatesAsFreshSubtree,
+} from '../../lib/fresh-planar-placement'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
@@ -49,6 +57,7 @@ import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
 } from '../../store/use-interaction-scope'
+import { IconRefGlyph } from '../ui/icon-ref'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
 
@@ -145,6 +154,79 @@ function getAttributeVersion(
   return attribute && 'version' in attribute && typeof attribute.version === 'number'
     ? attribute.version
     : 0
+}
+
+function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      <rect x="8" y="7" width="9" height="10" rx="1.75" />
+      <path d="M12.5 7v10" />
+      {direction === 'left' ? (
+        <>
+          <path d="M6.5 12H2.75" />
+          <path d="m5.5 9.75-2.75 2.25 2.75 2.25" />
+        </>
+      ) : (
+        <>
+          <path d="M17.5 12h3.75" />
+          <path d="m18.5 9.75 2.75 2.25-2.75 2.25" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+// Builtin string tokens map to the generic glyphs above; kind-owned marks
+// arrive as IconRef objects and render through the shared IconRefGlyph.
+function QuickActionIcon({ action }: { action: NodeQuickAction }) {
+  const icon = action.icon
+  if (!icon) return null
+  if (typeof icon === 'object') return <IconRefGlyph icon={icon} size={14} />
+  switch (icon) {
+    case 'add-left':
+      return <SideAddGlyph direction="left" />
+    case 'add-right':
+      return <SideAddGlyph direction="right" />
+    default:
+      return null
+  }
+}
+
+function collectQuickActionNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  selectedId: string | null,
+): Record<AnyNodeId, AnyNode> | null {
+  if (!selectedId) return null
+  const selected = nodes[selectedId as AnyNodeId]
+  if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
+
+  const collected: Record<AnyNodeId, AnyNode> = { [selected.id as AnyNodeId]: selected }
+  const add = (id: string | null | undefined) => {
+    if (!id) return
+    const node = nodes[id as AnyNodeId]
+    if (node) collected[node.id as AnyNodeId] = node
+  }
+  const addChildren = (node: AnyNode | undefined) => {
+    for (const childId of (node as { children?: readonly string[] } | undefined)?.children ?? []) {
+      add(childId)
+    }
+  }
+
+  add(selected.parentId ?? null)
+  addChildren(selected)
+  const parent = selected.parentId ? nodes[selected.parentId as AnyNodeId] : undefined
+  addChildren(parent)
+
+  return collected
 }
 
 // Pooled scratch for the per-frame anchor recompute (see useFrame below) so a
@@ -261,11 +343,22 @@ export function FloatingActionMenu() {
   })
 
   // Only show for single selection of specific types
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
 
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
+  const quickActionNodes = useScene(useShallow((s) => collectQuickActionNodes(s.nodes, selectedId)))
+  const quickActions = useMemo<NodeQuickAction[]>(
+    () =>
+      node && quickActionNodes
+        ? (nodeRegistry.get(node.type)?.quickActions?.({
+            node: node as never,
+            nodes: quickActionNodes,
+          }) ?? [])
+        : [],
+    [node, quickActionNodes],
+  )
   // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
   // NodeDefinition with `capabilities.selectable`) get the floating menu
   // by default too. Phase 4 collapses these into a single registry check.
@@ -441,6 +534,18 @@ export function FloatingActionMenu() {
       }
 
       useScene.temporal.getState().pause()
+
+      if (duplicatesAsFreshSubtree(node as AnyNode)) {
+        const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+        const draft = draftId ? useScene.getState().nodes[draftId] : null
+        if (draft) {
+          setMovingNode(draft as any)
+          setSelection({ selectedIds: [] })
+          return
+        }
+        useScene.temporal.getState().resume()
+        return
+      }
 
       let duplicateInfo = structuredClone(node) as any
       delete duplicateInfo.id
@@ -664,9 +769,25 @@ export function FloatingActionMenu() {
   const handleFind = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (node) emitter.emit('selection:find-node' as never, node as never)
+      if (node) emitter.emit('selection:find-node', node)
     },
     [node],
+  )
+
+  const handleQuickAction = useCallback(
+    (action: NodeQuickAction) => (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!node || action.disabled) return
+      const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
+      const result =
+        action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
+      if (result?.selectedIds) setSelection({ selectedIds: result.selectedIds })
+      if (result?.selectedIds) {
+        const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)
+        sfxEmitter.emit(selectedDifferentNode ? 'sfx:item-place' : 'sfx:item-pick')
+      }
+    },
+    [node, setSelection],
   )
 
   if (
@@ -688,7 +809,11 @@ export function FloatingActionMenu() {
           }}
           zIndexRange={[25, 0]}
         >
-          <div className="relative" ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
+          <div
+            className="relative flex flex-col items-center"
+            ref={menuScaleRef}
+            style={{ transformOrigin: 'center center' }}
+          >
             <NodeActionMenu
               onFind={node && canFindNode ? handleFind : undefined}
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
@@ -717,6 +842,30 @@ export function FloatingActionMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             />
+            {quickActions.length > 0 ? (
+              <div
+                className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+              >
+                {quickActions.map((action) => (
+                  <button
+                    aria-label={action.title ?? action.label}
+                    className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    disabled={action.disabled}
+                    key={action.id}
+                    onClick={handleQuickAction(action)}
+                    title={action.title ?? action.label}
+                    type="button"
+                  >
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                      <QuickActionIcon action={action} />
+                    </span>
+                    <span className="whitespace-nowrap leading-none">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {/* Height-drag dimension pill. Absolutely positioned just above
                 the menu (away from the height arrow below it) so it rides the
                 same scale transform + anchor, never overlaps the menu, and

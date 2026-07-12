@@ -11,6 +11,7 @@ import {
   type LevelNode,
   type NodeEvent,
   pointInPolygon,
+  resolveSelectionProxyId,
   sceneRegistry,
   useScene,
   type WallNode,
@@ -184,20 +185,20 @@ const isNodeInZone = (node: AnyNode, levelId: string, zoneId: string): boolean =
 const getStrategy = (): SelectionStrategy | null => {
   const { buildingId, levelId, zoneId } = useViewer.getState().selection
 
-  const computeNextIds = (node: AnyNode, selectedIds: string[], event?: any): string[] => {
+  const computeNextIds = (nodeId: string, selectedIds: string[], event?: any): string[] => {
     const isMeta = event?.metaKey || event?.nativeEvent?.metaKey
     const isCtrl = event?.ctrlKey || event?.nativeEvent?.ctrlKey
-    // Shift toggles like Cmd/Ctrl — same convention as the 2D floorplan layer.
+    // Shift toggles membership like Cmd/Ctrl.
     const isShift = event?.shiftKey || event?.nativeEvent?.shiftKey
 
     if (isMeta || isCtrl || isShift) {
-      if (selectedIds.includes(node.id)) {
-        return selectedIds.filter((id) => id !== node.id)
+      if (selectedIds.includes(nodeId)) {
+        return selectedIds.filter((id) => id !== nodeId)
       }
-      return [...selectedIds, node.id]
+      return [...selectedIds, nodeId]
     }
 
-    return [node.id]
+    return [nodeId]
   }
 
   // No building selected -> can select buildings
@@ -266,9 +267,13 @@ const getStrategy = (): SelectionStrategy | null => {
       }
 
       const { selectedIds } = useViewer.getState().selection
+      const proxyId = resolveSelectionProxyId(
+        nodeToSelect,
+        useScene.getState().nodes as Record<string, AnyNode | undefined>,
+      )
       useViewer
         .getState()
-        .setSelection({ selectedIds: computeNextIds(nodeToSelect, selectedIds, nativeEvent) })
+        .setSelection({ selectedIds: computeNextIds(proxyId, selectedIds, nativeEvent) })
     },
     handleDeselect: () => {
       const { selectedIds } = useViewer.getState().selection
@@ -317,7 +322,12 @@ export const SelectionManager = () => {
           useViewer.setState({ hoveredId: null })
           return
         }
-        useViewer.setState({ hoveredId: event.node.id })
+        useViewer.setState({
+          hoveredId: resolveSelectionProxyId(
+            event.node,
+            useScene.getState().nodes as Record<string, AnyNode | undefined>,
+          ),
+        })
       }
     }
 
@@ -327,7 +337,13 @@ export const SelectionManager = () => {
       if (event.node.type === 'ceiling') return
       if (strategy.isValid(event.node)) {
         event.stopPropagation()
-        useViewer.setState({ hoveredId: null })
+        const targetId = resolveSelectionProxyId(
+          event.node,
+          useScene.getState().nodes as Record<string, AnyNode | undefined>,
+        )
+        if (useViewer.getState().hoveredId === targetId) {
+          useViewer.setState({ hoveredId: null })
+        }
       }
     }
 

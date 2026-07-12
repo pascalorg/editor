@@ -5,6 +5,7 @@ import {
   emitter,
   resolveLevelId,
   sceneRegistry,
+  snapPointToGrid,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -18,12 +19,11 @@ import {
   resolveCeilingPlanPointSnap,
 } from '../../../lib/ceiling-plan-snap'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isGridSnapActive } from '../../../store/use-editor'
 import useInteractionScope, {
   useIsCurveReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
-import { snapToHalf } from '../../tools/item/placement-math'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
 const BRACKET_THICKNESS = 0.04
@@ -300,23 +300,29 @@ const CeilingSelectionAffordance = ({
         initialCorner[0] + (planePosition[0] - drag.startPlanePosition[0]),
         initialCorner[1] + (planePosition[1] - drag.startPlanePosition[1]),
       ]
-      const gridNextPosition: [number, number] = event.shiftKey
-        ? rawNextPosition
-        : [
-            initialCorner[0] + snapToHalf(planePosition[0] - drag.startPlanePosition[0]),
-            initialCorner[1] + snapToHalf(planePosition[1] - drag.startPlanePosition[1]),
-          ]
+      const rawDelta: [number, number] = [
+        planePosition[0] - drag.startPlanePosition[0],
+        planePosition[1] - drag.startPlanePosition[1],
+      ]
+      const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const snappedDelta = snapPointToGrid(rawDelta, gridStep)
+      const gridNextPosition: [number, number] = [
+        initialCorner[0] + snappedDelta[0],
+        initialCorner[1] + snappedDelta[1],
+      ]
       const nextPosition = resolveCeilingPlanPointSnap({
         rawPoint: rawNextPosition,
         fallbackPoint: gridNextPosition,
         levelId,
         excludeId: drag.ceilingId,
-        altKey: event.altKey,
-        shiftKey: event.shiftKey,
       }).point
 
+      const snapEpsilon = 1e-6
+      const alignmentSnapped =
+        Math.abs(nextPosition[0] - gridNextPosition[0]) > snapEpsilon ||
+        Math.abs(nextPosition[1] - gridNextPosition[1]) > snapEpsilon
       if (
-        !event.shiftKey &&
+        (gridStep > 0 || alignmentSnapped) &&
         drag.previousSnappedPosition &&
         (nextPosition[0] !== drag.previousSnappedPosition[0] ||
           nextPosition[1] !== drag.previousSnappedPosition[1])

@@ -27,18 +27,22 @@ export function RegisteredToolHelper({
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
-  // The snapping chip (when a context is active) already shows Shift = cycle, so
-  // drop the redundant 'Cycle snapping mode' tool hint to avoid a double pill;
-  // also hide draft-gated hints until the draft is far enough along.
+  // Some hints are replaced by live contextual chips, so keep the generic
+  // registry renderer from duplicating stale/static versions.
   const visible = hints.filter(
     (hint) =>
       !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
   if (visible.length === 0 && !snapContext && !continuationContext) return null
+  // Hints carrying a live-state `chip` render as mode chips next to the
+  // snapping / continuation rows; the rest stay static key rows.
+  const chipHints = visible.filter((hint) => hint.chip)
+  const staticHints = visible.filter((hint) => !hint.chip)
   return (
     <ContextualHelperPanel
-      hints={visible.map((hint) => {
+      chipHints={chipHints}
+      hints={staticHints.map((hint) => {
         // Shift is a per-kind bypass for opening / zone / duct placement ("Free
         // place", "Free angle", …) — those flip to a bypassed state while held.
         const isBypassHint = hint.key === 'Shift'

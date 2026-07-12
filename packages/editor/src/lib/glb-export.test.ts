@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, DoorNode, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, DoorNode, registerNode, sceneRegistry } from '@pascal-app/core'
 import { buildDoorPreviewMesh } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import { prepareSceneForExport } from './glb-export'
@@ -264,6 +264,54 @@ describe('prepareSceneForExport', () => {
     // Rest pose is closed: the first keyframe is the identity rotation.
     const closed = new THREE.Quaternion().fromArray(Array.from(track.values).slice(0, 4))
     expect(closed.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
+  })
+
+  test('bakes registry-owned open clips and stamps the node openable', () => {
+    const root = new THREE.Group()
+    const nodeGroup = new THREE.Group()
+    const movingPart = new THREE.Group()
+    movingPart.add(meshWithNodeMaterial(nodeMaterial()))
+    nodeGroup.add(movingPart)
+    root.add(nodeGroup)
+
+    const kind = `test-openable-${crypto.randomUUID()}`
+    const nodeId = 'registry_openable'
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      category: 'fixtures',
+      defaults: () => ({}),
+      capabilities: {},
+      exportAnimation: ({ node, object }: { node: AnyNode; object: THREE.Object3D }) => {
+        const target = object.children[0]!
+        const clip = new THREE.AnimationClip(`${node.id}: open`, 1, [
+          new THREE.VectorKeyframeTrack(`${target.uuid}.position`, [0, 1], [0, 0, 0, 0, 0, 1]),
+        ])
+        clip.userData = { loop: false }
+        return clip
+      },
+    } as never)
+    sceneRegistry.nodes.set(nodeId, nodeGroup)
+
+    const { scene, animations } = prepareSceneForExport(root, {
+      [nodeId]: {
+        object: 'node',
+        id: nodeId,
+        type: kind,
+        name: 'Custom openable',
+      } as unknown as AnyNode,
+    })
+
+    expect(animations).toHaveLength(1)
+    expect(animations[0]!.name).toBe('registry_openable: open')
+    const exported = scene.getObjectByProperty('name', nodeId)
+    expect(exported?.userData).toMatchObject({
+      pascalId: nodeId,
+      kind,
+      label: 'Custom openable',
+      openable: true,
+      clips: ['registry_openable: open'],
+    })
   })
 
   test('bakes a sliding door into a sampled position clip', () => {

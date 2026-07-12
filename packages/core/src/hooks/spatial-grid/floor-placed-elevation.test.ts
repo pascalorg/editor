@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, SlabNode } from '../../schema'
+import useScene from '../../store/use-scene'
 import { getFloorPlacedElevation, getFloorStackedPosition } from './floor-placed-elevation'
 import { spatialGridManager } from './spatial-grid-manager'
 
@@ -86,6 +87,7 @@ describe('floor-placed elevation resolver', () => {
   beforeEach(() => {
     nodeRegistry._reset()
     spatialGridManager.clear()
+    useScene.setState({ nodes: {} })
   })
 
   test('returns 0 without a floorPlaced capability', () => {
@@ -111,6 +113,118 @@ describe('floor-placed elevation resolver', () => {
         rotation: [0, 0, 0],
       }),
     ).toBe(0)
+  })
+
+  test('canPlaceOnFloorFootprints accepts an L-shaped draft in the open corner gap', () => {
+    const baseAsset = (makeFloorNode() as { asset: Record<string, unknown> }).asset
+    registerNode(
+      makeDefinition('item', {
+        floorPlaced: {
+          footprint: (node) => ({
+            dimensions: (node as { asset: { dimensions: [number, number, number] } }).asset
+              .dimensions,
+            rotation: [0, (node as { rotation: [number, number, number] }).rotation[1] ?? 0, 0],
+          }),
+          collides: true,
+        },
+      }),
+    )
+
+    const level = makeLevel()
+    const blocker = makeFloorNode({
+      id: 'item_blocker',
+      position: [0.85, 0, 0.85],
+      asset: {
+        ...baseAsset,
+        id: 'asset_blocker',
+        name: 'Blocker',
+        src: 'asset:blocker',
+        dimensions: [0.3, 1, 0.3],
+      } as AnyNode extends { asset: infer T } ? T : never,
+    })
+    useScene.setState({ nodes: nodesFor(level, blocker) })
+
+    const coarse = spatialGridManager.canPlaceOnFloor(LEVEL_ID, [0.5, 0, 0.5], [1, 1, 1], [0, 0, 0])
+    const precise = spatialGridManager.canPlaceOnFloorFootprints(LEVEL_ID, [
+      { position: [0.2, 0, 0.5], dimensions: [0.4, 1, 1], rotation: [0, 0, 0] },
+      { position: [0.8, 0, 0.2], dimensions: [0.4, 1, 0.4], rotation: [0, 0, 0] },
+    ])
+
+    expect(coarse.valid).toBe(false)
+    expect(coarse.conflictIds).toEqual(['item_blocker'])
+    expect(precise.valid).toBe(true)
+    expect(precise.conflictIds).toEqual([])
+  })
+
+  test('canPlaceOnFloorFootprints rejects overlapping draft footprints', () => {
+    useScene.setState({ nodes: nodesFor(makeLevel()) })
+
+    const result = spatialGridManager.canPlaceOnFloorFootprints(LEVEL_ID, [
+      { position: [0, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] },
+      { position: [0.25, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] },
+    ])
+
+    expect(result.valid).toBe(false)
+    expect(result.conflictIds).toEqual([])
+  })
+
+  test('canPlaceOnFloorFootprints ignores descendants of an ignored composite node', () => {
+    registerNode(
+      makeDefinition('cabinet', {
+        floorPlaced: {
+          footprint: () => ({
+            dimensions: [1, 1, 1],
+            rotation: [0, 0, 0],
+          }),
+          collides: true,
+        },
+      }),
+    )
+    registerNode(
+      makeDefinition('cabinet-module', {
+        floorPlaced: {
+          footprint: () => ({
+            dimensions: [1, 1, 1],
+            rotation: [0, 0, 0],
+          }),
+          collides: true,
+        },
+      }),
+    )
+
+    const level = makeLevel()
+    const run = {
+      id: 'cabinet_run',
+      type: 'cabinet',
+      object: 'node',
+      parentId: LEVEL_ID,
+      visible: true,
+      metadata: {},
+      children: ['cabinet-module_child'],
+      position: [0, 0, 0],
+      rotation: 0,
+    } as unknown as AnyNode
+    const module = {
+      id: 'cabinet-module_child',
+      type: 'cabinet-module',
+      object: 'node',
+      parentId: run.id,
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [0, 0, 0],
+      rotation: 0,
+    } as unknown as AnyNode
+    useScene.setState({ nodes: nodesFor(level, run, module) })
+
+    const result = spatialGridManager.canPlaceOnFloorFootprints(
+      LEVEL_ID,
+      [{ position: [0, 0, 0], dimensions: [1, 1, 1], rotation: [0, 0, 0] }],
+      [run.id],
+    )
+
+    expect(result.valid).toBe(true)
+    expect(result.conflictIds).toEqual([])
   })
 
   test('returns 0 when applies returns false', () => {
