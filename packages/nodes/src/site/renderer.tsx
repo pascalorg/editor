@@ -73,6 +73,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return theme.backgroundSky ?? theme.background
   })
   const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
+  const maxLightIntensity = useViewer((state) =>
+    Math.max(1, ...getSceneTheme(state.sceneTheme).lights.map((light) => light.intensity)),
+  )
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
@@ -119,11 +122,15 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const fade = smoothstep(float(fadeBounds.radius * 1.05), float(fadeBounds.radius * 5), dist)
     // Contact vignette: a soft darkening that hugs the lot so the parcel
     // reads as sitting on the ground instead of floating on an even field.
-    // Albedo-only — it must not tint the far-field dissolve below.
+    // The linear cut competes with the tone mapper's shoulder — bright themes
+    // (studio's key light runs at intensity 4) compress a fixed 15% to almost
+    // nothing — so the strength scales with the theme's strongest light.
+    const vignetteStrength = Math.min(0.45, 0.13 * maxLightIntensity)
     const halo = float(1)
       .sub(smoothstep(float(fadeBounds.radius * 0.95), float(fadeBounds.radius * 2.6), dist))
-      .mul(0.15)
-    material.colorNode = mix(color(bgColor), color('#000000'), fade).mul(float(1).sub(halo))
+      .mul(vignetteStrength)
+    const haloFactor = float(1).sub(halo)
+    material.colorNode = mix(color(bgColor), color('#000000'), fade).mul(haloFactor)
     // Dissolve, not tint: the albedo (lighting response, incl. shadows) fades
     // to black while an emissive term fades up to the backdrop gradient — the
     // exact formula the post pipeline composites (viewer lib/backdrop.ts),
@@ -136,16 +143,20 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       haze: color(horizonHazeColor(backgroundColor, appearance)),
       sky: color(skyColor),
     })
+    // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
+    // so without it the (bright) backdrop dilutes the vignette exactly where
+    // it should read. halo is 0 past 2.6R while the dissolve completes at 5R,
+    // so the far field stays the pure backdrop — the seam guarantee holds.
     ;(material as unknown as { emissiveNode: unknown }).emissiveNode = mix(
       color('#000000'),
       backdrop,
       fade,
-    )
+    ).mul(haloFactor)
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
     return material
-  }, [bgColor, backgroundColor, skyColor, appearance, fadeBounds])
+  }, [bgColor, backgroundColor, skyColor, appearance, maxLightIntensity, fadeBounds])
 
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds) return null
