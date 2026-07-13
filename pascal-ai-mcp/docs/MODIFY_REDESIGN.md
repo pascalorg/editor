@@ -126,8 +126,8 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 
 | 批次 | 内容 | 回归要求 |
 |---|---|---|
-| M0 | ModifyOp schema + `parseModifyOps`（容错解析，同 parseLayoutIntent 风格）+ `applyModifyOps`（纯函数：intent × ops → intent）+ 房间引用解析（三语） | 单测穷举各 op/引用失败/夹紧规则；零模型调用可测 |
-| M1 | 家具类 op 三件套（§5）+ agent 路由（家具 op 不走重分区）+ 家具修改 eval case ×3（增/删/换） | 离线 e2e（真实 MCP、0 token）；新 eval case 断言 |
+| M0 | ✅ 完成（2026-07-13）：`src/modify-ops.ts`——ModifyOp schema + `parseModifyOps`（容错解析，部分成功保留合法 op + 错误清单）+ `resolveRoomRef`（id→名称→词表类型唯一，歧义报错）+ `applyModifyOps`（纯函数，面积过 `TYPE_TO_KIND`+`roomAreaBounds` 判界：fatal 拒绝/soft 警告） | 346 单测过；零模型调用可测 |
+| M1 | ✅ 完成（2026-07-13）：`src/furniture-modify.ts` 家具三件套（增=检索+贴墙扫描；删=目录 id 匹配→名称兜底，多匹配删最后放置；换=先算后删，放不下不删）+ agent 快速路径（`tryFurnitureModify`：一次模型调用译 op，空 ops/结构 op/解析失败静默回退 legacy；无 intent 快照的旧场景家具修改也可用）+ eval case-16/17/18（增/删/换，`itemChanges` 断言：item diff 匹配 + structureUntouched） | 353 单测过 + dry-run 18 用例 0 结构问题；线上 case-16/17/18 待余额恢复后跑 |
 | M2 | 稳定性机制（footprint 锁 + deviationPenalty + 带序保持）+ 结构类 op 全管线 + diff 预览 | 稳定性单测（resize 不洗牌断言）；case-13/14 复刻为离线分区断言 |
 | M3 | 手动编辑漂移检测接入 + 旧场景回退路径 + legacy 开关 + 线上 eval（case-13/14 + 家具 case） | 全绿后删 legacy；文档状态改"已落地" |
 

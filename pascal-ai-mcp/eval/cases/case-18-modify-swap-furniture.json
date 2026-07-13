@@ -1,0 +1,29 @@
+{
+  "id": "case-18-modify-swap-furniture",
+  "category": "修改已有场景：更换家具（M1 确定性家具修改）",
+  "difficulty": "modify",
+  "basedOn": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把次卧的床换成更小的单人床，其他家具和墙体都不要动。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "modificationChecks": {
+    "preserveRoomCounts": true,
+    "maxDeletedOriginalWalls": 0,
+    "maxModifiedOriginalWalls": 0,
+    "preserveOriginalOpenings": true,
+    "preserveExteriorBounds": true,
+    "itemChanges": {
+      "deletedMatching": ["bed"],
+      "addedMatching": ["bed"],
+      "structureUntouched": true
+    }
+  },
+  "notes": "M1 家具快速路径回归：更换=删旧+放新（先算后删，放不下不删）。断言：(1) 删除一件 bed 且新增一件 bed（id 不同即视为更换成功）；(2) 零结构变化。新床是否确实更小由人工抽查；若基准场景次卧本来就是最小规格单人床，允许换成同规格（断言仍成立）。"
+}

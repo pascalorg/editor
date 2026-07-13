@@ -1,0 +1,28 @@
+{
+  "id": "case-17-modify-remove-furniture",
+  "category": "修改已有场景：删除家具（M1 确定性家具修改）",
+  "difficulty": "modify",
+  "basedOn": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把次卧的床删掉，其他保持原样。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "modificationChecks": {
+    "preserveRoomCounts": true,
+    "maxDeletedOriginalWalls": 0,
+    "maxModifiedOriginalWalls": 0,
+    "preserveOriginalOpenings": true,
+    "preserveExteriorBounds": true,
+    "itemChanges": {
+      "deletedMatching": ["bed"],
+      "structureUntouched": true
+    }
+  },
+  "notes": "M1 家具快速路径回归：纯家具删除。断言：(1) 删除至少一件匹配 bed 的 item；(2) 零结构变化；(3) 原墙/门窗/外轮廓不变。删的是否是次卧那张床由人工抽查（自动断言不区分房间归属，避免对基准场景床位分布做脆弱假设）。"
+}

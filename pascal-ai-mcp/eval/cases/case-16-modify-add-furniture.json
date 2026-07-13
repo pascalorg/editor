@@ -1,0 +1,28 @@
+{
+  "id": "case-16-modify-add-furniture",
+  "category": "修改已有场景：新增家具（M1 确定性家具修改）",
+  "difficulty": "modify",
+  "basedOn": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "在主卧加一张书桌，其他都不要动。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "modificationChecks": {
+    "preserveRoomCounts": true,
+    "maxDeletedOriginalWalls": 0,
+    "maxModifiedOriginalWalls": 0,
+    "preserveOriginalOpenings": true,
+    "preserveExteriorBounds": true,
+    "itemChanges": {
+      "addedMatching": ["desk"],
+      "structureUntouched": true
+    }
+  },
+  "notes": "M1 家具快速路径回归（docs/MODIFY_REDESIGN.md §5）：纯家具新增应走确定性执行器，零结构变化。断言：(1) 新增至少一件匹配 desk 的 item；(2) 不新增/删除任何结构节点；(3) 原墙/门窗/外轮廓不变。摆放位置合理性由 checkFurniturePlacement 诊断兜底，人工抽查 SVG。"
+}

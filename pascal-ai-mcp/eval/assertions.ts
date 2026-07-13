@@ -573,6 +573,18 @@ export type ModificationChecks = {
   preserveExteriorBounds?: boolean
   /** Require a matching existing room to meet an area range after modification. */
   targetRoomArea?: { type: string; min: number; max?: number; nameIncludes?: string[] }
+  /**
+   * Furniture-modify cases (M1): item-node diff assertions. Keywords match
+   * case-insensitively against the serialized node (name, asset name, tags —
+   * so an English catalog term matches regardless of the reply language).
+   * `structureUntouched` requires zero structural nodes added or deleted
+   * (modified is allowed: place_item re-parents touch zone children).
+   */
+  itemChanges?: {
+    addedMatching?: string[]
+    deletedMatching?: string[]
+    structureUntouched?: boolean
+  }
 }
 
 function snapshotZones(snapshot: SceneSnapshot): ZoneInfo[] {
@@ -840,6 +852,46 @@ export function assertModification(
         expected: max === undefined ? `≥${min}㎡` : `${min}–${max}㎡`,
         actual: candidates.map(zone => `${zone.name || zone.id}:${zone.areaSqMeters}㎡`),
         reason: matched ? undefined : `匹配的 ${type} 面积未达到要求`,
+      })
+    }
+  }
+
+  if (config.itemChanges) {
+    const textOf = (snapshot: SceneSnapshot, id: string) => JSON.stringify(snapshot[id] ?? {}).toLowerCase()
+    const addedItems = diff.added.filter(id => nodeType(after[id] ?? {}) === 'item')
+    const deletedItems = diff.deleted.filter(id => nodeType(before[id] ?? {}) === 'item')
+    for (const term of config.itemChanges.addedMatching ?? []) {
+      const ok = addedItems.some(id => textOf(after, id).includes(term.toLowerCase()))
+      results.push({
+        name: `modification:addedItem:${term}`,
+        status: ok ? 'pass' : 'fail',
+        expected: `新增至少一件匹配「${term}」的家具`,
+        actual: `新增 item ${addedItems.length} 件`,
+        reason: ok ? undefined : `新增的 item 中没有匹配「${term}」的`,
+      })
+    }
+    for (const term of config.itemChanges.deletedMatching ?? []) {
+      const ok = deletedItems.some(id => textOf(before, id).includes(term.toLowerCase()))
+      results.push({
+        name: `modification:deletedItem:${term}`,
+        status: ok ? 'pass' : 'fail',
+        expected: `删除至少一件匹配「${term}」的家具`,
+        actual: `删除 item ${deletedItems.length} 件`,
+        reason: ok ? undefined : `删除的 item 中没有匹配「${term}」的`,
+      })
+    }
+    if (config.itemChanges.structureUntouched) {
+      const structural = new Set(['wall', 'zone', 'slab', 'ceiling', 'door', 'window'])
+      const touched = [
+        ...diff.added.filter(id => structural.has(nodeType(after[id] ?? {}) ?? '')),
+        ...diff.deleted.filter(id => structural.has(nodeType(before[id] ?? {}) ?? '')),
+      ]
+      results.push({
+        name: 'modification:structureUntouched',
+        status: touched.length === 0 ? 'pass' : 'fail',
+        expected: '纯家具修改：不新增/删除任何结构节点（墙/房间/楼板/天花/门窗）',
+        actual: touched.length === 0 ? '结构未动' : touched,
+        reason: touched.length === 0 ? undefined : `结构节点被增删：${touched.join('、')}`,
       })
     }
   }

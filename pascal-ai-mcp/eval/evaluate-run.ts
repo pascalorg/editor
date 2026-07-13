@@ -312,6 +312,12 @@ export type EvalCase = {
     preserveExteriorBounds?: boolean
     /** Require a matching existing room to meet an area range after modification. */
     targetRoomArea?: { type: string; min: number; max?: number; nameIncludes?: string[] }
+    /** Furniture-modify (M1): item-node diff assertions, see assertions.ts. */
+    itemChanges?: {
+      addedMatching?: string[]
+      deletedMatching?: string[]
+      structureUntouched?: boolean
+    }
   }
   notes?: string
 }

@@ -71,9 +71,9 @@ const SCAN_STEP_M = 0.15
 // Try at most this many catalog candidates per checklist option.
 const MAX_CANDIDATES = 4
 
-type Footprint2D = { minX: number; maxX: number; minZ: number; maxZ: number }
+export type Footprint2D = { minX: number; maxX: number; minZ: number; maxZ: number }
 
-type CatalogCandidate = {
+export type CatalogCandidate = {
   id: string
   name: string
   dimensions: [number, number, number]
@@ -95,7 +95,7 @@ function isNumberTriple(value: unknown): value is [number, number, number] {
   return Array.isArray(value) && value.length === 3 && value.every(v => typeof v === 'number')
 }
 
-function footprintAt(
+export function footprintAt(
   x: number,
   z: number,
   w: number,
@@ -205,7 +205,7 @@ export function findWallPlacement(options: {
   return null
 }
 
-function parseCandidates(payload: Record<string, unknown> | null): CatalogCandidate[] {
+export function parseCandidates(payload: Record<string, unknown> | null): CatalogCandidate[] {
   if (!payload || !Array.isArray(payload.results)) return []
   const out: CatalogCandidate[] = []
   for (const entry of payload.results) {
