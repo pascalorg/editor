@@ -31,6 +31,7 @@ Rule source of truth lives in `docs/` (change flow: edit doc → sync code → e
 
 - [docs/LAYOUT_STRATEGY_DESIGN.md](docs/LAYOUT_STRATEGY_DESIGN.md) — 策略层规则与拓扑细则（areaBand / typology / kitchenMode / 打分参数）
 - [docs/NORMS_PROFILE_DESIGN.md](docs/NORMS_PROFILE_DESIGN.md) — default / JP 规范档案与参数来源（NormProfile）
+- [docs/MODIFY_REDESIGN.md](docs/MODIFY_REDESIGN.md) — 修改流程重设计（Modify = 编辑 Intent；草案，待拍板）
 
 ## Configuration
 

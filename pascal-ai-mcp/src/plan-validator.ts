@@ -60,8 +60,9 @@ const EDGE_EPSILON = 0.02
 // Maps LayoutPlan room types onto layout-metrics band kinds. `dining` maps
 // to `other` (no band) on purpose: an 8㎡ dining room is normal but sits
 // below the `living` band's minimum, and dual-counting it as a living room
-// would spam warnings.
-const TYPE_TO_KIND: Record<RoomType, RoomKind> = {
+// would spam warnings. Exported for modify-ops' resize clamping — the same
+// bands must judge a resize request and the resulting plan.
+export const TYPE_TO_KIND: Record<RoomType, RoomKind> = {
   bedroom: 'bedroom',
   bathroom: 'bathroom',
   kitchen: 'kitchen',
