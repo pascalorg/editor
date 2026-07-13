@@ -108,6 +108,62 @@ describe('buildMeasurementFloorplan', () => {
     ).toMatchObject({ appearance: 'outlined', screenUpright: true })
   })
 
+  test('renders angle and perimeter as first-class measurement kinds', () => {
+    const angle = MeasurementNode.parse({
+      id: 'measurement_angle',
+      type: 'measurement',
+      measurement: {
+        kind: 'angle',
+        points: [
+          [1, 0, 0],
+          [0, 0, 0],
+          [0, 0, 1],
+        ],
+      },
+    })
+    const perimeter = MeasurementNode.parse({
+      id: 'measurement_perimeter',
+      type: 'measurement',
+      measurement: {
+        kind: 'perimeter',
+        base: [
+          [0, 0, 0],
+          [3, 0, 0],
+          [3, 0, 4],
+        ],
+      },
+    })
+
+    const angleGeometry = buildMeasurementFloorplan(angle, context('metric'))
+    const perimeterGeometry = buildMeasurementFloorplan(perimeter, context('metric'))
+    expect(angleGeometry && labels(angleGeometry)).toEqual(['90°'])
+    expect(perimeterGeometry && labels(perimeterGeometry)).toEqual(['P 12m'])
+  })
+
+  test('marks a missing semantic feature as unlinked instead of freezing silently', () => {
+    const node = MeasurementNode.parse({
+      id: 'measurement_unlinked',
+      type: 'measurement',
+      measurement: {
+        kind: 'distance',
+        points: [
+          {
+            kind: 'feature',
+            reference: { nodeId: 'wall_missing', featureId: 'wall:start' },
+            fallback: [0, 0, 0],
+          },
+          [2, 0, 0],
+        ],
+      },
+    })
+
+    const geometry = buildMeasurementFloorplan(node, context('metric'))
+    expect(geometry && labels(geometry)).toEqual(['Unlinked · 2m'])
+    expect(
+      geometry && flattenGeometry(geometry).find((entry) => entry.kind === 'line'),
+    ).toMatchObject({ stroke: '#dc2626' })
+  })
+
   test('omits hidden measurements', () => {
     const node = MeasurementNode.parse({
       id: 'measurement_hidden',

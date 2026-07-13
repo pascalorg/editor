@@ -3,12 +3,15 @@
 import {
   type AnyNode,
   type MeasurementNode,
+  measurementAngle,
   measurementArea,
   measurementDistance,
+  measurementPerimeter,
   measurementPrismVolume,
   useScene,
 } from '@pascal-app/core'
 import {
+  formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -19,42 +22,64 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Ruler } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import {
+  detachMeasurementPayload,
+  type ResolvedMeasurementPayload,
+  resolveMeasurementNode,
+} from './resolve'
 
 function getMeasurementLabel(node: MeasurementNode): string {
   switch (node.measurement.kind) {
     case 'distance':
       return 'Distance'
+    case 'angle':
+      return 'Angle'
     case 'area':
       return 'Area'
+    case 'perimeter':
+      return 'Perimeter'
     case 'volume':
       return 'Volume'
   }
 }
 
-function getMeasurementValue(node: MeasurementNode, unit: 'metric' | 'imperial'): string {
-  switch (node.measurement.kind) {
+function getMeasurementValue(
+  measurement: ResolvedMeasurementPayload,
+  unit: 'metric' | 'imperial',
+): string {
+  switch (measurement.kind) {
     case 'distance':
-      return formatLinearMeasurement(measurementDistance(...node.measurement.points), unit)
+      return formatLinearMeasurement(measurementDistance(...measurement.points), unit)
+    case 'angle':
+      return formatAngleRadians(measurementAngle(...measurement.points))
     case 'area':
-      return formatAreaLabel(measurementArea(node.measurement.base), unit)
+      return formatAreaLabel(measurementArea(measurement.base), unit)
+    case 'perimeter':
+      return formatLinearMeasurement(measurementPerimeter(measurement.base), unit)
     case 'volume':
       return formatVolumeLabel(
-        measurementPrismVolume(node.measurement.base, node.measurement.extrusion),
+        measurementPrismVolume(measurement.base, measurement.extrusion),
         unit,
       )
   }
 }
 
-function getGeometrySummary(node: MeasurementNode, unit: 'metric' | 'imperial'): string {
-  switch (node.measurement.kind) {
+function getGeometrySummary(
+  measurement: ResolvedMeasurementPayload,
+  unit: 'metric' | 'imperial',
+): string {
+  switch (measurement.kind) {
     case 'distance':
       return '2 endpoints'
+    case 'angle':
+      return '3 points'
     case 'area':
-      return `${node.measurement.base.length} vertices`
+    case 'perimeter':
+      return `${measurement.base.length} vertices`
     case 'volume': {
-      const [x, y, z] = node.measurement.extrusion
+      const [x, y, z] = measurement.extrusion
       const extrusion = formatLinearMeasurement(Math.hypot(x, y, z), unit)
-      return `${node.measurement.base.length} base vertices, ${extrusion} extrusion`
+      return `${measurement.base.length} base vertices, ${extrusion} extrusion`
     }
   }
 }
@@ -64,6 +89,7 @@ export default function MeasurementPanel() {
   const setSelection = useViewer((state) => state.setSelection)
   const unit = useViewer((state) => state.unit)
   const updateNode = useScene((state) => state.updateNode)
+  const nodes = useScene((state) => state.nodes)
   const node = useScene((state) =>
     selectedId
       ? (state.nodes[selectedId as AnyNode['id']] as MeasurementNode | undefined)
@@ -92,8 +118,10 @@ export default function MeasurementPanel() {
   if (!(node && node.type === 'measurement' && selectedId)) return null
 
   const label = getMeasurementLabel(node)
-  const value = getMeasurementValue(node, unit)
-  const geometry = getGeometrySummary(node, unit)
+  const resolved = resolveMeasurementNode(node, (id) => nodes[id])
+  const value = getMeasurementValue(resolved.payload, unit)
+  const geometry = getGeometrySummary(resolved.payload, unit)
+  const associated = resolved.dependencies.length > 0
 
   return (
     <PanelWrapper
@@ -145,6 +173,29 @@ export default function MeasurementPanel() {
           <span className="shrink-0 text-muted-foreground">Geometry</span>
           <span className="text-right text-foreground/90">{geometry}</span>
         </div>
+        <div className="flex items-start justify-between gap-3 px-2 py-1.5 text-sm">
+          <span className="shrink-0 text-muted-foreground">Association</span>
+          <span className={resolved.dangling.length > 0 ? 'text-red-400' : 'text-foreground/90'}>
+            {resolved.dangling.length > 0
+              ? `${resolved.dangling.length} unlinked`
+              : associated
+                ? 'Linked'
+                : 'Free'}
+          </span>
+        </div>
+        {associated && (
+          <button
+            className="mt-2 h-9 w-full rounded-full border border-border/60 px-3 text-sm transition-colors hover:bg-muted"
+            onClick={() =>
+              updateNode(selectedId as AnyNode['id'], {
+                measurement: detachMeasurementPayload(node, (id) => nodes[id]),
+              })
+            }
+            type="button"
+          >
+            Detach measurement
+          </button>
+        )}
       </PanelSection>
     </PanelWrapper>
   )

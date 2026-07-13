@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test'
+import type { MeasurementFeature } from '../registry/types'
 import type { MeasurementPoint } from '../schema/nodes/measurement'
 import {
   areMeasurementPointsCoplanar,
+  closestMeasurementFeatureBinding,
+  measurementAngle,
   measurementArea,
   measurementAreaVector,
   measurementCentroid,
   measurementDistance,
   measurementNormal,
+  measurementPerimeter,
   measurementPrismVolume,
 } from './measurement-geometry'
 
@@ -20,6 +24,44 @@ const expectPointCloseTo = (actual: MeasurementPoint | null, expected: Measureme
 describe('measurement geometry', () => {
   test('measures full 3D distance', () => {
     expect(measurementDistance([1, 2, 3], [4, 6, 15])).toBe(13)
+  })
+
+  test('measures the smaller 3D angle and a closed perimeter', () => {
+    expect(measurementAngle([1, 0, 0], [0, 0, 0], [0, 1, 0])).toBeCloseTo(Math.PI / 2)
+    expect(measurementAngle([0, 0, 0], [0, 0, 0], [1, 0, 0])).toBe(0)
+    expect(
+      measurementPerimeter([
+        [0, 0, 0],
+        [3, 0, 0],
+        [3, 0, 4],
+      ]),
+    ).toBe(12)
+  })
+
+  test('matches the closest semantic feature with a normalized path position', () => {
+    const features: MeasurementFeature[] = [
+      {
+        id: 'boundary',
+        label: 'Boundary',
+        snapKind: 'edge',
+        geometry: {
+          kind: 'polygon',
+          points: [
+            [0, 0, 0],
+            [2, 0, 0],
+            [2, 0, 2],
+            [0, 0, 2],
+          ],
+        },
+      },
+    ]
+
+    const match = closestMeasurementFeatureBinding(features, [1.9, 0, 1], 0.2)
+
+    expect(match?.featureId).toBe('boundary')
+    expect(match?.point).toEqual([2, 0, 1])
+    expect(match?.parameters?.t).toBeCloseTo(0.375)
+    expect(match?.distance).toBeCloseTo(0.1)
   })
 
   test('computes a Newell area vector, area, and winding-aware normal', () => {

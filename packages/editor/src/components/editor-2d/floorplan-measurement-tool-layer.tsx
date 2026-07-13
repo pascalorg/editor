@@ -1,10 +1,20 @@
 'use client'
 
 import {
+  type AnyNode,
+  type AnyNodeId,
+  closestMeasurementFeatureBinding,
   emitter,
+  type GeometryContext,
+  type MeasurementFeatureAnchor,
+  type MeasurementSnapKind,
+  measurementAngle,
   measurementArea,
   measurementDistance,
+  measurementFeatureLength,
+  measurementPerimeter,
   measurementPrismVolume,
+  nodeRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -26,6 +36,7 @@ import {
   measurementPolygonMidpoints,
   useMeasurementDraft,
 } from '../../store/use-measurement-draft'
+import { formatAngleRadians } from '../tools/shared/segment-angle'
 import { useFloorplanRender } from './floorplan-render-context'
 import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
@@ -59,6 +70,75 @@ const MAX_REGISTERED_SNAP_SEGMENTS = 4096
 const MAX_SAMPLED_PATH_SEGMENTS = 48
 const VERTEX_SNAP_DISTANCE_PX = 10
 const EDGE_SNAP_DISTANCE_PX = 8
+const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
+
+function measurementGeometryContext(
+  node: AnyNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+): GeometryContext {
+  const resolve: GeometryContext['resolve'] = <N = AnyNode>(id: AnyNodeId) =>
+    nodes[id] as N | undefined
+  const childIds =
+    'children' in node && Array.isArray(node.children) ? (node.children as AnyNodeId[]) : []
+  const children = childIds
+    .map((id) => nodes[id])
+    .filter((child): child is AnyNode => child !== undefined)
+  const parent = node.parentId ? (nodes[node.parentId as AnyNodeId] ?? null) : null
+  const siblings =
+    parent && 'children' in parent && Array.isArray(parent.children)
+      ? (parent.children as AnyNodeId[])
+          .map((id) => nodes[id])
+          .filter(
+            (sibling): sibling is AnyNode => sibling !== undefined && sibling.type === node.type,
+          )
+      : []
+  return { resolve, children, parent, siblings }
+}
+
+function associatePlanPoint(
+  point: MeasurementPoint,
+  targetNodeId: string | null,
+): {
+  point: MeasurementPoint
+  anchor?: MeasurementFeatureAnchor
+  semantic?: { label: string; length: number | null; snapKind: MeasurementSnapKind }
+} {
+  if (!targetNodeId) return { point }
+  const nodes = useScene.getState().nodes
+  const node = nodes[targetNodeId as AnyNodeId]
+  const contribution = node ? nodeRegistry.get(node.type)?.measurement : undefined
+  if (!(node && contribution)) return { point }
+  const context = measurementGeometryContext(node, nodes)
+  const features = contribution.features(node, context)
+  const match =
+    contribution.match?.(node, context, point, SEMANTIC_FEATURE_SNAP_DISTANCE) ??
+    closestMeasurementFeatureBinding(features, point, SEMANTIC_FEATURE_SNAP_DISTANCE)
+  if (!match) return { point }
+  const reference = {
+    nodeId: node.id,
+    featureId: match.featureId,
+    parameters: match.parameters,
+  }
+  const feature =
+    contribution.resolve?.(node, context, reference) ??
+    features.find((candidate) => candidate.id === match.featureId) ??
+    null
+  return {
+    point: match.point,
+    anchor: {
+      kind: 'feature',
+      reference,
+      fallback: match.point,
+    },
+    semantic: feature
+      ? {
+          label: feature.label,
+          length: measurementFeatureLength(feature),
+          snapKind: feature.snapKind,
+        }
+      : undefined,
+  }
+}
 
 function closestPointOnScreenSegment(
   point: PlanPoint,
@@ -312,8 +392,16 @@ export function resolveFloorplanMeasurementAxisSnap(
   }
 }
 
-function isMeasurementKind(value: unknown): value is 'distance' | 'area' | 'volume' {
-  return value === 'distance' || value === 'area' || value === 'volume'
+function isMeasurementKind(
+  value: unknown,
+): value is 'distance' | 'angle' | 'area' | 'perimeter' | 'volume' {
+  return (
+    value === 'distance' ||
+    value === 'angle' ||
+    value === 'area' ||
+    value === 'perimeter' ||
+    value === 'volume'
+  )
 }
 
 function clientToPlanPoint(group: SVGGElement, clientX: number, clientY: number): PlanPoint | null {
@@ -422,8 +510,9 @@ function measurementVertexSnapAnchors(
 
 function closeBaseAndMaybeCommit(): boolean {
   const draft = useMeasurementDraft.getState()
+  if (draft.kind === 'distance' || draft.kind === 'angle') return false
   if (!draft.closeBase('2d', [0, 1, 0])) return false
-  if (useMeasurementDraft.getState().kind === 'area') commitMeasurementDraft('2d')
+  if (draft.kind === 'area' || draft.kind === 'perimeter') commitMeasurementDraft('2d')
   return true
 }
 
@@ -804,10 +893,11 @@ export function FloorplanMeasurementToolLayer() {
       consume(event)
       if (draft.owner !== '2d' || draft.stage !== 'collecting' || draft.vertexDrag) return
       if (draft.kind === 'distance') return
+      const polygon = draft.kind === 'area' || draft.kind === 'perimeter' || draft.kind === 'volume'
       const threshold = event.pointerType === 'touch' ? 22 : VERTEX_HANDLE_DISTANCE_PX
       const vertexIndex = closestVertexIndex(event, draft.points, threshold)
       const midpointIndex =
-        vertexIndex === null
+        vertexIndex === null && polygon
           ? closestVertexIndex(
               event,
               measurementPolygonMidpoints(draft.points).map((midpoint) => midpoint.point),
@@ -860,16 +950,21 @@ export function FloorplanMeasurementToolLayer() {
         const anchors = measurementVertexSnapAnchors(
           activeDraft.points,
           gesture.index,
-          activeDraft.kind !== 'distance',
+          activeDraft.kind === 'area' ||
+            activeDraft.kind === 'perimeter' ||
+            activeDraft.kind === 'volume',
         )
         const resolved = resolveEventPoint(event, anchors)
         if (resolved) {
+          const associated = associatePlanPoint(resolved.point, resolved.targetNodeId)
           activeDraft.updateDraggedVertex(
             '2d',
             {
-              point: resolved.point,
+              point: associated.point,
               normal: [0, 1, 0],
               targetNodeId: resolved.targetNodeId,
+              anchor: associated.anchor,
+              semantic: associated.semantic,
             },
             resolved.guide,
           )
@@ -879,13 +974,16 @@ export function FloorplanMeasurementToolLayer() {
 
       if (draft.stage !== 'collecting') return
       const resolved = resolveEventPoint(event)
+      const associated = resolved ? associatePlanPoint(resolved.point, resolved.targetNodeId) : null
       draft.setHover(
         '2d',
-        resolved
+        resolved && associated
           ? {
-              point: resolved.point,
+              point: associated.point,
               normal: [0, 1, 0],
               targetNodeId: resolved.targetNodeId,
+              anchor: associated.anchor,
+              semantic: associated.semantic,
             }
           : null,
         resolved?.guide ?? null,
@@ -908,7 +1006,9 @@ export function FloorplanMeasurementToolLayer() {
       clearVertexGesture(true)
       if (!wasEngaged && source === 'vertex') {
         const draft = useMeasurementDraft.getState()
-        if (vertexIndex === 0 && draft.points.length >= 3) closeBaseAndMaybeCommit()
+        if (vertexIndex === 0 && draft.points.length >= 3 && draft.kind !== 'angle') {
+          closeBaseAndMaybeCommit()
+        }
       }
       suppressNextClick.current = true
       setTimeout(() => {
@@ -936,19 +1036,22 @@ export function FloorplanMeasurementToolLayer() {
 
       const vertexIndex = draft.kind === 'distance' ? null : closestVertexIndex(event, draft.points)
       if (vertexIndex !== null) {
-        if (vertexIndex === 0 && draft.points.length >= 3) closeBaseAndMaybeCommit()
+        if (vertexIndex === 0 && draft.points.length >= 3 && draft.kind !== 'angle') {
+          closeBaseAndMaybeCommit()
+        }
         return
       }
       const resolved = resolveEventPoint(event)
       if (!resolved) return
-
-      if (!draft.addPoint('2d', resolved.point)) return
+      const associated = associatePlanPoint(resolved.point, resolved.targetNodeId)
+      if (!draft.addPoint('2d', associated.point, associated.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('2d')
     }
 
     const onDoubleClick = (event: MouseEvent) => {
       const draft = useMeasurementDraft.getState()
       if (draft.owner !== '2d' || draft.stage !== 'collecting') return
+      if (draft.kind === 'distance' || draft.kind === 'angle') return
       if (isExtrusionControlTarget(event.target)) return
       consume(event)
       if (suppressNextClick.current) {
@@ -993,20 +1096,15 @@ export function FloorplanMeasurementToolLayer() {
     const first = planPoints[0]
     const last = planPoints[planPoints.length - 1]
     const center = measurementPolygonLabelAnchor(points)
+    const polygon = kind === 'area' || kind === 'perimeter' || kind === 'volume'
     const midpointHandles =
-      kind !== 'distance' && stage === 'collecting' && !vertexDrag
-        ? measurementPolygonMidpoints(points)
-        : []
-    const activeEdges: Array<[MeasurementPoint, MeasurementPoint]> =
-      vertexDrag && kind !== 'distance'
-        ? [
-            [
-              points[(vertexDrag.index - 1 + points.length) % points.length]!,
-              points[vertexDrag.index]!,
-            ],
-            [points[vertexDrag.index]!, points[(vertexDrag.index + 1) % points.length]!],
-          ]
-        : []
+      polygon && stage === 'collecting' && !vertexDrag ? measurementPolygonMidpoints(points) : []
+    const activeEdges: Array<[MeasurementPoint, MeasurementPoint]> = vertexDrag
+      ? measurementVertexSnapAnchors(points, vertexDrag.index, polygon).map((neighbor) => [
+          neighbor,
+          points[vertexDrag.index]!,
+        ])
+      : []
     let label: {
       angle: number
       point: MeasurementPoint
@@ -1024,14 +1122,29 @@ export function FloorplanMeasurementToolLayer() {
         screenUpright: false,
         text: formatLinearMeasurement(measurementDistance(start, end), unit),
       }
-    } else if (kind === 'area' && livePoints.length >= 3) {
+    } else if (kind === 'angle' && livePoints.length >= 3) {
+      const anglePoints = livePoints.slice(0, 3) as [
+        MeasurementPoint,
+        MeasurementPoint,
+        MeasurementPoint,
+      ]
+      label = {
+        angle: 0,
+        point: anglePoints[1],
+        screenUpright: true,
+        text: formatAngleRadians(measurementAngle(...anglePoints)),
+      }
+    } else if ((kind === 'area' || kind === 'perimeter') && livePoints.length >= 3) {
       const liveCenter = measurementPolygonLabelAnchor(livePoints)
       if (liveCenter) {
         label = {
           angle: 0,
           point: liveCenter,
           screenUpright: true,
-          text: `A ${formatAreaLabel(measurementArea(livePoints), unit)}`,
+          text:
+            kind === 'area'
+              ? `A ${formatAreaLabel(measurementArea(livePoints), unit)}`
+              : `P ${formatLinearMeasurement(measurementPerimeter(livePoints), unit)}`,
         }
       }
     } else if (kind === 'volume' && center && baseNormal) {
@@ -1089,13 +1202,15 @@ export function FloorplanMeasurementToolLayer() {
   const labelFontSize = 12 * unitsPerPixel
   const reticleRadius = 16 * unitsPerPixel
   const reticleInnerRadius = 9 * unitsPerPixel
-  const reticleColor = axisGuide?.snapped
-    ? axisGuide.axis === 'x'
-      ? X_AXIS_COLOR
-      : axisGuide.axis === 'z'
-        ? Z_AXIS_COLOR
-        : RETICLE_COLOR
-    : RETICLE_COLOR
+  const reticleColor = hover?.semantic
+    ? '#22c55e'
+    : axisGuide?.snapped
+      ? axisGuide.axis === 'x'
+        ? X_AXIS_COLOR
+        : axisGuide.axis === 'z'
+          ? Z_AXIS_COLOR
+          : RETICLE_COLOR
+      : RETICLE_COLOR
   const guideAnchor = vertexDrag && axisGuide ? axisGuide.from : points.at(-1)
   const guideHalfLength = AXIS_GUIDE_HALF_LENGTH_PX * unitsPerPixel
   const labelBackground = renderContext?.palette.measurementLabelBackground ?? '#0f172a'
@@ -1141,9 +1256,21 @@ export function FloorplanMeasurementToolLayer() {
           y2={preview.planPoints[preview.planPoints.length - 1]!.y}
         />
       ) : null}
-      {kind !== 'distance' && preview.planPoints.length >= 2 ? (
+      {kind === 'angle' && preview.planPoints.length >= 2 ? (
+        <polyline
+          fill="none"
+          points={preview.polygonPoints}
+          stroke={DRAFT_COLOR}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : null}
+      {(kind === 'area' || kind === 'perimeter' || kind === 'volume') &&
+      preview.planPoints.length >= 2 ? (
         <>
-          {preview.planPoints.length >= 3 ? (
+          {kind !== 'perimeter' && preview.planPoints.length >= 3 ? (
             <polygon fill={DRAFT_COLOR} fillOpacity={0.12} points={preview.polygonPoints} />
           ) : null}
           <polyline
@@ -1277,6 +1404,23 @@ export function FloorplanMeasurementToolLayer() {
             y2={hover.point[2] + reticleInnerRadius}
           />
         </g>
+      ) : null}
+      {hover && hoverOwner === '2d' && hover.semantic ? (
+        <FloorplanDraftLabel
+          background={labelBackground}
+          border="#22c55e"
+          offsetPx={30}
+          point={hover.point}
+          sceneRotationDeg={sceneRotationDeg}
+          screenUpright
+          text={`${hover.semantic.label}${
+            hover.semantic.length === null
+              ? ''
+              : ` · ${formatLinearMeasurement(hover.semantic.length, unit)}`
+          }`}
+          textColor={labelText}
+          unitsPerPixel={unitsPerPixel}
+        />
       ) : null}
       {preview.label ? (
         <FloorplanDraftLabel

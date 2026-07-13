@@ -3,6 +3,11 @@ import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
+import {
+  matchWallMeasurementFeature,
+  resolveWallMeasurementFeature,
+  wallMeasurementFeatures,
+} from './measurement'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
 import { WallNode } from './schema'
@@ -104,6 +109,12 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   // per render pass, then the builder reads its own junctions by wall id.
   computeFloorplanLevelData: computeWallFloorplanLevelData,
   floorplan: buildWallFloorplan,
+  measurement: {
+    features: (node) => wallMeasurementFeatures(node),
+    match: (node, _ctx, point, maxDistance) =>
+      matchWallMeasurementFeature(node, point, maxDistance),
+    resolve: (node, _ctx, reference) => resolveWallMeasurementFeature(node, reference),
+  },
   floorplanDependsOnSiblings: true,
   // 2D drag affordances triggered by `endpoint-handle` primitives in
   // `def.floorplan`'s output. Sister to `affordanceTools` (3D) — the

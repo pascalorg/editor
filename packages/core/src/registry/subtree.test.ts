@@ -115,6 +115,40 @@ describe('cloneNodesInto', () => {
     }
   })
 
+  test('remaps associative measurement references inside the cloned subtree', () => {
+    const wall = makeNode('wall_1', 'wall', { parentId: 'level_1' })
+    const measurement = makeNode('measurement_1', 'measurement', {
+      parentId: 'level_1',
+      measurement: {
+        kind: 'distance',
+        points: [
+          {
+            kind: 'feature',
+            reference: { nodeId: 'wall_1', featureId: 'wall:start' },
+            fallback: [0, 0, 0],
+          },
+          [1, 0, 0],
+        ],
+      },
+    })
+    const result = cloneNodesInto([wall, measurement], {
+      rootId: 'wall_1' as AnyNodeId,
+    })
+    const clonedMeasurement = result.nodes.find((node) => node.type === 'measurement')
+
+    expect(clonedMeasurement?.type).toBe('measurement')
+    if (
+      clonedMeasurement?.type === 'measurement' &&
+      clonedMeasurement.measurement.kind === 'distance'
+    ) {
+      const anchor = clonedMeasurement.measurement.points[0]
+      expect(Array.isArray(anchor)).toBe(false)
+      if (!Array.isArray(anchor)) {
+        expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+    }
+  })
+
   test('parents the cloned root under opts.parentId when supplied', () => {
     const orig = makeNode('shelf_1', 'shelf', { parentId: 'level_old' })
     const { nodes } = cloneNodesInto([orig], {

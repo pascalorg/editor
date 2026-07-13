@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, LiveNodeOverrides } from '@pascal-app/core'
 import { type AnyNodeDefinition, nodeRegistry, registerNode } from '@pascal-app/core'
 import { z } from 'zod'
-import { computeAffectedSiblingIds } from './floorplan-registry-layer'
+import {
+  collectFloorplanDependencyNodes,
+  computeAffectedSiblingIds,
+} from './floorplan-registry-layer'
 
 function cabinetRun(id: string, children: string[] = [], parentId: string | null = 'level_test') {
   return {
@@ -152,5 +155,51 @@ describe('computeAffectedSiblingIds', () => {
     )
 
     expect(affected).toEqual(new Set([module.id, run.id, sibling.id] as AnyNodeId[]))
+  })
+})
+
+describe('collectFloorplanDependencyNodes', () => {
+  test('includes referenced hosts and their transform-owning parents', () => {
+    const level = {
+      id: 'level_test',
+      type: 'level',
+      parentId: null,
+      children: ['roof_test'],
+    } as unknown as AnyNode
+    const roof = {
+      id: 'roof_test',
+      type: 'roof',
+      parentId: level.id,
+      children: [],
+      position: [0, 0, 0],
+      rotation: 0,
+    } as unknown as AnyNode
+    const measurement = {
+      id: 'measurement_test',
+      type: 'measurement',
+      parentId: level.id,
+    } as unknown as AnyNode
+    const definition = {
+      floorplanDependencies: () => [roof.id],
+    } as unknown as AnyNodeDefinition
+
+    expect(
+      collectFloorplanDependencyNodes(
+        definition,
+        measurement,
+        {
+          [level.id]: level,
+          [roof.id]: roof,
+          [measurement.id]: measurement,
+        },
+        new Map<string, LiveNodeOverrides>([
+          [roof.id, { position: [3, 0, 2] }],
+          [level.id, { visible: false }],
+        ]),
+      ),
+    ).toEqual([
+      expect.objectContaining({ id: roof.id, position: [3, 0, 2] }),
+      expect.objectContaining({ id: level.id, visible: false }),
+    ])
   })
 })

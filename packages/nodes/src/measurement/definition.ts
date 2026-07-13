@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import { measurementReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
 import { buildMeasurementFloorplan } from './floorplan'
 import { measurementParametrics } from './parametrics'
 import { MeasurementNode } from './schema'
@@ -6,7 +6,7 @@ import { MeasurementNode } from './schema'
 export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   kind: 'measurement',
   bake: 'strip',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: MeasurementNode,
   category: 'analysis',
 
@@ -39,6 +39,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
     module: () => import('./renderer'),
   },
   floorplan: buildMeasurementFloorplan,
+  floorplanDependencies: (node) => measurementReferenceNodeIds(node.measurement),
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Place measurement point' },
@@ -49,12 +50,13 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
 
   presentation: {
     label: 'Measurement',
-    description: 'A persistent distance, area, or volume annotation.',
+    description: 'A persistent distance, angle, area, perimeter, or volume annotation.',
     icon: { kind: 'iconify', name: 'lucide:ruler' },
     hidden: true,
   },
 
   mcp: {
-    description: 'A persistent level-local distance, area, or volume measurement.',
+    description:
+      'A persistent level-local distance, angle, area, perimeter, or volume measurement.',
   },
 }

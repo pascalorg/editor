@@ -30,6 +30,7 @@ export const treesHostPanel: EditorHostPanel = {
   label: 'Nature',
   icon: { kind: 'url', src: NATURE_ICON },
   component: () => import('./presets-panel'),
+  kinds: ['trees:tree', 'trees:flower', 'trees:grass'],
 }
 
 // NOTE: no re-export from './geometry' — it imports ez-tree, which touches

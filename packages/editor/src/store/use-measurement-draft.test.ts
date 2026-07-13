@@ -109,6 +109,48 @@ describe('measurement draft transitions', () => {
     })
   })
 
+  test('makes angle ready on its third point and closes a perimeter', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('angle')
+    draft.addPoint('3d', point(1, 0, 0))
+    draft.addPoint('3d', point(0, 0, 0))
+    draft.addPoint('3d', point(0, 0, 1))
+    expect(useMeasurementDraft.getState().getCommitPayload('3d')).toEqual({
+      kind: 'angle',
+      points: [point(1, 0, 0), point(0, 0, 0), point(0, 0, 1)],
+    })
+
+    draft.setKind('perimeter')
+    draft.addPoint('2d', point(0, 0, 0))
+    draft.addPoint('2d', point(2, 0, 0))
+    draft.addPoint('2d', point(2, 0, 2))
+    expect(draft.closeBase('2d')).toBe(true)
+    expect(useMeasurementDraft.getState().getCommitPayload('2d')).toEqual({
+      kind: 'perimeter',
+      base: [point(0, 0, 0), point(2, 0, 0), point(2, 0, 2)],
+    })
+  })
+
+  test('persists a semantic feature anchor alongside its fallback point', () => {
+    const draft = useMeasurementDraft.getState()
+    const anchor = {
+      kind: 'feature' as const,
+      reference: {
+        nodeId: 'wall_host',
+        featureId: 'wall:centerline',
+        parameters: { t: 0.25, height: 1 },
+      },
+      fallback: point(1, 1, 0),
+    }
+    draft.addPoint('3d', anchor.fallback, anchor)
+    draft.addPoint('3d', point(2, 1, 0))
+
+    expect(useMeasurementDraft.getState().getCommitPayload('3d')).toEqual({
+      kind: 'distance',
+      points: [anchor, point(2, 1, 0)],
+    })
+  })
+
   test('closes a planar area and rejects a non-planar base', () => {
     const draft = useMeasurementDraft.getState()
     draft.setKind('area')
@@ -228,6 +270,7 @@ describe('measurement draft vertex editing', () => {
       owner: '3d',
       index: 1,
       originalPoint: point(2, 0, 0),
+      originalAnchor: null,
       inserted: false,
     })
     expect(draft.addPoint('3d', point(3, 0, 3))).toBe(false)

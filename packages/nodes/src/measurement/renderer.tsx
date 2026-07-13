@@ -1,15 +1,20 @@
 'use client'
 
 import {
+  type AnyNode,
   type MeasurementNode,
-  type MeasurementPayload,
   type MeasurementPoint,
+  measurementAngle,
   measurementArea,
   measurementDistance,
+  measurementPerimeter,
   measurementPrismVolume,
+  useLiveNodeOverrides,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
 import {
+  formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -29,6 +34,12 @@ import {
   SphereGeometry,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
+import { useShallow } from 'zustand/react/shallow'
+import {
+  measurementDependencyIds,
+  type ResolvedMeasurementPayload,
+  resolveMeasurementNode,
+} from './resolve'
 
 const MEASUREMENT_COLOR = '#14b8a6'
 
@@ -51,8 +62,14 @@ const midpoint = (start: MeasurementPoint, end: MeasurementPoint): MeasurementPo
   (start[2] + end[2]) / 2,
 ]
 
-function buildFillGeometry(measurement: MeasurementPayload): BufferGeometry | null {
-  if (measurement.kind === 'distance') return null
+function buildFillGeometry(measurement: ResolvedMeasurementPayload): BufferGeometry | null {
+  if (
+    measurement.kind === 'distance' ||
+    measurement.kind === 'angle' ||
+    measurement.kind === 'perimeter'
+  ) {
+    return null
+  }
 
   const triangles = triangulateMeasurementPolygon(measurement.base)
   if (triangles.length === 0) return null
@@ -87,7 +104,7 @@ function buildFillGeometry(measurement: MeasurementPayload): BufferGeometry | nu
   return geometry
 }
 
-function buildRenderData(measurement: MeasurementPayload): MeasurementRenderData {
+function buildRenderData(measurement: ResolvedMeasurementPayload): MeasurementRenderData {
   const linePositions: number[] = []
   const pushSegment = (start: MeasurementPoint, end: MeasurementPoint) => {
     linePositions.push(...start, ...end)
@@ -101,7 +118,13 @@ function buildRenderData(measurement: MeasurementPayload): MeasurementRenderData
     pushSegment(start, end)
     markerPoints = [start, end]
     labelPosition = midpoint(start, end)
-  } else if (measurement.kind === 'area') {
+  } else if (measurement.kind === 'angle') {
+    const [start, vertex, end] = measurement.points
+    pushSegment(start, vertex)
+    pushSegment(vertex, end)
+    markerPoints = [start, vertex, end]
+    labelPosition = vertex
+  } else if (measurement.kind === 'area' || measurement.kind === 'perimeter') {
     for (let index = 0; index < measurement.base.length; index++) {
       pushSegment(
         measurement.base[index]!,
@@ -138,12 +161,21 @@ function buildRenderData(measurement: MeasurementPayload): MeasurementRenderData
   }
 }
 
-function formatMeasurement(measurement: MeasurementPayload, unit: 'metric' | 'imperial'): string {
+function formatMeasurement(
+  measurement: ResolvedMeasurementPayload,
+  unit: 'metric' | 'imperial',
+): string {
   if (measurement.kind === 'distance') {
     return formatLinearMeasurement(measurementDistance(...measurement.points), unit)
   }
+  if (measurement.kind === 'angle') {
+    return formatAngleRadians(measurementAngle(...measurement.points))
+  }
   if (measurement.kind === 'area') {
     return `A ${formatAreaLabel(measurementArea(measurement.base), unit)}`
+  }
+  if (measurement.kind === 'perimeter') {
+    return `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit)}`
   }
   return `V ${formatVolumeLabel(measurementPrismVolume(measurement.base, measurement.extrusion), unit)}`
 }
@@ -166,39 +198,55 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
   const handlers = useNodeEvents(node, 'measurement')
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const unit = useViewer((state) => state.unit)
-  const data = useMemo(() => buildRenderData(node.measurement), [node.measurement])
-  const label = useMemo(() => formatMeasurement(node.measurement, unit), [node.measurement, unit])
+  const dependencyIds = measurementDependencyIds(
+    node.measurement,
+    (id) => useScene.getState().nodes[id],
+  )
+  useScene(useShallow((state) => dependencyIds.map((id) => state.nodes[id])))
+  useLiveNodeOverrides(useShallow((state) => dependencyIds.map((id) => state.overrides.get(id))))
+  const resolved = resolveMeasurementNode(node, (id) => {
+    const referencedNode = useScene.getState().nodes[id]
+    if (!referencedNode) return undefined
+    const liveOverride = useLiveNodeOverrides.getState().overrides.get(id)
+    return liveOverride ? ({ ...referencedNode, ...liveOverride } as AnyNode) : referencedNode
+  })
+  const data = buildRenderData(resolved.payload)
+  const label = useMemo(() => {
+    const value = formatMeasurement(resolved.payload, unit)
+    return resolved.dangling.length > 0 ? `Unlinked · ${value}` : value
+  }, [resolved, unit])
+  const color = resolved.dangling.length > 0 ? '#dc2626' : MEASUREMENT_COLOR
   const markerGeometry = useMemo(() => new SphereGeometry(0.035, 12, 8), [])
   const lineMaterial = useMemo(
     () =>
       new LineBasicNodeMaterial({
-        color: MEASUREMENT_COLOR,
+        color,
         linewidth: 2,
         depthTest: false,
         depthWrite: false,
       }),
-    [],
+    [color],
   )
   const fillMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
-        color: MEASUREMENT_COLOR,
+        color,
         transparent: true,
         opacity: 0.12,
         side: DoubleSide,
         depthTest: false,
         depthWrite: false,
       }),
-    [],
+    [color],
   )
   const markerMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
-        color: MEASUREMENT_COLOR,
+        color,
         depthTest: false,
         depthWrite: false,
       }),
-    [],
+    [color],
   )
 
   useEffect(
@@ -270,7 +318,7 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
                 node.measurement.kind === 'distance' ? '-translate-y-3' : ''
               }`}
               style={{
-                textShadow: `-1px -1px 0 ${MEASUREMENT_COLOR}, 1px -1px 0 ${MEASUREMENT_COLOR}, -1px 1px 0 ${MEASUREMENT_COLOR}, 1px 1px 0 ${MEASUREMENT_COLOR}`,
+                textShadow: `-1px -1px 0 ${color}, 1px -1px 0 ${color}, -1px 1px 0 ${color}, 1px 1px 0 ${color}`,
               }}
             >
               {label}

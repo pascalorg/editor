@@ -1,10 +1,16 @@
 'use client'
 
 import {
+  type AnyNodeId,
   emitter,
+  type MeasurementFeatureAnchor,
+  type MeasurementSnapKind,
+  measurementAngle,
   measurementArea,
   measurementCentroid,
   measurementDistance,
+  measurementFeatureLength,
+  measurementPerimeter,
   measurementPrismVolume,
   sceneRegistry,
   useScene,
@@ -12,6 +18,7 @@ import {
 import {
   commitMeasurementDraft,
   EDITOR_LAYER,
+  formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -56,6 +63,7 @@ import {
   Vector3,
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { matchMeasurementFeatureForNode } from './resolve'
 
 const AXIS_SNAP_DISTANCE_PX = 12
 const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
@@ -67,6 +75,7 @@ const SURFACE_RETICLE_RADIUS_PX = 16
 const MAX_DRAFT_DASH_SEGMENTS = 512
 const SURFACE_VERIFY_HALF_SPAN = 0.08
 const SURFACE_VERIFY_TOLERANCE = 0.012
+const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
 const DRAFT_COLOR = '#22d3ee'
 const RETICLE_COLOR = '#4f46e5'
 const GUIDE_COLORS: Record<MeasurementAxis, string> = {
@@ -235,8 +244,16 @@ export function selectClosestMeasurementVertexIndex(
   return closestIndex
 }
 
-function isMeasurementKind(value: unknown): value is 'distance' | 'area' | 'volume' {
-  return value === 'distance' || value === 'area' || value === 'volume'
+function isMeasurementKind(
+  value: unknown,
+): value is 'distance' | 'angle' | 'area' | 'perimeter' | 'volume' {
+  return (
+    value === 'distance' ||
+    value === 'angle' ||
+    value === 'area' ||
+    value === 'perimeter' ||
+    value === 'volume'
+  )
 }
 
 function isEffectivelyVisible(object: Object3D): boolean {
@@ -534,6 +551,45 @@ export function resolveSurfacePoint(
   }
 }
 
+function associateSurfaceHit(hit: LocalSurfaceHit): LocalSurfaceHit & {
+  anchor?: MeasurementFeatureAnchor
+  semantic?: {
+    label: string
+    length: number | null
+    snapKind: MeasurementSnapKind
+  }
+} {
+  if (!hit.targetNodeId) return hit
+  const nodes = useScene.getState().nodes
+  const node = nodes[hit.targetNodeId as AnyNodeId]
+  if (!node) return hit
+  const match = matchMeasurementFeatureForNode(
+    node,
+    (id) => nodes[id],
+    hit.point,
+    SEMANTIC_FEATURE_SNAP_DISTANCE,
+  )
+  if (!match) return hit
+  return {
+    ...hit,
+    point: match.point,
+    anchor: {
+      kind: 'feature',
+      reference: {
+        nodeId: node.id,
+        featureId: match.feature.id,
+        parameters: match.parameters,
+      },
+      fallback: match.point,
+    },
+    semantic: {
+      label: match.feature.label,
+      length: measurementFeatureLength(match.feature),
+      snapKind: match.feature.snapKind,
+    },
+  }
+}
+
 export function closestMeasurementExtrusionHeight(
   rayOrigin: MeasurementPoint,
   rayDirection: MeasurementPoint,
@@ -591,8 +647,9 @@ function extrusionHeightFromPointer(
 
 function closeBaseAndMaybeCommit(owner: MeasurementDraftOwner): boolean {
   const draft = useMeasurementDraft.getState()
+  if (draft.kind === 'distance' || draft.kind === 'angle') return false
   if (!draft.closeBase(owner)) return false
-  if (useMeasurementDraft.getState().kind === 'area') commitMeasurementDraft(owner)
+  if (draft.kind === 'area' || draft.kind === 'perimeter') commitMeasurementDraft(owner)
   return true
 }
 
@@ -1118,23 +1175,20 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       localToPreviewFrame(levelObject, buildingObject, point),
     )
     const worldBase = points.map((point) => localToPreviewFrame(levelObject, buildingObject, point))
+    const polygon = kind === 'area' || kind === 'perimeter' || kind === 'volume'
     const midpointHandles =
-      kind !== 'distance' && stage === 'collecting' && !vertexDrag
+      polygon && stage === 'collecting' && !vertexDrag
         ? measurementPolygonMidpoints(points).map(({ edgeIndex, point }) => ({
             edgeIndex,
             position: localToPreviewFrame(levelObject, buildingObject, point),
           }))
         : []
-    const activeEdges: Array<[Vector3, Vector3]> =
-      vertexDrag && kind !== 'distance'
-        ? [
-            [
-              worldBase[(vertexDrag.index - 1 + worldBase.length) % worldBase.length]!,
-              worldBase[vertexDrag.index]!,
-            ],
-            [worldBase[vertexDrag.index]!, worldBase[(vertexDrag.index + 1) % worldBase.length]!],
-          ]
-        : []
+    const activeEdges: Array<[Vector3, Vector3]> = vertexDrag
+      ? measurementVertexSnapAnchors(points, vertexDrag.index, polygon).map((neighbor) => [
+          localToPreviewFrame(levelObject, buildingObject, neighbor),
+          worldBase[vertexDrag.index]!,
+        ])
+      : []
     const closedBase = worldBase.length >= 3 ? [...worldBase, worldBase[0]!] : worldBase
     const normal = baseNormal ? new Vector3(...baseNormal) : null
     const topPoints =
@@ -1181,6 +1235,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
             },
             normal: localNormalToPreviewFrame(levelObject, buildingObject, hover.normal),
             position: localToPreviewFrame(levelObject, buildingObject, hover.point),
+            semantic: hover.semantic,
             snappedAxis: axisGuide?.snapped ? axisGuide.axis : null,
           }
         : null
@@ -1195,12 +1250,25 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         position: localToPreviewFrame(levelObject, buildingObject, midpoint(start, end)),
         text: formatLinearMeasurement(measurementDistance(start, end), unit),
       }
-    } else if (kind === 'area' && livePoints.length >= 3) {
+    } else if (kind === 'angle' && livePoints.length >= 3) {
+      const anglePoints = livePoints.slice(0, 3) as [
+        MeasurementPoint,
+        MeasurementPoint,
+        MeasurementPoint,
+      ]
+      label = {
+        position: localToPreviewFrame(levelObject, buildingObject, anglePoints[1]),
+        text: formatAngleRadians(measurementAngle(...anglePoints)),
+      }
+    } else if ((kind === 'area' || kind === 'perimeter') && livePoints.length >= 3) {
       const center = measurementPolygonLabelAnchor(livePoints)
       if (center) {
         label = {
           position: localToPreviewFrame(levelObject, buildingObject, center),
-          text: `A ${formatAreaLabel(measurementArea(livePoints), unit)}`,
+          text:
+            kind === 'area'
+              ? `A ${formatAreaLabel(measurementArea(livePoints), unit)}`
+              : `P ${formatLinearMeasurement(measurementPerimeter(livePoints), unit)}`,
         }
       }
     } else if (kind === 'volume' && points.length >= 3 && baseNormal) {
@@ -1279,7 +1347,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
   ])
 
   if (!preview) return null
-  const isPolygon = kind !== 'distance'
+  const isPolygon = kind === 'area' || kind === 'perimeter' || kind === 'volume'
   const liveClosed =
     isPolygon && preview.worldPoints.length >= 3
       ? [...preview.worldPoints, preview.worldPoints[0]!]
@@ -1365,7 +1433,24 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
           <sphereGeometry args={[0.022, 12, 12]} />
         </mesh>
       ))}
-      {preview.reticle ? <SurfaceReticle {...preview.reticle} /> : null}
+      {preview.reticle ? (
+        <>
+          <SurfaceReticle
+            axisDirections={preview.reticle.axisDirections}
+            normal={preview.reticle.normal}
+            position={preview.reticle.position}
+            snappedAxis={preview.reticle.snappedAxis}
+          />
+          {preview.reticle.semantic ? (
+            <DraftLabel offset position={preview.reticle.position} tone="secondary">
+              {preview.reticle.semantic.label}
+              {preview.reticle.semantic.length === null
+                ? ''
+                : ` · ${formatLinearMeasurement(preview.reticle.semantic.length, unit)}`}
+            </DraftLabel>
+          ) : null}
+        </>
+      ) : null}
       {preview.label ? (
         <DraftLabel
           appearance="outlined"
@@ -1570,7 +1655,9 @@ export const MeasurementTool: FC = () => {
         const anchors = measurementVertexSnapAnchors(
           activeDraft.points,
           gesture.index,
-          activeDraft.kind !== 'distance',
+          activeDraft.kind === 'area' ||
+            activeDraft.kind === 'perimeter' ||
+            activeDraft.kind === 'volume',
         )
         const resolved = resolveSurfacePoint(
           event,
@@ -1584,12 +1671,15 @@ export const MeasurementTool: FC = () => {
           activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
         )
         if (resolved) {
+          const hit = associateSurfaceHit(resolved.hit)
           activeDraft.updateDraggedVertex(
             '3d',
             {
-              point: resolved.hit.point,
-              normal: resolved.hit.normal,
-              targetNodeId: resolved.hit.targetNodeId,
+              point: hit.point,
+              normal: hit.normal,
+              targetNodeId: hit.targetNodeId,
+              anchor: hit.anchor,
+              semantic: hit.semantic,
             },
             resolved.guide,
           )
@@ -1626,13 +1716,7 @@ export const MeasurementTool: FC = () => {
       )
       draft.setHover(
         '3d',
-        resolved
-          ? {
-              point: resolved.hit.point,
-              normal: resolved.hit.normal,
-              targetNodeId: resolved.hit.targetNodeId,
-            }
-          : null,
+        resolved ? associateSurfaceHit(resolved.hit) : null,
         resolved?.guide ?? null,
       )
     }
@@ -1691,7 +1775,9 @@ export const MeasurementTool: FC = () => {
       const vertexIndex =
         draft.kind === 'distance' ? null : closestVertexIndex(event, levelObject, draft.points)
       if (vertexIndex !== null) {
-        if (vertexIndex === 0 && draft.points.length >= 3) closeBaseAndMaybeCommit('3d')
+        if (vertexIndex === 0 && draft.points.length >= 3 && draft.kind !== 'angle') {
+          closeBaseAndMaybeCommit('3d')
+        }
         return
       }
       const resolved = resolveSurfacePoint(
@@ -1706,14 +1792,15 @@ export const MeasurementTool: FC = () => {
         draft.axisGuide?.snapped ? draft.axisGuide : null,
       )
       if (!resolved) return
-
-      if (!draft.addPoint('3d', resolved.hit.point)) return
+      const hit = associateSurfaceHit(resolved.hit)
+      if (!draft.addPoint('3d', hit.point, hit.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('3d')
     }
 
     const onDoubleClick = (event: MouseEvent) => {
       const draft = useMeasurementDraft.getState()
       if (draft.owner !== '3d' || draft.stage !== 'collecting') return
+      if (draft.kind === 'distance' || draft.kind === 'angle') return
       consume(event)
       if (suppressNextClick.current) {
         suppressNextClick.current = false

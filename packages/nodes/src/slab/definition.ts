@@ -4,6 +4,7 @@ import {
   pointInPolygon2D,
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -171,6 +172,15 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   parametrics: slabParametrics,
   handles: slabHandles,
+  measurement: {
+    features: (node) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'slab',
+        height: node.elevation,
+        label: 'Slab',
+        polygon: node.polygon,
+      }),
+  },
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with 15° angle snap (Shift to defeat).

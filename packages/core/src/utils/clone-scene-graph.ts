@@ -1,3 +1,4 @@
+import { remapMeasurementReferences } from '../lib/measurement-geometry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -81,6 +82,10 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ;(clonedNode as Record<string, unknown>).roofSegmentId = idMap.get(
         clonedNode.roofSegmentId,
       ) as string | undefined
+    }
+
+    if (clonedNode.type === 'measurement') {
+      clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
     }
 
     clonedNodes[newId] = clonedNode
@@ -231,6 +236,10 @@ export function cloneLevelSubtree(
     if ('roofSegmentId' in cloned && typeof cloned.roofSegmentId === 'string') {
       ;(cloned as Record<string, unknown>).roofSegmentId =
         idMap.get(cloned.roofSegmentId) ?? cloned.roofSegmentId
+    }
+
+    if (cloned.type === 'measurement') {
+      cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
 
     clonedNodes.push(cloned)

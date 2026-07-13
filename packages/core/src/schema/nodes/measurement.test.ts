@@ -42,6 +42,49 @@ describe('MeasurementNode', () => {
     ).toBe(false)
   })
 
+  test('accepts semantic feature anchors with finite fallbacks', () => {
+    expect(
+      parseMeasurement({
+        kind: 'distance',
+        points: [
+          {
+            kind: 'feature',
+            reference: {
+              nodeId: 'wall_a',
+              featureId: 'wall:centerline',
+              parameters: { t: 0.25, side: 'center' },
+            },
+            fallback: [1, 0, 2],
+          },
+          [3, 0, 2],
+        ],
+      }).success,
+    ).toBe(true)
+  })
+
+  test('accepts angle and perimeter measurements', () => {
+    expect(
+      parseMeasurement({
+        kind: 'angle',
+        points: [
+          [1, 0, 0],
+          [0, 0, 0],
+          [0, 0, 1],
+        ],
+      }).success,
+    ).toBe(true)
+    expect(
+      parseMeasurement({
+        kind: 'perimeter',
+        base: [
+          [0, 0, 0],
+          [1, 0, 0],
+          [0, 0, 1],
+        ],
+      }).success,
+    ).toBe(true)
+  })
+
   test('requires at least three area base points', () => {
     expect(
       parseMeasurement({

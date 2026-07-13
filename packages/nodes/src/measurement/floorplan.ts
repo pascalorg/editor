@@ -5,16 +5,20 @@ import {
   type GeometryContext,
   type MeasurementNode,
   type MeasurementPoint,
+  measurementAngle,
   measurementArea,
   measurementDistance,
+  measurementPerimeter,
   measurementPrismVolume,
 } from '@pascal-app/core'
 import {
+  formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
   measurementPolygonLabelAnchor,
 } from '@pascal-app/editor'
+import { resolveMeasurementNode } from './resolve'
 
 const FALLBACK_STROKE = '#0f766e'
 
@@ -41,15 +45,21 @@ export function buildMeasurementFloorplan(
   if (node.visible === false) return null
 
   const unit = ctx.viewState?.unit ?? 'metric'
+  const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
+  const measurement = resolved.payload
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
   const palette = ctx.viewState?.palette
-  const stroke = selected
-    ? (palette?.selectedStroke ?? FALLBACK_STROKE)
-    : (palette?.measurementStroke ?? FALLBACK_STROKE)
+  const stroke =
+    resolved.dangling.length > 0
+      ? '#dc2626'
+      : selected
+        ? (palette?.selectedStroke ?? FALLBACK_STROKE)
+        : (palette?.measurementStroke ?? FALLBACK_STROKE)
   const style = lineStyle(stroke)
+  const statusPrefix = resolved.dangling.length > 0 ? 'Unlinked · ' : ''
 
-  if (node.measurement.kind === 'distance') {
-    const [start, end] = node.measurement.points
+  if (measurement.kind === 'distance') {
+    const [start, end] = measurement.points
     const [x1, y1] = projectPoint(start)
     const [x2, y2] = projectPoint(end)
     const collapsedHitTarget: FloorplanGeometry[] =
@@ -94,7 +104,7 @@ export function buildMeasurementFloorplan(
           appearance: 'outlined',
           cx: (x1 + x2) / 2,
           cy: (y1 + y2) / 2,
-          text: formatLinearMeasurement(measurementDistance(start, end), unit),
+          text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit)}`,
           angle: Math.atan2(y2 - y1, x2 - x1),
           offsetPx: 14,
         },
@@ -102,18 +112,45 @@ export function buildMeasurementFloorplan(
     }
   }
 
-  if (node.measurement.kind === 'area') {
-    const centroid =
-      measurementPolygonLabelAnchor(node.measurement.base) ?? node.measurement.base[0]!
+  if (measurement.kind === 'angle') {
+    const [start, vertex, end] = measurement.points
+    return {
+      kind: 'group',
+      children: [
+        {
+          kind: 'polyline',
+          points: [projectPoint(start), projectPoint(vertex), projectPoint(end)],
+          ...style,
+        },
+        {
+          kind: 'dimension-label',
+          appearance: 'outlined',
+          cx: vertex[0],
+          cy: vertex[2],
+          text: `${statusPrefix}${formatAngleRadians(measurementAngle(start, vertex, end))}`,
+          angle: 0,
+          offsetPx: 16,
+          screenUpright: true,
+        },
+      ],
+    }
+  }
+
+  if (measurement.kind === 'area' || measurement.kind === 'perimeter') {
+    const centroid = measurementPolygonLabelAnchor(measurement.base) ?? measurement.base[0]!
+    const label =
+      measurement.kind === 'area'
+        ? `A ${formatAreaLabel(measurementArea(measurement.base), unit)}`
+        : `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit)}`
 
     return {
       kind: 'group',
       children: [
         {
           kind: 'polygon',
-          points: node.measurement.base.map(projectPoint),
+          points: measurement.base.map(projectPoint),
           fill: stroke,
-          fillOpacity: 0.08,
+          fillOpacity: measurement.kind === 'area' ? 0.08 : 0,
           pointerEvents: 'all',
           ...style,
         },
@@ -122,7 +159,7 @@ export function buildMeasurementFloorplan(
           appearance: 'outlined',
           cx: centroid[0],
           cy: centroid[2],
-          text: `A ${formatAreaLabel(measurementArea(node.measurement.base), unit)}`,
+          text: `${statusPrefix}${label}`,
           angle: 0,
           screenUpright: true,
         },
@@ -130,7 +167,7 @@ export function buildMeasurementFloorplan(
     }
   }
 
-  const volume = node.measurement
+  const volume = measurement
   const top = volume.base.map((point) => add(point, volume.extrusion))
   const baseCentroid = measurementPolygonLabelAnchor(volume.base) ?? volume.base[0]!
   const labelPoint = add(baseCentroid, [
@@ -166,7 +203,7 @@ export function buildMeasurementFloorplan(
     appearance: 'outlined',
     cx: labelPoint[0],
     cy: labelPoint[2],
-    text: `V ${formatVolumeLabel(measurementPrismVolume(volume.base, volume.extrusion), unit)}`,
+    text: `${statusPrefix}V ${formatVolumeLabel(measurementPrismVolume(volume.base, volume.extrusion), unit)}`,
     angle: 0,
     screenUpright: true,
   })

@@ -1,18 +1,20 @@
 'use client'
 
 import { useViewer } from '@pascal-app/viewer'
-import { Box, Check, ChevronDown, Eye, EyeOff, Ruler, Square } from 'lucide-react'
+import { Box, Check, ChevronDown, Eye, EyeOff, Ruler, Square, Triangle, Waypoints } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
 
-type MeasurementKind = 'distance' | 'area' | 'volume'
+type MeasurementKind = 'distance' | 'angle' | 'area' | 'perimeter' | 'volume'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
+  { kind: 'angle', label: 'Angle', icon: Triangle },
   { kind: 'area', label: 'Area', icon: Square },
+  { kind: 'perimeter', label: 'Perimeter', icon: Waypoints },
   { kind: 'volume', label: 'Volume', icon: Box },
 ] as const satisfies readonly {
   kind: MeasurementKind
@@ -21,7 +23,13 @@ const measurementOptions = [
 }[]
 
 function isMeasurementKind(value: unknown): value is MeasurementKind {
-  return value === 'distance' || value === 'area' || value === 'volume'
+  return (
+    value === 'distance' ||
+    value === 'angle' ||
+    value === 'area' ||
+    value === 'perimeter' ||
+    value === 'volume'
+  )
 }
 
 export function MeasurementControl() {

@@ -3,6 +3,7 @@ import type {
   HandleDescriptor,
   NodeDefinition,
 } from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -118,6 +119,15 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
 
   parametrics: ceilingParametrics,
   handles: ceilingHandles,
+  measurement: {
+    features: (node) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'ceiling',
+        height: node.height,
+        label: 'Ceiling',
+        polygon: node.polygon,
+      }),
+  },
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with a vertical TSL-gradient connector + ground-shadow lines.

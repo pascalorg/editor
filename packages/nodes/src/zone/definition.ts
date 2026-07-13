@@ -1,4 +1,5 @@
 import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
@@ -38,6 +39,15 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   },
 
   parametrics: zoneParametrics,
+  measurement: {
+    features: (node) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'zone',
+        height: 0,
+        label: 'Zone',
+        polygon: node.polygon,
+      }),
+  },
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 

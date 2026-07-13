@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
   createSceneApi,
   type FloorplanAffordanceSession,
@@ -224,6 +225,7 @@ type NodeDeps = {
   palette: FloorplanPalette | undefined
   siblingEpoch: number
   committedNodes: Record<string, AnyNode> | null
+  dependencyNodes: AnyNode[]
   interactiveElevators: unknown
 }
 
@@ -1530,6 +1532,27 @@ type BuildFloorplanEntryGeometryArgs = {
   visibilityRootId: AnyNodeId | undefined
 }
 
+export function collectFloorplanDependencyNodes(
+  def: AnyNodeDefinition,
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  liveOverrides?: Map<string, LiveNodeOverrides>,
+): AnyNode[] {
+  return (def.floorplanDependencies?.(node) ?? []).flatMap((id) => {
+    const dependency = nodes[id]
+    if (!dependency) return []
+    const dependencyOverride = liveOverrides?.get(dependency.id)
+    const effectiveDependency = dependencyOverride
+      ? ({ ...dependency, ...dependencyOverride } as AnyNode)
+      : dependency
+    const parent = dependency.parentId ? nodes[dependency.parentId] : undefined
+    if (!parent) return [effectiveDependency]
+    const parentOverride = liveOverrides?.get(parent.id)
+    const effectiveParent = parentOverride ? ({ ...parent, ...parentOverride } as AnyNode) : parent
+    return [effectiveDependency, effectiveParent]
+  })
+}
+
 function buildFloorplanEntryGeometry({
   ctxOverrides,
   geometryCache,
@@ -1568,6 +1591,7 @@ function buildFloorplanEntryGeometry({
     def.floorplanSiblingOverrides ||
     def.floorplanAffectedIds
   )
+  const dependencyNodes = collectFloorplanDependencyNodes(def, node, nodes, liveOverrides)
   const deps: NodeDeps = {
     node,
     live,
@@ -1582,6 +1606,7 @@ function buildFloorplanEntryGeometry({
     // Sibling-dependent kinds (wall miters, opening cuts) read other nodes'
     // committed state via `ctx`, so committed sibling edits still invalidate.
     committedNodes: dependsOnSiblingInputs ? nodes : null,
+    dependencyNodes,
     interactiveElevators,
   }
   const cached = geometryCache.get(nodeId)
@@ -1653,9 +1678,15 @@ function buildFloorplanEntryGeometry({
     moving,
     palette,
   }
+  const resolveContextNode = <N = AnyNode>(rid: AnyNodeId): N | undefined => {
+    const contextNode = contextNodes[rid]
+    if (!contextNode) return undefined
+    const contextOverride = liveOverrides.get(contextNode.id)
+    return (contextOverride ? { ...contextNode, ...contextOverride } : contextNode) as N
+  }
   const ctx: GeometryContext = ctxOverrides
     ? {
-        resolve: <N = AnyNode>(rid: AnyNodeId): N | undefined => contextNodes[rid] as N | undefined,
+        resolve: resolveContextNode,
         children: ctxOverrides.children,
         siblings: ctxOverrides.siblings,
         parent: ctxOverrides.parent,
@@ -1671,7 +1702,10 @@ function buildFloorplanEntryGeometry({
             }
           : undefined,
       }
-    : buildContext(effectiveNode, contextNodes, viewState, levelData)
+    : {
+        ...buildContext(effectiveNode, contextNodes, viewState, levelData),
+        resolve: resolveContextNode,
+      }
   const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
     effectiveNode,
     ctx,
@@ -2945,6 +2979,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'palette',
     'siblingEpoch',
     'committedNodes',
+    'dependencyNodes',
     'interactiveElevators',
   ]
   for (const key of keys) {

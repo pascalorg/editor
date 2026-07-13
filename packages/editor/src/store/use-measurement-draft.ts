@@ -3,14 +3,17 @@
 import {
   areMeasurementPointsCoplanar,
   MEASUREMENT_PLANAR_TOLERANCE,
+  type MeasurementAnchor,
+  type MeasurementFeatureAnchor,
   MeasurementNode,
+  type MeasurementSnapKind,
   measurementNormal,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { create } from 'zustand'
 
-export type MeasurementKind = 'distance' | 'area' | 'volume'
+export type MeasurementKind = 'distance' | 'angle' | 'area' | 'perimeter' | 'volume'
 export type MeasurementDraftOwner = '2d' | '3d'
 export type MeasurementDraftStage = 'collecting' | 'extruding' | 'ready'
 export type MeasurementAxis = 'x' | 'y' | 'z'
@@ -27,19 +30,28 @@ export type MeasurementSurfacePoint = {
   point: MeasurementPoint
   normal: MeasurementPoint
   targetNodeId: string | null
+  anchor?: MeasurementFeatureAnchor
+  semantic?: {
+    label: string
+    length: number | null
+    snapKind: MeasurementSnapKind
+  }
 }
 
 export type MeasurementVertexDrag = {
   owner: MeasurementDraftOwner
   index: number
   originalPoint: MeasurementPoint
+  originalAnchor: MeasurementFeatureAnchor | null
   inserted: boolean
 }
 
 export type MeasurementDraftPayload =
-  | { kind: 'distance'; points: [MeasurementPoint, MeasurementPoint] }
-  | { kind: 'area'; base: MeasurementPoint[] }
-  | { kind: 'volume'; base: MeasurementPoint[]; extrusion: MeasurementPoint }
+  | { kind: 'distance'; points: [MeasurementAnchor, MeasurementAnchor] }
+  | { kind: 'angle'; points: [MeasurementAnchor, MeasurementAnchor, MeasurementAnchor] }
+  | { kind: 'area'; base: MeasurementAnchor[] }
+  | { kind: 'perimeter'; base: MeasurementAnchor[] }
+  | { kind: 'volume'; base: MeasurementAnchor[]; extrusion: MeasurementPoint }
 
 type MeasurementDraftState = {
   kind: MeasurementKind
@@ -47,6 +59,7 @@ type MeasurementDraftState = {
   levelId: string | null
   stage: MeasurementDraftStage
   points: MeasurementPoint[]
+  anchors: Array<MeasurementFeatureAnchor | null>
   hover: MeasurementSurfacePoint | null
   hoverOwner: MeasurementDraftOwner | null
   axisGuide: MeasurementAxisGuide | null
@@ -69,7 +82,11 @@ type MeasurementDraftState = {
   ): boolean
   finishVertexDrag(owner: MeasurementDraftOwner): boolean
   cancelVertexDrag(owner: MeasurementDraftOwner): boolean
-  addPoint(owner: MeasurementDraftOwner, point: MeasurementPoint): boolean
+  addPoint(
+    owner: MeasurementDraftOwner,
+    point: MeasurementPoint,
+    anchor?: MeasurementFeatureAnchor,
+  ): boolean
   closeBase(owner: MeasurementDraftOwner, preferredNormal?: MeasurementPoint): boolean
   setExtrusionHeight(owner: MeasurementDraftOwner, height: number): boolean
   finishExtrusion(owner: MeasurementDraftOwner): boolean
@@ -102,6 +119,7 @@ function idleState(kind: MeasurementKind) {
     levelId: null,
     stage: 'collecting' as const,
     points: [],
+    anchors: [],
     hover: null,
     hoverOwner: null,
     axisGuide: null,
@@ -115,21 +133,29 @@ function idleState(kind: MeasurementKind) {
 function payloadFor(state: MeasurementDraftState): MeasurementDraftPayload | null {
   if (state.stage !== 'ready') return null
 
+  const anchorAt = (index: number): MeasurementAnchor =>
+    state.anchors[index] ?? clonePoint(state.points[index]!)
+
   if (state.kind === 'distance') {
     const [start, end] = state.points
     if (!(start && end)) return null
-    return { kind: 'distance', points: [clonePoint(start), clonePoint(end)] }
+    return { kind: 'distance', points: [anchorAt(0), anchorAt(1)] }
   }
 
-  if (state.kind === 'area') {
+  if (state.kind === 'angle') {
+    if (state.points.length !== 3) return null
+    return { kind: 'angle', points: [anchorAt(0), anchorAt(1), anchorAt(2)] }
+  }
+
+  if (state.kind === 'area' || state.kind === 'perimeter') {
     if (state.points.length < 3) return null
-    return { kind: 'area', base: state.points.map(clonePoint) }
+    return { kind: state.kind, base: state.points.map((_, index) => anchorAt(index)) }
   }
 
   if (!(state.baseNormal && state.points.length >= 3)) return null
   return {
     kind: 'volume',
-    base: state.points.map(clonePoint),
+    base: state.points.map((_, index) => anchorAt(index)),
     extrusion: [
       state.baseNormal[0] * state.extrusionHeight,
       state.baseNormal[1] * state.extrusionHeight,
@@ -167,7 +193,13 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     }
 
     set({
-      vertexDrag: { owner, index, originalPoint: clonePoint(point), inserted: false },
+      vertexDrag: {
+        owner,
+        index,
+        originalPoint: clonePoint(point),
+        originalAnchor: state.anchors[index] ?? null,
+        inserted: false,
+      },
       hover: null,
       hoverOwner: null,
       axisGuide: null,
@@ -184,6 +216,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       state.stage !== 'collecting' ||
       state.vertexDrag ||
       state.kind === 'distance' ||
+      state.kind === 'angle' ||
       state.points.length < 3 ||
       !Number.isInteger(edgeIndex) ||
       edgeIndex < 0 ||
@@ -201,10 +234,18 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     ]
     const index = edgeIndex + 1
     const points = [...state.points.slice(0, index), midpoint, ...state.points.slice(index)]
+    const anchors = [...state.anchors.slice(0, index), null, ...state.anchors.slice(index)]
 
     set({
       points,
-      vertexDrag: { owner, index, originalPoint: clonePoint(midpoint), inserted: true },
+      anchors,
+      vertexDrag: {
+        owner,
+        index,
+        originalPoint: clonePoint(midpoint),
+        originalAnchor: null,
+        inserted: true,
+      },
       hover: null,
       hoverOwner: null,
       axisGuide: null,
@@ -229,12 +270,18 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     const points = state.points.map((point, index) =>
       index === drag.index ? clonePoint(hover.point) : point,
     )
+    const anchors = state.anchors.map((anchor, index) =>
+      index === drag.index ? (hover.anchor ?? null) : anchor,
+    )
     set({
       points,
+      anchors,
       hover: {
         point: clonePoint(hover.point),
         normal: clonePoint(hover.normal),
         targetNodeId: hover.targetNodeId,
+        anchor: hover.anchor,
+        semantic: hover.semantic,
       },
       hoverOwner: owner,
       axisGuide: axisGuide
@@ -266,8 +313,12 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       : state.points.map((point, index) =>
           index === drag.index ? clonePoint(drag.originalPoint) : point,
         )
+    const anchors = drag.inserted
+      ? state.anchors.filter((_, index) => index !== drag.index)
+      : state.anchors.map((anchor, index) => (index === drag.index ? drag.originalAnchor : anchor))
     set({
       points,
+      anchors,
       vertexDrag: null,
       hover: null,
       hoverOwner: null,
@@ -277,7 +328,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     return true
   },
 
-  addPoint: (owner, point) => {
+  addPoint: (owner, point, anchor) => {
     const state = get()
     const activeLevelId = useViewer.getState().selection.levelId
     if (!activeLevelId) return false
@@ -288,13 +339,19 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       return false
     }
     if (state.kind === 'distance' && state.points.length >= 2) return false
+    if (state.kind === 'angle' && state.points.length >= 3) return false
 
     const points = [...state.points, clonePoint(point)]
+    const anchors = [...state.anchors, anchor ?? null]
+    const ready =
+      (state.kind === 'distance' && points.length === 2) ||
+      (state.kind === 'angle' && points.length === 3)
     set({
       owner,
       levelId: state.levelId ?? activeLevelId,
       points,
-      stage: state.kind === 'distance' && points.length === 2 ? 'ready' : 'collecting',
+      anchors,
+      stage: ready ? 'ready' : 'collecting',
       hover: null,
       hoverOwner: null,
       axisGuide: null,
@@ -311,6 +368,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       state.stage !== 'collecting' ||
       state.vertexDrag ||
       state.kind === 'distance' ||
+      state.kind === 'angle' ||
       state.points.length < 3
     ) {
       return false
@@ -391,11 +449,13 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     }
 
     const points = state.points.slice(0, -1)
+    const anchors = state.anchors.slice(0, -1)
     set({
       owner: points.length > 0 ? owner : null,
       levelId: points.length > 0 ? state.levelId : null,
       stage: 'collecting',
       points,
+      anchors,
       hover: null,
       hoverOwner: null,
       axisGuide: null,
