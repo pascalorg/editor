@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, type Object3D, Scene, UnsignedByteType } from 'three'
+import { Color, Layers, Matrix4, type Object3D, Scene, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
@@ -18,18 +18,31 @@ import {
   premultiplyAlpha,
   renderOutput,
   sample,
+  saturation,
+  screenUV,
+  smoothstep,
   time,
   uniform,
+  vec3,
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
-import { edgeColorFor } from '../../lib/edge-style'
+import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
+import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
+
+// Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
+// highlights off gently but reads flat on its own; a mild mid-gray-pivot
+// contrast + saturation lift restores the punch. Rendered shading only.
+export const GRADE_PARAMS = {
+  contrast: 1.05,
+  saturation: 1.1,
+}
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
@@ -157,14 +170,36 @@ const PostProcessingPasses = ({
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
-  const initBg = getSceneTheme(useViewer.getState().sceneTheme).background
+  const initTheme = getSceneTheme(useViewer.getState().sceneTheme)
+  const initBg = initTheme.background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
+  // Zenith colour of the backdrop gradient (falls back to the flat background).
+  const initSky = initTheme.backgroundSky ?? initBg
+  const bgSkyUniform = useRef(uniform(new Color(initSky)))
+  const bgSkyCurrent = useRef(new Color(initSky))
+  const bgSkyTarget = useRef(new Color())
+  // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
+  const initHaze = horizonHazeColor(initSky, initTheme.appearance)
+  const bgHazeUniform = useRef(uniform(new Color(initHaze)))
+  const bgHazeCurrent = useRef(new Color(initHaze))
+  const bgHazeTarget = useRef(new Color())
+  const initSkyDeep = deepSkyColor(initSky)
+  const bgSkyDeepUniform = useRef(uniform(new Color(initSkyDeep)))
+  const bgSkyDeepCurrent = useRef(new Color(initSkyDeep))
+  const bgSkyDeepTarget = useRef(new Color())
+  // Scene-camera matrices for the backdrop: the pipeline's fullscreen quad has
+  // its own camera, so the sky gradient reconstructs each pixel's world-space
+  // view ray from these to find the true horizon (dir.y = 0).
+  const camProjInvUniform = useRef(uniform(new Matrix4()))
+  const camWorldUniform = useRef(uniform(new Matrix4()))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
+  // Dark scenes also scale the ink opacity down (see edge-style.ts).
   const inkColorUniform = useRef(uniform(new Color(edgeColorFor(initBg))))
+  const inkOpacityScaleUniform = useRef(uniform(edgeOpacityScaleFor(initBg)))
 
   const zoneLayers = useMemo(() => {
     const l = new Layers()
@@ -435,6 +470,17 @@ const PostProcessingPasses = ({
           ao = giTexture.a
         }
 
+        // AO is a near/mid-field cue like the ink: fade it out with raw depth
+        // (same ≈150→350 m window as ink-edges' distanceFade) so the horizon
+        // disc and the geometry↔sky depth cliff never grow an AO band — that
+        // band read as a visible line along the horizon.
+        const aoFarFade = smoothstep(
+          float(0.9994),
+          float(0.9998),
+          scenePassDepth.sample(screenUV).r,
+        )
+        ao = mix(ao, float(1), aoFarFade)
+
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
           add(scenePassColor.rgb.mul(ao), add(zonePass.rgb, scenePassDiffuse.rgb.mul(gi))),
@@ -453,10 +499,24 @@ const PostProcessingPasses = ({
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
             radius: inkRadius,
-            opacity: inkOpacity,
+            opacity: float(inkOpacity).mul(inkOpacityScaleUniform.current),
           }),
           sceneColor.a,
         )
+      }
+
+      // Scene-referred grade (contrast around mid-gray + saturation) before the
+      // pipeline's output tone mapping. Kept out of solid/schematic shading so
+      // the flat presets stay exact. The same transform is applied to the
+      // backdrop below so geometry that fades to the background colour (the
+      // horizon disc) matches it exactly.
+      const gradeRgb = (rgb: any) =>
+        saturation(
+          rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+          GRADE_PARAMS.saturation,
+        )
+      if (shading === 'rendered') {
+        sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
@@ -501,7 +561,29 @@ const PostProcessingPasses = ({
         )
       }
 
-      const composited = mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha)
+      // Backdrop: world-space view ray per pixel → background / horizon haze /
+      // sky gradient (shared formula in lib/backdrop.ts). The horizon disc
+      // dissolves into the same formula, so backdrop and ground meet
+      // seamlessly exactly where the disc vanishes.
+      const ndc = vec4(
+        screenUV.x.mul(2).sub(1),
+        float(1).sub(screenUV.y).mul(2).sub(1),
+        1,
+        1,
+      ) as any
+      const viewRay = (camProjInvUniform.current as any).mul(ndc)
+      const worldDir = (camWorldUniform.current as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
+      let bgGradient = backdropGradient({
+        dirY: worldDir.y,
+        background: bgUniform.current,
+        haze: bgHazeUniform.current,
+        sky: bgSkyUniform.current,
+        skyDeep: bgSkyDeepUniform.current,
+      })
+      if (shading === 'rendered') {
+        bgGradient = gradeRgb(bgGradient)
+      }
+      const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
@@ -596,11 +678,27 @@ const PostProcessingPasses = ({
     }
 
     // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
-    bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
+    const bgTheme = getSceneTheme(useViewer.getState().sceneTheme)
+    bgTarget.current.set(bgTheme.background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
+    bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
+    bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyUniform.current.value.copy(bgSkyCurrent.current)
+    bgHazeTarget.current.set(
+      horizonHazeColor(bgTheme.backgroundSky ?? bgTheme.background, bgTheme.appearance),
+    )
+    bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
+    bgHazeUniform.current.value.copy(bgHazeCurrent.current)
+    bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
+    bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
+    camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
+    camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
-    inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
+    const bgHex = `#${bgCurrent.current.getHexString()}`
+    inkColorUniform.current.value.set(edgeColorFor(bgHex))
+    inkOpacityScaleUniform.current.value = edgeOpacityScaleFor(bgHex)
 
     const outliner = useViewer.getState().outliner
     sanitizeOutlineObjects(outliner.selectedObjects)

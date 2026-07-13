@@ -23,3 +23,14 @@ export const ZONE_LAYER = 2
  * from thumbnails like the other editor-only layers.
  */
 export const GRID_LAYER = 3
+
+/**
+ * Layer for geometry hidden from the color passes but still rendered into the
+ * shadow map ("shadow-caster-only"). Used when cutaway/solo views hide roofs
+ * or non-selected levels: the sun keeps casting their shadows, so interiors
+ * get window-shaped light patches instead of flooding with uniform sun.
+ * No camera or pass enables this layer — only each shadow-casting light's
+ * shadow camera does (see `lights.tsx`). Applied per-object (layers don't
+ * cascade) via `applyShadowOnly` / `clearShadowOnly` in `lib/shadow-only.ts`.
+ */
+export const SHADOW_ONLY_LAYER = 4

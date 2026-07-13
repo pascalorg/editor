@@ -12,6 +12,7 @@ import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
+import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { GlbReferenceNodes } from './glb-reference-nodes'
@@ -592,14 +593,25 @@ export function GlbScene({
     if (levels.length === 0) return
     const { levelMode, selection, walkthroughMode } = useViewer.getState()
     const selectedLevel = selection.levelId
+    const selectedIdx = selectedLevel ? levels.findIndex((l) => l.id === selectedLevel) : -1
     levels.forEach(({ id, node, baseY }, index) => {
       const exploded = !walkthroughMode && levelMode === 'exploded'
       const targetY = baseY + (exploded ? index * EXPLODED_GAP : 0)
       // Snap (not lerp) in walkthrough so the first-person collider, built from
       // these world positions, matches the stacked building immediately.
       node.position.y = walkthroughMode ? targetY : lerp(node.position.y, targetY, delta * 12)
-      node.visible =
-        walkthroughMode || levelMode !== 'solo' || !selectedLevel || id === selectedLevel
+      // Solo: hidden levels above the soloed one keep casting shadows
+      // (shadow-caster-only); below-levels can't block the sun, so plain-hide.
+      const hidden =
+        !walkthroughMode && levelMode === 'solo' && Boolean(selectedLevel) && id !== selectedLevel
+      const castsWhileHidden = hidden && selectedIdx >= 0 && index > selectedIdx
+      if (castsWhileHidden) {
+        applyShadowOnly(node)
+        node.visible = true
+      } else {
+        clearShadowOnly(node)
+        node.visible = !hidden
+      }
     })
   }, 5)
 
@@ -819,7 +831,12 @@ export function GlbScene({
     // focused level actually has rooms. Focusing a zone-less floor keeps the
     // building intact (otherwise its roof would just vanish with nothing to show).
     const revealing = !walk && selection.levelId != null && levelsWithZones.has(selection.levelId)
-    for (const mesh of occluderOwnMeshes) mesh.visible = !revealing
+    // Shadow-caster-only: hidden roof/ceiling meshes keep casting sun shadows
+    // so interiors show window light patches instead of uniform sun flood.
+    for (const mesh of occluderOwnMeshes) {
+      if (revealing) applyShadowOnly(mesh)
+      else clearShadowOnly(mesh)
+    }
 
     for (const { id, levelId, meshes, uniforms } of zoneFills.current) {
       const show =
@@ -1031,7 +1048,7 @@ export function GlbScene({
       outliner.hoveredObjects.length = 0
       document.body.style.cursor = 'auto'
       // Restore ceilings/roof — the GLB scene is cached by drei and may be reused.
-      for (const mesh of occluderOwnMeshes) mesh.visible = true
+      for (const mesh of occluderOwnMeshes) clearShadowOnly(mesh)
     },
     [occluderOwnMeshes],
   )
