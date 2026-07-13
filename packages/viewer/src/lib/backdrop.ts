@@ -1,4 +1,4 @@
-import { mix, smoothstep } from 'three/tsl'
+import { abs, exp, mix, smoothstep } from 'three/tsl'
 
 /**
  * Shared backdrop gradient: flat background looking down, an atmospheric haze
@@ -22,10 +22,14 @@ export function backdropGradient({
   haze: any
   sky: any
 }): any {
-  // Below the horizon: background rising into haze as the ray flattens out.
-  const below = (mix as any)(background, haze, smoothstep(-0.25, -0.01, dirY))
-  // Above: haze dissolving into the sky zenith.
-  return (mix as any)(below, sky, smoothstep(0.02, 0.35, dirY))
+  // One gradient crossing the horizon smoothly, sky reaching down to it —
+  // a flat plateau sandwiched between two ramps reads as Mach lines, and a
+  // sky that only starts high leaves eye-level views all-white.
+  const base = (mix as any)(background, sky, smoothstep(-0.02, 0.25, dirY))
+  // Haze as an exponential glow peaking exactly at the horizon: C¹-smooth on
+  // both sides, so it brightens the junction without ever drawing an edge.
+  const hazeWeight = exp(abs(dirY).mul(-9)).mul(0.85)
+  return (mix as any)(base, haze, hazeWeight)
 }
 
 /**

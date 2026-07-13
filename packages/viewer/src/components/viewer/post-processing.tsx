@@ -20,6 +20,7 @@ import {
   sample,
   saturation,
   screenUV,
+  smoothstep,
   time,
   uniform,
   vec3,
@@ -448,6 +449,17 @@ const PostProcessingPasses = ({
           // look grainy — that's the point, it isolates denoise cost.
           ao = giTexture.a
         }
+
+        // AO is a near/mid-field cue like the ink: fade it out with raw depth
+        // (same ≈150→350 m window as ink-edges' distanceFade) so the horizon
+        // disc and the geometry↔sky depth cliff never grow an AO band — that
+        // band read as a visible line along the horizon.
+        const aoFarFade = smoothstep(
+          float(0.9994),
+          float(0.9998),
+          scenePassDepth.sample(screenUV).r,
+        )
+        ao = mix(ao, float(1), aoFarFade)
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(

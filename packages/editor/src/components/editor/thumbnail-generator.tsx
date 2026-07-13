@@ -31,6 +31,7 @@ import {
   pass,
   sample,
   screenUV,
+  smoothstep,
   uniform,
   vec4,
 } from 'three/tsl'
@@ -134,7 +135,14 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         denoisePass.index.value = 0
         denoisePass.radius.value = 4
 
-        const ao = (denoisePass as any).r
+        // Same far-field AO fade as the viewport pipeline — without it the
+        // horizon picks up a visible AO line in captures.
+        const aoFarFade = smoothstep(
+          float(0.9994),
+          float(0.9998),
+          scenePassDepth.sample(screenUV).r,
+        )
+        const ao = mix((denoisePass as any).r, float(1), aoFarFade)
         const sceneRgb = scenePassColor.rgb.mul(ao)
 
         // Per-pixel world ray from the capture camera → sky gradient above the
