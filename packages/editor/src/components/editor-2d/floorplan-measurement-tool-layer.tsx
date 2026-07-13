@@ -74,7 +74,7 @@ const FLOORPLAN_LABEL_STAGGER_STEP = 0.22
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_GAP_PX = 4
 const FLOORPLAN_MEASUREMENT_COLOR = '#8b5cf6'
 const FLOORPLAN_SNAP_COLOR = '#ffffff'
-const FLOORPLAN_PERIMETER_BOUNDARY_STROKE_WIDTH = 1.2
+const FLOORPLAN_MEASUREMENT_STROKE_WIDTH = 1.2
 const FLOORPLAN_DEGENERATE_MEASUREMENT_MARKER_LENGTH = 0.32
 const FLOORPLAN_ANGLE_ARC_MIN_RADIUS = 0.2
 const FLOORPLAN_ANGLE_ARC_MAX_RADIUS = 0.7
@@ -819,7 +819,7 @@ function AngleMeasurementLabel({
         stroke={palette.measurementStroke}
         strokeLinecap="round"
         strokeOpacity={strokeOpacity}
-        strokeWidth={1.35}
+        strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
         x1={layout.vertex.x}
         x2={layout.first.x}
@@ -830,7 +830,7 @@ function AngleMeasurementLabel({
         stroke={palette.measurementStroke}
         strokeLinecap="round"
         strokeOpacity={strokeOpacity}
-        strokeWidth={1.35}
+        strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
         x1={layout.vertex.x}
         x2={layout.second.x}
@@ -844,7 +844,7 @@ function AngleMeasurementLabel({
           stroke={palette.measurementStroke}
           strokeLinecap="round"
           strokeOpacity={strokeOpacity}
-          strokeWidth={1.8}
+          strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
           vectorEffect="non-scaling-stroke"
           x1={radial.x1}
           x2={radial.x2}
@@ -858,7 +858,7 @@ function AngleMeasurementLabel({
         stroke={palette.measurementStroke}
         strokeLinecap="round"
         strokeOpacity={strokeOpacity}
-        strokeWidth={1.8}
+        strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
       <MeasurementPillLabel2D
@@ -926,7 +926,7 @@ function AreaMeasurementBoundary2D({
   points,
   stroke,
   strokeOpacity,
-  strokeWidth = 1.35,
+  strokeWidth = FLOORPLAN_MEASUREMENT_STROKE_WIDTH,
 }: {
   isSelected: boolean
   points: MeasurementPoint[]
@@ -988,7 +988,7 @@ function PerimeterMeasurementLabel({
           points={displayBoundaryPoints}
           stroke={palette.measurementStroke}
           strokeOpacity={isSelected ? 0.98 : 0.68}
-          strokeWidth={FLOORPLAN_PERIMETER_BOUNDARY_STROKE_WIDTH}
+          strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
         />
       ) : null}
       <MeasurementPillLabel2D
@@ -1024,7 +1024,7 @@ function PolygonDraftOutline2D({
                 stroke={palette.measurementStroke}
                 strokeLinecap="round"
                 strokeOpacity={0.95}
-                strokeWidth={1.35}
+                strokeWidth={FLOORPLAN_MEASUREMENT_STROKE_WIDTH}
                 vectorEffect="non-scaling-stroke"
                 x1={point[0]}
                 x2={next[0]}

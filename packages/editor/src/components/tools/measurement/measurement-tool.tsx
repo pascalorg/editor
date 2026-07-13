@@ -71,8 +71,8 @@ import {
 } from '../../editor/measurement-pill'
 
 const MEASUREMENT_COLOR = 0x8b_5c_f6
-const MEASUREMENT_LINE_WIDTH = 0.018
-const MEASUREMENT_PERIMETER_BOUNDARY_WIDTH = MEASUREMENT_LINE_WIDTH * 0.75
+const MEASUREMENT_LINE_WIDTH = 0.0135
+const MEASUREMENT_PERIMETER_BOUNDARY_WIDTH = MEASUREMENT_LINE_WIDTH
 const MEASUREMENT_END_TICK = 0.28
 const MEASUREMENT_LABEL_LIFT = 0.08
 const MEASUREMENT_CURSOR_SIZE = 0.18
@@ -90,7 +90,6 @@ const MEASUREMENT_GRID_SNAP_RADIUS = 0.25
 const MEASUREMENT_NODE_SNAP_PRIORITY_BUCKET = 1_000
 const MEASUREMENT_PLAN_SNAP_Y_TOLERANCE = 1e-5
 const SURFACE_EVENT_SUPPRESSION_MS = 80
-const MEASUREMENT_IGNORED_NODE_TYPES = new Set(['site'])
 type MeasurementAppearance = 'dark' | 'light'
 
 const dashGeometry = new BoxGeometry(1, 1, 1)
@@ -174,7 +173,7 @@ const snapTargetLineMaterial = new MeshBasicNodeMaterial({
 
 function measurableNodeKinds(): string[] {
   return Array.from(nodeRegistry.entries()).flatMap(([kind, def]) =>
-    !MEASUREMENT_IGNORED_NODE_TYPES.has(kind) &&
+    is3DMeasurementPickEnabled(def) &&
     (def.measurement ||
       def.floorplan ||
       def.renderer ||
@@ -185,8 +184,12 @@ function measurableNodeKinds(): string[] {
   )
 }
 
+function is3DMeasurementPickEnabled(def: ReturnType<typeof nodeRegistry.get>): boolean {
+  return def?.measurement?.pick3D !== false
+}
+
 function isIgnoredMeasurementNode(node: AnyNode): boolean {
-  return MEASUREMENT_IGNORED_NODE_TYPES.has(node.type)
+  return !is3DMeasurementPickEnabled(nodeRegistry.get(node.type))
 }
 
 function clearTransientMeasurementHover() {
@@ -1517,7 +1520,7 @@ function MeasurementArea3D({
         id={area.id}
         material={material}
         points={area.boundaryPoints}
-        width={MEASUREMENT_LINE_WIDTH * 1.35}
+        width={MEASUREMENT_LINE_WIDTH}
       />
       <Html
         center
@@ -2028,7 +2031,7 @@ function MeasurementAngle3D({
           key={`${angle.id}-arc-${index}`}
           material={material}
           start={segment.start}
-          width={MEASUREMENT_LINE_WIDTH * 1.35}
+          width={MEASUREMENT_LINE_WIDTH}
         />
       ))}
       {angleLayout?.arcRadials.map((segment, index) => (
@@ -2037,7 +2040,7 @@ function MeasurementAngle3D({
           key={`${angle.id}-arc-radial-${index}`}
           material={material}
           start={segment.start}
-          width={MEASUREMENT_LINE_WIDTH * 1.35}
+          width={MEASUREMENT_LINE_WIDTH}
         />
       ))}
       {angleLayout ? (

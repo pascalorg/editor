@@ -823,6 +823,7 @@ export type MeasurementDefinition<N> = {
     cursorNormal?: MeasurementDefinitionPoint | null,
   ) => MeasurementDefinitionDirectLength | null
   perimeter?: (node: N, ctx: GeometryContext) => MeasurementDefinitionPerimeter | null
+  pick3D?: boolean
   snapGeometry?: (node: N, ctx: GeometryContext) => MeasurementDefinitionSnapGeometry | null
 }
 

@@ -7,7 +7,7 @@ import {
 } from '../../editor/measurement-pill'
 import { useFloorplanRender } from '../floorplan-render-context'
 
-const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.35
+const FLOORPLAN_MEASUREMENT_LINE_WIDTH = 1.2
 const FLOORPLAN_MEASUREMENT_LINE_OPACITY = 0.95
 const FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE_PX = 12
 const FLOORPLAN_MEASUREMENT_LABEL_LINE_HEIGHT_PX = 16

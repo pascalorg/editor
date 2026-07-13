@@ -105,6 +105,7 @@ const ENDPOINT_HANDLE_ACTIVE_DOT_RADIUS_PX = 4
 const ENDPOINT_HIT_STROKE_WIDTH_PX = 18
 const ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX = 16
 const ENDPOINT_HOVER_RING_STROKE_WIDTH_PX = 7
+const FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH = 1.2
 const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const DIRECT_DRAG_THRESHOLD_PX = 4
 const DIRECT_ROTATE_EPSILON = 1e-6
@@ -2454,7 +2455,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
               strokeDasharray="0.08 0.12"
               strokeLinecap="round"
               strokeOpacity={0.95}
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={g.start[0]}
               x2={eStartTip[0]}
@@ -2466,7 +2467,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
               strokeDasharray="0.08 0.12"
               strokeLinecap="round"
               strokeOpacity={0.95}
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={g.end[0]}
               x2={eEndTip[0]}
@@ -2477,7 +2478,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
             <line
               stroke={stroke}
               strokeLinecap="round"
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={dStart[0]}
               x2={gapStart[0]}
@@ -2487,7 +2488,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
             <line
               stroke={stroke}
               strokeLinecap="round"
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={gapEnd[0]}
               x2={dEnd[0]}
@@ -2498,7 +2499,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
             <line
               stroke={stroke}
               strokeLinecap="round"
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={dStart[0] - perpX}
               x2={dStart[0] + perpX}
@@ -2508,7 +2509,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
             <line
               stroke={stroke}
               strokeLinecap="round"
-              strokeWidth={1.35}
+              strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
               vectorEffect="non-scaling-stroke"
               x1={dEnd[0] - perpX}
               x2={dEnd[0] + perpX}
@@ -3042,7 +3043,7 @@ function RotationAngleOverlay({
         stroke={ROTATION_WEDGE_COLOR}
         strokeLinejoin="round"
         strokeOpacity={0.95}
-        strokeWidth={1.8}
+        strokeWidth={FLOORPLAN_AFFORDANCE_MEASUREMENT_STROKE_WIDTH}
         vectorEffect="non-scaling-stroke"
       />
       {/* Counter-rotate the scene transform so the chip stays horizontal. */}

@@ -774,6 +774,7 @@ function openingMeasurement(): MeasurementDefinition<TestNode> {
 
 function siteMeasurement(): MeasurementDefinition<TestNode> {
   return {
+    pick3D: false,
     snapGeometry: (node) => {
       const polygon = Array.isArray(node.polygon) ? node.polygon : node.polygon.points
       const geometry: Required<MeasurementDefinitionSnapGeometry> = { anchors: [], segments: [] }

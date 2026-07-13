@@ -29,7 +29,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
     deletable: false,
     presettable: false,
   },
-  measurement: siteMeasurement(),
+  measurement: { ...siteMeasurement(), pick3D: false },
 
   parametrics: siteParametrics,
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
