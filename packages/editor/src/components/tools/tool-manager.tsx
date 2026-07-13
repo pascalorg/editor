@@ -135,10 +135,16 @@ export const ToolManager: React.FC = () => {
   // switches to full polygon editing only after a flag activates site mode.
   const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
 
+  // A multi-selection is manipulated as one rigid group (drag / R / T), so
+  // per-node reshape chrome — the slab / ceiling boundary editors' vertex and
+  // edge handles — mounts only for a sole selection.
+  const isSoleSelection = selectedIds.length === 1
+
   // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
     phase === 'structure' &&
     mode === 'select' &&
+    isSoleSelection &&
     selectedSlabId !== undefined &&
     !editingSlabHoleIsManual
 
@@ -153,6 +159,7 @@ export const ToolManager: React.FC = () => {
   const showCeilingBoundaryEditor =
     phase === 'structure' &&
     mode === 'select' &&
+    isSoleSelection &&
     selectedCeilingId !== undefined &&
     (!editingHole || editingHole.nodeId !== selectedCeilingId)
 

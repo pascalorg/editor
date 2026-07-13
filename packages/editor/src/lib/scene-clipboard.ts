@@ -30,6 +30,8 @@ const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
   'stair',
   'spawn',
   'zone',
+  'cabinet',
+  'cabinet-module',
 ])
 
 let clipboardPayload: ClipboardPayload | null = null
@@ -97,6 +99,30 @@ function isLevelChildRoot(nodes: Record<AnyNodeId, AnyNode>, node: AnyNode) {
   const parentId = node.parentId as AnyNodeId | null
   if (!parentId) return true
   return nodes[parentId]?.type === 'level'
+}
+
+function getPromotedCabinetRunId(
+  nodes: Record<AnyNodeId, AnyNode>,
+  node: AnyNode,
+  selectedIds: Set<AnyNodeId>,
+) {
+  if (node.type !== 'cabinet-module') return null
+
+  const parentId = node.parentId as AnyNodeId | null
+  const parent = parentId ? nodes[parentId] : null
+  if (parent?.type !== 'cabinet') return null
+  if (!parentId) return null
+  if (selectedIds.has(parentId)) return parentId
+
+  const siblingIds = Array.isArray(parent.children) ? (parent.children as AnyNodeId[]) : []
+  const hasOnlySelectedModules =
+    siblingIds.length > 0 &&
+    siblingIds.every((childId) => {
+      const child = nodes[childId]
+      return child?.type === 'cabinet-module' && selectedIds.has(childId)
+    })
+
+  return hasOnlySelectedModules ? parentId : null
 }
 
 function getPasteTargetLevel(targetLevelId?: AnyNodeId) {
@@ -176,11 +202,14 @@ function remapNodeReferences(
   return AnyNode.parse(clone)
 }
 
-export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
+function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
   const scene = useScene.getState()
-  const ids = selectedIds ?? (useViewer.getState().selection.selectedIds as AnyNodeId[])
   const selectedIdSet = new Set(ids)
-  const rootIds = ids.filter((id) => {
+  const promotedIds = ids.map((id) => {
+    const node = scene.nodes[id]
+    return node ? (getPromotedCabinetRunId(scene.nodes, node, selectedIdSet) ?? id) : id
+  })
+  const rootIds = Array.from(new Set(promotedIds)).filter((id) => {
     const node = scene.nodes[id]
     return (
       node &&
@@ -191,7 +220,7 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
   })
 
   if (rootIds.length === 0) {
-    return false
+    return null
   }
 
   const subtreeIds = new Set<AnyNodeId>()
@@ -199,7 +228,7 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
     collectSubtreeIds(scene.nodes, rootId, subtreeIds)
   }
 
-  clipboardPayload = {
+  return {
     copiedAt: Date.now(),
     nodes: [...subtreeIds]
       .map((id) => scene.nodes[id])
@@ -207,15 +236,45 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
       .map((node) => JSON.parse(JSON.stringify(node)) as AnyNode),
     rootIds,
   }
+}
+
+export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
+  const ids = selectedIds ?? (useViewer.getState().selection.selectedIds as AnyNodeId[])
+  const payload = buildClipboardPayload(ids)
+  if (!payload) return false
+
+  clipboardPayload = payload
   notifySubscribers()
 
   return true
 }
 
+/**
+ * Clone the given nodes (subtrees included, ids remapped) onto the target /
+ * active level in place — the same copy + paste pipeline in one step, WITHOUT
+ * touching the user's editor clipboard. Selects the clones. Used by the group
+ * action menu's Duplicate.
+ */
+export function duplicateNodesToLevel(
+  ids: AnyNodeId[],
+  targetLevelId?: AnyNodeId,
+): PasteResult | null {
+  const payload = buildClipboardPayload(ids)
+  if (!payload) return null
+  return applyClipboardPayloadToLevel(payload, targetLevelId)
+}
+
 export function pasteEditorClipboardToLevel(targetLevelId?: AnyNodeId): PasteResult | null {
-  const payload = clipboardPayload
+  if (!clipboardPayload) return null
+  return applyClipboardPayloadToLevel(clipboardPayload, targetLevelId)
+}
+
+function applyClipboardPayloadToLevel(
+  payload: ClipboardPayload,
+  targetLevelId?: AnyNodeId,
+): PasteResult | null {
   const targetLevel = getPasteTargetLevel(targetLevelId)
-  if (!payload || !targetLevel) return null
+  if (!targetLevel) return null
 
   const scene = useScene.getState()
   const idMap = new Map<AnyNodeId, AnyNodeId>()

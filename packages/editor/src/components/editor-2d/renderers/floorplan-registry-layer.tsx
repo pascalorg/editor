@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   createSceneApi,
-  type FloorplanAffordancePoint,
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -17,6 +16,7 @@ import {
   nodeRegistry,
   pauseSceneHistory,
   resolveBuildingForLevel,
+  resolveSelectionProxyId,
   resumeSceneHistory,
   useInteractive,
   useLiveNodeOverrides,
@@ -36,11 +36,13 @@ import {
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
   snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
+import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
   boundaryReshapeScope,
@@ -58,7 +60,14 @@ import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
+import { startGroupPickUp } from '../../editor/group-actions'
+import { classifyParticipant } from '../../editor/group-transform-shared'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
+import {
+  FloorplanGroupSelectionBox,
+  startFloorplanGroupMove,
+  startFloorplanGroupRotate,
+} from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
@@ -244,6 +253,8 @@ type FloorplanLevelDataHook = (args: {
 type FloorplanRenderPass = 'base' | 'overlay'
 
 const POINTER_CURSOR_STYLE = { cursor: 'pointer' } as const
+// Group members advertise the drag-to-move-the-selection gesture.
+const MOVE_CURSOR_STYLE = { cursor: 'move' } as const
 const NO_POINTER_EVENTS_STYLE = { pointerEvents: 'none' } as const
 
 function snapshotNode(node: AnyNode): NodeSnapshot {
@@ -354,6 +365,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // Marquee preview selection — matches the legacy `highlightedIdSet` use
   // (filter-while-marquee), surfaces selection chrome without keyboard focus.
   const highlightedIdSet = useMemo(() => new Set(previewSelectedIds), [previewSelectedIds])
+  // Multi-selection: members show highlight only (per-node edit chrome hidden)
+  // and transformable members advertise the drag-to-move gesture.
+  const isMultiSelect = selectedIds.length > 1
+  const groupParticipantIdSet = useMemo(() => {
+    if (selectedIds.length < 2 || !levelId) return null
+    return new Set(
+      selectedIds.filter(
+        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      ),
+    )
+  }, [selectedIds, levelId, nodes])
 
   // Interactive state lives in refs; only the visible feedback bits go
   // into React state to keep re-renders cheap during drag.
@@ -389,13 +411,25 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     for (const [id] of liveTransforms) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
     for (const [id] of liveOverrides) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
@@ -464,7 +498,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
       const node = useScene.getState().nodes[id]
       if (!node || !isRegistryMovable(node.type)) return false
-      if (!useViewer.getState().selection.selectedIds.includes(id)) return false
+      // Sole selection only: per-node direct manipulation stands down for a
+      // multi-selection (the group session owns plain drags there, and Cmd is
+      // the selection-toggle key — a wobbly Cmd+click must not yank one
+      // member out of the group).
+      const currentSelectedIds = useViewer.getState().selection.selectedIds
+      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== id) return false
 
       event.preventDefault()
       event.stopPropagation()
@@ -532,10 +571,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
       if (event.button !== 2 || !(event.metaKey || event.ctrlKey)) return false
 
-      const node = useScene.getState().nodes[id]
+      const sceneNodes = useScene.getState().nodes
+      const selectedNode = sceneNodes[id]
+      const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
       if (!node || !canDirectRotateNode(node)) return false
+      // Sole selection only — same stand-down as the direct move above.
       const selectedIds = useViewer.getState().selection.selectedIds
-      if (!selectedIds.includes(id)) return false
+      if (selectedIds.length !== 1 || selectedIds[0] !== id) return false
       event.preventDefault()
       event.stopPropagation()
 
@@ -625,13 +667,76 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     [],
   )
 
+  // Photoshop-style group drag: plain pointer-down on a transformable member
+  // of a multi-selection slides the whole selection rigidly; a plain click
+  // (no drag) enters the group pick-up instead — parity with the single-item
+  // click-to-move (clicking outside still deselects). Modified clicks
+  // (selection toggle) and Cmd-drag / direct-rotate keep their existing
+  // paths. `immediate` engages without the drag threshold — the move-handle
+  // dot's pick-up semantics.
+  const startGroupMoveDrag = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>, immediate = false): boolean => {
+      if (event.button !== 0) return false
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+      if (movingNode) return false
+      if (useEditor.getState().mode === 'delete') return false
+      const started = startFloorplanGroupMove(id, event, {
+        immediate,
+        onClickFallthrough: immediate ? undefined : () => startGroupPickUp(),
+      })
+      if (!started) return false
+      event.preventDefault()
+      event.stopPropagation()
+      suppressBoxSelectForPointer(event)
+      return true
+    },
+    [movingNode],
+  )
+
+  // Move-handle dot variant — routes the dot through the group session when
+  // the owning node is part of a multi-selection.
+  const handleGroupMoveHandlePointerDown = useCallback(
+    (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => startGroupMoveDrag(id, event, true),
+    [startGroupMoveDrag],
+  )
+
+  // The dashed selection box is itself the group's drag handle: a press
+  // anywhere inside it slides the group (or picks it up on a plain click),
+  // anchored on the first transformable member.
+  const handleGroupBoxPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGGElement>) => {
+      const { selectedIds: currentIds, levelId: currentLevelId } = useViewer.getState().selection
+      const sceneNodes = useScene.getState().nodes
+      const anchor = currentIds.find(
+        (id) =>
+          classifyParticipant(sceneNodes[id as AnyNodeId], currentLevelId, sceneNodes) !== null,
+      )
+      if (!anchor) return
+      startGroupMoveDrag(anchor as AnyNodeId, event)
+    },
+    [startGroupMoveDrag],
+  )
+
+  // Corner rotate handles on the dashed selection box — 15° steps, Shift
+  // free, mirroring the 3D group rotate gizmo.
+  const handleGroupBoxRotatePointerDown = useCallback((event: ReactPointerEvent<SVGGElement>) => {
+    if (event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    if (useEditor.getState().mode === 'delete') return
+    if (startFloorplanGroupRotate(event)) {
+      event.preventDefault()
+      suppressBoxSelectForPointer(event)
+    }
+  }, [])
+
   const handleEntryPointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {
       if (startDirectMoveDrag(id, event)) return
       if (startDirectRotateDrag(id, event)) return
+      if (startGroupMoveDrag(id, event)) return
       handleSelect(id, event)
     },
-    [handleSelect, startDirectMoveDrag, startDirectRotateDrag],
+    [handleSelect, startDirectMoveDrag, startDirectRotateDrag, startGroupMoveDrag],
   )
 
   const floorplanData = useMemo(() => {
@@ -668,7 +773,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
       const dependsOnSiblingInputs = !!(
-        def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides
+        def.floorplanDependsOnSiblings ||
+        def.floorplanSiblingOverrides ||
+        def.floorplanAffectedIds
       )
       const descriptor: FloorplanEntryDescriptor = { id, node, dependsOnSiblingInputs }
       if (ctxOverrides) descriptor.ctxOverrides = ctxOverrides
@@ -914,8 +1021,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         return
       }
 
-      // Capture the final state BEFORE the revert so we know what to
-      // re-apply post-resume.
+      // Legacy compatibility for sessions that still wrote preview state into
+      // `useScene` during `apply()`: capture the final state BEFORE the revert
+      // so we know what to re-apply post-resume. New sessions should provide a
+      // `commit()` hook and preview through live overrides/transforms instead.
       const sceneNodes = useScene.getState().nodes
       const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
       for (const snap of drag.snapshots) {
@@ -934,7 +1043,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
 
       if (commitValid && finalUpdates.length > 0) {
-        // Single-undo dance (mirrors the 3D move-endpoint-tool):
+        // Legacy single-undo dance (mirrors the old 3D move-endpoint-tool):
         //   1. Revert to baseline while history is still paused (untracked).
         //   2. Resume history.
         //   3. Re-apply the final state — recorded as one tracked change.
@@ -1074,6 +1183,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             nodes={nodes}
             onClickStop={handleClickStop}
             onEntryPointerDown={handleEntryPointerDown}
+            onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
@@ -1081,6 +1191,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             pass="base"
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
+            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
+            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
@@ -1120,6 +1232,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             nodes={nodes}
             onClickStop={handleClickStop}
             onEntryPointerDown={handleEntryPointerDown}
+            onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
@@ -1127,6 +1240,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             pass="overlay"
             sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
             selected={selectedIdSet.has(entry.id)}
+            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
+            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
@@ -1136,6 +1251,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           />
         ))}
       </g>
+      {/* Dashed group bbox — shows what a group drag carries along while a
+          multi-selection exists, rides the live delta mid-drag, and doubles
+          as the group's whole-area drag handle. */}
+      <FloorplanGroupSelectionBox
+        onPointerDown={handleGroupBoxPointerDown}
+        onRotatePointerDown={handleGroupBoxRotatePointerDown}
+        palette={palette}
+        unitsPerPixel={unitsPerPixel}
+      />
       {/* Transient live-rotation readout — drawn last so the wedge + degree
           chip sit above all handle chrome while a rotate-arrow is dragged. */}
       {rotationOverlay && palette ? (
@@ -1169,8 +1293,13 @@ type FloorplanRegistryEntryProps = {
   node: AnyNode
   nodeId: AnyNodeId
   nodes: Record<string, AnyNode>
+  /** Selected member of a multi-selection: hide its per-node edit chrome. */
+  suppressHandles: boolean
+  /** Transformable member of a multi-selection: advertise drag-to-move. */
+  groupMoveCursor: boolean
   onClickStop: (event: React.MouseEvent<SVGGElement>) => void
   onEntryPointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => void
+  onGroupMovePointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => boolean
   onHandleHoverChange: (id: string | null) => void
   onHandlePointerDown: (
     nodeId: AnyNodeId,
@@ -1211,8 +1340,11 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   node,
   nodeId,
   nodes,
+  suppressHandles,
+  groupMoveCursor,
   onClickStop,
   onEntryPointerDown,
+  onGroupMovePointerDown,
   onHandleHoverChange,
   onHandlePointerDown,
   onHoveredIdChange,
@@ -1242,11 +1374,26 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   // Mirror the sidebar tree nodes' hover wiring — `useViewer.hoveredId` drives
   // the highlight halo in 3D as well as registry floor-plan hover strokes.
   const handlePointerEnter = useCallback(() => {
-    onHoveredIdChange(nodeId)
+    const node = useScene.getState().nodes[nodeId]
+    onHoveredIdChange(
+      node
+        ? resolveSelectionProxyId(
+            node,
+            useScene.getState().nodes as Record<string, AnyNode | undefined>,
+          )
+        : nodeId,
+    )
   }, [nodeId, onHoveredIdChange])
 
   const handlePointerLeave = useCallback(() => {
-    if (useViewer.getState().hoveredId === nodeId) onHoveredIdChange(null)
+    const node = useScene.getState().nodes[nodeId]
+    const targetId = node
+      ? resolveSelectionProxyId(
+          node,
+          useScene.getState().nodes as Record<string, AnyNode | undefined>,
+        )
+      : nodeId
+    if (useViewer.getState().hoveredId === targetId) onHoveredIdChange(null)
   }, [nodeId, onHoveredIdChange])
 
   const handleHandlePointerDown = useCallback(
@@ -1276,13 +1423,16 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       event.preventDefault()
       event.stopPropagation()
       suppressBoxSelectForPointer(event)
+      // In a multi-selection the move dot drives the group session, matching
+      // the body-drag gesture — the whole selection slides, not one member.
+      if (onGroupMovePointerDown(nodeId, event)) return
       sfxEmitter.emit('sfx:item-pick')
       setMovingNode(currentNode as never)
       // Claim 2D ownership of this move at the source. `setMovingNode`
       // resets the origin to null, so this must follow it.
       setMovingNodeOrigin('2d')
     },
-    [nodeId, setMovingNode, setMovingNodeOrigin],
+    [nodeId, onGroupMovePointerDown, setMovingNode, setMovingNodeOrigin],
   )
 
   const cacheEntry = buildFloorplanEntryGeometry({
@@ -1305,7 +1455,14 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     siblingEpoch,
     visibilityRootId,
   })
-  const geometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
+  const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
+  // Multi-selection shows highlight only: strip this member's edit handles /
+  // dimension chrome (all of which live in the overlay pass) while keeping
+  // its highlighted body geometry.
+  const geometry =
+    rawGeometry && suppressHandles && pass === 'overlay'
+      ? stripHandleChrome(rawGeometry)
+      : rawGeometry
   if (!geometry) return null
 
   const entryClick = isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : onClickStop
@@ -1320,7 +1477,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       onPointerDown={entryPointerDown}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
-      style={POINTER_CURSOR_STYLE}
+      style={groupMoveCursor ? MOVE_CURSOR_STYLE : POINTER_CURSOR_STYLE}
     >
       <InteractiveGeometry
         activeDragId={activeDragId}
@@ -1394,7 +1551,11 @@ function buildFloorplanEntryGeometry({
     return null
   }
 
-  const dependsOnSiblingInputs = !!(def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides)
+  const dependsOnSiblingInputs = !!(
+    def.floorplanDependsOnSiblings ||
+    def.floorplanSiblingOverrides ||
+    def.floorplanAffectedIds
+  )
   const deps: NodeDeps = {
     node,
     live,
@@ -1416,6 +1577,11 @@ function buildFloorplanEntryGeometry({
   const applyLiveTransform = (sourceNode: AnyNode): AnyNode => {
     if (!live) return sourceNode
     const hasPosition = Array.isArray((sourceNode as { position?: unknown }).position)
+    const parentFrameProjection = nodeRegistry.get(sourceNode.type)?.capabilities?.movable
+      ?.parentFrame?.floorplanLiveTransform
+    if (parentFrameProjection) {
+      return parentFrameProjection({ node: sourceNode, live })
+    }
     if (sourceNode.type === 'door' || sourceNode.type === 'window') {
       const r = (sourceNode as { rotation?: unknown }).rotation
       return {
@@ -1452,8 +1618,8 @@ function buildFloorplanEntryGeometry({
     ? def.floorplanSiblingOverrides({
         nodeId,
         nodes,
-        liveOverrides,
         liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
       })
     : nodes
   const sourceNode = contextNodes !== nodes ? (contextNodes[nodeId] ?? node) : node
@@ -1531,8 +1697,8 @@ export function getFloorplanLevelData(
     ? def.floorplanSiblingOverrides({
         nodeId: sampleId,
         nodes,
-        liveOverrides,
         liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
       })
     : nodes
   const siblings: AnyNode[] = []
@@ -2608,6 +2774,36 @@ export function splitFloorplanOverlay(g: FloorplanGeometry): {
   return { base: g, overlay: null }
 }
 
+/**
+ * Per-node edit chrome hidden while a multi-selection is active: the group is
+ * manipulated as one rigid piece (drag to move, R/T to rotate), so individual
+ * handles / dimension labels on each member would mislead. `text` stays —
+ * zone names are identification, not editing chrome.
+ */
+const HANDLE_CHROME_KINDS = new Set<FloorplanGeometry['kind']>([
+  'endpoint-handle',
+  'midpoint-handle',
+  'edge-handle',
+  'move-handle',
+  'move-arrow',
+  'rotate-arrow',
+  'dimension',
+  'dimension-label',
+  'equal-spacing-badge',
+])
+
+function stripHandleChrome(g: FloorplanGeometry): FloorplanGeometry | null {
+  if (HANDLE_CHROME_KINDS.has(g.kind)) return null
+  if (g.kind === 'group') {
+    const children = g.children
+      .map(stripHandleChrome)
+      .filter((c): c is FloorplanGeometry => c !== null)
+    if (children.length === 0) return null
+    return { kind: 'group', children, transform: g.transform }
+  }
+  return g
+}
+
 // Stable string key for a wall endpoint, rounded to 1 mm so floating-point
 // drift collapses while distinct corners stay distinct.
 function endpointKey(x: number, y: number): string {
@@ -2624,7 +2820,7 @@ function endpointKey(x: number, y: number): string {
 //   - a gutter join depends on sibling gutters under the same roof.
 // Everything else stays cached, so dragging one wall/opening rebuilds a handful
 // of geometries rather than every wall + opening on the level.
-function computeAffectedSiblingIds(
+export function computeAffectedSiblingIds(
   liveFlaggedIds: readonly AnyNodeId[],
   nodes: Record<string, AnyNode>,
   liveOverrides: Map<string, Record<string, unknown>>,
@@ -2656,6 +2852,17 @@ function computeAffectedSiblingIds(
     const node = nodes[id]
     if (!node) continue
     affected.add(id)
+    const def = nodeRegistry.get(node.type)
+    const extraAffectedIds = def?.floorplanAffectedIds?.({
+      nodeId: id,
+      node,
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      liveTransforms: useLiveTransforms.getState().transforms,
+      liveOverrides,
+    })
+    if (extraAffectedIds) {
+      for (const extraId of extraAffectedIds) affected.add(extraId)
+    }
     if (node.type === 'wall') {
       const w = node as unknown as {
         start: [number, number]
@@ -2879,24 +3086,6 @@ function formatGroupTransform(t?: {
   if (t.translate) parts.push(`translate(${t.translate[0]} ${t.translate[1]})`)
   if (t.rotate !== undefined) parts.push(`rotate(${(t.rotate * 180) / Math.PI})`)
   return parts.length > 0 ? parts.join(' ') : undefined
-}
-
-function clientToPlan(clientX: number, clientY: number): FloorplanAffordancePoint | null {
-  // The registry layer lives under the floor-plan scene `<g>`. The
-  // legacy panel computes the same conversion via floorplanSceneRef +
-  // getScreenCTM; we replicate it by walking up to the SVG owner.
-  const target = document.querySelector('g[data-floorplan-scene]') as SVGGElement | null
-  const svg = target?.ownerSVGElement
-  if (!(svg && target)) return null
-  const ctm = target.getScreenCTM()
-  if (!ctm) return null
-  const point = svg.createSVGPoint()
-  point.x = clientX
-  point.y = clientY
-  const transformed = point.matrixTransform(ctm.inverse())
-  // The floor-plan `<g>` maps plan X/Z directly to SVG x/y (Z stored as
-  // the Y axis on screen — same convention as `toSvgPlanPoint`).
-  return [transformed.x, transformed.y]
 }
 
 function swallowNextClick(timeoutMs = 0) {

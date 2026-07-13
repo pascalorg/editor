@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
+  pauseSpaceDetection,
+  resumeSpaceDetection,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -27,7 +29,7 @@ import {
   computeGroupBox,
   expandToComponent,
   levelFrame,
-  type Vec2,
+  rotateGroupPatches,
   type Vec3,
 } from './group-transform-shared'
 import {
@@ -43,6 +45,7 @@ import {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
 /**
  * Group-rotate gizmo. When 2+ transformable nodes in the active level frame are
@@ -64,6 +67,8 @@ export function GroupRotateHandle() {
   // Re-derive participants whenever the scene mutates (e.g. after a commit).
   // Drags only touch `useLiveNodeOverrides`, so this does not fire mid-drag.
   const nodes = useScene((s) => s.nodes)
+  // Re-measure the pivot/corner once the meshes settle after a scene change.
+  const meshEpoch = useMeshSettleEpoch(nodes)
 
   const participantIds = useMemo(
     () =>
@@ -92,10 +97,10 @@ export function GroupRotateHandle() {
 
   if (!shouldRender) return null
   // Remount when the moving set changes so the rest pivot re-seeds cleanly.
-  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} />
+  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} meshEpoch={meshEpoch} />
 }
 
-function GroupRotateHandleInner({ ids }: { ids: string[] }) {
+function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: number }) {
   const { camera, raycaster, gl, scene } = useThree()
   const arrowGeometry = useMemo(() => createRotateArrowHandleGeometry(), [])
   const hitGeometry = useMemo(() => createRotateArrowHitAreaGeometry(), [])
@@ -126,6 +131,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
   //   - `pivot`  = bbox center (XZ), Y at the group's base → the rotation origin
   //   - `corner` = front-right bbox corner at mid-height → where the gizmo sits
   const rest = useMemo(() => {
+    void meshEpoch
     const box = computeGroupBox(ids)
     if (!box) return null
     const pivot = new Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
@@ -135,7 +141,7 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       box.max.z + CORNER_OFFSET,
     )
     return { pivot, corner }
-  }, [ids])
+  }, [ids, meshEpoch])
 
   if (!rest) return null
   const active = isDragging && frozenRest.current ? frozenRest.current : rest
@@ -186,6 +192,10 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       if (s.kind === 'endpoint') {
         reach(s.start[0], s.start[1])
         reach(s.end[0], s.end[1])
+      } else if (s.kind === 'polygon') {
+        for (const [x, z] of s.polygon) {
+          reach(x, z)
+        }
       } else {
         reach(s.position[0], s.position[2])
       }
@@ -228,53 +238,29 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       while (delta < -Math.PI) delta += 2 * Math.PI
       if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
-      // Orbit each node's anchor point(s) CCW by `delta` (atan2 x→z sense) and
-      // turn its yaw by `-delta` to match three.js Y-rotation handedness (same
-      // convention as the single-item rotate handle in item/definition.ts).
-      // Endpoint nodes (walls/fences) have no yaw — swinging both endpoints
-      // around the pivot rotates them rigidly; their curveOffset sagitta is
-      // rotation-invariant, so arcs are preserved.
-      const cos = Math.cos(delta)
-      const sin = Math.sin(delta)
-      const rot = (x: number, z: number): Vec2 => {
-        const dx = x - localCenter.x
-        const dz = z - localCenter.z
-        return [localCenter.x + dx * cos - dz * sin, localCenter.z + dx * sin + dz * cos]
-      }
-      const overrideEntries: Array<readonly [string, Record<string, unknown>]> = []
+      // Shared rigid-rotation math (also used by the keyboard group R/T);
+      // see `rotateGroupPatches` for the orbit/yaw handedness contract.
+      const overrideEntries = rotateGroupPatches(
+        starts,
+        links,
+        { x: localCenter.x, z: localCenter.z },
+        delta,
+      )
+      const patchById = new Map(overrideEntries)
       const liveTransforms = useLiveTransforms.getState()
       for (const s of starts) {
-        if (s.kind === 'endpoint') {
-          overrideEntries.push([
-            s.id,
-            { start: rot(s.start[0], s.start[1]), end: rot(s.end[0], s.end[1]) },
-          ])
-        } else {
-          const [px, pz] = rot(s.position[0], s.position[2])
-          const position: Vec3 = [px, s.position[1], pz]
-          const rotation =
-            s.kind === 'vec3'
-              ? ([s.rotation[0], s.rotation[1] - delta, s.rotation[2]] as Vec3)
-              : s.rotation - delta
-          overrideEntries.push([s.id, { position, rotation }])
-          if (s.kind === 'scalar') {
-            liveTransforms.set(s.id, { position, rotation: s.rotation - delta })
+        if (s.kind === 'scalar') {
+          const patch = patchById.get(s.id)
+          if (patch) {
+            liveTransforms.set(s.id, {
+              position: patch.position as Vec3,
+              rotation: patch.rotation as number,
+            })
           }
         }
         useScene.getState().markDirty(s.id)
       }
-
-      // Drag each linked neighbour's shared endpoint to the same rotated spot
-      // (rot is deterministic, so it lands exactly on the selected wall's
-      // rotated endpoint), keeping the junction welded; the far end stays put.
       for (const l of links) {
-        overrideEntries.push([
-          l.id,
-          {
-            start: l.startLinked ? rot(l.start[0], l.start[1]) : l.start,
-            end: l.endLinked ? rot(l.end[0], l.end[1]) : l.end,
-          },
-        ])
         useScene.getState().markDirty(l.id)
       }
       useLiveNodeOverrides.getState().setMany(overrideEntries)
@@ -344,8 +330,12 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
       const updates = commitFromOverrides()
       // Resume before the commit so the single batched `updateNodes` is the
       // one tracked set — collapsing the whole group rotation into one undo.
+      // Space detection stays out: a rigid rotation of existing walls must
+      // not re-create the room's auto floors/ceilings at the new bearing.
+      pauseSpaceDetection()
       useScene.temporal.getState().resume()
       if (updates.length > 0) useScene.getState().updateNodes(updates)
+      resumeSpaceDetection()
       clearLivePreviews()
       cleanup()
     }
@@ -379,7 +369,14 @@ function GroupRotateHandleInner({ ids }: { ids: string[] }) {
         {/* Fat invisible grab target (torus wrapping the arrow). A plain
             default-layer mesh with the standard raycast — the shared
             `InvisibleHandleHitArea` (EDITOR_LAYER + custom raycast) never
-            received pointer events in this portalled context. */}
+            received pointer events in this portalled context: R3F's
+            `createPortal` gives the portal root its own fresh `Raycaster`
+            (default mask = layer 0 only), so the EDITOR_LAYER enable applied
+            to the root raycaster in `custom-camera-controls` never reaches
+            it. Harmless render-wise — the material is colorWrite:false /
+            depthWrite:false, so nothing leaks into thumbnails or the ink
+            pass. A proper fix would enable EDITOR_LAYER on the portal
+            raycaster from inside the portal. */}
         <mesh
           frustumCulled={false}
           geometry={hitGeometry}

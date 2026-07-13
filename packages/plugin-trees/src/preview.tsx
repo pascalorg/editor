@@ -1,5 +1,6 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
 import type { Material } from 'three'
 import { generateTree, treeSpecOf } from './geometry'
@@ -16,6 +17,9 @@ export default function TreePreview({ node }: { node: TreeNode }) {
   const built = useMemo(() => {
     const tree = generateTree(treeSpecOf(node))
     tree.scale.setScalar(node.height / naturalHeight(tree))
+    // Overlay layer keeps the ghost out of export/snapshot passes. Layers
+    // don't inherit, so every object in the built tree needs it.
+    tree.traverse((obj) => obj.layers.set(EDITOR_LAYER))
     return tree
   }, [node])
 

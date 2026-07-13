@@ -49,6 +49,7 @@ export type HandleDragMoveContext = {
 
 type HandleDragSession = {
   move: (context: HandleDragMoveContext) => Partial<AnyNode> | null
+  commit?: (patch: Partial<AnyNode>) => void
   markDirty?: boolean
   onBegin?: () => void
   onEnd?: () => void
@@ -206,7 +207,11 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
       if (lastPatch) {
-        sceneApi.update(overrideId, lastPatch)
+        if (session.commit) {
+          session.commit(lastPatch)
+        } else {
+          sceneApi.update(overrideId, lastPatch)
+        }
       }
       clearOverride()
       cleanup()

@@ -10,6 +10,7 @@ import { wallHostedOpeningMeasurement } from '../shared/measurement'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
@@ -228,6 +229,10 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
   floorplanDependsOnSiblings: true,
+  // Opening symbols position from `ctx.parent` (the host wall); merge the
+  // walls' live drag overrides so the symbol tracks a wall / group drag in
+  // realtime instead of jumping on commit.
+  floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
   // Stage D — placement (`def.tool`) + move-on-wall (`def.
   // affordanceTools.move`). Both ports of the legacy tools at
   // `editor/components/tools/door/`, relocated into the kind folder and

@@ -1,5 +1,5 @@
 import type { ZodObject } from 'zod'
-import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin, PluginPanel } from './types'
+import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin } from './types'
 
 const HOST_API_VERSION = 1 as const
 
@@ -85,78 +85,6 @@ export const nodeRegistry: NodeRegistry & {
 export function registerNode(def: AnyNodeDefinition): void {
   nodeRegistry._register(def)
 }
-
-/**
- * Registry of left-rail panels contributed by plugins. Same add-only,
- * duplicate-id-throws semantics as the node registry, with one difference: it
- * is *observable*. Plugin discovery runs asynchronously after the first React
- * render (see `loadExternalPlugins`), so the sidebar subscribes via
- * {@link PanelRegistryImpl.subscribe} / {@link PanelRegistryImpl.getSnapshot}
- * (the `useSyncExternalStore` contract) and re-renders when a panel lands.
- * `getSnapshot` returns a stable array reference between registrations so the
- * subscribing component doesn't re-render in a loop.
- */
-class PanelRegistryImpl {
-  private readonly panels = new Map<string, PluginPanel>()
-  private readonly listeners = new Set<() => void>()
-  private cached: PluginPanel[] = []
-  // node kind → the (namespaced) panel id of the plugin that shipped it.
-  // Populated by `loadPlugin`; lets a host's "find in catalog" open the
-  // panel that places a kind without hardcoding per-plugin knowledge.
-  private readonly kindPanels = new Map<string, string>()
-
-  subscribe = (onChange: () => void): (() => void) => {
-    this.listeners.add(onChange)
-    return () => {
-      this.listeners.delete(onChange)
-    }
-  }
-
-  getSnapshot = (): PluginPanel[] => this.cached
-
-  _register(panel: PluginPanel): void {
-    if (typeof panel.id !== 'string' || panel.id.length === 0) {
-      throw new Error('[registry] PluginPanel.id must be a non-empty string')
-    }
-    if (this.panels.has(panel.id)) {
-      if (isDevMode()) {
-        console.warn(`[registry] re-registering plugin panel "${panel.id}" (HMR)`)
-      } else {
-        throw new Error(`[registry] duplicate plugin panel id: "${panel.id}" already registered`)
-      }
-    }
-    this.panels.set(panel.id, panel)
-    this.emit()
-  }
-
-  _associateKind(kind: string, panelId: string): void {
-    this.kindPanels.set(kind, panelId)
-  }
-
-  /** The (namespaced) panel id of the plugin that registered `kind`, if any. */
-  panelForKind = (kind: string): string | undefined => this.kindPanels.get(kind)
-
-  // Test-only — clears the registry. Not exported from the package barrel.
-  _reset(): void {
-    this.panels.clear()
-    this.kindPanels.clear()
-    this.emit()
-  }
-
-  private emit(): void {
-    this.cached = Array.from(this.panels.values())
-    for (const fn of this.listeners) fn()
-  }
-}
-
-export const panelRegistry: {
-  subscribe: (onChange: () => void) => () => void
-  getSnapshot: () => PluginPanel[]
-  panelForKind: (kind: string) => string | undefined
-  _register: (panel: PluginPanel) => void
-  _associateKind: (kind: string, panelId: string) => void
-  _reset: () => void
-} = new PanelRegistryImpl()
 
 /**
  * Returns the set of registered kinds whose definition declares the
@@ -317,20 +245,6 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
   for (const def of plugin.nodes ?? []) {
     registerNode(def)
   }
-  for (const panel of plugin.panels ?? []) {
-    // Namespace the panel id by its owning plugin so two plugins can each
-    // ship a panel id of `'main'`. The namespaced id is what the sidebar
-    // uses as `activeSidebarPanel`.
-    panelRegistry._register({ ...panel, id: `${plugin.id}:${panel.id}` })
-  }
-  // Associate every node kind with the plugin's first panel — the panel a
-  // host's "find in catalog" should open to place more of that kind.
-  const firstPanel = plugin.panels?.[0]
-  if (firstPanel) {
-    for (const def of plugin.nodes ?? []) {
-      panelRegistry._associateKind(def.kind, `${plugin.id}:${firstPanel.id}`)
-    }
-  }
 }
 
 /**
@@ -346,7 +260,9 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
  */
 export type PluginDiscovery = () => Promise<Plugin[]>
 
-let pluginDiscovery: PluginDiscovery = async () => []
+const defaultPluginDiscovery: PluginDiscovery = async () => []
+
+let pluginDiscovery: PluginDiscovery = defaultPluginDiscovery
 
 /**
  * Replace the plugin discovery implementation. Call once at app startup
@@ -359,7 +275,25 @@ let pluginDiscovery: PluginDiscovery = async () => []
  * gate + duplicate-kind protection applies.
  */
 export function setPluginDiscovery(fn: PluginDiscovery): void {
+  if (isDevMode() && pluginDiscovery !== defaultPluginDiscovery) {
+    console.warn(
+      '[registry] setPluginDiscovery replaced an existing discovery chain — plugins registered earlier (e.g. via extendPluginDiscovery) are dropped. Use extendPluginDiscovery to compose instead.',
+    )
+  }
   pluginDiscovery = fn
+}
+
+/**
+ * Extend the current plugin discovery instead of replacing it. Useful for app-
+ * bundled example or first-party plugins that should load alongside any host-
+ * provided discovery source, not clobber it.
+ */
+export function extendPluginDiscovery(fn: PluginDiscovery): void {
+  const previous = pluginDiscovery
+  pluginDiscovery = async () => {
+    const [base, extra] = await Promise.all([previous(), fn()])
+    return [...base, ...extra]
+  }
 }
 
 /**

@@ -79,6 +79,22 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
         action: 'Add or remove an object from canvas multi-selection',
         note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
       },
+      {
+        keys: ['Left click'],
+        action: 'Move the whole multi-selection',
+        note:
+          'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it; click it to pick it up and place with the next click.',
+      },
+      {
+        keys: ['R', 'T'],
+        action: 'Rotate a multi-selection ±45° around its center',
+        note: 'Also works mid-move while carrying the selection.',
+      },
+      {
+        keys: ['Esc'],
+        action: 'Clear the selection',
+        note: 'Clicking empty space does the same.',
+      },
     ],
   },
   {
@@ -87,12 +103,12 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
         action: 'Move the selected movable object under the cursor',
-        note: 'Drag in Select mode. Guided snapping and guides are enabled by default.',
+        note: 'Drag in Select mode with a single object selected. Guided snapping and guides are enabled by default.',
       },
       {
         keys: ['Cmd/Ctrl', 'Right click'],
         action: 'Rotate the selected object under the cursor',
-        note: 'Drag left or right in Select mode. Rotation snaps to 15° increments by default.',
+        note: 'Drag left or right in Select mode with a single object selected. Rotation snaps to 15° increments by default.',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'Right click'],
@@ -119,7 +135,14 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Item Placement',
     shortcuts: [
-      { keys: ['R', 'T'], action: 'Rotate item; with a door selected, R toggles open/closed and T closes' },
+      {
+        keys: ['R', 'T'],
+        action: 'Rotate item; with a door selected, R toggles open/closed and T closes',
+      },
+      {
+        keys: ['E'],
+        action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
+      },
       {
         keys: ['Shift'],
         action: 'Temporarily bypass placement validation constraints',

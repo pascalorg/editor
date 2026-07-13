@@ -61,6 +61,16 @@ export function getLinearUnitLabel(unit: LinearUnit): string {
   return unit === 'imperial' ? 'ft' : 'm'
 }
 
+const SQUARE_FEET_PER_SQUARE_METER = FEET_PER_METER * FEET_PER_METER
+
+export function squareMetersToAreaUnit(squareMeters: number, unit: LinearUnit): number {
+  return unit === 'imperial' ? squareMeters * SQUARE_FEET_PER_SQUARE_METER : squareMeters
+}
+
+export function getAreaUnitLabel(unit: LinearUnit): string {
+  return unit === 'imperial' ? 'ft²' : 'm²'
+}
+
 function formatDecimal(value: number, decimals: number): string {
   return Number.parseFloat(value.toFixed(decimals)).toString()
 }
@@ -106,6 +116,15 @@ export function formatLinearMeasurement(
   return `${sign}${roundedMeters}m`
 }
 
+export function formatAreaLabel(
+  squareMeters: number,
+  unit: LinearUnit,
+  fractionDigits = 1,
+): string {
+  if (!Number.isFinite(squareMeters)) return '--'
+  return `${formatDecimal(squareMetersToAreaUnit(squareMeters, unit), fractionDigits)}${getAreaUnitLabel(unit)}`
+}
+
 export function formatAreaMeasurement(
   squareMeters: number,
   unit: LinearUnit,
@@ -117,7 +136,7 @@ export function formatAreaMeasurement(
   const precision = options.precision ?? 'standard'
 
   if (unit === 'imperial') {
-    const squareFeet = absoluteSquareMeters * FEET_PER_METER * FEET_PER_METER
+    const squareFeet = squareMetersToAreaUnit(absoluteSquareMeters, unit)
     return `${formatDecimal(squareFeet, AREA_DECIMALS[precision])}ft²`
   }
 

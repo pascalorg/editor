@@ -4,20 +4,103 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  createSceneApi,
   getWallMidpointHandlePoint,
+  type NodeQuickAction,
   nodeRegistry,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ReactNode, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useShallow } from 'zustand/react/shallow'
+import {
+  createFreshPlacementSubtree,
+  duplicatesAsFreshSubtree,
+} from '../../lib/fresh-planar-placement'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
+import { IconRefGlyph } from '../ui/icon-ref'
+
+function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      <rect x="8" y="7" width="9" height="10" rx="1.75" />
+      <path d="M12.5 7v10" />
+      {direction === 'left' ? (
+        <>
+          <path d="M6.5 12H2.75" />
+          <path d="m5.5 9.75-2.75 2.25 2.75 2.25" />
+        </>
+      ) : (
+        <>
+          <path d="M17.5 12h3.75" />
+          <path d="m18.5 9.75 2.75 2.25-2.75 2.25" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+// Builtin string tokens map to the generic glyphs above; kind-owned marks
+// arrive as IconRef objects and render through the shared IconRefGlyph.
+// Mirrors the 3D floating-action-menu (2D ↔ 3D parity).
+function QuickActionIcon({ action }: { action: NodeQuickAction }) {
+  const icon = action.icon
+  if (!icon) return null
+  if (typeof icon === 'object') return <IconRefGlyph icon={icon} size={14} />
+  switch (icon) {
+    case 'add-left':
+      return <SideAddGlyph direction="left" />
+    case 'add-right':
+      return <SideAddGlyph direction="right" />
+    default:
+      return null
+  }
+}
+
+function collectQuickActionNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  selectedId: string | null,
+): Record<AnyNodeId, AnyNode> | null {
+  if (!selectedId) return null
+  const selected = nodes[selectedId as AnyNodeId]
+  if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
+
+  const collected: Record<AnyNodeId, AnyNode> = { [selected.id as AnyNodeId]: selected }
+  const add = (id: string | null | undefined) => {
+    if (!id) return
+    const node = nodes[id as AnyNodeId]
+    if (node) collected[node.id as AnyNodeId] = node
+  }
+  const addChildren = (node: AnyNode | undefined) => {
+    for (const childId of (node as { children?: readonly string[] } | undefined)?.children ?? []) {
+      add(childId)
+    }
+  }
+
+  add(selected.parentId ?? null)
+  addChildren(selected)
+  const parent = selected.parentId ? nodes[selected.parentId as AnyNodeId] : undefined
+  addChildren(parent)
+
+  return collected
+}
 
 /**
  * Floating Move / Duplicate / Delete buttons that appear above the
@@ -45,8 +128,12 @@ import { NodeActionMenu } from '../editor/node-action-menu'
  *
  * Hidden while in a move state (so we don't show buttons over a ghost).
  */
-export function FloorplanRegistryActionMenu(): ReactNode {
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+export function FloorplanRegistryActionMenu() {
+  // Sole selection only — a multi-selection gets the group menu
+  // (`FloorplanGroupActionMenu`), whose actions target the whole selection.
+  const selectedId = useViewer((s) =>
+    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
+  ) as AnyNodeId | undefined
   const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
@@ -67,6 +154,9 @@ export function FloorplanRegistryActionMenu(): ReactNode {
   const isRegistryKind = !!def
   const isVisible = isRegistryKind && !movingNode && isFloorplanHovered
   const isWall = selectedKind === 'wall'
+  const quickActionNodes = useScene(
+    useShallow((s) => collectQuickActionNodes(s.nodes, selectedId ?? null)),
+  )
 
   useEffect(() => {
     if (!(isVisible && selectedId)) {
@@ -125,6 +215,14 @@ export function FloorplanRegistryActionMenu(): ReactNode {
 
   const node = useScene.getState().nodes[selectedId]
   if (!node) return null
+
+  const quickActions =
+    quickActionNodes && nodeRegistry.get(node.type)?.quickActions
+      ? (nodeRegistry.get(node.type)?.quickActions?.({
+          node: node as never,
+          nodes: quickActionNodes,
+        }) ?? [])
+      : []
 
   // Move button is enabled when any of:
   //   - `capabilities.movable` (generic translate-on-XZ — shelf / spawn / fence)
@@ -199,6 +297,18 @@ export function FloorplanRegistryActionMenu(): ReactNode {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
+    if (duplicatesAsFreshSubtree(node as AnyNode)) {
+      const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+      const draft = draftId ? useScene.getState().nodes[draftId] : null
+      if (draft) {
+        setMovingNode(draft as never)
+        setMovingNodeOrigin('2d')
+        useScene.temporal.getState().resume()
+        return
+      }
+      useScene.temporal.getState().resume()
+      return
+    }
     const cloned = structuredClone(node) as AnyNode & { id?: AnyNodeId }
     delete (cloned as { id?: AnyNodeId }).id
     const prevMeta =
@@ -223,9 +333,20 @@ export function FloorplanRegistryActionMenu(): ReactNode {
     useViewer.getState().setSelection({ selectedIds: [] })
   }
 
+  const handleQuickAction = (action: NodeQuickAction) => {
+    if (action.disabled) return
+    const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
+    const result = action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
+    if (result?.selectedIds) useViewer.getState().setSelection({ selectedIds: result.selectedIds })
+    if (result?.selectedIds) {
+      const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)
+      sfxEmitter.emit(selectedDifferentNode ? 'sfx:item-place' : 'sfx:item-pick')
+    }
+  }
+
   return createPortal(
     <div
-      className="pointer-events-none fixed z-30"
+      className="pointer-events-none fixed z-30 flex w-max flex-col items-center"
       style={{
         left: position.left,
         top: position.top,
@@ -240,6 +361,30 @@ export function FloorplanRegistryActionMenu(): ReactNode {
         onPointerDown={(event) => event.stopPropagation()}
         onPointerUp={(event) => event.stopPropagation()}
       />
+      {quickActions.length > 0 ? (
+        <div
+          className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+          {quickActions.map((action) => (
+            <button
+              aria-label={action.title ?? action.label}
+              className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+              disabled={action.disabled}
+              key={action.id}
+              onClick={() => handleQuickAction(action)}
+              title={action.title ?? action.label}
+              type="button"
+            >
+              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                <QuickActionIcon action={action} />
+              </span>
+              <span className="whitespace-nowrap leading-none">{action.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>,
     document.body,
   )

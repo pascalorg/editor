@@ -1,5 +1,6 @@
 import { Icon } from '@iconify/react'
-import { Fragment } from 'react'
+import type { ToolHint } from '@pascal-app/core'
+import { Fragment, useSyncExternalStore } from 'react'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
@@ -43,7 +44,13 @@ const KEY_CELL_CLASS = 'flex items-center gap-1'
 // Keys pressed together join with "+"; an entry that is itself an array is a
 // group of alternatives and joins with "/" — so [['Cmd/Ctrl', 'Shift'],
 // 'Left click'] reads "⌘ / ⇧ + click".
-function ShortcutSequence({ keys }: { keys: Array<string | string[]> }) {
+function ShortcutSequence({
+  active = false,
+  keys,
+}: {
+  active?: boolean
+  keys: Array<string | string[]>
+}) {
   return (
     <div className={KEY_CELL_CLASS}>
       {keys.map((entry, index) => (
@@ -59,11 +66,17 @@ function ShortcutSequence({ keys }: { keys: Array<string | string[]> }) {
                 {altIndex > 0 ? (
                   <span className="text-[9px] text-muted-foreground/70">/</span>
                 ) : null}
-                <ShortcutToken className={TOKEN_CLASS} value={alternative} />
+                <ShortcutToken
+                  className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+                  value={alternative}
+                />
               </Fragment>
             ))
           ) : (
-            <ShortcutToken className={TOKEN_CLASS} value={entry} />
+            <ShortcutToken
+              className={cn(TOKEN_CLASS, active && 'border-white bg-white text-black shadow-sm')}
+              value={entry}
+            />
           )}
         </Fragment>
       ))}
@@ -190,6 +203,26 @@ function SnappingChips({ context }: { context: SnapContext }) {
         />
       ) : null}
     </>
+  )
+}
+
+// A kind-owned live mode chip declared on a `ToolHint` (`hint.chip`) — the
+// registry counterpart of the snapping / continuation chips above: shows the
+// current value's label, and clicking the row (or the hint's key, handled by
+// the tool itself) cycles it.
+function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHint['chip']> } }) {
+  const { chip } = hint
+  const value = useSyncExternalStore(chip.subscribe, chip.value, chip.value)
+  const label = chip.labels[value] ?? hint.label
+  return (
+    <ChipRow
+      ariaLabel={label}
+      icon={chip.icons?.[value]}
+      label={label}
+      onClick={chip.cycle}
+      shortcut={hint.key}
+      tooltip={chip.tooltip}
+    />
   )
 }
 
@@ -327,18 +360,28 @@ function PaintScopeChip() {
 
 export function ContextualHelperPanel({
   hints,
+  chipHints = [],
   snapContext = null,
   showPaintScope = false,
   continuationContext = null,
 }: {
   hints: ContextualShortcutHint[]
+  // Kind-owned live mode chips (`ToolHint.chip`), rendered alongside the
+  // snapping / continuation chips.
+  chipHints?: ToolHint[]
   // The active snapping context drives the snapping chips (which mode set). Null
   // → no snapping chips for this interaction.
   snapContext?: SnapContext | null
   showPaintScope?: boolean
   continuationContext?: ContinuationContext | null
 }) {
-  if (hints.length === 0 && !snapContext && !showPaintScope && !continuationContext)
+  if (
+    hints.length === 0 &&
+    chipHints.length === 0 &&
+    !snapContext &&
+    !showPaintScope &&
+    !continuationContext
+  )
     return null
 
   return (
@@ -348,18 +391,26 @@ export function ContextualHelperPanel({
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />
       ) : null}
+      {chipHints.map((hint) =>
+        hint.chip ? (
+          <ToolHintChipRow
+            hint={hint as ToolHint & { chip: NonNullable<ToolHint['chip']> }}
+            key={`${hint.key}:${hint.label}`}
+          />
+        ) : null,
+      )}
       {showPaintScope ? <PaintScopeChip /> : null}
       {hints.map((hint) => (
         <div
-          className={cn(ROW_CLASS, 'items-start', hint.active && 'rounded-md bg-primary/10')}
+          className={cn(ROW_CLASS, 'items-start')}
           key={`${hint.keys.join('+')}:${hint.label}`}
         >
-          <ShortcutSequence keys={hint.keys} />
+          <ShortcutSequence active={hint.active} keys={hint.keys} />
           <div className="min-w-0">
             <div
               className={cn(
                 'text-xs leading-5',
-                hint.active ? 'text-foreground' : 'text-muted-foreground',
+                hint.active ? 'font-medium text-white' : 'text-muted-foreground',
               )}
             >
               {hint.label}

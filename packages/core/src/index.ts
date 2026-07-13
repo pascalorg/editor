@@ -1,6 +1,8 @@
 export type {
   BoxVentEvent,
   BuildingEvent,
+  CabinetEvent,
+  CabinetModuleEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,
@@ -72,6 +74,7 @@ export {
   polygonsOverlap,
   segmentsIntersect,
 } from './lib/polygon-relations'
+export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export { getRenderableSlabPolygon } from './lib/slab-polygon'
 export {
   deriveSlotId,
@@ -132,11 +135,13 @@ export type {
 export * from './registry'
 export * from './schema'
 export * from './services'
+export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
 } from './store/history-control'
 export {
   type ControlValue,

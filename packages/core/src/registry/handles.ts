@@ -100,9 +100,11 @@ export type Cursor = 'ew-resize' | 'ns-resize' | 'move' | 'grab' | 'grabbing'
 export type HandleDecoration<N> = {
   kind: 'ring'
   /** Node-local radius of the ring (XZ plane). */
-  radius: (node: N) => number
+  radius: (node: N, sceneApi: SceneApi) => number
   /** Node-local Y of the ring. Defaults to 0. */
   y?: (node: N) => number
+  /** Node-local center of the ring. Defaults to the node origin. */
+  center?: (node: N, sceneApi: SceneApi) => readonly [number, number, number]
 }
 
 /**
@@ -127,6 +129,16 @@ export type LinearResizeHandle<N> = {
   anchor: HandleAnchor
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  /** Optional live-scene visibility gate for context-dependent arrows. */
+  visible?: (node: N, sceneApi: SceneApi) => boolean
+  /**
+   * Optional committed-write hook. The generic handle renderer previews the
+   * selected node with the `apply` patch during drag; on release it normally
+   * writes that patch back to the same node. Composite nodes can override the
+   * final write here to fan the resize out to siblings / parents while keeping
+   * the handle UI generic.
+   */
+  commit?: (node: N, patch: Partial<N>, sceneApi: SceneApi) => void
   /**
    * Optional per-tick hook fired while this handle is being dragged, with the
    * live (in-progress, override-merged) node. A pure side-channel for transient

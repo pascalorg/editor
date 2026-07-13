@@ -5,6 +5,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  type CabinetModuleNode,
+  type CabinetNode,
   type CeilingNode,
   type ChimneyMaterialRole,
   type ChimneyNode,
@@ -68,6 +70,31 @@ const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'ai'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
 const MIN_FLOORPLAN_PANE_RATIO = 0.15
 const MAX_FLOORPLAN_PANE_RATIO = 0.85
+
+function resolveMovingNodeTarget(
+  node:
+    | ItemNode
+    | WindowNode
+    | DoorNode
+    | ElevatorNode
+    | CeilingNode
+    | ChimneyNode
+    | ColumnNode
+    | DormerNode
+    | SlabNode
+    | WallNode
+    | FenceNode
+    | RoofNode
+    | RoofSegmentNode
+    | SpawnNode
+    | StairNode
+    | StairSegmentNode
+    | BuildingNode
+    | CabinetNode
+    | CabinetModuleNode,
+) {
+  return node
+}
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
@@ -148,7 +175,7 @@ export type StructureTool =
   | 'pipe-trap'
 
 // Furnish mode tools (items and decoration)
-export type FurnishTool = 'item'
+export type FurnishTool = 'item' | 'cabinet'
 
 // Site mode tools
 export type SiteTool = 'property-line'
@@ -274,6 +301,8 @@ type EditorState = {
       | StairNode
       | StairSegmentNode
       | BuildingNode
+      | CabinetNode
+      | CabinetModuleNode
       | null,
   ) => void
   /**
@@ -493,6 +522,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     wall: CONTINUATION_PROFILES.wall.default,
     fence: CONTINUATION_PROFILES.fence.default,
     point: CONTINUATION_PROFILES.point.default,
+    cabinet: CONTINUATION_PROFILES.cabinet.default,
   },
   showReferenceFloor: false,
   referenceFloorOffset: 1,
@@ -633,6 +663,9 @@ function normalizeContinuationByContext(
     point:
       migrateContinuationMode(state?.continuationByContext?.point, 'point') ??
       CONTINUATION_PROFILES.point.default,
+    cabinet:
+      migrateContinuationMode(state?.continuationByContext?.cabinet, 'cabinet') ??
+      CONTINUATION_PROFILES.cabinet.default,
   }
 }
 
@@ -909,18 +942,25 @@ const useEditor = create<EditorState>()(
           set({ placementDragMode: false })
           return
         }
-        const isNew = Boolean((node as { metadata?: { isNew?: boolean } }).metadata?.isNew)
+        const targetNode = resolveMovingNodeTarget(node)
+        const isNew = Boolean((targetNode as { metadata?: { isNew?: boolean } }).metadata?.isNew)
         if (isNew) {
           scope.begin({
             kind: 'placing',
-            node,
-            nodeId: node.id,
-            nodeType: node.type,
+            node: targetNode,
+            nodeId: targetNode.id,
+            nodeType: targetNode.type,
             view: '3d',
             pressDrag: get().placementDragMode,
           })
         } else {
-          scope.begin({ kind: 'moving', node, nodeId: node.id, nodeType: node.type, view: '3d' })
+          scope.begin({
+            kind: 'moving',
+            node: targetNode,
+            nodeId: targetNode.id,
+            nodeType: targetNode.type,
+            view: '3d',
+          })
         }
         set({ movingNodeOrigin: null })
       },
@@ -1248,6 +1288,7 @@ const useEditor = create<EditorState>()(
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
       }),
+      skipHydration: true,
     },
   ),
 )

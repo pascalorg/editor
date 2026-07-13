@@ -88,6 +88,14 @@ export function MyTool() {
     `continuationContext`), not on the presence of hand-written `def.toolHints`, so a snappable draft tool
     with no bespoke hints (e.g. `zone`) still advertises the Shift = cycle control it already honors. See
     [interaction-scope](interaction-scope.md) § "Snapping mode & modifiers" and `lib/snapping-mode.ts`.
+  - **Sanctioned exception — wall connect snap.** Wall drafting keeps a tight, mode-independent
+    "connect" snap so a room can still close in the non-magnetic modes (`grid` / `angles` / `off`):
+    within `WALL_CONNECT_SNAP_RADIUS` (0.05 m, `components/tools/wall/wall-snap-geometry.ts`) of an
+    existing wall's endpoint / midpoint / crossing / body, the drafted point sticks onto it (and the
+    beacon shows). This is *connectivity*, not alignment — the snap runs from the already
+    mode-positioned point, so grid quantise / angle lock / free placement are respected right up to
+    the wall and only the last few cm stick. It is **not** a Shift bypass and must not be gated on
+    modifiers. See `snapWallDraftPointDetailed` in `components/tools/wall/wall-drafting.ts`.
 - **Constraints and guides can be decoupled.** When a stronger constraint owns the proposal —
   a wall segment's 45° lock while in `angles` mode — the tool may still publish passive dashed
   alignment/proximity guides as long as it does not apply the guide snap delta. Use this for chained

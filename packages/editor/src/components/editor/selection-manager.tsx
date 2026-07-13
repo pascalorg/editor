@@ -59,6 +59,7 @@ import {
 } from '../../lib/paint-scope'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import {
+  resolveCanvasSelectionNode,
   resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
   type SelectionModifierKeys,
@@ -75,7 +76,10 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { boxSelectHandled, suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { armGroupMove3d } from './group-move-3d'
+import { classifyParticipant } from './group-transform-shared'
 import { swallowNextClick } from './node-arrow-handles'
+import { setEditorThreeContext } from './three-context-bridge'
 
 const isNodeInCurrentLevel = (node: AnyNode): boolean => {
   // Elevators are building-scoped, so they stay selectable across level filters.
@@ -213,6 +217,26 @@ function resolveRoofMaterialTarget(
 function getEventObject(event: NodeEvent): Object3D {
   const eventWithObject = event as NodeEvent & { object?: Object3D }
   return eventWithObject.object ?? event.nativeEvent.object
+}
+
+/**
+ * Registry-driven in-scene click actions (`capabilities.sceneAction`): walk
+ * the pointer hit's object chain, ask the clicked kind to resolve an action
+ * target from each object's userData, and run it. Returns `true` when the
+ * kind consumed the click (no selection change should happen).
+ */
+function dispatchSceneAction(node: AnyNode, object: Object3D | null): boolean {
+  const sceneAction = nodeRegistry.get(node.type)?.capabilities?.sceneAction
+  if (!sceneAction) return false
+  let current: Object3D | null = object
+  while (current) {
+    const target = sceneAction.resolveTarget(current)
+    if (target !== null) {
+      return sceneAction.activate(node, target, createSceneApi(useScene))
+    }
+    current = current.parent
+  }
+  return false
 }
 
 function getIntersectionMaterialIndex(
@@ -711,7 +735,16 @@ export const SelectionManager = () => {
   // the editor wraps the canvas in a div with a custom `cursor: url(...)`, which
   // (being a closer ancestor) overrides any body cursor over the canvas.
   const glDomElement = useThree((s) => s.gl.domElement)
+  const camera = useThree((s) => s.camera)
+  const raycaster = useThree((s) => s.raycaster)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
+
+  // Publish the live three context for DOM-level sessions (group pick-up
+  // move) that raycast the 3D view from outside the R3F tree.
+  useEffect(() => {
+    setEditorThreeContext({ camera, raycaster, domElement: glDomElement })
+    return () => setEditorThreeContext(null)
+  }, [camera, raycaster, glDomElement])
   const modifierKeysRef = useRef<SelectionModifierKeys>({
     meta: false,
     ctrl: false,
@@ -1159,11 +1192,44 @@ export const SelectionManager = () => {
 
     const onPointerDown = (event: NodeEvent) => {
       const pointer = pointerEventFromNodeEvent(event)
-      if (pointer.button !== 0 || !isCommandModifier(pointer)) return
+      if (pointer.button !== 0) return
 
-      const node = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
+      // Plain press on a transformable member of a multi-selection arms the
+      // group move — dragging slides the whole selection on the ground plane
+      // (the 3D sibling of the 2D floorplan group drag, replacing the removed
+      // group-move gizmo cross). A plain click (no drag) still falls through
+      // to the normal click handling, which collapses to the pressed node.
+      if (
+        !(pointer.shiftKey || pointer.altKey || isCommandModifier(pointer)) &&
+        armGroupMove3d({
+          nodeId: event.node.id as AnyNodeId,
+          clientX: pointer.clientX,
+          clientY: pointer.clientY,
+          pointerId: pointer.pointerId,
+          nativeEvent: pointer,
+          camera,
+          raycaster,
+          domElement: glDomElement,
+        })
+      ) {
+        return
+      }
+
+      if (!isCommandModifier(pointer)) return
+
+      const eventNode = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
+      const node = resolveCanvasSelectionNode({
+        node: eventNode,
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
       if (!canDirectMoveNode(node)) return
-      if (!useViewer.getState().selection.selectedIds.includes(node.id)) return
+      // Sole selection only: per-node direct manipulation stands down for a
+      // multi-selection (the group sessions own plain drags there, and Cmd is
+      // the selection-toggle key — a wobbly Cmd+click must not yank one
+      // member out of the group).
+      const currentSelectedIds = useViewer.getState().selection.selectedIds
+      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== node.id) return
 
       const startX = pointer.clientX
       const startY = pointer.clientY
@@ -1260,7 +1326,7 @@ export const SelectionManager = () => {
         emitter.off(`${type}:pointerdown` as any, onPointerDown as any)
       }
     }
-  }, [isCurveReshape, mode, movingNode])
+  }, [isCurveReshape, mode, movingNode, camera, raycaster, glDomElement])
 
   // Move cursor over the selected movable node: the visual cue that clicking it
   // picks it up (replaces the removed move-cross gizmo). Reacts only when the
@@ -1272,15 +1338,24 @@ export const SelectionManager = () => {
     let prevKey = ' '
     const applyCursor = () => {
       const { selection, hoveredId } = useViewer.getState()
-      const sole = selection.selectedIds.length === 1 ? selection.selectedIds[0] : null
-      const key = `${hoveredId ?? ''}|${sole ?? ''}`
+      const selectedIds = selection.selectedIds
+      const sole = selectedIds.length === 1 ? selectedIds[0] : null
+      const key = `${hoveredId ?? ''}|${sole ?? ''}|${selectedIds.length}`
       if (key === prevKey) return
       prevKey = key
-      const node =
-        sole != null && hoveredId === sole && !getMovingNode()
-          ? useScene.getState().nodes[sole as AnyNodeId]
-          : null
-      if (node && canDirectMoveNode(node)) {
+      let wantsMove = false
+      if (hoveredId && !getMovingNode()) {
+        if (sole === hoveredId) {
+          const node = useScene.getState().nodes[sole as AnyNodeId]
+          wantsMove = !!node && canDirectMoveNode(node)
+        } else if (selectedIds.length > 1 && selectedIds.includes(hoveredId)) {
+          // Group member: dragging it slides the whole selection.
+          const nodes = useScene.getState().nodes
+          wantsMove =
+            classifyParticipant(nodes[hoveredId as AnyNodeId], selection.levelId, nodes) !== null
+        }
+      }
+      if (wantsMove) {
         glDomElement.style.cursor = 'move'
         owns = true
       } else if (owns) {
@@ -1316,9 +1391,10 @@ export const SelectionManager = () => {
       if (event.button !== 2 || !isCommandModifier(event)) return
       if (!(event.target instanceof HTMLCanvasElement)) return
 
+      // Sole selection only — same stand-down as the Cmd-drag move above.
       const selectedIds = useViewer.getState().selection.selectedIds
       const hoveredId = useViewer.getState().hoveredId as AnyNodeId | null
-      if (!hoveredId || !selectedIds.includes(hoveredId)) return
+      if (!hoveredId || selectedIds.length !== 1 || selectedIds[0] !== hoveredId) return
 
       const node = useScene.getState().nodes[hoveredId]
       if (!node || !canDirectRotateNode(node)) return
@@ -1433,7 +1509,20 @@ export const SelectionManager = () => {
       const activeScope = useInteractionScope.getState().scope
       if (activeScope.kind === 'reshaping' && activeScope.reshape === 'endpoint') return
 
-      const node = resolveSelectModeNodeTarget(event)
+      if (dispatchSceneAction(event.node, getEventObject(event))) {
+        event.stopPropagation()
+        clickHandledRef.current = true
+        setTimeout(() => {
+          clickHandledRef.current = false
+        }, 50)
+        return
+      }
+
+      const node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
 
       // A ceiling is selectable only through its corner handles, never via
       // the `ceiling-grid` body mesh. When the grid is revealed (ceiling
@@ -1492,7 +1581,11 @@ export const SelectionManager = () => {
             nodeToSelect = parentNode
           }
         }
-
+        nodeToSelect = resolveCanvasSelectionNode({
+          node: nodeToSelect,
+          nodes: useScene.getState().nodes,
+          selectedIds: selectedIdsBeforeRouting,
+        })
         // Clicking any node (e.g. the slab surface outside a hole) exits slab
         // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
         // click reaching here means the user clicked outside the hole.
@@ -1663,7 +1756,11 @@ export const SelectionManager = () => {
       // surface move tools keep tracking — but the select-hover outline must
       // stay put, so don't repaint under the cursor mid-drag.
       if (useViewer.getState().inputDragging) return
-      const node = resolveSelectModeNodeTarget(event)
+      const node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
       const currentPhase = useEditor.getState().phase
 
       // Ignore site/building if we are already inside a building
@@ -1691,14 +1788,22 @@ export const SelectionManager = () => {
 
     const onLeave = (event: NodeEvent) => {
       if (useViewer.getState().inputDragging) return
-      const nodeId = resolveSelectModeNodeTarget(event)?.id
+      const nodeId = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })?.id
       if (nodeId && useViewer.getState().hoveredId === nodeId) {
         useViewer.setState({ hoveredId: null })
       }
     }
 
     const onDoubleClick = (event: NodeEvent) => {
-      let node = resolveSelectModeNodeTarget(event)
+      let node = resolveCanvasSelectionNode({
+        node: resolveSelectModeNodeTarget(event),
+        nodes: useScene.getState().nodes,
+        selectedIds: useViewer.getState().selection.selectedIds,
+      })
 
       const currentPhase = useEditor.getState().phase
 
@@ -1959,6 +2064,7 @@ const SelectionMaterialSync = () => {
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const geometryRevision = useViewer((s) => s.geometryRevision)
   const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
   const highlightedMaterialsRef = useRef(
     new Map<
@@ -2035,6 +2141,7 @@ const SelectionMaterialSync = () => {
   }, [])
 
   useEffect(() => {
+    void geometryRevision
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
     for (const id of new Set([...selectedIds, ...previewSelectedIds])) {
@@ -2047,7 +2154,14 @@ const SelectionMaterialSync = () => {
 
     activeHighlightKindsRef.current = nextHighlightKinds
     syncSelectionMaterials()
-  }, [hoverHighlightMode, hoveredId, previewSelectedIds, selectedIds, syncSelectionMaterials])
+  }, [
+    geometryRevision,
+    hoverHighlightMode,
+    hoveredId,
+    previewSelectedIds,
+    selectedIds,
+    syncSelectionMaterials,
+  ])
 
   useEffect(() => {
     return useScene.subscribe((state, prevState) => {
@@ -2102,10 +2216,12 @@ const EditorOutlinerSync = () => {
   const selection = useViewer((s) => s.selection)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
+  const geometryRevision = useViewer((s) => s.geometryRevision)
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
+    void geometryRevision
     let idsToHighlight: string[] = []
 
     // 1. Determine what should be highlighted based on Phase
@@ -2158,7 +2274,7 @@ const EditorOutlinerSync = () => {
         if (obj?.parent) outliner.hoveredObjects.push(obj)
       }
     }
-  }, [phase, previewSelectedIds, selection, hoveredId, outliner, nodes])
+  }, [geometryRevision, phase, previewSelectedIds, selection, hoveredId, outliner, nodes])
 
   return null
 }

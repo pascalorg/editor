@@ -1,10 +1,21 @@
-import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  getWallFaceBandConfig,
+  sceneRegistry,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer from '../../store/use-viewer'
-import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
+import {
+  getMaterialsForWall,
+  getSelectionHighlightMaterials,
+  getWallMaterialHash,
+} from './wall-materials'
 
 const tmpVec = new Vector3()
 const u = new Vector3()
@@ -48,6 +59,7 @@ export const WallCutout = () => {
   const lastShading = useRef(useViewer.getState().shading)
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
+  const lastWallAppearanceKey = useRef('')
   const lastTextures = useRef(useViewer.getState().textures)
   const lastColorPreset = useRef(useViewer.getState().colorPreset)
   const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
@@ -62,22 +74,31 @@ export const WallCutout = () => {
     const previewSelectedIds = useViewer.getState().previewSelectedIds
     const hoveredId = useViewer.getState().hoveredId
     const hoverHighlightMode = useViewer.getState().hoverHighlightMode
+    const sceneState = useScene.getState()
     const currentTime = clock.elapsedTime
     const currentCameraPosition = camera.position
     camera.getWorldDirection(tmpVec)
     tmpVec.add(currentCameraPosition)
     const highlightedWallIds = new Set(
       [...selectedIds, ...previewSelectedIds].filter(
-        (id) => useScene.getState().nodes[id as AnyNodeId]?.type === 'wall',
+        (id) => sceneState.nodes[id as AnyNodeId]?.type === 'wall',
       ),
     )
     const deleteHoveredWallId =
       hoverHighlightMode === 'delete' &&
       hoveredId &&
-      useScene.getState().nodes[hoveredId as AnyNodeId]?.type === 'wall'
+      sceneState.nodes[hoveredId as AnyNodeId]?.type === 'wall'
         ? hoveredId
         : null
     const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
+    const wallAppearanceKey = Array.from(sceneRegistry.byType.wall!)
+      .sort()
+      .map((wallId) => {
+        const wallNode = sceneState.nodes[wallId as WallNode['id']]
+        if (wallNode?.type !== 'wall') return `${wallId}:missing`
+        return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
+      })
+      .join('|')
 
     const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
     const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)
@@ -91,7 +112,8 @@ export const WallCutout = () => {
       lastColorPreset.current !== colorPreset ||
       lastSceneTheme.current !== sceneTheme ||
       sceneRegistry.byType.wall!.size !== lastNumberOfWalls.current ||
-      lastHighlightKey.current !== highlightKey
+      lastHighlightKey.current !== highlightKey ||
+      lastWallAppearanceKey.current !== wallAppearanceKey
     ) {
       lastCameraPosition.current.copy(currentCameraPosition)
       lastCameraTarget.current.copy(tmpVec)
@@ -102,37 +124,39 @@ export const WallCutout = () => {
       walls.forEach((wallId) => {
         const wallMesh = sceneRegistry.nodes.get(wallId)
         if (!wallMesh) return
-        const wallNode = useScene.getState().nodes[wallId as WallNode['id']]
+        const wallNode = sceneState.nodes[wallId as WallNode['id']]
         if (wallNode?.type !== 'wall') return
 
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
+        const shouldSelectionHighlight =
+          isSelectionHighlighted && !getWallFaceBandConfig(wallNode).enabled
         const materials = getMaterialsForWall(
           wallNode,
           shading,
           textures,
           colorPreset,
           sceneTheme,
-          useScene.getState().materials,
+          sceneState.materials,
         )
 
         if (wallMode === 'translucent') {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteTranslucent
-            : isSelectionHighlighted
+            : shouldSelectionHighlight
               ? getSelectionHighlightMaterials(materials.translucent)
               : materials.translucent
         } else if (hideWall) {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteInvisible
-            : isSelectionHighlighted
+            : shouldSelectionHighlight
               ? getSelectionHighlightMaterials(materials.invisible)
               : materials.invisible
         } else {
           ;(wallMesh as Mesh).material = isDeleteHighlighted
             ? materials.deleteVisible
-            : isSelectionHighlighted
+            : shouldSelectionHighlight
               ? getSelectionHighlightMaterials(materials.visible)
               : materials.visible
         }
@@ -144,6 +168,7 @@ export const WallCutout = () => {
       lastSceneTheme.current = sceneTheme
       lastNumberOfWalls.current = sceneRegistry.byType.wall!.size
       lastHighlightKey.current = highlightKey
+      lastWallAppearanceKey.current = wallAppearanceKey
     }
   })
 

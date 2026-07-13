@@ -1,8 +1,9 @@
 # @pascal-app/plugin-trees
 
-The first-party **example plugin** for the Pascal editor. It contributes a
-procedural _trees_ node and a left-rail _presets_ panel, and exists to prove —
-and document — the minimal host surface every future plugin reuses.
+The first-party **example plugin** for the Pascal editor. It contributes
+procedural plant nodes plus a separately exported host-side Nature panel, and
+exists to prove — and document — the minimal node-plugin surface every future
+plugin reuses.
 
 It is structurally identical to a third-party plugin: it peer-depends on
 `@pascal-app/{core,viewer,editor}` (plus `react`/`three`/`@react-three/fiber`/
@@ -11,10 +12,11 @@ nothing private. Copy this folder as the starting point for a new plugin.
 
 ## What it demonstrates
 
-The contribution paths a plugin has:
+The contribution paths this package demonstrates:
 
-1. **Left-rail panel** — `panels` in the manifest. `presets-panel.tsx` is a
-   plain React component the host mounts behind an error boundary.
+1. **Host-side panel extension** — the standalone editor registers
+   `treesHostPanel` separately from the core plugin manifest. `presets-panel.tsx`
+   is a plain React component the host mounts behind an error boundary.
 2. **Right inspector for free** — `def.parametrics` (`parametrics.ts`). The host
    renders the preset/height/seed controls + the Randomize action with zero
    tree-specific code.
@@ -70,11 +72,16 @@ setPluginDiscovery(async () => [treesPlugin])
 ```
 
 `treesPlugin` exports three node kinds (`trees:tree`, `trees:flower`,
-`trees:grass`) and one panel (`Trees`), loaded through the same `loadPlugin`
-path as the built-ins.
+`trees:grass`) for the core `loadPlugin` path. The editor app separately imports
+`treesHostPanel` to surface the Nature rail entry; panels are not part of the v1
+core plugin manifest.
 
 ## Notes / known gaps
 
+- `package.json` points `main`/`exports` at raw TypeScript (`./src/index.ts`),
+  which works here only because the host app's bundler transpiles workspace
+  packages. A real third-party plugin must ship built JS (with `.d.ts` types) or
+  otherwise ensure the consuming host transpiles the package.
 - `createNode` and the `floorPlaced.footprint` callback are typed against the
   host's hand-maintained `AnyNode` union, so the node is cast (`as AnyNode` /
   `as TreeNode`). The registry derives `AnyNode` post-migration.

@@ -1,19 +1,23 @@
 'use client'
 
-import { type AnyNodeDefinition, nodeRegistry } from '@pascal-app/core'
+import { type AnyNodeDefinition, createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 
 const DEFAULT_PRIORITY = 5
 
 // Cache lazy components keyed by the module-loader function so React.lazy
 // isn't re-invoked across renders.
-const lazyCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+type RegisteredSystemProps = {
+  sceneApi: ReturnType<typeof createSceneApi>
+}
 
-function loadSystem(def: AnyNodeDefinition): ComponentType | null {
+const lazyCache = new WeakMap<() => Promise<unknown>, ComponentType<RegisteredSystemProps>>()
+
+function loadSystem(def: AnyNodeDefinition): ComponentType<RegisteredSystemProps> | null {
   if (!def.system) return null
   const cached = lazyCache.get(def.system.module)
   if (cached) return cached
-  const Comp = lazy(def.system.module as () => Promise<{ default: ComponentType }>)
+  const Comp = lazy(def.system.module)
   lazyCache.set(def.system.module, Comp)
   return Comp
 }
@@ -29,6 +33,7 @@ function loadSystem(def: AnyNodeDefinition): ComponentType | null {
  * guard added to each legacy system.
  */
 export function RegisteredSystems() {
+  const sceneApi = useMemo(() => createSceneApi(useScene), [])
   const entries = useMemo(() => {
     return Array.from(nodeRegistry.entries())
       .filter(([, def]) => def.system != null)
@@ -46,7 +51,7 @@ export function RegisteredSystems() {
       {entries.map(([kind, def]) => {
         const Comp = loadSystem(def)
         if (!Comp) return null
-        return <Comp key={`registered-system:${kind}`} />
+        return <Comp key={`registered-system:${kind}`} sceneApi={sceneApi} />
       })}
     </Suspense>
   )

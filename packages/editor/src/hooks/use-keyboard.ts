@@ -1,7 +1,25 @@
-import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  nodeRegistry,
+  pauseSpaceDetection,
+  resumeSpaceDetection,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { Vector3 } from 'three'
+import {
+  classifyParticipant,
+  collectParticipants,
+  computeGroupBox,
+  expandToComponent,
+  levelFrame,
+  rotateGroupPatches,
+} from '../components/editor/group-transform-shared'
 import { steppedRotation } from '../components/tools/item/placement-math'
+import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
@@ -24,6 +42,53 @@ function getRotatableSelectedReference() {
   if (!node || (node.type !== 'guide' && node.type !== 'scan')) return null
   if (useEditor.getState().guideUi[refId]?.locked === true) return null
   return node
+}
+
+// Group rotate: R/T on a multi-selection spins the whole selection rigidly
+// ±45° around its bbox center — the keyboard sibling of the 3D group-rotate
+// gizmo, sharing its participant snapshot + rigid-rotation math (welded
+// wall/fence junctions, connected-component expansion). One batched
+// `updateNodes` call = one undo step. Returns false when the selection holds
+// no transformable participants so the caller can fall through to the
+// single-selection arms.
+function rotateGroupSelection(direction: 1 | -1): boolean {
+  const { selectedIds, levelId } = useViewer.getState().selection
+  if (selectedIds.length <= 1) return false
+  const nodes = useScene.getState().nodes
+  const participantIds = selectedIds.filter(
+    (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+  )
+  if (participantIds.length === 0) return false
+  const fullIds = expandToComponent(participantIds, nodes, levelId)
+  const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+  if (starts.length === 0) return false
+
+  // Same pivot as the 3D gizmo: the selection's world bbox center, converted
+  // into the level frame before orbiting placements (a rotated building would
+  // otherwise displace the centre).
+  const box = computeGroupBox(fullIds)
+  if (!box) return false
+  const worldCenter = new Vector3(
+    (box.min.x + box.max.x) / 2,
+    box.min.y,
+    (box.min.z + box.max.z) / 2,
+  )
+  const localCenter = worldCenter.applyMatrix4(levelFrame(levelId).inverse)
+
+  // R (+45° yaw) orbits by -45° in the atan2 x→z sense: yaw = rotation - delta
+  // (see rotateGroupPatches), so keyboard direction matches the single-node
+  // steppedRotation sense.
+  const delta = -direction * (Math.PI / 4)
+  const patches = rotateGroupPatches(starts, links, { x: localCenter.x, z: localCenter.z }, delta)
+  // Space detection stays out: a rigid rotation of existing walls must not
+  // re-create the room's auto floors/ceilings at the new bearing.
+  pauseSpaceDetection()
+  useScene
+    .getState()
+    .updateNodes(patches.map(([id, data]) => ({ id, data: data as Partial<AnyNode> })))
+  resumeSpaceDetection()
+  sfxEmitter.emit('sfx:item-rotate')
+  return true
 }
 
 // Tools call this in their onCancel handler when they have an active mid-action to cancel,
@@ -333,6 +398,14 @@ export const useKeyboard = ({
         //
         // References (guide/scan) live in `selectedReferenceId`, not the viewer
         // selection — check them first, like the Delete arm below.
+        //
+        // Multi-selection branches to the group rotate before any of the
+        // single-selection arms (reference, door/window flip, registry
+        // keyboardActions, plain rotate) — those stay single-selection-only.
+        if (rotateGroupSelection(1)) {
+          e.preventDefault()
+          return
+        }
         const rotatableReference = getRotatableSelectedReference()
         if (rotatableReference) {
           e.preventDefault()
@@ -348,7 +421,9 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const sceneNodes = useScene.getState().nodes
+          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
           if (node?.type === 'door') {
             e.preventDefault()
             useScene.getState().updateNode(node.id, {
@@ -401,6 +476,11 @@ export const useKeyboard = ({
         }
       } else if ((e.key === 't' || e.key === 'T') && !isVersionPreviewMode && !isPlacingOpening()) {
         // Rotate selected node counter-clockwise
+        // Multi-selection → group rotate, mirroring the R arm above.
+        if (rotateGroupSelection(-1)) {
+          e.preventDefault()
+          return
+        }
         const rotatableReference = getRotatableSelectedReference()
         if (rotatableReference) {
           e.preventDefault()
@@ -416,7 +496,9 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const sceneNodes = useScene.getState().nodes
+          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
           if (node?.type === 'door') {
             // Door's open/close moved to E; T is a no-op for doors so
             // it doesn't free-rotate a wall-bound node by π/4.
@@ -455,7 +537,13 @@ export const useKeyboard = ({
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
-          if (node?.type === 'door' && node.openingKind !== 'opening') {
+          const registryE = node && nodeRegistry.get(node.type)?.keyboardActions?.e
+          if (node && registryE?.appliesTo(node)) {
+            // Registry-driven E interaction. Same shape as the R/T arms.
+            e.preventDefault()
+            registryE.run(node)
+            sfxEmitter.emit('sfx:item-rotate')
+          } else if (node?.type === 'door' && node.openingKind !== 'opening') {
             e.preventDefault()
             toggleDoorOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')

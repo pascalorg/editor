@@ -49,6 +49,14 @@ type ViewerState = {
   isExporting: boolean
   setExporting: (value: boolean) => void
 
+  /** Item model loads that exhausted their retries — nodeId → asset URL. The
+   * scene renders without these items (they settle as skipped); a bake host
+   * can persist the map onto the artifact's metadata so a missing item is
+   * queryable instead of silently absent. Transient (never persisted). */
+  itemLoadFailures: Record<string, string>
+  reportItemLoadFailure: (nodeId: string, url: string) => void
+  clearItemLoadFailure: (nodeId: string) => void
+
   /** Suspend the render loop while the canvas is fully covered (e.g. studio gallery). */
   renderPaused: boolean
   setRenderPaused: (value: boolean) => void
@@ -114,6 +122,10 @@ type ViewerState = {
   resetSelection: () => void
 
   outliner: Outliner // No setter as we will manipulate directly the arrays
+  /** Bumped by GeometrySystem after each rebuild pass so selection/outline
+   * effects can re-apply to the freshly swapped meshes. */
+  geometryRevision: number
+  bumpGeometryRevision: () => void
 
   // Export functionality
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
@@ -245,6 +257,21 @@ const useViewer = create<ViewerState>()(
       isExporting: false,
       setExporting: (value) => set({ isExporting: value }),
 
+      itemLoadFailures: {},
+      reportItemLoadFailure: (nodeId, url) =>
+        set((state) =>
+          state.itemLoadFailures[nodeId] === url
+            ? state
+            : { itemLoadFailures: { ...state.itemLoadFailures, [nodeId]: url } },
+        ),
+      clearItemLoadFailure: (nodeId) =>
+        set((state) => {
+          if (!(nodeId in state.itemLoadFailures)) return state
+          const next = { ...state.itemLoadFailures }
+          delete next[nodeId]
+          return { itemLoadFailures: next }
+        }),
+
       renderPaused: false,
       setRenderPaused: (value) => set({ renderPaused: value }),
 
@@ -372,6 +399,9 @@ const useViewer = create<ViewerState>()(
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },
+      geometryRevision: 0,
+      bumpGeometryRevision: () =>
+        set((state) => ({ geometryRevision: state.geometryRevision + 1 })),
 
       exportScene: null,
       setExportScene: (fn) => set({ exportScene: fn }),

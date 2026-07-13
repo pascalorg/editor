@@ -32,7 +32,6 @@ const slabSnapOptions = {
     nodes,
     rawPoint,
     fallbackPoint,
-    modifiers,
   }: PolygonAffordanceSnapContext<SlabNode>) {
     const sceneNodes = nodes as Record<string, AnyNode>
     return resolveSlabPlanPointSnap({
@@ -42,8 +41,7 @@ const slabSnapOptions = {
       excludeId: node.id,
       nodes: sceneNodes,
       // Magnetic wall-snap/alignment gates on `isMagneticSnapActive()` (the
-      // `lines` mode), so no Shift bypass — Alt still force-skips alignment.
-      altKey: modifiers.altKey,
+      // `lines` mode), so no Shift or Alt snap bypass.
     }).point
   },
 }

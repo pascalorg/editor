@@ -22,9 +22,10 @@ export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
 // select-mode hints off-screen — a resize is its own action, not a selection.
 export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
 
-// `activeHandleDrag.label`s for the multi-selection group gizmos' drags. Kept
-// here (not in the gizmo components) so `snapping-mode.ts` can resolve the
-// group move to the 'item' snap context without importing component code.
+// `activeHandleDrag.label`s for the multi-selection group drags: the body
+// drag sessions (2D floorplan + 3D ground plane) and the rotate gizmo. Kept
+// here (not in the session/gizmo modules) so `snapping-mode.ts` can resolve
+// the group move to the 'item' snap context without importing component code.
 export const GROUP_MOVE_DRAG_LABEL = 'group-move-handle'
 export const GROUP_ROTATE_DRAG_LABEL = 'group-rotate-handle'
 
@@ -89,6 +90,24 @@ export function resolveSelectModeHelpHints({
       label: 'Add or remove objects from the selection',
       active: true,
     })
+    return hints
+  }
+
+  // Multi-selection — advertise the group gestures: drag any member to slide
+  // the whole selection (2D floor plan body drag + the 3D move gizmo), R / T
+  // to step-rotate the group around its bounding-box center.
+  if (selectedCount > 1) {
+    hints.push({
+      keys: [LEFT_CLICK],
+      label: 'Click or drag the selection to move it as one',
+    })
+    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
+    hints.push({
+      keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
+      label: 'Add or remove objects from the selection',
+      active: commandPressed || shiftPressed,
+    })
+    hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)' })
     return hints
   }
 
