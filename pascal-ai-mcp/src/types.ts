@@ -182,6 +182,10 @@ export type WorkflowSession = {
   sceneResult?: SceneResult
   pendingModification?: string
   pendingOperation?: 'create' | 'update' | 'delete'
+  // Plan-first modify (MODIFY_REDESIGN.md §6): set when the drift warning
+  // was issued for the pending structural modification, so the follow-up
+  // confirm proceeds with the rebuild instead of warning again.
+  modifyDriftConfirmed?: boolean
   // Scene ids created by a fresh-build `generate()` attempt that then
   // failed partway through construction. `session.sceneId` gets rolled
   // back so a retry doesn't mistake the half-built wreckage for a real

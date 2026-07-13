@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   buildOpeningRepairData,
   describeRemainingIssues,
+  sceneDriftedFromPlan,
   formatUserFacingSummary,
   buildPlanTargets,
   formatPlanSnapshot,
@@ -775,5 +776,43 @@ describe('回复语言跟随：边界渲染', () => {
     const zh = describeRemainingIssues(diagnostics, 'zh')
     expect(zh).toContain('没有任何门')
     expect(zh).toContain('卧室数量不足')
+  })
+})
+
+describe('sceneDriftedFromPlan (MODIFY_REDESIGN §6)', () => {
+  const rect = (x0: number, z0: number, x1: number, z1: number): Array<[number, number]> =>
+    [[x0, z0], [x1, z0], [x1, z1], [x0, z1]]
+  const plan = {
+    footprint: { width: 8, depth: 6 },
+    entry: { roomId: 'living-1' },
+    rooms: [
+      { id: 'living-1', name: '客厅', type: 'living' as const, polygon: rect(0, 0, 5, 6), requiresExteriorWindow: true },
+      { id: 'bedroom-1', name: '主卧', type: 'bedroom' as const, polygon: rect(5, 0, 8, 6), requiresExteriorWindow: true },
+    ],
+    connections: [],
+  }
+
+  test('untouched scene (any zone order) is not drift', () => {
+    expect(sceneDriftedFromPlan([{ polygon: rect(5, 0, 8, 6) }, { polygon: rect(0, 0, 5, 6) }], plan)).toBe(false)
+  })
+
+  test('a hand-added room or a moved wall is drift', () => {
+    // Extra zone → count mismatch.
+    expect(sceneDriftedFromPlan(
+      [{ polygon: rect(0, 0, 5, 6) }, { polygon: rect(5, 0, 8, 3) }, { polygon: rect(5, 3, 8, 6) }],
+      plan,
+    )).toBe(true)
+    // Shared wall moved by 1m → both areas shift beyond tolerance.
+    expect(sceneDriftedFromPlan(
+      [{ polygon: rect(0, 0, 4, 6) }, { polygon: rect(4, 0, 8, 6) }],
+      plan,
+    )).toBe(true)
+  })
+
+  test('small executor rounding differences are tolerated', () => {
+    expect(sceneDriftedFromPlan(
+      [{ polygon: rect(0, 0, 4.97, 6) }, { polygon: rect(4.97, 0, 8, 6) }],
+      plan,
+    )).toBe(false)
   })
 })

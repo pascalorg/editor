@@ -85,6 +85,11 @@ export const MESSAGES = {
     p => `シーンの修正に失敗しました：${p.error}。元のシーンは保持されています。修正内容をもう一度入力してください。`,
     p => `Scene modification failed: ${p.error}. The original scene is preserved — please describe the change again.`,
   ),
+  modifyDriftWarning: def<Record<string, never>>(
+    () => '检测到当前场景与原规划之间存在手动修改的差异。继续执行这次结构修改会按新规划重建结构，手动改动可能被覆盖（家具类修改不受影响）。发送确认以继续，或重新描述修改需求。',
+    () => '現在のシーンと元のプランに手動編集による差分が検出されました。この構造修正を続行すると新しいプランに基づいて再構築され、手動の変更は上書きされる可能性があります（家具の変更は影響を受けません）。続行するには確認を送信するか、修正内容を改めて入力してください。',
+    () => 'Manual edits were detected between the current scene and the original plan. Proceeding with this structural change will rebuild the structure from the new plan and may overwrite them (furniture changes are unaffected). Send a confirmation to proceed, or describe a different change.',
+  ),
   modifyNoScene: def<Record<string, never>>(
     () => '找不到需要修改的场景，请重新生成户型。',
     () => '修正対象のシーンが見つかりません。間取りを再生成してください。',

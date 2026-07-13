@@ -423,6 +423,9 @@ export class PascalAiAgent {
 
     session.pendingModification = message
     session.pendingOperation = intent
+    // A new request invalidates a drift acknowledgement issued for the
+    // previous one (MODIFY_REDESIGN.md §6).
+    delete session.modifyDriftConfirmed
     // 删除是破坏性的，可能级联移除关联节点，保留二次确认；新增/修改都通过
     // apply_patch 完成、可撤销，直接执行以免每次微调都要多一次确认往返。
     if (intent === 'delete') {
@@ -758,7 +761,10 @@ export class PascalAiAgent {
       // re-partition under the stability constraint. Requests outside the op
       // vocabulary (and legacy scenes without an intent snapshot, for
       // structural asks) fall through to the legacy free-edit path.
-      if (operation === 'update') {
+      // PASCAL_MODIFY_LEGACY=1 forces the old free-edit path (comparison
+      // experiments only — same posture as AI_PLAN_LLM_GEOMETRY, deliberately
+      // not in AppConfig; the switch retires with batch M3's online eval).
+      if (operation === 'update' && process.env.PASCAL_MODIFY_LEGACY !== '1') {
         const fastPath = await this.tryPlanFirstModify(session, feedback, sceneId, nullableNumber(loaded.version))
         if (fastPath) return fastPath
       }
@@ -957,6 +963,19 @@ export class PascalAiAgent {
 
     // --- structural / rename path (M2) — needs the plan-first snapshots ---
     if (!session.layoutIntent || !session.layoutPlan) return null
+    // §6 manual-edit policy (方案 A): a structural rebuild would overwrite
+    // hand edits, so a detected drift warns once and proceeds only after the
+    // user confirms the SAME pending request. Furniture ops never get here.
+    if (sceneDriftedFromPlan(zones, session.layoutPlan)) {
+      if (!session.modifyDriftConfirmed) {
+        session.modifyDriftConfirmed = true
+        session.phase = 'awaiting_modification_confirmation'
+        const reply = t(session.language, 'modifyDriftWarning', {})
+        session.messages.push({ role: 'assistant', content: reply })
+        return { session, reply, next: 'finish' }
+      }
+    }
+    delete session.modifyDriftConfirmed
     const profile = resolveNormProfile(this.config.normProfile)
     // Rename pairs resolve against the PRE-edit intent (old name → zone).
     const renames = parsed.plan.ops.flatMap(op => {
@@ -977,6 +996,15 @@ export class PascalAiAgent {
       })
       if (patches.length > 0) await traceMcp('apply_patch', { patches })
       session.layoutIntent = applied.intent
+      // Keep the plan snapshot's names in step, or the rename would read as
+      // drift on the next structural modify.
+      session.layoutPlan = {
+        ...session.layoutPlan,
+        rooms: session.layoutPlan.rooms.map(room => {
+          const entry = renames.find(rename => rename.oldName === room.name)
+          return entry ? { ...room, name: entry.newName } : room
+        }),
+      }
       let furnReport: FurnitureModifyReport | null = null
       if (applied.furnitureOps.length > 0) {
         const levelId = await this.findLevelId(session)
@@ -2266,6 +2294,29 @@ function isCompletedPhase(phase: WorkflowSession['phase']): boolean {
  * attempt should be left in a retryable state. Extracted so it's unit
  * testable without constructing a live `PascalAiAgent`.
  */
+/**
+ * Manual-edit drift detection (MODIFY_REDESIGN.md §6): does the live scene's
+ * room set still match the plan snapshot it was built from? Compares room
+ * count and the sorted area profile — deliberately NOT names (renames are a
+ * supported non-structural edit) and NOT wall geometry (v1 has no persisted
+ * node snapshot to diff against). A hand-moved wall changes zone areas, a
+ * hand-added/removed room changes the count; both trip the check.
+ */
+export function sceneDriftedFromPlan(
+  zones: Array<{ polygon: Array<[number, number]> }>,
+  plan: LayoutPlan,
+): boolean {
+  if (zones.length !== plan.rooms.length) return true
+  const zoneAreas = zones.map(zone => polygonArea(zone.polygon)).sort((a, b) => a - b)
+  const planAreas = plan.rooms.map(room => polygonArea(room.polygon)).sort((a, b) => a - b)
+  for (let i = 0; i < zoneAreas.length; i++) {
+    const zone = zoneAreas[i]!
+    const planned = planAreas[i]!
+    if (Math.abs(zone - planned) > Math.max(0.8, planned * 0.1)) return true
+  }
+  return false
+}
+
 export function modifyFailureRecovery(
   hasPendingModification: boolean,
   hasSceneResult: boolean,
