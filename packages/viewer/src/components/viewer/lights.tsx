@@ -26,8 +26,9 @@ const SHADOWS_DISABLED =
 // Shadow darkness for the bright key lights (themes drive most lights past
 // intensity 1). Runs high so shadowed areas actually lose the sun's
 // contribution — the ambient/hemisphere/IBL stack provides the fill. The old
-// 0.55 clamp leaked 45% of the key light into shadow and flattened interiors.
-const MAX_SHADOW_INTENSITY = 0.9
+// 0.55 clamp leaked 45% of the key light into shadow and flattened interiors;
+// 0.9 read too heavy in review.
+const MAX_SHADOW_INTENSITY = 0.75
 
 // Shadow frustum framing. The frustum is fit to the BUILDING geometry (not the
 // camera): we union the bounds of all registered scene nodes, fit a sphere, and
@@ -253,7 +254,7 @@ export function Lights() {
           shadow-bias={-0.002}
           shadow-mapSize={[1024, 1024]}
           shadow-normalBias={0.3}
-          shadow-radius={4}
+          shadow-radius={2}
         >
           {light.castShadow && !SHADOWS_DISABLED && shadows ? (
             <orthographicCamera

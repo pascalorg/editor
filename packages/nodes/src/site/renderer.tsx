@@ -9,7 +9,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  backdropGradient,
   getSceneTheme,
+  horizonHazeColor,
   NodeRenderer,
   unionPolygons,
   useNodeEvents,
@@ -25,7 +27,7 @@ import {
   Shape,
   ShapeGeometry,
 } from 'three'
-import { color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
+import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
@@ -66,6 +68,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
   const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  const skyColor = useViewer((state) => {
+    const theme = getSceneTheme(state.sceneTheme)
+    return theme.backgroundSky ?? theme.background
+  })
+  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
@@ -110,20 +117,35 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const center = vec2(fadeBounds.cx, fadeBounds.cz)
     const dist = positionWorld.xz.sub(center).length()
     const fade = smoothstep(float(fadeBounds.radius * 1.05), float(fadeBounds.radius * 5), dist)
+    // Contact vignette: a soft darkening that hugs the lot so the parcel
+    // reads as sitting on the ground instead of floating on an even field.
+    // Albedo-only — it must not tint the far-field dissolve below.
+    const halo = float(1)
+      .sub(smoothstep(float(fadeBounds.radius * 0.95), float(fadeBounds.radius * 2.6), dist))
+      .mul(0.15)
+    material.colorNode = mix(color(bgColor), color('#000000'), fade).mul(float(1).sub(halo))
     // Dissolve, not tint: the albedo (lighting response, incl. shadows) fades
-    // to black while an emissive term fades up to the raw background colour —
-    // so the far end is literally the backdrop, with no lit-vs-flat seam.
-    material.colorNode = mix(color(bgColor), color('#000000'), fade)
+    // to black while an emissive term fades up to the backdrop gradient — the
+    // exact formula the post pipeline composites (viewer lib/backdrop.ts),
+    // evaluated with this fragment's view direction, so the far end is
+    // literally the backdrop (incl. the horizon haze) from any camera pose.
+    const viewDirY = positionWorld.sub(cameraPosition).normalize().y
+    const backdrop = backdropGradient({
+      dirY: viewDirY,
+      background: color(backgroundColor),
+      haze: color(horizonHazeColor(backgroundColor, appearance)),
+      sky: color(skyColor),
+    })
     ;(material as unknown as { emissiveNode: unknown }).emissiveNode = mix(
       color('#000000'),
-      color(backgroundColor),
+      backdrop,
       fade,
     )
     material.polygonOffset = true
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
     return material
-  }, [bgColor, backgroundColor, fadeBounds])
+  }, [bgColor, backgroundColor, skyColor, appearance, fadeBounds])
 
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds) return null

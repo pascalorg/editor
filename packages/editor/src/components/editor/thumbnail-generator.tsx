@@ -2,8 +2,10 @@
 
 import { emitter, sceneRegistry } from '@pascal-app/core'
 import {
+  backdropGradient,
   GRID_LAYER,
   getSceneTheme,
+  horizonHazeColor,
   SSGI_PARAMS,
   snapLevelsToTruePositions,
   useViewer,
@@ -29,7 +31,6 @@ import {
   pass,
   sample,
   screenUV,
-  smoothstep,
   uniform,
   vec4,
 } from 'three/tsl'
@@ -70,6 +71,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   // cached pipeline serves both opaque and transparent (preset/item) captures.
   const bgColorUniform = useRef(uniform(new THREE.Color('#ffffff')))
   const bgSkyUniform = useRef(uniform(new THREE.Color('#ffffff')))
+  const bgHazeUniform = useRef(uniform(new THREE.Color('#ffffff')))
   const bgProjInvUniform = useRef(uniform(new THREE.Matrix4()))
   const bgCamWorldUniform = useRef(uniform(new THREE.Matrix4()))
   const bgMixUniform = useRef(uniform(1))
@@ -148,11 +150,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const worldDir = (bgCamWorldUniform.current as any)
           .mul(vec4(viewRay.xyz, 0))
           .xyz.normalize()
-        const bgGradient = mix(
-          bgColorUniform.current,
-          bgSkyUniform.current,
-          smoothstep(float(0.0), float(0.35), worldDir.y),
-        )
+        const bgGradient = backdropGradient({
+          dirY: worldDir.y,
+          background: bgColorUniform.current,
+          haze: bgHazeUniform.current,
+          sky: bgSkyUniform.current,
+        })
         const alpha = scenePassColor.a
         const finalOutput = vec4(
           mix(sceneRgb, mix(bgGradient, sceneRgb, alpha), bgMixUniform.current),
@@ -229,6 +232,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const theme = getSceneTheme(useViewer.getState().sceneTheme)
         bgColorUniform.current.value.set(theme.background)
         bgSkyUniform.current.value.set(theme.backgroundSky ?? theme.background)
+        bgHazeUniform.current.value.set(horizonHazeColor(theme.background, theme.appearance))
         bgProjInvUniform.current.value.copy(thumbnailCamera.projectionMatrixInverse)
         bgCamWorldUniform.current.value.copy(thumbnailCamera.matrixWorld)
         bgMixUniform.current.value = transparent ? 0 : 1

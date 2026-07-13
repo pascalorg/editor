@@ -20,13 +20,13 @@ import {
   sample,
   saturation,
   screenUV,
-  smoothstep,
   time,
   uniform,
   vec3,
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { backdropGradient, horizonHazeColor } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
@@ -163,6 +163,11 @@ const PostProcessingPasses = ({
   const bgSkyUniform = useRef(uniform(new Color(initSky)))
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
+  // Horizon haze band (derived from the background — see lib/backdrop.ts).
+  const initHaze = horizonHazeColor(initBg, initTheme.appearance)
+  const bgHazeUniform = useRef(uniform(new Color(initHaze)))
+  const bgHazeCurrent = useRef(new Color(initHaze))
+  const bgHazeTarget = useRef(new Color())
   // Scene-camera matrices for the backdrop: the pipeline's fullscreen quad has
   // its own camera, so the sky gradient reconstructs each pixel's world-space
   // view ray from these to find the true horizon (dir.y = 0).
@@ -524,14 +529,10 @@ const PostProcessingPasses = ({
         )
       }
 
-      // Backdrop: vertical sky gradient (theme zenith at the top of the screen)
-      // compressed into the upper half so everything below mid-screen is pure
-      // horizon colour — the infinite-ground disc fades to that same colour,
-      // so the two meet seamlessly wherever the horizon lands.
-      // World-space view ray per pixel → sky above the true horizon
-      // (dir.y = 0), pure background at/below it. The horizon disc fades to
-      // the same background colour, so backdrop and ground meet seamlessly
-      // exactly where the disc vanishes.
+      // Backdrop: world-space view ray per pixel → background / horizon haze /
+      // sky gradient (shared formula in lib/backdrop.ts). The horizon disc
+      // dissolves into the same formula, so backdrop and ground meet
+      // seamlessly exactly where the disc vanishes.
       const ndc = vec4(
         screenUV.x.mul(2).sub(1),
         float(1).sub(screenUV.y).mul(2).sub(1),
@@ -540,11 +541,12 @@ const PostProcessingPasses = ({
       ) as any
       const viewRay = (camProjInvUniform.current as any).mul(ndc)
       const worldDir = (camWorldUniform.current as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
-      let bgGradient = mix(
-        bgUniform.current,
-        bgSkyUniform.current,
-        smoothstep(float(0.0), float(0.35), worldDir.y),
-      ) as any
+      let bgGradient = backdropGradient({
+        dirY: worldDir.y,
+        background: bgUniform.current,
+        haze: bgHazeUniform.current,
+        sky: bgSkyUniform.current,
+      })
       if (shading === 'rendered') {
         bgGradient = gradeRgb(bgGradient)
       }
@@ -633,6 +635,9 @@ const PostProcessingPasses = ({
     bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
     bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyUniform.current.value.copy(bgSkyCurrent.current)
+    bgHazeTarget.current.set(horizonHazeColor(bgTheme.background, bgTheme.appearance))
+    bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
+    bgHazeUniform.current.value.copy(bgHazeCurrent.current)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
     camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
