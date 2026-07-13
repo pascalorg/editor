@@ -27,7 +27,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
-import { edgeColorFor } from '../../lib/edge-style'
+import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
@@ -47,8 +47,8 @@ export const GRADE_PARAMS = {
 export const SSGI_PARAMS = {
   enabled: true,
   sliceCount: 1,
-  stepCount: 6,
-  radius: 1.6,
+  stepCount: 4,
+  radius: 1,
   expFactor: 1.5,
   thickness: 0.5,
   backfaceLighting: 0.5,
@@ -57,15 +57,6 @@ export const SSGI_PARAMS = {
   useLinearThickness: false,
   useScreenSpaceSampling: true,
   useTemporalFiltering: false,
-}
-
-// Heavier SSGI for one-shot renders (thumbnails / bake capture) where frame
-// time doesn't matter — the interactive editor stays on SSGI_PARAMS.
-export const SSGI_BAKE_PARAMS = {
-  ...SSGI_PARAMS,
-  sliceCount: 3,
-  stepCount: 8,
-  giIntensity: 1,
 }
 
 // Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
@@ -180,7 +171,9 @@ const PostProcessingPasses = ({
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
+  // Dark scenes also scale the ink opacity down (see edge-style.ts).
   const inkColorUniform = useRef(uniform(new Color(edgeColorFor(initBg))))
+  const inkOpacityScaleUniform = useRef(uniform(edgeOpacityScaleFor(initBg)))
 
   const zoneLayers = useMemo(() => {
     const l = new Layers()
@@ -435,7 +428,7 @@ const PostProcessingPasses = ({
 
         const giTexture = (giPass as any).getTextureNode()
 
-        let gi: any = giPass.rgb
+        const gi = giPass.rgb
         let ao: any
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
@@ -443,16 +436,8 @@ const PostProcessingPasses = ({
           const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
-          denoisePass.radius.value = 5
+          denoisePass.radius.value = 4
           ao = (denoisePass as any).r
-          if (SSGI_PARAMS.giIntensity > 0) {
-            // The GI bounce is composited additively, so its sampling noise
-            // reads as grain on lit surfaces — denoise it like the AO.
-            const giDenoise = denoise(vec4(gi, float(1)), scenePassDepth, sceneNormal, camera)
-            giDenoise.index.value = 1
-            giDenoise.radius.value = 5
-            gi = (giDenoise as any).rgb
-          }
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
@@ -477,7 +462,7 @@ const PostProcessingPasses = ({
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
             radius: inkRadius,
-            opacity: inkOpacity,
+            opacity: float(inkOpacity).mul(inkOpacityScaleUniform.current),
           }),
           sceneColor.a,
         )
@@ -651,7 +636,9 @@ const PostProcessingPasses = ({
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
     camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
-    inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
+    const bgHex = `#${bgCurrent.current.getHexString()}`
+    inkColorUniform.current.value.set(edgeColorFor(bgHex))
+    inkOpacityScaleUniform.current.value = edgeOpacityScaleFor(bgHex)
 
     const outliner = useViewer.getState().outliner
     sanitizeOutlineObjects(outliner.selectedObjects)

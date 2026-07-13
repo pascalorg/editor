@@ -519,7 +519,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         debounce: 100,
       }}
       shadows={{
-        type: THREE.PCFSoftShadowMap,
+        type: THREE.PCFShadowMap,
         enabled: true,
       }}
     >

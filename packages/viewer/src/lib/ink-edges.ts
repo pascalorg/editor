@@ -41,8 +41,9 @@ export function inkedEdges({
   // Line thickness in px (the detected band is ~2×radius) and final line
   // darkness — these are what distinguish soft (thin/faint) from strong
   // (thick/solid); the edge masks themselves saturate, so a gain wouldn't.
+  // Opacity may be a TSL node (theme-driven scaling) or a plain number.
   radius: number
-  opacity: number
+  opacity: any
   sceneRgb: any
 }) {
   const px = vec2(1, 1).div(screenSize).mul(radius)

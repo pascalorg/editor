@@ -3,7 +3,8 @@
 import { emitter, sceneRegistry } from '@pascal-app/core'
 import {
   GRID_LAYER,
-  SSGI_BAKE_PARAMS,
+  getSceneTheme,
+  SSGI_PARAMS,
   snapLevelsToTruePositions,
   useViewer,
 } from '@pascal-app/viewer'
@@ -21,11 +22,15 @@ import {
   diffuseColor,
   directionToColor,
   float,
+  mix,
   mrt,
   normalView,
   output,
   pass,
   sample,
+  screenUV,
+  smoothstep,
+  uniform,
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, RenderTarget, type WebGPURenderer } from 'three/webgpu'
@@ -58,6 +63,16 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const thumbnailCameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const pipelineRef = useRef<RenderPipeline | null>(null)
   const renderTargetRef = useRef<RenderTarget | null>(null)
+
+  // Backdrop compositing for scene snapshots (studio renders, project
+  // thumbnails): theme background + sky gradient, same world-ray math as the
+  // viewport backdrop in viewer's post-processing. Uniform-driven so the one
+  // cached pipeline serves both opaque and transparent (preset/item) captures.
+  const bgColorUniform = useRef(uniform(new THREE.Color('#ffffff')))
+  const bgSkyUniform = useRef(uniform(new THREE.Color('#ffffff')))
+  const bgProjInvUniform = useRef(uniform(new THREE.Matrix4()))
+  const bgCamWorldUniform = useRef(uniform(new THREE.Matrix4()))
+  const bgMixUniform = useRef(uniform(1))
 
   useEffect(() => {
     onThumbnailCaptureRef.current = onThumbnailCapture
@@ -99,17 +114,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
 
         const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, cam as any)
-        giPass.sliceCount.value = SSGI_BAKE_PARAMS.sliceCount
-        giPass.stepCount.value = SSGI_BAKE_PARAMS.stepCount
-        giPass.radius.value = SSGI_BAKE_PARAMS.radius
-        giPass.expFactor.value = SSGI_BAKE_PARAMS.expFactor
-        giPass.thickness.value = SSGI_BAKE_PARAMS.thickness
-        giPass.backfaceLighting.value = SSGI_BAKE_PARAMS.backfaceLighting
-        giPass.aoIntensity.value = SSGI_BAKE_PARAMS.aoIntensity
-        giPass.giIntensity.value = SSGI_BAKE_PARAMS.giIntensity
-        giPass.useLinearThickness.value = SSGI_BAKE_PARAMS.useLinearThickness
-        giPass.useScreenSpaceSampling.value = SSGI_BAKE_PARAMS.useScreenSpaceSampling
-        giPass.useTemporalFiltering = SSGI_BAKE_PARAMS.useTemporalFiltering
+        giPass.sliceCount.value = SSGI_PARAMS.sliceCount
+        giPass.stepCount.value = SSGI_PARAMS.stepCount
+        giPass.radius.value = SSGI_PARAMS.radius
+        giPass.expFactor.value = SSGI_PARAMS.expFactor
+        giPass.thickness.value = SSGI_PARAMS.thickness
+        giPass.backfaceLighting.value = SSGI_PARAMS.backfaceLighting
+        giPass.aoIntensity.value = SSGI_PARAMS.aoIntensity
+        giPass.giIntensity.value = SSGI_PARAMS.giIntensity
+        giPass.useLinearThickness.value = SSGI_PARAMS.useLinearThickness
+        giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
+        giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
         const giTexture = (giPass as any).getTextureNode()
         const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
@@ -118,7 +133,31 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         denoisePass.radius.value = 4
 
         const ao = (denoisePass as any).r
-        const finalOutput = vec4(scenePassColor.rgb.mul(ao), scenePassColor.a)
+        const sceneRgb = scenePassColor.rgb.mul(ao)
+
+        // Per-pixel world ray from the capture camera → sky gradient above the
+        // horizon (dir.y = 0), flat background below — mirrors the viewport
+        // backdrop. bgMix 0 bypasses it and keeps the capture transparent.
+        const ndc = vec4(
+          screenUV.x.mul(2).sub(1),
+          float(1).sub(screenUV.y).mul(2).sub(1),
+          1,
+          1,
+        ) as any
+        const viewRay = (bgProjInvUniform.current as any).mul(ndc)
+        const worldDir = (bgCamWorldUniform.current as any)
+          .mul(vec4(viewRay.xyz, 0))
+          .xyz.normalize()
+        const bgGradient = mix(
+          bgColorUniform.current,
+          bgSkyUniform.current,
+          smoothstep(float(0.0), float(0.35), worldDir.y),
+        )
+        const alpha = scenePassColor.a
+        const finalOutput = vec4(
+          mix(sceneRgb, mix(bgGradient, sceneRgb, alpha), bgMixUniform.current),
+          mix(alpha, float(1), bgMixUniform.current),
+        )
 
         // FXAA requires a texture node as input; convertToTexture renders finalOutput
         // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
@@ -157,6 +196,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       captureMode?: 'standard' | 'viewport' | 'area',
       cropRegion?: { x: number; y: number; width: number; height: number },
       standardSize?: { w: number; h: number },
+      transparent = false,
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
@@ -181,6 +221,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const { width, height } = gl.domElement
         thumbnailCamera.aspect = width / height
         thumbnailCamera.updateProjectionMatrix()
+        // The capture camera never joins the scene graph, so its matrixWorld
+        // is only refreshed by the render itself — too late for the backdrop
+        // uniforms below.
+        thumbnailCamera.updateMatrixWorld()
+
+        const theme = getSceneTheme(useViewer.getState().sceneTheme)
+        bgColorUniform.current.value.set(theme.background)
+        bgSkyUniform.current.value.set(theme.backgroundSky ?? theme.background)
+        bgProjInvUniform.current.value.copy(thumbnailCamera.projectionMatrixInverse)
+        bgCamWorldUniform.current.value.copy(thumbnailCamera.matrixWorld)
+        bgMixUniform.current.value = transparent ? 0 : 1
 
         // Capture camera data for snapshot storage
         const pos = mainCamera.position
@@ -478,10 +529,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       cropRegion?: { x: number; y: number; width: number; height: number }
       standardSize?: { w: number; h: number }
       snapLevels?: boolean
-      // `transparent` is informational here — the render pipeline already
-      // captures with alpha (see `setClearAlpha(0)` above) — the flag is
-      // forwarded so future tweaks (suppressing the ground occluder, theme
-      // background bits) can branch on it without touching the emitter.
+      // Preset/item captures keep the alpha channel (their thumbnails compose
+      // onto arbitrary palette backgrounds); scene snapshots — studio renders
+      // and project thumbnails — composite the theme backdrop + sky.
       transparent?: boolean
     }) => {
       await generate(
@@ -489,6 +539,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.captureMode,
         event.cropRegion,
         event.standardSize,
+        event.transparent === true,
       )
     }
 
