@@ -141,7 +141,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const backdrop = backdropGradient({
       dirY: viewDirY,
       background: color(backgroundColor),
-      haze: color(horizonHazeColor(backgroundColor, appearance)),
+      haze: color(horizonHazeColor(skyColor, appearance)),
       sky: color(skyColor),
       skyDeep: color(deepSkyColor(skyColor)),
     })

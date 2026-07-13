@@ -30,29 +30,29 @@ export function backdropGradient({
   // a single pale stop reads as a white void with blue "hiding" up top.
   let base = (mix as any)(background, sky, smoothstep(-0.02, 0.14, dirY))
   base = (mix as any)(base, skyDeep, smoothstep(0.1, 0.55, dirY))
-  // Haze as an exponential glow peaking exactly at the horizon: C¹-smooth on
+  // Haze as an exponential glow hugging the horizon tightly: C¹-smooth on
   // both sides, so it brightens the junction without ever drawing an edge.
-  const hazeWeight = exp(abs(dirY).mul(-7)).mul(0.9)
+  const hazeWeight = exp(abs(dirY).mul(-11)).mul(0.8)
   return (mix as any)(base, haze, hazeWeight)
 }
 
-// Warm white the haze lifts toward — reads as sun-scattered atmosphere at the
-// horizon (the slight yellow inZOI-style skies have) rather than sterile fog.
-const HAZE_WARM_WHITE = { r: 255, g: 244, b: 222 }
+// Warm sun tint the haze pulls toward — aerial perspective is sky-coloured
+// light plus a little sun scatter, not white fog.
+const HAZE_SUN_TINT = [255, 244, 222] as const
 
 /**
- * Atmospheric haze tint at the horizon: the theme background lifted toward a
- * warm white. Light themes get a bright glow, dark themes a faint one (reads
- * as scattered city light).
+ * Atmospheric haze at the horizon: the theme's *sky* colour pulled toward a
+ * warm sun tint — skyish and sunish at once, so the band reads as part of
+ * the sky rather than a white stripe. Dark themes keep it faint (a low glow
+ * over the night zenith).
  */
-export function horizonHazeColor(background: string, appearance: 'light' | 'dark'): string {
-  const amount = appearance === 'dark' ? 0.12 : 0.25
-  const hex = background.replace('#', '')
-  const warm = [HAZE_WARM_WHITE.r, HAZE_WARM_WHITE.g, HAZE_WARM_WHITE.b]
+export function horizonHazeColor(sky: string, appearance: 'light' | 'dark'): string {
+  const amount = appearance === 'dark' ? 0.25 : 0.5
+  const hex = sky.replace('#', '')
   let out = '#'
   for (let i = 0; i < 3; i++) {
     const c = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-    out += Math.round(c + (warm[i]! - c) * amount)
+    out += Math.round(c + (HAZE_SUN_TINT[i]! - c) * amount)
       .toString(16)
       .padStart(2, '0')
   }

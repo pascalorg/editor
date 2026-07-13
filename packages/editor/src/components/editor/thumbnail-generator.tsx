@@ -244,7 +244,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         bgColorUniform.current.value.set(theme.background)
         bgSkyUniform.current.value.set(theme.backgroundSky ?? theme.background)
         bgSkyDeepUniform.current.value.set(deepSkyColor(theme.backgroundSky ?? theme.background))
-        bgHazeUniform.current.value.set(horizonHazeColor(theme.background, theme.appearance))
+        bgHazeUniform.current.value.set(
+          horizonHazeColor(theme.backgroundSky ?? theme.background, theme.appearance),
+        )
         bgProjInvUniform.current.value.copy(thumbnailCamera.projectionMatrixInverse)
         bgCamWorldUniform.current.value.copy(thumbnailCamera.matrixWorld)
         bgMixUniform.current.value = transparent ? 0 : 1

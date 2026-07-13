@@ -165,7 +165,7 @@ const PostProcessingPasses = ({
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
   // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
-  const initHaze = horizonHazeColor(initBg, initTheme.appearance)
+  const initHaze = horizonHazeColor(initSky, initTheme.appearance)
   const bgHazeUniform = useRef(uniform(new Color(initHaze)))
   const bgHazeCurrent = useRef(new Color(initHaze))
   const bgHazeTarget = useRef(new Color())
@@ -652,7 +652,9 @@ const PostProcessingPasses = ({
     bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
     bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
     bgSkyUniform.current.value.copy(bgSkyCurrent.current)
-    bgHazeTarget.current.set(horizonHazeColor(bgTheme.background, bgTheme.appearance))
+    bgHazeTarget.current.set(
+      horizonHazeColor(bgTheme.backgroundSky ?? bgTheme.background, bgTheme.appearance),
+    )
     bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
     bgHazeUniform.current.value.copy(bgHazeCurrent.current)
     bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
