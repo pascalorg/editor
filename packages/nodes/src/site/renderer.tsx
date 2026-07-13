@@ -38,15 +38,19 @@ const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeom
   if (points.length < 2) return geometry
 
   const positions: number[] = []
+  const uvs: number[] = []
 
   // Create a simple line loop at ground level
-  for (const [x, z] of points) {
+  points.forEach(([x, z], index) => {
     positions.push(x ?? 0, Y_OFFSET, z ?? 0)
-  }
+    uvs.push(points.length > 1 ? index / (points.length - 1) : 0, 0)
+  })
   // Close the loop
   positions.push(points[0]?.[0] ?? 0, Y_OFFSET, points[0]?.[1] ?? 0)
+  uvs.push(1, 0)
 
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
 
   return geometry
 }

@@ -30,6 +30,8 @@ const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
   'stair',
   'spawn',
   'zone',
+  'cabinet',
+  'cabinet-module',
 ])
 
 let clipboardPayload: ClipboardPayload | null = null
@@ -97,6 +99,30 @@ function isLevelChildRoot(nodes: Record<AnyNodeId, AnyNode>, node: AnyNode) {
   const parentId = node.parentId as AnyNodeId | null
   if (!parentId) return true
   return nodes[parentId]?.type === 'level'
+}
+
+function getPromotedCabinetRunId(
+  nodes: Record<AnyNodeId, AnyNode>,
+  node: AnyNode,
+  selectedIds: Set<AnyNodeId>,
+) {
+  if (node.type !== 'cabinet-module') return null
+
+  const parentId = node.parentId as AnyNodeId | null
+  const parent = parentId ? nodes[parentId] : null
+  if (parent?.type !== 'cabinet') return null
+  if (!parentId) return null
+  if (selectedIds.has(parentId)) return parentId
+
+  const siblingIds = Array.isArray(parent.children) ? (parent.children as AnyNodeId[]) : []
+  const hasOnlySelectedModules =
+    siblingIds.length > 0 &&
+    siblingIds.every((childId) => {
+      const child = nodes[childId]
+      return child?.type === 'cabinet-module' && selectedIds.has(childId)
+    })
+
+  return hasOnlySelectedModules ? parentId : null
 }
 
 function getPasteTargetLevel(targetLevelId?: AnyNodeId) {
@@ -179,7 +205,11 @@ function remapNodeReferences(
 function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
   const scene = useScene.getState()
   const selectedIdSet = new Set(ids)
-  const rootIds = ids.filter((id) => {
+  const promotedIds = ids.map((id) => {
+    const node = scene.nodes[id]
+    return node ? (getPromotedCabinetRunId(scene.nodes, node, selectedIdSet) ?? id) : id
+  })
+  const rootIds = Array.from(new Set(promotedIds)).filter((id) => {
     const node = scene.nodes[id]
     return (
       node &&

@@ -9,6 +9,7 @@ import {
 import { z } from 'zod'
 import {
   canDirectMoveNode,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   snapDirectRotationDelta,
 } from './direct-manipulation'
@@ -111,5 +112,81 @@ describe('canDirectMoveNode', () => {
     registerTestDefinition(kind, {})
 
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+  })
+})
+
+describe('resolveDirectManipulationNode', () => {
+  test('routes proxied members to their assembly for direct transforms', () => {
+    const group = {
+      id: 'direct_manipulation_group',
+      type: 'direct-manipulation-group-test',
+    } as unknown as AnyNode
+    const member = {
+      id: 'direct_manipulation_member',
+      type: 'direct-manipulation-member-test',
+      metadata: { nodeSelectionProxyId: group.id },
+    } as unknown as AnyNode
+
+    expect(
+      resolveDirectManipulationNode(member, {
+        [group.id]: group,
+        [member.id]: member,
+      }),
+    ).toBe(group)
+  })
+
+  test('falls back to the selected node when the proxy target is missing', () => {
+    const member = {
+      id: 'direct_manipulation_orphan_member',
+      type: 'direct-manipulation-member-test',
+      metadata: { nodeSelectionProxyId: 'missing_group' },
+    } as unknown as AnyNode
+
+    expect(resolveDirectManipulationNode(member, { [member.id]: member })).toBe(member)
+  })
+
+  test('routes parent-frame children to their rotatable parent', () => {
+    const parentKind = 'direct-manipulation-parent-frame-parent-test'
+    const childKind = 'direct-manipulation-parent-frame-child-test'
+    registerTestDefinition(parentKind, {
+      capabilities: { rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] } },
+    })
+    registerTestDefinition(childKind, {
+      capabilities: {
+        movable: {
+          axes: ['x', 'z'],
+          gridSnap: true,
+          parentFrame: {
+            resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) =>
+              (node.parentId ? nodes[node.parentId] : null) ?? null,
+            parentRotationY: () => 0,
+            localToPlan: (_parent: AnyNode, local: readonly [number, number, number]) => [
+              local[0],
+              local[1],
+              local[2],
+            ],
+            planToLocal: (_parent: AnyNode, planX: number, localY: number, planZ: number) => [
+              planX,
+              localY,
+              planZ,
+            ],
+          },
+        },
+      },
+    })
+
+    const parent = { id: 'direct_manipulation_parent', type: parentKind } as unknown as AnyNode
+    const child = {
+      id: 'direct_manipulation_child',
+      type: childKind,
+      parentId: parent.id,
+    } as unknown as AnyNode
+
+    expect(
+      resolveDirectManipulationNode(child, {
+        [parent.id]: parent,
+        [child.id]: child,
+      }),
+    ).toBe(parent)
   })
 })

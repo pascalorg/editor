@@ -43,8 +43,6 @@ export type SurfacePlanSnapInput = {
   walls?: readonly WallNode[]
   candidates?: readonly AlignmentAnchor[]
   threshold?: number
-  altKey?: boolean
-  shiftKey?: boolean
   magnetic?: boolean
   align?: boolean
   highlightWalls?: boolean
@@ -206,9 +204,9 @@ export function resolveSurfacePlanPointSnap(input: SurfacePlanSnapInput): Surfac
 
   // Alignment "lines" are DISPLAYED in every mode (grid / lines / angles /
   // off); the magnetic pull onto an axis is applied only when magnetic
-  // ('lines'). Shift / Alt / `align: false` fully bypass (no guides).
+  // ('lines'). `align: false` fully bypasses (no guides).
   const basePoint = fallbackPoint ?? wallSnap.point
-  if (input.align === false || input.altKey) {
+  if (input.align === false) {
     useAlignmentGuides.getState().clear()
     return { point: basePoint, wallSnap: null, guides: [], wallIds: [] }
   }

@@ -5,7 +5,9 @@ import {
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
   hasRegistry3DMoveTool,
+  isMovable,
   nodeRegistry,
+  resolveSelectionProxyId,
   type SceneApi,
   useScene,
 } from '@pascal-app/core'
@@ -53,7 +55,23 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   // 3D direct move (Ctrl/Meta-drag, the move-cross grip) needs a move tool that
   // mounts in 3D — distinct from `isRegistryMovable`, which also accepts
   // floorplan-only movers (zone) for the 2D plan.
-  return hasRegistry3DMoveTool(node.type)
+  if (!hasRegistry3DMoveTool(node.type)) return false
+  // Bespoke movers (`affordanceTools.move`) own their constraints and often
+  // deliberately omit `capabilities.movable` — only gate registry-movable
+  // kinds on `isMovable`, so a per-node `movable.override` (e.g. a cabinet
+  // run locked behind its selection proxy) can opt out of direct move.
+  if (nodeRegistry.get(node.type)?.affordanceTools?.move) return true
+  return isMovable(node)
+}
+
+export function resolveDirectManipulationNode(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): AnyNode {
+  const target = nodes[resolveSelectionProxyId(node, nodes)] ?? node
+  const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
+  const parent = parentFrame?.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
+  return parent && canDirectRotateNode(parent) ? parent : target
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {

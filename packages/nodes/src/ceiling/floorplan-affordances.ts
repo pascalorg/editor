@@ -19,7 +19,6 @@ const ceilingSnapOptions = {
     nodes,
     rawPoint,
     fallbackPoint,
-    modifiers,
   }: PolygonAffordanceSnapContext<CeilingNode>) {
     const sceneNodes = nodes as Record<string, AnyNode>
     return resolveCeilingPlanPointSnap({
@@ -29,8 +28,7 @@ const ceilingSnapOptions = {
       excludeId: node.id,
       nodes: sceneNodes,
       // Magnetic wall-snap/alignment gates on `isMagneticSnapActive()` (the
-      // `lines` mode), so no Shift bypass — Alt still force-skips alignment.
-      altKey: modifiers.altKey,
+      // `lines` mode), so no Shift or Alt snap bypass.
     }).point
   },
 }

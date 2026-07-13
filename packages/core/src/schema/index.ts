@@ -33,6 +33,7 @@ export {
 } from './material'
 export { BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
+export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
@@ -187,12 +188,37 @@ export {
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
-export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
+export type {
+  WallBandSurfaceSlotId,
+  WallFaceBand,
+  WallFaceBandConfig,
+  WallSurfaceMaterialSpec,
+  WallSurfaceSide,
+  WallSurfaceSlotId,
+  WallTrimConfig,
+} from './nodes/wall'
 export {
+  buildEnabledWallFaceBandPatch,
+  buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
+  getWallBandSlotId,
+  getWallFaceBandConfig,
+  getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
+  getWallSurfaceSideFromBandSlot,
+  WALL_CHAIR_RAIL_DEFAULT,
+  WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  WALL_CROWN_DEFAULT,
+  WALL_CROWN_SLOT_DEFAULT,
+  WALL_FACE_BAND_DEFAULT,
+  WALL_SKIRTING_DEFAULT,
+  WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SLOT_DEFAULT,
+  WALL_SURFACE_SLOT_DEFAULTS,
+  WALL_TRIM_DEFAULTS,
   WallNode,
+  WallTreatmentSide,
+  WallTrimProfile,
 } from './nodes/wall'
 export { WindowNode, WindowType } from './nodes/window'
 export { ZoneNode } from './nodes/zone'

@@ -44,6 +44,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
+import { resolveDirectManipulationNode } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -137,6 +138,20 @@ export { swallowNextClick } from './handles/use-handle-drag'
 // its end). Upward trackers — wall / chimney height — stop at the cube.
 const TRACKER_THROUGH = 0.12
 
+type SceneApiForHandles = ReturnType<typeof createSceneApi>
+type CenteredGuideDecoration = {
+  center?: (node: AnyNode, sceneApi: SceneApiForHandles) => readonly [number, number, number]
+  radius: (node: AnyNode, sceneApi: SceneApiForHandles) => number
+}
+
+function guideDecorationCenter(decoration: unknown, node: AnyNode, sceneApi: SceneApiForHandles) {
+  return (decoration as CenteredGuideDecoration | undefined)?.center?.(node, sceneApi)
+}
+
+function guideDecorationRadius(decoration: unknown, node: AnyNode, sceneApi: SceneApiForHandles) {
+  return (decoration as CenteredGuideDecoration).radius(node, sceneApi)
+}
+
 // Mirrors the formatter used by wall / fence measurement labels so all
 // in-world dimension chips read consistently.
 function formatDimension(value: number, unit: 'metric' | 'imperial'): string {
@@ -195,9 +210,11 @@ export function NodeArrowHandles() {
   const isCurveReshape = useIsCurveReshape()
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
-  const rawNode = useScene((state) =>
-    selectedId ? (state.nodes[selectedId as AnyNodeId] ?? null) : null,
-  )
+  const rawNode = useScene((state) => {
+    if (!selectedId) return null
+    const selectedNode = state.nodes[selectedId as AnyNodeId]
+    return selectedNode ? resolveDirectManipulationNode(selectedNode, state.nodes) : null
+  })
 
   // Merge any live drag override so the arrows themselves (positions,
   // ring decorations) track the in-flight drag instead of freezing at
@@ -211,6 +228,7 @@ export function NodeArrowHandles() {
     [rawNode, liveOverride],
   )
   const def = node ? nodeRegistry.get(node.type) : null
+  const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
     if (!(node && def?.handles)) return null
     const all =
@@ -221,8 +239,13 @@ export function NodeArrowHandles() {
     // the selected node body (see selection-manager). Drop both flavours — the
     // `translate` ground cross (column/roof/shelf/spawn) and the `tap-action`
     // `move-cross` (item/door/window/elevator/stair) — keep rotate/resize.
-    return all.filter((d) => d.kind !== 'translate' && !('shape' in d && d.shape === 'move-cross'))
-  }, [node, def])
+    return all.filter(
+      (d) =>
+        d.kind !== 'translate' &&
+        !('shape' in d && d.shape === 'move-cross') &&
+        (d.kind !== 'linear-resize' || d.visible?.(node as never, descriptorSceneApi) !== false),
+    )
+  }, [node, def, descriptorSceneApi])
 
   const shouldRender =
     Boolean(node && descriptors?.length) &&
@@ -714,6 +737,10 @@ function LinearArrow({
 
       return {
         overrideId,
+        commit:
+          descriptor.kind === 'linear-resize' && descriptor.commit
+            ? (patch) => descriptor.commit?.(initialNode, patch, sceneApi)
+            : undefined,
         onBegin: () => {
           // Always claim the handle-drag scope so the HUD knows a resize is the
           // active interaction (keeps the idle select hints off-screen). The
@@ -818,7 +845,8 @@ function LinearArrow({
       <>
         {showDecoration && decoration ? (
           <GuideRing
-            radius={decoration.radius(node as never)}
+            center={guideDecorationCenter(decoration, node, placementSceneApi)}
+            radius={guideDecorationRadius(decoration, node, placementSceneApi)}
             y={decoration.y?.(node as never) ?? 0}
           />
         ) : null}
@@ -846,7 +874,8 @@ function LinearArrow({
     <>
       {showDecoration && decoration ? (
         <GuideRing
-          radius={decoration.radius(node as never)}
+          center={guideDecorationCenter(decoration, node, placementSceneApi)}
+          radius={guideDecorationRadius(decoration, node, placementSceneApi)}
           y={decoration.y?.(node as never) ?? 0}
         />
       ) : null}
@@ -870,7 +899,15 @@ function LinearArrow({
 // e.g. the curved-stair width arrow traces the outer rim, the inner-radius
 // arrow traces the central pillar. Floats at node-local `y`, lies in the
 // XZ plane.
-export function GuideRing({ radius, y }: { radius: number; y: number }) {
+export function GuideRing({
+  center,
+  radius,
+  y,
+}: {
+  center?: readonly [number, number, number]
+  radius: number
+  y: number
+}) {
   const safeRadius = Math.max(radius, 0.01)
   const ringGeometry = useMemo(() => {
     const inner = Math.max(safeRadius - 0.015, 0.001)
@@ -897,7 +934,7 @@ export function GuideRing({ radius, y }: { radius: number; y: number }) {
       frustumCulled={false}
       geometry={ringGeometry}
       material={ringMaterial}
-      position={[0, y, 0]}
+      position={center ? [center[0], y, center[2]] : [0, y, 0]}
       renderOrder={1009}
       rotation={[-Math.PI / 2, 0, 0]}
     />
@@ -1006,11 +1043,13 @@ function RotationGuideOutline({ geometry }: { geometry: BufferGeometry }) {
 // from the pivot; the fill is pulled inside it so it reads as the handle
 // swinging around rather than overlapping the icon.
 function RotationWedge({
+  center,
   delta,
   handleAngle,
   orbitRadius,
   y,
 }: {
+  center?: readonly [number, number, number]
   delta: number
   handleAngle: number
   orbitRadius: number
@@ -1050,7 +1089,7 @@ function RotationWedge({
   ]
 
   return (
-    <group position={[0, y, 0]}>
+    <group position={center ? [center[0], y, center[2]] : [0, y, 0]}>
       <mesh
         frustumCulled={false}
         geometry={fill}
@@ -1145,6 +1184,7 @@ function ArcArrow({
   // arrow is hovered or dragging. Same recipe as the linear / radial
   // decoration path.
   const decoration = descriptor.decoration
+  const decorationCenter = guideDecorationCenter(decoration, node, placementSceneApi)
   const showDecoration = Boolean(decoration) && (isHovered || isDragging || isDirectRotating)
 
   const activate = useHandleDrag({
@@ -1239,7 +1279,8 @@ function ArcArrow({
     <>
       {showDecoration && decoration ? (
         <GuideRing
-          radius={decoration.radius(node as never)}
+          center={guideDecorationCenter(decoration, node, placementSceneApi)}
+          radius={guideDecorationRadius(decoration, node, placementSceneApi)}
           y={decoration.y?.(node as never) ?? 0}
         />
       ) : null}
@@ -1249,9 +1290,16 @@ function ArcArrow({
           ring on any surface — flat ground or a pitched roof. */}
       {rotationDelta !== null ? (
         <RotationWedge
+          center={decorationCenter}
           delta={rotationDelta}
-          handleAngle={Math.atan2(position[2], position[0])}
-          orbitRadius={Math.hypot(position[0], position[2])}
+          handleAngle={Math.atan2(
+            position[2] - (decorationCenter?.[2] ?? 0),
+            position[0] - (decorationCenter?.[0] ?? 0),
+          )}
+          orbitRadius={Math.hypot(
+            position[0] - (decorationCenter?.[0] ?? 0),
+            position[2] - (decorationCenter?.[2] ?? 0),
+          )}
           y={decoration?.y?.(node as never) ?? 0}
         />
       ) : null}

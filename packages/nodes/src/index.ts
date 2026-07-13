@@ -1,6 +1,7 @@
 import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
+import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
@@ -70,6 +71,8 @@ export const builtinPlugin: Plugin = {
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
     windowDefinition as unknown as AnyNodeDefinition,
+    cabinetDefinition as unknown as AnyNodeDefinition,
+    cabinetModuleDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
@@ -113,6 +116,15 @@ export const builtinPlugin: Plugin = {
 
 export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
+export {
+  bakeCabinetAnimationClip,
+  type CabinetPlacementType,
+  cabinetDefinition,
+  cabinetModuleDefinition,
+  poseCabinetMovingParts,
+  useCabinetPlacementStatus,
+  useCabinetPlacementType,
+} from './cabinet'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'

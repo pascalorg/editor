@@ -7,6 +7,7 @@ import {
   isOperationDoorType,
   itemClipRegistry,
   type LevelNode,
+  nodeRegistry,
   sceneRegistry,
   type WindowNode,
   type ZoneNode,
@@ -101,9 +102,9 @@ export async function exportSceneToGlb(
  *    `isMeshBasicMaterial`; the viewer's `MeshStandard/LambertNodeMaterial` set
  *    `isNodeMaterial` instead, so without this every surface exports as a blank
  *    default material.
- *  - Bakes each openable door/window's open motion into a glTF animation clip
- *    via the build-once + pose-at-t primitives (`pascalSwingLeaf` for doors,
- *    `poseWindowMovingParts` for windows).
+ *  - Bakes open motions into glTF animation clips via kind-owned registry
+ *    hooks, plus the legacy door/window build-once + pose-at-t primitives
+ *    (`pascalSwingLeaf` for doors, `poseWindowMovingParts` for windows).
  *  - Stamps `name` + `extras` identity from `sceneRegistry` so selection/hover
  *    survive the bake with no in-memory registry, and strips all other userData
  *    so editor/runtime ephemera never leak into glTF extras.
@@ -461,21 +462,33 @@ function bakeAnimationClips(
     if (!node || !target) continue
 
     const clip =
-      node.type === 'door'
+      bakeRegistryAnimationClips(node, target) ??
+      (node.type === 'door'
         ? bakeDoorClip(id, node, target)
         : node.type === 'window'
           ? bakeWindowClip(id, node as WindowNode, target)
           : node.type === 'item'
             ? bakeItemClip(id, target)
-            : null
+            : null)
 
     if (clip) {
-      clips.push(clip)
-      clipNamesByNode.set(id, [clip.name])
+      const nodeClips = Array.isArray(clip) ? clip : [clip]
+      clips.push(...nodeClips)
+      clipNamesByNode.set(
+        id,
+        nodeClips.map((c) => c.name),
+      )
     }
   }
 
   return { clips, clipNamesByNode }
+}
+
+function bakeRegistryAnimationClips(
+  node: AnyNode,
+  object: THREE.Object3D,
+): THREE.AnimationClip | THREE.AnimationClip[] | null | undefined {
+  return nodeRegistry.get(node.type)?.exportAnimation?.({ node, object })
 }
 
 /**
@@ -771,6 +784,9 @@ function nodeDisplayLabel(node: AnyNode): string {
       return 'Door'
     case 'window':
       return 'Window'
+    case 'cabinet':
+    case 'cabinet-module':
+      return 'Cabinet'
     case 'slab':
       return 'Slab'
     case 'ceiling':
@@ -820,10 +836,10 @@ function stampIdentity(
       extras.label = getLevelDisplayName(node as LevelNode)
       target.visible = true
     }
-    // Only doors/windows that actually baked an open clip are openable. A cased
-    // opening (no leaf) or a fixed window (no operable sash) produces no clip, so
-    // it stays unflagged — the file never claims a part opens when nothing moves.
-    if (node.type === 'door' || node.type === 'window') {
+    // Only nodes that actually baked an open clip are openable. A cased opening
+    // (no leaf), fixed window, or static cabinet produces no clip, so it stays
+    // unflagged — the file never claims a part opens when nothing moves.
+    if (clipNamesByNode.get(id)?.some((name) => name.endsWith(': open'))) {
       const clipNames = clipNamesByNode.get(id)
       if (clipNames?.length) {
         extras.openable = true

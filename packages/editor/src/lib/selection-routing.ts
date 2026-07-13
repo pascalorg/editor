@@ -1,4 +1,9 @@
-import { type AnyNode, type ItemNode, nodeRegistry } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type ItemNode,
+  nodeRegistry,
+  resolveSelectionProxyId,
+} from '@pascal-app/core'
 
 export type SelectionModifierKeys = {
   meta: boolean
@@ -9,6 +14,35 @@ export type SelectionModifierKeys = {
 export type NodeSelectionTarget = {
   phase: 'site' | 'structure' | 'furnish'
   structureLayer?: 'zones' | 'elements'
+}
+
+function shouldBypassSelectionProxy(node: AnyNode, target: AnyNode): boolean {
+  if (node.id === target.id) return false
+  // Kind-declared bypass (`def.selectionProxy.bypassDirectPick`): the kind
+  // keeps a proxy for grouped affordances but wants a direct body click to
+  // select the clicked node itself.
+  return nodeRegistry.get(node.type)?.selectionProxy?.bypassDirectPick?.(node, target) ?? false
+}
+
+export function resolveCanvasSelectionNode({
+  node,
+  nodes,
+  selectedIds,
+}: {
+  node: AnyNode
+  nodes: Readonly<Record<string, AnyNode | undefined>>
+  selectedIds: readonly string[]
+}): AnyNode {
+  const proxiedTarget = nodes[resolveSelectionProxyId(node, nodes)] ?? node
+  let target = shouldBypassSelectionProxy(node, proxiedTarget) ? node : proxiedTarget
+  const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
+  if (parentFrame) {
+    const parent = parentFrame.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
+    if (parent && selectedIds.length === 1 && selectedIds[0] === parent.id) {
+      target = parent
+    }
+  }
+  return target
 }
 
 export function isSelectionModifierActive(keys: SelectionModifierKeys): boolean {

@@ -72,6 +72,8 @@ interface DragBoundingBoxProps {
    * includes per-level landings outside the shaft footprint).
    */
   size?: [number, number, number]
+  /** Local center of `size`. Defaults to the node origin plus half-height. */
+  center?: [number, number, number]
   /** Y center of the box in the node's local frame. Defaults to `size[1] / 2`. */
   centerY?: number
   color?: number
@@ -91,6 +93,7 @@ export function DragBoundingBox({
   rotationY = 0,
   fallbackSize = [0, 0, 0],
   size,
+  center,
   centerY,
   color = DEFAULT_COLOR,
 }: DragBoundingBoxProps) {
@@ -105,7 +108,7 @@ export function DragBoundingBox({
 
   const [w, h, d] = size ?? measured?.size ?? fallbackSize
   const [cx, cy, cz] = size
-    ? [0, centerY ?? size[1] / 2, 0]
+    ? (center ?? [0, centerY ?? size[1] / 2, 0])
     : (measured?.center ?? [0, fallbackSize[1] / 2, 0])
   const minY = cy - h / 2
   const groundY = minY + 0.01

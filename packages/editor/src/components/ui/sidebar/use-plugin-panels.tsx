@@ -1,9 +1,10 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef, panelRegistry, type PluginPanel } from '@pascal-app/core'
+import { type IconRef } from '@pascal-app/core'
 import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
 import useEditor from '../../../store/use-editor'
+import { editorHostPanelRegistry, type EditorHostPanel } from '../../../lib/plugin-panels'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 
@@ -46,9 +47,9 @@ function PluginPanelCrashed({ label }: { label: string }) {
 // `React.lazy` must be called once per loader so the resolved component keeps a
 // stable identity across renders (otherwise switching panels remounts the tree
 // every time the sidebar re-renders). Cache the wrapped component by its loader.
-const wrappedPanelCache = new WeakMap<PluginPanel['component'], ComponentType>()
+const wrappedPanelCache = new WeakMap<EditorHostPanel['component'], ComponentType>()
 
-function resolvePanelComponent(panel: PluginPanel): ComponentType {
+function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
   const cached = wrappedPanelCache.get(panel.component)
   if (cached) return cached
   const Lazy = lazy(panel.component)
@@ -65,21 +66,21 @@ function resolvePanelComponent(panel: PluginPanel): ComponentType {
 }
 
 /**
- * Merge plugin-contributed panels (from the observable {@link panelRegistry})
+ * Merge host-registered panels (from the observable {@link editorHostPanelRegistry})
  * with the host's `extraPanels`, returning the combined list the icon rail and
  * panel-content area render. Host panels keep their leading order and win on id
  * collisions. Subscribes to the registry so a panel that registers after the
- * first render (plugin discovery is async) makes the rail re-render.
+ * first render makes the rail re-render.
  *
  * Panels are filtered by the current workspace: a panel surfaces only in the
- * workspaces it declares (`PluginPanel.workspaces`, default `['edit']`), so an
+ * workspaces it declares (`EditorHostPanel.workspaces`, default `['edit']`), so an
  * authoring panel like Nature doesn't ride into the studio rail.
  */
-export function usePluginPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
+export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   const registered = useSyncExternalStore(
-    panelRegistry.subscribe,
-    panelRegistry.getSnapshot,
-    panelRegistry.getSnapshot,
+    editorHostPanelRegistry.subscribe,
+    editorHostPanelRegistry.getSnapshot,
+    editorHostPanelRegistry.getSnapshot,
   )
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const hostIds = new Set(hostPanels?.map((p) => p.id))

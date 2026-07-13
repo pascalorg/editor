@@ -39,6 +39,7 @@ export type PaintableMaterialTarget =
       | 'slab'
       | 'ceiling'
       | 'shelf'
+      | 'cabinet'
       | 'chimney'
       | 'dormer'
       | 'box-vent'
@@ -273,7 +274,7 @@ export function resolveActivePaintMaterialFromSelection(params: {
       nodes,
     })
     if (surface) {
-      const sourceTarget = selectedNode.type as PaintableMaterialTarget
+      const sourceTarget = (paintCap.materialTarget ?? selectedNode.type) as PaintableMaterialTarget
       return hasActivePaintMaterial({
         material: surface.material,
         materialPreset: surface.materialPreset,
@@ -351,6 +352,10 @@ export function resolveActivePaintMaterialFromSelection(params: {
   // Wall / chimney / dormer flow through the registry-driven path
   // at the top of this function.
 
+  // Slot-backed kinds resolve via the registry-driven `getEffectiveMaterial`
+  // path at the top of this function, including legacy inline-material
+  // fallbacks when their capability exposes one.
+
   if (
     (selectedNode.type === 'fence' ||
       selectedNode.type === 'column' ||
@@ -385,6 +390,10 @@ export function resolvePaintTargetFromSelection(params: {
 
   const selectedNode = nodes[selectedId]
   if (!selectedNode) return null
+
+  const registryPaintTarget = nodeRegistry.get(selectedNode.type)?.capabilities?.paint
+    ?.materialTarget
+  if (registryPaintTarget) return registryPaintTarget as PaintableMaterialTarget
 
   if (selectedNode.type === 'wall') {
     return 'wall'

@@ -7,7 +7,7 @@ import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { resolveAssetSnapTarget, SnapTargetBadge } from '../snap-target-badge'
-import { CATALOG_ITEMS } from './catalog-items'
+import { CATALOG_ITEMS, type CatalogItem } from './catalog-items'
 
 export function ItemCatalog({
   category,
@@ -36,9 +36,9 @@ export function ItemCatalog({
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
-  const sourceItems = itemsOverride ?? CATALOG_ITEMS
+  const sourceItems: CatalogItem[] = itemsOverride ?? CATALOG_ITEMS
   // Server-provided results bypass all local filtering; otherwise filter by category/search/tags
-  const filteredItems =
+  const filteredItems: CatalogItem[] =
     overrideItems ??
     (() => {
       const categoryItems = search
@@ -80,7 +80,7 @@ export function ItemCatalog({
               // the selected node.
               useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
-              setTool('item')
+              setTool(item.tool ?? 'item')
               setMode('build')
             }}
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}

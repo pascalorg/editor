@@ -122,6 +122,10 @@ type ViewerState = {
   resetSelection: () => void
 
   outliner: Outliner // No setter as we will manipulate directly the arrays
+  /** Bumped by GeometrySystem after each rebuild pass so selection/outline
+   * effects can re-apply to the freshly swapped meshes. */
+  geometryRevision: number
+  bumpGeometryRevision: () => void
 
   // Export functionality
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
@@ -395,6 +399,9 @@ const useViewer = create<ViewerState>()(
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },
+      geometryRevision: 0,
+      bumpGeometryRevision: () =>
+        set((state) => ({ geometryRevision: state.geometryRevision + 1 })),
 
       exportScene: null,
       setExportScene: (fn) => set({ exportScene: fn }),

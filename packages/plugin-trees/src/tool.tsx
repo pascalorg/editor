@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { EDITOR_LAYER, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import { usePlacement } from './placement'
@@ -17,29 +17,27 @@ import { useTreesStore } from './store'
  */
 export default function TreeTool() {
   const activeLevelId = useViewer((s) => s.selection.levelId)
-  const brush = useTreesStore()
+  const preset = useTreesStore((s) => s.preset)
+  const size = useTreesStore((s) => s.size)
+  const height = useTreesStore((s) => s.height)
+  const foliageDensity = useTreesStore((s) => s.foliageDensity)
+  const trunkThickness = useTreesStore((s) => s.trunkThickness)
+  const leafless = useTreesStore((s) => s.leafless)
 
   const previewNode = useMemo(
     () =>
       TreeNode.parse({
-        preset: brush.preset,
-        size: brush.size,
-        height: brush.height,
-        foliageDensity: brush.foliageDensity,
-        trunkThickness: brush.trunkThickness,
-        leafless: brush.leafless,
+        preset,
+        size,
+        height,
+        foliageDensity,
+        trunkThickness,
+        leafless,
         // seed/treeType left unset → the ghost shows the pure preset, as placed.
         position: [0, 0, 0],
         rotation: [0, 0, 0],
       }),
-    [
-      brush.preset,
-      brush.size,
-      brush.height,
-      brush.foliageDensity,
-      brush.trunkThickness,
-      brush.leafless,
-    ],
+    [preset, size, height, foliageDensity, trunkThickness, leafless],
   )
 
   const { cursorRef, cursorVisible } = usePlacement(activeLevelId, (position) => {
@@ -67,7 +65,7 @@ export default function TreeTool() {
   if (!activeLevelId) return null
 
   return (
-    <group ref={cursorRef} visible={cursorVisible}>
+    <group layers={EDITOR_LAYER} ref={cursorRef} visible={cursorVisible}>
       <TreePreview node={previewNode} />
     </group>
   )

@@ -16,6 +16,7 @@ import {
   nodeRegistry,
   pauseSceneHistory,
   resolveBuildingForLevel,
+  resolveSelectionProxyId,
   resumeSceneHistory,
   useInteractive,
   useLiveNodeOverrides,
@@ -35,6 +36,7 @@ import {
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
   snapDirectRotationDelta,
@@ -409,13 +411,25 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     for (const [id] of liveTransforms) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
     for (const [id] of liveOverrides) {
       const node = sceneNodes[id as AnyNodeId]
-      if (node && nodeRegistry.get(node.type)?.floorplanDependsOnSiblings) {
+      const def = node ? nodeRegistry.get(node.type) : null
+      if (
+        node &&
+        (def?.floorplanDependsOnSiblings ||
+          def?.floorplanSiblingOverrides ||
+          def?.floorplanAffectedIds)
+      ) {
         liveFlaggedIds.push(id as AnyNodeId)
       }
     }
@@ -557,7 +571,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
       if (event.button !== 2 || !(event.metaKey || event.ctrlKey)) return false
 
-      const node = useScene.getState().nodes[id]
+      const sceneNodes = useScene.getState().nodes
+      const selectedNode = sceneNodes[id]
+      const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
       if (!node || !canDirectRotateNode(node)) return false
       // Sole selection only — same stand-down as the direct move above.
       const selectedIds = useViewer.getState().selection.selectedIds
@@ -757,7 +773,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
       const dependsOnSiblingInputs = !!(
-        def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides
+        def.floorplanDependsOnSiblings ||
+        def.floorplanSiblingOverrides ||
+        def.floorplanAffectedIds
       )
       const descriptor: FloorplanEntryDescriptor = { id, node, dependsOnSiblingInputs }
       if (ctxOverrides) descriptor.ctxOverrides = ctxOverrides
@@ -1003,8 +1021,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         return
       }
 
-      // Capture the final state BEFORE the revert so we know what to
-      // re-apply post-resume.
+      // Legacy compatibility for sessions that still wrote preview state into
+      // `useScene` during `apply()`: capture the final state BEFORE the revert
+      // so we know what to re-apply post-resume. New sessions should provide a
+      // `commit()` hook and preview through live overrides/transforms instead.
       const sceneNodes = useScene.getState().nodes
       const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
       for (const snap of drag.snapshots) {
@@ -1023,7 +1043,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
 
       if (commitValid && finalUpdates.length > 0) {
-        // Single-undo dance (mirrors the 3D move-endpoint-tool):
+        // Legacy single-undo dance (mirrors the old 3D move-endpoint-tool):
         //   1. Revert to baseline while history is still paused (untracked).
         //   2. Resume history.
         //   3. Re-apply the final state — recorded as one tracked change.
@@ -1354,11 +1374,26 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   // Mirror the sidebar tree nodes' hover wiring — `useViewer.hoveredId` drives
   // the highlight halo in 3D as well as registry floor-plan hover strokes.
   const handlePointerEnter = useCallback(() => {
-    onHoveredIdChange(nodeId)
+    const node = useScene.getState().nodes[nodeId]
+    onHoveredIdChange(
+      node
+        ? resolveSelectionProxyId(
+            node,
+            useScene.getState().nodes as Record<string, AnyNode | undefined>,
+          )
+        : nodeId,
+    )
   }, [nodeId, onHoveredIdChange])
 
   const handlePointerLeave = useCallback(() => {
-    if (useViewer.getState().hoveredId === nodeId) onHoveredIdChange(null)
+    const node = useScene.getState().nodes[nodeId]
+    const targetId = node
+      ? resolveSelectionProxyId(
+          node,
+          useScene.getState().nodes as Record<string, AnyNode | undefined>,
+        )
+      : nodeId
+    if (useViewer.getState().hoveredId === targetId) onHoveredIdChange(null)
   }, [nodeId, onHoveredIdChange])
 
   const handleHandlePointerDown = useCallback(
@@ -1516,7 +1551,11 @@ function buildFloorplanEntryGeometry({
     return null
   }
 
-  const dependsOnSiblingInputs = !!(def.floorplanDependsOnSiblings || def.floorplanSiblingOverrides)
+  const dependsOnSiblingInputs = !!(
+    def.floorplanDependsOnSiblings ||
+    def.floorplanSiblingOverrides ||
+    def.floorplanAffectedIds
+  )
   const deps: NodeDeps = {
     node,
     live,
@@ -1538,6 +1577,11 @@ function buildFloorplanEntryGeometry({
   const applyLiveTransform = (sourceNode: AnyNode): AnyNode => {
     if (!live) return sourceNode
     const hasPosition = Array.isArray((sourceNode as { position?: unknown }).position)
+    const parentFrameProjection = nodeRegistry.get(sourceNode.type)?.capabilities?.movable
+      ?.parentFrame?.floorplanLiveTransform
+    if (parentFrameProjection) {
+      return parentFrameProjection({ node: sourceNode, live })
+    }
     if (sourceNode.type === 'door' || sourceNode.type === 'window') {
       const r = (sourceNode as { rotation?: unknown }).rotation
       return {
@@ -1571,7 +1615,12 @@ function buildFloorplanEntryGeometry({
   }
 
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId,
+        nodes,
+        liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
+      })
     : nodes
   const sourceNode = contextNodes !== nodes ? (contextNodes[nodeId] ?? node) : node
   const overrideNode = liveOverride ? ({ ...sourceNode, ...liveOverride } as AnyNode) : sourceNode
@@ -1645,7 +1694,12 @@ export function getFloorplanLevelData(
 
   const computeLevelData = def.computeFloorplanLevelData as FloorplanLevelDataHook
   const contextNodes = def.floorplanSiblingOverrides
-    ? def.floorplanSiblingOverrides({ nodeId: sampleId, nodes, liveOverrides })
+    ? def.floorplanSiblingOverrides({
+        nodeId: sampleId,
+        nodes,
+        liveTransforms: useLiveTransforms.getState().transforms,
+        liveOverrides,
+      })
     : nodes
   const siblings: AnyNode[] = []
   for (const id of ids) {
@@ -2766,7 +2820,7 @@ function endpointKey(x: number, y: number): string {
 //   - a gutter join depends on sibling gutters under the same roof.
 // Everything else stays cached, so dragging one wall/opening rebuilds a handful
 // of geometries rather than every wall + opening on the level.
-function computeAffectedSiblingIds(
+export function computeAffectedSiblingIds(
   liveFlaggedIds: readonly AnyNodeId[],
   nodes: Record<string, AnyNode>,
   liveOverrides: Map<string, Record<string, unknown>>,
@@ -2798,6 +2852,17 @@ function computeAffectedSiblingIds(
     const node = nodes[id]
     if (!node) continue
     affected.add(id)
+    const def = nodeRegistry.get(node.type)
+    const extraAffectedIds = def?.floorplanAffectedIds?.({
+      nodeId: id,
+      node,
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      liveTransforms: useLiveTransforms.getState().transforms,
+      liveOverrides,
+    })
+    if (extraAffectedIds) {
+      for (const extraId of extraAffectedIds) affected.add(extraId)
+    }
     if (node.type === 'wall') {
       const w = node as unknown as {
         start: [number, number]
