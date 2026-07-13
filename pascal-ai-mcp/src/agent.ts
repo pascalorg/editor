@@ -12,7 +12,13 @@ import {
   WINDOW_PATTERN,
 } from './lang/room-vocab'
 import { executeFurniturePlan, type FurnitureRoom } from './furniture-executor'
-import { executeFurnitureModifyOps, type FurnitureModifyReport } from './furniture-modify'
+import {
+  executeFurnitureModifyOps,
+  isChecklistItem,
+  replayManualItems,
+  type FurnitureModifyReport,
+  type ManualItem,
+} from './furniture-modify'
 import { partitionLayout } from './layout-partitioner'
 import { applyModifyOps, parseModifyOps, resolveRoomRef, type FurnitureModifyOp } from './modify-ops'
 import { computeLayoutQuality } from './layout-metrics'
@@ -764,11 +770,17 @@ export class PascalAiAgent {
       // structural asks) fall through to the legacy free-edit path.
       // PASCAL_MODIFY_LEGACY=1 forces the old free-edit path (comparison
       // experiments only — same posture as AI_PLAN_LLM_GEOMETRY, deliberately
-      // not in AppConfig; the switch retires with batch M3's online eval).
-      if (operation === 'update' && process.env.PASCAL_MODIFY_LEGACY !== '1') {
+      // not in AppConfig). ALL intents go through the translator — a
+      // delete-classified "把次卧删掉" is a remove_room, a create-classified
+      // addition is an add_room; the double-confirm for deletes already
+      // happened before modify() runs.
+      if (process.env.PASCAL_MODIFY_LEGACY !== '1') {
         const fastPath = await this.tryPlanFirstModify(session, feedback, sceneId, nullableNumber(loaded.version))
         if (fastPath) return fastPath
       }
+      // Reaching legacy on a scene without plan snapshots deserves a note in
+      // the reply (§7) — structural asks on pre-plan-first scenes land here.
+      const legacyNoSnapshot = !session.layoutIntent || !session.layoutPlan
       // Pre-edit snapshot: drives the deterministic protection acceptance
       // below and marks every pre-existing wall read-only for the dedupe.
       // Delete operations are exempt — removing existing structure is their
@@ -858,7 +870,7 @@ export class PascalAiAgent {
         : 'completed_with_issues'
       delete session.pendingModification
       delete session.pendingOperation
-      const reply = buildCompletionReply({
+      const completionReply = buildCompletionReply({
         lang: session.language ?? 'en',
         successText: t(session.language, 'modifySuccess', {}),
         repairRounds,
@@ -867,6 +879,9 @@ export class PascalAiAgent {
         furnitureIssues,
         gateFailures: gates.report.failures,
       })
+      const reply = legacyNoSnapshot
+        ? [completionReply, t(session.language, 'modifyLegacyNoSnapshot', {})].join('\n')
+        : completionReply
       session.messages.push({ role: 'assistant', content: reply })
       return { session, reply, next: 'finish' }
     } catch (error) {
@@ -1112,6 +1127,32 @@ export class PascalAiAgent {
     const nodes = snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {})))
     const levelId = Object.entries(nodes).find(([, node]) => node.type === 'level')?.[0] ?? null
     if (!levelId) return null
+    // §6 manual-item replay: items outside the furniture checklist (decor,
+    // user-picked extras) don't come back through the furnishing pass —
+    // capture them (with their pre-rebuild room) before everything is
+    // cleared, re-place them after.
+    const manualItems: ManualItem[] = Object.values(nodes).flatMap(node => {
+      if (node.type !== 'item') return []
+      const value = node as {
+        name?: unknown
+        position?: unknown
+        asset?: { id?: unknown; name?: unknown; dimensions?: unknown; attachTo?: unknown }
+      }
+      const assetId = typeof value.asset?.id === 'string' ? value.asset.id : null
+      const position = value.position
+      if (!assetId || !Array.isArray(position) || position.length !== 3) return []
+      if (value.asset?.attachTo === 'wall' || value.asset?.attachTo === 'ceiling') return []
+      const name = typeof value.name === 'string' && value.name
+        ? value.name
+        : typeof value.asset?.name === 'string' ? value.asset.name : assetId
+      if (isChecklistItem(name)) return []
+      const dims = Array.isArray(value.asset?.dimensions) && value.asset.dimensions.length === 3
+        ? value.asset.dimensions as [number, number, number]
+        : [1, 1, 1] as [number, number, number]
+      const home = zones.find(zone => pointInPolygon(position[0] as number, position[2] as number, zone.polygon))
+      if (!home) return []
+      return [{ catalogItemId: assetId, name, dimensions: dims, roomName: home.name }]
+    })
     const clearTypes = new Set(['zone', 'wall', 'slab', 'ceiling', 'item'])
     for (const [id, node] of Object.entries(nodes)) {
       if (!clearTypes.has(String(node.type))) continue
@@ -1122,13 +1163,13 @@ export class PascalAiAgent {
       }
     }
     const built = await executeLayoutPlan({
-      plan: partition.plan,
+      plan,
       levelId,
       callMcp: traceMcp,
       dedupeSharedWalls: () => this.dedupeSharedWalls(session.sessionId, levelId),
       beforeCall,
     })
-    const furnitureRooms: FurnitureRoom[] = partition.plan.rooms.map(planRoom => ({
+    const furnitureRooms: FurnitureRoom[] = plan.rooms.map(planRoom => ({
       id: planRoom.id,
       name: planRoom.name,
       type: planRoom.type,
@@ -1140,7 +1181,7 @@ export class PascalAiAgent {
       furnitureRooms.filter(room => room.zoneId !== null).map(room => [room.zoneId as string, room.type]),
     )
     session.layoutIntent = intent
-    session.layoutPlan = partition.plan
+    session.layoutPlan = plan
     session.strategy = strategy
     const furnished = await executeFurniturePlan({
       rooms: furnitureRooms,
@@ -1159,19 +1200,30 @@ export class PascalAiAgent {
         beforeCall,
       })
     }
+    const replay = await replayManualItems({
+      items: manualItems,
+      rooms: furnitureRooms,
+      levelId,
+      callMcp: traceMcp,
+      beforeCall,
+    })
     trace.converged = true
     return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
       okDetails: [
         ...applied.notes,
-        ...partition.notes,
+        ...planNotes,
         ...(furnReport?.results.filter(r => r.ok).map(r => r.detail) ?? []),
+        ...replay.replaced.map(name => `手动家具「${name}」已在重建后重新放置`),
       ],
       failedDetails: [
         ...built.executionIssues,
         ...furnished.missing.map(entry => `「${entry.room}」缺少${entry.label}：${entry.reason}`),
         ...furnished.executionIssues,
         ...(furnReport?.results.filter(r => !r.ok).map(r => r.detail) ?? []),
+        ...replay.lost.map(entry => `手动家具「${entry.name}」未能重放：${entry.reason}`),
+        ...replay.executionIssues,
       ],
+      previousVersion: loadedVersion,
     })
   }
 
@@ -1201,7 +1253,7 @@ export class PascalAiAgent {
     sceneId: string,
     loadedVersion: number | null,
     trace: { toolCounts: Record<string, number> },
-    results: { okDetails: string[]; failedDetails: string[] },
+    results: { okDetails: string[]; failedDetails: string[]; previousVersion?: number | null },
   ): Promise<Partial<WorkflowGraphState>> {
     const diagnostics = await this.collectDiagnostics(session)
     const sceneVersion = await this.persistScene(
@@ -1250,7 +1302,12 @@ export class PascalAiAgent {
       gateFailures: gates.report.failures,
     })
     const okDetails = results.okDetails.map(detail => `- ${detail}`)
-    const reply = okDetails.length > 0 ? [base, ...okDetails].join('\n') : base
+    // §6 版本安全: the pre-change version rides the reply so the user can
+    // roll a structural rebuild back through the store's version history.
+    const versionNote = typeof results.previousVersion === 'number'
+      ? [t(session.language, 'modifyPreviousVersion', { version: results.previousVersion })]
+      : []
+    const reply = [base, ...okDetails, ...versionNote].join('\n')
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -1787,7 +1844,11 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
       ? wallsPayload.walls.filter(isWallWithOpenings)
       : []
     const items = Array.isArray(summaryPayload.items) ? summaryPayload.items.filter(isItemSummary) : []
-    const planTargets = buildPlanTargets(session.brief)
+    // Gates judge the scene against the CURRENT requirement truth: the
+    // intent snapshot for plan-first scenes (modify ops edit it — after a
+    // confirmed remove_room the old brief must not keep failing gate 1/2
+    // forever), the brief for legacy scenes.
+    const planTargets = gateTargetsForSession(session)
     const requiredWindowRoomTypes = windowRoomTypesFromBrief(session.brief)
     const report = evaluateCompletionGates(zones, walls, items, {
       ...(planTargets.totalAreaSqm !== undefined ? { totalAreaSqm: planTargets.totalAreaSqm } : {}),
@@ -2359,6 +2420,28 @@ function isCompletedPhase(phase: WorkflowSession['phase']): boolean {
  * attempt should be left in a retryable state. Extracted so it's unit
  * testable without constructing a live `PascalAiAgent`.
  */
+/**
+ * Requirement truth for the completion gates: the layoutIntent snapshot when
+ * the scene is plan-first (kept current by every modify), the brief
+ * otherwise. Only the four gate-checked types become requirements — the
+ * intent's circulation/service rooms are layout output, not user asks.
+ */
+export function gateTargetsForSession(
+  session: Pick<WorkflowSession, 'brief' | 'layoutIntent'>,
+): PlanTargets {
+  const intent = session.layoutIntent
+  if (!intent) return buildPlanTargets(session.brief)
+  const counts = new Map<RoomType, number>()
+  for (const room of intent.rooms) counts.set(room.type, (counts.get(room.type) ?? 0) + 1)
+  const requiredRooms = (['bedroom', 'living', 'kitchen', 'bathroom'] as RoomType[])
+    .filter(type => (counts.get(type) ?? 0) > 0)
+    .map(type => ({ type, count: counts.get(type)! }))
+  return {
+    ...(intent.targetTotalAreaSqm > 0 ? { totalAreaSqm: intent.targetTotalAreaSqm } : {}),
+    ...(requiredRooms.length > 0 ? { requiredRooms } : {}),
+  }
+}
+
 /**
  * Manual-edit drift detection (MODIFY_REDESIGN.md §6): does the live scene's
  * room set still match the plan snapshot it was built from? Compares room

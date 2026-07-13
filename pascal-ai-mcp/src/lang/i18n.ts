@@ -90,6 +90,16 @@ export const MESSAGES = {
     () => '現在のシーンと元のプランに手動編集による差分が検出されました。この構造修正を続行すると新しいプランに基づいて再構築され、手動の変更は上書きされる可能性があります（家具の変更は影響を受けません）。続行するには確認を送信するか、修正内容を改めて入力してください。',
     () => 'Manual edits were detected between the current scene and the original plan. Proceeding with this structural change will rebuild the structure from the new plan and may overwrite them (furniture changes are unaffected). Send a confirmation to proceed, or describe a different change.',
   ),
+  modifyLegacyNoSnapshot: def<Record<string, never>>(
+    () => '说明：该场景缺少规划快照（较早生成），本次修改通过兼容路径执行。',
+    () => '補足：このシーンにはプランのスナップショットがない（旧版で生成）ため、今回の修正は互換パスで実行されました。',
+    () => 'Note: this scene has no plan snapshot (generated before plan-first), so this change ran through the compatibility path.',
+  ),
+  modifyPreviousVersion: def<{ version: number }>(
+    p => `修改前的场景版本为 v${p.version}，如需回滚可恢复该版本。`,
+    p => `修正前のシーンバージョンは v${p.version} です。必要であればこのバージョンに戻せます。`,
+    p => `The scene version before this change was v${p.version}; restore it to roll back if needed.`,
+  ),
   modifyNoScene: def<Record<string, never>>(
     () => '找不到需要修改的场景，请重新生成户型。',
     () => '修正対象のシーンが見つかりません。間取りを再生成してください。',

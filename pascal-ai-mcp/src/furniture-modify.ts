@@ -311,3 +311,106 @@ export async function executeFurnitureModifyOps(options: {
 
   return { results, executionIssues: issues }
 }
+
+// --- manual-item replay (MODIFY_REDESIGN.md §6, structural rebuild) ---------
+
+// An item is checklist-covered when any checklist option recognizes its name
+// — those come back through the furnishing pass after a rebuild. Everything
+// else (decor, user-picked extras) is "manual" and must be replayed.
+export function isChecklistItem(name: string): boolean {
+  return findVocabularyOption(name) !== null
+}
+
+export type ManualItem = {
+  catalogItemId: string
+  name: string
+  dimensions: [number, number, number]
+  // Room name in the PRE-rebuild scene; replay matches it against the
+  // rebuilt rooms by name (rename keeps snapshots in step, so names hold).
+  roomName: string
+}
+
+export type ManualReplayReport = {
+  replaced: string[]
+  lost: Array<{ name: string; reason: string }>
+  executionIssues: string[]
+}
+
+// Best-effort re-placement of manual items after a structural rebuild:
+// same wall-scan constraints as every other placement — an item that no
+// longer fits (room shrank / removed) lands in `lost`, reported, never
+// silently dropped.
+export async function replayManualItems(options: {
+  items: ManualItem[]
+  rooms: FurnitureRoom[]
+  levelId: string
+  callMcp: McpCaller
+  beforeCall?: () => void
+}): Promise<ManualReplayReport> {
+  const { items, rooms, levelId, callMcp, beforeCall } = options
+  const issues: string[] = []
+  const replaced: string[] = []
+  const lost: Array<{ name: string; reason: string }> = []
+  if (items.length === 0) return { replaced, lost, executionIssues: issues }
+
+  const wallsPayload = await callWithRetry(callMcp, 'get_walls', { levelId }, issues, '读取墙体清单', beforeCall)
+  const isPair = (v: unknown): v is [number, number] =>
+    Array.isArray(v) && v.length === 2 && typeof v[0] === 'number' && typeof v[1] === 'number'
+  const walls = (Array.isArray(wallsPayload?.walls) ? wallsPayload.walls : [])
+    .filter((wall): wall is { start: [number, number]; end: [number, number]; openings: never[] } => {
+      const value = wall as { start?: unknown; end?: unknown; openings?: unknown }
+      return isPair(value?.start) && isPair(value?.end) && Array.isArray(value?.openings)
+    })
+  const keepClear = doorClearances(walls)
+
+  const summaryPayload = await callWithRetry(callMcp, 'get_level_summary', {}, issues, '读取已放置家具', beforeCall)
+  const rawItems = Array.isArray(summaryPayload?.items) ? summaryPayload.items : []
+  const occupied: Footprint2D[] = []
+  for (const entry of rawItems) {
+    const value = entry as { position?: unknown; rotation?: unknown; asset?: { dimensions?: unknown; attachTo?: unknown } }
+    if (!isNumberTriple(value.position)) continue
+    if (value.asset?.attachTo === 'wall' || value.asset?.attachTo === 'ceiling') continue
+    const dims = isNumberTriple(value.asset?.dimensions) ? value.asset.dimensions : [1, 1, 1] as [number, number, number]
+    const rotationY = isNumberTriple(value.rotation) ? value.rotation[1] : 0
+    occupied.push(footprintAt(value.position[0], value.position[2], dims[0], dims[2], rotationY))
+  }
+
+  for (const item of items) {
+    const room = rooms.find(entry => entry.name === item.roomName)
+    if (!room) {
+      lost.push({ name: item.name, reason: `所在房间「${item.roomName}」已不存在` })
+      continue
+    }
+    const spot = findWallPlacement({
+      polygon: room.polygon,
+      itemDims: item.dimensions,
+      occupied,
+      keepClear,
+    })
+    if (!spot) {
+      lost.push({ name: item.name, reason: `「${item.roomName}」中没有可放置的位置` })
+      continue
+    }
+    const payload = await callWithRetry(
+      callMcp,
+      'place_item',
+      {
+        catalogItemId: item.catalogItemId,
+        targetNodeId: room.zoneId ?? levelId,
+        position: spot.position,
+        rotation: spot.rotationY,
+      },
+      issues,
+      `重放「${item.name}」到「${room.name}」`,
+      beforeCall,
+    )
+    const itemId = typeof payload?.itemId === 'string' ? payload.itemId : null
+    if (!itemId || payload?.status === 'catalog_unavailable') {
+      lost.push({ name: item.name, reason: '资产已不在目录中，无法重放' })
+      continue
+    }
+    occupied.push(footprintAt(spot.position[0], spot.position[2], item.dimensions[0], item.dimensions[2], spot.rotationY))
+    replaced.push(item.name)
+  }
+  return { replaced, lost, executionIssues: issues }
+}

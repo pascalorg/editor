@@ -1,0 +1,24 @@
+{
+  "id": "case-19-modify-remove-room",
+  "category": "修改已有场景：删除房间（plan-first 结构管线 · delete 意图）",
+  "difficulty": "modify",
+  "setupFrom": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把次卧删掉，其他房间尽量保持不变。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 1,
+    "客厅": 1,
+    "厨房": 1,
+    "卫生间": 1
+  },
+  "requireAllRoomsReachable": true,
+  "notes": "堵 remove_room 盲区：删除意图（二次确认后）必须走 plan-first 管线——重分区删房、footprint 缩小（§8-2 拍板：总面积减去被删房间）。断言：(1) 次卧消失（卧室 2→1），其余房型数量不变；(2) 全部房间可达；(3) gates 全过——gates 以 layoutIntent 为需求真相（gateTargetsForSession），删房后不应再按原 brief 报缺卧室/面积偏差。刻意不断言锁宽：删掉一间卧室会让双带+走廊拓扑退化为单带，锁旧宽度在几何上无解（碎柱），分区器按 §4 设计放开轮廓重搜并记 note——轮廓变化在此场景是正确行为，由 modelCalls=1（plan-first 路径证据）+ 回复中的回退 note 人工抽查。"
+}

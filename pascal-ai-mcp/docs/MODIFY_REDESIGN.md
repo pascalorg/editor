@@ -149,3 +149,15 @@ M0–M2 核心为确定性代码，模型服务不可用也能开发（ModifyOp 
 | **case-18 衣柜误删修复** | 根因：目录检索按 tag 匹配，"bed" 命中所有 `bedroom` tag 资产 → swap 按"删最后放置"删了**衣柜**、按"最小规格优先"把**床头柜**当"单人床"放入；eval 断言对序列化节点做子串匹配，`bedroom` tag 含 "bed" 假通过。修复：`searchTerm` 补上生成路径同款 `option.match` 候选过滤（"床"永不返回床头柜/衣柜）；eval `itemChanges` 只匹配 name/asset 身份字段并优先用词表词边界 matcher |
 
 首轮结果（2026-07-13T03-10，4/6）：case-03 满分、case-13 书房 6–8㎡ ✅（旧流程 15㎡ 问题根治）、case-16/17 ✅；case-14（resize 欠额，补偿已落码）与 case-18（上表修复）待重跑。
+
+### 收尾批次（2026-07-13，文档-代码对齐审计后）
+
+| 修正 | 内容 |
+|---|---|
+| delete/create 意图接入 | 快速路径的门从 `operation==='update'` 放开为全部意图（翻译器统一判定；删除的二次确认在进 modify 前已完成）——此前"把次卧删掉"这类 delete 分类请求一直走 legacy，删除恰是豁免保护的最危险操作。eval case-19（删次卧）验证：modelCalls=1、gates 全过 ✅ |
+| gates 需求真相 | `gateTargetsForSession`：plan-first 场景的 gates 以 `layoutIntent` 快照为需求真相（modify 随手更新），legacy 场景仍用 brief——否则确认删房后 gates 拿旧 brief 永远报缺卧室/面积偏差 |
+| 手动家具重放（§6 兑现） | `isChecklistItem` + `replayManualItems`：重建前从场景快照采集非清单 item（含原房间归属），重建后按房间名重扫描摆放；房间没了/放不下/资产失效 → 逐件列入回复，不静默丢弃 |
+| 补偿 plan 未用 bug | resize 欠额补偿产出的 `plan`/`planNotes` 此前未被重建与快照使用（仍用 `partition.plan`，case-14 因未触发补偿而侥幸通过）——重建/`session.layoutPlan`/notes 全部改用补偿后结果 |
+| 旧场景注明（§7 兑现） | 无快照场景走 legacy 时回复追加 `modifyLegacyNoSnapshot` 说明 |
+| 版本号（§6 兑现） | 结构重建回复追加 `modifyPreviousVersion`（修改前版本号，可回滚） |
+| case-19 断言教训 | 删除大房间会让"双带+走廊"退化为单带，锁旧宽几何无解 → 分区器按 §4 放开轮廓重搜（设计内行为）——remove 类案例不断言锁宽，锁宽断言只适用于 add/resize |

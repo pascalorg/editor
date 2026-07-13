@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { FurnitureRoom } from './furniture-executor'
-import { executeFurnitureModifyOps } from './furniture-modify'
+import { executeFurnitureModifyOps, isChecklistItem, replayManualItems } from './furniture-modify'
 
 // 4×3.5 bedroom, door centered on the south wall (same fixture family as
 // furniture-executor.test.ts).
@@ -259,5 +259,45 @@ describe('executeFurnitureModifyOps', () => {
     })
     expect(report.results[0]!.ok).toBe(true)
     expect(deleted).toEqual(['item-bed'])
+  })
+})
+
+describe('manual-item replay (MODIFY_REDESIGN §6)', () => {
+  test('isChecklistItem separates checklist furniture from manual decor', () => {
+    expect(isChecklistItem('Double Bed')).toBe(true)
+    expect(isChecklistItem('Wardrobe Closet')).toBe(true)
+    expect(isChecklistItem('Potted Plant 03')).toBe(false)
+    expect(isChecklistItem('Bookshelf')).toBe(false)
+  })
+
+  test('replays a manual item into the surviving room, reports the vanished room', async () => {
+    const { callMcp, calls } = makeMockMcp({ items: [] })
+    const report = await replayManualItems({
+      items: [
+        { catalogItemId: 'plant-03', name: 'Potted Plant 03', dimensions: [0.4, 1.1, 0.4], roomName: '主卧' },
+        { catalogItemId: 'bookshelf', name: 'Bookshelf', dimensions: [0.8, 1.8, 0.3], roomName: '书房' }, // 房间已删除
+      ],
+      rooms: [bedroom],
+      levelId: 'level-1',
+      callMcp,
+    })
+    expect(report.replaced).toEqual(['Potted Plant 03'])
+    expect(report.lost).toHaveLength(1)
+    expect(report.lost[0]!.reason).toContain('已不存在')
+    const place = calls.find(call => call.name === 'place_item')
+    expect(place?.args.catalogItemId).toBe('plant-03')
+    expect(place?.args.targetNodeId).toBe('zone-bed')
+  })
+
+  test('a manual item that no longer fits lands in lost, not silently dropped', async () => {
+    const { callMcp } = makeMockMcp({ items: [existingBed, existingWardrobe] })
+    const report = await replayManualItems({
+      items: [{ catalogItemId: 'grand-piano', name: 'Grand Piano', dimensions: [3.9, 1.0, 3.4], roomName: '主卧' }],
+      rooms: [bedroom],
+      levelId: 'level-1',
+      callMcp,
+    })
+    expect(report.replaced).toEqual([])
+    expect(report.lost[0]!.reason).toContain('没有可放置的位置')
   })
 })
