@@ -27,7 +27,7 @@ import {
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
-import { backdropGradient, horizonHazeColor } from '../../lib/backdrop'
+import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
@@ -164,11 +164,15 @@ const PostProcessingPasses = ({
   const bgSkyUniform = useRef(uniform(new Color(initSky)))
   const bgSkyCurrent = useRef(new Color(initSky))
   const bgSkyTarget = useRef(new Color())
-  // Horizon haze band (derived from the background — see lib/backdrop.ts).
+  // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
   const initHaze = horizonHazeColor(initBg, initTheme.appearance)
   const bgHazeUniform = useRef(uniform(new Color(initHaze)))
   const bgHazeCurrent = useRef(new Color(initHaze))
   const bgHazeTarget = useRef(new Color())
+  const initSkyDeep = deepSkyColor(initSky)
+  const bgSkyDeepUniform = useRef(uniform(new Color(initSkyDeep)))
+  const bgSkyDeepCurrent = useRef(new Color(initSkyDeep))
+  const bgSkyDeepTarget = useRef(new Color())
   // Scene-camera matrices for the backdrop: the pipeline's fullscreen quad has
   // its own camera, so the sky gradient reconstructs each pixel's world-space
   // view ray from these to find the true horizon (dir.y = 0).
@@ -558,6 +562,7 @@ const PostProcessingPasses = ({
         background: bgUniform.current,
         haze: bgHazeUniform.current,
         sky: bgSkyUniform.current,
+        skyDeep: bgSkyDeepUniform.current,
       })
       if (shading === 'rendered') {
         bgGradient = gradeRgb(bgGradient)
@@ -650,6 +655,9 @@ const PostProcessingPasses = ({
     bgHazeTarget.current.set(horizonHazeColor(bgTheme.background, bgTheme.appearance))
     bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
     bgHazeUniform.current.value.copy(bgHazeCurrent.current)
+    bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
+    bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
     camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
     camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.

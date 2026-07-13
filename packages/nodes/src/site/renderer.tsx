@@ -10,6 +10,7 @@ import {
 } from '@pascal-app/core'
 import {
   backdropGradient,
+  deepSkyColor,
   getSceneTheme,
   horizonHazeColor,
   NodeRenderer,
@@ -142,6 +143,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       background: color(backgroundColor),
       haze: color(horizonHazeColor(backgroundColor, appearance)),
       sky: color(skyColor),
+      skyDeep: color(deepSkyColor(skyColor)),
     })
     // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
     // so without it the (bright) backdrop dilutes the vignette exactly where

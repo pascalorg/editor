@@ -3,6 +3,7 @@
 import { emitter, sceneRegistry } from '@pascal-app/core'
 import {
   backdropGradient,
+  deepSkyColor,
   GRID_LAYER,
   getSceneTheme,
   horizonHazeColor,
@@ -72,6 +73,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   // cached pipeline serves both opaque and transparent (preset/item) captures.
   const bgColorUniform = useRef(uniform(new THREE.Color('#ffffff')))
   const bgSkyUniform = useRef(uniform(new THREE.Color('#ffffff')))
+  const bgSkyDeepUniform = useRef(uniform(new THREE.Color('#ffffff')))
   const bgHazeUniform = useRef(uniform(new THREE.Color('#ffffff')))
   const bgProjInvUniform = useRef(uniform(new THREE.Matrix4()))
   const bgCamWorldUniform = useRef(uniform(new THREE.Matrix4()))
@@ -163,6 +165,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           background: bgColorUniform.current,
           haze: bgHazeUniform.current,
           sky: bgSkyUniform.current,
+          skyDeep: bgSkyDeepUniform.current,
         })
         const alpha = scenePassColor.a
         const finalOutput = vec4(
@@ -240,6 +243,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const theme = getSceneTheme(useViewer.getState().sceneTheme)
         bgColorUniform.current.value.set(theme.background)
         bgSkyUniform.current.value.set(theme.backgroundSky ?? theme.background)
+        bgSkyDeepUniform.current.value.set(deepSkyColor(theme.backgroundSky ?? theme.background))
         bgHazeUniform.current.value.set(horizonHazeColor(theme.background, theme.appearance))
         bgProjInvUniform.current.value.copy(thumbnailCamera.projectionMatrixInverse)
         bgCamWorldUniform.current.value.copy(thumbnailCamera.matrixWorld)
