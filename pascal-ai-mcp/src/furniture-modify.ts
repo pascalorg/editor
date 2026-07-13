@@ -25,6 +25,7 @@ import {
   type Footprint2D,
   type FurnitureRoom,
 } from './furniture-executor'
+import { findVocabularyOption } from './furniture-checklist'
 import { pointInPolygon } from './layout-plan'
 import type { FurnitureModifyOp } from './modify-ops'
 import { callWithRetry, type McpCaller } from './scene-executor'
@@ -78,16 +79,36 @@ async function searchTerm(
   issues: string[],
   beforeCall?: () => void,
 ): Promise<CatalogCandidate[]> {
-  const payload = await callWithRetry(callMcp, 'search_assets', { query: term }, issues, `检索「${term}」`, beforeCall)
-  return parseCandidates(payload)
+  const query = async (q: string) => parseCandidates(
+    await callWithRetry(callMcp, 'search_assets', { query: q }, issues, `检索「${q}」`, beforeCall))
+  const primary = await query(term)
+  if (primary.length > 0) return primary
+  // The op translator emits terms in the user's language while the catalog
+  // is English-only — retry through the checklist vocabulary's English-first
+  // search terms before declaring the term unknown.
+  const option = findVocabularyOption(term)
+  if (!option) return primary
+  for (const fallback of option.searchTerms) {
+    if (fallback === term) continue
+    const candidates = await query(fallback)
+    if (candidates.length > 0) return candidates
+  }
+  return primary
 }
 
 // Existing room items matching a user term: catalog-id match first (the
-// catalog owns the vocabulary), name substring as fallback.
+// catalog owns the vocabulary), then the checklist option's trilingual
+// matcher, then name substring as a last resort — the term may be CJK while
+// placed items carry English catalog names.
 function matchRoomItems(items: SceneItem[], room: FurnitureRoom, term: string, catalogIds: Set<string>): SceneItem[] {
   const inRoom = items.filter(item => item.roomId === room.id)
   const byAsset = inRoom.filter(item => item.assetId !== null && catalogIds.has(item.assetId))
   if (byAsset.length > 0) return byAsset
+  const matcher = findVocabularyOption(term)?.match
+  if (matcher) {
+    const byVocab = inRoom.filter(item => matcher.test(item.name) || matcher.test(item.assetName))
+    if (byVocab.length > 0) return byVocab
+  }
   const needle = term.toLowerCase()
   return inRoom.filter(item =>
     item.name.toLowerCase().includes(needle) || item.assetName.toLowerCase().includes(needle))

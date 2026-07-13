@@ -47,6 +47,8 @@ export type AssertionResult = {
 // ---------------------------------------------------------------------------
 
 const EPS = 0.05 // wall-coincidence tolerance (m)
+
+const round2 = (value: number): number => Math.round(value * 100) / 100
 const MIN_OVERLAP = 0.03 // below this two collinear segments merely touch
 
 type Seg = { start: [number, number]; end: [number, number] }
@@ -571,6 +573,8 @@ export type ModificationChecks = {
   addedRoomArea?: { type: string; min: number; max: number }
   /** Require the overall zone footprint bounds to remain unchanged. */
   preserveExteriorBounds?: boolean
+  /** Width-only exterior check for plan-first structural modifies (§4 locks W, depth floats). */
+  preserveExteriorWidth?: boolean
   /** Require a matching existing room to meet an area range after modification. */
   targetRoomArea?: { type: string; min: number; max?: number; nameIncludes?: string[] }
   /**
@@ -824,6 +828,32 @@ export function assertModification(
     }
   }
 
+  if (config.preserveExteriorWidth) {
+    // Plan-first structural modify (MODIFY_REDESIGN.md §4) locks the
+    // footprint WIDTH but lets depth float with the total-area change — the
+    // honest exterior assertion for add/resize cases is width-only.
+    const beforeBounds = overallBounds(snapshotZones(before))
+    const afterBounds = overallBounds(afterScene.zones)
+    if (!beforeBounds || !afterBounds) {
+      results.push({
+        name: 'modification:preserveExteriorWidth',
+        status: 'unsupported',
+        reason: '修改前或修改后缺少有效 zone polygon，无法比较外轮廓宽度',
+      })
+    } else {
+      const beforeWidth = beforeBounds.maxX - beforeBounds.minX
+      const afterWidth = afterBounds.maxX - afterBounds.minX
+      const unchanged = Math.abs(beforeWidth - afterWidth) <= EPS
+      results.push({
+        name: 'modification:preserveExteriorWidth',
+        status: unchanged ? 'pass' : 'fail',
+        expected: `宽度 ${round2(beforeWidth)}m`,
+        actual: `宽度 ${round2(afterWidth)}m`,
+        reason: unchanged ? undefined : '修改后的整体轮廓宽度与基准场景不一致（footprint 锁宽被破坏）',
+      })
+    }
+  }
+
   if (config.targetRoomArea) {
     const { type, min, max, nameIncludes } = config.targetRoomArea
     const pattern = roomTypePattern(type)
@@ -968,19 +998,30 @@ export const FURNITURE_PLACEMENT_RATE_MIN = 0.9
 
 export function assertPlanFirstResult(
   sceneResult: PlanFirstSceneResult | undefined,
-  options: { maxModelCalls?: number } = {},
+  options: { maxModelCalls?: number; allowedGateFailures?: string[] } = {},
 ): AssertionResult[] {
   const results: AssertionResult[] = []
 
   if (!sceneResult?.gateFailures) {
     results.push({ name: 'gatesPassed', status: 'unsupported', reason: 'sceneResult.gateFailures 缺失（旧版本会话？）' })
   } else {
+    // A modify case may deliberately violate a gate (e.g. 用户要求删掉床 →
+    // "卧室缺少必备家具：床" is the CORRECT outcome, not a defect). Gate
+    // failures matching an allowed pattern are waived for THIS case only;
+    // anything else still fails.
+    const allowed = options.allowedGateFailures ?? []
+    const blocking = sceneResult.gateFailures.filter(
+      failure => !allowed.some(pattern => failure.includes(pattern)),
+    )
+    const waived = sceneResult.gateFailures.length - blocking.length
     results.push({
       name: 'gatesPassed',
-      status: sceneResult.gateFailures.length === 0 ? 'pass' : 'fail',
-      expected: '全部完成门槛通过',
-      actual: sceneResult.gateFailures.length === 0 ? '通过' : `${sceneResult.gateFailures.length} 项未过`,
-      reason: sceneResult.gateFailures.length > 0 ? sceneResult.gateFailures.join('；') : undefined,
+      status: blocking.length === 0 ? 'pass' : 'fail',
+      expected: waived > 0 ? `完成门槛通过（豁免 ${waived} 项与请求直接对应的失败）` : '全部完成门槛通过',
+      actual: blocking.length === 0
+        ? waived > 0 ? `通过（豁免 ${waived} 项）` : '通过'
+        : `${blocking.length} 项未过`,
+      reason: blocking.length > 0 ? blocking.join('；') : undefined,
     })
   }
 

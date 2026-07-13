@@ -13,6 +13,7 @@
     }
   ],
   "expectedFacts": {},
+  "allowedGateFailures": ["缺少必备家具：床"],
   "modificationChecks": {
     "preserveRoomCounts": true,
     "maxDeletedOriginalWalls": 0,
@@ -24,5 +25,5 @@
       "structureUntouched": true
     }
   },
-  "notes": "M1 家具快速路径回归：纯家具删除。断言：(1) 删除至少一件匹配 bed 的 item；(2) 零结构变化；(3) 原墙/门窗/外轮廓不变。删的是否是次卧那张床由人工抽查（自动断言不区分房间归属，避免对基准场景床位分布做脆弱假设）。"
+  "notes": "M1 家具快速路径回归：纯家具删除。断言：(1) 删除至少一件匹配 bed 的 item；(2) 零结构变化；(3) 原墙/门窗/外轮廓不变。删的是否是次卧那张床由人工抽查（自动断言不区分房间归属，避免对基准场景床位分布做脆弱假设）。gate 豁免：删床是用户显式请求，「缺少必备家具：床」是本用例的正确结果而非缺陷。"
 }

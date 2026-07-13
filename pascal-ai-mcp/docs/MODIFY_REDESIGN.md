@@ -124,7 +124,7 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 | 3 | 稳定性位移阈值（§4 的 0.5m）与 deviationWeight 数值 | 落码时以 eval/预览实测定，文档只定语义 |
 | 4 | 旧流程退役时间 | case-13/14 + 新家具 eval case 全绿后删 legacy 路径 |
 
-## 9. 实施批次
+## 9. 实施批次 
 
 | 批次 | 内容 | 回归要求 |
 |---|---|---|

@@ -296,6 +296,7 @@ async function runCase(
   testCase: EvalCase,
   repeatIndex: number,
   sceneIdByCaseRepeat: Map<string, string>,
+  casesById: Map<string, EvalCase>,
 ): Promise<CaseRunResult> {
   const sessionId = `eval-${testCase.id}-r${repeatIndex}-${Date.now()}`
   const started = Date.now()
@@ -348,6 +349,65 @@ async function runCase(
       }
     }
     let lastResult: ChatResult | undefined
+    // setupFrom: replay the referenced generation case's turns in THIS
+    // session first, so the modify turns run against a session that holds the
+    // plan-first snapshots (layoutIntent/layoutPlan) — the production shape of
+    // "生成→接着改". The before-snapshot is the freshly generated scene.
+    if (testCase.setupFrom) {
+      const setupCase = casesById.get(testCase.setupFrom)
+      if (!setupCase) {
+        return {
+          caseId: testCase.id,
+          repeatIndex,
+          ok: false,
+          workflowCompleted: false,
+          assertionsPassed: false,
+          error: `setupFrom 引用的用例不存在：${testCase.setupFrom}`,
+          elapsedMs: Date.now() - started,
+          checks: {},
+        }
+      }
+      for (const turn of setupCase.turns) {
+        const phase = lastResult?.session.phase as WorkflowPhase | undefined
+        if ('action' in turn && turn.action === 'confirm' && (phase === 'completed' || phase === 'completed_with_issues')) break
+        if ('action' in turn && turn.action === 'confirm' && !canConfirmFromPhase(phase)) {
+          return {
+            caseId: testCase.id,
+            repeatIndex,
+            ok: false,
+            workflowCompleted: false,
+            assertionsPassed: false,
+            error: `setupFrom(${setupCase.id}) 生成阶段无法确认（phase=${phase ?? '无'}）：${lastResult?.reply ?? '(无回复)'}`,
+            modelAttempts: lastResult?.session.modelCallsTotal,
+            elapsedMs: Date.now() - started,
+            finalPhase: phase,
+            checks: {},
+          }
+        }
+        const input: ChatInput = { sessionId }
+        if ('message' in turn) input.message = turn.message
+        if ('action' in turn) input.action = turn.action
+        lastResult = await agent.chat(input)
+      }
+      const setupPhase = lastResult?.session.phase as WorkflowPhase | undefined
+      const setupSceneId = lastResult?.session.sceneResult?.sceneId ?? lastResult?.session.sceneId
+      if ((setupPhase !== 'completed' && setupPhase !== 'completed_with_issues') || !setupSceneId) {
+        return {
+          caseId: testCase.id,
+          repeatIndex,
+          ok: false,
+          workflowCompleted: false,
+          assertionsPassed: false,
+          error: `setupFrom(${setupCase.id}) 生成未完成（phase=${setupPhase ?? '无'}，sceneId=${setupSceneId ?? '无'}），修改用例无法继续`,
+          modelAttempts: lastResult?.session.modelCallsTotal,
+          elapsedMs: Date.now() - started,
+          finalPhase: setupPhase,
+          checks: {},
+        }
+      }
+      await mcp.callTool('load_scene', { id: setupSceneId })
+      beforeSnapshot = parseSceneSnapshot(toolPayload(await mcp.callTool('get_scene', {})))
+    }
     for (let i = 0; i < testCase.turns.length; i++) {
       const turn = testCase.turns[i]!
       const currentPhase = lastResult?.session.phase as WorkflowPhase | undefined
@@ -506,7 +566,8 @@ async function runCase(
     if (workflow.ok && sceneResult) {
       const planFirstResults = assertPlanFirstResult(sceneResult, {
         ...(testCase.maxModelCalls !== undefined ? { maxModelCalls: testCase.maxModelCalls } : {}),
-      }).filter(result => !(testCase.basedOn && result.name === 'furniturePlacementRate'))
+        ...(testCase.allowedGateFailures ? { allowedGateFailures: testCase.allowedGateFailures } : {}),
+      }).filter(result => !((testCase.basedOn || testCase.setupFrom) && result.name === 'furniturePlacementRate'))
       assertions = [...(assertions ?? []), ...planFirstResults]
       assertionRollup = rollupAssertions(assertions)
       if (!assertionRollup.allPassed) assertionsPassed = false
@@ -771,10 +832,13 @@ async function main(): Promise<void> {
 
   const sceneIdByCaseRepeat = new Map<string, string>()
   const results: CaseRunResult[] = []
+  // setupFrom lookups resolve against the FULL corpus, not the --only subset —
+  // a filtered run of case-13 must still find case-03's turns.
+  const casesById = new Map(allCases.map(testCase => [testCase.id, testCase]))
 
   for (const testCase of cases) {
     for (let repeatIndex = 1; repeatIndex <= repeat; repeatIndex++) {
-      const result = await runCase(agent, mcp, testCase, repeatIndex, sceneIdByCaseRepeat)
+      const result = await runCase(agent, mcp, testCase, repeatIndex, sceneIdByCaseRepeat, casesById)
       results.push(result)
       if (result.ok && result.sceneId) {
         sceneIdByCaseRepeat.set(dependencySceneKey(testCase.id, repeatIndex), result.sceneId)

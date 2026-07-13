@@ -178,4 +178,47 @@ describe('executeFurnitureModifyOps', () => {
     })
     expect(report.results.map(r => r.ok)).toEqual([true, true])
   })
+
+  // The real MCP catalog is English-only (id/name/tags), while the op
+  // translator is told to emit terms in the user's language — the checklist
+  // vocabulary must bridge the two. This mock mirrors that reality: Chinese
+  // queries return nothing.
+  const ENGLISH_CATALOG: typeof CATALOG = {
+    bed: [
+      { id: 'double-bed', name: 'Double Bed', dimensions: [1.8, 0.5, 2.1] },
+      { id: 'single-bed-compact', name: 'Compact Single Bed', dimensions: [1.0, 0.5, 1.9], tags: ['compact'] },
+    ],
+    desk: [{ id: 'desk', name: 'Writing Desk', dimensions: [1.2, 0.75, 0.6] }],
+  }
+
+  test('CJK term resolves through checklist vocabulary against an English-only catalog (eval case-18 regression)', async () => {
+    const { callMcp, deleted, calls } = makeMockMcp({ catalog: ENGLISH_CATALOG })
+    const report = await executeFurnitureModifyOps({
+      ops: [{ op: 'swap_furniture', room: '主卧', from: '床', to: '单人床' }],
+      rooms: [bedroom],
+      levelId: 'level-1',
+      callMcp,
+    })
+    expect(report.results[0]!.ok).toBe(true)
+    expect(deleted).toEqual(['item-bed'])
+    // 「床」/「单人床」 themselves hit the catalog empty; the vocabulary
+    // fallback re-queries with the English search term.
+    expect(calls.filter(call => call.name === 'search_assets').map(call => call.args.query)).toContain('bed')
+  })
+
+  test('CJK remove matches the placed English-named item via the trilingual matcher', async () => {
+    // Catalog knows the term but returns ids that do NOT match the placed
+    // item (e.g. user-placed variant) — the matcher regex still finds it.
+    const { callMcp, deleted } = makeMockMcp({
+      catalog: { ...ENGLISH_CATALOG, bed: [{ id: 'other-bed', name: 'Other Bed', dimensions: [1.8, 0.5, 2.1] }] },
+    })
+    const report = await executeFurnitureModifyOps({
+      ops: [{ op: 'remove_furniture', room: '主卧', item: '床' }],
+      rooms: [bedroom],
+      levelId: 'level-1',
+      callMcp,
+    })
+    expect(report.results[0]!.ok).toBe(true)
+    expect(deleted).toEqual(['item-bed'])
+  })
 })

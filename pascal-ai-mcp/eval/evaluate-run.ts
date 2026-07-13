@@ -272,6 +272,15 @@ export type EvalCase = {
   // `basedOn` when non-empty; leave empty to fall back to the basedOn scene.
   // The harness never modifies this scene directly — it copies it per repeat.
   baseSceneId?: string
+  /**
+   * Run the referenced generation case's turns FIRST in the SAME session,
+   * then this case's own turns — the modify then sees the session's
+   * layoutIntent/layoutPlan snapshots, which is the plan-first structural
+   * pipeline's production shape (生成→接着改). Mutually exclusive with
+   * baseSceneId: a fixed scene loaded into a fresh session has no snapshots,
+   * so structural modifies against it can only exercise the legacy path.
+   */
+  setupFrom?: string
   turns: CaseTurn[]
   expectedFacts?: {
     bedroom_count?: number
@@ -290,6 +299,12 @@ export type EvalCase = {
   requireAllRoomsReachable?: boolean
   /** 批次 D: fail the case when the turn used more model calls than this (§9 budgets). */
   maxModelCalls?: number
+  /**
+   * Gate-failure substrings that are the INTENDED outcome of this case's
+   * request (e.g. 删床用例豁免「缺少必备家具：床」) — matching failures don't
+   * fail the gatesPassed assertion; everything else still does.
+   */
+  allowedGateFailures?: string[]
   /** Required adjacency relationships between room types (e.g. ensuite). */
   requiredAdjacency?: Array<{ a: string; b: string; relation: AdjacencyRelation }>
   /** Overall footprint width×depth with tolerance, e.g. {width:5,depth:18,tolerance:0.12}. */
@@ -310,6 +325,8 @@ export type EvalCase = {
     addedRoomArea?: { type: string; min: number; max: number }
     /** Require the overall zone footprint bounds to remain unchanged. */
     preserveExteriorBounds?: boolean
+    /** Width-only exterior check for plan-first structural modifies (§4 locks W, depth floats). */
+    preserveExteriorWidth?: boolean
     /** Require a matching existing room to meet an area range after modification. */
     targetRoomArea?: { type: string; min: number; max?: number; nameIncludes?: string[] }
     /** Furniture-modify (M1): item-node diff assertions, see assertions.ts. */
@@ -340,6 +357,14 @@ export function validateCaseStructure(testCase: EvalCase, allCaseIds: Set<string
   if (testCase.basedOn && !allCaseIds.has(testCase.basedOn)) {
     problems.push(`basedOn 引用了不存在的用例 id："${testCase.basedOn}"`)
   }
+  if (testCase.setupFrom) {
+    if (!allCaseIds.has(testCase.setupFrom)) {
+      problems.push(`setupFrom 引用了不存在的用例 id："${testCase.setupFrom}"`)
+    }
+    if ((testCase.baseSceneId ?? '').trim()) {
+      problems.push('setupFrom 与 baseSceneId 互斥：固定场景加载进新 session 没有 plan 快照，setupFrom 的意义就是在同一 session 里先生成出快照')
+    }
+  }
   if (!('message' in testCase.turns[0]!)) {
     problems.push('第一轮必须是用户消息，不能直接是 action')
   }
@@ -347,7 +372,7 @@ export function validateCaseStructure(testCase: EvalCase, allCaseIds: Set<string
   if (!hasConfirm) problems.push('turns 里没有 confirm 动作，用例永远不会真正触发生成/修改')
 
   const hasFixedBase = Boolean((testCase.baseSceneId ?? '').trim())
-  if (!testCase.basedOn && !hasFixedBase) {
+  if (!testCase.basedOn && !hasFixedBase && !testCase.setupFrom) {
     const messageText = testCase.turns
       .filter((t): t is { role: 'user'; message: string } => 'message' in t)
       .map(t => t.message)
@@ -414,8 +439,8 @@ function validateAssertionConfig(testCase: EvalCase): string[] {
   }
   if (testCase.modificationChecks) {
     const hasFixedBase = Boolean((testCase.baseSceneId ?? '').trim())
-    if (!testCase.basedOn && !hasFixedBase) {
-      problems.push('modificationChecks 是修改类断言，用例必须提供 baseSceneId 或 basedOn 之一')
+    if (!testCase.basedOn && !hasFixedBase && !testCase.setupFrom) {
+      problems.push('modificationChecks 是修改类断言，用例必须提供 baseSceneId、basedOn 或 setupFrom 之一')
     }
     const mc = testCase.modificationChecks
     if (mc.addedRoomType && !knownType(mc.addedRoomType)) problems.push(`modificationChecks.addedRoomType "${mc.addedRoomType}" 是未知房间类型`)

@@ -80,6 +80,26 @@ export function requiredFurnitureFor(type: RoomType): FurnitureRequirement[] {
   return CHECKLISTS[type] ?? []
 }
 
+// Vocabulary lookup for the modify path: the op translator emits short
+// generic terms in the user's language (「床」「书桌」), but the MCP catalog
+// is English-only — this maps such a term to the checklist option that owns
+// its trilingual matcher and English-first search terms. Returns null for
+// terms outside the checklist vocabulary (caller falls back to the raw term).
+export function findVocabularyOption(term: string): FurnitureOption | null {
+  const trimmed = term.trim()
+  if (!trimmed) return null
+  for (const requirements of Object.values(CHECKLISTS)) {
+    for (const requirement of requirements) {
+      for (const option of requirement.options) {
+        if (option.match.test(trimmed) || option.searchTerms.includes(trimmed.toLowerCase())) {
+          return option
+        }
+      }
+    }
+  }
+  return null
+}
+
 // Which requirements are NOT satisfied by the given item names.
 export function findMissingFurniture(
   type: RoomType,
