@@ -21,6 +21,8 @@ type ViewerState = {
   setHoveredId: (id: AnyNode['id'] | ZoneNode['id'] | null) => void
   cameraMode: 'perspective' | 'orthographic'
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
+  isExporting: boolean
+  setExporting: (value: boolean) => void
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
   wallMode: 'up' | 'cutaway' | 'down'
@@ -32,6 +34,8 @@ type ViewerState = {
   setSelection: (updates: Partial<SelectionPath>) => void
   resetSelection: () => void
   outliner: Outliner
+  geometryRevision: number
+  bumpGeometryRevision: () => void
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
   setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
 }

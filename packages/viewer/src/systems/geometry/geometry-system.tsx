@@ -8,11 +8,12 @@ import {
   nodeRegistry,
   type SurfaceRole,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import { FrontSide, type Group, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -58,6 +59,7 @@ export const GeometrySystem = () => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const bumpGeometryRevision = useViewer((s) => s.bumpGeometryRevision)
   // The shared scene-material library, threaded into each builder's ctx so
   // pure geometry builders can resolve `scene:<id>` slot refs without
   // importing `useScene`.
@@ -107,6 +109,7 @@ export const GeometrySystem = () => {
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
+    let rebuiltGeometry = false
 
     // Phase 1 — group dirty nodes by (kind, parentId). Kinds that
     // declare `def.computeLevelData` get one batch precompute per
@@ -187,7 +190,8 @@ export const GeometrySystem = () => {
       // never skipped. This kills the board remount + pointer enter/leave
       // churn when an item reparents onto a shelf.
       if (def.geometryKey) {
-        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}`
+        const childLiveOverrideKey = liveChildOverrideKey(node)
+        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}|${childLiveOverrideKey}`
         if (shouldReuseGeometryBuild(builtGeometryKeyRef.current, id, group, builtKey)) {
           clearDirty(id as AnyNodeId)
           continue
@@ -219,21 +223,10 @@ export const GeometrySystem = () => {
 
       disposeChildren(group)
       for (const child of [...built.children]) {
-        // Tag every child the builder produced so a subsequent rebuild
-        // can dispose only THIS rebuild's outputs and leave React-
-        // mounted siblings (hosted items inside a shelf / slab / etc.)
-        // alone. Without this, a parent rebuild triggered by a child
-        // event (e.g. an item reparenting onto a shelf calls
-        // `dirtyNodes.add(parent)` in `ItemRenderer`'s effect) would
-        // wipe ALL of the parent group's children — including the
-        // freshly-mounted item — leaving the item in scene state but
-        // invisible.
-        ;(child as { userData?: Record<string, unknown> }).userData = {
-          ...(child as { userData?: Record<string, unknown> }).userData,
-          __fromGeometry: true,
-        }
+        markGeometryBuildOutput(child)
         group.add(child)
       }
+      rebuiltGeometry = true
       // NOTE: we intentionally do NOT reset `group.position` / `group.rotation`
       // here. The `ParametricNodeRenderer` binds them via JSX (`position={...}`
       // / `rotation={...}`) driven by `useLiveTransforms` during drag and
@@ -245,9 +238,23 @@ export const GeometrySystem = () => {
 
       clearDirty(id as AnyNodeId)
     }
+    if (rebuiltGeometry) bumpGeometryRevision()
   }, 2)
 
   return null
+}
+
+function liveChildOverrideKey(node: AnyNode): string {
+  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
+  if (!Array.isArray(childIds) || childIds.length === 0) return ''
+
+  const overrides = useLiveNodeOverrides.getState().overrides
+  const entries: Array<[AnyNodeId, unknown]> = []
+  for (const childId of childIds) {
+    const override = overrides.get(childId)
+    if (override) entries.push([childId, override])
+  }
+  return entries.length === 0 ? '' : JSON.stringify(entries)
 }
 
 function nodeReferencesSceneMaterial(node: AnyNode): boolean {
@@ -265,15 +272,18 @@ function buildGeometryContext(
   levelData: unknown,
   materials: GeometryContext['materials'],
 ): GeometryContext {
-  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
+  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => {
+    const resolved = nodes[id]
+    return resolved ? (getEffectiveNode(resolved) as N) : undefined
+  }
 
   const childIds = (node as unknown as { children?: AnyNodeId[] }).children
   const children: AnyNode[] = Array.isArray(childIds)
-    ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
+    ? childIds.map((cid) => resolve<AnyNode>(cid)).filter((n): n is AnyNode => n !== undefined)
     : []
 
   const parentId = node.parentId as AnyNodeId | null
-  const parent: AnyNode | null = parentId ? (nodes[parentId] ?? null) : null
+  const parent: AnyNode | null = parentId ? (resolve<AnyNode>(parentId) ?? null) : null
 
   // Siblings = same kind, same parent, excluding self. Walks the parent's
   // children array; falls back to scanning the whole scene if the parent
@@ -284,13 +294,13 @@ function buildGeometryContext(
     if (Array.isArray(parentChildIds)) {
       for (const sid of parentChildIds) {
         if (sid === node.id) continue
-        const s = nodes[sid]
+        const s = resolve<AnyNode>(sid)
         if (s && s.type === node.type) siblings.push(s)
       }
     } else {
-      siblings = Object.values(nodes).filter(
-        (n) => n !== node && n.type === node.type && n.parentId === parentId,
-      )
+      siblings = Object.values(nodes)
+        .filter((n) => n !== node && n.type === node.type && n.parentId === parentId)
+        .map((n) => getEffectiveNode(n))
     }
   }
 
@@ -384,6 +394,18 @@ export default GeometrySystem
 export type GeometryBuildCacheEntry = {
   group: Group
   key: string
+}
+
+export function markGeometryBuildOutput(child: Object3D): void {
+  // Tag the builder subtree so paint previews can reach nested meshes (for
+  // example a cabinet sink faucet handle), while disposal still removes only
+  // top-level builder children from the registered group.
+  child.traverse((object) => {
+    object.userData = {
+      ...object.userData,
+      __fromGeometry: true,
+    }
+  })
 }
 
 export function shouldReuseGeometryBuild(

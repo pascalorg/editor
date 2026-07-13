@@ -675,6 +675,33 @@ function migrateNodes(nodes: Record<string, any>): {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
     }
 
+    // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the
+    // per-compartment `doorType`) and was removed from both cabinet schemas;
+    // `handlePosition: 'edge'` behaved identically to 'auto' and was dropped
+    // from the enum; the compartment stack became a discriminated union that
+    // rejects a `cooktopLayout` mismatched to its gas/induction type (the old
+    // loose schema ignored it).
+    if (node.type === 'cabinet' || node.type === 'cabinet-module') {
+      const { doorStyle: _doorStyle, ...rest } = node
+      const next: Record<string, any> = rest
+      if (next.handlePosition === 'edge') next.handlePosition = 'auto'
+      if (Array.isArray(next.stack)) {
+        next.stack = next.stack.map((compartment: any) => {
+          if (!compartment || typeof compartment !== 'object') return compartment
+          const layout = compartment.cooktopLayout
+          if (typeof layout !== 'string') return compartment
+          if (compartment.type === 'cooktop-gas' && !layout.startsWith('gas-')) {
+            return { ...compartment, cooktopLayout: 'gas-4burner' }
+          }
+          if (compartment.type === 'cooktop-induction' && !layout.startsWith('induction-')) {
+            return { ...compartment, cooktopLayout: 'induction-4zone' }
+          }
+          return compartment
+        })
+      }
+      patchedNodes[id] = next
+    }
+
     if (node.type === 'slab' || node.type === 'ceiling') {
       patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
     }

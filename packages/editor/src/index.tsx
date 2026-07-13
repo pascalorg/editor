@@ -112,6 +112,7 @@ export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
+export { PlacementBox } from './components/tools/shared/placement-box'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,
@@ -318,6 +319,12 @@ export {
   type PlanarPoint,
   resolvePlanarCursorPosition,
 } from './lib/planar-cursor-placement'
+export {
+  type EditorHostPanel,
+  type EditorHostPanelWorkspace,
+  editorHostPanelRegistry,
+  registerEditorHostPanel,
+} from './lib/plugin-panels'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
@@ -325,6 +332,7 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
+export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
 export {
   clearSlabSnapFeedback,

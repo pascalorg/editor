@@ -133,7 +133,6 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
         fallbackPoint: context.gridPoint,
         levelId: ceilingLevelId,
         excludeId: ceilingId,
-        altKey: context.nativeEvent?.altKey === true,
       }).point,
     [ceilingId, ceilingLevelId],
   )

@@ -5146,6 +5146,7 @@ export function FloorplanPanel({
     useEditor.getState().navigationSyncPose,
   )
   const compassNeedleRef = useRef<SVGSVGElement | null>(null)
+  const hiddenCompassAnimationRef = useRef<number | null>(null)
   const levelId = useViewer((state) => state.selection.levelId)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
@@ -6624,8 +6625,50 @@ export function FloorplanPanel({
     }
   }, [syncFloorplanViewportToNavigationPose, isFloorplanOpen])
 
+  const cancelHiddenCompassAnimation = useCallback(() => {
+    if (hiddenCompassAnimationRef.current !== null) {
+      cancelAnimationFrame(hiddenCompassAnimationRef.current)
+      hiddenCompassAnimationRef.current = null
+    }
+  }, [])
+
+  // Align-north while the panel is hidden publishes a single '2d' pose that
+  // the 3D camera applies through the echo-suppressed pending-pose path — it
+  // never publishes '3d' frames back, so the needle must animate itself.
+  // Same time constant as the 2D view animation and the camera's effective
+  // smoothTime, so all three stay visually in step.
+  const animateHiddenCompassNeedle = useCallback(
+    (targetDeg: number) => {
+      cancelHiddenCompassAnimation()
+      let last = performance.now()
+      const tick = (now: number) => {
+        hiddenCompassAnimationRef.current = null
+        if (isFloorplanOpenRef.current) {
+          return
+        }
+        const deltaMs = now - last
+        last = now
+        const currentDeg = latestFloorplanUserRotationDegRef.current
+        const decay = Math.exp(-deltaMs / FLOORPLAN_VIEW_ANIMATION_TIME_CONSTANT_MS)
+        let nextDeg = targetDeg - (targetDeg - currentDeg) * decay
+        if (Math.abs(targetDeg - nextDeg) < 0.05) {
+          nextDeg = targetDeg
+        }
+        latestFloorplanUserRotationDegRef.current = nextDeg
+        if (compassNeedleRef.current) {
+          compassNeedleRef.current.style.transform = `rotate(${nextDeg}deg)`
+        }
+        if (nextDeg !== targetDeg) {
+          hiddenCompassAnimationRef.current = requestAnimationFrame(tick)
+        }
+      }
+      hiddenCompassAnimationRef.current = requestAnimationFrame(tick)
+    },
+    [cancelHiddenCompassAnimation],
+  )
+
   useEffect(() => {
-    return useEditor.subscribe((state) => {
+    const unsubscribe = useEditor.subscribe((state) => {
       const pose = state.navigationSyncPose
       if (!pose || latestNavigationSyncPoseRef.current?.revision === pose.revision) {
         return
@@ -6633,25 +6676,40 @@ export function FloorplanPanel({
 
       latestNavigationSyncPoseRef.current = pose
 
-      if (pose.source === '3d') {
-        if (!isFloorplanOpenRef.current) {
+      if (!isFloorplanOpenRef.current) {
+        const nextDeg = floorplanRotationFromCameraAzimuth(
+          pose.azimuth,
+          latestFloorplanUserRotationDegRef.current,
+        )
+        if (pose.source === '3d') {
           // Panel hidden — drive the compass needle imperatively without
           // triggering React state (setViewport) that would re-render the
-          // full floorplan SVG every camera frame.
-          const nextDeg = floorplanRotationFromCameraAzimuth(
-            pose.azimuth,
-            latestFloorplanUserRotationDegRef.current,
-          )
+          // full floorplan SVG every camera frame. The live camera stream
+          // owns the needle, so any local animation yields to it.
+          cancelHiddenCompassAnimation()
           latestFloorplanUserRotationDegRef.current = nextDeg
           if (compassNeedleRef.current) {
             compassNeedleRef.current.style.transform = `rotate(${nextDeg}deg)`
           }
-          return
+        } else {
+          animateHiddenCompassNeedle(nextDeg)
         }
+        return
+      }
+
+      if (pose.source === '3d') {
         syncFloorplanViewportToNavigationPose(pose)
       }
     })
-  }, [syncFloorplanViewportToNavigationPose])
+    return () => {
+      unsubscribe()
+      cancelHiddenCompassAnimation()
+    }
+  }, [
+    syncFloorplanViewportToNavigationPose,
+    animateHiddenCompassNeedle,
+    cancelHiddenCompassAnimation,
+  ])
 
   // When the panel is hidden the imperative path owns the compass needle.
   // React re-renders can overwrite the needle's inline transform with stale
@@ -7442,8 +7500,8 @@ export function FloorplanPanel({
   const alignFloorplanViewToNorth = useCallback(() => {
     if (!isFloorplanOpenRef.current) {
       // Panel hidden — derive from the live 3D camera pose and publish
-      // directly. The compass animates via the imperative subscription as
-      // the 3D camera transitions.
+      // directly. The pose subscription picks this '2d' pose up and animates
+      // the needle locally (the camera transition suppresses '3d' echoes).
       const pose = latestNavigationSyncPoseRef.current
       if (!pose) return
       const currentRotation = latestFloorplanUserRotationDegRef.current
@@ -9327,7 +9385,6 @@ export function FloorplanPanel({
       showOpeningGhost,
       isPolygonBuildActive,
       isRoofBuildActive,
-      isSlabBuildActive,
       isWallBuildActive,
       levelId,
       publishFloorplanNavigationPose,
@@ -9619,7 +9676,6 @@ export function FloorplanPanel({
     isOpeningPlacementActive: isOpeningBuildActive && !isOpeningMoveActive,
     isPolygonBuildActive,
     isRoofBuildActive,
-    isSlabBuildActive,
     isWallBuildActive,
     isZoneBuildActive,
     levelId,

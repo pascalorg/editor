@@ -163,6 +163,28 @@ function resolveNodeLevelId(node: AnyNode, nodes: Record<string, AnyNode>): stri
   return 'default'
 }
 
+function expandIgnoredNodeIds(
+  ignoreIds: readonly string[] | undefined,
+  nodes: Record<string, AnyNode>,
+): Set<string> {
+  const ignored = new Set(ignoreIds ?? [])
+  const queue = [...ignored]
+
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    const node = nodes[id]
+    const children = (node as { children?: unknown } | undefined)?.children
+    if (!Array.isArray(children)) continue
+    for (const childId of children) {
+      if (typeof childId !== 'string' || ignored.has(childId)) continue
+      ignored.add(childId)
+      queue.push(childId)
+    }
+  }
+
+  return ignored
+}
+
 /**
  * Test if two line segments (a1->a2) and (b1->b2) intersect.
  */
@@ -705,15 +727,42 @@ export class SpatialGridManager {
     rotation: [number, number, number],
     ignoreIds?: string[],
   ) {
+    return this.canPlaceOnFloorFootprints(levelId, [{ position, dimensions, rotation }], ignoreIds)
+  }
+
+  canPlaceOnFloorFootprints(
+    levelId: string,
+    footprints: readonly {
+      position: [number, number, number]
+      dimensions: [number, number, number]
+      rotation: [number, number, number]
+    }[],
+    ignoreIds?: string[],
+  ) {
     const nodes = useScene.getState().nodes
-    const ignoreSet = new Set(ignoreIds ?? [])
-    const draftBounds = footprintBoundsXZ(position, dimensions, rotation[1])
+    const ignoreSet = expandIgnoredNodeIds(ignoreIds, nodes)
+    const draftBounds = footprints.map((footprint) =>
+      footprintBoundsXZ(footprint.position, footprint.dimensions, footprint.rotation[1] ?? 0),
+    )
+    for (let i = 0; i < draftBounds.length; i += 1) {
+      const a = draftBounds[i]!
+      for (let j = i + 1; j < draftBounds.length; j += 1) {
+        const b = draftBounds[j]!
+        if (
+          intervalsOverlap(a.minX, a.maxX, b.minX, b.maxX) &&
+          intervalsOverlap(a.minZ, a.maxZ, b.minZ, b.maxZ)
+        ) {
+          return { valid: false, conflictIds: [] }
+        }
+      }
+    }
 
     // A floor placement conflicts with any other COLLIDING floor-resting node,
     // not just items — every kind whose `floorPlaced.collides` is set (item /
-    // shelf / column) contributes its footprint(s) as an obstacle. Each
-    // candidate's XZ extent is read from the same declarative footprint the
-    // elevation + sync paths use, so adding a colliding kind needs no change here.
+    // shelf / column / cabinet / stair) contributes its footprint(s) as an
+    // obstacle. Each candidate's XZ extent is read from the same declarative
+    // footprint the elevation + sync paths use, so adding a colliding kind
+    // needs no change here.
     const conflicts: string[] = []
     for (const node of Object.values(nodes)) {
       if (ignoreSet.has(node.id)) continue
@@ -733,8 +782,11 @@ export class SpatialGridManager {
           fpRotation,
         )
         if (
-          intervalsOverlap(draftBounds.minX, draftBounds.maxX, bounds.minX, bounds.maxX) &&
-          intervalsOverlap(draftBounds.minZ, draftBounds.maxZ, bounds.minZ, bounds.maxZ)
+          draftBounds.some(
+            (draft) =>
+              intervalsOverlap(draft.minX, draft.maxX, bounds.minX, bounds.maxX) &&
+              intervalsOverlap(draft.minZ, draft.maxZ, bounds.minZ, bounds.maxZ),
+          )
         ) {
           conflicts.push(node.id)
           break

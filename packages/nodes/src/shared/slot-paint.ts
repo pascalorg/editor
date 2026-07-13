@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   generateSceneMaterialId,
   type MaterialSchema,
+  type MaterialTarget,
   type PaintCapability,
   type PaintPreviewArgs,
   type PaintResolveArgs,
@@ -230,6 +231,7 @@ export function resolveSlotByReRaycast(args: PaintResolveArgs): string | null {
 }
 
 export type SlotPaintConfig = {
+  materialTarget?: MaterialTarget
   /** Resolve the slot id for a pointer hit (`null` = not paintable here). */
   resolveRole: (args: PaintResolveArgs) => string | null
   /** Apply a preview to the registered mesh subtree for `role`. */
@@ -249,6 +251,7 @@ export type SlotPaintConfig = {
 
 export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapability {
   return {
+    materialTarget: config.materialTarget,
     roomScope: config.roomScope,
     resolveRole: config.resolveRole,
     buildPatch: ({ node, role, materialPreset }) => {

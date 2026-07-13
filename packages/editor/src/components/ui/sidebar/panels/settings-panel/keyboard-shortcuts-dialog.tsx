@@ -134,7 +134,14 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Item Placement',
     shortcuts: [
-      { keys: ['R', 'T'], action: 'Rotate item; with a door selected, R toggles open/closed and T closes' },
+      {
+        keys: ['R', 'T'],
+        action: 'Rotate item; with a door selected, R toggles open/closed and T closes',
+      },
+      {
+        keys: ['E'],
+        action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
+      },
       {
         keys: ['Shift'],
         action: 'Temporarily bypass placement validation constraints',

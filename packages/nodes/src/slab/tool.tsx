@@ -100,7 +100,6 @@ export const SlabTool: React.FC = () => {
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
-        altKey: event.nativeEvent?.altKey === true,
       }).point
       setSnappedCursorPosition(displayPoint)
       if (

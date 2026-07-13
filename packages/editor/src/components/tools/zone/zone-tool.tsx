@@ -99,7 +99,6 @@ export const ZoneTool: React.FC = () => {
       lastPoint: [number, number] | undefined,
       gridPoint: [number, number],
       rawPoint: [number, number],
-      altKey: boolean,
     ): [number, number] => {
       const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const orthoPoint: [number, number] =
@@ -110,7 +109,6 @@ export const ZoneTool: React.FC = () => {
         rawPoint,
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
-        altKey,
       }).point
     }
 
@@ -189,12 +187,10 @@ export const ZoneTool: React.FC = () => {
       levelYRef.current = event.localPosition[1]
 
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      const displayPoint = snapDraftPoint(
-        lastPoint,
-        cursorPosition,
-        [event.localPosition[0], event.localPosition[2]],
-        event.nativeEvent?.altKey === true,
-      )
+      const displayPoint = snapDraftPoint(lastPoint, cursorPosition, [
+        event.localPosition[0],
+        event.localPosition[2],
+      ])
       snappedCursorPosition = displayPoint
 
       // Play snap sound when the snapped position changes during drawing — only
@@ -219,12 +215,10 @@ export const ZoneTool: React.FC = () => {
       if (!currentLevelId) return
 
       const lastPoint = pointsRef.current[pointsRef.current.length - 1]
-      const clickPoint = snapDraftPoint(
-        lastPoint,
-        gridPointOf(event),
-        [event.localPosition[0], event.localPosition[2]],
-        event.nativeEvent?.altKey === true,
-      )
+      const clickPoint = snapDraftPoint(lastPoint, gridPointOf(event), [
+        event.localPosition[0],
+        event.localPosition[2],
+      ])
 
       // Check if clicking on the first point to close the shape
       const firstPoint = pointsRef.current[0]

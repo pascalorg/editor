@@ -92,6 +92,7 @@ export const glassMaterial = new MeshLambertNodeMaterial({
   opacity: 0.35,
   side: THREE.FrontSide,
 })
+glassMaterial.userData.__pascalCachedMaterial = true
 
 function resolveNodeMaterialSide(side: THREE.Side): THREE.Side {
   return side === THREE.DoubleSide ? THREE.FrontSide : side
@@ -475,6 +476,7 @@ export function createMaterialFromPreset(
     shading === 'solid' ? new MeshLambertNodeMaterial() : new MeshStandardNodeMaterial()
   applyMaterialPresetToMaterials(material, preset)
   maybeApplyGlassFresnel(material)
+  material.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, material)
   return material
 }
@@ -525,6 +527,7 @@ export function createMaterial(
         })
 
   maybeApplyGlassFresnel(threeMaterial)
+  threeMaterial.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial
 }
@@ -601,6 +604,7 @@ function cachedDefaultMaterial(
   if (cached) return cached
 
   const material = createDefaultMaterial(color, roughness, shading, side)
+  material.userData.__pascalCachedMaterial = true
   defaultMaterialCache.set(cacheKey, material)
   return material
 }
