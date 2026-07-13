@@ -139,6 +139,9 @@ const CARVE_CORNER_PREFERENCE: Partial<Record<RoomType, Corner[]>> = {
   entry: ['bottom-left', 'bottom-right'],
   kitchen: ['bottom-right', 'bottom-left', 'top-right'],
   dining: ['bottom-left', 'bottom-right', 'top-left'],
+  // Study needs an exterior window — bottom corners sit on the entry-side
+  // exterior wall in every hub position this carve is used from.
+  study: ['bottom-right', 'bottom-left'],
 }
 
 // --- normalization ----------------------------------------------------------
@@ -298,10 +301,43 @@ export type PartitionStrategyHint = {
   footprintHint?: { widthM: number; depthM: number }
 }
 
+// Modify-path stability (MODIFY_REDESIGN.md §4): lock the footprint width to
+// the previous plan's and penalize room-center displacement, so a re-partition
+// after an intent edit moves as little as possible.
+export type PartitionStability = {
+  previousPlan: LayoutPlan
+}
+
+// Sum of room-center displacement (m) for rooms present in both plans,
+// matched by id. Rooms added/removed by the edit contribute nothing — their
+// movement is the point of the edit.
+export function planDeviation(plan: LayoutPlan, previous: LayoutPlan): number {
+  const centerOf = (polygon: Array<[number, number]>): [number, number] => {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    for (const [x, z] of polygon) {
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (z < minZ) minZ = z
+      if (z > maxZ) maxZ = z
+    }
+    return [(minX + maxX) / 2, (minZ + maxZ) / 2]
+  }
+  const previousCenters = new Map(previous.rooms.map(room => [room.id, centerOf(room.polygon)]))
+  let total = 0
+  for (const room of plan.rooms) {
+    const prev = previousCenters.get(room.id)
+    if (!prev) continue
+    const [cx, cz] = centerOf(room.polygon)
+    total += Math.hypot(cx - prev[0], cz - prev[1])
+  }
+  return total
+}
+
 export function partitionLayout(
   intent: LayoutIntent,
   profile: NormProfile = DEFAULT_NORM_PROFILE,
   strategy?: PartitionStrategyHint,
+  stability?: PartitionStability,
 ): PartitionResult {
   if (!(intent.targetTotalAreaSqm > 0)) {
     return {
@@ -329,6 +365,16 @@ export function partitionLayout(
   const carveOptions = hub
     ? [false, true]
     : [false]
+  // Stability (§4 MODIFY_REDESIGN): the previous footprint width replaces the
+  // whole width search — depth alone absorbs the area change.
+  const prevW = stability ? stability.previousPlan.footprint.width : null
+  const widthCandidates = (lo: number, hi: number, steps: number): number[] => {
+    if (prevW !== null) return [prevW]
+    const base = Math.sqrt(intent.targetTotalAreaSqm)
+    const out: number[] = []
+    for (let step = 0; step <= steps; step++) out.push(round2(base * (lo + ((hi - lo) * step) / steps)))
+    return out
+  }
   if (strategy?.typology === 'narrow_lot' && hub) {
     // Linear topology (§3.2). With a lot hint the footprint is fixed; without
     // one, slender aspect ratios are searched up to the narrow-lot cap.
@@ -341,6 +387,8 @@ export function partitionLayout(
         W: round2(Math.min(hint.widthM, hint.depthM)),
         D: round2(Math.max(hint.widthM, hint.depthM)),
       })
+    } else if (prevW !== null) {
+      geometries.push({ W: prevW, D: round2(intent.targetTotalAreaSqm / prevW) })
     } else {
       const area = intent.targetTotalAreaSqm
       for (let step = 0; step <= 6; step++) {
@@ -367,9 +415,7 @@ export function partitionLayout(
     }
     // The main wing wants to be wider than a square footprint, so the width
     // search starts higher; wing proportions are searched alongside.
-    const base = Math.sqrt(intent.targetTotalAreaSqm)
-    for (let step = 0; step <= 8; step++) {
-      const W = round2(base * (0.9 + (0.6 * step) / 8))
+    for (const W of widthCandidates(0.9, 1.5, 8)) {
       for (const wingFrac of [0.35, 0.45, 0.55]) {
         for (const carveSmallPublic of carveOptions) {
           attempts.push(tryLShapeLayout(intent, rooms, hub, W, wingFrac, carveSmallPublic, p, s))
@@ -381,16 +427,13 @@ export function partitionLayout(
     // ANY candidate survives, fall back to the band search only when none
     // does — pure score competition would let the band's larger feasible
     // range crowd the preference out every time.
-    const base = Math.sqrt(intent.targetTotalAreaSqm)
     if (strategy?.typology === 'tanoji' && hub) {
-      for (let step = 0; step <= 32; step++) {
-        const W = round2(base * (0.7 + (0.8 * step) / 32))
+      for (const W of widthCandidates(0.7, 1.5, 32)) {
         attempts.push(tryTanojiLayout(intent, rooms, hub, W, p, s))
       }
     }
     if (!attempts.some(attempt => !('reject' in attempt))) {
-      for (let step = 0; step <= 32; step++) {
-        const W = round2(base * (0.7 + (0.8 * step) / 32))
+      for (const W of widthCandidates(0.7, 1.5, 32)) {
         for (const carveSmallPublic of carveOptions) {
           attempts.push(
             hub
@@ -403,6 +446,7 @@ export function partitionLayout(
   }
 
   let best: Candidate | null = null
+  let bestPenalty = Infinity
   const rejectCounts = new Map<string, { count: number; l10n?: IssueL10n }>()
   for (const attempt of attempts) {
     if ('reject' in attempt) {
@@ -411,7 +455,28 @@ export function partitionLayout(
       else rejectCounts.set(attempt.reject, { count: 1, l10n: attempt.l10n })
       continue
     }
-    if (!best || attempt.penalty < best.penalty) best = attempt
+    // §4 mechanism 2: the candidate that moves existing rooms least wins.
+    const penalty = attempt.penalty
+      + (stability ? planDeviation(attempt.plan, stability.previousPlan) * s.deviationWeight : 0)
+    if (penalty < bestPenalty) {
+      best = attempt
+      bestPenalty = penalty
+    }
+  }
+  if (!best && stability) {
+    // 做不到时不硬凑（§4）：the locked footprint has no feasible layout for
+    // the edited intent — rerun unconstrained and say so, instead of failing
+    // a change that a fresh footprint could absorb.
+    const relaxed = partitionLayout(intent, profile, strategy)
+    if (relaxed.ok) {
+      const note = '稳定性约束下无可行布局，已放开外轮廓重新排布（房间位置会有明显变化）'
+      return {
+        ok: true,
+        plan: { ...relaxed.plan, notes: [...(relaxed.plan.notes ?? []), note] },
+        notes: [...relaxed.notes, note],
+      }
+    }
+    return relaxed
   }
   if (!best) {
     const topReasons = [...rejectCounts.entries()]
@@ -480,7 +545,11 @@ function assignCarves(
       carveSpecs.push({ room, hostId: hub.id })
     } else if (
       carveSmallPublic
-      && (room.type === 'kitchen' || room.type === 'dining')
+      // Small study included (M2): "在客厅里划一间书房" (eval case-13) is a
+      // hub carve by definition — as a full-depth private column a ~7㎡ study
+      // is always too narrow, which would force a footprint change on every
+      // such modify.
+      && (room.type === 'kitchen' || room.type === 'dining' || room.type === 'study')
       && room.area <= p.carveablePublicMaxSqm
     ) {
       carveSpecs.push({ room, hostId: hub.id })

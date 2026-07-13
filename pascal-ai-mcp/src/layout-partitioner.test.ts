@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { partitionLayout } from './layout-partitioner'
+import { partitionLayout, planDeviation, planRoomAreas } from './layout-partitioner'
 import { validateLayoutPlan, type PlanTargets } from './plan-validator'
 import { polygonArea, type LayoutIntent } from './layout-plan'
 
@@ -202,6 +202,72 @@ describe('partitionLayout: narrow_lot topology (S3)', () => {
 
   test('standard_band strategy reproduces the no-strategy result', () => {
     expect(partitionLayout(两居, undefined, { typology: 'standard_band' })).toEqual(partitionLayout(两居))
+  })
+})
+
+describe('partitionLayout: modify-path stability (M2)', () => {
+  const baseline = () => {
+    const result = partitionLayout(两居)
+    if (!result.ok) throw new Error('baseline partition failed')
+    return result.plan
+  }
+
+  test('resize (case-14 offline replica): width locked, other rooms barely move', () => {
+    const prev = baseline()
+    const resized = {
+      ...两居,
+      targetTotalAreaSqm: 78,
+      rooms: 两居.rooms.map(room => room.id === 'bedroom-1' ? { ...room, targetAreaSqm: 18 } : room),
+    }
+    const result = partitionLayout(resized, undefined, undefined, { previousPlan: prev })
+    if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+    expect(result.plan.footprint.width).toBe(prev.footprint.width)
+    // The resized bedroom must actually grow…
+    const bedroom = result.plan.rooms.find(room => room.id === 'bedroom-1')!
+    expect(planRoomAreas(result.plan).get('bedroom-1')!).toBeGreaterThan(15)
+    expect(bedroom).toBeDefined()
+    // …while total displacement across all shared rooms stays small (the
+    // depth only absorbs +3㎡ / W ≈ 0.35m).
+    expect(planDeviation(result.plan, prev)).toBeLessThan(3)
+  })
+
+  test('add_room (case-13 offline replica): width locked, new room lands, rest stay put', () => {
+    const prev = baseline()
+    const withStudy = {
+      ...两居,
+      targetTotalAreaSqm: 82,
+      rooms: [...两居.rooms, { id: 'study-1', name: '书房', type: 'study' as const, targetAreaSqm: 7 }],
+    }
+    const result = partitionLayout(withStudy, undefined, undefined, { previousPlan: prev })
+    if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+    expect(result.plan.footprint.width).toBe(prev.footprint.width)
+    expect(result.plan.rooms.some(room => room.id === 'study-1')).toBe(true)
+    // Every previous room survives the edit.
+    for (const room of prev.rooms) {
+      if (room.type === 'hallway') continue // corridor is layout infrastructure
+      expect(result.plan.rooms.some(entry => entry.id === room.id)).toBe(true)
+    }
+    expect(planDeviation(result.plan, prev)).toBeLessThan(8)
+  })
+
+  test('falls back to a fresh footprint (with a note) when the locked width cannot fit', () => {
+    const prev = baseline() // W ≈ 8.4 for 75㎡
+    const shrunk = {
+      targetTotalAreaSqm: 24,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living' as const, targetAreaSqm: 18 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom' as const, targetAreaSqm: 6 },
+      ],
+    }
+    const result = partitionLayout(shrunk, undefined, undefined, { previousPlan: prev })
+    if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+    // 24㎡ at the old width would be ~2.9m deep — infeasible; the fallback
+    // re-searches and says so.
+    expect(result.notes.join()).toContain('放开外轮廓')
+  })
+
+  test('no stability argument reproduces the fresh-generation result exactly', () => {
+    expect(partitionLayout(两居, undefined, undefined)).toEqual(partitionLayout(两居))
   })
 })
 

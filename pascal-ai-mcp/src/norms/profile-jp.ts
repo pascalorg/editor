@@ -52,6 +52,7 @@ export const JP_NORM_PROFILE: NormProfile = {
     roomAspectExcessWeight: 8,
     corridorShareSoft: 0.15,
     corridorShareExcessWeight: 120,
+    deviationWeight: 3,
   },
   defaultRoomAreas: Object.fromEntries(
     Object.entries(JP_ROOM_AREAS_JO).map(([type, jo]) => [type, Math.round(jo * JO * 100) / 100]),

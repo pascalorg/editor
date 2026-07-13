@@ -76,11 +76,13 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 
 重跑分区器不能把用户没让动的房间洗牌。三层机制，全部确定性：
 
-1. **footprint 锁定**：修改时 `W` 固定为现状 plan 的 W（消掉最大变数）；`D` 允许随总面积增减浮动。add/remove_room 改变总面积时，总面积 = 旧总面积 ± 该房间面积（其他房间面积**不重新分配**，靠分区器现有 scale 机制微调）；
-2. **偏离惩罚（新 scorer 项）**：`planDeviationPenalty = Σ 房间矩形中心位移(m) × weight`，对新旧 plan 都存在的房间计算；进 `ScoringParams`（`deviationWeight`，仅修改路径非零）——"动得最少的可行方案胜出"，正好是 §3.6 反馈回路框架下的一个常规惩罚项；
-3. **带序保持**：分区器候选生成时，旧 plan 中各房间的带位置（public/private band、列顺序）作为首选排列先试，失败才回退全排列搜索。
+1. **footprint 锁定**（✅ M2）：修改时 `W` 固定为现状 plan 的 W（消掉最大变数）；`D` 允许随总面积增减浮动。add/remove_room 改变总面积时，总面积 = 旧总面积 ± 该房间面积（其他房间面积**不重新分配**，靠分区器现有 scale 机制微调）。锁定后无可行布局时**放开轮廓重搜并显式记 note**（"做不到时不硬凑"），变更幅度如实进回复；
+2. **偏离惩罚（新 scorer 项）**（✅ M2）：`planDeviation(plan, previousPlan) = Σ 同 id 房间矩形中心位移(m)`，乘 `ScoringParams.deviationWeight`（default/jp 均 3/m，代码为准）加在候选罚分上，仅传入 `previousPlan` 时生效——"动得最少的可行方案胜出"，正好是 §3.6 反馈回路框架下的一个常规惩罚项；
+3. **带序保持**（v1 由 1+2 吸收）：现有分区器带内排序本就是确定性的（按房型固定顺序），锁 W + 偏离惩罚已使同类候选中"保持原排列"者胜出；显式的"旧排列种子 + 失败回退全排列"等 eval 暴露洗牌案例再加。
 
-预期效果分级（写进 eval 断言）：resize 单房间 → 其余房间中心位移 ≤0.5m；add/remove → 同带房间保序、对侧带房间位移 ≤0.5m。做不到时不硬凑——diff 预览会如实展示变化范围，由用户确认。
+配套（M2）：小书房（≤ carveablePublicMaxSqm）加入枢纽嵌入房型（kitchen/dining/study）——"在客厅里划一间书房"（case-13 原文）本质是嵌入操作，作为私密全进深柱的 ~7㎡ 书房在锁宽下必然过窄，会迫使每次此类修改都改动轮廓；书房嵌入角位优先贴外墙侧（需外窗）。现有预览 SVG 逐字节不变（现有意图无书房）。
+
+预期效果（已写进离线分区断言）：resize 单房间 → 全部共有房间位移合计 <3m；add 小房间（嵌入路径）→ 合计 <8m。做不到时轮廓回退 + note 如实告知。
 
 ## 5. 家具类 op 的确定性执行
 
@@ -128,7 +130,7 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 |---|---|---|
 | M0 | ✅ 完成（2026-07-13）：`src/modify-ops.ts`——ModifyOp schema + `parseModifyOps`（容错解析，部分成功保留合法 op + 错误清单）+ `resolveRoomRef`（id→名称→词表类型唯一，歧义报错）+ `applyModifyOps`（纯函数，面积过 `TYPE_TO_KIND`+`roomAreaBounds` 判界：fatal 拒绝/soft 警告） | 346 单测过；零模型调用可测 |
 | M1 | ✅ 完成（2026-07-13）：`src/furniture-modify.ts` 家具三件套（增=检索+贴墙扫描；删=目录 id 匹配→名称兜底，多匹配删最后放置；换=先算后删，放不下不删）+ agent 快速路径（`tryFurnitureModify`：一次模型调用译 op，空 ops/结构 op/解析失败静默回退 legacy；无 intent 快照的旧场景家具修改也可用）+ eval case-16/17/18（增/删/换，`itemChanges` 断言：item diff 匹配 + structureUntouched） | 353 单测过 + dry-run 18 用例 0 结构问题；线上 case-16/17/18 待余额恢复后跑 |
-| M2 | 稳定性机制（footprint 锁 + deviationPenalty + 带序保持）+ 结构类 op 全管线 + diff 预览 | 稳定性单测（resize 不洗牌断言）；case-13/14 复刻为离线分区断言 |
+| M2 | ✅ 完成（2026-07-13）：稳定性机制（`partitionLayout` 第 4 参数 `{previousPlan}`：宽度搜索收敛为旧 W + `planDeviation`×`deviationWeight` 进候选罚分 + 锁定无解时放开轮廓重搜记 note）+ agent 结构管线（`tryPlanFirstModify`：翻译 op → `applyModifyOps` → deriveStrategy → 稳定性重分区 → validator → 结构全量重建（清 zone/wall/slab/ceiling/item 后 `executeLayoutPlan` + 清单家具重摆）→ session 三快照 + zoneRoomTypes 刷新；rename-only 走 `apply_patch` 改 zone 名不重建；拒绝路径 `rejectPlanFirstModify` 引用具体原因）+ 小书房入枢纽嵌入。**v1 与原设计的偏差**：diff 预览不再单独一轮确认——修改本就有确认环节，变更明细（applyModifyOps/partition notes）在重建后随回复给出；预生成预览等 ingest 侧接入翻译后再评估 | 357 单测过（case-13/14 复刻为离线分区断言 + 轮廓回退断言 + 无 stability 参数时与旧行为逐字段相等）；预览 SVG 逐字节不变 |
 | M3 | 手动编辑漂移检测接入 + 旧场景回退路径 + legacy 开关 + 线上 eval（case-13/14 + 家具 case） | 全绿后删 legacy；文档状态改"已落地" |
 
 M0–M2 核心为确定性代码，模型服务不可用也能开发（ModifyOp 翻译用 fixture 测）；唯一新模型 prompt（修改请求 → ModifyOp JSON）在 M1 一并写好但可后验。

@@ -34,6 +34,7 @@ export const DEFAULT_NORM_PROFILE: NormProfile = {
     roomAspectExcessWeight: 8,
     corridorShareSoft: 0.15,
     corridorShareExcessWeight: 120,
+    deviationWeight: 3,
   },
   defaultRoomAreas: DEFAULT_ROOM_AREAS,
   // Pre-profile behavior verbatim: the CN band tables with the validator's

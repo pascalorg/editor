@@ -11,15 +11,16 @@ import {
   roomNamePattern,
   WINDOW_PATTERN,
 } from './lang/room-vocab'
-import { executeFurniturePlan } from './furniture-executor'
-import { executeFurnitureModifyOps } from './furniture-modify'
-import { parseModifyOps, type FurnitureModifyOp } from './modify-ops'
+import { executeFurniturePlan, type FurnitureRoom } from './furniture-executor'
+import { executeFurnitureModifyOps, type FurnitureModifyReport } from './furniture-modify'
+import { partitionLayout } from './layout-partitioner'
+import { applyModifyOps, parseModifyOps, resolveRoomRef, type FurnitureModifyOp } from './modify-ops'
 import { computeLayoutQuality } from './layout-metrics'
 import type { IssueL10n, LayoutPlan, RoomType } from './layout-plan'
 import { PascalMcpClient } from './mcp'
 import { OpenAiCompatibleClient, type RequestHooks } from './openai-compatible'
 import { buildLayoutPlan, type PlanBuildResult } from './plan-builder'
-import type { PlanTargets } from './plan-validator'
+import { validateLayoutPlan, type PlanTargets } from './plan-validator'
 import { executeLayoutPlan, toolPayload, type SceneExecutionReport } from './scene-executor'
 
 // Re-exported for eval/run-eval.ts, which historically imported it from here.
@@ -82,20 +83,26 @@ const MODIFICATION_GUARD_PROMPT =
   + '新开的门优先安排在新隔墙上；不要改动与本次请求无关的门窗和家具。'
   + '如果请求给出了新增房间的面积或数值范围，创建后必须用 get_zones 实测确认落在范围内再结束。'
 
-// M1 (docs/MODIFY_REDESIGN.md §3/§5): translates a modify request into
-// furniture ModifyOps — the model's ONLY job on the fast path. Anything
-// structural must come back as empty ops so the request falls through to
-// the legacy path (structural ops arrive with batch M2).
-const MODIFY_OPS_SYSTEM_PROMPT = `你是场景修改请求解析器。判断用户请求是否【只涉及家具的增加、删除或更换】，只返回一个 JSON 对象，不要任何解释或 Markdown 代码块。
-若请求只涉及家具，返回 {"ops":[...]}，每个 op 只能是以下三种：
+// M1/M2 (docs/MODIFY_REDESIGN.md §3): translates a modify request into
+// ModifyOps — the model's ONLY job on the plan-first modify path; every op
+// is executed deterministically. Requests outside the op vocabulary (move a
+// wall, reposition a door…) must come back as empty ops so they fall through
+// to the legacy path.
+const MODIFY_OPS_SYSTEM_PROMPT = `你是场景修改请求解析器。把用户请求翻译成结构化操作列表，只返回一个 JSON 对象，不要任何解释或 Markdown 代码块。
+返回 {"ops":[...]}，每个 op 只能是以下七种：
+  {"op":"add_room","room":{"name":"<房间名>","type":"<bedroom|living|living_kitchen|dining|kitchen|bathroom|study|storage|balcony|other>","targetAreaSqm":<可选，数字>},"near":"<可选，希望邻接的房间名>"}
+  {"op":"remove_room","room":"<房间名>"}
+  {"op":"resize_room","room":"<房间名>","targetAreaSqm":<数字>}
+  {"op":"rename_room","room":"<房间名>","name":"<新名称>"}
   {"op":"add_furniture","room":"<房间名>","item":"<家具名>"}
   {"op":"remove_furniture","room":"<房间名>","item":"<家具名>"}
   {"op":"swap_furniture","room":"<房间名>","from":"<现有家具>","to":"<新家具>"}
 规则：
-- room 必须使用房间清单里的名称原文；
+- room/near 引用现有房间时必须使用房间清单里的名称原文；
 - item/from/to 用简短通用词（如 沙发、书桌、床、衣柜），不要带修饰语；
-- 一次请求可以输出多个 op；
-- 若请求涉及任何房间结构变化（加/删房间、改面积、移墙、门窗），或你不确定是否纯家具操作，返回 {"ops":[]}。`
+- 一次请求可以输出多个 op，按用户叙述顺序排列；
+- 只描述用户明确要求的改动，不要自作主张补充；
+- 若请求超出以上七种操作能表达的范围（如移动某面墙、调整门窗位置、整体换风格），或你无法确定，返回 {"ops":[]}。`
 
 // Thrown at a loop boundary inside a long-running generation/modification
 // when the user has asked to cancel, so the in-flight work unwinds promptly
@@ -745,13 +752,14 @@ export class PascalAiAgent {
       // diagnosable rather than leaving the stored phase at its pre-edit value.
       this.sessions.set(session.sessionId, session)
       const loaded = toolPayload(await this.callMcp(session.sessionId, 'load_scene', { id: sceneId }))
-      // M1 fast path (docs/MODIFY_REDESIGN.md §5): furniture-only requests
-      // run deterministically — one model call translates the request into
-      // ModifyOps, execution is zero model calls. Structural requests (and
-      // anything the translator is unsure about) fall through to the legacy
-      // free-edit path until batch M2 lands.
+      // Plan-first modify (docs/MODIFY_REDESIGN.md §2): one model call
+      // translates the request into ModifyOps; furniture ops run the
+      // deterministic executor, structural ops edit the intent and
+      // re-partition under the stability constraint. Requests outside the op
+      // vocabulary (and legacy scenes without an intent snapshot, for
+      // structural asks) fall through to the legacy free-edit path.
       if (operation === 'update') {
-        const fastPath = await this.tryFurnitureModify(session, feedback, sceneId, nullableNumber(loaded.version))
+        const fastPath = await this.tryPlanFirstModify(session, feedback, sceneId, nullableNumber(loaded.version))
         if (fastPath) return fastPath
       }
       // Pre-edit snapshot: drives the deterministic protection acceptance
@@ -881,11 +889,12 @@ export class PascalAiAgent {
     }
   }
 
-  // M1 furniture fast path (docs/MODIFY_REDESIGN.md §5). Returns null when
-  // the request is not a pure furniture change — the caller then continues
+  // Plan-first modify (docs/MODIFY_REDESIGN.md §2, batches M1+M2). Returns
+  // null when the request can't be expressed as ModifyOps (or a structural
+  // ask hits a legacy scene without snapshots) — the caller then continues
   // down the legacy path. Throws (cancellation, model outage) propagate to
   // modify()'s catch, which owns the retry phase bookkeeping.
-  private async tryFurnitureModify(
+  private async tryPlanFirstModify(
     session: WorkflowSession,
     feedback: string,
     sceneId: string,
@@ -893,11 +902,11 @@ export class PascalAiAgent {
   ): Promise<Partial<WorkflowGraphState> | null> {
     // Live room list from zones; types come from the authoritative map when
     // the scene was built plan-first, name classification otherwise — so the
-    // fast path also works for legacy scenes without an intent snapshot.
+    // furniture path also works for legacy scenes without an intent snapshot.
     const zonesPayload = toolPayload(await this.callMcp(session.sessionId, 'get_zones', {}))
     const zones = Array.isArray(zonesPayload.zones) ? zonesPayload.zones.filter(isZoneSummary) : []
     if (zones.length === 0) return null
-    const rooms = zones.map(zone => ({
+    const rooms: FurnitureRoom[] = zones.map(zone => ({
       id: zone.id,
       name: zone.name,
       type: session.zoneRoomTypes?.[zone.id] ?? classifyRoomTypeByName(zone.name),
@@ -905,7 +914,15 @@ export class PascalAiAgent {
       zoneId: zone.id,
     }))
 
-    const trace = startPhaseTrace(session, '家具修改（确定性执行器）')
+    const trace = startPhaseTrace(session, '规划式修改（确定性执行器）')
+    const traceMcp = async (name: string, args: Record<string, unknown>) => {
+      const result = await this.callMcp(session.sessionId, name, args)
+      trace.toolCounts[name] = (trace.toolCounts[name] ?? 0) + 1
+      trace.toolCalls.push({ name, ok: true })
+      return result
+    }
+    const beforeCall = () => this.throwIfCancelled(session.sessionId)
+
     trace.modelCalls++
     const raw = await this.withModelFallback(session.sessionId, (model, hooks) =>
       model.complete([
@@ -914,33 +931,187 @@ export class PascalAiAgent {
       ], `${session.sessionId}:modify:ops`, { ...hooks, temperature: this.config.aiTemperatureGeometry }),
     )
     const parsed = parseModifyOps(raw)
-    // Empty ops is the translator's "structural / not sure" signal; parse
-    // defects also mean this isn't a clean furniture request — both defer to
-    // the legacy path rather than burning correction rounds here.
+    // Empty ops is the translator's "out of vocabulary / not sure" signal;
+    // parse defects also mean this isn't a clean request — both defer to the
+    // legacy path rather than burning correction rounds here.
     if (!parsed.plan || parsed.errors.length > 0) return null
+
     const furnitureOnly = parsed.plan.ops.every(op =>
       op.op === 'add_furniture' || op.op === 'remove_furniture' || op.op === 'swap_furniture')
-    if (!furnitureOnly) return null
-    const ops = parsed.plan.ops as FurnitureModifyOp[]
+    if (furnitureOnly) {
+      const levelId = await this.findLevelId(session)
+      if (!levelId) return null
+      const report = await executeFurnitureModifyOps({
+        ops: parsed.plan.ops as FurnitureModifyOp[],
+        rooms,
+        levelId,
+        callMcp: traceMcp,
+        beforeCall,
+      })
+      trace.converged = true
+      return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
+        okDetails: report.results.filter(r => r.ok).map(r => r.detail),
+        failedDetails: report.results.filter(r => !r.ok).map(r => r.detail),
+      })
+    }
 
+    // --- structural / rename path (M2) — needs the plan-first snapshots ---
+    if (!session.layoutIntent || !session.layoutPlan) return null
+    const profile = resolveNormProfile(this.config.normProfile)
+    // Rename pairs resolve against the PRE-edit intent (old name → zone).
+    const renames = parsed.plan.ops.flatMap(op => {
+      if (op.op !== 'rename_room') return []
+      const resolved = resolveRoomRef(op.room, session.layoutIntent!.rooms)
+      return 'room' in resolved ? [{ oldName: resolved.room.name, newName: op.name }] : []
+    })
+    const applied = applyModifyOps(session.layoutIntent, parsed.plan, profile)
+    if (applied.errors.length > 0) return this.rejectPlanFirstModify(session, applied.errors)
+
+    if (!applied.structural) {
+      // rename (± furniture) only — no re-partition (§3): zone rename is a
+      // metadata patch, everything else stays untouched.
+      const zoneIdByName = new Map(zones.map(zone => [zone.name, zone.id]))
+      const patches = renames.flatMap(entry => {
+        const zoneId = zoneIdByName.get(entry.oldName)
+        return zoneId ? [{ op: 'update', id: zoneId, data: { name: entry.newName } }] : []
+      })
+      if (patches.length > 0) await traceMcp('apply_patch', { patches })
+      session.layoutIntent = applied.intent
+      let furnReport: FurnitureModifyReport | null = null
+      if (applied.furnitureOps.length > 0) {
+        const levelId = await this.findLevelId(session)
+        if (!levelId) return null
+        furnReport = await executeFurnitureModifyOps({
+          ops: applied.furnitureOps,
+          rooms,
+          levelId,
+          callMcp: traceMcp,
+          beforeCall,
+        })
+      }
+      trace.converged = true
+      return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
+        okDetails: [...applied.notes, ...(furnReport?.results.filter(r => r.ok).map(r => r.detail) ?? [])],
+        failedDetails: furnReport?.results.filter(r => !r.ok).map(r => r.detail) ?? [],
+      })
+    }
+
+    // Re-partition the edited intent under the stability constraint (§4),
+    // validate, then rebuild the scene deterministically (§6: v1 = full
+    // structural rebuild, zero model calls).
+    const intent = applied.intent
+    const requiredRooms = [...intent.rooms.reduce((acc, room) => {
+      acc.set(room.type, (acc.get(room.type) ?? 0) + 1)
+      return acc
+    }, new Map<RoomType, number>())].map(([type, count]) => ({ type, count }))
+    const targets: PlanTargets = { totalAreaSqm: intent.targetTotalAreaSqm, requiredRooms }
+    const briefSummary = session.summary || formatSummary(session.brief)
+    const strategy = deriveStrategy(deriveBriefFacts(briefSummary), targets, profile)
+    const partition = partitionLayout(intent, profile, strategy, { previousPlan: session.layoutPlan })
+    if (!partition.ok) {
+      return this.rejectPlanFirstModify(session, [
+        partition.reason,
+        ...(partition.details ?? []).map(detail => detail.message),
+      ])
+    }
+    const validation = validateLayoutPlan(partition.plan, targets, profile)
+    if (validation.fatal.length > 0) return this.rejectPlanFirstModify(session, validation.fatal)
+
+    // --- rebuild: clear old structure, execute the new plan ---
     const nodes = snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {})))
     const levelId = Object.entries(nodes).find(([, node]) => node.type === 'level')?.[0] ?? null
     if (!levelId) return null
-
-    const report = await executeFurnitureModifyOps({
-      ops,
-      rooms,
+    const clearTypes = new Set(['zone', 'wall', 'slab', 'ceiling', 'item'])
+    for (const [id, node] of Object.entries(nodes)) {
+      if (!clearTypes.has(String(node.type))) continue
+      try {
+        await traceMcp('delete_node', { id, cascade: true })
+      } catch {
+        // Already removed by an earlier cascade — expected, not an error.
+      }
+    }
+    const built = await executeLayoutPlan({
+      plan: partition.plan,
       levelId,
-      callMcp: async (name, args) => {
-        const result = await this.callMcp(session.sessionId, name, args)
-        trace.toolCounts[name] = (trace.toolCounts[name] ?? 0) + 1
-        trace.toolCalls.push({ name, ok: true })
-        return result
-      },
-      beforeCall: () => this.throwIfCancelled(session.sessionId),
+      callMcp: traceMcp,
+      dedupeSharedWalls: () => this.dedupeSharedWalls(session.sessionId, levelId),
+      beforeCall,
     })
+    const furnitureRooms: FurnitureRoom[] = partition.plan.rooms.map(planRoom => ({
+      id: planRoom.id,
+      name: planRoom.name,
+      type: planRoom.type,
+      polygon: planRoom.polygon,
+      zoneId: built.rooms.find(entry => entry.planRoomId === planRoom.id)?.zoneId ?? null,
+    }))
+    // Snapshot refresh (§2 病灶④): the next modify must see THIS state.
+    session.zoneRoomTypes = Object.fromEntries(
+      furnitureRooms.filter(room => room.zoneId !== null).map(room => [room.zoneId as string, room.type]),
+    )
+    session.layoutIntent = intent
+    session.layoutPlan = partition.plan
+    session.strategy = strategy
+    const furnished = await executeFurniturePlan({
+      rooms: furnitureRooms,
+      levelId,
+      callMcp: traceMcp,
+      beforeCall,
+    })
+    // Deferred furniture ops run against the rebuilt rooms.
+    let furnReport: FurnitureModifyReport | null = null
+    if (applied.furnitureOps.length > 0) {
+      furnReport = await executeFurnitureModifyOps({
+        ops: applied.furnitureOps,
+        rooms: furnitureRooms,
+        levelId,
+        callMcp: traceMcp,
+        beforeCall,
+      })
+    }
     trace.converged = true
+    return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
+      okDetails: [
+        ...applied.notes,
+        ...partition.notes,
+        ...(furnReport?.results.filter(r => r.ok).map(r => r.detail) ?? []),
+      ],
+      failedDetails: [
+        ...built.executionIssues,
+        ...furnished.missing.map(entry => `「${entry.room}」缺少${entry.label}：${entry.reason}`),
+        ...furnished.executionIssues,
+        ...(furnReport?.results.filter(r => !r.ok).map(r => r.detail) ?? []),
+      ],
+    })
+  }
 
+  private async findLevelId(session: WorkflowSession): Promise<string | null> {
+    const nodes = snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {})))
+    return Object.entries(nodes).find(([, node]) => node.type === 'level')?.[0] ?? null
+  }
+
+  // Deterministic rejection (docs/MODIFY_REDESIGN.md §2): the edit itself is
+  // invalid (unresolvable room, fatal area bound, infeasible partition) —
+  // tell the user why instead of falling back to the legacy free-edit path,
+  // which would "solve" it by violating the same constraint.
+  private rejectPlanFirstModify(
+    session: WorkflowSession,
+    errors: string[],
+  ): Partial<WorkflowGraphState> {
+    delete session.pendingModification
+    delete session.pendingOperation
+    session.phase = modifyFailureRecovery(false, Boolean(session.sceneResult)).phase
+    const reply = t(session.language, 'modifyFailedNoRetry', { error: errors.join('；') })
+    session.messages.push({ role: 'assistant', content: reply })
+    return { session, reply, next: 'finish' }
+  }
+
+  private async finishPlanFirstModify(
+    session: WorkflowSession,
+    sceneId: string,
+    loadedVersion: number | null,
+    trace: { toolCounts: Record<string, number> },
+    results: { okDetails: string[]; failedDetails: string[] },
+  ): Promise<Partial<WorkflowGraphState>> {
     const diagnostics = await this.collectDiagnostics(session)
     const sceneVersion = await this.persistScene(
       session.sessionId,
@@ -952,7 +1123,7 @@ export class PascalAiAgent {
     // Failed ops surface through the furniture-issue channel; successful op
     // details ride the reply below (zh internal strings, same policy as the
     // executor reports).
-    const furnitureIssues = report.results.filter(r => !r.ok).map(r => r.detail)
+    const furnitureIssues = results.failedDetails
     const remainingIssueCount = countAllIssues(diagnostics, furnitureIssues)
     session.sceneResult = {
       sceneId,
@@ -987,7 +1158,7 @@ export class PascalAiAgent {
       furnitureIssues,
       gateFailures: gates.report.failures,
     })
-    const okDetails = report.results.filter(r => r.ok).map(r => `- ${r.detail}`)
+    const okDetails = results.okDetails.map(detail => `- ${detail}`)
     const reply = okDetails.length > 0 ? [base, ...okDetails].join('\n') : base
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }

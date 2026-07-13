@@ -57,6 +57,10 @@ export type ScoringParams = {
   roomAspectExcessWeight: number
   corridorShareSoft: number
   corridorShareExcessWeight: number
+  // Modify-path stability (MODIFY_REDESIGN.md §4): penalty per meter of
+  // room-center displacement vs the previous plan. Only applied when the
+  // partitioner is given a previous plan — zero-cost on fresh generation.
+  deviationWeight: number
 }
 
 export type NormProfile = {
