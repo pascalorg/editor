@@ -219,6 +219,39 @@ describe('diffSnapshots + assertModification', () => {
     expect(rollup.allPassed).toBe(true)
   })
 
+  test('itemChanges matches identity fields only — a bedroom-tagged closet must not satisfy "bed" (case-18 假通过 regression)', () => {
+    const beforeSnap: SceneSnapshot = {
+      zoneBed: { type: 'zone', name: '卧室2' },
+      itemBed: { type: 'item', asset: { id: 'single-bed', name: 'Single Bed', tags: ['bed', 'bedroom'] } },
+      itemCloset: { type: 'item', asset: { id: 'closet-large', name: 'Large Closet', tags: ['bedroom', 'closet'] } },
+    }
+    // The bug scenario: the closet was deleted and a bedside table added.
+    const afterSnap: SceneSnapshot = {
+      zoneBed: { type: 'zone', name: '卧室2' },
+      itemBed: { type: 'item', asset: { id: 'single-bed', name: 'Single Bed', tags: ['bed', 'bedroom'] } },
+      itemBedside: { type: 'item', asset: { id: 'bedside-table', name: 'Bedside Table', tags: ['bedroom'] } },
+    }
+    const results = assertModification(beforeSnap, afterSnap, { zones: [], walls: [] }, {
+      itemChanges: { deletedMatching: ['bed'], addedMatching: ['bed'] },
+    })
+    // The closet's "bedroom" tag no longer fakes a bed deletion, and the
+    // bedside table no longer fakes a bed addition (word-boundary matcher).
+    expect(results.find(r => r.name === 'modification:deletedItem:bed')?.status).toBe('fail')
+    expect(results.find(r => r.name === 'modification:addedItem:bed')?.status).toBe('fail')
+
+    // And the honest swap passes: bed out, bed in.
+    const honestAfter: SceneSnapshot = {
+      zoneBed: { type: 'zone', name: '卧室2' },
+      itemNewBed: { type: 'item', asset: { id: 'single-bed-compact', name: 'Compact Single Bed', tags: ['bed'] } },
+      itemCloset: { type: 'item', asset: { id: 'closet-large', name: 'Large Closet', tags: ['bedroom', 'closet'] } },
+    }
+    const honest = assertModification(beforeSnap, honestAfter, { zones: [], walls: [] }, {
+      itemChanges: { deletedMatching: ['bed'], addedMatching: ['bed'] },
+    })
+    expect(honest.find(r => r.name === 'modification:deletedItem:bed')?.status).toBe('pass')
+    expect(honest.find(r => r.name === 'modification:addedItem:bed')?.status).toBe('pass')
+  })
+
   test('modification fails when too many original walls are deleted', () => {
     const beforeWithWalls: SceneSnapshot = {
       zoneBed: { type: 'zone', name: '卧室' },

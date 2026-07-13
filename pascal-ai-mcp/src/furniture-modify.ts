@@ -79,14 +79,21 @@ async function searchTerm(
   issues: string[],
   beforeCall?: () => void,
 ): Promise<CatalogCandidate[]> {
-  const query = async (q: string) => parseCandidates(
-    await callWithRetry(callMcp, 'search_assets', { query: q }, issues, `检索「${q}」`, beforeCall))
+  // When the term is in the checklist vocabulary, only candidates its
+  // matcher recognizes count — same guard as the generation executor's
+  // searchCandidates. Without it, a broad catalog search ("bed" hits every
+  // asset tagged "bedroom") makes swap delete the wardrobe and place a
+  // bedside table as the "单人床" (case-18 online regression).
+  const option = findVocabularyOption(term)
+  const recognized = (candidates: CatalogCandidate[]) =>
+    option ? candidates.filter(candidate => option.match.test(candidate.name)) : candidates
+  const query = async (q: string) => recognized(parseCandidates(
+    await callWithRetry(callMcp, 'search_assets', { query: q }, issues, `检索「${q}」`, beforeCall)))
   const primary = await query(term)
   if (primary.length > 0) return primary
   // The op translator emits terms in the user's language while the catalog
   // is English-only — retry through the checklist vocabulary's English-first
   // search terms before declaring the term unknown.
-  const option = findVocabularyOption(term)
   if (!option) return primary
   for (const fallback of option.searchTerms) {
     if (fallback === term) continue

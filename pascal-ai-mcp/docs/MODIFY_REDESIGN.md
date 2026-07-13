@@ -134,3 +134,16 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 | M3 | **离线部分 ✅（2026-07-13）**：漂移检测（`sceneDriftedFromPlan`：房间数 + 排序面积档对比，容差 max(0.8㎡, 10%)——刻意不比名称（rename 是合法非结构编辑，rename 后 plan 快照名称同步）也不比墙几何（v1 无持久节点快照））+ 确认握手（漂移时警告一次 `modifyDriftWarning`，`session.modifyDriftConfirmed` 标记，同一 pending 请求确认后重建；换新请求时标记作废）+ `PASCAL_MODIFY_LEGACY=1` 开关（强制走旧路径，对照实验用）。旧场景回退路径已随 M2 落地（无快照 → 结构修改回 legacy，家具修改照常）。**剩余：线上 eval（case-13/14/16/17/18）**，key 恢复后跑 | 360 单测过；全绿后删 legacy 路径；文档状态改"已落地" |
 
 M0–M2 核心为确定性代码，模型服务不可用也能开发（ModifyOp 翻译用 fixture 测）；唯一新模型 prompt（修改请求 → ModifyOp JSON）在 M1 一并写好但可后验。
+
+### 线上调试记录（2026-07-13，首轮线上 eval 后）
+
+| 修正 | 内容 |
+|---|---|
+| 词表桥 | `findVocabularyOption`（furniture-checklist）：翻译器输出用户语言的家具词，目录是英文——检索与房内物品匹配都过三语词表桥 |
+| 翻译重试 | ModifyOp 解析**缺陷**重试 ≤2 轮（喂错误清单）；空 ops 是"超出词汇表"信号，不重试直接回 legacy |
+| resize 欠额补偿 | 分区器均匀缩放使 resize 目标系统性偏低几个点 → 按欠额比例通胀目标重分区一次，仍不达标则如实记 note |
+| prompt 硬化 | 房间称呼映射（主卧→卧室1 类）；brief 抽取稳定 key（total_area/room_program）；evaluateBrief 几何/功能判定放宽到值匹配，防信息完整请求误入澄清 |
+| eval 适配 plan-first | `setupFrom`（同 session 先生成基准场景以获得快照，与 baseSceneId 互斥）；`preserveExteriorWidth`（§4 锁宽语义的诚实断言，替代"原墙零改动"——全量重建下原墙必然重建）；`allowedGateFailures`（case-17 删床后"缺床"是正确结果） |
+| **case-18 衣柜误删修复** | 根因：目录检索按 tag 匹配，"bed" 命中所有 `bedroom` tag 资产 → swap 按"删最后放置"删了**衣柜**、按"最小规格优先"把**床头柜**当"单人床"放入；eval 断言对序列化节点做子串匹配，`bedroom` tag 含 "bed" 假通过。修复：`searchTerm` 补上生成路径同款 `option.match` 候选过滤（"床"永不返回床头柜/衣柜）；eval `itemChanges` 只匹配 name/asset 身份字段并优先用词表词边界 matcher |
+
+首轮结果（2026-07-13T03-10，4/6）：case-03 满分、case-13 书房 6–8㎡ ✅（旧流程 15㎡ 问题根治）、case-16/17 ✅；case-14（resize 欠额，补偿已落码）与 case-18（上表修复）待重跑。

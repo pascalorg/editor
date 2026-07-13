@@ -206,6 +206,45 @@ describe('executeFurnitureModifyOps', () => {
     expect(calls.filter(call => call.name === 'search_assets').map(call => call.args.query)).toContain('bed')
   })
 
+  test('a broad "bed" search must not touch bedroom-tagged non-beds (case-18 衣柜误删 regression)', async () => {
+    // The real catalog matches search terms against tags too: querying "bed"
+    // returns the closet (tagged "bedroom") and the bedside table. Without
+    // the vocabulary-matcher filter, swap deleted the closet (last placed
+    // asset-id match) and placed the bedside table as the "单人床" (smallest
+    // footprint wins).
+    const TAG_MATCHED_CATALOG: typeof CATALOG = {
+      bed: [
+        { id: 'double-bed', name: 'Double Bed', dimensions: [1.8, 0.5, 2.1] },
+        { id: 'single-bed-compact', name: 'Compact Single Bed', dimensions: [1.0, 0.5, 1.9], tags: ['compact'] },
+        { id: 'bedside-table', name: 'Bedside Table', dimensions: [0.4, 0.5, 0.4] },
+        { id: 'closet-large', name: 'Large Closet', dimensions: [1.2, 2.2, 0.6], tags: ['bedroom'] },
+      ],
+    }
+    const closet = {
+      id: 'item-closet',
+      name: 'Large Closet',
+      position: [3.4, 0, 1.5] as [number, number, number],
+      rotation: [0, -Math.PI / 2, 0] as [number, number, number],
+      asset: { id: 'closet-large', name: 'Large Closet', dimensions: [1.2, 2.2, 0.6] as [number, number, number] },
+    }
+    const { callMcp, deleted, calls } = makeMockMcp({
+      catalog: TAG_MATCHED_CATALOG,
+      items: [existingBed, closet],
+    })
+    const report = await executeFurnitureModifyOps({
+      ops: [{ op: 'swap_furniture', room: '主卧', from: '床', to: '单人床' }],
+      rooms: [bedroom],
+      levelId: 'level-1',
+      callMcp,
+    })
+    expect(report.results[0]!.ok).toBe(true)
+    // The BED is what gets swapped — the closet stays.
+    expect(deleted).toEqual(['item-bed'])
+    // And the replacement is a real bed, not the smaller bedside table.
+    const placed = calls.find(call => call.name === 'place_item')
+    expect(placed?.args.catalogItemId).toBe('single-bed-compact')
+  })
+
   test('CJK remove matches the placed English-named item via the trilingual matcher', async () => {
     // Catalog knows the term but returns ids that do NOT match the placed
     // item (e.g. user-placed variant) — the matcher regex still finds it.

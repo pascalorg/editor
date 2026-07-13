@@ -11,6 +11,7 @@
 // reason. `unsupported` means "this can't be reliably decided from the data we
 // have" and must NOT be counted as a pass by the caller.
 
+import { findVocabularyOption } from '../src/furniture-checklist'
 import { ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
 import { ROOM_TYPE_PATTERNS } from './evaluate-run'
 
@@ -887,11 +888,25 @@ export function assertModification(
   }
 
   if (config.itemChanges) {
-    const textOf = (snapshot: SceneSnapshot, id: string) => JSON.stringify(snapshot[id] ?? {}).toLowerCase()
+    // Match on the item's name/asset identity ONLY — never the serialized
+    // node: asset tags like "bedroom" contain "bed", which let a deleted
+    // wardrobe satisfy deletedMatching:["bed"] (case-18 false pass). Terms
+    // in the furniture-checklist vocabulary use its word-boundary matcher
+    // ("bed" must not match "Bedside Table"); others fall back to a name
+    // substring.
+    const itemMatches = (snapshot: SceneSnapshot, id: string, term: string): boolean => {
+      const node = snapshot[id] as { name?: unknown; asset?: { id?: unknown; name?: unknown } } | undefined
+      const fields = [node?.name, node?.asset?.name, node?.asset?.id]
+        .filter((value): value is string => typeof value === 'string')
+      const option = findVocabularyOption(term)
+      if (option) return fields.some(field => option.match.test(field))
+      const needle = term.toLowerCase()
+      return fields.some(field => field.toLowerCase().includes(needle))
+    }
     const addedItems = diff.added.filter(id => nodeType(after[id] ?? {}) === 'item')
     const deletedItems = diff.deleted.filter(id => nodeType(before[id] ?? {}) === 'item')
     for (const term of config.itemChanges.addedMatching ?? []) {
-      const ok = addedItems.some(id => textOf(after, id).includes(term.toLowerCase()))
+      const ok = addedItems.some(id => itemMatches(after, id, term))
       results.push({
         name: `modification:addedItem:${term}`,
         status: ok ? 'pass' : 'fail',
@@ -901,7 +916,7 @@ export function assertModification(
       })
     }
     for (const term of config.itemChanges.deletedMatching ?? []) {
-      const ok = deletedItems.some(id => textOf(before, id).includes(term.toLowerCase()))
+      const ok = deletedItems.some(id => itemMatches(before, id, term))
       results.push({
         name: `modification:deletedItem:${term}`,
         status: ok ? 'pass' : 'fail',
