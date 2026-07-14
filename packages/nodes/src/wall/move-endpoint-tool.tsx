@@ -231,6 +231,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
+    // Last point handed to `applyPreview` — lets the Alt keydown/keyup
+    // handlers re-run the preview immediately on a modifier change instead of
+    // waiting for the next mousemove.
+    let lastMovedPoint: WallPlanPoint | null = null
+    // The first pointer-up is the *grab* of a click-to-move; later ones are
+    // drops. See the `!hasChanged` branch in `onPointerUp`.
+    let hasReleasedOnce = false
 
     // Wall ids carrying a live position override during the drag. Mirrors the
     // 3D/2D wall MOVE tools: preview via `useLiveNodeOverrides` (the wall
@@ -271,6 +278,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
+      lastMovedPoint = movingPoint
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
       const linkedUpdates = detachLinkedWalls
@@ -282,6 +290,20 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             nextStart,
             nextEnd,
           )
+      if (detachLinkedWalls) {
+        // Attach→detach transition: `setMany` only writes the ids it is
+        // handed, so linked walls dragged on earlier attached ticks would keep
+        // their stale overrides. Drop them so their corners snap back to the
+        // scene originals (untouched during the drag).
+        const overrides = useLiveNodeOverrides.getState()
+        const sceneState = useScene.getState()
+        for (const linked of linkedOriginalsRef.current) {
+          if (touchedWallIds.delete(linked.id as AnyNodeId)) {
+            overrides.clear(linked.id)
+            sceneState.markDirty(linked.id as AnyNodeId)
+          }
+        }
+      }
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
       setAngleLabel(
@@ -395,7 +417,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             : null,
         )
 
-      applyPreview(alignedPoint, event.nativeEvent.altKey)
+      // The keydown listener can't observe an Alt press that predates the
+      // tool mounting; the pointer event can. Sync the shared ref (single Alt
+      // source for preview, HUD badge, and commit) before applying.
+      if (event.nativeEvent.altKey !== altPressedRef.current) {
+        altPressedRef.current = event.nativeEvent.altKey
+        setAltPressed(event.nativeEvent.altKey)
+      }
+      applyPreview(alignedPoint, altPressedRef.current)
     }
 
     const onPointerUp = () => {
@@ -413,14 +442,23 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      // Endpoint still at its original spot: this release is the *grab* of a
-      // click-to-move (a tap on the handle, or a press that never dragged). Stay
-      // armed so the endpoint keeps following the cursor — the next release after
-      // an actual move commits. A press-drag and a click thus engage identically;
-      // previously the no-drag branch dismissed the tool, and whether it even ran
-      // raced the window pointer-up listener mounting (hence "works once, then
-      // needs a long press").
-      if (!hasChanged) return
+      // Endpoint still at its original spot. The FIRST release is the *grab*
+      // of a click-to-move (a tap on the handle, or a press that never
+      // dragged): stay armed so the endpoint keeps following the cursor — a
+      // press-drag and a click thus engage identically. Any LATER release at
+      // an unchanged position is a deliberate drop: end the interaction
+      // cleanly (previews restored, scope ended, no history entry) instead of
+      // leaving the user stuck until they move the mouse.
+      if (!hasChanged) {
+        if (!hasReleasedOnce) {
+          hasReleasedOnce = true
+          return
+        }
+        restoreOriginal()
+        useViewer.getState().setSelection({ selectedIds: [nodeId] })
+        exitMoveMode()
+        return
+      }
 
       if (isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
@@ -472,26 +510,36 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       exitMoveMode()
     }
 
+    // Single Alt writer for keyboard transitions. Re-running the preview on
+    // the flip keeps geometry and the HUD badge in lockstep — detach reverts
+    // the linked walls instantly, re-attach snaps them onto the dragged point
+    // — without waiting for the next mousemove.
+    const setAltState = (pressed: boolean) => {
+      if (altPressedRef.current === pressed) return
+      altPressedRef.current = pressed
+      setAltPressed(pressed)
+      if (lastMovedPoint) {
+        applyPreview(lastMovedPoint, pressed)
+      }
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
       if (event.key === 'Alt') {
-        altPressedRef.current = true
-        setAltPressed(true)
+        setAltState(true)
       }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Alt') {
-        altPressedRef.current = false
-        setAltPressed(false)
+        setAltState(false)
       }
     }
 
     const onWindowBlur = () => {
-      altPressedRef.current = false
-      setAltPressed(false)
+      setAltState(false)
     }
 
     emitter.on('grid:move', onGridMove)

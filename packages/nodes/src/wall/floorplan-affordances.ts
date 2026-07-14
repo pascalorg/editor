@@ -244,6 +244,17 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         const sceneState = useScene.getState()
         overrides.set(node.id as AnyNodeId, { start: primaryStart, end: primaryEnd })
         sceneState.markDirty(node.id as AnyNodeId)
+        if (modifiers.altKey) {
+          // Attach→detach transition: linked walls dragged on earlier attached
+          // ticks still carry overrides — drop them so their corners snap back
+          // to the scene originals (untouched during the drag).
+          for (const linked of linkedWalls) {
+            if (overrides.get(linked.id)) {
+              overrides.clear(linked.id)
+              sceneState.markDirty(linked.id)
+            }
+          }
+        }
         for (const upd of linkedUpdates) {
           overrides.set(upd.id, { start: upd.start, end: upd.end })
           sceneState.markDirty(upd.id)
