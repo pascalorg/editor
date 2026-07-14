@@ -207,6 +207,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   const [altPressed, setAltPressed] = useState(false)
   const unit = useViewer((s) => s.unit)
 
+  // Alt-detach only affects walls sharing the moving endpoint; walls linked
+  // solely to the fixed endpoint never move, so the hint would be noise.
+  const movingOriginal =
+    target.endpoint === 'start' ? originalStartRef.current : originalEndRef.current
+  const canDetachCorner = linkedOriginalsRef.current.some(
+    (wall) => samePoint(wall.start, movingOriginal) || samePoint(wall.end, movingOriginal),
+  )
+
   const exitMoveMode = useCallback(() => {
     useInteractionScope
       .getState()
@@ -598,23 +606,25 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           unit={unit}
         />
       </Html>
-      <Html
-        position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
-        style={{ pointerEvents: 'none', touchAction: 'none' }}
-        zIndexRange={[100, 0]}
-      >
-        <div className="translate-y-10">
-          <div
-            className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
-              altPressed
-                ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
-                : 'border-border bg-background/95 text-muted-foreground'
-            }`}
-          >
-            {altPressed ? 'Detaching corner' : 'Alt to detach'}
+      {canDetachCorner && (
+        <Html
+          position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+          style={{ pointerEvents: 'none', touchAction: 'none' }}
+          zIndexRange={[100, 0]}
+        >
+          <div className="translate-y-10">
+            <div
+              className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
+                altPressed
+                  ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                  : 'border-border bg-background/95 text-muted-foreground'
+              }`}
+            >
+              {altPressed ? 'Detaching corner' : 'Alt to detach'}
+            </div>
           </div>
-        </div>
-      </Html>
+        </Html>
+      )}
       {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
     </group>
   )
