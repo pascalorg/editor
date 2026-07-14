@@ -1,4 +1,4 @@
-import { emitter, useScene, validateBuildJson } from '@pascal-app/core'
+import { clearSceneHistory, emitter, useScene, validateBuildJson } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
@@ -267,6 +267,9 @@ export function SettingsPanel({
       parsed.nodes as Parameters<typeof setScene>[0],
       parsed.rootNodeIds as Parameters<typeof setScene>[1],
     )
+    // An import is a scene load: it becomes the undo floor. Without this,
+    // undo could step back into the pre-import scene state.
+    clearSceneHistory()
     resetSelection()
     setPhase('site')
     setPendingImport(null)
@@ -274,6 +277,9 @@ export function SettingsPanel({
 
   const handleResetToDefault = () => {
     clearScene()
+    // Same floor rule as import — undo after a reset must not resurrect the
+    // old scene (or land on the empty intermediate `unloadScene` state).
+    clearSceneHistory()
     resetSelection()
     setPhase('structure')
     selectDefaultBuildingAndLevel()
