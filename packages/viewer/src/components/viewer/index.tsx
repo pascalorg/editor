@@ -446,6 +446,14 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const transparentBackground = useViewer((state) => state.transparentBackground)
+  // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
+  // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
+  // off disposes the shadow map's GPU texture but three r184's WebGPU node
+  // cache keeps the shadows-on builder state that references it, so toggling
+  // back on reuses destroyed resources and every frame submit fails with a
+  // GPUValidationError. Disabling at the renderer level rebuilds materials
+  // without disposing anything, so the round-trip is safe.
+  const shadowsEnabled = useViewer((state) => state.shadows)
   useLayoutEffect(() => {
     if (transparent === undefined) return
 
@@ -549,7 +557,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       }}
       shadows={{
         type: THREE.PCFShadowMap,
-        enabled: true,
+        enabled: shadowsEnabled,
       }}
     >
       <FrameLimiter fps={50} />
