@@ -126,7 +126,10 @@ import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-laye
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
-import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
+import {
+  FloorplanRegistryLayer,
+  RotationAngleOverlay,
+} from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -1409,6 +1412,44 @@ function buildGuideRotationDraft(
     position: toPlanPointFromSvgPoint(interaction.centerSvg),
     scale: interaction.scale,
     rotation: getGuideSceneRotationFromSvgRotation(snappedRotationSvg),
+  }
+}
+
+/** Live rotation readout for a guide rotate drag — feeds the registry
+ *  layer's wedge + degree chip so guides read the same as every other
+ *  rotate affordance. Sweeps from the grabbed corner's bearing at grab to
+ *  its current (snapped) bearing; suppressed below ~0.5° so a fresh grab
+ *  doesn't flash a zero-width sliver. */
+function buildGuideRotationReadout(
+  interaction: GuideInteractionState | null,
+  draft: GuideTransformDraft | null,
+) {
+  if (
+    !(
+      interaction &&
+      draft &&
+      interaction.mode === 'rotate' &&
+      draft.guideId === interaction.guideId
+    )
+  ) {
+    return null
+  }
+
+  const delta = normalizeAngle(getGuideSvgRotation(draft.rotation) - interaction.rotationSvg)
+  if (Math.abs(delta) < 0.0087) {
+    return null
+  }
+
+  const width = getGuideWidth(interaction.scale)
+  const height = getGuideHeight(width, interaction.aspectRatio)
+  const startAngle = interaction.rotationSvg + interaction.cornerBaseAngle
+
+  return {
+    pivot: [interaction.centerSvg.x, interaction.centerSvg.y] as const,
+    startAngle,
+    endAngle: startAngle + delta,
+    radius: Math.hypot(width, height) / 2,
+    sweep: Math.abs(delta),
   }
 }
 
@@ -5625,6 +5666,10 @@ export function FloorplanPanel({
   const activeGuideInteractionMode = guideTransformDraft
     ? (guideInteractionRef.current?.mode ?? null)
     : null
+  const guideRotationReadout = buildGuideRotationReadout(
+    guideInteractionRef.current,
+    guideTransformDraft,
+  )
   const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
@@ -11391,6 +11436,19 @@ export function FloorplanPanel({
                   rotationModifierPressed={rotationModifierPressed}
                   sceneRotationDeg={floorplanSceneRotationDeg}
                   showHandles={canInteractWithGuides && guideUi[selectedGuide.id]?.locked !== true}
+                />
+              )}
+
+              {guideRotationReadout && (
+                <RotationAngleOverlay
+                  overlay={guideRotationReadout}
+                  palette={{
+                    measurementLabelBackground: isDark ? '#0f172a' : '#ffffff',
+                    measurementLabelText: isDark ? '#e2e8f0' : '#171717',
+                    measurementStroke: palette.measurementStroke,
+                  }}
+                  sceneRotationDeg={floorplanSceneRotationDeg}
+                  unitsPerPixel={floorplanUnitsPerPixel}
                 />
               )}
 
