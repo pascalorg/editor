@@ -23,6 +23,7 @@ import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
+import { isActive } from '../lib/interaction/scope'
 import {
   copySelectedNodesToEditorClipboard,
   pasteEditorClipboardToLevel,
@@ -96,6 +97,26 @@ function rotateGroupSelection(direction: 1 | -1): boolean {
 let _toolCancelConsumed = false
 export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
+}
+
+// ⌘Z pressed mid-interaction (moving a node, drawing a wall, mid-placement…)
+// reads as "abort this action", not history undo — route it through the same
+// cancel path as Escape and report whether anything was in flight so the
+// undo/redo arms know to skip the history jump. Pointer drags that only
+// listen for their own capture-phase keydown never reach here — they
+// stopPropagation first (see isHistoryShortcut call sites).
+const cancelInteractionForHistoryShortcut = () => {
+  if (useEditor.getState().referenceScaleActiveGuideId) {
+    guideEmitter.emit('guide:cancel-reference-scale')
+    return true
+  }
+  _toolCancelConsumed = false
+  emitter.emit('tool:cancel')
+  return (
+    _toolCancelConsumed ||
+    isActive(useInteractionScope.getState().scope) ||
+    useViewer.getState().inputDragging
+  )
 }
 
 export const useKeyboard = ({
@@ -323,10 +344,12 @@ export const useKeyboard = ({
       } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
+        if (cancelInteractionForHistoryShortcut()) return
         runUndo()
       } else if (e.key === 'Z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
+        if (cancelInteractionForHistoryShortcut()) return
         runRedo()
       } else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()

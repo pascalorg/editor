@@ -15,6 +15,7 @@ import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, {
@@ -301,6 +302,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
@@ -347,6 +349,16 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       cleanup()
     }
 
+    // Escape / ⌘Z abort the rotate — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = () => {
       clearLivePreviews()
       cleanup()
@@ -357,6 +369,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 
   return createPortal(

@@ -32,6 +32,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -498,6 +499,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
@@ -527,10 +529,21 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       cleanup()
     }
 
+    // Escape / ⌘Z abort the drag — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 
   return (
