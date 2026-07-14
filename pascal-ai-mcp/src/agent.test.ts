@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   bedroomCountFromBriefText,
   briefFactsFor,
+  ensureSiteDimensionFact,
   buildOpeningRepairData,
   describeRemainingIssues,
   sceneDriftedFromPlan,
@@ -870,6 +871,42 @@ describe('briefFactsFor（P0：结构化 brief 尺寸优先于摘要正则）', 
   test('摘要能解析时结构化扫描不介入', () => {
     const facts = briefFactsFor(emptyBrief as never, '地块宽 6 米、长 15 米')
     expect(facts.siteHint).toEqual({ widthM: 6, depthM: 15 })
+  })
+
+  test('ensureSiteDimensionFact：抽取丢尺寸时从用户原话确定性注入（case-06 二修）', () => {
+    // 抽取结果只剩 plot_shape，没有任何可解析出尺寸的事实。
+    const brief = {
+      ...structuredClone(emptyBrief),
+      hardConstraints: [{
+        key: 'plot_shape', label: '地块形状', value: '长方形',
+        source: 'user', confidence: 0.9, confirmationStatus: 'confirmed',
+      }],
+    }
+    ensureSiteDimensionFact(brief as never, '我有块地，宽 5 米、长 18 米，想盖个两居', 'zh')
+    const injected = (brief.hardConstraints as Array<{ key: string }>).find(f => f.key === 'boundary_dimensions')
+    expect(injected).toBeDefined()
+    // briefFactsFor 的结构化扫描立即吃到 → 策略层拿到 footprintHint。
+    const facts = briefFactsFor(brief as never, '硬性约束：地块为长方形。设计目标：两居。')
+    expect(facts.siteHint).toEqual({ widthM: 5, depthM: 18 })
+  })
+
+  test('ensureSiteDimensionFact：brief 已有可解析尺寸时不重复注入', () => {
+    const brief = {
+      ...structuredClone(emptyBrief),
+      hardConstraints: [{
+        key: 'boundary_dimensions', label: '地块边界', value: '宽 5 米 × 长 18 米',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+    }
+    ensureSiteDimensionFact(brief as never, '宽 5 米、长 18 米', 'zh')
+    expect(brief.hardConstraints).toHaveLength(1)
+    expect((brief.hardConstraints[0] as { value: string }).value).toBe('宽 5 米 × 长 18 米')
+  })
+
+  test('ensureSiteDimensionFact：原话没有尺寸时不动 brief', () => {
+    const brief = structuredClone(emptyBrief)
+    ensureSiteDimensionFact(brief as never, '想要一个三居室，采光好一点', 'zh')
+    expect(brief.hardConstraints).toHaveLength(0)
   })
 })
 

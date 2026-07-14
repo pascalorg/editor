@@ -24,7 +24,7 @@
   "maxModelCalls": 2,
   "modificationChecks": {
     "preserveExteriorBounds": true,
-    "preserveRoomPolygons": { "except": ["玄关", "客厅", "走廊"] }
+    "preserveRoomPolygons": { "except": ["玄关"], "allowAbsorber": true }
   },
-  "notes": "验证 2026-07-14 entry 宿主吸收修复：删玄关必须走局部吸收而非全局重分区——玄关并入共享边最长的合规邻室（客厅/走廊，白名单 living/living_kitchen/dining/hallway），plan.entry 重挂到吸收方，其余房间多边形逐点不变、外轮廓不变。gates 里「没有通向室外的入户门」正好卡死入户门重挂：不重挂必红。maxModelCalls=2 钉住 plan-first 路径（翻译 1 + 修正重试 ≤1）。已知盲区：若 setup 生成阶段就没切出独立玄关间，修改会被拒且本用例可能假绿——case-10 的 expectedRoomCounts 已加「玄关:1」作为配套哨兵，读报告时两个要一起看。"
+  "notes": "验证 2026-07-14 entry 宿主吸收修复：删玄关必须走局部吸收而非全局重分区——玄关并入共享边最长且并集过形状预检的合规邻室（白名单 living/living_kitchen/dining/hallway，具体哪间由基线拓扑决定，allowAbsorber 只允许至多一间改形），plan.entry 重挂到吸收方，其余房间多边形逐点不变、外轮廓不变。gates 里「没有通向室外的入户门」正好卡死入户门重挂：不重挂必红。maxModelCalls=2 钉住 plan-first 路径（翻译 1 + 修正重试 ≤1）。已知盲区：若 setup 生成阶段就没切出独立玄关间，修改会被拒且本用例可能假绿——case-10 的 expectedRoomCounts 已加「玄关:1」作为配套哨兵，读报告时两个要一起看。"
 }

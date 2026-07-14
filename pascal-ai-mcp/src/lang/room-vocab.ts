@@ -67,8 +67,11 @@ export function classifyRoomTypeByName(name: string): RoomType {
   if (ROOM_NAME_PATTERNS.storage.test(name)) return 'storage'
   if (ROOM_NAME_PATTERNS.bedroom.test(name)) return 'bedroom'
   if (ROOM_NAME_PATTERNS.kitchen.test(name)) return 'kitchen'
-  if (ROOM_NAME_PATTERNS.dining.test(name)) return 'dining'
+  // living before dining: a combined name（「客厅兼餐厅」）is a living room
+  // that also serves meals, not a dining room that swallowed the living
+  // room — pure 「餐厅」 names carry no living wording and still hit dining.
   if (ROOM_NAME_PATTERNS.living.test(name)) return 'living'
+  if (ROOM_NAME_PATTERNS.dining.test(name)) return 'dining'
   if (ROOM_NAME_PATTERNS.study.test(name)) return 'study'
   if (ROOM_NAME_PATTERNS.storage.test(name)) return 'storage'
   if (ROOM_NAME_PATTERNS.balcony.test(name)) return 'balcony'

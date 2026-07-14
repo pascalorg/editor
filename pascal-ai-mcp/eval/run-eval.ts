@@ -413,15 +413,16 @@ async function runCase(
       const currentPhase = lastResult?.session.phase as WorkflowPhase | undefined
       // Existing-scene modifications may complete immediately on the user
       // message, without entering a confirmation phase. In that case the
-      // following scripted confirm is redundant; keep the completed result
-      // and continue to scene/assertion collection instead of misclassifying
-      // a successful modification as an invalid confirmation flow.
+      // following scripted confirm is redundant; skip JUST this turn — a
+      // chained case (case-23: modify→confirm→modify→confirm) must still
+      // deliver the remaining user messages, so `break` here would silently
+      // drop them (2026-07-14 复盘：case-23 第 3/4 turn 从未发出).
       if (
         'action' in turn &&
         turn.action === 'confirm' &&
         (currentPhase === 'completed' || currentPhase === 'completed_with_issues')
       ) {
-        break
+        continue
       }
       if ('action' in turn && turn.action === 'confirm' && !canConfirmFromPhase(currentPhase)) {
         const elapsedMs = Date.now() - started

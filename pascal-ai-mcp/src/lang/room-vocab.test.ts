@@ -39,6 +39,13 @@ describe('classifyRoomTypeByName: trilingual', () => {
     expect(classifyRoomTypeByName('Hallway')).toBe('hallway')
   })
 
+  test('客厅兼餐厅 classifies as living, pure 餐厅 stays dining (2026-07-14 复盘)', () => {
+    expect(classifyRoomTypeByName('客厅兼餐厅')).toBe('living')
+    expect(classifyRoomTypeByName('餐厅')).toBe('dining')
+    expect(classifyRoomTypeByName('饭厅')).toBe('dining')
+    expect(classifyRoomTypeByName('living/dining room')).toBe('living')
+  })
+
   test('unknown names fall through to other', () => {
     expect(classifyRoomTypeByName('謎の部屋')).toBe('other')
     expect(classifyRoomTypeByName('')).toBe('other')

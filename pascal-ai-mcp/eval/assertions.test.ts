@@ -252,6 +252,57 @@ describe('diffSnapshots + assertModification', () => {
     expect(honest.find(r => r.name === 'modification:addedItem:bed')?.status).toBe('pass')
   })
 
+  test('preserveRoomPolygons allowAbsorber：至多一间改形视为吸收方（2026-07-14 复盘：吸收方不拍死）', () => {
+    // before：卫生间 + 三间房；after：卫生间没了，次卧改形（吸收方），其余逐点不变。
+    const snapZone = (name: string, x0: number, z0: number, x1: number, z1: number) => ({
+      type: 'zone', name, polygon: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]],
+    })
+    const beforeSnap: SceneSnapshot = {
+      bath: snapZone('卫生间', 0, 0, 2, 3),
+      bed2: snapZone('次卧', 2, 0, 5, 3),
+      bed1: snapZone('主卧', 5, 0, 9, 3),
+      liv: snapZone('客厅', 0, 3, 9, 7),
+    }
+    const afterZones = [
+      zone('bed2', '次卧', 0, 0, 5, 3), // absorbed the bathroom
+      zone('bed1', '主卧', 5, 0, 9, 3),
+      zone('liv', '客厅', 0, 3, 9, 7),
+    ]
+    const afterSnap: SceneSnapshot = {
+      bed2: snapZone('次卧', 0, 0, 5, 3),
+      bed1: snapZone('主卧', 5, 0, 9, 3),
+      liv: snapZone('客厅', 0, 3, 9, 7),
+    }
+    const results = assertModification(beforeSnap, afterSnap, { zones: afterZones, walls: [] }, {
+      preserveRoomPolygons: { except: ['卫生间'], allowAbsorber: true },
+    })
+    const check = results.find(r => r.name === 'modification:preserveRoomPolygons')
+    expect(check?.status).toBe('pass')
+    expect(check?.actual).toBe('吸收方：次卧')
+
+    // 两间以上改形 = 走了重分区，必须 fail。
+    const reshuffled: SceneSnapshot = {
+      bed2: snapZone('次卧', 0, 0, 4, 3),
+      bed1: snapZone('主卧', 4, 0, 9, 3),
+      liv: snapZone('客厅', 0, 3, 9, 7),
+    }
+    const reshuffledZones = [
+      zone('bed2', '次卧', 0, 0, 4, 3),
+      zone('bed1', '主卧', 4, 0, 9, 3),
+      zone('liv', '客厅', 0, 3, 9, 7),
+    ]
+    const failed = assertModification(beforeSnap, reshuffled, { zones: reshuffledZones, walls: [] }, {
+      preserveRoomPolygons: { except: ['卫生间'], allowAbsorber: true },
+    })
+    expect(failed.find(r => r.name === 'modification:preserveRoomPolygons')?.status).toBe('fail')
+
+    // 不带 allowAbsorber 的旧语义不变：吸收方改形即 fail。
+    const strict = assertModification(beforeSnap, afterSnap, { zones: afterZones, walls: [] }, {
+      preserveRoomPolygons: { except: ['卫生间'] },
+    })
+    expect(strict.find(r => r.name === 'modification:preserveRoomPolygons')?.status).toBe('fail')
+  })
+
   test('modification fails when too many original walls are deleted', () => {
     const beforeWithWalls: SceneSnapshot = {
       zoneBed: { type: 'zone', name: '卧室' },

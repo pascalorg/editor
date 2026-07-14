@@ -373,6 +373,7 @@ export class PascalAiAgent {
     try {
       const extracted = await this.extractRequirements(session, message, input.imageDataUrl)
       session.brief = mergeBrief(session.brief, extracted)
+      ensureSiteDimensionFact(session.brief, message, session.language ?? 'zh')
       session.questions = stringArray(extracted.questions).slice(0, 3)
       if (session.phase === 'clarifying') session.clarificationRounds++
       return { session, reply: '', next: 'evaluate' }
@@ -1013,14 +1014,15 @@ export class PascalAiAgent {
 
     // 局部删除吸收（§6，2026-07-14 语义修订，用户实测反馈驱动）：单独的
     // remove_room 优先把房间矩形并入共享边最长的邻室——其余房间坐标一个
-    // 不动，footprint/总面积不变。吸收在几何上不可行（删走廊、玄关宿主、
-    // 会产生孤房、并集不成单一多边形）或并集触发面积 fatal 时，才落回下面
-    // 的稳定性重分区（此时布局变化不可避免，notes 如实告知）。
+    // 不动，footprint/总面积不变。候选邻室逐个过形状预检（并集长宽比 ≤
+    // maxRoomAspect，在 absorbRoomInPlan 循环内），全部不合格、几何上不可行
+    //（删走廊、玄关宿主、会产生孤房、并集不成单一多边形）或并集触发面积
+    // fatal 时，才落回下面的稳定性重分区（此时布局变化不可避免，notes 如实告知）。
     if (parsed.plan.ops.length === 1 && parsed.plan.ops[0]!.op === 'remove_room') {
       const removeOp = parsed.plan.ops[0] as { op: 'remove_room'; room: string }
       const resolved = resolveRoomRef(removeOp.room, session.layoutIntent.rooms)
       if ('room' in resolved) {
-        const absorbed = absorbRoomInPlan(session.layoutPlan, resolved.room.id)
+        const absorbed = absorbRoomInPlan(session.layoutPlan, resolved.room.id, profile.partition.maxRoomAspect)
         if (absorbed) {
           const localRooms = session.layoutIntent.rooms
             .filter(room => room.id !== resolved.room.id)
@@ -2569,6 +2571,36 @@ export function gateTargetsForSession(
  * misses), while the extraction prompt pins dimensions under stable keys.
  * Prose parsing over the summary stays as the fallback.
  */
+// P0（case-06 复盘二修）：抽取模型（temp=1）会偶发丢掉用户口述的地块尺寸
+// （「宽 5 米、长 18 米」→ brief 里只剩 plot_shape），prompt 补丁治标不治本。
+// ingest 后对用户原话跑确定性提取；brief 里没有任何可解析出尺寸的事实时，
+// 补写一条 boundary_dimensions 硬约束 —— briefFactsFor 的结构化扫描就能吃
+// 到，策略层稳定拿到 footprintHint，模型丢了也在。
+const SITE_DIMENSIONS_LABEL: Record<Lang, string> = { zh: '地块尺寸', ja: '敷地寸法', en: 'Lot dimensions' }
+
+export function ensureSiteDimensionFact(brief: DesignBrief, userMessage: string, lang: Lang): void {
+  const hint = detectSiteHint(userMessage)
+  if (!hint) return
+  const pools = [brief.hardConstraints, brief.existingCondition, brief.designGoals, brief.assumptions]
+  const hasParseable = pools.some(pool =>
+    pool.some(fact => detectSiteHint(`${fact.key} ${fact.label} ${formatValue(fact.value)}`) !== undefined))
+  if (hasParseable) return
+  brief.hardConstraints = [
+    // An unparseable model-written boundary fact would shadow the injected
+    // key on the next mergeFacts round — replace it, the user's own numbers
+    // are strictly more reliable.
+    ...brief.hardConstraints.filter(fact => fact.key !== 'boundary_dimensions'),
+    {
+      key: 'boundary_dimensions',
+      label: SITE_DIMENSIONS_LABEL[lang],
+      value: `${hint.widthM}m × ${hint.depthM}m`,
+      source: 'user',
+      confidence: 1,
+      confirmationStatus: 'confirmed',
+    },
+  ]
+}
+
 export function briefFactsFor(brief: DesignBrief, briefSummary: string): BriefFacts {
   const facts = deriveBriefFacts(briefSummary)
   if (!facts.siteHint) {

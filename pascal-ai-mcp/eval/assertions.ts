@@ -597,8 +597,14 @@ export type ModificationChecks = {
    * `except` must reappear after with an identical polygon (±2cm) — proves
    * the modify moved nothing it wasn't asked to touch. Matching is geometric
    * (name-independent), so renames don't read as movement.
+   *
+   * `allowAbsorber`: the absorber is picked by shared-edge length at runtime
+   * (topology-dependent — 2026-07-14 复盘: pinning it in `except` broke when
+   * the baseline layout changed). With it set, `except` lists only the
+   * removed room(s) and AT MOST ONE other room may change shape (the
+   * absorber, reported in `actual`).
    */
-  preserveRoomPolygons?: { except: string[] }
+  preserveRoomPolygons?: { except: string[]; allowAbsorber?: boolean }
   /** Rename cases: these zone names must exist after the modification. */
   requireZoneNames?: string[]
 }
@@ -923,12 +929,16 @@ export function assertModification(
     const moved = beforeZones.filter(zone =>
       !afterScene.zones.some(z => samePolygon(zone.polygon, z.polygon)),
     ).map(zone => zone.name)
+    const allowAbsorber = config.preserveRoomPolygons.allowAbsorber === true
+    const pass = allowAbsorber ? moved.length <= 1 : moved.length === 0
     results.push({
       name: 'modification:preserveRoomPolygons',
-      status: moved.length === 0 ? 'pass' : 'fail',
-      expected: `除 ${config.preserveRoomPolygons.except.join('、')} 外全部房间多边形保持原样`,
-      actual: moved.length === 0 ? '未移动' : moved,
-      reason: moved.length === 0 ? undefined : `以下房间被移动/改形：${moved.join('、')}`,
+      status: pass ? 'pass' : 'fail',
+      expected: allowAbsorber
+        ? `除 ${config.preserveRoomPolygons.except.join('、')} 外至多一间房间改形（吸收方）`
+        : `除 ${config.preserveRoomPolygons.except.join('、')} 外全部房间多边形保持原样`,
+      actual: moved.length === 0 ? '未移动' : (pass ? `吸收方：${moved.join('、')}` : moved),
+      reason: pass ? undefined : `以下房间被移动/改形：${moved.join('、')}`,
     })
   }
 

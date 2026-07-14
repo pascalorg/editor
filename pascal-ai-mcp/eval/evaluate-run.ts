@@ -41,12 +41,17 @@ export function zoneNameMatchesType(type: string, zoneName: string): boolean {
   if (!target) return false
   const classified = classifyRoomTypeByName(zoneName)
   if (classified === target) return true
-  if (classified !== 'living_kitchen') return false
-  if (target === 'living' || target === 'kitchen') return true
-  // Dining only when the merged zone's NAME claims it（「客餐厨」「LDK」——
-  // D 在名字里）；「客厅与开放式厨房」没有餐的部分，旁边的独立餐厅不该
-  // 被数成第二个（case-11 复盘）。
-  return target === 'dining' && /餐|dining|ダイニング|l?dk/i.test(zoneName)
+  if (classified === 'living_kitchen') {
+    if (target === 'living' || target === 'kitchen') return true
+    // Dining only when the merged zone's NAME claims it（「客餐厨」「LDK」——
+    // D 在名字里）；「客厅与开放式厨房」没有餐的部分，旁边的独立餐厅不该
+    // 被数成第二个（case-11 复盘）。
+    return target === 'dining' && /餐|dining|ダイニング|l?dk/i.test(zoneName)
+  }
+  // 「客厅兼餐厅」 classifies as living（living 先于 dining，2026-07-14 复盘）
+  // —— 名字里的餐仍然承担餐厅功能，同 LDK 的 D 兜底；countZonesOfType 的
+  // direct-first 语义保证它只补缺位、不叠加到独立餐厅上。
+  return classified === 'living' && target === 'dining' && /餐|dining|ダイニング/i.test(zoneName)
 }
 
 // Counting semantics on top of zoneNameMatchesType: a merged zone stands in

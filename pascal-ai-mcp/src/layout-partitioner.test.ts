@@ -578,6 +578,40 @@ describe('absorbRoomInPlan: local removal by absorption (MODIFY_REDESIGN §6 修
     expect(result.plan.footprint).toEqual(plan.footprint)
   })
 
+  test('tanoji sliver candidate is skipped, not vetoed (2026-07-14 eval 复盘 case-20/21/23 根因)', () => {
+    // 田の字下卫生间是窄格子：共享边最长的邻居（主卧）并集成 3.3:1 细长 L。
+    // 形状预检必须在候选循环内 continue 到下一个邻居，而不是一票否决吸收。
+    const intent: LayoutIntent = {
+      targetTotalAreaSqm: 70,
+      rooms: [
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 13 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 11 },
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 17 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 10 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 7 },
+      ],
+    }
+    const plan = planOf(intent, { typology: 'tanoji' })
+    const maxAspect = 3.0
+    // Baseline (no precheck): the longest-edge neighbor wins and the union
+    // fails validation — the scenario this fix exists for.
+    const naive = absorbRoomInPlan(plan, 'bath-1')
+    if (!naive) throw new Error('expected naive absorption')
+    expect(validateLayoutPlan(naive.plan, { totalAreaSqm: 70 }).fatal).not.toEqual([])
+    const result = absorbRoomInPlan(plan, 'bath-1', maxAspect)
+    if (!result) throw new Error('expected absorption with shape precheck')
+    // The precheck routed absorption away from the sliver-producing neighbor…
+    expect(result.absorbedInto.id).not.toBe(naive.absorbedInto.id)
+    // …and the whole plan clears the validator (no「过于狭长」fatal).
+    expect(validateLayoutPlan(result.plan, { totalAreaSqm: 70 }).fatal).toEqual([])
+    // Everyone except the absorber keeps their exact polygon.
+    for (const room of plan.rooms) {
+      if (room.id === 'bath-1' || room.id === result.absorbedInto.id) continue
+      expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
+    }
+    expect(result.plan.footprint).toEqual(plan.footprint)
+  })
+
   test('entry-host removal (玄关) absorbs and re-homes the front door; nothing else moves', () => {
     const withEntry: LayoutIntent = {
       targetTotalAreaSqm: 70,
@@ -609,6 +643,46 @@ describe('absorbRoomInPlan: local removal by absorption (MODIFY_REDESIGN §6 修
       expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
     }
     expect(result.plan.footprint).toEqual(plan.footprint)
+  })
+
+  test('entry absorbs into the corridor: circulation is aspect-exempt and remapped doors are not orphans (case-21 线上几何复刻)', () => {
+    // Scene 7b8a53e8547a rev21: the entry strip's only whitelisted neighbor
+    // is the corridor above it — their union is a 1.15×6.52 strip (5.67:1).
+    // The validator exempts circulation from the aspect check, so the
+    // precheck must too; and the kitchen's only door (to the entry) gets
+    // REMAPPED onto the absorber, so it must not read as an orphan.
+    const P = (points: number[][]) => points as Array<[number, number]>
+    const plan = {
+      footprint: { width: 6.39, depth: 9.39 },
+      entry: { roomId: 'entry-1' },
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living' as const, polygon: P([[0, 6.52], [6.39, 6.52], [6.39, 9.39], [0, 9.39]]), requiresExteriorWindow: false },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen' as const, polygon: P([[0, 0], [2.82, 0], [2.82, 2.53], [0, 2.53]]), requiresExteriorWindow: false },
+        { id: 'bedroom-1', name: '榻榻米卧室1', type: 'bedroom' as const, polygon: P([[0, 2.53], [2.82, 2.53], [2.82, 6.52], [0, 6.52]]), requiresExteriorWindow: true },
+        { id: 'bedroom-2', name: '榻榻米卧室2', type: 'bedroom' as const, polygon: P([[3.97, 1.9], [6.39, 1.9], [6.39, 6.52], [3.97, 6.52]]), requiresExteriorWindow: true },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom' as const, polygon: P([[3.97, 0], [6.39, 0], [6.39, 1.9], [3.97, 1.9]]), requiresExteriorWindow: false },
+        { id: 'entry-1', name: '玄关换鞋区', type: 'entry' as const, polygon: P([[2.82, 0], [3.97, 0], [3.97, 2.66], [2.82, 2.66]]), requiresExteriorWindow: false },
+        { id: 'corridor-1', name: '走廊', type: 'hallway' as const, polygon: P([[2.82, 2.66], [3.97, 2.66], [3.97, 6.52], [2.82, 6.52]]), requiresExteriorWindow: false },
+      ],
+      connections: [
+        { from: 'entry-1', to: 'corridor-1', type: 'door' as const },
+        { from: 'corridor-1', to: 'living-1', type: 'door' as const },
+        { from: 'corridor-1', to: 'bedroom-1', type: 'door' as const },
+        { from: 'corridor-1', to: 'bedroom-2', type: 'door' as const },
+        { from: 'entry-1', to: 'kitchen-1', type: 'door' as const },
+        { from: 'entry-1', to: 'bath-1', type: 'door' as const },
+      ],
+    }
+    const result = absorbRoomInPlan(plan as never, 'entry-1', 3.0)
+    if (!result) throw new Error('expected absorption into the corridor')
+    expect(result.absorbedInto.id).toBe('corridor-1')
+    expect(result.plan.entry.roomId).toBe('corridor-1')
+    // Kitchen/bath doors remapped onto the absorber, not dropped.
+    expect(result.plan.connections.some(c =>
+      (c.from === 'kitchen-1' && c.to === 'corridor-1') || (c.from === 'corridor-1' && c.to === 'kitchen-1'))).toBe(true)
+    expect(result.plan.connections.some(c =>
+      (c.from === 'bath-1' && c.to === 'corridor-1') || (c.from === 'corridor-1' && c.to === 'bath-1'))).toBe(true)
+    expect(validateLayoutPlan(result.plan as never, { totalAreaSqm: 60 }).fatal).toEqual([])
   })
 
   test('entry-host removal never absorbs into a bedroom or bathroom', () => {

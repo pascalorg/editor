@@ -41,6 +41,8 @@ import {
   type LayoutPlanRoom,
   type RoomType,
 } from './layout-plan'
+import { polygonAspectRatio } from './layout-metrics'
+import { TYPE_TO_KIND } from './plan-validator'
 import {
   DEFAULT_NORM_PROFILE,
   quantizeAreaSqm,
@@ -1480,9 +1482,12 @@ export function planRoomAreas(plan: LayoutPlan): Map<string, number> {
 // The removed room's area merges into the neighbor with the longest shared
 // edge — every other room keeps its exact polygon, footprint and total area
 // unchanged. Deterministic and topology-agnostic: works for band carves,
-// tanoji wing cells and narrow-lot stack segments alike. Returns null when
-// absorption cannot produce one simple polygon or would break circulation —
-// the caller falls back to the stability re-partition.
+// tanoji wing cells and narrow-lot stack segments alike. Candidates whose
+// union polygon fails the shape precheck (bounding-box aspect > maxAspect)
+// are skipped IN the loop — a tanoji bathroom whose longest-edge neighbor
+// yields a 3.3:1 sliver must fall through to the next neighbor instead of
+// vetoing absorption outright (2026-07-14 eval 复盘). Returns null only when
+// every candidate fails — the caller falls back to the stability re-partition.
 // ---------------------------------------------------------------------------
 
 // Room types a front door may open into when the entry host is absorbed.
@@ -1492,6 +1497,7 @@ const ENTRY_HOST_TYPES = new Set<RoomType>(['living', 'living_kitchen', 'dining'
 export function absorbRoomInPlan(
   plan: LayoutPlan,
   roomId: string,
+  maxAspect?: number,
 ): { plan: LayoutPlan; absorbedInto: LayoutPlanRoom } | null {
   const target = plan.rooms.find(room => room.id === roomId)
   if (!target) return null
@@ -1503,12 +1509,17 @@ export function absorbRoomInPlan(
   // the absorber ("去掉玄关" = 进门即客厅) — but only into a room type that
   // may face the front door.
   const hostsEntry = plan.entry.roomId === roomId
-  // A room whose ONLY door connection is the target would be orphaned.
-  for (const room of plan.rooms) {
-    if (room.id === roomId) continue
-    const connections = plan.connections.filter(c => c.from === room.id || c.to === room.id)
-    if (connections.length > 0 && connections.every(c => c.from === roomId || c.to === roomId)) {
-      return null
+  // A room whose ONLY door connection is the target would be orphaned —
+  // except on entry-host removal, where the target's doors are REMAPPED onto
+  // the absorber below（并集保留玄关的每一面墙）, so nothing gets orphaned
+  // (2026-07-14 复盘：厨房只开门到玄关的布局被误判孤房，删玄关走了重分区).
+  if (!hostsEntry) {
+    for (const room of plan.rooms) {
+      if (room.id === roomId) continue
+      const connections = plan.connections.filter(c => c.from === room.id || c.to === room.id)
+      if (connections.length > 0 && connections.every(c => c.from === roomId || c.to === roomId)) {
+        return null
+      }
     }
   }
 
@@ -1526,6 +1537,14 @@ export function absorbRoomInPlan(
   for (const { room: neighbor } of candidates) {
     const union = unionAdjacentPolygons(neighbor.polygon, target.polygon)
     if (!union) continue
+    // Mirror the validator's aspect semantics: circulation rooms are exempt
+    // （长走廊本来就是长条），so absorbing the entry into the corridor —
+    // often its only whitelisted neighbor — must not be shape-vetoed.
+    if (
+      maxAspect !== undefined &&
+      TYPE_TO_KIND[neighbor.type] !== 'circulation' &&
+      polygonAspectRatio(union) > maxAspect
+    ) continue
     const absorbedInto: LayoutPlanRoom = { ...neighbor, polygon: union }
     const rooms = plan.rooms
       .filter(room => room.id !== roomId)
