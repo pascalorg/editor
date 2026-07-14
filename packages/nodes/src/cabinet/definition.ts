@@ -31,6 +31,7 @@ import {
   cabinetMetadataRecord,
   cabinetModulesForRun,
   totalCabinetHeight as cabinetTotalHeight,
+  cornerSourceWidthOverridesForDerivedDepth,
   previewCornerRunsFromRunSources,
   resolveCabinetType,
   runModuleBaseY,
@@ -630,6 +631,12 @@ function commitRunResize(
         }
       }
     }
+    if (syncDepth) {
+      for (const [id, depthPatch] of depthOverrides) {
+        if (sceneApi.get(id)?.type !== 'cabinet') continue
+        sceneApi.update(id, depthPatch as Partial<AnyNode>)
+      }
+    }
   }
 
   if (syncDepth || syncHeight || syncPosition) {
@@ -908,9 +915,14 @@ function cabinetConnectedRunDepthHandle(
     previewOverrides: (_node, depth, liveSceneApi) => {
       const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
       const moduleOverrides = backAlignedRunDepthOverrides(liveTarget, liveSceneApi.nodes(), depth)
+      const sourceOverrides = cornerSourceWidthOverridesForDerivedDepth(
+        liveTarget,
+        liveSceneApi.nodes(),
+        depth,
+      )
       return previewCornerRunsFromRunSources({
         baseLayout: 'width-only',
-        initialOverrides: moduleOverrides,
+        initialOverrides: [...moduleOverrides, ...sourceOverrides],
         run: { ...liveTarget, depth },
         sceneApi: liveSceneApi,
       })
@@ -918,6 +930,13 @@ function cabinetConnectedRunDepthHandle(
     commit: (_node, patch, liveSceneApi) => {
       if (typeof patch.depth !== 'number') return
       const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+      for (const [id, sourcePatch] of cornerSourceWidthOverridesForDerivedDepth(
+        liveTarget,
+        liveSceneApi.nodes(),
+        patch.depth,
+      )) {
+        liveSceneApi.update(id, sourcePatch)
+      }
       commitRunResize(liveTarget, { depth: patch.depth }, liveSceneApi, {
         cornerSync: 'width-only',
       })

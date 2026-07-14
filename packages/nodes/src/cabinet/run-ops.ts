@@ -307,13 +307,25 @@ export function backAlignedRunDepthOverrides(
   const backZ = runBackLineZ(modules)
   const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
   for (const module of modules) {
+    const positionZ = backZ + depth / 2
+    const parentShiftZ = positionZ - module.position[2]
     overrides.push([
       module.id as AnyNodeId,
       {
         depth,
-        position: [module.position[0], module.position[1], backZ + depth / 2],
+        position: [module.position[0], module.position[1], positionZ],
       } as Partial<AnyNode>,
     ])
+    for (const childId of module.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type !== 'cabinet') continue
+      overrides.push([
+        child.id as AnyNodeId,
+        {
+          position: [child.position[0], child.position[1], child.position[2] - parentShiftZ],
+        } as Partial<AnyNode>,
+      ])
+    }
     const wallChild = wallChildOf(module, nodes)
     if (wallChild) {
       overrides.push([
@@ -328,6 +340,104 @@ export function backAlignedRunDepthOverrides(
       ])
     }
   }
+  return overrides
+}
+
+export function cornerSourceWidthOverridesForDerivedDepth(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  depth: number,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const link = cornerDerivedRunLink(run.metadata)
+  if (link?.role !== 'base-leg') return []
+  const sourceModule = nodes[link.sourceModuleId]
+  const sourceRun = nodes[link.sourceRunId]
+  if (sourceModule?.type !== 'cabinet-module' || sourceRun?.type !== 'cabinet') return []
+
+  const width = Math.max(
+    MIN_TRIMMED_CORNER_CONNECTED_WIDTH,
+    sourceModule.width - (depth - run.depth),
+  )
+  const widthDelta = width - sourceModule.width
+  const direction = link.side === 'right' ? 1 : -1
+  const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = [
+    [
+      sourceModule.id as AnyNodeId,
+      {
+        width,
+        position: [
+          sourceModule.position[0] + (direction * widthDelta) / 2,
+          sourceModule.position[1],
+          sourceModule.position[2],
+        ],
+      } as Partial<AnyNode>,
+    ],
+  ]
+  const wallChild = wallChildOf(sourceModule, nodes)
+  if (wallChild) {
+    overrides.push([
+      wallChild.id as AnyNodeId,
+      {
+        width,
+        position: [
+          wallChild.position[0],
+          wallChild.position[1],
+          backAlignZ(sourceModule.depth, wallChild.depth),
+        ],
+      } as Partial<AnyNode>,
+    ])
+  }
+  const sourceLink = cornerSourceLink(sourceModule.metadata)
+  for (const linkedRunId of sourceLink?.linkedRunIds ?? []) {
+    const linkedRun = nodes[linkedRunId]
+    if (linkedRun?.type !== 'cabinet') continue
+    const derivedLink = cornerDerivedRunLink(linkedRun.metadata)
+    if (
+      derivedLink?.role !== 'bridge' ||
+      derivedLink.side !== link.side ||
+      derivedLink.sourceModuleId !== sourceModule.id
+    ) {
+      continue
+    }
+    const bridge = cabinetModulesForRun(linkedRun, nodes).find(
+      (module) => module.name === 'Wall Bridge Filler',
+    )
+    if (!bridge) continue
+    const bridgeWidth = Math.max(0.01, bridge.width - widthDelta)
+    const bridgeWidthDelta = bridgeWidth - bridge.width
+    overrides.push([
+      bridge.id as AnyNodeId,
+      {
+        width: bridgeWidth,
+        position: [
+          bridge.position[0] - (direction * bridgeWidthDelta) / 2,
+          bridge.position[1],
+          bridge.position[2],
+        ],
+      } as Partial<AnyNode>,
+    ])
+    const linkedMetadata = cabinetMetadataRecord(linkedRun.metadata)
+    const linkedRevision =
+      typeof linkedMetadata.cabinetLayoutRevision === 'number'
+        ? linkedMetadata.cabinetLayoutRevision
+        : 0
+    overrides.push([
+      linkedRun.id as AnyNodeId,
+      {
+        metadata: {
+          ...linkedMetadata,
+          cabinetLayoutRevision: linkedRevision + 1,
+        },
+      } as Partial<AnyNode>,
+    ])
+  }
+  const metadata = cabinetMetadataRecord(sourceRun.metadata)
+  const revision =
+    typeof metadata.cabinetLayoutRevision === 'number' ? metadata.cabinetLayoutRevision : 0
+  overrides.push([
+    sourceRun.id as AnyNodeId,
+    { metadata: { ...metadata, cabinetLayoutRevision: revision + 1 } } as Partial<AnyNode>,
+  ])
   return overrides
 }
 
@@ -1620,7 +1730,10 @@ export function previewCornerRunsFromRunSources({
   run: CabinetNode
   sceneApi: SceneApi
 }): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
-  const overrides = new Map<AnyNodeId, Partial<AnyNode>>(initialOverrides)
+  const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
+  for (const [id, patch] of initialOverrides) {
+    overrides.set(id, { ...(overrides.get(id) ?? {}), ...patch } as Partial<AnyNode>)
+  }
   const previewNodes = { ...sceneApi.nodes() }
   for (const [id, patch] of overrides) {
     const current = previewNodes[id]

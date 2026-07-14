@@ -2441,16 +2441,30 @@ describe('cabinet handles', () => {
     const initialSourcePosition = [...source.position]
     const initialLegPosition = [...leg.position]
     const initialLegBack = legModule.position[2] - legModule.depth / 2
-    const patch = handle.apply(source, 0.78, sceneApi as never)
+    const cornerWallFiller = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+    )!
+    const initialCornerWallWorld = resolveCabinetWorldTransform(
+      cornerWallFiller,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    const patch = handle.apply(source, 0.48, sceneApi as never)
 
     handle.commit?.(source, patch, sceneApi as never)
 
-    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(0.78)
+    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(0.48)
     expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
     const resizedLegModule = sceneApi.get<CabinetModuleNode>(legModule.id)!
     expect(resizedLegModule.position[2] - resizedLegModule.depth / 2).toBeCloseTo(initialLegBack)
     expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(source.depth)
     expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
+    const resizedCornerWallWorld = resolveCabinetWorldTransform(
+      sceneApi.get<CabinetModuleNode>(cornerWallFiller.id)!,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    expect(resizedCornerWallWorld.position[0]).toBeCloseTo(initialCornerWallWorld.position[0])
+    expect(resizedCornerWallWorld.position[2]).toBeCloseTo(initialCornerWallWorld.position[2])
   })
 
   test.each([
