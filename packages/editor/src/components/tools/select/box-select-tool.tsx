@@ -35,6 +35,7 @@ import {
 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { at } from '../../../lib/typed-access'
 import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
@@ -137,8 +138,8 @@ function polygonIntersectsBounds(polygon: [number, number][], b: Bounds): boolea
     [b.minX, b.maxZ, b.minX, b.minZ],
   ]
   for (let i = 0; i < polygon.length; i++) {
-    const [px1, pz1] = polygon[i]!
-    const [px2, pz2] = polygon[(i + 1) % polygon.length]!
+    const [px1, pz1] = at(polygon, i)
+    const [px2, pz2] = at(polygon, (i + 1) % polygon.length)
     for (const [ex1, ez1, ex2, ez2] of edges) {
       if (segmentsIntersect(px1, pz1, px2, pz2, ex1, ez1, ex2, ez2)) return true
     }
@@ -150,8 +151,8 @@ function polygonIntersectsBounds(polygon: [number, number][], b: Bounds): boolea
 function pointInPolygon(x: number, z: number, polygon: [number, number][]): boolean {
   let inside = false
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, zi] = polygon[i]!
-    const [xj, zj] = polygon[j]!
+    const [xi, zi] = at(polygon, i)
+    const [xj, zj] = at(polygon, j)
     if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) {
       inside = !inside
     }
@@ -399,7 +400,7 @@ const BoxSelectToolInner: React.FC = () => {
   const { camera, gl } = useThree()
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const cursorRef = useRef<Group>(null)
-  const rectFillRef = useRef<Mesh>(null!)
+  const rectFillRef = useRef<Mesh | null>(null)
   const outlineRef = useRef(createOutlineSegments())
   const startPoint = useRef(new Vector3())
   const currentPoint = useRef(new Vector3())
@@ -563,7 +564,7 @@ const BoxSelectToolInner: React.FC = () => {
       currentPoint.current.set(snappedX, event.position[1], snappedZ)
 
       // Check drag threshold (screen pixels)
-      const nativeEvent = event.nativeEvent as unknown as PointerEvent
+      const nativeEvent = event.nativeEvent.nativeEvent
       const dx = nativeEvent.clientX - startClientX.current
       const dy = nativeEvent.clientY - startClientY.current
       if (!isDragging.current && Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {

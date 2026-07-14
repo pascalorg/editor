@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { coerce } from '../test-utils'
 import { nodeRegistry, registerNode } from './registry'
 import { cascadeDirty, collectDescendants, type SpatialQuery } from './relations-resolver'
 import type { AnyNodeDefinition, Relations, SceneApi } from './types'
@@ -15,9 +16,9 @@ function makeDef(
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities: {},
     relations,
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
@@ -26,13 +27,13 @@ function makeDef(
 }
 
 function makeNode(kind: string, idStr: string, extra: Partial<AnyNode> = {}): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: id(idStr),
     type: kind,
     parentId: null,
     visible: true,
     ...extra,
-  } as unknown as AnyNode
+  })
 }
 
 function makeFakeScene(nodes: Record<string, AnyNode>): SceneApi {

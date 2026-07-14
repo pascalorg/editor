@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '../../schema/types'
+import { coerce } from '../../test-utils'
 import useScene from '../use-scene'
 
 // bun:test has no DOM — node-actions schedules markDirty via requestAnimationFrame,
 // so polyfill it as synchronous.
 type RafFn = (cb: (t: number) => void) => number
-;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= ((
-  cb: (t: number) => void,
-) => {
+type RafGlobals = {
+  requestAnimationFrame?: RafFn
+  cancelAnimationFrame?: (id: number) => void
+}
+const rafGlobals = coerce<RafGlobals>(globalThis)
+rafGlobals.requestAnimationFrame ??= (cb: (t: number) => void) => {
   cb(0)
   return 0
-}) as RafFn
-;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
-  () => {}
+}
+rafGlobals.cancelAnimationFrame ??= () => {}
 
 const ROOF_ID = 'roof_test' as AnyNodeId
 const SEG_A_ID = 'rseg_a' as AnyNodeId
@@ -20,7 +23,7 @@ const SEG_B_ID = 'rseg_b' as AnyNodeId
 const VENT_ID = 'bvent_v1' as AnyNodeId
 
 function makeRoof(): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: ROOF_ID,
     type: 'roof',
     parentId: null,
@@ -31,11 +34,11 @@ function makeRoof(): AnyNode {
     position: [0, 0, 0],
     rotation: 0,
     children: [SEG_A_ID, SEG_B_ID],
-  } as unknown as AnyNode
+  })
 }
 
 function makeSegment(id: AnyNodeId, children: AnyNodeId[] = []): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id,
     type: 'roof-segment',
     parentId: ROOF_ID,
@@ -55,11 +58,11 @@ function makeSegment(id: AnyNodeId, children: AnyNodeId[] = []): AnyNode {
     overhang: 0.3,
     shingleThickness: 0.05,
     children,
-  } as unknown as AnyNode
+  })
 }
 
 function makeVent(parentId: AnyNodeId): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: VENT_ID,
     type: 'box-vent',
     parentId,
@@ -83,7 +86,7 @@ function makeVent(parentId: AnyNodeId): AnyNode {
     cornerBevel: 0.012,
     style: 'cap',
     materialPreset: 'preset-white',
-  } as unknown as AnyNode
+  })
 }
 
 function childrenOf(id: AnyNodeId): AnyNodeId[] {
@@ -171,7 +174,7 @@ describe('node-actions reparent — repeated segment-hopping', () => {
         [ROOF_ID]: makeRoof(),
         [SEG_A_ID]: makeSegment(SEG_A_ID, [id]),
         [SEG_B_ID]: makeSegment(SEG_B_ID, []),
-        [id]: {
+        [id]: coerce<AnyNode>({
           id,
           type,
           parentId: SEG_A_ID,
@@ -182,7 +185,7 @@ describe('node-actions reparent — repeated segment-hopping', () => {
           metadata: {},
           position: [0, 0, 0],
           rotation: 0,
-        } as unknown as AnyNode,
+        }),
       },
       rootNodeIds: [ROOF_ID],
     } as never)

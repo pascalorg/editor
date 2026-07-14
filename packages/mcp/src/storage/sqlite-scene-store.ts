@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -152,7 +151,7 @@ function editorUrlForScene(id: string): string {
 }
 
 function hashGraphJson(graphJson: string): string {
-  return createHash('sha256').update(graphJson).digest('hex')
+  return new Bun.CryptoHasher('sha256').update(graphJson).digest('hex')
 }
 
 function rowToProjectStatus(row: SceneRow): ProjectStatus {
@@ -596,7 +595,7 @@ export class SqliteSceneStore implements SceneStore {
     if (!this.dbPromise) {
       this.dbPromise = (async () => {
         mkdirSync(path.dirname(this.databasePath), { recursive: true })
-        const db = await openSqliteDatabase(this.databasePath)
+        const db = openSqliteDatabase(this.databasePath)
         db.exec('PRAGMA foreign_keys = ON')
         db.exec('PRAGMA journal_mode = WAL')
         db.exec('PRAGMA busy_timeout = 5000')

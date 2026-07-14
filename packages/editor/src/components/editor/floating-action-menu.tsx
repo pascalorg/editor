@@ -31,7 +31,7 @@ import * as THREE from 'three'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
-import useEditor from '../../store/use-editor'
+import useEditor, { isMovingNode } from '../../store/use-editor'
 import { NodeActionMenu } from './node-action-menu'
 
 const ALLOWED_TYPES = [
@@ -188,27 +188,12 @@ export function FloatingActionMenu() {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      if (
-        node.type === 'item' ||
-        node.type === 'window' ||
-        node.type === 'door' ||
-        node.type === 'elevator' ||
-        node.type === 'wall' ||
-        node.type === 'fence' ||
-        node.type === 'column' ||
-        node.type === 'slab' ||
-        node.type === 'ceiling' ||
-        node.type === 'spawn' ||
-        node.type === 'roof' ||
-        node.type === 'roof-segment' ||
-        node.type === 'stair' ||
-        node.type === 'stair-segment' ||
-        // Registry-driven kinds default to movable; MoveTool dispatches them
-        // to MoveRegistryNodeTool. Phase 4 reads `capabilities.movable` to
-        // gate this instead of the unconditional OR.
-        isRegistrySelectable(node.type)
-      ) {
-        setMovingNode(node as any)
+      // Registry-driven kinds default to movable (chimney, dormer, …); they are
+      // part of the MovingNode union, so `isMovingNode` accepts them. MoveTool
+      // dispatches registry kinds to MoveRegistryNodeTool. Phase 4 reads
+      // `capabilities.movable` to gate this instead.
+      if (isMovingNode(node) || isRegistrySelectable(node.type)) {
+        if (isMovingNode(node)) setMovingNode(node)
       }
       setSelection({ selectedIds: [] })
     },
@@ -265,9 +250,12 @@ export function FloatingActionMenu() {
 
       useScene.temporal.getState().pause()
 
-      let duplicateInfo = structuredClone(node) as any
+      const duplicateInfo: Record<string, unknown> = structuredClone(node)
       delete duplicateInfo.id
-      duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+      duplicateInfo.metadata = {
+        ...(duplicateInfo.metadata as Record<string, unknown> | undefined),
+        isNew: true,
+      }
 
       let duplicate: AnyNode | null = null
       try {
@@ -292,8 +280,11 @@ export function FloatingActionMenu() {
           duplicate = RoofSegmentNode.parse(duplicateInfo)
         } else if (node.type === 'stair') {
           duplicateInfo.children = []
-          duplicateInfo.metadata = { ...duplicateInfo.metadata }
-          delete duplicateInfo.metadata?.isNew
+          const stairMetadata = {
+            ...(duplicateInfo.metadata as Record<string, unknown> | undefined),
+          }
+          delete stairMetadata.isNew
+          duplicateInfo.metadata = stairMetadata
           duplicate = StairNode.parse(duplicateInfo)
         } else if (node.type === 'stair-segment') {
           duplicate = StairSegmentNode.parse(duplicateInfo)
@@ -365,13 +356,9 @@ export function FloatingActionMenu() {
           // Registry-driven kinds: offset the position slightly so the
           // duplicate doesn't overlap exactly, then create + hand to the
           // move tool. Mirrors the roof-segment / stair-segment behavior.
-          if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
-            const pos = (duplicate as { position: [number, number, number] }).position
-            ;(duplicate as { position: [number, number, number] }).position = [
-              pos[0] + 1,
-              pos[1],
-              pos[2] + 1,
-            ]
+          if ('position' in duplicate && Array.isArray(duplicate.position)) {
+            const pos = duplicate.position
+            duplicate.position = [pos[0] + 1, pos[1], pos[2] + 1]
           }
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         }
@@ -385,12 +372,16 @@ export function FloatingActionMenu() {
           duplicate.type === 'door' ||
           duplicate.type === 'roof-segment' ||
           duplicate.type === 'spawn' ||
-          duplicate.type === 'stair-segment' ||
+          duplicate.type === 'stair-segment'
+        ) {
+          setMovingNode(duplicate)
+        } else if (
           // Registry-driven kinds get picked up by MoveTool's generic
           // fallback (MoveRegistryNodeTool) so the user can reposition.
-          nodeRegistry.has(duplicate.type)
+          nodeRegistry.has(duplicate.type) &&
+          isMovingNode(duplicate)
         ) {
-          setMovingNode(duplicate as any)
+          setMovingNode(duplicate)
         } else if (duplicate.type === 'stair') {
           setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }

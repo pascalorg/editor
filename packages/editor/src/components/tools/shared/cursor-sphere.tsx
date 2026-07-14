@@ -102,8 +102,8 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
           {tooltipContent || (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              alt={activeToolConfig!.label}
-              src={activeToolConfig!.iconSrc}
+              alt={activeToolConfig?.label}
+              src={activeToolConfig?.iconSrc}
               style={{
                 width: '100%',
                 height: '100%',

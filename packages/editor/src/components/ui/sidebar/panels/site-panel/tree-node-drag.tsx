@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { at, requireDefined } from '../../../../../lib/typed-access'
 
 // ---------------------------------------------------------------------------
 // Reparenting rules
@@ -154,7 +155,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         currentChildren.splice(fromIndex, 1)
         const toIndex = Math.min(dropTarget.insertIndex, currentChildren.length)
         currentChildren.splice(toIndex, 0, drag.nodeId)
-        state.updateNode(dropTarget.parentId as AnyNodeId, { children: currentChildren } as any)
+        state.updateNode(dropTarget.parentId as AnyNodeId, { children: currentChildren })
       }
     } else {
       // --- Reparent to different parent, preserving world position ---
@@ -169,14 +170,11 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         getTransform(newParent),
       )
 
-      state.updateNode(
-        drag.nodeId as AnyNodeId,
-        {
-          parentId: dropTarget.parentId,
-          position: newLocal.position,
-          rotation: newLocal.rotation,
-        } as any,
-      )
+      state.updateNode(drag.nodeId as AnyNodeId, {
+        parentId: dropTarget.parentId,
+        position: newLocal.position,
+        rotation: newLocal.rotation,
+      })
 
       // Place at the correct index within the new parent's children
       const updatedParent = state.nodes[dropTarget.parentId as AnyNodeId]
@@ -187,7 +185,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
           children.splice(idx, 1)
           const toIndex = Math.min(dropTarget.insertIndex, children.length)
           children.splice(toIndex, 0, drag.nodeId)
-          state.updateNode(dropTarget.parentId as AnyNodeId, { children } as any)
+          state.updateNode(dropTarget.parentId as AnyNodeId, { children })
         }
       }
 
@@ -250,7 +248,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         const targetEl = (el as HTMLElement).closest?.('[data-drop-target]') as HTMLElement | null
         if (!targetEl) continue
 
-        const parentId = targetEl.dataset.dropTarget!
+        const parentId = requireDefined(targetEl.dataset.dropTarget)
 
         // Validate this is a legal drop
         const targetNode = useScene.getState().nodes[parentId as AnyNodeId]
@@ -261,7 +259,7 @@ export function TreeNodeDragProvider({ children }: { children: ReactNode }) {
         let insertIndex = childRows.length
 
         for (let i = 0; i < childRows.length; i++) {
-          const row = childRows[i]!
+          const row = at(childRows, i)
           const rect = row.getBoundingClientRect()
           const midY = rect.top + rect.height / 2
           if (e.clientY < midY) {

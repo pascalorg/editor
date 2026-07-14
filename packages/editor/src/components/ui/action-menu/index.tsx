@@ -60,8 +60,6 @@ function PaintMaterialTray() {
 export function ActionMenu({ className }: { className?: string }) {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
-  const tool = useEditor((state) => state.tool)
-  const catalogCategory = useEditor((state) => state.catalogCategory)
   const isMobile = useIsMobile()
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
   const hasReferenceOnMobile = useEditor((s) => isMobile && Boolean(s.selectedReferenceId))

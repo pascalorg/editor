@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   type ElevatorNode,
   type FloorplanGeometry,
@@ -287,27 +288,24 @@ export function buildElevatorFloorplan(
  * it through ctx — but doing so leaks the whole scene store into every
  * `def.floorplan` call. Narrow opt-in is the better default.
  */
-function collectAllNodes(ctx: GeometryContext): Record<string, never> {
+function collectAllNodes(ctx: GeometryContext): Record<string, AnyNode> {
   // We need the building → levels graph for service-level resolution.
   // Walk up from the elevator: parent (level) → its parent (building) →
   // building.children (all levels). That's enough for the resolver.
-  const out: Record<string, unknown> = {}
+  const out: Record<string, AnyNode> = {}
   const level = ctx.parent
   if (level) {
     out[level.id] = level
-    const building = (level as { parentId?: string }).parentId
-      ? ctx.resolve((level as { parentId: string }).parentId as never)
-      : undefined
+    const building = level.parentId ? ctx.resolve(level.parentId as AnyNodeId) : undefined
     if (building) {
       out[building.id] = building
-      const childIds = (building as unknown as { children?: string[] }).children
-      if (Array.isArray(childIds)) {
-        for (const cid of childIds) {
-          const child = ctx.resolve(cid as never)
+      if ('children' in building && Array.isArray(building.children)) {
+        for (const cid of building.children) {
+          const child = ctx.resolve(cid as AnyNodeId)
           if (child) out[child.id] = child
         }
       }
     }
   }
-  return out as Record<string, never>
+  return out
 }

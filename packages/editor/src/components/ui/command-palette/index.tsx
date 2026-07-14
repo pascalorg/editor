@@ -29,7 +29,7 @@ interface CommandPaletteStore {
   goBack: () => void
 }
 
-export const useCommandPalette = create<CommandPaletteStore>((set, get) => ({
+export const useCommandPalette = create<CommandPaletteStore>((set) => ({
   open: false,
   setOpen: (open) => {
     set({ open })
@@ -188,11 +188,11 @@ function EmptyActionItem({ action }: { action: CommandPaletteEmptyAction }) {
 // Main component
 // ---------------------------------------------------------------------------
 export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEmptyAction }) {
-  const { open, setOpen, mode, setMode, pages, inputValue, setInputValue, navigateTo, goBack } =
+  const { open, setOpen, mode, setMode, pages, inputValue, setInputValue, goBack } =
     useCommandPalette()
 
-  const [meta, setMeta] = useState('⌘')
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [_meta, setMeta] = useState('⌘')
+  const [_isFullscreen, setIsFullscreen] = useState(false)
 
   const page = pages[pages.length - 1]
 
@@ -258,7 +258,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
   const confirmRename = () => {
     if (!(activeLevelId && inputValue.trim())) return
     run(() => {
-      useScene.getState().updateNode(activeLevelId as AnyNodeId, { name: inputValue.trim() } as any)
+      useScene.getState().updateNode(activeLevelId as AnyNodeId, { name: inputValue.trim() })
     })
   }
 

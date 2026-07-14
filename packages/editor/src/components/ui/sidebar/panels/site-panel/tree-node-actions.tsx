@@ -17,7 +17,10 @@ export const TreeNodeActions = memo(function TreeNodeActions({ nodeId }: TreeNod
   const updateNode = useScene((state) => state.updateNode)
   const updateNodes = useScene((state) => state.updateNodes)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const hasCamera = useScene((s) => !!(s.nodes[nodeId] as any)?.camera)
+  const hasCamera = useScene((s) => {
+    const node = s.nodes[nodeId]
+    return !!node && 'camera' in node && !!node.camera
+  })
 
   const toggleVisibility = (e: React.MouseEvent) => {
     e.stopPropagation()

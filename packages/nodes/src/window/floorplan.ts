@@ -55,7 +55,6 @@ export function buildWindowFloorplan(
   ]
 
   const view = ctx.viewState
-  const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted

@@ -19,6 +19,16 @@ import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
 
+/** Narrows an unknown store node value to a WallNode by its discriminant. */
+function isWallNode(node: unknown): node is WallNode {
+  return (
+    typeof node === 'object' &&
+    node !== null &&
+    'type' in node &&
+    (node as { type: unknown }).type === 'wall'
+  )
+}
+
 export type Space = {
   id: string
   levelId: string
@@ -919,12 +929,12 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
     const wallsByLevel = new Map<string, WallNode[]>()
 
     for (const node of Object.values(nodes)) {
-      if (node && (node as any).type === 'wall' && (node as any).parentId) {
-        const levelId = (node as any).parentId as string
-        const levelWalls = wallsByLevel.get(levelId) ?? []
-        levelWalls.push(node as WallNode)
-        wallsByLevel.set(levelId, levelWalls)
-      }
+      if (!isWallNode(node)) continue
+      const levelId = node.parentId
+      if (!levelId) continue
+      const levelWalls = wallsByLevel.get(levelId) ?? []
+      levelWalls.push(node)
+      wallsByLevel.set(levelId, levelWalls)
     }
 
     const currentSnapshots = new Map<string, string>()

@@ -5,13 +5,13 @@ Core library for Pascal 3D building editor.
 ## Installation
 
 ```bash
-npm install @pascal-app/core
+bun add @pascal-app/core
 ```
 
 ## Peer Dependencies
 
 ```bash
-npm install react three @react-three/fiber @react-three/drei
+bun add react three @react-three/fiber @react-three/drei
 ```
 
 ## What's Included

@@ -578,8 +578,7 @@ function DraftAngleArc({ arc, color }: { arc: DraftAngleLabel['arc']; color: str
   }, [arc])
 
   return (
-    // @ts-expect-error - R3F accepts Three line primitives, matching the other editor drawing tools.
-    <line frustumCulled={false} geometry={geometry} layers={EDITOR_LAYER} renderOrder={2}>
+    <threeLine frustumCulled={false} geometry={geometry} layers={EDITOR_LAYER} renderOrder={2}>
       <lineBasicNodeMaterial
         color={color}
         depthTest={false}
@@ -588,7 +587,7 @@ function DraftAngleArc({ arc, color }: { arc: DraftAngleLabel['arc']; color: str
         opacity={0.95}
         transparent
       />
-    </line>
+    </threeLine>
   )
 }
 

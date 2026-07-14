@@ -441,7 +441,8 @@ function getNodeChildIds(node: AnyNode): AnyNodeId[] {
     return []
   }
 
-  return (node.children as unknown[])
+  const children: unknown[] = node.children
+  return children
     .map((child) => {
       if (typeof child === 'string') return child
       if (child && typeof child === 'object' && 'id' in child && typeof child.id === 'string') {

@@ -112,7 +112,7 @@ export const Grid = ({
     revealRadius,
   ])
 
-  const gridRef = useRef<Mesh>(null!)
+  const gridRef = useRef<Mesh | null>(null)
   const [gridY, setGridY] = useState(0)
 
   // Use custom raycasting for grid events (independent of mesh events)
@@ -131,6 +131,8 @@ export const Grid = ({
   }, [])
 
   useFrame((_, delta) => {
+    const grid = gridRef.current
+    if (!grid) return
     const currentLevelId = useViewer.getState().selection.levelId
     let targetY = 0
     if (currentLevelId) {
@@ -139,8 +141,8 @@ export const Grid = ({
         targetY = levelMesh.position.y
       }
     }
-    const newY = MathUtils.lerp(gridRef.current.position.y, targetY, 12 * delta)
-    gridRef.current.position.y = newY
+    const newY = MathUtils.lerp(grid.position.y, targetY, 12 * delta)
+    grid.position.y = newY
     setGridY(newY)
   })
 

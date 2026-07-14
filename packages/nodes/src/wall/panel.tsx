@@ -110,8 +110,6 @@ export default function WallPanel() {
 
   if (!(node && node.type === 'wall' && selectedId)) return null
 
-  const dx = node.end[0] - node.start[0]
-  const dz = node.end[1] - node.start[1]
   const length = getWallCurveLength(node)
 
   const height = node.height ?? 2.5

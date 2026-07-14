@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test'
 
+// The mocked store/operations carry test-only instrumentation fields
+// (`__instanceNumber`, `__store`) not present on their production types.
+// This probe isolates that boundary in one place with no `as unknown` at
+// call sites.
+function testProbe<T>(value: unknown): T {
+  return value as T
+}
+
 describe('getSceneStore', () => {
   beforeEach(() => {
     mock.module('@pascal-app/mcp/operations', () => ({
@@ -47,8 +55,8 @@ describe('getSceneStore', () => {
     expect(storeA).toBe(storeB)
     // Factory should have been invoked exactly once — asserted indirectly via
     // our mock's instance counter.
-    expect((storeA as unknown as { __instanceNumber: number }).__instanceNumber).toBe(1)
-    expect((storeB as unknown as { __instanceNumber: number }).__instanceNumber).toBe(1)
+    expect(testProbe<{ __instanceNumber: number }>(storeA).__instanceNumber).toBe(1)
+    expect(testProbe<{ __instanceNumber: number }>(storeB).__instanceNumber).toBe(1)
   })
 
   test('reset helper clears the cached singleton', async () => {
@@ -69,6 +77,6 @@ describe('getSceneStore', () => {
     const store = await mod.getSceneStore()
     const operations = await mod.getSceneOperations()
 
-    expect((operations as unknown as { __store: unknown }).__store).toBe(store)
+    expect(testProbe<{ __store: unknown }>(operations).__store).toBe(store)
   })
 })

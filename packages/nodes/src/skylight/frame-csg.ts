@@ -45,9 +45,9 @@ export function buildFrameGeometry({
 
   let frameGeo: THREE.BufferGeometry
   try {
-    const outerBrush = new Brush(outerBox, visibleDummyMat as unknown as THREE.MeshStandardMaterial)
+    const outerBrush = new Brush(outerBox, visibleDummyMat)
     prepareBrushForCSG(outerBrush)
-    const innerBrush = new Brush(innerBox, visibleDummyMat as unknown as THREE.MeshStandardMaterial)
+    const innerBrush = new Brush(innerBox, visibleDummyMat)
     prepareBrushForCSG(innerBrush)
     const result = csgEvaluator.evaluate(outerBrush, innerBrush, SUBTRACTION) as Brush
     frameGeo = csgGeometry(result).clone()

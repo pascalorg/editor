@@ -56,16 +56,16 @@ export function findClosestWallInPlan(
 ): WallHit | null {
   if (!parentLevelId) return null
   const level = nodes[parentLevelId]
-  const childIds = (level as unknown as { children?: AnyNodeId[] })?.children
-  if (!Array.isArray(childIds)) return null
+  if (!level || !('children' in level) || !Array.isArray(level.children)) return null
+  const childIds: readonly string[] = level.children
 
   let best: WallHit | null = null
 
   for (const childId of childIds) {
-    const node = nodes[childId]
+    const node = nodes[childId as AnyNodeId]
     if (!node || node.type !== 'wall') continue
     if (childId === excludeWallId) continue
-    const wall = node as WallNode
+    const wall = node
     if (isCurvedWall(wall)) continue
 
     const sx = wall.start[0]

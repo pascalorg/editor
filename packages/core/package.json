@@ -60,8 +60,9 @@
     "build": "tsc --build",
     "dev": "tsc --build --watch",
     "test": "bun test",
+    "check-types": "tsc --noEmit -p tsconfig.check.json",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
     "@react-three/drei": "^10",

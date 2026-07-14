@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // web-ifc ships its WASM binaries inside node_modules. Next.js needs to
 // serve them at the app root URL (the library hardcodes `/web-ifc.wasm`
 // when no `wasmPath` override is set), so copy the three blobs into
@@ -8,49 +8,44 @@
 // install step doesn't leave the dev server with a stale or missing
 // copy. Idempotent: skips files that already match by size.
 
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 // web-ifc's package.json doesn't expose subpath exports, so we can't use
-// require.resolve('web-ifc/package.json'). Walk up the script directory
+// `import.meta.resolve('web-ifc/package.json')`. Walk up the script directory
 // looking for the package folder inside any node_modules along the way.
-function findWebIfcDir(startDir) {
+async function findWebIfcDir(startDir: string): Promise<string | null> {
   let dir = startDir
   while (dir && dir !== '/') {
     const candidate = join(dir, 'node_modules', 'web-ifc')
-    if (existsSync(join(candidate, 'web-ifc.wasm'))) return candidate
+    if (await Bun.file(join(candidate, 'web-ifc.wasm')).exists()) return candidate
     dir = resolve(dir, '..')
   }
   return null
 }
 
-const webIfcDir = findWebIfcDir(import.meta.dirname)
+const scriptDir = import.meta.dir
+const webIfcDir = await findWebIfcDir(scriptDir)
 if (!webIfcDir) {
   console.warn('[ifc-converter] web-ifc package not found — wasm copy skipped.')
   process.exit(0)
 }
-const publicDir = join(import.meta.dirname, '..', 'public')
 
-mkdirSync(publicDir, { recursive: true })
+const publicDir = join(scriptDir, '..', 'public')
 
 const files = ['web-ifc.wasm', 'web-ifc-mt.wasm', 'web-ifc-node.wasm']
 for (const name of files) {
-  const src = join(webIfcDir, name)
-  const dst = join(publicDir, name)
+  const src = Bun.file(join(webIfcDir, name))
+  const dst = Bun.file(join(publicDir, name))
   try {
-    const srcSize = statSync(src).size
-    let dstSize = 0
-    try {
-      dstSize = statSync(dst).size
-    } catch {
-      /* not present yet */
-    }
+    const srcSize = src.size
+    const dstSize = (await dst.exists()) ? dst.size : 0
     if (srcSize === dstSize) {
       continue
     }
-    copyFileSync(src, dst)
+    await Bun.write(dst, src)
     console.log(`[ifc-converter] copied ${name} (${(srcSize / 1024).toFixed(0)} KB)`)
   } catch (err) {
-    console.warn(`[ifc-converter] could not copy ${name}:`, err.message)
+    const message = err instanceof Error ? err.message : String(err)
+    console.warn(`[ifc-converter] could not copy ${name}:`, message)
   }
 }

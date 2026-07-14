@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build --watch",
-    "prepublishOnly": "npm run build"
+    "check-types": "tsc --noEmit -p tsconfig.check.json",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@pascal-app/core": "*",

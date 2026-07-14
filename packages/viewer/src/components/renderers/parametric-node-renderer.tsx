@@ -47,12 +47,15 @@ type RenderableNode = AnyNode & {
 }
 
 export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
+  // `useRegistry` (core, non-editable here) requires `RefObject<Object3D>` with
+  // a non-null `current`; React 19's `useRef<Group>(null!)` is the idiomatic way
+  // to produce that ref type. The group is always mounted before effects run.
   const ref = useRef<Group>(null!)
   const n = node as RenderableNode
-  // biome-ignore lint/suspicious/noExplicitAny: useNodeEvents is keyed by
-  // literal kind; the registry path passes a runtime kind union. Routing
-  // through the type cast is safer than widening the hook signature.
-  const handlers = useNodeEvents(node as any, node.type as any)
+  // `useNodeEvents` is keyed by a literal kind, but the registry path has a
+  // runtime union. Instantiating the generic at the full `AnyNodeType` union
+  // keeps both arguments correlated without an `any` cast.
+  const handlers = useNodeEvents<AnyNode['type']>(node, node.type)
   const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
 
   useRegistry(node.id, node.type, ref)

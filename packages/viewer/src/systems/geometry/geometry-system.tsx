@@ -11,7 +11,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
-import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import { FrontSide, type Group, type Material, type Mesh, type Object3D } from 'three'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -106,7 +106,7 @@ export const GeometrySystem = () => {
       const siblings: AnyNode[] = []
       if (batch.parentId) {
         const parent = nodes[batch.parentId]
-        const childIds = (parent as unknown as { children?: AnyNodeId[] })?.children
+        const childIds = parent ? getChildIds(parent) : undefined
         if (Array.isArray(childIds)) {
           for (const cid of childIds) {
             const child = nodes[cid]
@@ -142,10 +142,11 @@ export const GeometrySystem = () => {
       const levelData = levelDataByBatch.get(key)
       const ctx = buildGeometryContext(node, nodes, levelData)
 
-      // The builder is typed against the kind's specific node — at the
-      // generic system level we lose that refinement, so the cast lands
-      // here. Builders are responsible for trusting their schema.
-      const built = (
+      // `def.geometry`'s public type is a 2-arg builder returning `Object3D`,
+      // but viewer builders accept extra render args. A narrower-arity function
+      // is assignable to a wider one, so pin the runtime signature precisely
+      // (no `any`). The returned `Object3D` is always the builder's root group.
+      const builtObject = (
         builder as (
           n: AnyNode,
           c: GeometryContext,
@@ -153,8 +154,9 @@ export const GeometrySystem = () => {
           textures: boolean,
           colorPreset: ColorPreset,
           sceneTheme: string,
-        ) => { children: unknown[] }
-      )(node, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
+        ) => Object3D
+      )(node, ctx, shading, textures, colorPreset, sceneTheme)
+      const built = builtObject as Group
 
       if (!textures && def.surfaceRole) {
         applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset, sceneTheme)
@@ -193,6 +195,18 @@ export const GeometrySystem = () => {
   return null
 }
 
+// Most `AnyNode` kinds carry a `children` array of node ids; the element type
+// varies per kind (branded id unions, or a loose `string[]` on `site`), and a
+// few kinds have no `children` at all. Read it behind a property-presence guard
+// and normalise elements to `AnyNodeId` so callers can index the node map
+// without an escape-hatch cast.
+function getChildIds(node: AnyNode): AnyNodeId[] | undefined {
+  if ('children' in node && Array.isArray(node.children)) {
+    return node.children.map((childId) => childId as AnyNodeId)
+  }
+  return undefined
+}
+
 function buildGeometryContext(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
@@ -200,7 +214,7 @@ function buildGeometryContext(
 ): GeometryContext {
   const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
 
-  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
+  const childIds = getChildIds(node)
   const children: AnyNode[] = Array.isArray(childIds)
     ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
     : []
@@ -213,7 +227,7 @@ function buildGeometryContext(
   // doesn't carry a `children` list (rare — most parents do).
   let siblings: AnyNode[] = []
   if (parent) {
-    const parentChildIds = (parent as unknown as { children?: AnyNodeId[] }).children
+    const parentChildIds = getChildIds(parent)
     if (Array.isArray(parentChildIds)) {
       for (const sid of parentChildIds) {
         if (sid === node.id) continue

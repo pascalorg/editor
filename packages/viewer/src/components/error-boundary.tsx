@@ -9,18 +9,18 @@ interface ErrorBoundaryProps {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, { hasError: boolean }> {
-  state = { hasError: false }
+  override state = { hasError: false }
   static getDerivedStateFromError() {
     return { hasError: true }
   }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(
       `[viewer] ErrorBoundary caught${this.props.scope ? ` (${this.props.scope})` : ''}:`,
       error,
       info.componentStack,
     )
   }
-  render() {
+  override render() {
     return this.state.hasError ? this.props.fallback : this.props.children
   }
 }

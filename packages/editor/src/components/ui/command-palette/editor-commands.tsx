@@ -7,7 +7,6 @@ import {
   AppWindow,
   ArrowRight,
   Box,
-  Building2,
   Camera,
   Copy,
   DoorOpen,
@@ -17,11 +16,7 @@ import {
   Grid3X3,
   Hexagon,
   Layers,
-  Map,
   Maximize2,
-  Minimize2,
-  Moon,
-  MousePointer2,
   Package,
   PaintBucket,
   PencilLine,
@@ -30,7 +25,6 @@ import {
   Sparkles,
   Square,
   SquareStack,
-  Sun,
   Trash2,
   Undo2,
   Video,
@@ -150,7 +144,7 @@ export function EditorCommands() {
         execute: () =>
           run(() => {
             const { selectedIds } = useViewer.getState().selection
-            useScene.getState().deleteNodes(selectedIds as any[])
+            useScene.getState().deleteNodes(selectedIds as AnyNodeId[])
           }),
       },
       {

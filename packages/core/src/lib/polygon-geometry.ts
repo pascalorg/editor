@@ -54,12 +54,13 @@ function dedupePolygonPoints(
     deduped.push(point)
   }
 
+  const first = deduped[0]
+  const last = deduped[deduped.length - 1]
   if (
     deduped.length > 2 &&
-    Math.hypot(
-      deduped[0]![0] - deduped[deduped.length - 1]![0],
-      deduped[0]![1] - deduped[deduped.length - 1]![1],
-    ) <= tolerance
+    first &&
+    last &&
+    Math.hypot(first[0] - last[0], first[1] - last[1]) <= tolerance
   ) {
     deduped.pop()
   }
@@ -75,11 +76,19 @@ function simplifyPolyline(
     return points.map(([x, z]) => [x, z] as [number, number])
   }
 
+  const start = points[0]
+  const end = points[points.length - 1]
+  if (!start || !end) {
+    return points.map(([x, z]) => [x, z] as [number, number])
+  }
+
   let maxDistance = -1
   let splitIndex = -1
 
   for (let index = 1; index < points.length - 1; index += 1) {
-    const distance = pointLineDistance(points[index]!, points[0]!, points[points.length - 1]!)
+    const point = points[index]
+    if (!point) continue
+    const distance = pointLineDistance(point, start, end)
     if (distance > maxDistance) {
       maxDistance = distance
       splitIndex = index
@@ -87,7 +96,7 @@ function simplifyPolyline(
   }
 
   if (maxDistance <= tolerance || splitIndex === -1) {
-    return [points[0]!, points[points.length - 1]!]
+    return [start, end]
   }
 
   const left = simplifyPolyline(points.slice(0, splitIndex + 1), tolerance)
@@ -109,9 +118,13 @@ export function simplifyClosedPolygon(
   let maxDistanceSquared = -1
 
   for (let i = 0; i < cleanPolygon.length; i += 1) {
+    const pi = cleanPolygon[i]
+    if (!pi) continue
     for (let j = i + 1; j < cleanPolygon.length; j += 1) {
-      const dx = cleanPolygon[j]![0] - cleanPolygon[i]![0]
-      const dz = cleanPolygon[j]![1] - cleanPolygon[i]![1]
+      const pj = cleanPolygon[j]
+      if (!pj) continue
+      const dx = pj[0] - pi[0]
+      const dz = pj[1] - pi[1]
       const distanceSquared = dx * dx + dz * dz
       if (distanceSquared > maxDistanceSquared) {
         maxDistanceSquared = distanceSquared

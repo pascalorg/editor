@@ -41,7 +41,7 @@ const ShelfPreview = ({ node }: { node: ShelfNode }) => {
     const cloned: Material[] = []
     built.traverse((obj) => {
       // Skip pointer events: see component-level note above.
-      ;(obj as unknown as { raycast: () => void }).raycast = () => {}
+      obj.raycast = () => {}
 
       // `Mesh.material` is typed as `Material | Material[]` upstream;
       // every shelf board carries a material from

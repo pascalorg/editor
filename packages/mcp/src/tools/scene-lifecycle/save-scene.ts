@@ -115,7 +115,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         if (errors.length > 0) {
           throwMcpError(ErrorCode.InvalidParams, 'graph_invalid', { errors })
         }
-        sceneGraph = graph as unknown as SceneGraph
+        sceneGraph = graph as SceneGraph
       }
 
       try {

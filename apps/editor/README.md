@@ -340,10 +340,10 @@ Clears dirty flag
 
 ```bash
 # Install dependencies
-pnpm install
+bun install
 
 # Run development server
-pnpm dev
+bun dev
 
 # Open http://localhost:3000
 ```

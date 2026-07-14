@@ -2,7 +2,6 @@
 // Load shims FIRST so any subsequent core import sees the RAF polyfill.
 import '../bridge/node-shims'
 
-import { readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
@@ -55,7 +54,7 @@ async function main(): Promise<void> {
 
   const bridge = new SceneBridge()
   if (values.scene) {
-    const raw = readFileSync(values.scene, 'utf8')
+    const raw = await Bun.file(values.scene).text()
     bridge.loadJSON(raw)
   } else {
     bridge.loadDefault()

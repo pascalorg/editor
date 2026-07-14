@@ -5,6 +5,7 @@ import { Camera, Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-reac
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { at } from '../../lib/typed-access'
 import useEditor from '../../store/use-editor'
 
 type CaptureMode = 'standard' | 'viewport' | 'area'
@@ -99,7 +100,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (mode !== 'area' || captureState !== 'idle') return
       e.preventDefault()
-      const rect = overlayRef.current!.getBoundingClientRect()
+      const overlay = overlayRef.current
+      if (!overlay) return
+      const rect = overlay.getBoundingClientRect()
       const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top }
 
       // If clicking inside an existing selection → move mode
@@ -128,7 +131,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDragging) return
-      const rect = overlayRef.current!.getBoundingClientRect()
+      const overlay = overlayRef.current
+      if (!overlay) return
+      const rect = overlay.getBoundingClientRect()
       const pt = {
         x: Math.max(0, Math.min(e.clientX - rect.left, rect.width)),
         y: Math.max(0, Math.min(e.clientY - rect.top, rect.height)),
@@ -194,7 +199,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           { x: x1, y: y1 },
         ], // BR → anchor TL
       ]
-      const [anchor, current] = corners[cornerIndex]!
+      const [anchor, current] = at(corners, cornerIndex)
       setDrag({ start: anchor, end: current })
       setIsDragging(true)
     },

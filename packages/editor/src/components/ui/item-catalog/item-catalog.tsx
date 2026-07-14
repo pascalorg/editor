@@ -2,13 +2,7 @@
 
 import type { AssetInput } from '@pascal-app/core'
 import { resolveCdnUrl } from '@pascal-app/viewer'
-import Image from 'next/image'
 import { useEffect } from 'react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
 import { CATALOG_ITEMS } from './catalog-items'

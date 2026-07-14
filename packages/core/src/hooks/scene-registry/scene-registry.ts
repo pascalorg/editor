@@ -66,12 +66,12 @@ export function useRegistry(id: string, type: string, ref: React.RefObject<THREE
     sceneRegistry.nodes.set(id, obj)
 
     // 2. Add to type-specific set — Proxy auto-creates on first access.
-    sceneRegistry.byType[type]!.add(id)
+    sceneRegistry.byType[type]?.add(id)
 
     // 3. Cleanup when component unmounts
     return () => {
       sceneRegistry.nodes.delete(id)
-      sceneRegistry.byType[type]!.delete(id)
+      sceneRegistry.byType[type]?.delete(id)
     }
   }, [id, type, ref])
 }

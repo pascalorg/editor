@@ -279,8 +279,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         useScene.getState().deleteNode(movingDoorNode.id)
         useScene.temporal.getState().resume()
 
-        const cloned = structuredClone(movingDoorNode) as any
-        delete cloned.id
+        const { id: _id, ...cloned } = structuredClone(movingDoorNode)
         const node = DoorNode.parse({
           ...cloned,
           position: [clampedX, clampedY, 0],

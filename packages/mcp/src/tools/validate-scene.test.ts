@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerValidateScene } from './validate-scene'
 
 describe('validate_scene', () => {
@@ -14,7 +15,7 @@ describe('validate_scene', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerValidateScene(server, bridge)
+    registerValidateScene(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -26,7 +27,7 @@ describe('validate_scene', () => {
       arguments: {},
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.valid).toBe(true)
     expect(Array.isArray(parsed.errors)).toBe(true)
   })
@@ -36,7 +37,7 @@ describe('validate_scene', () => {
       name: 'validate_scene',
       arguments: {},
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     for (const err of parsed.errors) {
       expect(typeof err.nodeId).toBe('string')
       expect(typeof err.path).toBe('string')

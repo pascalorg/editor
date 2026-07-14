@@ -40,13 +40,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: "https://registry.npmjs.org"
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Configure npm registry auth for Bun
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Configure git
         run: |
@@ -108,59 +108,51 @@ jobs:
       - name: Build & publish core
         if: inputs.package == 'core' || inputs.package == 'all'
         working-directory: packages/core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/core@$CORE_VERSION"
-            npm publish --dry-run --access public
+            bun publish --dry-run --access public
           else
-            npm publish --access public
+            bun publish --access public
             echo "📦 Published @pascal-app/core@$CORE_VERSION"
           fi
 
       - name: Build & publish viewer
         if: inputs.package == 'viewer' || inputs.package == 'all'
         working-directory: packages/viewer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/viewer@$VIEWER_VERSION"
-            npm publish --dry-run --access public
+            bun publish --dry-run --access public
           else
-            npm publish --access public
+            bun publish --access public
             echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
           fi
 
       - name: Publish editor
         if: inputs.package == 'editor' || inputs.package == 'all'
         working-directory: packages/editor
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
-            npm publish --dry-run --access public
+            bun publish --dry-run --access public
           else
-            npm publish --access public
+            bun publish --access public
             echo "📦 Published @pascal-app/editor@$EDITOR_VERSION"
           fi
 
       - name: Build & publish mcp
         if: inputs.package == 'mcp' || inputs.package == 'all'
         working-directory: packages/mcp
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/mcp@$MCP_VERSION"
-            npm publish --dry-run --access public
+            bun publish --dry-run --access public
           else
-            npm publish --access public
+            bun publish --access public
             echo "📦 Published @pascal-app/mcp@$MCP_VERSION"
           fi
 

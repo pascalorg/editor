@@ -8,18 +8,14 @@
  *
  * Run with: bun run scripts/smoke.ts
  */
-import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const BIN_PATH = resolve(__dirname, '../dist/bin/pascal-mcp.js')
+const BIN_PATH = resolve(import.meta.dir, '../dist/bin/pascal-mcp.js')
 
 async function main(): Promise<void> {
-  if (!existsSync(BIN_PATH)) {
+  if (!(await Bun.file(BIN_PATH).exists())) {
     console.error(`[smoke] bin not found at ${BIN_PATH}`)
     console.error('[smoke] run `bun run build` first')
     process.exit(1)

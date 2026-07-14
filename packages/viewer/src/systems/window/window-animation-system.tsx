@@ -24,7 +24,6 @@ const easeWindowAnimation = (value: number) => value * value * (3 - 2 * value)
 
 function markWindowDirty(windowId: AnyNodeId) {
   const scene = useScene.getState()
-  const node = scene.nodes[windowId]
   scene.dirtyNodes.add(windowId)
 }
 

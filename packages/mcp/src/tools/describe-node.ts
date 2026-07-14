@@ -89,7 +89,7 @@ export function registerDescribeNode(server: McpServer, bridge: SceneOperations)
         parentId: (n.parentId ?? null) as string | null,
         ancestryIds,
         childrenIds,
-        properties: n as unknown as Record<string, unknown>,
+        properties: n as Record<string, unknown>,
         description: describe(n),
       }
 

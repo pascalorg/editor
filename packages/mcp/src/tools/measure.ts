@@ -77,8 +77,11 @@ function shoelaceArea(polygon: Array<[number, number]>): number {
   let sum = 0
   const n = polygon.length
   for (let i = 0; i < n; i++) {
-    const [x1, z1] = polygon[i]!
-    const [x2, z2] = polygon[(i + 1) % n]!
+    const a = polygon[i]
+    const b = polygon[(i + 1) % n]
+    if (!a || !b) continue
+    const [x1, z1] = a
+    const [x2, z2] = b
     sum += x1 * z2 - x2 * z1
   }
   return Math.abs(sum) / 2

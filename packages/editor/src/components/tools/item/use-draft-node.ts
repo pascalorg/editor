@@ -113,7 +113,8 @@ export function useDraftNode(): DraftNodeHandle {
       const { parentId: newParentId, ...updateProps } = finalUpdate
       const parentId =
         newParentId ?? originalStateRef.current?.parentId ?? useViewer.getState().selection.levelId
-      const original = originalStateRef.current!
+      const original = originalStateRef.current
+      if (!original) return null
 
       // Restore original state while paused — so the undo baseline is clean
       useScene.getState().updateNode(draft.id, {

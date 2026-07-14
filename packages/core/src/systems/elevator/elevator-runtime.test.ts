@@ -17,6 +17,9 @@ const entries: ElevatorLevelEntry[] = [
   { id: upperLevelId as ElevatorLevelEntry['id'], label: '1', baseY: 2.5 },
 ]
 
+const [defaultEntry] = entries
+if (!defaultEntry) throw new Error('entries fixture must be non-empty')
+
 const elevator = ElevatorNode.parse({
   speed: 10,
   doorDurationMs: 100,
@@ -49,7 +52,7 @@ describe('elevator runtime helpers', () => {
       upperLevelId,
     )
     const moving = stepElevatorRuntimeState({
-      defaultEntry: entries[0]!,
+      defaultEntry,
       delta: 0.016,
       elevator,
       entries,
@@ -58,7 +61,7 @@ describe('elevator runtime helpers', () => {
     })
 
     const arrived = stepElevatorRuntimeState({
-      defaultEntry: entries[0]!,
+      defaultEntry,
       delta: 1,
       elevator,
       entries,
@@ -67,7 +70,7 @@ describe('elevator runtime helpers', () => {
     })
 
     const open = stepElevatorRuntimeState({
-      defaultEntry: entries[0]!,
+      defaultEntry,
       delta: 1,
       elevator,
       entries,

@@ -27,7 +27,10 @@ function outsetPolygon(polygon: Array<[number, number]>, amount: number): Array<
   let area2 = 0
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
+    const pi = polygon[i]
+    const pj = polygon[j]
+    if (!pi || !pj) continue
+    area2 += pi[0] * pj[1] - pj[0] * pi[1]
   }
   const s = area2 >= 0 ? 1 : -1
 
@@ -35,24 +38,30 @@ function outsetPolygon(polygon: Array<[number, number]>, amount: number): Array<
   const offEdges: Array<[number, number, number, number]> = []
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    const dx = polygon[j]![0] - polygon[i]![0]
-    const dz = polygon[j]![1] - polygon[i]![1]
+    const pi = polygon[i]
+    const pj = polygon[j]
+    if (!pi || !pj) continue
+    const dx = pj[0] - pi[0]
+    const dz = pj[1] - pi[1]
     const len = Math.sqrt(dx * dx + dz * dz)
     if (len < 1e-9) {
-      offEdges.push([polygon[i]![0], polygon[i]![1], dx, dz])
+      offEdges.push([pi[0], pi[1], dx, dz])
       continue
     }
     const nx = ((s * dz) / len) * amount
     const nz = ((s * -dx) / len) * amount
-    offEdges.push([polygon[i]![0] + nx, polygon[i]![1] + nz, dx, dz])
+    offEdges.push([pi[0] + nx, pi[1] + nz, dx, dz])
   }
 
   // Intersect consecutive offset edges to get new vertices
   const result: Array<[number, number]> = []
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    const [ax, az, adx, adz] = offEdges[i]!
-    const [bx, bz, bdx, bdz] = offEdges[j]!
+    const edgeA = offEdges[i]
+    const edgeB = offEdges[j]
+    if (!edgeA || !edgeB) continue
+    const [ax, az, adx, adz] = edgeA
+    const [bx, bz, bdx, bdz] = edgeB
     const denom = adx * bdz - adz * bdx
     if (Math.abs(denom) < 1e-9) {
       // Parallel edges — use offset endpoint

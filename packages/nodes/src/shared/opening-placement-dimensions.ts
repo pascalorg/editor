@@ -1,5 +1,4 @@
 import {
-  type AnyNode,
   type AnyNodeId,
   type DoorNode,
   type FloorplanGeometry,
@@ -56,14 +55,14 @@ export function buildOpeningPlacementDimensions(
   // Walk wall.children to find adjacent openings (door OR window).
   // ctx.siblings only includes same-kind nodes; doors + windows need
   // each other so we go via the parent's children directly.
-  const childIds = ((wall as unknown as { children?: AnyNodeId[] }).children ?? []) as AnyNodeId[]
+  const childIds: readonly AnyNodeId[] = wall.children ?? []
   let leftBoundary: number | null = null
   let rightBoundary: number | null = null
   for (const childId of childIds) {
     if (childId === opening.id) continue
-    const sibling = ctx.resolve(childId) as AnyNode | undefined
+    const sibling = ctx.resolve(childId)
     if (!sibling || (sibling.type !== 'door' && sibling.type !== 'window')) continue
-    const sib = sibling as DoorNode | WindowNode
+    const sib = sibling
     const sibStart = sib.position[0] - sib.width / 2
     const sibEnd = sib.position[0] + sib.width / 2
     if (sibEnd <= startDist && (leftBoundary === null || sibEnd > leftBoundary)) {
@@ -143,18 +142,16 @@ function computeOutwardNormal(
   const nz = dirX
 
   // Find the level by walking up via wall.parentId.
-  const level = wall.parentId
-    ? (ctx.resolve(wall.parentId as AnyNodeId) as AnyNode | undefined)
-    : null
-  const levelChildren = ((level as unknown as { children?: AnyNodeId[] })?.children ??
-    []) as AnyNodeId[]
+  const level = wall.parentId ? ctx.resolve(wall.parentId as AnyNodeId) : null
+  const levelChildren: readonly string[] =
+    level && 'children' in level && Array.isArray(level.children) ? level.children : []
   let sumX = 0
   let sumZ = 0
   let count = 0
   for (const childId of levelChildren) {
-    const child = ctx.resolve(childId) as AnyNode | undefined
+    const child = ctx.resolve(childId as AnyNodeId)
     if (!child || child.type !== 'wall') continue
-    const w = child as WallNode
+    const w = child
     sumX += w.start[0] + w.end[0]
     sumZ += w.start[1] + w.end[1]
     count += 2

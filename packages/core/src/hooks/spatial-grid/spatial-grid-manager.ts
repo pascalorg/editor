@@ -15,10 +15,11 @@ export function pointInPolygon(px: number, pz: number, polygon: Array<[number, n
   let inside = false
   const n = polygon.length
   for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i]![0],
-      zi = polygon[i]![1]
-    const xj = polygon[j]![0],
-      zj = polygon[j]![1]
+    const pi = polygon[i]
+    const pj = polygon[j]
+    if (!pi || !pj) continue
+    const [xi, zi] = pi
+    const [xj, zj] = pj
 
     if (zi > pz !== zj > pz && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) {
       inside = !inside
@@ -185,18 +186,10 @@ function segmentIntersectsPolygon(
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    if (
-      segmentsIntersect(
-        sx1,
-        sz1,
-        sx2,
-        sz2,
-        polygon[i]![0],
-        polygon[i]![1],
-        polygon[j]![0],
-        polygon[j]![1],
-      )
-    ) {
+    const pi = polygon[i]
+    const pj = polygon[j]
+    if (!pi || !pj) continue
+    if (segmentsIntersect(sx1, sz1, sx2, sz2, pi[0], pi[1], pj[0], pj[1])) {
       return true
     }
   }
@@ -230,16 +223,10 @@ export function itemOverlapsPolygon(
   // Check if any item edge intersects any polygon edge
   for (let i = 0; i < 4; i++) {
     const j = (i + 1) % 4
-    if (
-      segmentIntersectsPolygon(
-        corners[i]![0],
-        corners[i]![1],
-        corners[j]![0],
-        corners[j]![1],
-        polygon,
-      )
-    )
-      return true
+    const ci = corners[i]
+    const cj = corners[j]
+    if (!ci || !cj) continue
+    if (segmentIntersectsPolygon(ci[0], ci[1], cj[0], cj[1], polygon)) return true
   }
 
   return false
@@ -342,8 +329,11 @@ export function wallOverlapsPolygon(
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    const [p1x, p1z] = polygon[i]!
-    const [p2x, p2z] = polygon[j]!
+    const p1 = polygon[i]
+    const p2 = polygon[j]
+    if (!p1 || !p2) continue
+    const [p1x, p1z] = p1
+    const [p2x, p2z] = p2
 
     if (segmentsCollinearAndOverlap(start[0], start[1], end[0], end[1], p1x, p1z, p2x, p2z)) {
       return true
@@ -369,17 +359,19 @@ export class SpatialGridManager {
   }
 
   private getFloorGrid(levelId: string): SpatialGrid {
-    if (!this.floorGrids.has(levelId)) {
-      this.floorGrids.set(levelId, new SpatialGrid({ cellSize: this.cellSize }))
-    }
-    return this.floorGrids.get(levelId)!
+    const existing = this.floorGrids.get(levelId)
+    if (existing) return existing
+    const grid = new SpatialGrid({ cellSize: this.cellSize })
+    this.floorGrids.set(levelId, grid)
+    return grid
   }
 
   private getWallGrid(levelId: string): WallSpatialGrid {
-    if (!this.wallGrids.has(levelId)) {
-      this.wallGrids.set(levelId, new WallSpatialGrid())
-    }
-    return this.wallGrids.get(levelId)!
+    const existing = this.wallGrids.get(levelId)
+    if (existing) return existing
+    const grid = new WallSpatialGrid()
+    this.wallGrids.set(levelId, grid)
+    return grid
   }
 
   private getWallLength(wallId: string): number {
@@ -396,17 +388,19 @@ export class SpatialGridManager {
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {
-    if (!this.ceilingGrids.has(ceilingId)) {
-      this.ceilingGrids.set(ceilingId, new SpatialGrid({ cellSize: this.cellSize }))
-    }
-    return this.ceilingGrids.get(ceilingId)!
+    const existing = this.ceilingGrids.get(ceilingId)
+    if (existing) return existing
+    const grid = new SpatialGrid({ cellSize: this.cellSize })
+    this.ceilingGrids.set(ceilingId, grid)
+    return grid
   }
 
   private getSlabMap(levelId: string): Map<string, SlabNode> {
-    if (!this.slabsByLevel.has(levelId)) {
-      this.slabsByLevel.set(levelId, new Map())
-    }
-    return this.slabsByLevel.get(levelId)!
+    const existing = this.slabsByLevel.get(levelId)
+    if (existing) return existing
+    const slabMap = new Map<string, SlabNode>()
+    this.slabsByLevel.set(levelId, slabMap)
+    return slabMap
   }
 
   // Called when nodes change

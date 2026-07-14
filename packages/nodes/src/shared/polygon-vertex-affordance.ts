@@ -76,9 +76,9 @@ function buildRingPatch(
   return { holes: nextHoles }
 }
 
-export function createPolygonVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
-  kind: string,
-): FloorplanAffordance<N> {
+export function createPolygonVertexAffordance<
+  N extends PolygonShape & { id: AnyNodeId; type: string },
+>(kind: string): FloorplanAffordance<N> {
   return {
     start({ node, payload }): FloorplanAffordanceSession {
       const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
@@ -109,7 +109,7 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined
-          if (!final || (final as unknown as { type: string }).type !== kind) return false
+          if (!final || final.type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
         },
@@ -126,7 +126,9 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
  * movement reverts to the pre-insert ring — "click without drag" is a
  * no-op, matching the legacy slab boundary editor.
  */
-export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
+export function createPolygonAddVertexAffordance<
+  N extends PolygonShape & { id: AnyNodeId; type: string },
+>(
   kind: string,
 ): FloorplanAffordance<N> {
   return {
@@ -184,7 +186,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined
-          if (!final || (final as unknown as { type: string }).type !== kind) return false
+          if (!final || final.type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
         },
@@ -202,7 +204,9 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
  * Snap is grid-aligned on the projected scalar (so a Shift-free drag
  * lands on grid lines along the edge normal).
  */
-export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: AnyNodeId }>(
+export function createPolygonMoveEdgeAffordance<
+  N extends PolygonShape & { id: AnyNodeId; type: string },
+>(
   kind: string,
 ): FloorplanAffordance<N> {
   return {
@@ -275,7 +279,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined
-          if (!final || (final as unknown as { type: string }).type !== kind) return false
+          if (!final || final.type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
         },

@@ -25,9 +25,9 @@ const g = globalThis as GlobalWithRaf
 if (typeof g.requestAnimationFrame === 'undefined') {
   g.requestAnimationFrame = (cb: RafCallback): number => {
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-    return setTimeout(() => cb(now), 0) as unknown as number
+    return Number(setTimeout(() => cb(now), 0))
   }
   g.cancelAnimationFrame = (id: number) => {
-    clearTimeout(id as unknown as ReturnType<typeof setTimeout>)
+    clearTimeout(id)
   }
 }

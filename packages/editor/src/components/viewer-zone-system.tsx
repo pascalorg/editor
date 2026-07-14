@@ -4,6 +4,7 @@ import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import type { Mesh } from 'three'
+import { nodesByType } from '../lib/typed-access'
 import useEditor from '../store/use-editor'
 
 export const ViewerZoneSystem = () => {
@@ -12,7 +13,7 @@ export const ViewerZoneSystem = () => {
     const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
 
-    sceneRegistry.byType.zone!.forEach((id) => {
+    nodesByType('zone').forEach((id) => {
       const obj = sceneRegistry.nodes.get(id)
       if (!obj) return
 

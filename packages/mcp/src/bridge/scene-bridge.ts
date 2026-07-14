@@ -166,7 +166,7 @@ export class SceneBridge {
     // Strategies 2 & 3: parent's own `children` field.
     const parent = nodes[parentId]
     if (parent && 'children' in parent && Array.isArray(parent.children)) {
-      for (const child of parent.children as unknown[]) {
+      for (const child of parent.children) {
         let childId: string | null = null
         if (typeof child === 'string') childId = child
         else if (
@@ -389,10 +389,12 @@ export class SceneBridge {
     }
 
     for (let i = 0; i < patches.length; i++) {
-      const p = patches[i]!
+      const p = patches[i]
+      if (!p) continue
       if (p.op === 'create') {
         flush('create')
-        const parsedNode = parsedCreateNodes.get(i)!
+        const parsedNode = parsedCreateNodes.get(i)
+        if (!parsedNode) continue
         createOps.push({ node: parsedNode, parentId: p.parentId })
         createdIds.push(parsedNode.id as AnyNodeId)
       } else if (p.op === 'update') {
@@ -494,7 +496,7 @@ export class SceneBridge {
     const nodes = useScene.getState().nodes
     for (const candidate of Object.values(nodes)) {
       if (!('children' in candidate && Array.isArray(candidate.children))) continue
-      for (const child of candidate.children as unknown[]) {
+      for (const child of candidate.children) {
         let childId: string | null = null
         if (typeof child === 'string') childId = child
         else if (
@@ -525,7 +527,8 @@ export class SceneBridge {
     // Precompute parent → child[] index from parentId only. `children` arrays
     // are consulted on-the-fly via getChildren.
     while (stack.length > 0) {
-      const curr = stack.pop()!
+      const curr = stack.pop()
+      if (curr === undefined) break
       if (seen.has(curr)) continue
       seen.add(curr)
       out.push(curr)

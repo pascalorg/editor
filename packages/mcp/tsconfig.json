@@ -6,7 +6,7 @@
     "noEmit": false,
     "composite": true,
     "incremental": true,
-    "types": ["node"]
+    "types": ["bun"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "scripts"],

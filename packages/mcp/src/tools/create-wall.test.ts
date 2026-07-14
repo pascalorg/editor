@@ -17,14 +17,15 @@ describe('create_wall', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerCreateWall(server, bridge)
+    registerCreateWall(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('creates a wall with custom thickness', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'create_wall',
       arguments: {
@@ -35,7 +36,7 @@ describe('create_wall', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.wallId).toMatch(/^wall_/)
     const created = bridge.getNode(parsed.wallId)
     expect(created).not.toBeNull()
@@ -104,7 +105,8 @@ describe('create_wall', () => {
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     await Promise.all([liveServer.connect(srvT), liveClient.connect(cliT)])
 
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await liveClient.callTool({
       name: 'create_wall',
       arguments: {
@@ -115,9 +117,12 @@ describe('create_wall', () => {
     })
 
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(savedGraphs).toHaveLength(1)
-    expect(savedGraphs[0]!.nodes[parsed.wallId]).toBeDefined()
+    const savedGraph = savedGraphs[0]
+    expect(savedGraph).toBeDefined()
+    if (!savedGraph) return
+    expect(savedGraph.nodes[parsed.wallId]).toBeDefined()
     expect(eventKinds).toEqual(['create_wall'])
     expect(bridge.getActiveScene()?.version).toBe(2)
   })
@@ -135,7 +140,8 @@ describe('create_wall', () => {
   })
 
   test('rejects invalid start tuple', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'create_wall',
       arguments: {

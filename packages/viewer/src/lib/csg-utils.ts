@@ -11,25 +11,26 @@ import { computeBoundsTree } from 'three-mesh-bvh'
  */
 
 export function csgGeometry(brush: Brush): THREE.BufferGeometry {
-  return brush.geometry as unknown as THREE.BufferGeometry
+  return brush.geometry
 }
 
 export function csgMaterials(brush: Brush): THREE.Material[] {
-  const mat = (brush as unknown as { material: THREE.Material | THREE.Material[] }).material
+  const mat = brush.material
   return Array.isArray(mat) ? mat : [mat]
 }
 
 export const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
-;(csgEvaluator as unknown as { consolidateGroups: boolean }).consolidateGroups = false
+csgEvaluator.consolidateGroups = false
 csgEvaluator.attributes = ['position', 'normal', 'uv']
 
 export function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
-  ;(geometry as unknown as { computeBoundsTree: typeof computeBoundsTree }).computeBoundsTree =
-    computeBoundsTree
-  ;(
-    geometry as unknown as { computeBoundsTree: (opts: { maxLeafSize: number }) => void }
-  ).computeBoundsTree({ maxLeafSize: 10 })
+  // See scene-bvh.tsx: two `three-mesh-bvh` versions augment `three` (0.8.3 via
+  // three-bvh-csg vs 0.9.9 direct), so the merged `computeBoundsTree` signature
+  // (`=> MeshBVH`) rejects the 0.9.9 helper. Bind the runtime helper and call
+  // the 0.9.9 import directly so `maxLeafSize` resolves against its options.
+  geometry.computeBoundsTree = computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+  computeBoundsTree.call(geometry, { maxLeafSize: 10 })
 }
 
 export function prepareBrushForCSG(brush: Brush) {

@@ -4,12 +4,16 @@
  */
 
 // Polyfill BEFORE importing core.
-if (typeof (globalThis as any).requestAnimationFrame === 'undefined') {
-  ;(globalThis as any).requestAnimationFrame = (cb: (t: number) => void): number => {
-    return setTimeout(() => cb(performance.now()), 0) as unknown as number
+const raf: typeof globalThis & {
+  requestAnimationFrame?: (cb: (t: number) => void) => number
+  cancelAnimationFrame?: (id: number) => void
+} = globalThis
+if (typeof raf.requestAnimationFrame === 'undefined') {
+  raf.requestAnimationFrame = (cb: (t: number) => void): number => {
+    return Number(setTimeout(() => cb(performance.now()), 0))
   }
-  ;(globalThis as any).cancelAnimationFrame = (id: number) => {
-    clearTimeout(id as unknown as NodeJS.Timeout)
+  raf.cancelAnimationFrame = (id: number) => {
+    clearTimeout(id)
   }
 }
 
@@ -45,16 +49,12 @@ async function main() {
     start: [0, 0],
     end: [5, 0],
   })
-  useScene.getState().createNode(wall, levelId as any)
+  useScene.getState().createNode(wall, levelId)
   const state2 = useScene.getState()
   assert(wall.id in state2.nodes, 'wall not created')
-  const levelAfter = state2.nodes[levelId]!
-  assert(
-    'children' in levelAfter &&
-      Array.isArray(levelAfter.children) &&
-      levelAfter.children.includes(wall.id),
-    'wall not linked as level child',
-  )
+  const levelAfter = state2.nodes[levelId]
+  assert(levelAfter?.type === 'level', 'level node missing after create')
+  assert(levelAfter.children.includes(wall.id), 'wall not linked as level child')
   console.log('OK 2: created wall', wall.id)
 
   // 4. Wait for any RAF-queued dirty markings (from updateNodesAction polyfill)
@@ -64,7 +64,8 @@ async function main() {
   useScene.getState().updateNode(wall.id, { thickness: 0.25, height: 3.0 })
   await new Promise((r) => setTimeout(r, 5))
   const state3 = useScene.getState()
-  const w3 = state3.nodes[wall.id] as any
+  const w3 = state3.nodes[wall.id]
+  assert(w3?.type === 'wall', 'wall missing after update')
   assert(w3.thickness === 0.25, 'thickness not updated')
   assert(w3.height === 3.0, 'height not updated')
   console.log('OK 3: updated wall thickness + height')
@@ -73,9 +74,9 @@ async function main() {
   useScene.temporal.getState().undo()
   await new Promise((r) => setTimeout(r, 5))
   const state4 = useScene.getState()
-  const w4 = state4.nodes[wall.id] as any
-  console.log('   after undo: thickness =', w4?.thickness, 'height =', w4?.height)
-  assert(w4, 'wall still exists after 1 undo (update was undone)')
+  const w4 = state4.nodes[wall.id]
+  assert(w4?.type === 'wall', 'wall still exists after 1 undo (update was undone)')
+  console.log('   after undo: thickness =', w4.thickness, 'height =', w4.height)
   // default thickness/height come from schema defaults, not required to be exact values; just prove they changed back
   assert(w4.thickness !== 0.25 || w4.height !== 3.0, 'undo did not revert update')
   console.log('OK 4: undo reverted update')
@@ -91,8 +92,8 @@ async function main() {
   useScene.temporal.getState().redo(2)
   await new Promise((r) => setTimeout(r, 5))
   const state6 = useScene.getState()
-  const w6 = state6.nodes[wall.id] as any
-  assert(w6, 'redo did not restore wall')
+  const w6 = state6.nodes[wall.id]
+  assert(w6?.type === 'wall', 'redo did not restore wall')
   assert(w6.thickness === 0.25 && w6.height === 3.0, 'redo did not restore updated props')
   console.log('OK 6: redo restored wall + update')
 

@@ -1,11 +1,16 @@
 'use client'
 
-import { type AnyNodeId, emitter, useScene, type ZoneNode } from '@pascal-app/core'
+import { type AnyNodeId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  offZoneEditLabel,
+  onZoneEditLabel,
+  type ZoneEditLabelEvent,
+} from '../../../lib/node-events'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 
@@ -119,15 +124,15 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
 
   // Listen for edit-label events from the 2D floorplan (double-click on zone label)
   useEffect(() => {
-    const handler = (event: { zoneId: string }) => {
+    const handler = (event: ZoneEditLabelEvent) => {
       if (event.zoneId === zoneId) {
         setValue(zoneNameRef.current)
         setEditing(true)
       }
     }
-    emitter.on('zone:edit-label' as any, handler as any)
+    onZoneEditLabel(handler)
     return () => {
-      emitter.off('zone:edit-label' as any, handler as any)
+      offZoneEditLabel(handler)
     }
   }, [zoneId])
 
@@ -236,7 +241,7 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
           }
         }}
         onMouseDown={(e) => e.stopPropagation()}
-        onPointerEnter={(e) => {
+        onPointerEnter={(_e) => {
           if (mode === 'delete') {
             useViewer.setState({ hoveredId: zoneId })
           }

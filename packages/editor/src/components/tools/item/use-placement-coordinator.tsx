@@ -224,7 +224,7 @@ function getBoxEdgePoints(bounds: PreviewBounds): number[] {
   ]
 }
 
-function updateLineGeometry(ref: React.RefObject<LineSegments>, points: number[]) {
+function updateLineGeometry(ref: React.RefObject<LineSegments | null>, points: number[]) {
   const geometry = ref.current?.geometry
   if (!geometry) return
 
@@ -279,12 +279,12 @@ export interface PlacementCoordinatorConfig {
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
-  const cursorGroupRef = useRef<Group>(null!)
-  const edgesRef = useRef<LineSegments>(null!)
-  const measurementWidthRef = useRef<LineSegments>(null!)
-  const measurementDepthRef = useRef<LineSegments>(null!)
-  const measurementHeightRef = useRef<LineSegments>(null!)
-  const basePlaneRef = useRef<Mesh>(null!)
+  const cursorGroupRef = useRef<Group | null>(null)
+  const edgesRef = useRef<LineSegments | null>(null)
+  const measurementWidthRef = useRef<LineSegments | null>(null)
+  const measurementDepthRef = useRef<LineSegments | null>(null)
+  const measurementHeightRef = useRef<LineSegments | null>(null)
+  const basePlaneRef = useRef<Mesh | null>(null)
   const gridPosition = useRef(new Vector3(0, 0, 0))
   const lastRawPos = useRef(new Vector3(0, 0, 0))
   const lastWallDirtyAtRef = useRef(new Map<string, number>())
@@ -331,8 +331,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     updateLineGeometry(edgesRef, getBoxEdgePoints(bounds))
 
-    const oldBasePlaneGeometry = basePlaneRef.current.geometry
-    basePlaneRef.current.geometry = nextBasePlaneGeometry
+    const basePlane = basePlaneRef.current
+    if (!basePlane) return
+    const oldBasePlaneGeometry = basePlane.geometry
+    basePlane.geometry = nextBasePlaneGeometry
     oldBasePlaneGeometry.dispose()
   }, [])
 
@@ -431,7 +433,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       minZ,
     ]
 
-    const applyPoints = (ref: React.RefObject<LineSegments>, points: number[]) => {
+    const applyPoints = (ref: React.RefObject<LineSegments | null>, points: number[]) => {
       updateLineGeometry(ref, points)
     }
 
@@ -442,6 +444,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
   useEffect(() => {
     if (!asset) return
+    const cursorGroup = cursorGroupRef.current
+    if (!cursorGroup) return
     useScene.temporal.getState().pause()
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
@@ -456,7 +460,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
-      cursorGroupRef.current.position.y = 0
+      cursorGroup.position.y = 0
     }
 
     // ---- Helpers ----
@@ -467,7 +471,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftItem: draftNode.current,
       gridPosition: gridPosition.current,
       state: { ...placementState.current },
-      currentCursorRotationY: cursorGroupRef.current.rotation.y,
+      currentCursorRotationY: cursorGroup.rotation.y,
     })
 
     const getActiveValidators = () =>
@@ -501,11 +505,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       gridPosition.current.set(...result.gridPosition)
 
       const c = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(c.x, c.y, c.z)
+      cursorGroup.position.set(c.x, c.y, c.z)
       if (result.cursorRotation) {
-        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+        cursorGroup.rotation.set(...result.cursorRotation)
       } else {
-        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+        cursorGroup.rotation.set(0, result.cursorRotationY, 0)
       }
 
       const draft = draftNode.current
@@ -519,11 +523,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const ensureDraft = (result: TransitionResult) => {
       gridPosition.current.set(...result.gridPosition)
       const c = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(c.x, c.y, c.z)
+      cursorGroup.position.set(c.x, c.y, c.z)
       if (result.cursorRotation) {
-        cursorGroupRef.current.rotation.set(...result.cursorRotation)
+        cursorGroup.rotation.set(...result.cursorRotation)
       } else {
-        cursorGroupRef.current.rotation.set(0, result.cursorRotationY, 0)
+        cursorGroup.rotation.set(0, result.cursorRotationY, 0)
       }
 
       const initRotation: [number, number, number] = result.cursorRotation ?? [
@@ -564,22 +568,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const worldPos = new Vector3()
         mesh.getWorldPosition(worldPos)
         const localPos = worldToBuildingLocal(worldPos.x, worldPos.y, worldPos.z)
-        cursorGroupRef.current.position.copy(localPos)
+        cursorGroup.position.copy(localPos)
         if (draftNode.current.asset.attachTo) {
           // Wall/ceiling items: extract world Y rotation (handles wall-parented items correctly)
           const q = new Quaternion()
           mesh.getWorldQuaternion(q)
-          cursorGroupRef.current.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
+          cursorGroup.rotation.y = new Euler().setFromQuaternion(q, 'YXZ').y
         } else {
           // Floor items: the cursor group lives in building-local space, so use the
           // node's local Y rotation — the same value onGridMove applies. The world
           // quaternion would double-count any building rotation, leaving the initial
           // box mis-rotated until the first cursor move.
-          cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+          cursorGroup.rotation.y = draftNode.current.rotation[1] ?? 0
         }
       } else {
-        cursorGroupRef.current.position.copy(gridPosition.current)
-        cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
+        cursorGroup.position.copy(gridPosition.current)
+        cursorGroup.rotation.y = draftNode.current.rotation[1] ?? 0
       }
     }
 
@@ -611,7 +615,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       previousGridPos = [...result.gridPosition]
       gridPosition.current.set(...result.gridPosition)
-      cursorGroupRef.current.position.set(
+      cursorGroup.position.set(
         result.cursorPosition[0],
         result.cursorPosition[1],
         result.cursorPosition[2],
@@ -620,7 +624,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // transform the 2D floorplan mirrors) aligned with the draft's
       // rotation. Without this the box stays at its seed rotation until a
       // manual R/T, so a moved already-rotated item shows an axis-aligned box.
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      cursorGroup.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) draft.position = result.gridPosition
@@ -629,7 +633,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draft) {
         useLiveTransforms.getState().set(draft.id, {
           position: result.gridPosition,
-          rotation: cursorGroupRef.current.rotation.y,
+          rotation: cursorGroup.rotation.y,
         })
       }
 
@@ -641,7 +645,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       // Preserve cursor rotation for the next draft
-      const currentRotation: [number, number, number] = [0, cursorGroupRef.current.rotation.y, 0]
+      const currentRotation: [number, number, number] = [0, cursorGroup.rotation.y, 0]
 
       // Clear live transform before commit
       if (draftNode.current) {
@@ -749,8 +753,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       gridPosition.current.set(...result.gridPosition)
       const wc = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(wc.x, wc.y, wc.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      cursorGroup.position.set(wc.x, wc.y, wc.z)
+      cursorGroup.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft && result.nodeUpdate) {
@@ -872,7 +876,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       Object.assign(placementState.current, { surface: 'floor', surfaceItemId: null })
       gridPosition.current.set(wx, 0, wz)
-      cursorGroupRef.current.position.set(wx, 0, wz)
+      cursorGroup.position.set(wx, 0, wz)
 
       const draft = draftNode.current
       if (draft) {
@@ -955,8 +959,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       gridPosition.current.set(...result.gridPosition)
       const ic = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      cursorGroup.position.set(ic.x, ic.y, ic.z)
+      cursorGroup.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) {
@@ -1001,8 +1005,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId) {
           const shelfNode = useScene.getState().nodes[ctx.state.shelfId as AnyNodeId]
           if (shelfNode && shelfNode.type === 'shelf') {
-            const synthetic = { ...event, node: shelfNode } as unknown as ItemEvent
-            const result = shelfSurfaceStrategy.click(ctx, synthetic as never)
+            const synthetic: ShelfEvent = { ...event, node: shelfNode }
+            const result = shelfSurfaceStrategy.click(ctx, synthetic)
             if (result) {
               event.stopPropagation()
               if (draftNode.current) {
@@ -1010,7 +1014,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               }
               draftNode.commit(result.nodeUpdate)
               if (configRef.current.onCommitted()) {
-                const enterResult = shelfSurfaceStrategy.enter(ctx, synthetic as never)
+                const enterResult = shelfSurfaceStrategy.enter(ctx, synthetic)
                 if (enterResult) {
                   applyTransition(enterResult)
                 } else {
@@ -1056,7 +1060,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (ctx.state.surface === 'ceiling' && ctx.state.ceilingId) {
           const ceilingNode = useScene.getState().nodes[ctx.state.ceilingId as AnyNodeId]
           if (ceilingNode && ceilingNode.type === 'ceiling') {
-            const synthetic = { ...event, node: ceilingNode } as unknown as CeilingEvent
+            const synthetic: CeilingEvent = { ...event, node: ceilingNode }
             const result = ceilingStrategy.click(ctx, synthetic, getActiveValidators())
             if (result) {
               event.stopPropagation()
@@ -1158,7 +1162,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       gridPosition.current.set(...result.gridPosition)
       const cc = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(cc.x, cc.y, cc.z)
+      cursorGroup.position.set(cc.x, cc.y, cc.z)
 
       revalidate()
 
@@ -1171,7 +1175,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Publish live transform for 2D floorplan
         useLiveTransforms.getState().set(draft.id, {
           position: result.cursorPosition,
-          rotation: cursorGroupRef.current.rotation.y,
+          rotation: cursorGroup.rotation.y,
         })
       }
     }
@@ -1275,8 +1279,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       gridPosition.current.set(...result.gridPosition)
       const ic = worldToBuildingLocal(...result.cursorPosition)
-      cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)
-      cursorGroupRef.current.rotation.y = result.cursorRotationY
+      cursorGroup.position.set(ic.x, ic.y, ic.z)
+      cursorGroup.rotation.y = result.cursorRotationY
 
       const draft = draftNode.current
       if (draft) {
@@ -1354,7 +1358,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
         // Ref + cursor mesh + item mesh — no store update during drag
-        cursorGroupRef.current.rotation.y = newRotationY
+        cursorGroup.rotation.y = newRotationY
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.rotation.y = newRotationY
 
@@ -1368,8 +1372,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           const z = snapToGrid(lastRawPos.current.z, swapDims ? dimX : dimZ)
           gridPosition.current.set(x, gridPosition.current.y, z)
           draft.position = [x, gridPosition.current.y, z]
-          cursorGroupRef.current.position.x = x
-          cursorGroupRef.current.position.z = z
+          cursorGroup.position.x = x
+          cursorGroup.position.z = z
           if (mesh) {
             mesh.position.x = x
             mesh.position.z = z
@@ -1392,7 +1396,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               worldSnapped.y,
               worldSnapped.z,
             )
-            cursorGroupRef.current.position.set(localSnapped.x, localSnapped.y, localSnapped.z)
+            cursorGroup.position.set(localSnapped.x, localSnapped.y, localSnapped.z)
             if (mesh) mesh.position.set(x, y, z)
           }
         }
@@ -1403,9 +1407,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           useLiveTransforms.getState().set(draft.id, {
             ...currentLive,
             position: [
-              cursorGroupRef.current.position.x,
-              cursorGroupRef.current.position.y,
-              cursorGroupRef.current.position.z,
+              cursorGroup.position.x,
+              cursorGroup.position.y,
+              cursorGroup.position.z,
             ] as [number, number, number],
             rotation: newRotationY,
           })

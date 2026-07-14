@@ -1,8 +1,4 @@
-import {
-  type MaterialPresetPayload,
-  type MaterialTarget,
-  MaterialTarget as MaterialTargetSchema,
-} from './schema/material'
+import type { MaterialPresetPayload } from './schema/material'
 
 export type MaterialCatalogItem = {
   id: string
@@ -13,43 +9,6 @@ export type MaterialCatalogItem = {
   previewColor?: string
   preset: MaterialPresetPayload
 }
-
-const WALL_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.wall,
-  MaterialTargetSchema.enum.chimney,
-  MaterialTargetSchema.enum.dormer,
-]
-
-const SLAB_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.slab,
-  MaterialTargetSchema.enum.chimney,
-]
-
-const WALL_AND_SLAB_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.wall,
-  MaterialTargetSchema.enum.slab,
-  MaterialTargetSchema.enum.chimney,
-  MaterialTargetSchema.enum.dormer,
-]
-
-const STAIR_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.stair,
-  MaterialTargetSchema.enum['stair-segment'],
-]
-
-const STAIR_AND_FENCE_TARGETS: MaterialTarget[] = [
-  ...STAIR_TARGETS,
-  MaterialTargetSchema.enum.fence,
-]
-
-const ROOF_TARGETS: MaterialTarget[] = [
-  MaterialTargetSchema.enum.roof,
-  MaterialTargetSchema.enum['roof-segment'],
-  MaterialTargetSchema.enum.chimney,
-  MaterialTargetSchema.enum.dormer,
-]
-
-const CEILING_TARGETS: MaterialTarget[] = [MaterialTargetSchema.enum.ceiling]
 
 export const MATERIAL_CATEGORIES = ['wood', 'flooring', 'roof', 'other'] as const
 export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]

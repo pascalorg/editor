@@ -49,11 +49,11 @@ export function trimChimneyBodyAgainstRoof(
   const indexCount = indexed.getIndex()?.count ?? 0
   indexed.clearGroups()
   if (indexCount > 0) indexed.addGroup(0, indexCount, 0)
-  ;(
-    indexed as unknown as { computeBoundsTree?: (opts: { maxLeafSize: number }) => void }
-  ).computeBoundsTree?.({ maxLeafSize: 10 })
+  // The BVH bounds tree is computed by `prepareBrushForCSG(chimneyBrush)`
+  // below (it runs `computeGeometryBoundsTree` on the same geometry), so
+  // no separate `computeBoundsTree` call is needed here.
 
-  const chimneyBrush = new Brush(indexed, visibleMat as unknown as THREE.MeshStandardMaterial)
+  const chimneyBrush = new Brush(indexed, visibleMat)
   chimneyBrush.updateMatrixWorld()
   prepareBrushForCSG(chimneyBrush)
 

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, Capabilities, MovableConfig } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { coerce } from '../test-utils'
 import { applyAxisLock, isMovable, movePlanToward, moveToward, resolveMovable } from './movement'
 
 const id = (s: string) => s as AnyNodeId
@@ -11,21 +12,21 @@ function makeDef(kind: string, capabilities: Capabilities = {}): AnyNodeDefiniti
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities,
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
   }
 }
 
 function makeNode(kind: string, idStr: string): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: id(idStr),
     type: kind,
     parentId: null,
     visible: true,
-  } as unknown as AnyNode
+  })
 }
 
 describe('resolveMovable', () => {

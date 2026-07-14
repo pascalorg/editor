@@ -114,7 +114,9 @@ describe('photo_to_scene', () => {
     // Bridge was swapped.
     const rootIds = bridge.getRootNodeIds()
     expect(rootIds.length).toBe(1)
-    const rootId = rootIds[0]!
+    const rootId = rootIds[0]
+    expect(rootId).toBeDefined()
+    if (!rootId) return
     const root = bridge.getNode(rootId)
     expect(root?.type).toBe('site')
 
@@ -126,7 +128,9 @@ describe('photo_to_scene', () => {
     expect(zones.length).toBe(1)
 
     // Scene was persisted in the store.
-    const saved = await store.load(structured.sceneId!)
+    expect(structured.sceneId).toBeDefined()
+    if (structured.sceneId === undefined) return
+    const saved = await store.load(structured.sceneId)
     expect(saved).not.toBeNull()
     expect(saved?.name).toBe('Test Scene')
   })
@@ -138,7 +142,7 @@ describe('photo_to_scene', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_unavailable')
   })
 
@@ -156,7 +160,7 @@ describe('photo_to_scene', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_response_unparseable')
   })
 

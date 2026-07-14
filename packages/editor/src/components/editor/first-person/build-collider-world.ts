@@ -10,6 +10,7 @@ import {
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
+import { nodesByType } from '../../../lib/typed-access'
 
 const COLLIDER_NODE_TYPES = [
   'wall',
@@ -176,7 +177,7 @@ function buildRegisteredNodeTypeLookup() {
   const nodeTypes = new Map<string, ColliderNodeType>()
 
   for (const type of COLLIDER_NODE_TYPES) {
-    for (const nodeId of sceneRegistry.byType[type]!) {
+    for (const nodeId of nodesByType(type)) {
       nodeTypes.set(nodeId, type)
     }
   }
@@ -238,7 +239,7 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
   }
 
   for (const type of COLLIDER_NODE_TYPES) {
-    for (const nodeId of sceneRegistry.byType[type]!) {
+    for (const nodeId of nodesByType(type)) {
       if (shouldSkipColliderNode(nodeId, type)) continue
 
       const root = sceneRegistry.nodes.get(nodeId)
@@ -280,17 +281,18 @@ export function buildFirstPersonColliderWorldFromRegistry(): FirstPersonCollider
     return null
   }
 
-  const bvhGeometry = mergedGeometry as THREE.BufferGeometry & {
-    computeBoundsTree?: typeof computeBoundsTree
-    disposeBoundsTree?: typeof disposeBoundsTree
-  }
+  const bvhGeometry: THREE.BufferGeometry & {
+    computeBoundsTree: typeof computeBoundsTree
+    disposeBoundsTree: typeof disposeBoundsTree
+  } = Object.assign(mergedGeometry, {
+    computeBoundsTree,
+    disposeBoundsTree,
+  })
 
-  ;(bvhGeometry as any).computeBoundsTree = computeBoundsTree
-  ;(bvhGeometry as any).disposeBoundsTree = disposeBoundsTree
-  bvhGeometry.computeBoundsTree?.({
+  bvhGeometry.computeBoundsTree({
     maxLeafTris: 12,
     strategy: 0,
-  } as never)
+  })
   bvhGeometry.computeBoundingBox()
 
   const mesh = new THREE.Mesh(bvhGeometry, COLLIDER_MATERIAL)

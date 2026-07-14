@@ -1,5 +1,14 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import {
+  BuildingNode,
+  DoorNode,
+  LevelNode,
+  SiteNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 
 /**
  * 80 m² two-bedroom apartment.
@@ -36,13 +45,9 @@ function wall(
   end: [number, number],
   children: string[] = [],
 ): AnyNode {
-  return {
-    object: 'node',
+  return WallNode.parse({
     id,
-    type: 'wall',
     parentId: 'level_0',
-    visible: true,
-    metadata: {},
     children,
     thickness: WALL_THICKNESS,
     height: WALL_HEIGHT,
@@ -50,17 +55,13 @@ function wall(
     end,
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  })
 }
 
 function door(id: string, parentWallId: string): AnyNode {
-  return {
-    object: 'node',
+  return DoorNode.parse({
     id,
-    type: 'door',
     parentId: parentWallId,
-    visible: true,
-    metadata: {},
     wallId: parentWallId,
     position: [0, 1.05, 0],
     rotation: [0, 0, 0],
@@ -97,17 +98,13 @@ function door(id: string, parentWallId: string): AnyNode {
     doorCloser: false,
     panicBar: false,
     panicBarHeight: 1.0,
-  } as unknown as AnyNode
+  })
 }
 
 function makeWindow(id: string, parentWallId: string, width = 1.2): AnyNode {
-  return {
-    object: 'node',
+  return WindowNode.parse({
     id,
-    type: 'window',
     parentId: parentWallId,
-    visible: true,
-    metadata: {},
     wallId: parentWallId,
     position: [0, 1.2, 0],
     rotation: [0, 0, 0],
@@ -122,20 +119,16 @@ function makeWindow(id: string, parentWallId: string, width = 1.2): AnyNode {
     sill: true,
     sillDepth: 0.08,
     sillThickness: 0.03,
-  } as unknown as AnyNode
+  })
 }
 
 function buildTemplate(): SceneGraph {
   const nodes: NodeMap = {}
 
   // Root nodes
-  nodes.site_2br = {
-    object: 'node',
+  nodes.site_2br = SiteNode.parse({
     id: 'site_2br',
-    type: 'site',
     parentId: null,
-    visible: true,
-    metadata: {},
     polygon: {
       type: 'polygon',
       points: [
@@ -146,19 +139,15 @@ function buildTemplate(): SceneGraph {
       ],
     },
     children: ['building_2br'],
-  } as unknown as AnyNode
+  })
 
-  nodes.building_2br = {
-    object: 'node',
+  nodes.building_2br = BuildingNode.parse({
     id: 'building_2br',
-    type: 'building',
     parentId: 'site_2br',
-    visible: true,
-    metadata: {},
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     children: ['level_0'],
-  } as unknown as AnyNode
+  })
 
   // Openings — declared up front so walls can list them as children.
   nodes.door_front = door('door_front', 'wall_s')
@@ -198,13 +187,9 @@ function buildTemplate(): SceneGraph {
   nodes.wall_part_2 = wall('wall_part_2', [BATH_X, Z_MIN], [BATH_X, CORRIDOR_Z])
 
   // Zones: one per room.
-  nodes.zone_living = {
-    object: 'node',
+  nodes.zone_living = ZoneNode.parse({
     id: 'zone_living',
-    type: 'zone',
     parentId: 'level_0',
-    visible: true,
-    metadata: {},
     name: 'Living / Kitchen',
     color: '#60a5fa',
     polygon: [
@@ -213,15 +198,11 @@ function buildTemplate(): SceneGraph {
       [X_MAX, Z_MAX],
       [X_MIN, Z_MAX],
     ],
-  } as unknown as AnyNode
+  })
 
-  nodes.zone_bed1 = {
-    object: 'node',
+  nodes.zone_bed1 = ZoneNode.parse({
     id: 'zone_bed1',
-    type: 'zone',
     parentId: 'level_0',
-    visible: true,
-    metadata: {},
     name: 'Bedroom 1',
     color: '#f472b6',
     polygon: [
@@ -230,15 +211,11 @@ function buildTemplate(): SceneGraph {
       [BED_X, CORRIDOR_Z],
       [X_MIN, CORRIDOR_Z],
     ],
-  } as unknown as AnyNode
+  })
 
-  nodes.zone_bath = {
-    object: 'node',
+  nodes.zone_bath = ZoneNode.parse({
     id: 'zone_bath',
-    type: 'zone',
     parentId: 'level_0',
-    visible: true,
-    metadata: {},
     name: 'Bath',
     color: '#a7f3d0',
     polygon: [
@@ -247,15 +224,11 @@ function buildTemplate(): SceneGraph {
       [BATH_X, CORRIDOR_Z],
       [BED_X, CORRIDOR_Z],
     ],
-  } as unknown as AnyNode
+  })
 
-  nodes.zone_bed2 = {
-    object: 'node',
+  nodes.zone_bed2 = ZoneNode.parse({
     id: 'zone_bed2',
-    type: 'zone',
     parentId: 'level_0',
-    visible: true,
-    metadata: {},
     name: 'Bedroom 2',
     color: '#fcd34d',
     polygon: [
@@ -264,15 +237,11 @@ function buildTemplate(): SceneGraph {
       [X_MAX, CORRIDOR_Z],
       [BATH_X, CORRIDOR_Z],
     ],
-  } as unknown as AnyNode
+  })
 
-  nodes.level_0 = {
-    object: 'node',
+  nodes.level_0 = LevelNode.parse({
     id: 'level_0',
-    type: 'level',
     parentId: 'building_2br',
-    visible: true,
-    metadata: {},
     level: 0,
     children: [
       'wall_n',
@@ -289,7 +258,7 @@ function buildTemplate(): SceneGraph {
       'zone_bath',
       'zone_bed2',
     ],
-  } as unknown as AnyNode
+  })
 
   return {
     nodes: nodes as Record<AnyNodeId, AnyNode>,

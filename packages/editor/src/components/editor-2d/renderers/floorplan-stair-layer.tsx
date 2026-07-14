@@ -15,6 +15,7 @@ import {
   toSvgX,
   toSvgY,
 } from '../svg-paths'
+import { first } from '../../../lib/typed-access'
 
 type FloorplanPolygonEntry = {
   points: string
@@ -418,8 +419,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     vectorEffect="non-scaling-stroke"
                   />
                   <circle
-                    cx={toSvgX(arrow.polyline[0]!.x)}
-                    cy={toSvgY(arrow.polyline[0]!.y)}
+                    cx={toSvgX(first(arrow.polyline).x)}
+                    cy={toSvgY(first(arrow.polyline).y)}
                     fill={straightAccent}
                     pointerEvents="none"
                     r="0.045"

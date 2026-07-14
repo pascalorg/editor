@@ -33,12 +33,16 @@ const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
-  ;(geometry as any).computeBoundsTree = computeBoundsTree
-  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+  // See scene-bvh.tsx: two `three-mesh-bvh` versions augment `three` (0.8.3 via
+  // three-bvh-csg vs 0.9.9 direct), so the merged `computeBoundsTree` signature
+  // (`=> MeshBVH`) rejects the 0.9.9 helper. Bind the runtime helper and call
+  // the 0.9.9 import directly so `maxLeafSize` resolves against its options.
+  geometry.computeBoundsTree = computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+  computeBoundsTree.call(geometry, { maxLeafSize: 10 })
 }
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
-  return brush.geometry as unknown as THREE.BufferGeometry
+  return brush.geometry
 }
 
 type WallBoundaryEdgeTag = 'front' | 'back' | 'base'

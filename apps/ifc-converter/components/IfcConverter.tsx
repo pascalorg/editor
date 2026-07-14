@@ -22,6 +22,7 @@ type ConverterMetadata = {
   levelId?: string
   elevation?: number
   material?: string
+  materialLayers?: { name: string; thickness?: number }[]
   typeName?: string
   properties?: Record<string, Record<string, string | number | boolean>>
   [key: string]: unknown
@@ -29,6 +30,24 @@ type ConverterMetadata = {
 
 function meta(node: { metadata?: unknown } | null | undefined): ConverterMetadata {
   return (node?.metadata ?? {}) as ConverterMetadata
+}
+
+// The details panel reads a loose, display-oriented view of a node's optional
+// geometry fields (which vary per node kind). This structural type keeps those
+// reads type-safe without spreading casts across the JSX.
+type IfcDisplayNode = {
+  type: string
+  name?: string
+  metadata?: unknown
+  start?: readonly number[]
+  end?: readonly number[]
+  position?: readonly number[]
+  polygon?: readonly unknown[]
+  thickness?: number
+  height?: number
+  width?: number
+  elevation?: number
+  sillHeight?: number
 }
 
 export default function IfcConverter() {
@@ -241,7 +260,9 @@ export default function IfcConverter() {
 
   const downloadIfc = () => {
     if (!ifcData) return
-    const blob = new Blob([ifcData as any], { type: 'application/octet-stream' })
+    // Copy into a fresh ArrayBuffer-backed view so it satisfies BlobPart
+    // (a Uint8Array over ArrayBufferLike isn't assignable to BlobPart).
+    const blob = new Blob([new Uint8Array(ifcData)], { type: 'application/octet-stream' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -551,12 +572,14 @@ export default function IfcConverter() {
               </p>
             </div>
             {selectedNodeId &&
-              Boolean(
-                (pascalData?.nodes as Record<string, unknown> | undefined)?.[selectedNodeId],
-              ) &&
+              pascalData?.nodes[selectedNodeId as keyof PascalSceneGraph['nodes']] &&
               (() => {
-                const node = (pascalData!.nodes as Record<string, any>)[selectedNodeId] as any
-                const meta = node.metadata ?? {}
+                if (!pascalData) return null
+                const node = pascalData.nodes[
+                  selectedNodeId as keyof PascalSceneGraph['nodes']
+                ] as IfcDisplayNode | undefined
+                if (!node) return null
+                const meta = (node.metadata ?? {}) as ConverterMetadata
                 const Row = ({ k, v }: { k: string; v: string }) => (
                   <div className="flex justify-between text-xs gap-2">
                     <span className="text-gray-500 shrink-0">{k}</span>
@@ -591,7 +614,10 @@ export default function IfcConverter() {
                         {meta.levelId && (
                           <Row
                             k="Level"
-                            v={pascalData!.nodes[meta.levelId]?.name ?? meta.levelId}
+                            v={
+                              pascalData.nodes[meta.levelId as keyof PascalSceneGraph['nodes']]
+                                ?.name ?? meta.levelId
+                            }
                           />
                         )}
                       </div>
@@ -647,7 +673,7 @@ export default function IfcConverter() {
                             Material
                           </p>
                           {meta.material && <Row k="Name" v={meta.material} />}
-                          {meta.materialLayers?.map((l: any, i: number) => (
+                          {meta.materialLayers?.map((l, i) => (
                             <Row
                               key={i}
                               k={l.name}
@@ -660,12 +686,12 @@ export default function IfcConverter() {
                       )}
 
                       {meta.properties &&
-                        Object.entries(meta.properties).map(([psetName, props]: [string, any]) => (
+                        Object.entries(meta.properties).map(([psetName, props]) => (
                           <div key={psetName} className="space-y-1 pb-2 border-b border-gray-100">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                               {psetName}
                             </p>
-                            {Object.entries(props).map(([k, v]: [string, any]) => (
+                            {Object.entries(props).map(([k, v]) => (
                               <Row key={k} k={k} v={String(v)} />
                             ))}
                           </div>

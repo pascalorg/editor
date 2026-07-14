@@ -267,10 +267,11 @@ export const createNodesAction = (
         if ('children' in parent) {
           const existing = (parent as { children?: unknown }).children
           const children = Array.isArray(existing) ? (existing as AnyNodeId[]) : []
+          const container = parent as AnyContainerNode
           nextNodes[effectiveParentId] = {
-            ...parent,
-            children: Array.from(new Set([...children, newNode.id])) as any,
-          }
+            ...container,
+            children: Array.from(new Set([...children, newNode.id])),
+          } as AnyNode
         }
       } else if (!effectiveParentId) {
         // 3. Handle Root nodes
@@ -353,10 +354,11 @@ export const applyNodeChangesAction = (
       if (effectiveParentId && nextNodes[effectiveParentId]) {
         const parent = nextNodes[effectiveParentId]
         if ('children' in parent && Array.isArray(parent.children)) {
+          const container = parent as AnyContainerNode
           nextNodes[effectiveParentId] = {
-            ...parent,
-            children: Array.from(new Set([...parent.children, newNode.id])) as any,
-          }
+            ...container,
+            children: Array.from(new Set([...container.children, newNode.id])),
+          } as AnyNode
           parentsToMarkDirty.add(effectiveParentId)
         }
       } else if (!effectiveParentId && !nextRootIds.includes(newNode.id as AnyNodeId)) {

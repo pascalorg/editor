@@ -37,7 +37,8 @@ describe('list_scenes', () => {
     })
     expect(result.isError).toBeFalsy()
     const parsed = parseToolText(result.content as StoredTextContent[])
-    const scenes = parsed.scenes as unknown[]
+    const scenes = parsed.scenes
+    expect(Array.isArray(scenes)).toBe(true)
     expect(scenes).toHaveLength(2)
   })
 
@@ -52,7 +53,10 @@ describe('list_scenes', () => {
     const parsed = parseToolText(result.content as StoredTextContent[])
     const scenes = parsed.scenes as { id: string }[]
     expect(scenes).toHaveLength(1)
-    expect(scenes[0]!.id).toBe('a')
+    const firstScene = scenes[0]
+    expect(firstScene).toBeDefined()
+    if (!firstScene) return
+    expect(firstScene.id).toBe('a')
   })
 
   test('rejects non-positive limit per schema', async () => {
@@ -73,7 +77,8 @@ describe('list_scenes', () => {
       arguments: { limit: 2 },
     })
     const parsed = parseToolText(result.content as StoredTextContent[])
-    const scenes = parsed.scenes as unknown[]
+    const scenes = parsed.scenes
+    expect(Array.isArray(scenes)).toBe(true)
     expect(scenes).toHaveLength(2)
   })
 })

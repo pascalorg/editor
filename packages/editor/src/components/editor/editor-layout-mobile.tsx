@@ -5,6 +5,7 @@ import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useSta
 import useEditor from '../../store/use-editor'
 import { MobileTabBar } from '../ui/sidebar/mobile-tab-bar'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
+import { first } from '../../lib/typed-access'
 import { BottomSheet, type BottomSheetHandle } from './bottom-sheet'
 
 const MIN_SNAP = 0
@@ -73,7 +74,7 @@ export function EditorLayoutMobile({
   // Keep active panel valid
   useEffect(() => {
     if (sidebarTabs.length > 0 && !sidebarTabs.some((t) => t.id === activePanel)) {
-      setActivePanel(sidebarTabs[0]!.id)
+      setActivePanel(first(sidebarTabs).id)
     }
   }, [sidebarTabs, activePanel, setActivePanel])
 

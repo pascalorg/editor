@@ -3,7 +3,7 @@
 import { type ScanNode, useRegistry } from '@pascal-app/core'
 import { useAssetUrl, useGLTFKTX2, useViewer } from '@pascal-app/viewer'
 import { Suspense, useMemo, useRef } from 'react'
-import type { Group, Material, Mesh } from 'three'
+import { type Group, type Material, Mesh } from 'three'
 
 export const ScanRenderer = ({ node }: { node: ScanNode }) => {
   const showScans = useViewer((s) => s.showScans)
@@ -30,8 +30,11 @@ export const ScanRenderer = ({ node }: { node: ScanNode }) => {
 }
 
 const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
-  const gltf = useGLTFKTX2(url) as any
-  const scene = gltf.scene
+  // `useGLTF` is typed to also accept an array of paths (returning an
+  // array); we always pass a single URL, so narrow to the object form.
+  const result = useGLTFKTX2(url)
+  const gltf = Array.isArray(result) ? result[0] : result
+  const scene = gltf?.scene
 
   useMemo(() => {
     const normalizedOpacity = opacity / 100
@@ -50,9 +53,9 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
       material.needsUpdate = true
     }
 
-    scene.traverse((child: any) => {
-      if ((child as Mesh).isMesh) {
-        const mesh = child as Mesh
+    scene?.traverse((child) => {
+      if (child instanceof Mesh) {
+        const mesh = child
 
         // Disable raycasting
         mesh.raycast = () => {}
@@ -73,6 +76,7 @@ const ScanModel = ({ url, opacity }: { url: string; opacity: number }) => {
     })
   }, [scene, opacity])
 
+  if (!scene) return null
   return <primitive object={scene} />
 }
 

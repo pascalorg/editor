@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SlabNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerPlaceItem } from './place-item'
 
 describe('place_item', () => {
@@ -15,14 +16,15 @@ describe('place_item', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerPlaceItem(server, bridge)
+    registerPlaceItem(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('places an item on a wall and derives wallT', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [10, 0] })
     bridge.createNode(wall, level.id)
 
@@ -35,7 +37,7 @@ describe('place_item', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.itemId).toMatch(/^item_/)
     expect(parsed.status).toBe('ok')
     const item = bridge.getNode(parsed.itemId)
@@ -46,7 +48,8 @@ describe('place_item', () => {
   })
 
   test('places a floor item through a slab target but parents it to the level for rendering', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const slab = SlabNode.parse({
       polygon: [
         [0, 0],
@@ -66,14 +69,15 @@ describe('place_item', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const item = bridge.getNode(parsed.itemId)
     expect(item?.parentId).toBe(level.id)
     expect(bridge.validateScene().valid).toBe(true)
   })
 
   test('rejects placement on an unsupported node', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
     const result = await client.callTool({
       name: 'place_item',
       arguments: {

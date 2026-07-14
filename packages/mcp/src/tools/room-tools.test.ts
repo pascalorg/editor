@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerRoomTools } from './room-tools'
 
 describe('room tools', () => {
@@ -15,7 +16,7 @@ describe('room tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerRoomTools(server, bridge)
+    registerRoomTools(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -27,13 +28,14 @@ describe('room tools', () => {
       arguments: { query: 'sofa' },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.total).toBeGreaterThan(0)
     expect(parsed.results.map((item: { id: string }) => item.id)).toContain('sofa')
   })
 
   test('create_room creates a valid zone/slab/ceiling/wall bundle', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'create_room',
       arguments: {
@@ -48,7 +50,7 @@ describe('room tools', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.zoneId).toMatch(/^zone_/)
     expect(parsed.slabId).toMatch(/^slab_/)
     expect(parsed.ceilingId).toMatch(/^ceiling_/)
@@ -58,7 +60,8 @@ describe('room tools', () => {
   })
 
   test('create_room rejects dedicated roof support levels', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
     const roofLevel = LevelNode.parse({
       name: 'Roof',
       level: 1,
@@ -84,7 +87,8 @@ describe('room tools', () => {
   })
 
   test('add_door and add_window convert t to wall-local meters', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const roomResult = await client.callTool({
       name: 'create_room',
       arguments: {
@@ -98,14 +102,14 @@ describe('room tools', () => {
         ],
       },
     })
-    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const wallId = room.wallIds[0]
 
     const doorResult = await client.callTool({
       name: 'add_door',
       arguments: { wallId, t: 0.5 },
     })
-    const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(door.localX).toBeCloseTo(2.5, 3)
     expect(door.t).toBe(0.5)
     expect(door.position).toBe(0.5)
@@ -119,7 +123,7 @@ describe('room tools', () => {
       name: 'add_window',
       arguments: { wallId, t: 0.25, width: 1, height: 1, sillHeight: 1 },
     })
-    const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(win.localX).toBeCloseTo(1.25, 3)
     expect(win.t).toBe(0.25)
     expect(win.position).toBe(0.25)
@@ -131,7 +135,8 @@ describe('room tools', () => {
   })
 
   test('add_door and add_window accept position as a t alias', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const roomResult = await client.callTool({
       name: 'create_room',
       arguments: {
@@ -145,14 +150,14 @@ describe('room tools', () => {
         ],
       },
     })
-    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const wallId = room.wallIds[0]
 
     const doorResult = await client.callTool({
       name: 'add_door',
       arguments: { wallId, position: 0.25 },
     })
-    const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(door.localX).toBeCloseTo(1.5, 3)
     expect(door.t).toBe(0.25)
 
@@ -160,14 +165,15 @@ describe('room tools', () => {
       name: 'add_window',
       arguments: { wallId, position: 0.75, width: 1 },
     })
-    const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(win.localX).toBeCloseTo(4.5, 3)
     expect(win.t).toBe(0.75)
     expect(bridge.validateScene().valid).toBe(true)
   })
 
   test('furnish_room parents floor items to the level and keeps the scene valid', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'furnish_room',
       arguments: {
@@ -183,7 +189,7 @@ describe('room tools', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.placed).toBeGreaterThan(0)
     for (const itemId of parsed.itemIds) {
       expect(bridge.getNode(itemId)?.parentId).toBe(level.id)
@@ -192,7 +198,8 @@ describe('room tools', () => {
   })
 
   test('furnish_room can infer level and polygon from zoneId', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const roomResult = await client.callTool({
       name: 'create_room',
       arguments: {
@@ -206,7 +213,7 @@ describe('room tools', () => {
         ],
       },
     })
-    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]!.text)
+    const room = JSON.parse((roomResult.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const result = await client.callTool({
       name: 'furnish_room',
       arguments: {
@@ -216,7 +223,7 @@ describe('room tools', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.placed).toBeGreaterThan(0)
     for (const itemId of parsed.itemIds) {
       expect(bridge.getNode(itemId)?.parentId).toBe(level.id)

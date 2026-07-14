@@ -115,7 +115,7 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
       }
 
       const payload = {
-        nodes: results as unknown as Array<Record<string, unknown>>,
+        nodes: results as Array<Record<string, unknown>>,
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

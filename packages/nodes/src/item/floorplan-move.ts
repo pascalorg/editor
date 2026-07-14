@@ -214,13 +214,13 @@ function findContainingSurface(
 ): CeilingNode | null {
   if (!parentLevelId) return null
   const level = nodes[parentLevelId]
-  const childIds = (level as unknown as { children?: AnyNodeId[] })?.children
-  if (!Array.isArray(childIds)) return null
+  if (!level || !('children' in level) || !Array.isArray(level.children)) return null
+  const childIds: readonly string[] = level.children
 
   for (const childId of childIds) {
-    const node = nodes[childId]
+    const node = nodes[childId as AnyNodeId]
     if (!node || node.type !== targetKind) continue
-    const surface = node as CeilingNode
+    const surface = node
     const polygon = surface.polygon
     if (!polygon || polygon.length < 3) continue
     if (!pointInRing(point, polygon)) continue

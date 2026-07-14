@@ -23,7 +23,8 @@ export function getLevelHeight(
     lastNodesRef = nodes
   }
 
-  if (heightCache.has(levelId)) return heightCache.get(levelId)!
+  const cached = heightCache.get(levelId)
+  if (cached !== undefined) return cached
 
   const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
   if (!level) return DEFAULT_LEVEL_HEIGHT
@@ -37,7 +38,7 @@ export function getLevelHeight(
       const ch = (child as CeilingNode).height ?? DEFAULT_LEVEL_HEIGHT
       if (ch > maxTop) maxTop = ch
     } else if (child.type === 'wall') {
-      let meshY = sceneRegistry.nodes.get(childId as any)?.position.y ?? 0
+      let meshY = sceneRegistry.nodes.get(childId)?.position.y ?? 0
       if (meshY < 0) meshY = 0
       const top = meshY + ((child as WallNode).height ?? DEFAULT_LEVEL_HEIGHT)
       if (top > maxTop) maxTop = top
@@ -71,11 +72,11 @@ export function snapLevelsToTruePositions(): () => void {
   }
 
   const entries: LevelEntry[] = []
-  sceneRegistry.byType.level!.forEach((levelId) => {
+  sceneRegistry.byType.level?.forEach((levelId) => {
     const obj = sceneRegistry.nodes.get(levelId)
     const level = nodes[levelId as LevelNode['id']]
     if (obj && level) {
-      entries.push({ levelId, index: (level as any).level ?? 0, obj })
+      entries.push({ levelId, index: (level as LevelNode).level ?? 0, obj })
     }
   })
   entries.sort((a, b) => a.index - b.index)

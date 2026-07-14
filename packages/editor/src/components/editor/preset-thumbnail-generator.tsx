@@ -5,6 +5,7 @@ import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect } from 'react'
 import * as THREE from 'three'
 import { usePresetsAdapter } from '../../contexts/presets-context'
+import { requireDefined } from '../../lib/typed-access'
 
 const THUMBNAIL_SIZE = 1080
 const CAMERA_FOV = 45
@@ -98,7 +99,7 @@ export const PresetThumbnailGenerator = () => {
       const offscreen = document.createElement('canvas')
       offscreen.width = THUMBNAIL_SIZE
       offscreen.height = THUMBNAIL_SIZE
-      const ctx = offscreen.getContext('2d')!
+      const ctx = requireDefined(offscreen.getContext('2d'))
       ctx.drawImage(gl.domElement, sx, sy, minDim, minDim, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE)
 
       offscreen.toBlob(async (blob) => {

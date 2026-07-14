@@ -16,7 +16,7 @@ function getRegistryRenderer(
   // GLB / instanced-GLB sources lower onto built-in renderers landed in
   // Phase 5 — for now only parametric (lazy module) sources are honored.
   if (source.kind !== 'parametric') return null
-  const Comp = lazy(source.module) as unknown as ComponentType<{ node: AnyNode }>
+  const Comp: ComponentType<{ node: AnyNode }> = lazy(source.module)
   lazyCache.set(source, Comp)
   return Comp
 }

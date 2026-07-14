@@ -268,8 +268,9 @@ function pointInPolygon(point: Point2D, polygon: Point2D[]) {
   const [x, z] = point
 
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]!
-    const b = polygon[j]!
+    const a = polygon[i]
+    const b = polygon[j]
+    if (!a || !b) continue
     if (pointOnSegment(point, a, b)) return true
     const intersects =
       a[1] > z !== b[1] > z && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1]) + a[0]
@@ -330,8 +331,13 @@ function buildUnionPolygonsFromRects(rects: AxisAlignedRect[]): Point2D[][] {
   const occupied = new Set<string>()
   for (let xi = 0; xi < xs.length - 1; xi += 1) {
     for (let zi = 0; zi < zs.length - 1; zi += 1) {
-      const cx = (xs[xi]! + xs[xi + 1]!) / 2
-      const cz = (zs[zi]! + zs[zi + 1]!) / 2
+      const xi0 = xs[xi]
+      const xi1 = xs[xi + 1]
+      const zi0 = zs[zi]
+      const zi1 = zs[zi + 1]
+      if (xi0 == null || xi1 == null || zi0 == null || zi1 == null) continue
+      const cx = (xi0 + xi1) / 2
+      const cz = (zi0 + zi1) / 2
       if (
         rects.some((rect) => cx > rect.minX && cx < rect.maxX && cz > rect.minZ && cz < rect.maxZ)
       ) {
@@ -349,10 +355,11 @@ function buildUnionPolygonsFromRects(rects: AxisAlignedRect[]): Point2D[][] {
     for (let zi = 0; zi < zs.length - 1; zi += 1) {
       if (!occupied.has(`${xi}:${zi}`)) continue
 
-      const x0 = xs[xi]!
-      const x1 = xs[xi + 1]!
-      const z0 = zs[zi]!
-      const z1 = zs[zi + 1]!
+      const x0 = xs[xi]
+      const x1 = xs[xi + 1]
+      const z0 = zs[zi]
+      const z1 = zs[zi + 1]
+      if (x0 == null || x1 == null || z0 == null || z1 == null) continue
 
       if (!occupied.has(`${xi}:${zi - 1}`)) addEdge([x0, z0], [x1, z0])
       if (!occupied.has(`${xi + 1}:${zi}`)) addEdge([x1, z0], [x1, z1])
@@ -691,7 +698,10 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const existingHoles = slab.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, slab.holeMetadata)
     const preservedHoles = existingHoles
-      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .map((polygon, index) => ({
+        metadata: existingMetadata[index] ?? { source: 'manual' as const },
+        polygon,
+      }))
       .filter((entry) => entry.metadata.source !== 'stair')
     const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 
@@ -740,7 +750,10 @@ export function syncAutoStairOpenings(nodes: Record<string, AnyNode>) {
     const existingHoles = ceiling.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
     const preservedHoles = existingHoles
-      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .map((polygon, index) => ({
+        metadata: existingMetadata[index] ?? { source: 'manual' as const },
+        polygon,
+      }))
       .filter((entry) => entry.metadata.source !== 'stair')
     const preservedHolePolygons = preservedHoles.map((entry) => entry.polygon)
 

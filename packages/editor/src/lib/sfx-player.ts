@@ -1,5 +1,6 @@
 import { Howl } from 'howler'
 import useAudio from '../store/use-audio'
+import { requireDefined } from './typed-access'
 
 // Per-sound variation config. Playback rate also shifts pitch (one semitone ≈ 1.0595×),
 // so a rate range of ~0.88–1.12 reads as a subtle ±2 semitones — enough to kill the
@@ -100,7 +101,7 @@ export function playSFX(name: SFXName) {
     console.warn(`SFX not found: ${name}`)
     return
   }
-  const config = SFX[name]!
+  const config = requireDefined(SFX[name])
 
   // Drop rapid repeats — two plays of the same SFX within minIntervalMs just
   // smear into noise, they don't add useful information.

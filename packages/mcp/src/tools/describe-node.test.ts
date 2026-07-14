@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerDescribeNode } from './describe-node'
 
 describe('describe_node', () => {
@@ -15,7 +16,7 @@ describe('describe_node', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerDescribeNode(server, bridge)
+    registerDescribeNode(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -24,17 +25,18 @@ describe('describe_node', () => {
   test('describes a wall with human sentence', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
     expect(level).toBeDefined()
+    if (!level) return
     const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
-    bridge.createNode(wall, level!.id)
+    bridge.createNode(wall, level.id)
 
     const result = await client.callTool({
       name: 'describe_node',
       arguments: { id: wall.id },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.type).toBe('wall')
-    expect(parsed.parentId).toBe(level!.id)
+    expect(parsed.parentId).toBe(level.id)
     expect(typeof parsed.description).toBe('string')
     expect(parsed.description).toContain('Wall from')
     expect(Array.isArray(parsed.ancestryIds)).toBe(true)
@@ -43,14 +45,15 @@ describe('describe_node', () => {
   })
 
   test('ancestry for wall includes level and building', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [3, 0] })
     bridge.createNode(wall, level.id)
     const result = await client.callTool({
       name: 'describe_node',
       arguments: { id: wall.id },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.ancestryIds).toContain(level.id)
   })
 

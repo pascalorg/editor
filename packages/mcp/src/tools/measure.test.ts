@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerMeasure } from './measure'
 
 describe('measure', () => {
@@ -15,14 +16,15 @@ describe('measure', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerMeasure(server, bridge)
+    registerMeasure(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('computes distance between two wall midpoints', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const a = WallNode.parse({ start: [0, 0], end: [2, 0] })
     const b = WallNode.parse({ start: [10, 0], end: [12, 0] })
     bridge.createNode(a, level.id)
@@ -32,14 +34,15 @@ describe('measure', () => {
       name: 'measure',
       arguments: { fromId: a.id, toId: b.id },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     // Midpoint a = (1,0,0); midpoint b = (11,0,0) — distance 10.
     expect(parsed.distanceMeters).toBeCloseTo(10, 5)
     expect(parsed.units).toBe('meters')
   })
 
   test('computes zone area via shoelace for self-measurement', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     // 4x4 square centred at origin — area 16.
     const zone = ZoneNode.parse({
       name: 'Kitchen',
@@ -56,7 +59,7 @@ describe('measure', () => {
       name: 'measure',
       arguments: { fromId: zone.id, toId: zone.id },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.distanceMeters).toBe(0)
     expect(parsed.areaSqMeters).toBeCloseTo(16, 5)
   })

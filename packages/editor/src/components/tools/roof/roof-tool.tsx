@@ -16,7 +16,6 @@ import { BufferGeometry, DoubleSide, type Group, type Line, Vector3 } from 'thre
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -126,12 +125,10 @@ type PreviewState = {
 
 export const RoofTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
-  const outlineRef = useRef<Line>(null!)
+  const outlineRef = useRef<Line | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
-  const setTool = useEditor((state) => state.setTool)
-  const setMode = useEditor((state) => state.setMode)
 
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => {
@@ -149,7 +146,10 @@ export const RoofTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
-    outlineRef.current.geometry = new BufferGeometry()
+    const outline = outlineRef.current
+    if (!outline) return
+
+    outline.geometry = new BufferGeometry()
 
     const updateOutline = (
       corner1: [number, number, number],
@@ -165,9 +165,9 @@ export const RoofTool: React.FC = () => {
         new Vector3(corner1[0], gridY, corner1[2]),
       ]
 
-      outlineRef.current.geometry.dispose()
-      outlineRef.current.geometry = new BufferGeometry().setFromPoints(groundPoints)
-      outlineRef.current.visible = true
+      outline.geometry.dispose()
+      outline.geometry = new BufferGeometry().setFromPoints(groundPoints)
+      outline.visible = true
     }
 
     const onGridMove = (event: GridEvent) => {
@@ -221,7 +221,7 @@ export const RoofTool: React.FC = () => {
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 
         corner1Ref.current = null
-        outlineRef.current.visible = false
+        outline.visible = false
       } else {
         corner1Ref.current = [gridX, y, gridZ]
         setPreview((prev) => ({
@@ -235,7 +235,7 @@ export const RoofTool: React.FC = () => {
       if (corner1Ref.current) {
         markToolCancelConsumed()
         corner1Ref.current = null
-        outlineRef.current.visible = false
+        outline.visible = false
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
     }
@@ -268,11 +268,9 @@ export const RoofTool: React.FC = () => {
     <group>
       <CursorSphere ref={cursorRef} />
 
-      {/* @ts-ignore */}
-      <line
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
-        // @ts-expect-error
         ref={outlineRef}
         renderOrder={1}
         visible={false}
@@ -286,7 +284,7 @@ export const RoofTool: React.FC = () => {
           opacity={0.3}
           transparent
         />
-      </line>
+      </threeLine>
 
       {corner1 && (
         <CursorSphere

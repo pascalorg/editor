@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { EDITOR_LAYER } from './../../../lib/constants'
 import { sfxEmitter } from './../../../lib/sfx-bus'
-import useEditor from './../../../store/use-editor'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_OFFSET = 0.02
@@ -87,13 +86,12 @@ const isValidPoint = (pt: [number, number] | null | undefined): pt is [number, n
 
 export const ZoneTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
-  const mainLineRef = useRef<Line>(null!)
-  const closingLineRef = useRef<Line>(null!)
+  const mainLineRef = useRef<Line | null>(null)
+  const closingLineRef = useRef<Line | null>(null)
   const pointsRef = useRef<Array<[number, number]>>([])
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
   const levelYRef = useRef(0) // Track current level Y position
   const currentLevelId = useViewer((state) => state.selection.levelId)
-  const setTool = useEditor((state) => state.setTool)
 
   // Preview state for reactive rendering (for shape and point markers)
   const [preview, setPreview] = useState<PreviewState>({
@@ -105,19 +103,23 @@ export const ZoneTool: React.FC = () => {
   useEffect(() => {
     if (!currentLevelId) return
 
+    const mainLine = mainLineRef.current
+    const closingLine = closingLineRef.current
+    if (!mainLine || !closingLine) return
+
     let cursorPosition: [number, number] = [0, 0]
 
     // Initialize line geometries
-    mainLineRef.current.geometry = new BufferGeometry()
-    closingLineRef.current.geometry = new BufferGeometry()
+    mainLine.geometry = new BufferGeometry()
+    closingLine.geometry = new BufferGeometry()
 
     const updateLines = () => {
       const points = pointsRef.current
       const y = levelYRef.current + Y_OFFSET
 
       if (points.length === 0) {
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
+        mainLine.visible = false
+        closingLine.visible = false
         return
       }
 
@@ -135,11 +137,11 @@ export const ZoneTool: React.FC = () => {
 
       // Update main line geometry
       if (linePoints.length >= 2) {
-        mainLineRef.current.geometry.dispose()
-        mainLineRef.current.geometry = new BufferGeometry().setFromPoints(linePoints)
-        mainLineRef.current.visible = true
+        mainLine.geometry.dispose()
+        mainLine.geometry = new BufferGeometry().setFromPoints(linePoints)
+        mainLine.visible = true
       } else {
-        mainLineRef.current.visible = false
+        mainLine.visible = false
       }
 
       // Update closing line (from cursor back to first point)
@@ -151,12 +153,12 @@ export const ZoneTool: React.FC = () => {
             new Vector3(snapped[0], y, snapped[1]),
             new Vector3(firstPoint[0], y, firstPoint[1]),
           ]
-          closingLineRef.current.geometry.dispose()
-          closingLineRef.current.geometry = new BufferGeometry().setFromPoints(closingPoints)
-          closingLineRef.current.visible = true
+          closingLine.geometry.dispose()
+          closingLine.geometry = new BufferGeometry().setFromPoints(closingPoints)
+          closingLine.visible = true
         }
       } else {
-        closingLineRef.current.visible = false
+        closingLine.visible = false
       }
     }
 
@@ -233,8 +235,8 @@ export const ZoneTool: React.FC = () => {
         // Reset state
         pointsRef.current = []
         setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current })
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
+        mainLine.visible = false
+        closingLine.visible = false
       } else {
         // Add point to polygon
         pointsRef.current = [...pointsRef.current, clickPoint]
@@ -252,8 +254,8 @@ export const ZoneTool: React.FC = () => {
         // Reset state
         pointsRef.current = []
         setPreview({ points: [], cursorPoint: null, levelY: levelYRef.current })
-        mainLineRef.current.visible = false
-        closingLineRef.current.visible = false
+        mainLine.visible = false
+        closingLine.visible = false
       }
     }
 
@@ -328,25 +330,21 @@ export const ZoneTool: React.FC = () => {
       )}
 
       {/* Main line - uses native line element with TSL-compatible material */}
-      {/* @ts-ignore */}
-      <line
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
-        // @ts-expect-error
         ref={mainLineRef}
         renderOrder={1}
         visible={false}
       >
         <bufferGeometry />
         <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
-      </line>
+      </threeLine>
 
       {/* Closing line - uses native line element with TSL-compatible material */}
-      {/* @ts-ignore */}
-      <line
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
-        // @ts-expect-error
         ref={closingLineRef}
         renderOrder={1}
         visible={false}
@@ -360,7 +358,7 @@ export const ZoneTool: React.FC = () => {
           opacity={0.5}
           transparent
         />
-      </line>
+      </threeLine>
 
       {/* Point markers */}
       {points.map(([x, z], index) =>

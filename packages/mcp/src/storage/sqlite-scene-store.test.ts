@@ -4,6 +4,7 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { BuildingNode, SiteNode, WallNode } from '@pascal-app/core/schema'
 import {
   resolveDefaultDatabasePath,
   SqliteSceneStore,
@@ -12,26 +13,14 @@ import {
 import { SceneInvalidError, SceneTooLargeError, SceneVersionConflictError } from './types'
 
 function makeGraph(overrides: Partial<SceneGraph> = {}): SceneGraph {
+  const site = SiteNode.parse({ id: 'site_abc', parentId: null })
+  const building = BuildingNode.parse({ id: 'building_def', parentId: site.id })
   return {
     nodes: {
-      site_abc: {
-        object: 'node',
-        id: 'site_abc',
-        type: 'site',
-        parentId: null,
-        visible: true,
-        metadata: {},
-      },
-      building_def: {
-        object: 'node',
-        id: 'building_def',
-        type: 'building',
-        parentId: 'site_abc',
-        visible: true,
-        metadata: {},
-      },
-    } as SceneGraph['nodes'],
-    rootNodeIds: ['site_abc'] as SceneGraph['rootNodeIds'],
+      [site.id]: site,
+      [building.id]: building,
+    },
+    rootNodeIds: [site.id],
     ...overrides,
   }
 }
@@ -109,8 +98,9 @@ describe('SqliteSceneStore', () => {
 
     const loaded = await store.load('kitchen')
     expect(loaded).not.toBeNull()
-    expect(loaded!.graph).toEqual(graph)
-    expect(loaded!.name).toBe('Kitchen')
+    if (!loaded) return
+    expect(loaded.graph).toEqual(graph)
+    expect(loaded.name).toBe('Kitchen')
   })
 
   test('stores optional metadata verbatim', async () => {
@@ -235,25 +225,19 @@ describe('SqliteSceneStore', () => {
       kind: 'save_scene',
       graph,
     })
+    const wall = WallNode.parse({
+      id: 'wall_new',
+      parentId: 'building_def',
+      start: [0, 0],
+      end: [1, 0],
+      thickness: 0.1,
+      height: 2.5,
+    })
     const updatedGraph = makeGraph({
       nodes: {
         ...graph.nodes,
-        wall_new: {
-          object: 'node',
-          id: 'wall_new',
-          type: 'wall',
-          parentId: 'building_def',
-          visible: true,
-          metadata: {},
-          children: [],
-          start: [0, 0],
-          end: [1, 0],
-          thickness: 0.1,
-          height: 2.5,
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-      } as SceneGraph['nodes'],
+        [wall.id]: wall,
+      },
     })
     const second = await store.appendSceneEvent({
       sceneId: meta.id,
@@ -269,8 +253,11 @@ describe('SqliteSceneStore', () => {
     ])
     const afterFirst = await store.listSceneEvents('live', { afterEventId: first.eventId })
     expect(afterFirst).toHaveLength(1)
-    expect(afterFirst[0]!.eventId).toBe(second.eventId)
-    expect(afterFirst[0]!.graph.nodes.wall_new).toBeDefined()
+    const afterFirstEvent = afterFirst[0]
+    expect(afterFirstEvent).toBeDefined()
+    if (!afterFirstEvent) return
+    expect(afterFirstEvent.eventId).toBe(second.eventId)
+    expect(afterFirstEvent.graph.nodes[wall.id]).toBeDefined()
   })
 
   test('validates name and scene size', async () => {

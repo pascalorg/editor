@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LevelNode, SlabNode, StairNode, StairSegmentNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerApplyPatch } from './apply-patch'
 
 describe('apply_patch', () => {
@@ -15,14 +16,15 @@ describe('apply_patch', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerApplyPatch(server, bridge)
+    registerApplyPatch(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('applies a batch of create + update', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
 
     const result = await client.callTool({
@@ -35,7 +37,7 @@ describe('apply_patch', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.appliedOps).toBe(2)
     expect(parsed.createdIds).toContain(wall.id)
     // Wait a tick for RAF-scheduled dirty-marking to settle.
@@ -46,8 +48,10 @@ describe('apply_patch', () => {
   })
 
   test('syncs derived stair openings after stair patches', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!ground) throw new Error('expected a ground node')
     const upper = LevelNode.parse({ name: 'Upper Floor', level: 1 })
     const upperSlab = SlabNode.parse({
       name: 'Upper Floor Slab',
@@ -108,7 +112,7 @@ describe('apply_patch', () => {
     const result = await client.callTool({
       name: 'apply_patch',
       arguments: {
-        patches: [{ op: 'nope', garbage: true } as unknown as object],
+        patches: [{ op: 'nope', garbage: true }],
       },
     })
     expect(result.isError).toBe(true)

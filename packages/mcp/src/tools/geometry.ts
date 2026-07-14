@@ -47,8 +47,9 @@ export function polygonArea(points: Vec2[]): number {
   if (points.length < 3) return 0
   let area = 0
   for (let i = 0; i < points.length; i++) {
-    const current = points[i]!
-    const next = points[(i + 1) % points.length]!
+    const current = points[i]
+    const next = points[(i + 1) % points.length]
+    if (!current || !next) continue
     area += current[0] * next[1] - next[0] * current[1]
   }
   return Math.abs(area) / 2
@@ -111,8 +112,9 @@ export function pointInPolygon(point: Vec2, polygon: Vec2[], includeBoundary = t
   const [x, z] = point
 
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]!
-    const b = polygon[j]!
+    const a = polygon[i]
+    const b = polygon[j]
+    if (!a || !b) continue
     if (pointOnSegment(point, a, b)) return includeBoundary
 
     const intersects =

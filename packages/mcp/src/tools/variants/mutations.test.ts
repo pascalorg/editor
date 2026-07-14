@@ -1,207 +1,175 @@
 import { describe, expect, test } from 'bun:test'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNodeId } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  BuildingNode,
+  DoorNode,
+  FenceNode,
+  LevelNode,
+  SiteNode,
+  WallNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 import { applyMutation, mulberry32 } from './mutations'
 
+function nodesById(nodes: AnyNode[]): SceneGraph['nodes'] {
+  const out: SceneGraph['nodes'] = {}
+  for (const node of nodes) out[node.id] = node
+  return out
+}
+
 function makeBaseGraph(): SceneGraph {
-  const nodes: SceneGraph['nodes'] = {
-    site_a: {
-      object: 'node',
-      id: 'site_a',
-      type: 'site',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      polygon: {
-        type: 'polygon',
-        points: [
-          [-10, -10],
-          [10, -10],
-          [10, 10],
-          [-10, 10],
-        ],
-      },
-      children: [],
-    },
-    building_a: {
-      object: 'node',
-      id: 'building_a',
-      type: 'building',
-      parentId: 'site_a',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      children: ['level_a'],
-    },
-    level_a: {
-      object: 'node',
-      id: 'level_a',
-      type: 'level',
-      parentId: 'building_a',
-      visible: true,
-      metadata: {},
-      children: ['wall_n', 'wall_s', 'wall_e', 'wall_w', 'wall_mid', 'zone_kitchen', 'zone_living'],
-    },
-    wall_n: {
-      object: 'node',
-      id: 'wall_n',
-      type: 'wall',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      start: [-10, 10],
-      end: [10, 10],
-      thickness: 0.1,
-      height: 2.5,
-      children: [],
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    },
-    wall_s: {
-      object: 'node',
-      id: 'wall_s',
-      type: 'wall',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      start: [-10, -10],
-      end: [10, -10],
-      thickness: 0.1,
-      height: 2.5,
-      children: [],
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    },
-    wall_e: {
-      object: 'node',
-      id: 'wall_e',
-      type: 'wall',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      start: [10, -10],
-      end: [10, 10],
-      thickness: 0.1,
-      height: 2.5,
-      children: [],
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    },
-    wall_w: {
-      object: 'node',
-      id: 'wall_w',
-      type: 'wall',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      start: [-10, -10],
-      end: [-10, 10],
-      thickness: 0.1,
-      height: 2.5,
-      children: [],
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    },
-    wall_mid: {
-      object: 'node',
-      id: 'wall_mid',
-      type: 'wall',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      start: [-5, 0],
-      end: [5, 0],
-      thickness: 0.1,
-      height: 2.5,
-      children: ['door_mid'],
-      frontSide: 'unknown',
-      backSide: 'unknown',
-    },
-    door_mid: {
-      object: 'node',
-      id: 'door_mid',
-      type: 'door',
-      parentId: 'wall_mid',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      wallId: 'wall_mid',
-      width: 0.9,
-      height: 2.1,
-      frameThickness: 0.05,
-      frameDepth: 0.07,
-      threshold: true,
-      thresholdHeight: 0.02,
-      hingesSide: 'left',
-      swingDirection: 'inward',
-      segments: [],
-      handle: true,
-      handleHeight: 1.05,
-      handleSide: 'right',
-      contentPadding: [0.04, 0.04],
-      doorCloser: false,
-      panicBar: false,
-      panicBarHeight: 1.0,
-    },
-    zone_kitchen: {
-      object: 'node',
-      id: 'zone_kitchen',
-      type: 'zone',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      name: 'Kitchen',
-      polygon: [
-        [-5, 0],
-        [5, 0],
-        [5, 10],
-        [-5, 10],
+  const site = SiteNode.parse({
+    id: 'site_a',
+    parentId: null,
+    polygon: {
+      type: 'polygon',
+      points: [
+        [-10, -10],
+        [10, -10],
+        [10, 10],
+        [-10, 10],
       ],
-      color: '#ff0000',
     },
-    zone_living: {
-      object: 'node',
-      id: 'zone_living',
-      type: 'zone',
-      parentId: 'level_a',
-      visible: true,
-      metadata: {},
-      name: 'Living',
-      polygon: [
-        [-5, -10],
-        [5, -10],
-        [5, 0],
-        [-5, 0],
-      ],
-      color: '#00ff00',
-    },
-    fence_1: {
-      object: 'node',
-      id: 'fence_1',
-      type: 'fence',
-      parentId: 'site_a',
-      visible: true,
-      metadata: {},
-      start: [-8, -8],
-      end: [8, -8],
-      height: 1.8,
-      thickness: 0.08,
-      baseHeight: 0.22,
-      postSpacing: 2,
-      postSize: 0.1,
-      topRailHeight: 0.04,
-      groundClearance: 0,
-      edgeInset: 0.015,
-      baseStyle: 'grounded',
-      color: '#ffffff',
-      style: 'slat',
-    },
-  } as unknown as SceneGraph['nodes']
+    children: [],
+  })
+  const building = BuildingNode.parse({
+    id: 'building_a',
+    parentId: 'site_a',
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    children: ['level_a'],
+  })
+  const level = LevelNode.parse({
+    id: 'level_a',
+    parentId: 'building_a',
+    children: ['wall_n', 'wall_s', 'wall_e', 'wall_w', 'wall_mid', 'zone_kitchen', 'zone_living'],
+  })
+  const wallN = WallNode.parse({
+    id: 'wall_n',
+    parentId: 'level_a',
+    start: [-10, 10],
+    end: [10, 10],
+    thickness: 0.1,
+    height: 2.5,
+    children: [],
+  })
+  const wallS = WallNode.parse({
+    id: 'wall_s',
+    parentId: 'level_a',
+    start: [-10, -10],
+    end: [10, -10],
+    thickness: 0.1,
+    height: 2.5,
+    children: [],
+  })
+  const wallE = WallNode.parse({
+    id: 'wall_e',
+    parentId: 'level_a',
+    start: [10, -10],
+    end: [10, 10],
+    thickness: 0.1,
+    height: 2.5,
+    children: [],
+  })
+  const wallW = WallNode.parse({
+    id: 'wall_w',
+    parentId: 'level_a',
+    start: [-10, -10],
+    end: [-10, 10],
+    thickness: 0.1,
+    height: 2.5,
+    children: [],
+  })
+  const wallMid = WallNode.parse({
+    id: 'wall_mid',
+    parentId: 'level_a',
+    start: [-5, 0],
+    end: [5, 0],
+    thickness: 0.1,
+    height: 2.5,
+    children: ['door_mid'],
+  })
+  const doorMid = DoorNode.parse({
+    id: 'door_mid',
+    parentId: 'wall_mid',
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    wallId: 'wall_mid',
+    width: 0.9,
+    height: 2.1,
+    frameThickness: 0.05,
+    frameDepth: 0.07,
+    threshold: true,
+    thresholdHeight: 0.02,
+    hingesSide: 'left',
+    swingDirection: 'inward',
+    segments: [],
+    handle: true,
+    handleHeight: 1.05,
+    handleSide: 'right',
+    contentPadding: [0.04, 0.04],
+    doorCloser: false,
+    panicBar: false,
+    panicBarHeight: 1.0,
+  })
+  const zoneKitchen = ZoneNode.parse({
+    id: 'zone_kitchen',
+    parentId: 'level_a',
+    name: 'Kitchen',
+    polygon: [
+      [-5, 0],
+      [5, 0],
+      [5, 10],
+      [-5, 10],
+    ],
+    color: '#ff0000',
+  })
+  const zoneLiving = ZoneNode.parse({
+    id: 'zone_living',
+    parentId: 'level_a',
+    name: 'Living',
+    polygon: [
+      [-5, -10],
+      [5, -10],
+      [5, 0],
+      [-5, 0],
+    ],
+    color: '#00ff00',
+  })
+  const fence = FenceNode.parse({
+    id: 'fence_1',
+    parentId: 'site_a',
+    start: [-8, -8],
+    end: [8, -8],
+    height: 1.8,
+    thickness: 0.08,
+    baseHeight: 0.22,
+    postSpacing: 2,
+    postSize: 0.1,
+    topRailHeight: 0.04,
+    groundClearance: 0,
+    edgeInset: 0.015,
+    baseStyle: 'grounded',
+    color: '#ffffff',
+    style: 'slat',
+  })
   return {
-    nodes,
-    rootNodeIds: ['site_a'] as AnyNodeId[],
+    nodes: nodesById([
+      site,
+      building,
+      level,
+      wallN,
+      wallS,
+      wallE,
+      wallW,
+      wallMid,
+      doorMid,
+      zoneKitchen,
+      zoneLiving,
+      fence,
+    ]),
+    rootNodeIds: [site.id],
   }
 }
 
@@ -309,43 +277,32 @@ describe('applyMutation: open-plan', () => {
   })
 
   test('skips gracefully when there are no interior walls', () => {
+    const site = SiteNode.parse({
+      id: 'site_a',
+      parentId: null,
+      polygon: {
+        type: 'polygon',
+        points: [
+          [-10, -10],
+          [10, -10],
+          [10, 10],
+          [-10, 10],
+        ],
+      },
+      children: [],
+    })
+    const wallN = WallNode.parse({
+      id: 'wall_n',
+      parentId: 'site_a',
+      start: [-10, 10],
+      end: [10, 10],
+      thickness: 0.1,
+      height: 2.5,
+      children: [],
+    })
     const graph: SceneGraph = {
-      nodes: {
-        site_a: {
-          object: 'node',
-          id: 'site_a',
-          type: 'site',
-          parentId: null,
-          visible: true,
-          metadata: {},
-          polygon: {
-            type: 'polygon',
-            points: [
-              [-10, -10],
-              [10, -10],
-              [10, 10],
-              [-10, 10],
-            ],
-          },
-          children: [],
-        },
-        wall_n: {
-          object: 'node',
-          id: 'wall_n',
-          type: 'wall',
-          parentId: 'site_a',
-          visible: true,
-          metadata: {},
-          start: [-10, 10],
-          end: [10, 10],
-          thickness: 0.1,
-          height: 2.5,
-          children: [],
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-      } as unknown as SceneGraph['nodes'],
-      rootNodeIds: ['site_a'] as AnyNodeId[],
+      nodes: nodesById([site, wallN]),
+      rootNodeIds: [site.id],
     }
     const out = applyMutation(graph, mulberry32(9), 'open-plan')
     expect(Object.keys(out.nodes)).toEqual(Object.keys(graph.nodes))
@@ -380,28 +337,23 @@ describe('applyMutation: fence-style', () => {
 
 describe('applyMutation: no-op behaviour', () => {
   test('wall-thickness on a graph with no walls leaves nodes unchanged', () => {
+    const site = SiteNode.parse({
+      id: 'site_a',
+      parentId: null,
+      polygon: {
+        type: 'polygon',
+        points: [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ],
+      },
+      children: [],
+    })
     const graph: SceneGraph = {
-      nodes: {
-        site_a: {
-          object: 'node',
-          id: 'site_a',
-          type: 'site',
-          parentId: null,
-          visible: true,
-          metadata: {},
-          polygon: {
-            type: 'polygon',
-            points: [
-              [-1, -1],
-              [1, -1],
-              [1, 1],
-              [-1, 1],
-            ],
-          },
-          children: [],
-        },
-      } as unknown as SceneGraph['nodes'],
-      rootNodeIds: ['site_a'] as AnyNodeId[],
+      nodes: nodesById([site]),
+      rootNodeIds: [site.id],
     }
     const out = applyMutation(graph, mulberry32(8), 'wall-thickness')
     expect(JSON.stringify(out.nodes)).toBe(JSON.stringify(graph.nodes))

@@ -85,11 +85,11 @@ async function resolveImageBlock(image: string): Promise<ImageBlock> {
   }
 
   const dataUriMatch = image.match(DATA_URI_RE)
-  if (dataUriMatch) {
+  if (dataUriMatch?.[1] && dataUriMatch[2]) {
     return {
       type: 'image',
-      mimeType: dataUriMatch[1]!,
-      data: dataUriMatch[2]!,
+      mimeType: dataUriMatch[1],
+      data: dataUriMatch[2],
     }
   }
 

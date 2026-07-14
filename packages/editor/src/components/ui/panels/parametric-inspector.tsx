@@ -13,7 +13,7 @@ import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isMovingNode } from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { SegmentedControl } from '../controls/segmented-control'
@@ -64,9 +64,9 @@ export function ParametricInspector() {
   const handleMove = useCallback(() => {
     if (!selectedId) return
     const node = useScene.getState().nodes[selectedId]
-    if (!node) return
+    if (!node || !isMovingNode(node)) return
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setMovingNode(node as any)
+    useEditor.getState().setMovingNode(node)
     setSelection({ selectedIds: [] })
   }, [selectedId, setSelection])
 

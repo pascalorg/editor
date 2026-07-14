@@ -76,15 +76,15 @@ export default function RoofSegmentPanel() {
     if (!node?.parentId) return
     triggerSFX('sfx:item-pick')
 
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+    const { id: _id, metadata, position, ...rest } = structuredClone(node)
+    const baseMetadata =
+      metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
     // Offset slightly so it's visible
-    duplicateInfo.position = [
-      duplicateInfo.position[0] + 1,
-      duplicateInfo.position[1],
-      duplicateInfo.position[2] + 1,
-    ]
+    const duplicateInfo = {
+      ...rest,
+      metadata: { ...baseMetadata, isNew: true },
+      position: [position[0] + 1, position[1], position[2] + 1],
+    }
 
     try {
       const duplicate = RoofSegmentNodeSchema.parse(duplicateInfo)

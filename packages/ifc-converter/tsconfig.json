@@ -6,12 +6,7 @@
     "noEmit": false,
     "composite": true,
     "incremental": true,
-    "types": ["bun"],
-    // Migrated from a repo without `noUncheckedIndexedAccess`. The
-    // existing index access patterns (Mat4 / IFC entity arrays) are
-    // surrounded by length checks the type system can't follow. Re-enable
-    // when the file is split into per-element modules.
-    "noUncheckedIndexedAccess": false
+    "types": ["bun"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

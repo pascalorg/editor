@@ -1,5 +1,14 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import {
+  BuildingNode,
+  DoorNode,
+  LevelNode,
+  SiteNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 
 /**
  * 40 m² studio apartment — a single open room with one window, one front door
@@ -24,13 +33,9 @@ type StudioNodes = {
 }
 
 function buildNodes(): StudioNodes {
-  const site: AnyNode = {
-    object: 'node',
-    id: 'site_empty' as AnyNodeId,
-    type: 'site',
+  const site: AnyNode = SiteNode.parse({
+    id: 'site_empty',
     parentId: null,
-    visible: true,
-    metadata: {},
     polygon: {
       type: 'polygon',
       points: [
@@ -40,33 +45,25 @@ function buildNodes(): StudioNodes {
         [-15, 15],
       ],
     },
-    children: ['building_empty' as AnyNodeId],
-  } as unknown as AnyNode
+    children: ['building_empty'],
+  })
 
-  const building: AnyNode = {
-    object: 'node',
-    id: 'building_empty' as AnyNodeId,
-    type: 'building',
-    parentId: 'site_empty' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const building: AnyNode = BuildingNode.parse({
+    id: 'building_empty',
+    parentId: 'site_empty',
     position: [0, 0, 0],
     rotation: [0, 0, 0],
-    children: ['level_0' as AnyNodeId],
-  } as unknown as AnyNode
+    children: ['level_0'],
+  })
 
   // Walls with deterministic ids; child ids are listed below after doors/windows
   // are created, so we fill this array after computing them.
   const wallIds = ['wall_n', 'wall_e', 'wall_s', 'wall_w'] as const
 
   // South wall carries the front door; west wall carries the window.
-  const door: AnyNode = {
-    object: 'node',
-    id: 'door_front' as AnyNodeId,
-    type: 'door',
-    parentId: 'wall_s' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const door: AnyNode = DoorNode.parse({
+    id: 'door_front',
+    parentId: 'wall_s',
     wallId: 'wall_s',
     position: [0, 1.05, 0],
     rotation: [0, 0, 0],
@@ -103,15 +100,11 @@ function buildNodes(): StudioNodes {
     doorCloser: false,
     panicBar: false,
     panicBarHeight: 1.0,
-  } as unknown as AnyNode
+  })
 
-  const windowNode: AnyNode = {
-    object: 'node',
-    id: 'window_w' as AnyNodeId,
-    type: 'window',
-    parentId: 'wall_w' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const windowNode: AnyNode = WindowNode.parse({
+    id: 'window_w',
+    parentId: 'wall_w',
     wallId: 'wall_w',
     position: [0, 1.2, 0],
     rotation: [0, 0, 0],
@@ -126,15 +119,11 @@ function buildNodes(): StudioNodes {
     sill: true,
     sillDepth: 0.08,
     sillThickness: 0.03,
-  } as unknown as AnyNode
+  })
 
-  const wallNorth: AnyNode = {
-    object: 'node',
-    id: 'wall_n' as AnyNodeId,
-    type: 'wall',
-    parentId: 'level_0' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const wallNorth: AnyNode = WallNode.parse({
+    id: 'wall_n',
+    parentId: 'level_0',
     children: [],
     thickness: 0.1,
     height: 2.5,
@@ -142,15 +131,11 @@ function buildNodes(): StudioNodes {
     end: [W, -D],
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  })
 
-  const wallEast: AnyNode = {
-    object: 'node',
-    id: 'wall_e' as AnyNodeId,
-    type: 'wall',
-    parentId: 'level_0' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const wallEast: AnyNode = WallNode.parse({
+    id: 'wall_e',
+    parentId: 'level_0',
     children: [],
     thickness: 0.1,
     height: 2.5,
@@ -158,15 +143,11 @@ function buildNodes(): StudioNodes {
     end: [W, D],
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  })
 
-  const wallSouth: AnyNode = {
-    object: 'node',
-    id: 'wall_s' as AnyNodeId,
-    type: 'wall',
-    parentId: 'level_0' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const wallSouth: AnyNode = WallNode.parse({
+    id: 'wall_s',
+    parentId: 'level_0',
     children: ['door_front'],
     thickness: 0.1,
     height: 2.5,
@@ -174,15 +155,11 @@ function buildNodes(): StudioNodes {
     end: [-W, D],
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  })
 
-  const wallWest: AnyNode = {
-    object: 'node',
-    id: 'wall_w' as AnyNodeId,
-    type: 'wall',
-    parentId: 'level_0' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const wallWest: AnyNode = WallNode.parse({
+    id: 'wall_w',
+    parentId: 'level_0',
     children: ['window_w'],
     thickness: 0.1,
     height: 2.5,
@@ -190,15 +167,11 @@ function buildNodes(): StudioNodes {
     end: [-W, -D],
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  })
 
-  const zone: AnyNode = {
-    object: 'node',
-    id: 'zone_living' as AnyNodeId,
-    type: 'zone',
-    parentId: 'level_0' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const zone: AnyNode = ZoneNode.parse({
+    id: 'zone_living',
+    parentId: 'level_0',
     name: 'Living / Kitchen',
     color: '#60a5fa',
     polygon: [
@@ -207,18 +180,14 @@ function buildNodes(): StudioNodes {
       [W, D],
       [-W, D],
     ],
-  } as unknown as AnyNode
+  })
 
-  const level: AnyNode = {
-    object: 'node',
-    id: 'level_0' as AnyNodeId,
-    type: 'level',
-    parentId: 'building_empty' as AnyNodeId,
-    visible: true,
-    metadata: {},
+  const level: AnyNode = LevelNode.parse({
+    id: 'level_0',
+    parentId: 'building_empty',
     level: 0,
-    children: [...wallIds, 'zone_living'] as AnyNodeId[],
-  } as unknown as AnyNode
+    children: [...wallIds, 'zone_living'],
+  })
 
   return {
     site,
@@ -235,12 +204,12 @@ function buildTemplate(): SceneGraph {
   const n = buildNodes()
   const nodes: Record<AnyNodeId, AnyNode> = {}
   for (const node of [n.site, n.building, n.level, ...n.walls, n.zone, n.door, n.window]) {
-    nodes[node.id as AnyNodeId] = node
+    nodes[node.id] = node
   }
 
   return {
     nodes,
-    rootNodeIds: ['site_empty'] as AnyNodeId[],
+    rootNodeIds: [n.site.id],
   }
 }
 

@@ -50,7 +50,7 @@ export function useNodeEvents<K extends AnyNodeType>(node: NodeByKind<K>, type: 
       // which often fails if the mouse moves even 1 pixel.
       emit('click', e)
     },
-    onClick: (e: ThreeEvent<PointerEvent>) => {
+    onClick: (_e: ThreeEvent<PointerEvent>) => {
       // Disable default R3F click since we synthesize it on pointerup
       // This prevents double-clicks from firing twice.
     },

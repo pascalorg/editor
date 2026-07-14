@@ -26,7 +26,7 @@ const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
 
 export const CustomCameraControls = () => {
-  const controls = useRef<CameraControlsImpl>(null!)
+  const controls = useRef<CameraControlsImpl | null>(null)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
@@ -174,8 +174,6 @@ export const CustomCameraControls = () => {
     const updateConfig = () => {
       if (!controls.current) return
 
-      const shift = keyState.shiftRight || keyState.shiftLeft
-      const control = keyState.controlRight || keyState.controlLeft
       const space = keyState.space
 
       const wheelAction =
@@ -302,6 +300,7 @@ export const CustomCameraControls = () => {
     const maxDim = Math.max(tempSize.x, tempSize.y, tempSize.z)
     const distance = Math.max(maxDim * 2, 15)
 
+    if (!controls.current) return
     controls.current.setLookAt(
       tempCenter.x + distance * 0.7,
       tempCenter.y + distance * 0.5,

@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { SiteNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerLoadScene } from './load-scene'
 import {
@@ -31,12 +32,11 @@ describe('load_scene', () => {
   })
 
   test('loads a stored scene and returns its SceneMeta', async () => {
-    const graph = {
-      nodes: {
-        root_a: { id: 'root_a', type: 'site', parentId: null, children: [] },
-      },
-      rootNodeIds: ['root_a'],
-    } as unknown as SceneGraph
+    const site = SiteNode.parse({ id: 'site_root', parentId: null, children: [] })
+    const graph: SceneGraph = {
+      nodes: { [site.id]: site },
+      rootNodeIds: [site.id],
+    }
     const meta = await store.save({ id: 'scene-one', name: 'One', graph })
 
     const result = await client.callTool({
@@ -49,7 +49,7 @@ describe('load_scene', () => {
     expect(parsed.id).toBe('scene-one')
     expect(parsed.name).toBe('One')
     expect(parsed.version).toBe(meta.version)
-    expect(bridge.getRootNodeIds()).toContain('root_a')
+    expect(bridge.getRootNodeIds()).toContain(site.id)
   })
 
   test('throws scene_not_found when id is unknown', async () => {

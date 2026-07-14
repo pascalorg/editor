@@ -9,7 +9,14 @@ import {
   screenUV,
   smoothstep,
   vec2,
+  vec3,
 } from 'three/tsl'
+
+// The TSL node types aren't cleanly exported from `three/tsl`. The scene/ink
+// color inputs are loose node handles at this shader boundary, but the result
+// is always a vec3 color node — pin that so the `vec4(...)` wrap at the call
+// site type-checks without an escape-hatch cast.
+type Vec3Node = ReturnType<typeof vec3>
 
 // Screen-space ink outline (SketchUp / Moebius look). Reads the scene-pass
 // depth + normal MRT and inks two signals:
@@ -44,7 +51,7 @@ export function inkedEdges({
   radius: number
   opacity: number
   sceneRgb: any
-}) {
+}): Vec3Node {
   const px = vec2(1, 1).div(screenSize).mul(radius)
   const uvN = screenUV
 
@@ -72,8 +79,12 @@ export function inkedEdges({
   )
   const normalEdge = smoothstep(float(0.01), float(0.05), nDiff)
 
-  // TSL's typed overloads are finicky across versions; the runtime is proven in
-  // the aesthetic sandbox, so cast at the mask/mix boundary.
-  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity), float(1))
-  return (mix as any)(sceneRgb, inkColor, edgeMask)
+  const edgeMask = min(max(depthEdge, normalEdge).mul(opacity), float(1))
+  // TSL's node types are not exported from `three/tsl`, so `sceneRgb`/`inkColor`
+  // stay loose node handles and `mix`'s overload resolves to its float form.
+  // At runtime this mixes two vec3 colors and produces a vec3; the two node
+  // types don't structurally overlap for a direct assertion, so an `unknown`
+  // bridge to `Vec3Node` is unavoidable — but it still hands callers a correct,
+  // non-`any` return type (which `vec4(...)` at the call site requires).
+  return mix(sceneRgb, inkColor, edgeMask) as unknown as Vec3Node
 }

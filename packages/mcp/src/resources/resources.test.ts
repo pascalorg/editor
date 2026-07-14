@@ -8,6 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations, type SceneOperations } from '../operations'
 import { registerAgentGuide } from './agent-guide'
 import { registerCatalogItems } from './catalog-items'
 import { registerConstraints } from './constraints'
@@ -22,11 +23,11 @@ type ClientServerPair = {
 }
 
 async function spinUp(
-  register: (server: McpServer, bridge: SceneBridge) => void,
+  register: (server: McpServer, operations: SceneOperations) => void,
 ): Promise<ClientServerPair> {
   const bridge = new SceneBridge()
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  register(server, bridge)
+  register(server, createSceneOperations({ bridge }))
   const client = new Client({ name: 'test-client', version: '0.0.0' })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])

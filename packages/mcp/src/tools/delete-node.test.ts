@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerDeleteNode } from './delete-node'
 
 describe('delete_node', () => {
@@ -15,14 +16,15 @@ describe('delete_node', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerDeleteNode(server, bridge)
+    registerDeleteNode(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('deletes a leaf node', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [2, 0] })
     bridge.createNode(wall, level.id)
 
@@ -31,13 +33,14 @@ describe('delete_node', () => {
       arguments: { id: wall.id },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.deletedIds).toContain(wall.id)
     expect(bridge.getNode(wall.id)).toBeNull()
   })
 
   test('refuses to delete a node with children without cascade', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
     const result = await client.callTool({
       name: 'delete_node',
       arguments: { id: building.id },
@@ -46,13 +49,14 @@ describe('delete_node', () => {
   })
 
   test('cascades when cascade=true', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
     const result = await client.callTool({
       name: 'delete_node',
       arguments: { id: building.id, cascade: true },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.deletedIds.length).toBeGreaterThanOrEqual(1)
     expect(bridge.getNode(building.id)).toBeNull()
   })

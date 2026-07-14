@@ -23,6 +23,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useState } from 'react'
 import * as THREE from 'three'
+import { at, first } from '../../lib/typed-access'
 
 const GUIDE_Y_OFFSET = 0.08
 const LABEL_LIFT = 0.08
@@ -353,8 +354,8 @@ function buildMeasurementGuide(
 
   let guideLength = 0
   for (let index = 1; index < guidePath.length; index += 1) {
-    const prev = guidePath[index - 1]!
-    const next = guidePath[index]!
+    const prev = at(guidePath, index - 1)
+    const next = at(guidePath, index)
     guideLength += Math.hypot(next[0] - prev[0], next[2] - prev[2])
   }
 
@@ -362,12 +363,12 @@ function buildMeasurementGuide(
 
   // Extension lines coming out of the extremity markers of the wall
   const extOvershoot = 0.04
-  const guideStart = guidePath[0]!
-  const guideEnd = guidePath[guidePath.length - 1]!
+  const guideStart = first(guidePath)
+  const guideEnd = at(guidePath, guidePath.length - 1)
   const extensionStartBase = curvedMeasurementPath ? guideStart : startLocal
   const extensionEndBase = curvedMeasurementPath ? guideEnd : endLocal
   const midpoint = curvedMeasurementPath
-    ? guidePath[Math.floor(guidePath.length / 2)]!
+    ? at(guidePath, Math.floor(guidePath.length / 2))
     : ([
         (guideStart[0] + guideEnd[0]) / 2,
         guideStart[1],
@@ -535,8 +536,8 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
 
     let total = 0
     for (let index = 1; index < guide.guidePath.length; index += 1) {
-      const prev = guide.guidePath[index - 1]!
-      const next = guide.guidePath[index]!
+      const prev = at(guide.guidePath, index - 1)
+      const next = at(guide.guidePath, index)
       total += Math.hypot(next[0] - prev[0], next[2] - prev[2])
     }
     return total

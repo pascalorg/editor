@@ -2,17 +2,20 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { createSceneApi } from '../registry/scene-api'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import useScene from '../store/use-scene'
+import { coerce } from '../test-utils'
 
 // Polyfills for bun:test (no DOM).
 type RafFn = (cb: (t: number) => void) => number
-;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= ((
-  cb: (t: number) => void,
-) => {
+type RafGlobals = {
+  requestAnimationFrame?: RafFn
+  cancelAnimationFrame?: (id: number) => void
+}
+const rafGlobals = coerce<RafGlobals>(globalThis)
+rafGlobals.requestAnimationFrame ??= (cb: (t: number) => void) => {
   cb(0)
   return 0
-}) as RafFn
-;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
-  () => {}
+}
+rafGlobals.cancelAnimationFrame ??= () => {}
 
 /**
  * Validates the "single-undo dance" pattern used by Stage D actions:
@@ -32,7 +35,7 @@ type RafFn = (cb: (t: number) => void) => number
 const FENCE_ID = 'fence_test' as AnyNodeId
 
 function makeFence(curveOffset: number): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: FENCE_ID,
     type: 'fence',
     parentId: null,
@@ -54,7 +57,7 @@ function makeFence(curveOffset: number): AnyNode {
     color: '#ffffff',
     style: 'slat',
     curveOffset,
-  } as unknown as AnyNode
+  })
 }
 
 describe('Single-undo dance', () => {

@@ -63,7 +63,7 @@ export function registerDuplicateLevel(server: McpServer, bridge: SceneOperation
 
       const payload = {
         newLevelId: newLevelId as string,
-        newNodeIds: result.createdIds as unknown as string[],
+        newNodeIds: result.createdIds as string[],
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

@@ -32,7 +32,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         if (p.op === 'create') {
           return {
             op: 'create',
-            node: p.node as unknown as AnyNode,
+            node: p.node as AnyNode,
             ...(p.parentId !== undefined ? { parentId: p.parentId as AnyNodeId } : {}),
           }
         }
@@ -55,8 +55,8 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         await publishLiveSceneSnapshot(bridge, 'apply_patch')
         const payload = {
           appliedOps: result.appliedOps,
-          deletedIds: result.deletedIds as unknown as string[],
-          createdIds: result.createdIds as unknown as string[],
+          deletedIds: result.deletedIds as string[],
+          createdIds: result.createdIds as string[],
         }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

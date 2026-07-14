@@ -1,4 +1,4 @@
-import type { AnyNodeDefinition, Plugin } from '@pascal-app/core'
+import type { Plugin } from '@pascal-app/core'
 import { boxVentDefinition } from './box-vent'
 import { buildingDefinition } from './building'
 import { ceilingDefinition } from './ceiling'
@@ -15,6 +15,7 @@ import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
 import { scanDefinition } from './scan'
+import { asNodeDefinition } from './shared/register-node'
 import { shelfDefinition } from './shelf'
 import { siteDefinition } from './site'
 import { skylightDefinition } from './skylight'
@@ -48,36 +49,36 @@ export const builtinPlugin: Plugin = {
   apiVersion: 1,
   nodes: [
     // Stage E-complete (full registry path)
-    shelfDefinition as unknown as AnyNodeDefinition,
-    spawnDefinition as unknown as AnyNodeDefinition,
-    wallDefinition as unknown as AnyNodeDefinition,
-    fenceDefinition as unknown as AnyNodeDefinition,
-    slabDefinition as unknown as AnyNodeDefinition,
-    ceilingDefinition as unknown as AnyNodeDefinition,
-    doorDefinition as unknown as AnyNodeDefinition,
-    windowDefinition as unknown as AnyNodeDefinition,
-    itemDefinition as unknown as AnyNodeDefinition,
+    asNodeDefinition(shelfDefinition),
+    asNodeDefinition(spawnDefinition),
+    asNodeDefinition(wallDefinition),
+    asNodeDefinition(fenceDefinition),
+    asNodeDefinition(slabDefinition),
+    asNodeDefinition(ceilingDefinition),
+    asNodeDefinition(doorDefinition),
+    asNodeDefinition(windowDefinition),
+    asNodeDefinition(itemDefinition),
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
-    columnDefinition as unknown as AnyNodeDefinition,
-    elevatorDefinition as unknown as AnyNodeDefinition,
-    roofDefinition as unknown as AnyNodeDefinition,
-    roofSegmentDefinition as unknown as AnyNodeDefinition,
-    stairDefinition as unknown as AnyNodeDefinition,
-    stairSegmentDefinition as unknown as AnyNodeDefinition,
-    zoneDefinition as unknown as AnyNodeDefinition,
-    siteDefinition as unknown as AnyNodeDefinition,
-    buildingDefinition as unknown as AnyNodeDefinition,
-    levelDefinition as unknown as AnyNodeDefinition,
-    guideDefinition as unknown as AnyNodeDefinition,
-    scanDefinition as unknown as AnyNodeDefinition,
+    asNodeDefinition(columnDefinition),
+    asNodeDefinition(elevatorDefinition),
+    asNodeDefinition(roofDefinition),
+    asNodeDefinition(roofSegmentDefinition),
+    asNodeDefinition(stairDefinition),
+    asNodeDefinition(stairSegmentDefinition),
+    asNodeDefinition(zoneDefinition),
+    asNodeDefinition(siteDefinition),
+    asNodeDefinition(buildingDefinition),
+    asNodeDefinition(levelDefinition),
+    asNodeDefinition(guideDefinition),
+    asNodeDefinition(scanDefinition),
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
-    boxVentDefinition as unknown as AnyNodeDefinition,
-    ridgeVentDefinition as unknown as AnyNodeDefinition,
-    chimneyDefinition as unknown as AnyNodeDefinition,
-    solarPanelDefinition as unknown as AnyNodeDefinition,
-    skylightDefinition as unknown as AnyNodeDefinition,
-    dormerDefinition as unknown as AnyNodeDefinition,
+    asNodeDefinition(boxVentDefinition),
+    asNodeDefinition(ridgeVentDefinition),
+    asNodeDefinition(chimneyDefinition),
+    asNodeDefinition(solarPanelDefinition),
+    asNodeDefinition(skylightDefinition),
+    asNodeDefinition(dormerDefinition),
   ],
 }
 

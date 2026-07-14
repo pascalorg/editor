@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
+import { coerce } from '../test-utils'
 import { loadPlugin, nodeRegistry, registerNode } from './registry'
 import type { AnyNodeDefinition, Plugin } from './types'
 
@@ -10,9 +11,9 @@ function makeDefinition(
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities: {},
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
     ...overrides,
@@ -98,11 +99,11 @@ describe('loadPlugin', () => {
   })
 
   test('throws on apiVersion mismatch', async () => {
-    const plugin = {
+    const plugin = coerce<Plugin>({
       id: 'old-plugin',
-      apiVersion: 99 as unknown as 1,
+      apiVersion: 99,
       nodes: [],
-    }
+    })
     await expect(loadPlugin(plugin)).rejects.toThrow(/apiVersion/)
   })
 

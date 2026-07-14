@@ -194,7 +194,10 @@ export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPL
   let totalLength = 0
 
   for (let index = 1; index < points.length; index += 1) {
-    totalLength += distance(points[index - 1]!, points[index]!)
+    const prev = points[index - 1]
+    const curr = points[index]
+    if (!prev || !curr) continue
+    totalLength += distance(prev, curr)
   }
 
   return totalLength
@@ -222,11 +225,15 @@ export function getWallSurfacePolygon(
     })
   }
 
-  if (left.length > 0 && right.length > 0) {
-    left[0] = miterOverrides?.startLeft ?? left[0]!
-    right[0] = miterOverrides?.startRight ?? right[0]!
-    left[left.length - 1] = miterOverrides?.endLeft ?? left[left.length - 1]!
-    right[right.length - 1] = miterOverrides?.endRight ?? right[right.length - 1]!
+  const firstLeft = left[0]
+  const firstRight = right[0]
+  const lastLeft = left[left.length - 1]
+  const lastRight = right[right.length - 1]
+  if (firstLeft && firstRight && lastLeft && lastRight) {
+    left[0] = miterOverrides?.startLeft ?? firstLeft
+    right[0] = miterOverrides?.startRight ?? firstRight
+    left[left.length - 1] = miterOverrides?.endLeft ?? lastLeft
+    right[right.length - 1] = miterOverrides?.endRight ?? lastRight
   }
 
   return [...right, ...left.reverse()]

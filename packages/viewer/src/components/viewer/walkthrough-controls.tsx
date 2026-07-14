@@ -2,9 +2,11 @@
 
 import { PointerLockControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef } from 'react'
+import { type ComponentRef, useCallback, useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import useViewer from '../../store/use-viewer'
+
+type PointerLockControlsImpl = ComponentRef<typeof PointerLockControls>
 
 const MOVE_SPEED = 5
 const EYE_HEIGHT = 1.6
@@ -14,8 +16,8 @@ const _forward = new Vector3()
 const _right = new Vector3()
 
 export const WalkthroughControls = () => {
-  const controlsRef = useRef<any>(null!)
-  const walkthroughMode = useViewer((s: any) => s.walkthroughMode)
+  const controlsRef = useRef<PointerLockControlsImpl | null>(null)
+  const walkthroughMode = useViewer((s) => s.walkthroughMode)
   const keys = useRef({ w: false, a: false, s: false, d: false })
   const camera = useThree((s) => s.camera)
 

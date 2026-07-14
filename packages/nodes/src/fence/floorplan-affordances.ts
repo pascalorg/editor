@@ -79,7 +79,7 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
     const fixedPoint: FencePlanPoint = endpoint === 'start' ? originalEnd : originalStart
 
     const parentId = node.parentId ?? null
-    const { walls, fences } = collectLevel(nodes, parentId)
+    const { fences } = collectLevel(nodes, parentId)
     const linkedOriginals = collectLinkedFences(fences, node.id, originalMovingPoint)
 
     const affectedIds: AnyNodeId[] = [node.id, ...linkedOriginals.map((l) => l.id)]

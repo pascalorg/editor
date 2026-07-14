@@ -1,6 +1,6 @@
 'use client'
 
-import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
+import { type FloorplanGeometry, type FloorplanStyle, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
 
 /**
@@ -29,35 +29,21 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
   return renderNode(geometry, 0)
 })
 
-function styleAttrs(g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> }) {
-  // Shared SVG attribute mapping for any styled primitive. Keeps the per-
-  // primitive switch arms terse and ensures new style fields land
-  // everywhere at once. `as any` avoids re-asserting every variant
-  // includes the style fields — they all do, except `group` (which is
-  // filtered out by the caller's type bound).
-  const s = g as unknown as {
-    fill?: string
-    fillOpacity?: number
-    stroke?: string
-    strokeWidth?: number
-    strokeDasharray?: string
-    strokeLinecap?: 'butt' | 'round' | 'square'
-    strokeLinejoin?: 'miter' | 'round' | 'bevel'
-    strokeOpacity?: number
-    opacity?: number
-    vectorEffect?: 'non-scaling-stroke'
-  }
+function styleAttrs(g: FloorplanStyle) {
+  // Shared SVG attribute mapping for any styled primitive. Callers pass a
+  // concrete styled variant, each of which intersects `FloorplanStyle`, so the
+  // fields are read directly off that common shape.
   return {
-    fill: s.fill ?? 'none',
-    fillOpacity: s.fillOpacity,
-    stroke: s.stroke,
-    strokeWidth: s.strokeWidth,
-    strokeDasharray: s.strokeDasharray,
-    strokeLinecap: s.strokeLinecap,
-    strokeLinejoin: s.strokeLinejoin,
-    strokeOpacity: s.strokeOpacity,
-    opacity: s.opacity,
-    vectorEffect: s.vectorEffect,
+    fill: g.fill ?? 'none',
+    fillOpacity: g.fillOpacity,
+    stroke: g.stroke,
+    strokeWidth: g.strokeWidth,
+    strokeDasharray: g.strokeDasharray,
+    strokeLinecap: g.strokeLinecap,
+    strokeLinejoin: g.strokeLinejoin,
+    strokeOpacity: g.strokeOpacity,
+    opacity: g.opacity,
+    vectorEffect: g.vectorEffect,
   }
 }
 

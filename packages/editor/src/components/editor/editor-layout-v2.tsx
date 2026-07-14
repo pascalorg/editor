@@ -2,6 +2,7 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { first } from '../../lib/typed-access'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -38,7 +39,7 @@ function LeftColumn({
   // Ensure active panel is a valid tab
   useEffect(() => {
     if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
-      setActivePanel(tabs[0]!.id)
+      setActivePanel(first(tabs).id)
     }
   }, [tabs, activePanel, setActivePanel])
 

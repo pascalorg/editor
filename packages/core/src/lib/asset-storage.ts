@@ -31,8 +31,9 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
     const id = url.replace('asset://', '')
 
     // Check cache first
-    if (urlCache.has(id)) {
-      return urlCache.get(id)!
+    const cached = urlCache.get(id)
+    if (cached !== undefined) {
+      return cached
     }
 
     try {

@@ -54,7 +54,7 @@ export default function RoofPanel() {
   // Flatten roof accessories hosted by any segment of this roof. Each
   // selector re-runs only when the relevant child list changes.
   const segmentIdSet = useScene(
-    useShallow((s) => {
+    useShallow((_s) => {
       if (!node) return new Set<string>()
       return new Set((node.children ?? []) as string[])
     }),

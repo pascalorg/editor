@@ -14,6 +14,7 @@
 
 import { z } from 'zod'
 import type { AnyNode, AnyNodeId } from '../../schema/types'
+import { coerce } from '../../test-utils'
 import { nodeRegistry, registerNode } from '../registry'
 import { cascadeDirty, type SpatialQuery } from '../relations-resolver'
 import type { AnyNodeDefinition, SceneApi } from '../types'
@@ -24,9 +25,9 @@ function makeDef(kind: string, relations?: AnyNodeDefinition['relations']): AnyN
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities: {},
     relations,
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
@@ -58,20 +59,20 @@ function buildFixture() {
       for (let d = 0; d < 2; d++) {
         const doorId = ID(`door_r${row}c${col}d${d}`)
         childIds.push(doorId)
-        nodes[doorId as string] = {
+        nodes[doorId as string] = coerce<AnyNode>({
           id: doorId,
           type: 'door',
           parentId: wallId,
           visible: true,
-        } as unknown as AnyNode
+        })
       }
-      nodes[wallId as string] = {
+      nodes[wallId as string] = coerce<AnyNode>({
         id: wallId,
         type: 'wall',
         parentId: null,
         visible: true,
         children: childIds,
-      } as unknown as AnyNode
+      })
 
       // Map this wall to its bordering slab (sparse: ~25 walls share a slab).
       const slabRow = Math.floor(row / 5)
@@ -86,12 +87,12 @@ function buildFixture() {
   for (let row = 0; row < 10; row++) {
     for (let col = 0; col < 20; col++) {
       const slabId = ID(`slab_r${row}c${col}`)
-      nodes[slabId as string] = {
+      nodes[slabId as string] = coerce<AnyNode>({
         id: slabId,
         type: 'slab',
         parentId: null,
         visible: true,
-      } as unknown as AnyNode
+      })
     }
   }
 

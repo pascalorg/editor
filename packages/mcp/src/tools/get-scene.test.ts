@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerGetScene } from './get-scene'
 
 describe('get_scene', () => {
@@ -14,7 +15,7 @@ describe('get_scene', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerGetScene(server, bridge)
+    registerGetScene(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -23,7 +24,7 @@ describe('get_scene', () => {
   test('returns scene with nodes and rootNodeIds', async () => {
     const result = await client.callTool({ name: 'get_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     const parsed = JSON.parse(text)
     expect(Array.isArray(parsed.rootNodeIds)).toBe(true)
     expect(parsed.rootNodeIds.length).toBeGreaterThan(0)
@@ -35,7 +36,7 @@ describe('get_scene', () => {
     const beforeCount = Object.keys(bridge.getNodes()).length
     bridge.setScene({}, [])
     const result = await client.callTool({ name: 'get_scene', arguments: {} })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.rootNodeIds.length).toBe(0)
     expect(Object.keys(parsed.nodes).length).toBe(0)
     expect(beforeCount).toBeGreaterThan(0)

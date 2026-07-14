@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, DragAction, Relations, SceneApi } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { coerce } from '../test-utils'
 import { createDragSession } from './drag-session'
 
 const id = (s: string) => s as AnyNodeId
@@ -59,9 +60,9 @@ function makeDef(kind: string, relations?: Relations): AnyNodeDefinition {
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities: {},
     relations,
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
@@ -102,9 +103,9 @@ describe('createDragSession', () => {
   })
 
   test('move runs preview + apply and marks the returned id dirty', () => {
-    const scene = makeSpyScene({ a: { id: id('a'), type: 'thing' } as any })
+    const scene = makeSpyScene({ a: coerce<AnyNode>({ id: id('a'), type: 'thing' }) })
     const session = createDragSession(makeAction(), scene)
-    session.start({ point: [0, 0], node: { id: id('a') } as any })
+    session.start({ point: [0, 0], node: coerce<AnyNode>({ id: id('a') }) })
     session.move([1, 0], { shift: false, alt: false, ctrl: false, meta: false })
     expect(session.getDraft()).toEqual({ x: 1 })
     expect(scene._calls.markedDirty).toContain(id('a'))
@@ -115,9 +116,9 @@ describe('createDragSession', () => {
       ...makeAction(),
       snap: (draft) => ({ x: Math.round(draft.x) }),
     }
-    const scene = makeSpyScene({ a: { id: id('a'), type: 'thing' } as any })
+    const scene = makeSpyScene({ a: coerce<AnyNode>({ id: id('a'), type: 'thing' }) })
     const session = createDragSession(action, scene)
-    session.start({ point: [0, 0], node: { id: id('a') } as any })
+    session.start({ point: [0, 0], node: coerce<AnyNode>({ id: id('a') }) })
     session.move([0.7, 0], { shift: false, alt: false, ctrl: false, meta: false })
     expect(session.getDraft()).toEqual({ x: 1 })
   })
@@ -129,9 +130,9 @@ describe('createDragSession', () => {
       cancel: cancelSpy,
       commit: () => false,
     }
-    const scene = makeSpyScene({ a: { id: id('a'), type: 'thing' } as any })
+    const scene = makeSpyScene({ a: coerce<AnyNode>({ id: id('a'), type: 'thing' }) })
     const session = createDragSession(action, scene)
-    session.start({ point: [0, 0], node: { id: id('a') } as any })
+    session.start({ point: [0, 0], node: coerce<AnyNode>({ id: id('a') }) })
     session.move([1, 0], { shift: false, alt: false, ctrl: false, meta: false })
     const result = session.commit()
     expect(result).toBe(false)
@@ -211,9 +212,9 @@ describe('createDragSession', () => {
   test('dirty cascade fires once per id even across multiple move ticks', () => {
     // Register a kind with no relations — cascade returns just {startId}.
     registerNode(makeDef('thing'))
-    const scene = makeSpyScene({ a: { id: id('a'), type: 'thing' } as any })
+    const scene = makeSpyScene({ a: coerce<AnyNode>({ id: id('a'), type: 'thing' }) })
     const session = createDragSession(makeAction(), scene)
-    session.start({ point: [0, 0], node: { id: id('a') } as any })
+    session.start({ point: [0, 0], node: coerce<AnyNode>({ id: id('a') }) })
     session.move([1, 0], { shift: false, alt: false, ctrl: false, meta: false })
     session.move([2, 0], { shift: false, alt: false, ctrl: false, meta: false })
     session.move([3, 0], { shift: false, alt: false, ctrl: false, meta: false })
@@ -225,8 +226,8 @@ describe('createDragSession', () => {
     registerNode(makeDef('wall', { hosts: ['door'] }))
     registerNode(makeDef('door'))
     const scene = makeSpyScene({
-      w: { id: id('w'), type: 'wall', children: [id('d')] } as any,
-      d: { id: id('d'), type: 'door', parentId: id('w') } as any,
+      w: coerce<AnyNode>({ id: id('w'), type: 'wall', children: [id('d')] }),
+      d: coerce<AnyNode>({ id: id('d'), type: 'door', parentId: id('w') }),
     })
     const action: DragAction<{ id: AnyNodeId }, { x: number }> = {
       begin: () => ({ id: id('w') }),
@@ -235,7 +236,7 @@ describe('createDragSession', () => {
       cancel: () => {},
     }
     const session = createDragSession(action, scene)
-    session.start({ point: [0, 0], node: { id: id('w') } as any })
+    session.start({ point: [0, 0], node: coerce<AnyNode>({ id: id('w') }) })
     session.move([1, 0], { shift: false, alt: false, ctrl: false, meta: false })
     // both wall and door marked dirty
     expect(scene._calls.markedDirty).toContain(id('w'))

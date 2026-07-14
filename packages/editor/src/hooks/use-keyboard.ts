@@ -1,4 +1,4 @@
-import { type AnyNodeId, emitter, nodeRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, emitter, type LevelNode, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { closeDoorOpenState, toggleDoorOpenState } from '../lib/door-interaction'
@@ -8,6 +8,7 @@ import {
   pasteEditorClipboardToLevel,
 } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
+import { at } from '../lib/typed-access'
 import { closeWindowOpenState, toggleWindowOpenState } from '../lib/window-interaction'
 import useEditor from '../store/use-editor'
 
@@ -134,19 +135,22 @@ export const useKeyboard = ({
         const { buildingId, levelId } = useViewer.getState().selection
         if (buildingId) {
           const building = useScene.getState().nodes[buildingId]
-          const levels =
+          const levels: LevelNode['id'][] =
             building?.type === 'building'
               ? building.children.filter(
-                  (childId) => useScene.getState().nodes[childId as AnyNodeId]?.type === 'level',
+                  (childId): childId is LevelNode['id'] =>
+                    useScene.getState().nodes[childId as AnyNodeId]?.type === 'level',
                 )
               : []
           if (levels.length > 0) {
-            const currentIdx = levelId ? levels.indexOf(levelId as any) : -1
+            const currentIdx = levelId ? levels.indexOf(levelId) : -1
             const nextIdx = currentIdx < levels.length - 1 ? currentIdx + 1 : currentIdx
-            if (nextIdx !== -1 && nextIdx !== currentIdx) {
-              useViewer.getState().setSelection({ levelId: levels[nextIdx] as any })
-            } else if (currentIdx === -1) {
-              useViewer.getState().setSelection({ levelId: levels[0] as any })
+            const nextLevelId = levels[nextIdx]
+            const firstLevelId = levels[0]
+            if (nextIdx !== -1 && nextIdx !== currentIdx && nextLevelId) {
+              useViewer.getState().setSelection({ levelId: nextLevelId })
+            } else if (currentIdx === -1 && firstLevelId) {
+              useViewer.getState().setSelection({ levelId: firstLevelId })
             }
           }
         }
@@ -155,19 +159,22 @@ export const useKeyboard = ({
         const { buildingId, levelId } = useViewer.getState().selection
         if (buildingId) {
           const building = useScene.getState().nodes[buildingId]
-          const levels =
+          const levels: LevelNode['id'][] =
             building?.type === 'building'
               ? building.children.filter(
-                  (childId) => useScene.getState().nodes[childId as AnyNodeId]?.type === 'level',
+                  (childId): childId is LevelNode['id'] =>
+                    useScene.getState().nodes[childId as AnyNodeId]?.type === 'level',
                 )
               : []
           if (levels.length > 0) {
-            const currentIdx = levelId ? levels.indexOf(levelId as any) : -1
+            const currentIdx = levelId ? levels.indexOf(levelId) : -1
             const prevIdx = currentIdx > 0 ? currentIdx - 1 : currentIdx
-            if (prevIdx !== -1 && prevIdx !== currentIdx) {
-              useViewer.getState().setSelection({ levelId: levels[prevIdx] as any })
-            } else if (currentIdx === -1) {
-              useViewer.getState().setSelection({ levelId: levels[levels.length - 1] as any })
+            const prevLevelId = levels[prevIdx]
+            const lastLevelId = levels[levels.length - 1]
+            if (prevIdx !== -1 && prevIdx !== currentIdx && prevLevelId) {
+              useViewer.getState().setSelection({ levelId: prevLevelId })
+            } else if (currentIdx === -1 && lastLevelId) {
+              useViewer.getState().setSelection({ levelId: lastLevelId })
             }
           }
         }
@@ -176,7 +183,7 @@ export const useKeyboard = ({
         // Operable doors/windows use R to toggle their open/closed state.
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const node = useScene.getState().nodes[at(selectedNodeIds, 0)]
           if (node?.type === 'door') {
             e.preventDefault()
             if (node.openingKind !== 'opening') {
@@ -225,7 +232,7 @@ export const useKeyboard = ({
         // Rotate selected node counter-clockwise
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
+          const node = useScene.getState().nodes[at(selectedNodeIds, 0)]
           if (node?.type === 'door') {
             e.preventDefault()
             if (node.openingKind !== 'opening') {
@@ -303,7 +310,7 @@ export const useKeyboard = ({
 
           // Play appropriate SFX based on what's being deleted
           if (selectedNodeIds.length === 1) {
-            const node = useScene.getState().nodes[selectedNodeIds[0]!]
+            const node = useScene.getState().nodes[at(selectedNodeIds, 0)]
             if (node?.type === 'item') {
               sfxEmitter.emit('sfx:item-delete')
             } else {

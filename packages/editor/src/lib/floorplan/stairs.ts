@@ -14,6 +14,7 @@ import type {
   FloorplanStairSegmentEntry,
   StairSegmentTransform,
 } from './types'
+import { at, first } from '../typed-access'
 
 const FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS = 0.05
 const FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION = 0.18
@@ -30,10 +31,13 @@ function getFloorplanStairSegmentCenterLine(polygon: Point2D[]): FloorplanLineSe
   }
 
   const [backLeft, backRight, frontRight, frontLeft] = polygon
+  if (!backLeft || !backRight || !frontRight || !frontLeft) {
+    return null
+  }
 
   return {
-    start: interpolatePlanPoint(backLeft!, backRight!, 0.5),
-    end: interpolatePlanPoint(frontLeft!, frontRight!, 0.5),
+    start: interpolatePlanPoint(backLeft, backRight, 0.5),
+    end: interpolatePlanPoint(frontLeft, frontRight, 0.5),
   }
 }
 
@@ -43,8 +47,11 @@ function getFloorplanStairInnerPolygon(polygon: Point2D[]): Point2D[] {
   }
 
   const [backLeft, backRight, frontRight, frontLeft] = polygon
-  const outerWidth = getPlanPointDistance(backLeft!, backRight!)
-  const outerLength = getPlanPointDistance(backLeft!, frontLeft!)
+  if (!backLeft || !backRight || !frontRight || !frontLeft) {
+    return polygon
+  }
+  const outerWidth = getPlanPointDistance(backLeft, backRight)
+  const outerLength = getPlanPointDistance(backLeft, frontLeft)
   const widthInset = Math.min(
     FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS,
     outerWidth * FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION,
@@ -54,10 +61,10 @@ function getFloorplanStairInnerPolygon(polygon: Point2D[]): Point2D[] {
     outerLength * FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION,
   )
 
-  const insetBackLeft = movePlanPointTowards(backLeft!, frontLeft!, lengthInset)
-  const insetBackRight = movePlanPointTowards(backRight!, frontRight!, lengthInset)
-  const insetFrontLeft = movePlanPointTowards(frontLeft!, backLeft!, lengthInset)
-  const insetFrontRight = movePlanPointTowards(frontRight!, backRight!, lengthInset)
+  const insetBackLeft = movePlanPointTowards(backLeft, frontLeft, lengthInset)
+  const insetBackRight = movePlanPointTowards(backRight, frontRight, lengthInset)
+  const insetFrontLeft = movePlanPointTowards(frontLeft, backLeft, lengthInset)
+  const insetFrontRight = movePlanPointTowards(frontRight, backRight, lengthInset)
 
   const innerPolygon = [
     movePlanPointTowards(insetBackLeft, insetBackRight, widthInset),
@@ -66,8 +73,8 @@ function getFloorplanStairInnerPolygon(polygon: Point2D[]): Point2D[] {
     movePlanPointTowards(insetFrontLeft, insetFrontRight, widthInset),
   ]
 
-  const innerWidth = getPlanPointDistance(innerPolygon[0]!, innerPolygon[1]!)
-  const innerLength = getPlanPointDistance(innerPolygon[0]!, innerPolygon[3]!)
+  const innerWidth = getPlanPointDistance(first(innerPolygon), at(innerPolygon, 1))
+  const innerLength = getPlanPointDistance(first(innerPolygon), at(innerPolygon, 3))
 
   return innerWidth > 0.06 && innerLength > 0.06 ? innerPolygon : polygon
 }
@@ -81,13 +88,16 @@ function getFloorplanStairTreadLines(
   }
 
   const [backLeft, backRight, frontRight, frontLeft] = innerPolygon
+  if (!backLeft || !backRight || !frontRight || !frontLeft) {
+    return []
+  }
   const treadLines: FloorplanLineSegment[] = []
 
   for (let stepIndex = 1; stepIndex < segment.stepCount; stepIndex += 1) {
     const t = stepIndex / segment.stepCount
     treadLines.push({
-      start: interpolatePlanPoint(backLeft!, frontLeft!, t),
-      end: interpolatePlanPoint(backRight!, frontRight!, t),
+      start: interpolatePlanPoint(backLeft, frontLeft, t),
+      end: interpolatePlanPoint(backRight, frontRight, t),
     })
   }
 
@@ -99,8 +109,8 @@ function getFloorplanStairTreadThickness(segment: StairSegmentNode, innerPolygon
     return 0
   }
 
-  const innerWidth = getPlanPointDistance(innerPolygon[0]!, innerPolygon[1]!)
-  const innerLength = getPlanPointDistance(innerPolygon[0]!, innerPolygon[3]!)
+  const innerWidth = getPlanPointDistance(first(innerPolygon), at(innerPolygon, 1))
+  const innerLength = getPlanPointDistance(first(innerPolygon), at(innerPolygon, 3))
   const treadRun = innerLength / Math.max(segment.stepCount, 1)
   return clampPlanValue(
     Math.min(FLOORPLAN_STAIR_TREAD_BAND_THICKNESS, innerWidth * 0.12, treadRun * 0.44),
@@ -132,10 +142,13 @@ function getFloorplanStairSegmentCenterPoint(segment: FloorplanStairSegmentEntry
   }
 
   const [backLeft, backRight, frontRight, frontLeft] = segment.polygon
+  if (!backLeft || !backRight || !frontRight || !frontLeft) {
+    return null
+  }
 
   return {
-    x: (backLeft!.x + backRight!.x + frontRight!.x + frontLeft!.x) / 4,
-    y: (backLeft!.y + backRight!.y + frontRight!.y + frontLeft!.y) / 4,
+    x: (backLeft.x + backRight.x + frontRight.x + frontLeft.x) / 4,
+    y: (backLeft.y + backRight.y + frontRight.y + frontLeft.y) / 4,
   }
 }
 
@@ -148,16 +161,19 @@ function getFloorplanStairSegmentSidePoint(
   }
 
   const [backLeft, backRight, frontRight, frontLeft] = segment.polygon
+  if (!backLeft || !backRight || !frontRight || !frontLeft) {
+    return null
+  }
 
   switch (side) {
     case 'back':
-      return interpolatePlanPoint(backLeft!, backRight!, 0.5)
+      return interpolatePlanPoint(backLeft, backRight, 0.5)
     case 'front':
-      return interpolatePlanPoint(frontLeft!, frontRight!, 0.5)
+      return interpolatePlanPoint(frontLeft, frontRight, 0.5)
     case 'left':
-      return interpolatePlanPoint(backLeft!, frontLeft!, 0.5)
+      return interpolatePlanPoint(backLeft, frontLeft, 0.5)
     case 'right':
-      return interpolatePlanPoint(backRight!, frontRight!, 0.5)
+      return interpolatePlanPoint(backRight, frontRight, 0.5)
   }
 }
 
@@ -277,7 +293,7 @@ function buildFloorplanStairArrow(
   const rawPoints: Point2D[] = []
 
   for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex += 1) {
-    const segment = segments[segmentIndex]!
+    const segment = at(segments, segmentIndex)
     const nextSegment = segments[segmentIndex + 1]?.segment
     const entryPoint = getFloorplanStairSegmentSidePoint(segment, 'back')
     const exitPoint = getFloorplanStairSegmentSidePoint(
@@ -310,10 +326,10 @@ function buildFloorplanStairArrow(
     return null
   }
 
-  const firstPoint = rawPoints[0]!
-  const secondPoint = rawPoints[1]!
-  const beforeLastPoint = rawPoints[rawPoints.length - 2]!
-  const lastPoint = rawPoints[rawPoints.length - 1]!
+  const firstPoint = first(rawPoints)
+  const secondPoint = at(rawPoints, 1)
+  const beforeLastPoint = at(rawPoints, rawPoints.length - 2)
+  const lastPoint = at(rawPoints, rawPoints.length - 1)
   const firstLength = getPlanPointDistance(firstPoint, secondPoint)
   const lastLength = getPlanPointDistance(beforeLastPoint, lastPoint)
 
@@ -382,7 +398,7 @@ export function computeFloorplanStairSegmentTransforms(
   let currentRotation = 0
 
   for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!
+    const segment = at(segments, index)
 
     if (index === 0) {
       transforms.push({
@@ -392,7 +408,7 @@ export function computeFloorplanStairSegmentTransforms(
       continue
     }
 
-    const previousSegment = segments[index - 1]!
+    const previousSegment = at(segments, index - 1)
     let attachX = 0
     let attachY = previousSegment.height
     let attachZ = previousSegment.length
@@ -461,7 +477,7 @@ export function buildFloorplanStairEntry(
 
   const transforms = computeFloorplanStairSegmentTransforms(segments)
   const segmentEntries = segments.map((segment, index) => {
-    const polygon = getFloorplanStairSegmentPolygon(stair, segment, transforms[index]!)
+    const polygon = getFloorplanStairSegmentPolygon(stair, segment, at(transforms, index))
     const centerLine = getFloorplanStairSegmentCenterLine(polygon)
     const innerPolygon = getFloorplanStairInnerPolygon(polygon)
     const treadThickness = getFloorplanStairTreadThickness(segment, innerPolygon)

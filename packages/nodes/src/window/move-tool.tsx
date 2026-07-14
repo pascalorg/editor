@@ -297,15 +297,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         useScene.getState().deleteNode(movingWindowNode.id)
         useScene.temporal.getState().resume()
 
-        const cloned = structuredClone(movingWindowNode) as any
-        delete cloned.id
-        if (cloned.metadata && typeof cloned.metadata === 'object') {
-          delete cloned.metadata.isNew
-          delete cloned.metadata.isTransient
+        const { id: _id, metadata, ...rest } = structuredClone(movingWindowNode)
+        let cleanMetadata = metadata
+        if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+          const { isNew: _isNew, isTransient: _isTransient, ...restMetadata } = metadata
+          cleanMetadata = restMetadata
         }
 
         const node = WindowNode.parse({
-          ...cloned,
+          ...rest,
+          metadata: cleanMetadata,
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,

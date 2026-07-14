@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { AnyNodeDefinition, Capabilities, SceneApi } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { coerce } from '../test-utils'
 import {
   canAttach,
   clampYToHostTop,
@@ -22,9 +23,9 @@ function makeDef(
   return {
     kind,
     schemaVersion: 1,
-    schema: z.object({ type: z.literal(kind) }) as any,
+    schema: z.object({ type: z.literal(kind) }),
     category: 'utility',
-    defaults: () => ({}) as any,
+    defaults: () => ({}),
     capabilities,
     renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
     ...overrides,
@@ -32,12 +33,12 @@ function makeDef(
 }
 
 function makeNode(kind: string, idStr: string, parentId: string | null = null): AnyNode {
-  return {
+  return coerce<AnyNode>({
     id: id(idStr),
     type: kind,
     parentId: parentId ? id(parentId) : null,
     visible: true,
-  } as unknown as AnyNode
+  })
 }
 
 function makeFakeScene(nodes: Record<string, AnyNode>): SceneApi {

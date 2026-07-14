@@ -27,7 +27,7 @@ export function registerGetNode(server: McpServer, bridge: SceneOperations): voi
       if (!node) {
         throwMcpError(ErrorCode.InvalidParams, `Node not found: ${id}`)
       }
-      const payload = { node: node as unknown as Record<string, unknown> }
+      const payload = { node: node as Record<string, unknown> }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   BuildingNode,
   DoorNode,
@@ -8,10 +10,33 @@ import {
   WallNode,
   ZoneNode,
 } from '@pascal-app/core/schema'
+import type { Patch } from './scene-bridge'
 import { SceneBridge } from './scene-bridge'
 
 function tick() {
   return new Promise((r) => setTimeout(r, 5))
+}
+
+/** Assert an array is non-empty and return its first element. */
+function first<T>(arr: readonly T[], what: string): T {
+  const value = arr[0]
+  if (value === undefined) throw new Error(`expected at least one ${what}`)
+  return value
+}
+
+/** Assert a node lookup resolved and return it. */
+function requireNode(node: AnyNode | null, id: string): AnyNode {
+  if (node === null) throw new Error(`expected node ${id} to exist`)
+  return node
+}
+
+/**
+ * Coerce a deliberately malformed value to the type a validator expects, so
+ * tests can exercise the runtime rejection paths for statically-invalid input.
+ * The runtime value stays wrong on purpose; only the static type is asserted.
+ */
+function invalidInput<T>(value: unknown): T {
+  return value as T
 }
 
 describe('SceneBridge', () => {
@@ -46,7 +71,7 @@ describe('SceneBridge', () => {
     })
 
     test('getNode returns the node by id', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const fetched = bridge.getNode(level.id)
       expect(fetched?.id).toBe(level.id)
     })
@@ -58,39 +83,43 @@ describe('SceneBridge', () => {
 
   describe('createNode', () => {
     test('creates a wall attached to a level', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
       const id = bridge.createNode(wall, level.id)
       expect(id).toBe(wall.id)
       expect(bridge.getNode(wall.id)).not.toBeNull()
       // Level should list the wall as a child.
-      const freshLevel = bridge.getNode(level.id) as any
+      const freshLevel = bridge.getNode(level.id)
+      expect(freshLevel?.type).toBe('level')
+      if (freshLevel?.type !== 'level') return
       expect(freshLevel.children).toContain(wall.id)
     })
 
     test('created wall has the correct parentId', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
-      const w = bridge.getNode(wall.id)!
+      const w = requireNode(bridge.getNode(wall.id), wall.id)
       expect(w.parentId).toBe(level.id)
     })
   })
 
   describe('updateNode', () => {
     test('merges new fields on existing node', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
       bridge.createNode(wall, level.id)
-      bridge.updateNode(wall.id, { thickness: 0.25, height: 3 } as any)
+      bridge.updateNode(wall.id, { thickness: 0.25, height: 3 })
       await tick()
-      const w = bridge.getNode(wall.id) as any
+      const w = bridge.getNode(wall.id)
+      expect(w?.type).toBe('wall')
+      if (w?.type !== 'wall') return
       expect(w.thickness).toBe(0.25)
       expect(w.height).toBe(3)
     })
 
     test('throws on unknown id', () => {
-      expect(() => bridge.updateNode('wall_missing' as any, { height: 3 } as any)).toThrow(
+      expect(() => bridge.updateNode('wall_missing' as AnyNodeId, { height: 3 })).toThrow(
         /node not found/,
       )
     })
@@ -98,7 +127,7 @@ describe('SceneBridge', () => {
 
   describe('deleteNode', () => {
     test('deletes a leaf node', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       const removed = bridge.deleteNode(wall.id)
@@ -108,7 +137,7 @@ describe('SceneBridge', () => {
 
     test('cascade=false throws if node has children', () => {
       // Level (with a child wall) — deleting non-cascaded must throw.
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       expect(() => bridge.deleteNode(level.id, false)).toThrow(/descendant/)
@@ -118,7 +147,7 @@ describe('SceneBridge', () => {
     })
 
     test('cascade=true removes node and all descendants', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall1 = WallNode.parse({ start: [0, 0], end: [1, 0] })
       const wall2 = WallNode.parse({ start: [1, 0], end: [1, 1] })
       bridge.createNode(wall1, level.id)
@@ -132,25 +161,26 @@ describe('SceneBridge', () => {
     })
 
     test('throws on unknown id', () => {
-      expect(() => bridge.deleteNode('wall_nope' as any, false)).toThrow(/node not found/)
+      expect(() => bridge.deleteNode('wall_nope' as AnyNodeId, false)).toThrow(/node not found/)
     })
   })
 
   describe('undo / redo', () => {
     test('round-trips create + update', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
       bridge.createNode(wall, level.id)
       await tick()
-      bridge.updateNode(wall.id, { thickness: 0.25 } as any)
+      bridge.updateNode(wall.id, { thickness: 0.25 })
       await tick()
 
       // Undo update
       const u1 = bridge.undo()
       await tick()
       expect(u1).toBe(1)
-      const w1 = bridge.getNode(wall.id) as any
-      expect(w1).not.toBeNull()
+      const w1 = bridge.getNode(wall.id)
+      expect(w1?.type).toBe('wall')
+      if (w1?.type !== 'wall') return
       expect(w1.thickness).not.toBe(0.25)
 
       // Undo create — wall should be gone
@@ -163,13 +193,14 @@ describe('SceneBridge', () => {
       const r = bridge.redo(2)
       await tick()
       expect(r).toBe(2)
-      const w3 = bridge.getNode(wall.id) as any
-      expect(w3).not.toBeNull()
+      const w3 = bridge.getNode(wall.id)
+      expect(w3?.type).toBe('wall')
+      if (w3?.type !== 'wall') return
       expect(w3.thickness).toBe(0.25)
     })
 
     test('getHistory tracks pointers', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       await tick()
@@ -184,7 +215,7 @@ describe('SceneBridge', () => {
     })
 
     test('clearHistory wipes past/future', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       bridge.createNode(WallNode.parse({ start: [0, 0], end: [1, 0] }), level.id)
       await tick()
       bridge.clearHistory()
@@ -202,7 +233,7 @@ describe('SceneBridge', () => {
 
   describe('applyPatch', () => {
     test('applies mixed create/update/delete atomically', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wallA = WallNode.parse({ start: [0, 0], end: [2, 0] })
       const wallB = WallNode.parse({ start: [2, 0], end: [2, 2] })
       // pre-seed one wall, then exercise update + delete
@@ -211,7 +242,7 @@ describe('SceneBridge', () => {
 
       const res = bridge.applyPatch([
         { op: 'create', node: wallB, parentId: level.id },
-        { op: 'update', id: wallA.id, data: { thickness: 0.3 } as any },
+        { op: 'update', id: wallA.id, data: { thickness: 0.3 } },
         { op: 'delete', id: wallA.id },
       ])
       await tick()
@@ -224,14 +255,14 @@ describe('SceneBridge', () => {
     })
 
     test('is all-or-nothing: invalid op rolls back no changes', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const pre = Object.keys(bridge.getNodes()).length
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       expect(() =>
         bridge.applyPatch([
           { op: 'create', node: wall, parentId: level.id },
           // This op is invalid — id does not exist.
-          { op: 'update', id: 'wall_missing' as any, data: { thickness: 0.1 } as any },
+          { op: 'update', id: 'wall_missing' as AnyNodeId, data: { thickness: 0.1 } },
         ]),
       ).toThrow(/invalid patch/)
       // The wall must NOT have been created.
@@ -243,18 +274,18 @@ describe('SceneBridge', () => {
     test('rejects create with non-existent parentId', () => {
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       expect(() =>
-        bridge.applyPatch([{ op: 'create', node: wall, parentId: 'level_nope' as any }]),
+        bridge.applyPatch([{ op: 'create', node: wall, parentId: 'level_nope' as AnyNodeId }]),
       ).toThrow(/invalid patch/)
     })
 
     test('rejects delete of unknown id', () => {
-      expect(() => bridge.applyPatch([{ op: 'delete', id: 'wall_nope' as any }])).toThrow(
+      expect(() => bridge.applyPatch([{ op: 'delete', id: 'wall_nope' as AnyNodeId }])).toThrow(
         /invalid patch/,
       )
     })
 
     test('rejects delete with cascade=false on a node with children', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       bridge.createNode(WallNode.parse({ start: [0, 0], end: [1, 0] }), level.id)
       await tick()
       expect(() => bridge.applyPatch([{ op: 'delete', id: level.id, cascade: false }])).toThrow(
@@ -263,7 +294,7 @@ describe('SceneBridge', () => {
     })
 
     test('accepts delete with cascade=true on a node with children', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       await tick()
@@ -274,28 +305,33 @@ describe('SceneBridge', () => {
 
     test('rejects create with schema-invalid node', () => {
       // Bypass .parse so we can feed an invalid node through the union.
-      const bogus = {
+      const bogus = invalidInput<AnyNode>({
         object: 'node',
         id: 'wall_bogus',
         type: 'wall',
         // missing start/end
-      } as any
+      })
       expect(() => bridge.applyPatch([{ op: 'create', node: bogus }])).toThrow(/invalid patch/)
     })
 
     test('rejects unknown op', () => {
-      expect(() => bridge.applyPatch([{ op: 'wat', id: 'x' } as any])).toThrow(/invalid patch/)
+      const unknownOp = invalidInput<Patch>({ op: 'wat', id: 'x' })
+      expect(() => bridge.applyPatch([unknownOp])).toThrow(/invalid patch/)
     })
 
     test('rejects update with non-object data', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
-      expect(() => bridge.applyPatch([{ op: 'update', id: level.id, data: null as any }])).toThrow(
-        /invalid patch/,
-      )
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
+      const nullData = invalidInput<Patch>({
+        op: 'update',
+        id: level.id,
+        data: null,
+      })
+      expect(() => bridge.applyPatch([nullData])).toThrow(/invalid patch/)
     })
 
     test('rejects undefined patch entry', () => {
-      expect(() => bridge.applyPatch([undefined as any])).toThrow(/invalid patch/)
+      const missingPatch = invalidInput<Patch[]>([undefined])
+      expect(() => bridge.applyPatch(missingPatch)).toThrow(/invalid patch/)
     })
   })
 
@@ -309,13 +345,13 @@ describe('SceneBridge', () => {
     test('flags bad nodes fed in via setScene', () => {
       const site = SiteNode.parse({})
       // Bypass the schema by constructing a bogus wall object directly.
-      const bogus = {
+      const bogus = invalidInput<AnyNode>({
         object: 'node',
         id: 'wall_bogus',
         type: 'wall',
         parentId: site.id,
         // missing required `start`/`end`
-      } as any
+      })
       bridge.setScene({ [site.id]: site, [bogus.id]: bogus }, [site.id])
       const res = bridge.validateScene()
       expect(res.valid).toBe(false)
@@ -325,7 +361,7 @@ describe('SceneBridge', () => {
 
   describe('traversal: site quirk & generic helpers', () => {
     test('getChildren uses the flat dict (handles site children-as-objects)', () => {
-      const site = bridge.findNodes({ type: 'site' })[0]!
+      const site = first(bridge.findNodes({ type: 'site' }), 'site')
       const children = bridge.getChildren(site.id)
       // Building is the expected child of site via parentId.
       const types = children.map((c) => c.type).sort()
@@ -333,7 +369,7 @@ describe('SceneBridge', () => {
     })
 
     test('getChildren works for level (children-as-ids)', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       const children = bridge.getChildren(level.id)
@@ -341,7 +377,7 @@ describe('SceneBridge', () => {
     })
 
     test('getAncestry walks to root', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       const ancestry = bridge.getAncestry(wall.id)
@@ -353,11 +389,11 @@ describe('SceneBridge', () => {
     })
 
     test('getAncestry returns [] for unknown id', () => {
-      expect(bridge.getAncestry('wall_nope' as any)).toEqual([])
+      expect(bridge.getAncestry('wall_nope' as AnyNodeId)).toEqual([])
     })
 
     test('resolveLevelId returns the enclosing level', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       expect(bridge.resolveLevelId(wall.id)).toBe(level.id)
@@ -365,7 +401,7 @@ describe('SceneBridge', () => {
 
     test('resolveLevelId returns null if no level ancestor', () => {
       // Site itself has no level ancestor.
-      const site = bridge.findNodes({ type: 'site' })[0]!
+      const site = first(bridge.findNodes({ type: 'site' }), 'site')
       expect(bridge.resolveLevelId(site.id)).toBeNull()
     })
 
@@ -376,7 +412,7 @@ describe('SceneBridge', () => {
     })
 
     test('findNodes filters by parentId', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       const childrenOfLevel = bridge.findNodes({ parentId: level.id })
@@ -384,7 +420,7 @@ describe('SceneBridge', () => {
     })
 
     test('findNodes filters by levelId (via ancestry)', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       const door = DoorNode.parse({ wallId: wall.id })
@@ -410,8 +446,11 @@ describe('SceneBridge', () => {
 
     test('exportJSON deep-clones (mutation does not leak back)', () => {
       const exp = bridge.exportJSON()
-      const someId = Object.keys(exp.nodes)[0]!
-      ;(exp.nodes as any)[someId] = 'tampered'
+      const someId = Object.keys(exp.nodes)[0] as AnyNodeId | undefined
+      expect(someId).toBeDefined()
+      if (someId === undefined) return
+      const tampered = exp.nodes as Record<AnyNodeId, unknown>
+      tampered[someId] = 'tampered'
       // Store is unchanged.
       expect(typeof bridge.getNodes()[someId]).toBe('object')
     })
@@ -437,14 +476,16 @@ describe('SceneBridge', () => {
     })
 
     test('loadJSON throws when parsed JSON is not an object', () => {
+      // Both the string path and the direct-object path converge on the same
+      // `typeof parsed !== 'object'` guard; exercise both.
       expect(() => bridge.loadJSON('null')).toThrow(/expected object/)
-      expect(() => bridge.loadJSON(null as any)).toThrow(/expected object/)
+      expect(() => bridge.loadJSON(JSON.parse('null'))).toThrow(/expected object/)
     })
 
     test('loadJSON throws on wrong top-level shape', () => {
-      expect(() => bridge.loadJSON({} as any)).toThrow(/invalid scene/)
-      expect(() => bridge.loadJSON({ nodes: 1, rootNodeIds: [] } as any)).toThrow(/invalid scene/)
-      expect(() => bridge.loadJSON({ nodes: {}, rootNodeIds: 'nope' } as any)).toThrow(
+      expect(() => bridge.loadJSON('{}')).toThrow(/invalid scene/)
+      expect(() => bridge.loadJSON('{ "nodes": 1, "rootNodeIds": [] }')).toThrow(/invalid scene/)
+      expect(() => bridge.loadJSON('{ "nodes": {}, "rootNodeIds": "nope" }')).toThrow(
         /invalid scene/,
       )
     })
@@ -465,21 +506,21 @@ describe('SceneBridge', () => {
         value: { polluted: true },
       })
       const bad = { nodes, rootNodeIds: [] }
-      expect(() => bridge.loadJSON(bad as any)).toThrow(/forbidden key/)
+      expect(() => bridge.loadJSON(bad as SceneGraph)).toThrow(/forbidden key/)
     })
 
     test('setScene round-trip preserves node count', () => {
       const pre = Object.keys(bridge.getNodes()).length
       const snap = bridge.exportJSON()
       bridge.setScene({}, [])
-      bridge.setScene(snap.nodes as any, snap.rootNodeIds as any)
+      bridge.setScene(snap.nodes, snap.rootNodeIds)
       expect(Object.keys(bridge.getNodes()).length).toBe(pre)
     })
   })
 
   describe('flushDirty', () => {
     test('drains the dirty set', async () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
       bridge.createNode(wall, level.id)
       await tick()
@@ -501,9 +542,9 @@ describe('SceneBridge', () => {
       const site = SiteNode.parse({ children: [] })
       bridge.setScene(
         {
-          [site.id]: { ...site, children: [] } as any,
-          [building.id]: { ...building, parentId: site.id } as any,
-          [level.id]: { ...level, parentId: building.id } as any,
+          [site.id]: { ...site, children: [] },
+          [building.id]: { ...building, parentId: site.id },
+          [level.id]: { ...level, parentId: building.id },
         },
         [site.id],
       )
@@ -512,7 +553,7 @@ describe('SceneBridge', () => {
     })
 
     test('zone and item nodes are creatable and discoverable', () => {
-      const level = bridge.findNodes({ type: 'level' })[0]!
+      const level = first(bridge.findNodes({ type: 'level' }), 'level')
       const zone = ZoneNode.parse({
         name: 'Zone A',
         polygon: [

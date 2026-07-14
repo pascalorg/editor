@@ -28,7 +28,6 @@ import { cn } from './../../../lib/utils'
 
 const SIDEBAR_COOKIE_NAME = 'sidebar_state'
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = '18rem'
 const SIDEBAR_WIDTH_MOBILE = '18rem'
 const SIDEBAR_WIDTH_ICON = '3rem'
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b'
@@ -192,7 +191,7 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
   const setIsDragging = useSidebarStore((state) => state.setIsDragging)
   const isResizing = React.useRef(false)
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const handlePointerDown = (_e: React.PointerEvent) => {
     isResizing.current = true
     setIsDragging(true)
     document.body.style.cursor = 'col-resize'

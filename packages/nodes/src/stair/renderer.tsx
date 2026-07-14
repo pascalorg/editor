@@ -8,10 +8,6 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  createMaterial,
-  createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
-  DEFAULT_STAIR_MATERIAL,
   getStairBodyMaterials,
   getStairRailingMaterial,
   NodeRenderer,
@@ -66,24 +62,6 @@ export const StairRenderer = ({ node }: { node: StairNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
-
-  const material = useMemo(() => {
-    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset)
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
-    if (presetMaterial) return presetMaterial
-    const mat = node.material
-    if (!mat) return DEFAULT_STAIR_MATERIAL(shading)
-    return createMaterial(mat, shading)
-  }, [
-    shading,
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
-    textures,
-    colorPreset,
-  ])
 
   const straightBodyMaterials = useMemo(
     () => getStairBodyMaterials(node, shading, textures, colorPreset),
@@ -254,7 +232,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
 
   return (
     <group name="stair-railing">
-      {railPaths.map((segmentPath, index) => (
+      {railPaths.map((segmentPath, _index) => (
         <group
           key={`${segmentPath.layout.segment.id}-railing`}
           position={[

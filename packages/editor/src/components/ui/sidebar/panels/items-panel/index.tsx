@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
+import { first } from '../../../../../lib/typed-access'
 import { cn } from '../../../../../lib/utils'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
@@ -55,12 +56,12 @@ export function ItemsPanel({
   // Auto-select the first category when the panel mounts without one
   useEffect(() => {
     if (!(catalogCategory && furnishTools.some((c) => c.catalogCategory === catalogCategory))) {
-      setCatalogCategory(furnishTools[0]!.catalogCategory)
+      setCatalogCategory(first(furnishTools).catalogCategory)
     }
   }, [catalogCategory, setCatalogCategory])
 
   const activeCategory =
-    furnishTools.find((c) => c.catalogCategory === catalogCategory) ?? furnishTools[0]!
+    furnishTools.find((c) => c.catalogCategory === catalogCategory) ?? first(furnishTools)
 
   function selectCategory(categoryId: CatalogCategory) {
     setCatalogCategory(categoryId)

@@ -1,5 +1,5 @@
 import { useThree } from '@react-three/fiber'
-import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, type ReactNode, type Ref, useCallback, useEffect, useRef } from 'react'
 import { type BufferGeometry, type Group, Mesh } from 'three'
 import {
   acceleratedRaycast,
@@ -52,7 +52,14 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
     const ref = useRef<Group>(null)
     const raycaster = useThree((state) => state.raycaster)
 
-    useImperativeHandle(forwardedRef, () => ref.current!, [])
+    // Store the group in the local ref and forward it to any parent ref.
+    const setRef = useCallback(
+      (group: Group | null) => {
+        ref.current = group
+        assignRef(forwardedRef, group)
+      },
+      [forwardedRef],
+    )
 
     useEffect(() => {
       if (!enabled || !ref.current) return
@@ -69,7 +76,7 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
       const acceleratedMeshes = new Set<Mesh>()
       const computedGeometries = new Set<BufferGeometry>()
 
-      ;(raycaster as any).firstHitOnly = firstHitOnly
+      raycaster.firstHitOnly = firstHitOnly
 
       group.traverse((child) => {
         if (!isMesh(child)) return
@@ -85,15 +92,16 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
         if (geometry.boundsTree || !hasBvhCompatibleGeometry(geometry)) return
 
         try {
-          // The three-mesh-bvh + @types/three combo doesn't agree on
-          // BVH option / class identity (ComputeBVHOptions vs
-          // MeshBVHOptions, GeometryBVH vs MeshBVH) — cast through
-          // `unknown` to bypass the structural mismatch. Runtime is
-          // fine; we're just calling the library's own helpers.
-          ;(geometry as { computeBoundsTree?: unknown }).computeBoundsTree =
+          // Two `three-mesh-bvh` versions augment `three` here: `three-bvh-csg`
+          // pulls 0.8.3 (`computeBoundsTree: (o?: MeshBVHOptions) => MeshBVH`)
+          // while the viewer depends on 0.9.9 (`=> GeometryBVH`). The merged
+          // `BufferGeometry.computeBoundsTree` signature resolves to 0.8.3's,
+          // which the 0.9.9 helper is not assignable to. The runtime helpers
+          // are correct; only the declared return types conflict, so an
+          // `unknown` bridge is unavoidable until the versions are unified.
+          geometry.computeBoundsTree =
             computeBoundsTree as unknown as typeof geometry.computeBoundsTree
-          ;(geometry as { disposeBoundsTree?: unknown }).disposeBoundsTree =
-            disposeBoundsTree as unknown as typeof geometry.disposeBoundsTree
+          geometry.disposeBoundsTree = disposeBoundsTree
           geometry.computeBoundsTree(options)
           computedGeometries.add(geometry)
         } catch (error) {
@@ -105,7 +113,7 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
       })
 
       return () => {
-        delete (raycaster as any).firstHitOnly
+        delete raycaster.firstHitOnly
 
         for (const geometry of computedGeometries) {
           if (geometry.boundsTree) {
@@ -131,8 +139,16 @@ export const SceneBvh = forwardRef<Group, SceneBvhProps>(
       raycaster,
     ])
 
-    return <group ref={ref}>{children}</group>
+    return <group ref={setRef}>{children}</group>
   },
 )
+
+function assignRef(ref: Ref<Group>, value: Group | null) {
+  if (typeof ref === 'function') {
+    ref(value)
+  } else if (ref) {
+    ref.current = value
+  }
+}
 
 SceneBvh.displayName = 'SceneBvh'

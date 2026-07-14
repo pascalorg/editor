@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode, ZoneNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerFindNodes } from './find-nodes'
 
 describe('find_nodes', () => {
@@ -15,7 +16,7 @@ describe('find_nodes', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerFindNodes(server, bridge)
+    registerFindNodes(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -27,7 +28,7 @@ describe('find_nodes', () => {
       arguments: { type: 'level' },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.nodes.length).toBeGreaterThan(0)
     for (const n of parsed.nodes) {
       expect(n.type).toBe('level')
@@ -39,13 +40,14 @@ describe('find_nodes', () => {
       name: 'find_nodes',
       arguments: { type: 'roof' },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(Array.isArray(parsed.nodes)).toBe(true)
     expect(parsed.nodes.length).toBe(0)
   })
 
   test('zoneId filters walls whose midpoint falls in the zone polygon', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const zone = ZoneNode.parse({
       name: 'Kitchen',
       polygon: [
@@ -65,7 +67,7 @@ describe('find_nodes', () => {
       name: 'find_nodes',
       arguments: { type: 'wall', zoneId: zone.id },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const ids: string[] = parsed.nodes.map((n: { id: string }) => n.id)
     expect(ids).toContain(inWall.id)
     expect(ids).not.toContain(outWall.id)

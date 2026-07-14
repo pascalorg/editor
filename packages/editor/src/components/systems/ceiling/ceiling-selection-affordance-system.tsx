@@ -1,17 +1,13 @@
 'use client'
 
-import {
-  type CeilingNode,
-  emitter,
-  resolveLevelId,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
+import { type CeilingNode, resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
 import type { Object3D } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { emitSyntheticNodeEvent } from '../../../lib/node-events'
+import { at } from '../../../lib/typed-access'
 import useEditor from '../../../store/use-editor'
 
 const BRACKET_THICKNESS = 0.04
@@ -135,17 +131,14 @@ const CornerBracket = ({
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
 
-    const nodes = useScene.getState().nodes
-
     useEditor.getState().setMovingNode(null)
     useEditor.getState().setMovingWallEndpoint(null)
     useEditor.getState().setCurvingWall(null)
     useEditor.getState().setEditingHole(null)
     useEditor.getState().setMode('select')
 
-    emitter.emit('ceiling:click' as any, {
+    emitSyntheticNodeEvent('ceiling', 'click', {
       node: ceiling,
-      nativeEvent: e.nativeEvent,
       localPosition: [0, 0, 0],
       position: [corner.corner[0], ceiling.height ?? 2.5, corner.corner[1]],
       stopPropagation: () => e.stopPropagation(),
@@ -219,8 +212,8 @@ function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketDat
   if (polygon.length < 3) return []
 
   const allCorners = polygon.map((corner, index) => {
-    const previous = polygon[(index - 1 + polygon.length) % polygon.length]!
-    const next = polygon[(index + 1) % polygon.length]!
+    const previous = at(polygon, (index - 1 + polygon.length) % polygon.length)
+    const next = at(polygon, (index + 1) % polygon.length)
     const incomingVector = [previous[0] - corner[0], previous[1] - corner[1]] as [number, number]
     const outgoingVector = [next[0] - corner[0], next[1] - corner[1]] as [number, number]
     const incomingDirection = normalize2D(incomingVector)

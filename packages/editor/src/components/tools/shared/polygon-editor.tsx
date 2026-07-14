@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Line, type Object3D } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { at, first } from '../../../lib/typed-access'
 import { snapToHalf } from '../item/placement-math'
 
 const Y_OFFSET = 0.02
@@ -120,7 +121,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const [hoveredEdge, setHoveredEdge] = useState<number | null>(null)
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
 
-  const lineRef = useRef<Line>(null!)
+  const lineRef = useRef<Line | null>(null)
   const previousPositionRef = useRef<[number, number] | null>(null)
 
   // Track the last polygon prop to detect external changes (undo/redo)
@@ -151,8 +152,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     if (displayPolygon.length < 2) return []
     return displayPolygon.map(([x1, z1], index) => {
       const nextIndex = (index + 1) % displayPolygon.length
-      const [x2, z2] = displayPolygon[nextIndex]!
-      return [(x1! + x2) / 2, (z1! + z2) / 2] as [number, number]
+      const [x2, z2] = at(displayPolygon, nextIndex)
+      return [(x1 + x2) / 2, (z1 + z2) / 2] as [number, number]
     })
   }, [displayPolygon])
 
@@ -161,7 +162,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
     return displayPolygon.flatMap(([x1, z1], index) => {
       const nextIndex = (index + 1) % displayPolygon.length
-      const [x2, z2] = displayPolygon[nextIndex]!
+      const [x2, z2] = at(displayPolygon, nextIndex)
       const dx = x2 - x1
       const dz = z2 - z1
       const length = Math.hypot(dx, dz)
@@ -337,19 +338,20 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   useEffect(() => {
     if (!lineRef.current || displayPolygon.length < 2) return
 
+    const line = lineRef.current
     const positions: number[] = []
     for (const [x, z] of displayPolygon) {
-      positions.push(x!, editY + 0.01, z!)
+      positions.push(x, editY + 0.01, z)
     }
     // Close the loop
-    const first = displayPolygon[0]!
-    positions.push(first[0]!, editY + 0.01, first[1]!)
+    const firstPoint = first(displayPolygon)
+    positions.push(firstPoint[0], editY + 0.01, firstPoint[1])
 
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
 
-    lineRef.current.geometry.dispose()
-    lineRef.current.geometry = geometry
+    line.geometry.dispose()
+    line.geometry = geometry
   }, [displayPolygon, editY])
 
   if (displayPolygon.length < minVertices) return null
@@ -361,11 +363,10 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const editorContent = (
     <group>
       {/* Border line */}
-      <line
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
         raycast={() => {}}
-        // @ts-expect-error R3F <line> element conflicts with SVG <line> type
         ref={lineRef}
         renderOrder={10}
       >
@@ -378,7 +379,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           opacity={0.8}
           transparent
         />
-      </line>
+      </threeLine>
 
       {/* Vertex handles - blue cylinders that match surface height */}
       {displayPolygon.map(([x, z], index) => {
@@ -411,7 +412,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 isDragging: true,
                 mode: 'vertex',
                 vertexIndex: index,
-                initialPosition: [x!, z!],
+                initialPosition: [x, z],
                 initialPolygon: displayPolygon.map(([px, pz]) => [px, pz] as [number, number]),
                 pointerId: e.pointerId,
               })
@@ -424,7 +425,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               e.stopPropagation()
               setHoveredVertex(null)
             }}
-            position={[x!, editY + height / 2, z!]}
+            position={[x, editY + height / 2, z]}
           >
             <cylinderGeometry args={[radius, radius, height, 16]} />
             <meshStandardMaterial
@@ -536,13 +537,13 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               onPointerDown={(e) => {
                 if (e.button !== 0) return
                 e.stopPropagation()
-                const insertedVertex = handleAddVertex(index, [x!, z!])
+                const insertedVertex = handleAddVertex(index, [x, z])
                 if (insertedVertex.vertexIndex >= 0) {
                   setDragState({
                     isDragging: true,
                     mode: 'vertex',
                     vertexIndex: insertedVertex.vertexIndex,
-                    initialPosition: [x!, z!],
+                    initialPosition: [x, z],
                     initialPolygon: insertedVertex.polygon,
                     pointerId: e.pointerId,
                   })
@@ -557,7 +558,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 e.stopPropagation()
                 setHoveredMidpoint(null)
               }}
-              position={[x!, editY + height / 2, z!]}
+              position={[x, editY + height / 2, z]}
             >
               <cylinderGeometry args={[radius, radius, height, 16]} />
               <meshStandardMaterial

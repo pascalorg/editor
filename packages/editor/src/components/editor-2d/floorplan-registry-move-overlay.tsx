@@ -14,6 +14,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { isRecord, isVec3, readNodeField } from '../../lib/typed-access'
 import useEditor from '../../store/use-editor'
 
 const GRID_STEP = 0.5
@@ -148,9 +149,9 @@ export function FloorplanRegistryMoveOverlay() {
           const data: Record<string, unknown> = {}
           let changed = false
           for (const [key, before] of Object.entries(snap.data)) {
-            const after = (current as unknown as Record<string, unknown>)[key]
+            const after = readNodeField(current, key)
             if (!deepEqual(before, after)) {
-              data[key] = Array.isArray(after) ? [...(after as unknown[])] : after
+              data[key] = Array.isArray(after) ? [...after] : after
               changed = true
             }
           }
@@ -319,7 +320,7 @@ export function FloorplanRegistryMoveOverlay() {
               const current = currentNodes[snap.id]
               if (!current) return false
               for (const [key, before] of Object.entries(snap.data)) {
-                const after = (current as unknown as Record<string, unknown>)[key]
+                const after = readNodeField(current, key)
                 if (!deepEqual(before, after)) return true
               }
               return false
@@ -345,11 +346,10 @@ export function FloorplanRegistryMoveOverlay() {
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
 
-    const originalPosition = ((
-      movingNode as unknown as {
-        position?: [number, number, number]
-      }
-    ).position ?? [0, 0, 0]) as [number, number, number]
+    const positionField = readNodeField(movingNode, 'position')
+    const originalPosition: [number, number, number] = isVec3(positionField)
+      ? positionField
+      : [0, 0, 0]
 
     let lastSnapped: [number, number] | null = null
 
@@ -380,7 +380,7 @@ export function FloorplanRegistryMoveOverlay() {
         useScene
           .getState()
           .updateNode(movingNode.id as AnyNodeId, { position: [sx, oldY, sz] } as Partial<AnyNode>)
-        const meta = (movingNode as unknown as { metadata?: Record<string, unknown> }).metadata
+        const meta = isRecord(movingNode.metadata) ? movingNode.metadata : undefined
         if (meta?.isNew) {
           useScene.getState().updateNode(
             movingNode.id as AnyNodeId,
@@ -426,7 +426,7 @@ function snapshotNode(node: AnyNode): NodeSnapshot {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(node)) {
     if (key === 'id' || key === 'type' || key === 'object') continue
-    data[key] = Array.isArray(value) ? [...(value as unknown[])] : value
+    data[key] = Array.isArray(value) ? [...value] : value
   }
   return { id: node.id, data }
 }

@@ -5,13 +5,13 @@
 ## Installation
 
 ```bash
-npm install @pascal-app/viewer @pascal-app/core
+bun add @pascal-app/viewer @pascal-app/core
 ```
 
 ## Peer Dependencies
 
 ```bash
-npm install react three @react-three/fiber @react-three/drei
+bun add react three @react-three/fiber @react-three/drei
 ```
 
 ## What's Included

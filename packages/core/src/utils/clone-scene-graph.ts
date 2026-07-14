@@ -17,6 +17,19 @@ function extractIdPrefix(id: string): string {
 }
 
 /**
+ * Reads a string `id` from a child entry that may be a string ID or an embedded
+ * node object. Returns undefined when no string id is present.
+ */
+function childStringId(child: unknown): string | undefined {
+  if (typeof child === 'string') return child
+  if (child && typeof child === 'object' && 'id' in child) {
+    const { id } = child as { id: unknown }
+    if (typeof id === 'string') return id
+  }
+  return undefined
+}
+
+/**
  * Deep clones a scene graph with all node IDs regenerated while preserving
  * parent-child relationships and other internal references.
  *
@@ -41,7 +54,9 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
   const clonedNodes = {} as Record<AnyNodeId, AnyNode>
 
   for (const [oldId, node] of Object.entries(nodes)) {
-    const newId = idMap.get(oldId)! as AnyNodeId
+    const mappedId = idMap.get(oldId)
+    if (mappedId === undefined) continue
+    const newId = mappedId as AnyNodeId
     const clonedNode = structuredClone({ ...node, id: newId }) as AnyNode
 
     // Remap parentId
@@ -53,18 +68,11 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     // Children can be either string IDs or embedded node objects (with an `id` property).
     // Normalize both forms to remapped string IDs.
     if ('children' in clonedNode && Array.isArray(clonedNode.children)) {
-      ;(clonedNode as Record<string, unknown>).children = (clonedNode.children as unknown[])
+      const children: unknown[] = clonedNode.children
+      ;(clonedNode as Record<string, unknown>).children = children
         .map((child) => {
-          if (typeof child === 'string') return idMap.get(child)
-          if (
-            child &&
-            typeof child === 'object' &&
-            'id' in child &&
-            typeof (child as any).id === 'string'
-          ) {
-            return idMap.get((child as any).id)
-          }
-          return undefined
+          const childId = childStringId(child)
+          return childId === undefined ? undefined : idMap.get(childId)
         })
         .filter((id): id is string => id !== undefined)
     }
@@ -95,7 +103,8 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     }
 
     for (const [oldCollectionId, collection] of Object.entries(collections)) {
-      const newCollectionId = collectionIdMap.get(oldCollectionId)!
+      const newCollectionId = collectionIdMap.get(oldCollectionId)
+      if (newCollectionId === undefined) continue
       clonedCollections[newCollectionId] = {
         ...collection,
         id: newCollectionId,
@@ -174,7 +183,11 @@ export function cloneLevelSubtree(
     idMap.set(oldId, generateId(prefix))
   }
 
-  const newLevelId = idMap.get(levelId)! as AnyNodeId
+  const mappedLevelId = idMap.get(levelId)
+  if (mappedLevelId === undefined) {
+    throw new Error(`Failed to remap level "${levelId}"`)
+  }
+  const newLevelId = mappedLevelId as AnyNodeId
 
   // Clone each node with remapped references.
   // Use JSON roundtrip instead of structuredClone because live runtime nodes may
@@ -185,7 +198,9 @@ export function cloneLevelSubtree(
     const node = nodes[oldId]
     if (!node) continue
 
-    const newId = idMap.get(oldId)! as AnyNodeId
+    const mappedId = idMap.get(oldId)
+    if (mappedId === undefined) continue
+    const newId = mappedId as AnyNodeId
 
     // JSON roundtrip: safely strips functions, Object3D, circular refs, etc.
     const cloned = JSON.parse(JSON.stringify(node)) as AnyNode
@@ -199,17 +214,11 @@ export function cloneLevelSubtree(
 
     // Remap children array
     if ('children' in cloned && Array.isArray(cloned.children)) {
-      ;(cloned as Record<string, unknown>).children = (cloned.children as unknown[])
+      const children: unknown[] = cloned.children
+      ;(cloned as Record<string, unknown>).children = children
         .map((child) => {
-          if (typeof child === 'string') return idMap.get(child) ?? child
-          if (
-            child &&
-            typeof child === 'object' &&
-            'id' in child &&
-            typeof (child as any).id === 'string'
-          ) {
-            return idMap.get((child as any).id) ?? (child as any).id
-          }
+          const childId = childStringId(child)
+          if (childId !== undefined) return idMap.get(childId) ?? childId
           return child
         })
         .filter((id): id is string => typeof id === 'string')
@@ -252,17 +261,11 @@ export function forkSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     // Remove scan children from any parent that references them.
     // Children can be string IDs or embedded node objects.
     if ('children' in clonedNode && Array.isArray(clonedNode.children)) {
-      ;(clonedNode as Record<string, unknown>).children = (clonedNode.children as unknown[]).filter(
-        (child) => {
-          const childId =
-            typeof child === 'string'
-              ? child
-              : child && typeof child === 'object' && 'id' in child
-                ? (child as any).id
-                : null
-          return childId ? !excludedNodeIds.has(childId) : true
-        },
-      )
+      const children: unknown[] = clonedNode.children
+      ;(clonedNode as Record<string, unknown>).children = children.filter((child) => {
+        const childId = childStringId(child)
+        return childId ? !excludedNodeIds.has(childId) : true
+      })
     }
 
     filteredNodes[nodeId as AnyNodeId] = clonedNode

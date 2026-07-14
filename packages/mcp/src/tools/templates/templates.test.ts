@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { AnyNodeId } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { createSceneOperations } from '../../operations'
 import {
@@ -87,8 +88,8 @@ describe('create_from_template', () => {
     expect(bridgeNodes.length).toBeGreaterThan(0)
 
     // Root id from the tool response should exist in the bridge.
-    for (const rid of parsed.rootNodeIds as string[]) {
-      expect(bridge.getNode(rid as any)).not.toBeNull()
+    for (const rid of parsed.rootNodeIds as AnyNodeId[]) {
+      expect(bridge.getNode(rid)).not.toBeNull()
     }
   })
 

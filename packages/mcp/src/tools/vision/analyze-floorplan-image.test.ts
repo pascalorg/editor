@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations } from '../../operations'
 import { registerAnalyzeFloorplanImage } from './analyze-floorplan-image'
 
 type Handler = (req: unknown) => unknown | Promise<unknown>
@@ -20,7 +21,7 @@ async function makeWiredPair(opts: {
   const bridge = new SceneBridge()
   bridge.loadDefault()
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerAnalyzeFloorplanImage(server, bridge)
+  registerAnalyzeFloorplanImage(server, createSceneOperations({ bridge }))
 
   const [srvT, cliT] = InMemoryTransport.createLinkedPair()
 
@@ -108,7 +109,7 @@ describe('analyze_floorplan_image', () => {
     })
     // The McpError thrown inside the tool handler is surfaced as a tool error.
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_unavailable')
   })
 
@@ -126,7 +127,7 @@ describe('analyze_floorplan_image', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_response_unparseable')
   })
 
@@ -150,7 +151,7 @@ describe('analyze_floorplan_image', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_response_invalid')
   })
 
@@ -170,7 +171,10 @@ describe('analyze_floorplan_image', () => {
       },
     })
     const params = (capturedRequest as { params: { messages: Array<{ content: unknown }> } }).params
-    const content = params.messages[0]!.content as Array<{
+    const firstMessage = params.messages[0]
+    expect(firstMessage).toBeDefined()
+    if (!firstMessage) return
+    const content = firstMessage.content as Array<{
       type: string
       data?: string
       mimeType?: string

@@ -17,7 +17,9 @@ import { computeGraphHash, editorUrlFor } from './metadata'
 export type StoredTextContent = { type: string; text: string }
 
 export function parseToolText(content: StoredTextContent[]): Record<string, unknown> {
-  return JSON.parse(content[0]!.text) as Record<string, unknown>
+  const first = content[0]
+  if (!first) throw new Error('expected at least one content block')
+  return JSON.parse(first.text) as Record<string, unknown>
 }
 
 export function createTestSceneOperations(options?: {

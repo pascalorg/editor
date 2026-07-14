@@ -56,6 +56,7 @@ import {
   isOperableWindowType,
   toggleWindowOpenState,
 } from '../../lib/window-interaction'
+import { nodesByType } from '../../lib/typed-access'
 import useEditor from '../../store/use-editor'
 import {
   buildFirstPersonColliderWorldFromRegistry,
@@ -316,23 +317,20 @@ function createElevatorColliderMesh(
 ) {
   const geometry = new BoxGeometry(size[0], size[1], size[2])
 
-  const bvhGeometry = geometry as typeof geometry & {
-    computeBoundsTree?: typeof computeBoundsTree
-    disposeBoundsTree?: typeof disposeBoundsTree
-  }
-  ;(bvhGeometry as any).computeBoundsTree = computeBoundsTree
-  ;(bvhGeometry as any).disposeBoundsTree = disposeBoundsTree
-  bvhGeometry.computeBoundsTree?.({
+  const bvhGeometry: typeof geometry & {
+    computeBoundsTree: typeof computeBoundsTree
+    disposeBoundsTree: typeof disposeBoundsTree
+  } = Object.assign(geometry, {
+    computeBoundsTree,
+    disposeBoundsTree,
+  })
+  bvhGeometry.computeBoundsTree({
     maxLeafSize: 12,
     strategy: 0,
-  } as never)
+  })
   bvhGeometry.computeBoundingBox()
 
-  const mesh = new Mesh(bvhGeometry, elevatorColliderMaterial) as unknown as ElevatorColliderMesh
-  mesh.raycast = acceleratedRaycast
-  mesh.matrixAutoUpdate = false
-  mesh.visible = true
-  mesh.userData = {
+  const colliderUserData: Mesh['userData'] & ElevatorColliderUserData = {
     ...userData,
     dynamic: isDynamicElevatorCollider(kind),
     elevatorId,
@@ -345,6 +343,13 @@ function createElevatorColliderMesh(
     restitution: 0.03,
     type: 'ELEVATOR_COLLIDER',
   }
+  const mesh: ElevatorColliderMesh = Object.assign(
+    new Mesh(bvhGeometry, elevatorColliderMaterial),
+    { userData: colliderUserData },
+  )
+  mesh.raycast = acceleratedRaycast
+  mesh.matrixAutoUpdate = false
+  mesh.visible = true
   return mesh
 }
 
@@ -352,7 +357,7 @@ function buildElevatorColliderMeshes(): ElevatorColliderMesh[] {
   const nodes = useScene.getState().nodes
   const meshes: ElevatorColliderMesh[] = []
 
-  for (const elevatorId of sceneRegistry.byType.elevator!) {
+  for (const elevatorId of nodesByType('elevator')) {
     const typedElevatorId = elevatorId as AnyNodeId
     const node = nodes[typedElevatorId]
     if (node?.type !== 'elevator' || node.visible === false) continue
@@ -585,7 +590,7 @@ export const FirstPersonControls = () => {
     let closestDoorId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const doorId of sceneRegistry.byType.door!) {
+    for (const doorId of nodesByType('door')) {
       const node = nodes[doorId as AnyNodeId]
       if (node?.type !== 'door') continue
       if (node.openingKind === 'opening') continue
@@ -683,7 +688,7 @@ export const FirstPersonControls = () => {
     let closestWindowId: AnyNodeId | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
 
-    for (const windowId of sceneRegistry.byType.window!) {
+    for (const windowId of nodesByType('window')) {
       const node = nodes[windowId as AnyNodeId]
       if (node?.type !== 'window') continue
       if (node.openingKind === 'opening') continue
@@ -713,7 +718,7 @@ export const FirstPersonControls = () => {
       let closestTarget: FirstPersonInteractableTarget | null = null
       let closestDistance = DOOR_INTERACTION_DISTANCE
 
-      for (const elevatorId of sceneRegistry.byType.elevator!) {
+      for (const elevatorId of nodesByType('elevator')) {
         const typedElevatorId = elevatorId as AnyNodeId
         const node = nodes[typedElevatorId]
         if (node?.type !== 'elevator') continue
@@ -1088,11 +1093,11 @@ export const FirstPersonControls = () => {
       const elevatorIds = activeRide
         ? [
             activeRide.elevatorId,
-            ...Array.from(sceneRegistry.byType.elevator!).filter(
+            ...Array.from(nodesByType('elevator')).filter(
               (elevatorId) => elevatorId !== activeRide.elevatorId,
             ),
           ]
-        : Array.from(sceneRegistry.byType.elevator!)
+        : Array.from(nodesByType('elevator'))
 
       for (const elevatorId of elevatorIds) {
         const typedElevatorId = elevatorId as AnyNodeId

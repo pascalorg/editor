@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { type AnyNodeId, AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
+import { AnyNode as AnyNodeSchema, SiteNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { createSceneOperations } from '../../operations'
 import {
@@ -22,29 +22,45 @@ type Variant = {
   graph?: SceneGraph
 }
 
+/**
+ * Narrows the untyped `parseToolText` payload to the `{ variants: Variant[] }`
+ * shape the tool guarantees, verifying at runtime that `variants` is an array.
+ */
+function parseVariantsResult(content: StoredTextContent[]): { variants: Variant[] } {
+  const parsed = parseToolText(content)
+  const variants = parsed.variants
+  expect(Array.isArray(variants)).toBe(true)
+  return { variants: variants as Variant[] }
+}
+
+/** Asserts the variant carries an inline graph and returns it typed. */
+function expectGraph(variant: Variant | undefined): SceneGraph {
+  expect(variant).toBeDefined()
+  if (variant === undefined) throw new Error('variant is undefined')
+  const graph = variant.graph
+  expect(graph).toBeDefined()
+  if (graph === undefined) throw new Error('variant.graph is undefined')
+  return graph
+}
+
 function emptyBase(): SceneGraph {
+  const site = SiteNode.parse({
+    id: 'site_empty',
+    parentId: null,
+    polygon: {
+      type: 'polygon',
+      points: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    },
+    children: [],
+  })
   return {
-    nodes: {
-      site_empty: {
-        object: 'node',
-        id: 'site_empty',
-        type: 'site',
-        parentId: null,
-        visible: true,
-        metadata: {},
-        polygon: {
-          type: 'polygon',
-          points: [
-            [-5, -5],
-            [5, -5],
-            [5, 5],
-            [-5, 5],
-          ],
-        },
-        children: [],
-      },
-    } as unknown as SceneGraph['nodes'],
-    rootNodeIds: ['site_empty'] as AnyNodeId[],
+    nodes: { [site.id]: site },
+    rootNodeIds: [site.id],
   }
 }
 
@@ -81,40 +97,30 @@ describe('generate_variants', () => {
     // Find the level and add a couple of walls.
     const level = Object.values(base.nodes).find((n) => n.type === 'level')
     expect(level).toBeDefined()
+    const wall1 = WallNode.parse({
+      id: 'wall_1',
+      parentId: level?.id ?? null,
+      start: [0, 0],
+      end: [5, 0],
+      thickness: 0.1,
+      height: 2.5,
+      children: [],
+    })
+    const wall2 = WallNode.parse({
+      id: 'wall_2',
+      parentId: level?.id ?? null,
+      start: [0, 5],
+      end: [5, 5],
+      thickness: 0.1,
+      height: 2.5,
+      children: [],
+    })
     const withWalls: SceneGraph = {
       nodes: {
         ...base.nodes,
-        wall_1: {
-          object: 'node',
-          id: 'wall_1',
-          type: 'wall',
-          parentId: level?.id ?? null,
-          visible: true,
-          metadata: {},
-          start: [0, 0],
-          end: [5, 0],
-          thickness: 0.1,
-          height: 2.5,
-          children: [],
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-        wall_2: {
-          object: 'node',
-          id: 'wall_2',
-          type: 'wall',
-          parentId: level?.id ?? null,
-          visible: true,
-          metadata: {},
-          start: [0, 5],
-          end: [5, 5],
-          thickness: 0.1,
-          height: 2.5,
-          children: [],
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-      } as unknown as SceneGraph['nodes'],
+        [wall1.id]: wall1,
+        [wall2.id]: wall2,
+      },
       rootNodeIds: base.rootNodeIds,
     }
     bridge.setScene(withWalls.nodes, withWalls.rootNodeIds)
@@ -128,15 +134,13 @@ describe('generate_variants', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = parseToolText(result.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
+    const parsed = parseVariantsResult(result.content as StoredTextContent[])
     expect(parsed.variants.length).toBe(3)
     for (const v of parsed.variants) {
-      expect(v.graph).toBeDefined()
+      const graph = expectGraph(v)
       // Every wall's thickness is in the allowed set.
       const allowed = new Set([0.1, 0.15, 0.2, 0.25])
-      for (const node of Object.values((v.graph as SceneGraph).nodes)) {
+      for (const node of Object.values(graph.nodes)) {
         if (node.type !== 'wall') continue
         expect(allowed.has((node as { thickness: number }).thickness)).toBe(true)
       }
@@ -147,40 +151,30 @@ describe('generate_variants', () => {
     // Seed walls so the mutation has something to act on.
     const base = bridge.exportJSON()
     const level = Object.values(base.nodes).find((n) => n.type === 'level')
+    const wallA = WallNode.parse({
+      id: 'wall_a',
+      parentId: level?.id ?? null,
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.1,
+      height: 2.5,
+      children: [],
+    })
+    const wallB = WallNode.parse({
+      id: 'wall_b',
+      parentId: level?.id ?? null,
+      start: [0, 4],
+      end: [4, 4],
+      thickness: 0.1,
+      height: 2.5,
+      children: [],
+    })
     const withWalls: SceneGraph = {
       nodes: {
         ...base.nodes,
-        wall_a: {
-          object: 'node',
-          id: 'wall_a',
-          type: 'wall',
-          parentId: level?.id ?? null,
-          visible: true,
-          metadata: {},
-          start: [0, 0],
-          end: [4, 0],
-          thickness: 0.1,
-          height: 2.5,
-          children: [],
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-        wall_b: {
-          object: 'node',
-          id: 'wall_b',
-          type: 'wall',
-          parentId: level?.id ?? null,
-          visible: true,
-          metadata: {},
-          start: [0, 4],
-          end: [4, 4],
-          thickness: 0.1,
-          height: 2.5,
-          children: [],
-          frontSide: 'unknown',
-          backSide: 'unknown',
-        },
-      } as unknown as SceneGraph['nodes'],
+        [wallA.id]: wallA,
+        [wallB.id]: wallB,
+      },
       rootNodeIds: base.rootNodeIds,
     }
     bridge.setScene(withWalls.nodes, withWalls.rootNodeIds)
@@ -188,12 +182,8 @@ describe('generate_variants', () => {
     const args = { count: 2, vary: ['wall-thickness'], seed: 123 }
     const r1 = await client.callTool({ name: 'generate_variants', arguments: args })
     const r2 = await client.callTool({ name: 'generate_variants', arguments: args })
-    const p1 = parseToolText(r1.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
-    const p2 = parseToolText(r2.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
+    const p1 = parseVariantsResult(r1.content as StoredTextContent[])
+    const p2 = parseVariantsResult(r2.content as StoredTextContent[])
     expect(p1.variants.length).toBe(p2.variants.length)
     // Compare the mutated fields (not the ids, which fresh-nanoid each time).
     function wallThicknesses(g: SceneGraph): number[] {
@@ -203,8 +193,8 @@ describe('generate_variants', () => {
         .sort()
     }
     for (let i = 0; i < p1.variants.length; i++) {
-      const t1 = wallThicknesses(p1.variants[i]?.graph as SceneGraph)
-      const t2 = wallThicknesses(p2.variants[i]?.graph as SceneGraph)
+      const t1 = wallThicknesses(expectGraph(p1.variants[i]))
+      const t2 = wallThicknesses(expectGraph(p2.variants[i]))
       expect(t1).toEqual(t2)
     }
   })
@@ -223,13 +213,10 @@ describe('generate_variants', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = parseToolText(result.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
+    const parsed = parseVariantsResult(result.content as StoredTextContent[])
     expect(parsed.variants.length).toBe(3)
     for (const v of parsed.variants) {
-      const g = v.graph as SceneGraph
-      expect(g).toBeDefined()
+      const g = expectGraph(v)
       // No walls were present — so node counts should match the (forked) base.
       expect(Object.keys(g.nodes).length).toBe(Object.keys(graph.nodes).length)
     }
@@ -246,9 +233,7 @@ describe('generate_variants', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = parseToolText(result.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
+    const parsed = parseVariantsResult(result.content as StoredTextContent[])
     expect(parsed.variants.length).toBe(2)
     for (const v of parsed.variants) {
       expect(typeof v.sceneId).toBe('string')
@@ -283,11 +268,9 @@ describe('generate_variants', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = parseToolText(result.content as StoredTextContent[]) as unknown as {
-      variants: Variant[]
-    }
+    const parsed = parseVariantsResult(result.content as StoredTextContent[])
     for (const v of parsed.variants) {
-      const g = v.graph as SceneGraph
+      const g = expectGraph(v)
       for (const node of Object.values(g.nodes)) {
         const res = AnyNodeSchema.safeParse(node)
         expect(res.success).toBe(true)

@@ -38,6 +38,7 @@ import {
 } from './../../../../../lib/level-duplication'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { at } from './../../../../../lib/typed-access'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
@@ -54,8 +55,8 @@ function calculatePerimeter(points: Array<[number, number]>): number {
   if (points.length < 2) return 0
   let perimeter = 0
   for (let i = 0; i < points.length; i++) {
-    const [x1, z1] = points[i]!
-    const [x2, z2] = points[(i + 1) % points.length]!
+    const [x1, z1] = at(points, i)
+    const [x2, z2] = at(points, (i + 1) % points.length)
     perimeter += Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2)
   }
   return perimeter
@@ -67,8 +68,8 @@ function calculatePolygonArea(polygon: Array<[number, number]>): number {
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
-    const [currentX, currentY] = polygon[i]!
-    const [nextX, nextY] = polygon[j]!
+    const [currentX, currentY] = at(polygon, i)
+    const [nextX, nextY] = at(polygon, j)
     area += currentX * nextY
     area -= nextX * currentY
   }
@@ -1273,7 +1274,6 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
 const ContentSection = memo(function ContentSection() {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
-  const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
@@ -1525,9 +1525,7 @@ export interface SitePanelProps {
 
 export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanelProps = {}) {
   const rootNodeIds = useScene((state) => state.rootNodeIds)
-  const updateNode = useScene((state) => state.updateNode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
-  const setSelection = useViewer((state) => state.setSelection)
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
 

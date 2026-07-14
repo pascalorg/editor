@@ -277,7 +277,7 @@ function buildPanelCutters(node: ChimneyNode, topY: number): Brush[] {
     geo.clearGroups()
     if (idx > 0) geo.addGroup(0, idx, 0)
 
-    const brush = new Brush(geo, dummyMat as unknown as THREE.MeshStandardMaterial)
+    const brush = new Brush(geo, dummyMat)
     brush.updateMatrixWorld()
     prepareBrushForCSG(brush)
     brushes.push(brush)
@@ -307,7 +307,7 @@ function buildCutter(
   geo.clearGroups()
   if (idx > 0) geo.addGroup(0, idx, 0)
 
-  const brush = new Brush(geo, dummyMat as unknown as THREE.MeshStandardMaterial)
+  const brush = new Brush(geo, dummyMat)
   brush.updateMatrixWorld()
   prepareBrushForCSG(brush)
   return brush
@@ -322,7 +322,7 @@ function subtractCutters(base: THREE.BufferGeometry, cutters: Brush[]): THREE.Bu
   indexed.clearGroups()
   if (ic > 0) indexed.addGroup(0, ic, 0)
 
-  const baseBrush = new Brush(indexed, dummyMat as unknown as THREE.MeshStandardMaterial)
+  const baseBrush = new Brush(indexed, dummyMat)
   baseBrush.updateMatrixWorld()
   prepareBrushForCSG(baseBrush)
 

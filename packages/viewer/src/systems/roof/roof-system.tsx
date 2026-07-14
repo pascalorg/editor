@@ -17,22 +17,27 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
-  return brush.geometry as unknown as THREE.BufferGeometry
+  return brush.geometry
 }
 
 function csgMaterials(brush: Brush): THREE.Material[] {
-  const mat = (brush as any).material
+  const mat = brush.material
   return Array.isArray(mat) ? mat : [mat]
 }
 
 const csgEvaluator = new Evaluator()
 csgEvaluator.useGroups = true
-;(csgEvaluator as any).consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
+csgEvaluator.consolidateGroups = false // shared dummyMats across brushes causes consolidation to misalign groupIndices vs groupOrder indices → crash
 csgEvaluator.attributes = ['position', 'normal', 'uv']
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
-  ;(geometry as any).computeBoundsTree = computeBoundsTree
-  ;(geometry as any).computeBoundsTree({ maxLeafSize: 10 })
+  // See scene-bvh.tsx: `three-bvh-csg` pins three-mesh-bvh 0.8.3 whose `three`
+  // augmentation types `computeBoundsTree` as `(o?: MeshBVHOptions) => MeshBVH`,
+  // incompatible with the 0.9.9 helper we import (`=> GeometryBVH`, and its
+  // options accept `maxLeafSize`). Bind the helper as the geometry method and
+  // invoke the 0.9.9 import directly so the option type resolves correctly.
+  geometry.computeBoundsTree = computeBoundsTree as unknown as typeof geometry.computeBoundsTree
+  computeBoundsTree.call(geometry, { maxLeafSize: 10 })
 }
 
 function prepareBrushForCSG(brush: Brush) {
@@ -1414,9 +1419,9 @@ export function getRoofOuterSurfaceFrameAtPoint(
     const a = index.getX(i)
     const b = index.getX(i + 1)
     const c = index.getX(i + 2)
-    _surfaceV0.fromBufferAttribute(pos as any, a)
-    _surfaceV1.fromBufferAttribute(pos as any, b)
-    _surfaceV2.fromBufferAttribute(pos as any, c)
+    _surfaceV0.fromBufferAttribute(pos, a)
+    _surfaceV1.fromBufferAttribute(pos, b)
+    _surfaceV2.fromBufferAttribute(pos, c)
 
     const hit = _surfaceRay.intersectTriangle(_surfaceV0, _surfaceV1, _surfaceV2, false, _tmpVec3A)
     if (!hit) continue

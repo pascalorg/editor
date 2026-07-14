@@ -234,23 +234,6 @@ function getPresetTextureCacheKey(
   return `${path}-${props.repeatX}-${props.repeatY}-${props.rotation}-${props.wrapS}-${props.wrapT}-${props.flipY}-${slot ?? 'map'}`
 }
 
-function getPresetTexture(
-  path: string,
-  props: MaterialMapProperties,
-  slot?: TextureSlot,
-): THREE.Texture {
-  const resolvedPath = resolveCdnUrl(path) ?? path
-  const cacheKey = getPresetTextureCacheKey(resolvedPath, props, slot)
-  const cached = textureCache.get(cacheKey)
-  if (cached) return cached
-
-  const texture = textureLoader.load(resolvedPath)
-  applyTextureProperties(texture, props, slot)
-  setTextureCacheKey(texture, cacheKey)
-  textureCache.set(cacheKey, texture)
-  return texture
-}
-
 function createAssignedTexture(
   source: THREE.Texture,
   props: MaterialMapProperties,

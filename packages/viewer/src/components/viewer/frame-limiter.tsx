@@ -6,8 +6,7 @@ type FrameLimiterProps = {
 }
 
 const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
-  const { advance, set, frameloop: initFrameloop, scene, clock } = useThree()
-  const renderer = useThree((state) => state.gl)
+  const { advance, set, frameloop: initFrameloop } = useThree()
 
   useLayoutEffect(() => {
     let elapsed = 0

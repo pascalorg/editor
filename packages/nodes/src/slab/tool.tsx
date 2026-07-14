@@ -219,23 +219,19 @@ export const SlabTool: React.FC = () => {
           />
         </mesh>
       )}
-      {/* @ts-ignore */}
-      <line
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
-        // @ts-expect-error
         ref={mainLineRef}
         renderOrder={1}
         visible={false}
       >
         <bufferGeometry />
         <lineBasicNodeMaterial color="#818cf8" depthTest={false} depthWrite={false} linewidth={3} />
-      </line>
-      {/* @ts-ignore */}
-      <line
+      </threeLine>
+      <threeLine
         frustumCulled={false}
         layers={EDITOR_LAYER}
-        // @ts-expect-error
         ref={closingLineRef}
         renderOrder={1}
         visible={false}
@@ -249,7 +245,7 @@ export const SlabTool: React.FC = () => {
           opacity={0.5}
           transparent
         />
-      </line>
+      </threeLine>
       {points.map(([x, z], index) => (
         <CursorSphere
           color="#818cf8"

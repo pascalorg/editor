@@ -1,13 +1,11 @@
 'use client'
 
 import NextImage from 'next/image'
-import { useContextualTools } from '../../../hooks/use-contextual-tools'
 
 import { cn } from '../../../lib/utils'
 import useEditor, {
   type CatalogCategory,
   type StructureTool,
-  type Tool,
 } from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
@@ -49,18 +47,11 @@ export function StructureTools() {
   const setTool = useEditor((state) => state.setTool)
   const setCatalogCategory = useEditor((state) => state.setCatalogCategory)
 
-  const contextualTools = useContextualTools()
-
   // Filter tools based on structureLayer
   const visibleTools =
     structureLayer === 'zones'
       ? tools.filter((t) => t.id === 'zone')
       : tools.filter((t) => t.id !== 'zone')
-
-  const hasActiveTool = visibleTools.some(
-    (t) =>
-      activeTool === t.id && (t.catalogCategory ? catalogCategory === t.catalogCategory : true),
-  )
 
   return (
     <div className="flex items-center gap-1.5 px-1">
@@ -69,8 +60,6 @@ export function StructureTools() {
         const isActive =
           activeTool === tool.id &&
           (tool.catalogCategory ? catalogCategory === tool.catalogCategory : true)
-
-        const isContextual = contextualTools.includes(tool.id)
 
         return (
           <ActionButton

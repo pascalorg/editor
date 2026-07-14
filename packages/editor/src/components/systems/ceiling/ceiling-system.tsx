@@ -1,6 +1,7 @@
 import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { nodesByType } from '../../../lib/typed-access'
 import useEditor from '../../../store/use-editor'
 
 export const CeilingSystem = () => {
@@ -46,7 +47,7 @@ export const CeilingSystem = () => {
       }
     }
 
-    const ceilings = sceneRegistry.byType.ceiling!
+    const ceilings = nodesByType('ceiling')
     ceilings.forEach((ceiling) => {
       const mesh = sceneRegistry.nodes.get(ceiling)
       if (mesh) {

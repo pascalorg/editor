@@ -76,7 +76,6 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   ]
 
   const view = ctx.viewState
-  const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted

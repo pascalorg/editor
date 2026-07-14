@@ -13,18 +13,24 @@ import { type ComponentType, lazy } from 'react'
  * Returns null when the kind doesn't declare the affordance — callers
  * mount the legacy fallback in that case.
  */
-const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+// Each affordance tool declares its own props, so the dynamically-resolved
+// component is typed with open props (mirrors the core registry's own
+// `ComponentType<any>` value type). The loader itself is precisely typed, so
+// no `as`-cast is needed to feed it to `lazy`.
+type AffordanceToolLoader = () => Promise<{ default: ComponentType<any> }>
+
+const lazyToolCache = new WeakMap<AffordanceToolLoader, ComponentType<any>>()
 
 export function getRegistryAffordanceTool(
   kind: string,
   affordance: string,
 ): ComponentType<any> | null {
   const def = nodeRegistry.get(kind)
-  const loader = def?.affordanceTools?.[affordance]
+  const loader: AffordanceToolLoader | undefined = def?.affordanceTools?.[affordance]
   if (!loader) return null
   const cached = lazyToolCache.get(loader)
   if (cached) return cached
-  const Comp = lazy(loader as () => Promise<{ default: ComponentType<any> }>)
-  lazyToolCache.set(loader, Comp as unknown as ComponentType)
-  return Comp as unknown as ComponentType<any>
+  const Comp = lazy(loader)
+  lazyToolCache.set(loader, Comp)
+  return Comp
 }

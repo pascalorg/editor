@@ -157,12 +157,12 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
   }
 
   // --- Floor at Y=0 ---
-  for (const [x, z] of polygon) pushFloorVertex(x!, 0, z!)
+  for (const [x, z] of polygon) pushFloorVertex(x, 0, z)
 
-  const pts2d = polygon.map(([x, z]) => new THREE.Vector2(x!, z!))
-  const holesPts2d = holePolygons.map((h) => h.map(([x, z]) => new THREE.Vector2(x!, z!)))
+  const pts2d = polygon.map(([x, z]) => new THREE.Vector2(x, z))
+  const holesPts2d = holePolygons.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)))
   for (const hole of holePolygons) {
-    for (const [x, z] of hole) pushFloorVertex(x!, 0, z!)
+    for (const [x, z] of hole) pushFloorVertex(x, 0, z)
   }
 
   const floorTris = THREE.ShapeUtils.triangulateShape(pts2d, holesPts2d)
@@ -180,10 +180,10 @@ function generatePoolGeometry(slabNode: SlabNode): THREE.BufferGeometry {
     const vBase = positions.length / 3
     const segmentLength = Math.max(Math.hypot(x1 - x0, z1 - z0), 0.001)
 
-    pushWallVertex(x0!, 0, z0!, 0, 0) // v0 — floor level
-    pushWallVertex(x1!, 0, z1!, segmentLength, 0) // v1 — floor level
-    pushWallVertex(x1!, depth, z1!, segmentLength, depth) // v2 — ground level
-    pushWallVertex(x0!, depth, z0!, 0, depth) // v3 — ground level
+    pushWallVertex(x0, 0, z0, 0, 0) // v0 — floor level
+    pushWallVertex(x1, 0, z1, segmentLength, 0) // v1 — floor level
+    pushWallVertex(x1, depth, z1, segmentLength, depth) // v2 — ground level
+    pushWallVertex(x0, depth, z0, 0, depth) // v3 — ground level
 
     indices.push(vBase, vBase + 1, vBase + 2)
     indices.push(vBase, vBase + 2, vBase + 3)

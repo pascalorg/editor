@@ -20,11 +20,11 @@ export const LevelSystem = () => {
       obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
     }
     const entries: LevelEntry[] = []
-    sceneRegistry.byType.level!.forEach((levelId) => {
+    sceneRegistry.byType.level?.forEach((levelId) => {
       const obj = sceneRegistry.nodes.get(levelId)
       const level = nodes[levelId as LevelNode['id']]
       if (obj && level) {
-        entries.push({ levelId, index: (level as any).level ?? 0, obj })
+        entries.push({ levelId, index: (level as LevelNode).level ?? 0, obj })
       }
     })
     entries.sort((a, b) => a.index - b.index)

@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CreateMessageRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { SceneBridge } from '../../bridge/scene-bridge'
+import { createSceneOperations } from '../../operations'
 import { registerAnalyzeRoomPhoto } from './analyze-room-photo'
 
 type Handler = (req: unknown) => unknown | Promise<unknown>
@@ -15,7 +16,7 @@ async function makeWiredPair(opts: {
   const bridge = new SceneBridge()
   bridge.loadDefault()
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerAnalyzeRoomPhoto(server, bridge)
+  registerAnalyzeRoomPhoto(server, createSceneOperations({ bridge }))
 
   const [srvT, cliT] = InMemoryTransport.createLinkedPair()
 
@@ -77,8 +78,12 @@ describe('analyze_room_photo', () => {
     expect(structured.approximateDimensions.widthM).toBe(4.2)
     expect(structured.approximateDimensions.lengthM).toBe(5.8)
     expect(structured.identifiedFixtures.length).toBe(2)
-    expect(structured.identifiedFixtures[0]!.type).toBe('sofa')
-    expect(structured.identifiedWindows[0]!.wallLabel).toBe('north')
+    const firstFixture = structured.identifiedFixtures[0]
+    const firstWindow = structured.identifiedWindows[0]
+    expect(firstFixture).toBeDefined()
+    expect(firstWindow).toBeDefined()
+    expect(firstFixture?.type).toBe('sofa')
+    expect(firstWindow?.wallLabel).toBe('north')
   })
 
   test('sampling unavailable → throws sampling_unavailable', async () => {
@@ -88,7 +93,7 @@ describe('analyze_room_photo', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_unavailable')
   })
 
@@ -106,7 +111,7 @@ describe('analyze_room_photo', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_response_unparseable')
   })
 
@@ -132,7 +137,7 @@ describe('analyze_room_photo', () => {
       arguments: { image: 'aGVsbG8=' },
     })
     expect(result.isError).toBe(true)
-    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    const text = (result.content as Array<{ type: string; text: string }>)[0]?.text ?? ''
     expect(text).toContain('sampling_response_invalid')
   })
 })

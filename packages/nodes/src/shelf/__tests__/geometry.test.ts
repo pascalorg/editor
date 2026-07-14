@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Mesh } from 'three'
+import { BoxGeometry, type Mesh, MeshStandardMaterial } from 'three'
 import { buildShelfGeometry, shelfRowSurfaceYs } from '../geometry'
 import { ShelfNode } from '../schema'
 
@@ -49,9 +49,17 @@ describe('buildShelfGeometry — wall-shelf', () => {
     const industrialBracket = industrial.children.find(
       (c) => c.name === 'shelf-bracket-left',
     ) as Mesh
-    const minimalParams = (minimalBracket.geometry as any).parameters
-    const industrialParams = (industrialBracket.geometry as any).parameters
-    expect(industrialParams.width).toBeGreaterThan(minimalParams.width)
+    expect(minimalBracket.geometry).toBeInstanceOf(BoxGeometry)
+    expect(industrialBracket.geometry).toBeInstanceOf(BoxGeometry)
+    if (
+      !(minimalBracket.geometry instanceof BoxGeometry) ||
+      !(industrialBracket.geometry instanceof BoxGeometry)
+    ) {
+      throw new Error('expected bracket geometries to be BoxGeometry')
+    }
+    expect(industrialBracket.geometry.parameters.width).toBeGreaterThan(
+      minimalBracket.geometry.parameters.width,
+    )
   })
 })
 
@@ -173,12 +181,18 @@ describe('shelfRowSurfaceYs', () => {
   })
 })
 
+function boardMaterial(node: ReturnType<typeof ShelfNode.parse>): MeshStandardMaterial {
+  const board = buildShelfGeometry(node).children.find((c) => c.name === 'shelf-board-0') as Mesh
+  const material = board.material
+  if (!(material instanceof MeshStandardMaterial)) {
+    throw new Error('expected shelf board material to be a MeshStandardMaterial')
+  }
+  return material
+}
+
 describe('material application', () => {
   test('default shelf material is the canonical white shared with walls / stairs', () => {
-    const board = buildShelfGeometry(ShelfNode.parse({})).children.find(
-      (c) => c.name === 'shelf-board-0',
-    ) as Mesh
-    const material = board.material as { color: { getHexString(): string } }
+    const material = boardMaterial(ShelfNode.parse({}))
     // DEFAULT_SHELF_MATERIAL is '#ffffff' — same as DEFAULT_WALL_MATERIAL /
     // DEFAULT_STAIR_MATERIAL so an unpainted shelf reads as the same
     // "default white" surface the rest of the structural kinds use.
@@ -186,18 +200,12 @@ describe('material application', () => {
   })
 
   test('user-set material is applied (not the default)', () => {
-    const defaultBoard = (
-      buildShelfGeometry(ShelfNode.parse({})).children.find(
-        (c) => c.name === 'shelf-board-0',
-      ) as Mesh
-    ).material as { color: { getHexString(): string } }
-    const customBoard = (
-      buildShelfGeometry(
-        ShelfNode.parse({
-          material: { properties: { color: '#112233' } },
-        }),
-      ).children.find((c) => c.name === 'shelf-board-0') as Mesh
-    ).material as { color: { getHexString(): string } }
+    const defaultBoard = boardMaterial(ShelfNode.parse({}))
+    const customBoard = boardMaterial(
+      ShelfNode.parse({
+        material: { properties: { color: '#112233' } },
+      }),
+    )
     expect(customBoard.color.getHexString()).not.toBe(defaultBoard.color.getHexString())
   })
 })

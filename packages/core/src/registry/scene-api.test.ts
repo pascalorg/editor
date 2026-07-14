@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resetSceneHistoryPauseDepth } from '../store/history-control'
+import { coerce } from '../test-utils'
 import { createSceneApi, type SceneStoreLike } from './scene-api'
 
 function makeFakeStore(initial: Record<string, AnyNode> = {}) {
@@ -45,14 +46,14 @@ function makeFakeStore(initial: Record<string, AnyNode> = {}) {
 }
 
 function makeNode(id: string, extra: Record<string, unknown> = {}): AnyNode {
-  return { id, type: 'site', parentId: null, visible: true, ...extra } as unknown as AnyNode
+  return coerce<AnyNode>({ id, type: 'site', parentId: null, visible: true, ...extra })
 }
 
 // Tests use short string IDs ("a", "b") for readability. The store's
 // AnyNodeId is a branded template-literal type — cast at the boundary.
 const id = (s: string) => s as AnyNodeId
-const nodes = (store: ReturnType<typeof makeFakeStore>) =>
-  store._state.nodes as unknown as Record<string, AnyNode>
+const nodes = (store: ReturnType<typeof makeFakeStore>): Record<string, AnyNode> =>
+  store._state.nodes
 
 describe('SceneApi', () => {
   beforeEach(() => {

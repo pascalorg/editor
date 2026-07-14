@@ -2,7 +2,6 @@
 
 import { Icon } from '@iconify/react'
 import {
-  type AnyNodeId,
   type BuildingNode,
   type GuideNode,
   type LevelNode,

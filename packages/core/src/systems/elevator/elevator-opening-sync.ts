@@ -71,8 +71,9 @@ function pointInPolygon(point: Point2D, polygon: Point2D[]) {
   const [x, z] = point
 
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const a = polygon[i]!
-    const b = polygon[j]!
+    const a = polygon[i]
+    const b = polygon[j]
+    if (!a || !b) continue
     if (pointOnSegment(point, a, b)) return true
     const intersects =
       a[1] > z !== b[1] > z && x < ((b[0] - a[0]) * (z - a[1])) / (b[1] - a[1]) + a[0]
@@ -179,7 +180,10 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
     const existingHoles = slab.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, slab.holeMetadata)
     const preservedHoles = existingHoles
-      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .map((polygon, index) => ({
+        metadata: existingMetadata[index] ?? { source: 'manual' as const },
+        polygon,
+      }))
       .filter((entry) => entry.metadata.source !== 'elevator')
     const manualHoles = preservedHoles.filter((entry) => entry.metadata.source !== 'stair')
     const stairHoles = preservedHoles.filter((entry) => entry.metadata.source === 'stair')
@@ -227,7 +231,10 @@ export function syncAutoElevatorOpenings(nodes: Record<string, AnyNode>) {
     const existingHoles = ceiling.holes ?? []
     const existingMetadata = normalizeExistingMetadata(existingHoles, ceiling.holeMetadata)
     const preservedHoles = existingHoles
-      .map((polygon, index) => ({ metadata: existingMetadata[index]!, polygon }))
+      .map((polygon, index) => ({
+        metadata: existingMetadata[index] ?? { source: 'manual' as const },
+        polygon,
+      }))
       .filter((entry) => entry.metadata.source !== 'elevator')
     const manualHoles = preservedHoles.filter((entry) => entry.metadata.source !== 'stair')
     const stairHoles = preservedHoles.filter((entry) => entry.metadata.source === 'stair')

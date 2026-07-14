@@ -234,9 +234,14 @@ function buildRoomPlacements(
 ) {
   const bounds = polygonBounds(polygon)
   const n = polygon.length
+  const at = (idx: number): Vec2 => {
+    const p = polygon[idx]
+    if (!p) throw new Error(`polygon index ${idx} out of range (length ${n})`)
+    return p
+  }
   const backIdx = (doorWallIndex + Math.floor(n / 2)) % n
-  const backStart = polygon[backIdx]!
-  const backEnd = polygon[(backIdx + 1) % n]!
+  const backStart = at(backIdx)
+  const backEnd = at((backIdx + 1) % n)
   const backMidX = (backStart[0] + backEnd[0]) / 2
   const backMidZ = (backStart[1] + backEnd[1]) / 2
   const inwardX = bounds.centerX - backMidX
@@ -258,8 +263,8 @@ function buildRoomPlacements(
   ]
 
   const sideIdx = (doorWallIndex + 1) % n
-  const sideStart = polygon[sideIdx]!
-  const sideEnd = polygon[(sideIdx + 1) % n]!
+  const sideStart = at(sideIdx)
+  const sideEnd = at((sideIdx + 1) % n)
   const sideMidX = (sideStart[0] + sideEnd[0]) / 2
   const sideMidZ = (sideStart[1] + sideEnd[1]) / 2
   const sideInX = bounds.centerX - sideMidX
@@ -320,8 +325,8 @@ function buildRoomPlacements(
       addBack('coffee-table', 2.1)
       addSide('livingroom-chair', 0.85, -sideAlongLen * 0.18)
       const doorIdx = doorWallIndex % n
-      const doorStart = polygon[doorIdx]!
-      const doorEnd = polygon[(doorIdx + 1) % n]!
+      const doorStart = at(doorIdx)
+      const doorEnd = at((doorIdx + 1) % n)
       placements.push({
         assetId: 'tv-stand',
         x: (doorStart[0] + doorEnd[0]) / 2 - inX * 0.35,

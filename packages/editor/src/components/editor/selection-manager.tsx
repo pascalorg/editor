@@ -53,6 +53,7 @@ import {
   hasActivePaintMaterial,
   resolveActivePaintMaterialFromSelection,
 } from '../../lib/material-paint'
+import { offNodeEvent, onNodeEvent } from '../../lib/node-events'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, {
   type MaterialTargetRole,
@@ -296,14 +297,18 @@ function applyRoofSegmentPaintPreview(
   if (!(edge || wall || top)) return null
   const fallback = parent ? getRoofMaterialArray(parent) : null
   const fb = (n: number) => fallback?.[n] ?? null
-  const arr: Material[] = [
-    edge ?? wall ?? top ?? fb(0)!,
-    wall ?? edge ?? top ?? fb(1)!,
-    wall ?? edge ?? top ?? fb(2)!,
-    top ?? wall ?? edge ?? fb(3)!,
+  const arr: (Material | null)[] = [
+    edge ?? wall ?? top ?? fb(0),
+    wall ?? edge ?? top ?? fb(1),
+    wall ?? edge ?? top ?? fb(2),
+    top ?? wall ?? edge ?? fb(3),
   ]
-  if (arr.some((m) => !m)) return null
-  return previewMeshMaterial(mesh, arr)
+  const resolvedArr: Material[] = []
+  for (const m of arr) {
+    if (!m) return null
+    resolvedArr.push(m)
+  }
+  return previewMeshMaterial(mesh, resolvedArr)
 }
 
 function applyStairPaintPreview(
@@ -800,7 +805,6 @@ const getSelectionTarget = (node: AnyNode): SelectionTarget | null => {
 }
 
 export const SelectionManager = () => {
-  const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const setHoverHighlightMode = useViewer((s) => s.setHoverHighlightMode)
   const modifierKeysRef = useRef<ModifierKeys>({
@@ -930,13 +934,14 @@ export const SelectionManager = () => {
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
+                  if (!role) return
                   const sceneState = useScene.getState()
                   if (segmentTarget) {
                     sceneState.updateNode(
                       segmentTarget.id as AnyNodeId,
                       buildRoofSegmentSurfaceMaterialPatch(
                         segmentTarget,
-                        role!,
+                        role,
                         activePaintMaterial.material,
                         activePaintMaterial.materialPreset,
                       ),
@@ -946,7 +951,7 @@ export const SelectionManager = () => {
                       buildRoofSurfaceMaterialUpdates(
                         sceneState.nodes,
                         roofNode as RoofNode,
-                        role!,
+                        role,
                         activePaintMaterial.material,
                         activePaintMaterial.materialPreset,
                       ),
@@ -990,13 +995,14 @@ export const SelectionManager = () => {
           apply:
             compatible && hasActivePaintMaterial(activePaintMaterial)
               ? () => {
+                  if (!role) return
                   useScene
                     .getState()
                     .updateNode(
                       stairNode.id as AnyNodeId,
                       buildStairSurfaceMaterialPatch(
                         stairNode as StairNode,
-                        role!,
+                        role,
                         activePaintMaterial.material,
                         activePaintMaterial.materialPreset,
                       ),
@@ -1161,16 +1167,16 @@ export const SelectionManager = () => {
     const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
 
     for (const type of subscribedKinds) {
-      emitter.on(`${type}:enter` as any, onEnter as any)
-      emitter.on(`${type}:leave` as any, onLeave as any)
-      emitter.on(`${type}:click` as any, onClick as any)
+      onNodeEvent(type, 'enter', onEnter)
+      onNodeEvent(type, 'leave', onLeave)
+      onNodeEvent(type, 'click', onClick)
     }
 
     return () => {
       for (const type of subscribedKinds) {
-        emitter.off(`${type}:enter` as any, onEnter as any)
-        emitter.off(`${type}:leave` as any, onLeave as any)
-        emitter.off(`${type}:click` as any, onClick as any)
+        offNodeEvent(type, 'enter', onEnter)
+        offNodeEvent(type, 'leave', onLeave)
+        offNodeEvent(type, 'click', onClick)
       }
       clearActivePreview()
       useViewer.setState({ hoveredId: null })
@@ -1361,7 +1367,7 @@ export const SelectionManager = () => {
     const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
 
     subscribedKinds.forEach((type) => {
-      emitter.on(`${type}:click` as any, onClick as any)
+      onNodeEvent(type, 'click', onClick)
     })
 
     const onGridClick = () => {
@@ -1382,7 +1388,7 @@ export const SelectionManager = () => {
 
     return () => {
       subscribedKinds.forEach((type) => {
-        emitter.off(`${type}:click` as any, onClick as any)
+        offNodeEvent(type, 'click', onClick)
       })
       emitter.off('grid:click', onGridClick)
     }
@@ -1519,16 +1525,16 @@ export const SelectionManager = () => {
     const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
 
     subscribedKinds.forEach((type) => {
-      emitter.on(`${type}:enter` as any, onEnter as any)
-      emitter.on(`${type}:leave` as any, onLeave as any)
-      emitter.on(`${type}:double-click` as any, onDoubleClick as any)
+      onNodeEvent(type, 'enter', onEnter)
+      onNodeEvent(type, 'leave', onLeave)
+      onNodeEvent(type, 'double-click', onDoubleClick)
     })
 
     return () => {
       subscribedKinds.forEach((type) => {
-        emitter.off(`${type}:enter` as any, onEnter as any)
-        emitter.off(`${type}:leave` as any, onLeave as any)
-        emitter.off(`${type}:double-click` as any, onDoubleClick as any)
+        offNodeEvent(type, 'enter', onEnter)
+        offNodeEvent(type, 'leave', onLeave)
+        offNodeEvent(type, 'double-click', onDoubleClick)
       })
     }
   }, [curvingFence, curvingWall, mode, movingNode])
@@ -1598,16 +1604,16 @@ export const SelectionManager = () => {
     const subscribedKinds = [...(allTypes as readonly string[]), ...registryKinds]
 
     for (const type of subscribedKinds) {
-      emitter.on(`${type}:click` as any, onClick as any)
-      emitter.on(`${type}:enter` as any, onEnter as any)
-      emitter.on(`${type}:leave` as any, onLeave as any)
+      onNodeEvent(type, 'click', onClick)
+      onNodeEvent(type, 'enter', onEnter)
+      onNodeEvent(type, 'leave', onLeave)
     }
 
     return () => {
       for (const type of subscribedKinds) {
-        emitter.off(`${type}:click` as any, onClick as any)
-        emitter.off(`${type}:enter` as any, onEnter as any)
-        emitter.off(`${type}:leave` as any, onLeave as any)
+        offNodeEvent(type, 'click', onClick)
+        offNodeEvent(type, 'enter', onEnter)
+        offNodeEvent(type, 'leave', onLeave)
       }
       useViewer.setState({ hoveredId: null })
     }

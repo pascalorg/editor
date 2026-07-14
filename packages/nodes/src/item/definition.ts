@@ -43,30 +43,32 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   category: 'furnish',
   surfaceRole: 'furnishing',
 
-  // Defaults shape is cast: the schema requires a fully-typed `asset`
-  // field, but in practice items are always created from the catalog
-  // (the asset is supplied at placement time). `createNode` re-parses
-  // through the schema, so any missing zod defaults fill at runtime.
-  defaults: () =>
-    ({
-      object: 'node',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      children: [],
-      position: [0, 0, 0],
+  // In practice items are always created from the catalog (the real
+  // asset is supplied at placement time); this placeholder just needs to
+  // satisfy the schema's output shape. `createNode` re-parses through the
+  // schema, so any zod defaults still fill at runtime.
+  defaults: (): Omit<ItemNodeType, 'id' | 'type'> => ({
+    object: 'node',
+    parentId: null,
+    visible: true,
+    metadata: {},
+    children: [],
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    asset: {
+      id: 'placeholder',
+      category: 'misc',
+      name: 'Item',
+      thumbnail: '',
+      src: 'asset:placeholder',
+      dimensions: [1, 1, 1],
+      source: 'library',
+      offset: [0, 0, 0],
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
-      asset: {
-        id: 'placeholder',
-        category: 'misc',
-        name: 'Item',
-        thumbnail: '',
-        src: 'asset:placeholder',
-        dimensions: [1, 1, 1],
-        source: 'library',
-      },
-    }) as unknown as Omit<ItemNodeType, 'id' | 'type'>,
+    },
+  }),
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },

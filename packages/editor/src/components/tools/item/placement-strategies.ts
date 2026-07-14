@@ -6,6 +6,7 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
+  NodeEvent,
   ShelfEvent,
   ShelfNode,
   WallEvent,
@@ -19,6 +20,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { first } from '../../../lib/typed-access'
 import {
   calculateCursorRotation,
   calculateItemRotation,
@@ -41,7 +43,9 @@ import type {
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
 
-function getWorldNormalY(event: ItemEvent): number | null {
+type SurfaceHitEvent = Pick<NodeEvent, 'normal' | 'object'>
+
+function getWorldNormalY(event: SurfaceHitEvent): number | null {
   if (!event.normal) return null
 
   const normal = new Vector3(event.normal[0], event.normal[1], event.normal[2])
@@ -49,7 +53,7 @@ function getWorldNormalY(event: ItemEvent): number | null {
   return normal.y
 }
 
-function isUpwardItemSurfaceHit(event: ItemEvent): boolean {
+function isUpwardItemSurfaceHit(event: SurfaceHitEvent): boolean {
   const normalY = getWorldNormalY(event)
   return normalY !== null && normalY >= UPWARD_SURFACE_NORMAL_MIN_Y
 }
@@ -608,8 +612,8 @@ function getShelfRowSurfaceY(shelfNode: ShelfNode, localY: number): number | nul
   if (!custom) return null
   const candidates = custom(shelfNode as AnyNode)
   if (candidates.length === 0) return null
-  let best = candidates[0]
-  let bestDist = Math.abs(best!.position[1] - localY)
+  let best = first(candidates)
+  let bestDist = Math.abs(best.position[1] - localY)
   for (let i = 1; i < candidates.length; i++) {
     const c = candidates[i]
     if (!c) continue
@@ -737,7 +741,7 @@ export const shelfSurfaceStrategy = {
  *  via a tiny `ItemEvent`-shaped adapter — the function only reads
  *  `event.normal` + `event.object`. */
 function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
-  return isUpwardItemSurfaceHit(event as unknown as ItemEvent)
+  return isUpwardItemSurfaceHit(event)
 }
 
 // ============================================================================

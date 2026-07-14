@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerConstructionTools } from './construction-tools'
 import { registerSceneQueryTools } from './scene-query'
 
@@ -17,8 +18,9 @@ describe('construction tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerConstructionTools(server, bridge)
-    registerSceneQueryTools(server, bridge)
+    const operations = createSceneOperations({ bridge })
+    registerConstructionTools(server, operations)
+    registerSceneQueryTools(server, operations)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -30,7 +32,8 @@ describe('construction tools', () => {
   })
 
   test('create_story_shell creates level-owned walls plus slab and ceiling', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'create_story_shell',
       arguments: {
@@ -46,7 +49,7 @@ describe('construction tools', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.wallIds).toHaveLength(4)
     expect(parsed.slabId).toMatch(/^slab_/)
     expect(parsed.ceilingId).toMatch(/^ceiling_/)
@@ -61,8 +64,10 @@ describe('construction tools', () => {
   })
 
   test('create_stair_between_levels creates one rectangular manual opening', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!ground) throw new Error('expected a ground node')
     const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
     bridge.createNode(upper, building.id)
 
@@ -96,7 +101,7 @@ describe('construction tools', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.openingPolygon).toHaveLength(4)
 
     const stair = bridge.getNode(parsed.stairId)
@@ -122,8 +127,10 @@ describe('construction tools', () => {
   })
 
   test('verify_scene flags suspicious multi-story wall heights', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!ground) throw new Error('expected a ground node')
     const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
     bridge.createNode(upper, building.id)
 
@@ -143,20 +150,22 @@ describe('construction tools', () => {
     expect(shell.isError).toBeFalsy()
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.hasIssues).toBe(true)
     expect(parsed.issues.join('\n')).toContain('multi-story exterior walls should be split')
   })
 
   test('create_roof creates a dedicated roof level by default', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const result = await client.callTool({
       name: 'create_roof',
       arguments: { levelId: level.id, width: 8, depth: 6, roofType: 'gable' },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const roofLevel = bridge.getNode(parsed.roofLevelId)
     const roof = bridge.getNode(parsed.roofId)
     const segment = bridge.getNode(parsed.roofSegmentId)
@@ -175,8 +184,10 @@ describe('construction tools', () => {
   })
 
   test('story construction tools reject dedicated roof support levels', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const roofLevel = LevelNode.parse({
       name: 'Roof',
       level: 1,
@@ -213,8 +224,10 @@ describe('construction tools', () => {
   })
 
   test('create_roof requires an explicit roof support level when roofLevelId is provided', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const occupiedUpper = LevelNode.parse({
       name: 'Second Floor',
       level: 1,
@@ -235,7 +248,8 @@ describe('construction tools', () => {
   })
 
   test('verify_scene flags roofs mixed into occupied levels', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     await client.callTool({
       name: 'create_story_shell',
       arguments: {
@@ -261,7 +275,7 @@ describe('construction tools', () => {
     expect(roof.isError).toBeFalsy()
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.hasIssues).toBe(true)
     expect(parsed.issues.join('\n')).toContain('dedicated roof level')
   })

@@ -1,8 +1,9 @@
 'use client'
 
-import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
+import { type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
 import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
 import { getPlanPointDistance } from '../../lib/floorplan'
+import { emitSyntheticNodeEvent } from '../../lib/node-events'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import type { WallPlanPoint } from '../tools/wall/wall-drafting'
 
@@ -115,13 +116,13 @@ export function useFloorplanBackgroundPlacement({
           const length = Math.sqrt(dx * dx + dz * dz)
           const distance = closest.t * length
 
-          emitter.emit('wall:click', {
+          emitSyntheticNodeEvent('wall', 'click', {
             node: closest.wall,
-            point: { x: closest.point[0], y: 0, z: closest.point[1] },
+            position: [closest.point[0], 0, closest.point[1]],
             localPosition: [distance, floorplanOpeningLocalY, 0],
             normal: closest.normal,
             stopPropagation: () => {},
-          } as any)
+          })
         }
         return true
       }

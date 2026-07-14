@@ -23,8 +23,16 @@ import {
   sample,
   vec4,
 } from 'three/tsl'
-import { RenderPipeline, RenderTarget, type WebGPURenderer } from 'three/webgpu'
+import { RenderPipeline, RenderTarget } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
+import {
+  asWebGPURenderer,
+  denoiseResultNode,
+  isWebGPUBackend,
+  nodesByType,
+  requireDefined,
+  ssgiTextureNode,
+} from '../../lib/typed-access'
 
 const THUMBNAIL_WIDTH = 1920
 const THUMBNAIL_HEIGHT = 1080
@@ -69,7 +77,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
     const buildPipeline = async () => {
       try {
-        if ((gl as any).init) await (gl as any).init()
+        await asWebGPURenderer(gl).init()
         if (!mounted) return
 
         // pass() handles MRT internally for all material types, including custom
@@ -93,7 +101,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
         const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
 
-        const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, cam as any)
+        const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, cam)
         giPass.sliceCount.value = SSGI_PARAMS.sliceCount
         giPass.stepCount.value = SSGI_PARAMS.stepCount
         giPass.radius.value = SSGI_PARAMS.radius
@@ -106,20 +114,20 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
         giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-        const giTexture = (giPass as any).getTextureNode()
+        const giTexture = ssgiTextureNode(giPass)
         const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
         const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, cam)
         denoisePass.index.value = 0
         denoisePass.radius.value = 4
 
-        const ao = (denoisePass as any).r
+        const ao = denoiseResultNode(denoisePass)
         const finalOutput = vec4(scenePassColor.rgb.mul(ao), scenePassColor.a)
 
         // FXAA requires a texture node as input; convertToTexture renders finalOutput
         // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
         const aaOutput = fxaa(convertToTexture(finalOutput))
 
-        const pipeline = new RenderPipeline(gl as unknown as WebGPURenderer)
+        const pipeline = new RenderPipeline(asWebGPURenderer(gl))
         pipeline.outputNode = aaOutput
         pipelineRef.current = pipeline
 
@@ -179,7 +187,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         let tgt: [number, number, number] | null = null
         if (controls && 'getTarget' in controls) {
           const v = new THREE.Vector3()
-          ;(controls as any).getTarget(v)
+          controls.getTarget(v)
           tgt = [v.x, v.y, v.z]
         }
         const isOrtho = mainCamera instanceof THREE.OrthographicCamera
@@ -208,7 +216,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const restoreNodeVisibility = (() => {
           const saved = new Map<THREE.Object3D, boolean>()
           for (const type of ['scan', 'guide'] as const) {
-            const ids = sceneRegistry.byType[type]!
+            const ids = nodesByType(type)
             ids.forEach((id) => {
               const node = sceneRegistry.nodes.get(id)
               if (node) {
@@ -234,12 +242,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             rt.setSize(width, height)
           }
 
-          const renderer = gl as unknown as WebGPURenderer
+          const renderer = asWebGPURenderer(gl)
 
           // Notify other systems (wall cutouts, selection manager) to restore
           // their overrides before capture and re-apply them after.
           emitter.emit('thumbnail:before-capture', undefined)
-          ;(renderer as any).setClearAlpha(0)
+          renderer.setClearAlpha(0)
           renderer.setRenderTarget(rt)
           pipelineRef.current.render()
           renderer.setRenderTarget(null)
@@ -254,7 +262,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // Read pixels from the RT asynchronously.
           // WebGPU copyTextureToBuffer aligns each row to 256 bytes, so we must
           // depad the rows before constructing ImageData.
-          const pixels = (await (renderer as any).readRenderTargetPixelsAsync(
+          const pixels = (await renderer.readRenderTargetPixelsAsync(
             rt,
             0,
             0,
@@ -273,11 +281,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // `isWebGPURenderer` lies — it stays true even when the renderer
           // falls back to the WebGL backend. Inspect the actual backend
           // instead (presence of a GPU device, or backend constructor name).
-          const backend = (renderer as any).backend
-          const isWebGPU =
-            !!backend?.device ||
-            backend?.isWebGPUBackend === true ||
-            backend?.constructor?.name === 'WebGPUBackend'
+          const isWebGPU = isWebGPUBackend(renderer.backend)
           let tightPixels: Uint8ClampedArray
           if (isWebGPU) {
             // WebGPU: depad rows if needed; orientation is already top-down.
@@ -311,13 +315,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
           }
 
-          const imageData = new ImageData(
-            tightPixels as unknown as Uint8ClampedArray<ArrayBuffer>,
-            width,
-            height,
-          )
+          const imageData = new ImageData(width, height)
+          imageData.data.set(tightPixels)
           const srcCanvas = new OffscreenCanvas(width, height)
-          srcCanvas.getContext('2d')!.putImageData(imageData, 0, 0)
+          requireDefined(srcCanvas.getContext('2d')).putImageData(imageData, 0, 0)
 
           let outW: number
           let outH: number
@@ -326,7 +327,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             outW = width
             outH = height
             const offscreen = new OffscreenCanvas(outW, outH)
-            offscreen.getContext('2d')!.drawImage(srcCanvas, 0, 0)
+            requireDefined(offscreen.getContext('2d')).drawImage(srcCanvas, 0, 0)
             blob = await offscreen.convertToBlob({ type: 'image/png' })
           } else if (captureMode === 'area' && cropRegion) {
             const sx = Math.round(cropRegion.x * width)
@@ -334,7 +335,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             outW = Math.round(cropRegion.width * width)
             outH = Math.round(cropRegion.height * height)
             const offscreen = new OffscreenCanvas(outW, outH)
-            offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, outW, outH, 0, 0, outW, outH)
+            requireDefined(offscreen.getContext('2d')).drawImage(
+              srcCanvas,
+              sx,
+              sy,
+              outW,
+              outH,
+              0,
+              0,
+              outW,
+              outH,
+            )
             blob = await offscreen.convertToBlob({ type: 'image/png' })
           } else {
             // Standard: center-crop to 1920×1080 aspect ratio
@@ -354,9 +365,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             outW = THUMBNAIL_WIDTH
             outH = THUMBNAIL_HEIGHT
             const offscreen = new OffscreenCanvas(outW, outH)
-            offscreen
-              .getContext('2d')!
-              .drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
+            requireDefined(offscreen.getContext('2d')).drawImage(
+              srcCanvas,
+              sx,
+              sy,
+              sWidth,
+              sHeight,
+              0,
+              0,
+              outW,
+              outH,
+            )
             blob = await offscreen.convertToBlob({ type: 'image/png' })
           }
 
@@ -380,7 +399,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
-            offscreen.getContext('2d')!.drawImage(gl.domElement, 0, 0)
+            requireDefined(offscreen.getContext('2d')).drawImage(gl.domElement, 0, 0)
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
@@ -395,9 +414,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
-            offscreen
-              .getContext('2d')!
-              .drawImage(gl.domElement, sx, sy, outW, outH, 0, 0, outW, outH)
+            requireDefined(offscreen.getContext('2d')).drawImage(
+              gl.domElement,
+              sx,
+              sy,
+              outW,
+              outH,
+              0,
+              0,
+              outW,
+              outH,
+            )
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
@@ -423,9 +450,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
-            offscreen
-              .getContext('2d')!
-              .drawImage(gl.domElement, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
+            requireDefined(offscreen.getContext('2d')).drawImage(
+              gl.domElement,
+              sx,
+              sy,
+              sWidth,
+              sHeight,
+              0,
+              0,
+              outW,
+              outH,
+            )
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
@@ -479,7 +514,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       target: [number, number, number]
     }) => {
       if (controls && 'setLookAt' in controls) {
-        ;(controls as any).setLookAt(
+        controls.setLookAt(
           position[0],
           position[1],
           position[2],

@@ -1,7 +1,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, type Object3D, UnsignedByteType } from 'three'
+import { Color, Layers, type Object3D, type PerspectiveCamera, UnsignedByteType } from 'three'
+import type SSGINode from 'three/addons/tsl/display/SSGINode.js'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
+import type DenoiseNode from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
@@ -20,13 +22,14 @@ import {
   uniform,
   vec4,
 } from 'three/tsl'
-import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { RenderPipeline } from 'three/webgpu'
 import { edgeColorFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { asWebGPURenderer } from '../../lib/webgpu-renderer'
 import useViewer from '../../store/use-viewer'
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
@@ -127,7 +130,11 @@ const PostProcessingPasses = ({
 }: {
   hoverStyles?: HoverStyles
 }) => {
-  const { gl: renderer, invalidate, scene, camera, size } = useThree()
+  const { gl, invalidate, scene, camera, size } = useThree()
+  // R3F types `gl` as a WebGL renderer; this viewer always runs WebGPU. Narrow
+  // once so every WebGPU-specific access below (setClearAlpha, direct render,
+  // backend.device.queue) stays typed against `WebGPURendererLike`.
+  const renderer = asWebGPURenderer(gl)
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
@@ -283,7 +290,7 @@ const PostProcessingPasses = ({
       hoverHighlightMode,
       projectId,
       shading,
-      rendererCtor: (renderer as any).constructor?.name,
+      rendererCtor: renderer.constructor?.name,
       width,
       height,
     })
@@ -334,7 +341,10 @@ const PostProcessingPasses = ({
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
-      let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
+      // `sceneColor` starts as the vec4 scene texture node and is later
+      // reassigned to `vec4(...)` composites; type it as the union of both node
+      // shapes so either form is assignable without an escape-hatch cast.
+      let sceneColor: typeof scenePassColor | ReturnType<typeof vec4> = scenePassColor
 
       // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
       // (depth/normal). Built whenever either is active.
@@ -362,7 +372,13 @@ const PostProcessingPasses = ({
         const diffuseTexture = scenePass.getTexture('diffuseColor')
         diffuseTexture.type = UnsignedByteType
 
-        const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, camera as any)
+        // SSGI requires a perspective camera; the viewer always uses one.
+        const giPass = ssgi(
+          scenePassColor,
+          scenePassDepth,
+          sceneNormal,
+          camera as PerspectiveCamera,
+        )
         giPass.sliceCount.value = SSGI_PARAMS.sliceCount
         giPass.stepCount.value = SSGI_PARAMS.stepCount
         giPass.radius.value = SSGI_PARAMS.radius
@@ -375,10 +391,19 @@ const PostProcessingPasses = ({
         giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
         giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-        const giTexture = (giPass as any).getTextureNode()
-
         const gi = giPass.rgb
-        let ao: any
+        // `SSGINode.getTextureNode()` and `DenoiseNode`'s channel swizzles exist
+        // at runtime but are absent from the addon's type declarations. Reuse
+        // the (typed) vec4 texture-node shape `scenePassColor` produces (it
+        // exposes `.a`/`.rgb`) to describe them, avoiding `any` while keeping the
+        // node graph strongly typed.
+        type Vec4TextureNode = typeof scenePassColor
+        type ChannelNode = Vec4TextureNode['a']
+        const giTexture = (
+          giPass as SSGINode & { getTextureNode(): Vec4TextureNode }
+        ).getTextureNode()
+
+        let ao: ChannelNode
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
           // SSGI packs AO into alpha, so we remap it into RGB before denoising.
@@ -386,7 +411,7 @@ const PostProcessingPasses = ({
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
           denoisePass.radius.value = 4
-          ao = (denoisePass as any).r
+          ao = (denoisePass as DenoiseNode & { r: ChannelNode }).r
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
@@ -459,7 +484,7 @@ const PostProcessingPasses = ({
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
       const finalOutput = vec4(withOverlay, float(1))
 
-      const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
+      const renderPipeline = new RenderPipeline(renderer)
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
@@ -470,7 +495,7 @@ const PostProcessingPasses = ({
         {
           version: pipelineVersion,
           ssgi: SSGI_PARAMS.enabled,
-          rendererCtor: (renderer as any).constructor?.name,
+          rendererCtor: renderer.constructor?.name,
         },
         error,
       )
@@ -524,15 +549,11 @@ const PostProcessingPasses = ({
 
     if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
       try {
-        if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(1)
-        }
+        renderer.setClearAlpha?.(1)
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-        ;(renderer as any).render(scene, camera)
+        renderer.render(scene, camera)
         if (PERF_OVERLAY_ENABLED) {
-          const queue = (renderer as any).backend?.device?.queue as
-            | { onSubmittedWorkDone?: () => Promise<void> }
-            | undefined
+          const queue = renderer.backend?.device?.queue
           queue?.onSubmittedWorkDone?.().then(() => {
             pushGpuSample(performance.now() - submittedAt)
           })
@@ -546,7 +567,7 @@ const PostProcessingPasses = ({
     try {
       // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
       // making scenePassColor.a a reliable geometry mask (geometry pixels write a=1 via output node).
-      ;(renderer as any).setClearAlpha(0)
+      renderer.setClearAlpha?.(0)
       const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
       renderPipelineRef.current.render()
       if (PERF_OVERLAY_ENABLED) {
@@ -555,9 +576,7 @@ const PostProcessingPasses = ({
         // timestamp is a clean per-frame GPU duration. Doesn't block CPU
         // (no await) and works for the custom RenderPipeline path that
         // bypasses three.js's timestamp-query infrastructure.
-        const queue = (renderer as any).backend?.device?.queue as
-          | { onSubmittedWorkDone?: () => Promise<void> }
-          | undefined
+        const queue = renderer.backend?.device?.queue
         queue?.onSubmittedWorkDone?.().then(() => {
           pushGpuSample(performance.now() - submittedAt)
         })
@@ -566,7 +585,7 @@ const PostProcessingPasses = ({
       hasPipelineErrorRef.current = true
       console.error('[viewer/post-processing] Render pass failed.', {
         retryCount: retryCountRef.current,
-        rendererCtor: (renderer as any).constructor?.name,
+        rendererCtor: renderer.constructor?.name,
         error,
       })
       if (renderPipelineRef.current) {

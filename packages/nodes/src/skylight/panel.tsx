@@ -354,14 +354,14 @@ export default function SkylightPanel() {
               value={Math.round(((node.openingAngle ?? Math.PI / 10) * 180) / Math.PI)}
             />
             <SegmentedControl
-              onChange={(v) => commitProp({ openingSide: v as SkylightNode['openingSide'] })}
+              onChange={(v) => commitProp({ openingSide: v })}
               options={[
                 { label: 'Top', value: 'top' },
                 { label: 'Bottom', value: 'bottom' },
                 { label: 'Left', value: 'left' },
                 { label: 'Right', value: 'right' },
               ]}
-              value={(node.openingSide ?? 'top') as any}
+              value={node.openingSide ?? 'top'}
             />
             <SegmentedControl
               onChange={(v) => commitProp({ motorHousing: v === 'yes' })}
@@ -402,12 +402,12 @@ export default function SkylightPanel() {
               value={Math.round((node.operationState ?? 0) * 100) / 100}
             />
             <SegmentedControl
-              onChange={(v) => commitProp({ slideDirection: v as SkylightNode['slideDirection'] })}
+              onChange={(v) => commitProp({ slideDirection: v })}
               options={[
                 { label: 'Along Z', value: 'z' },
                 { label: 'Along X', value: 'x' },
               ]}
-              value={(node.slideDirection ?? 'z') as any}
+              value={node.slideDirection ?? 'z'}
             />
             <SliderControl
               label="Track Width"

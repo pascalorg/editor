@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../../operations'
@@ -10,7 +9,7 @@ export function computeGraphHash(graph: SceneGraph): string {
     rootNodeIds: graph.rootNodeIds ?? [],
     collections: (graph as Record<string, unknown>).collections ?? {},
   })
-  return createHash('sha256').update(normalized).digest('hex')
+  return new Bun.CryptoHasher('sha256').update(normalized).digest('hex')
 }
 
 export function editorUrlFor(meta: Pick<SceneMeta, 'id' | 'editorUrl' | 'url'>): string {

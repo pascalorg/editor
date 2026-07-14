@@ -520,7 +520,7 @@ export const ViewerOverlay = ({
               onClick={() => {
                 if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
                 const modes: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
-                const nextIndex = (modes.indexOf(levelMode as any) + 1) % modes.length
+                const nextIndex = (modes.findIndex((m) => m === levelMode) + 1) % modes.length
                 useViewer.getState().setLevelMode(modes[nextIndex] ?? 'stacked')
               }}
               size="icon"
@@ -554,7 +554,7 @@ export const ViewerOverlay = ({
               label={`Walls: ${wallModeConfig[wallMode as keyof typeof wallModeConfig].label}`}
               onClick={() => {
                 const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
-                const nextIndex = (modes.indexOf(wallMode as any) + 1) % modes.length
+                const nextIndex = (modes.findIndex((m) => m === wallMode) + 1) % modes.length
                 useViewer.getState().setWallMode(modes[nextIndex] ?? 'cutaway')
               }}
               size="icon"

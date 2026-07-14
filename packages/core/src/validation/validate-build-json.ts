@@ -226,7 +226,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
 
   const unknownTypeNames = Object.keys(stats.unknownTypes)
   if (unknownTypeNames.length > 0) {
-    const totalUnknown = unknownTypeNames.reduce((n, t) => n + stats.unknownTypes[t]!, 0)
+    const totalUnknown = unknownTypeNames.reduce((n, t) => n + (stats.unknownTypes[t] ?? 0), 0)
     warnings.push({
       severity: 'warning',
       code: 'unknown_types',

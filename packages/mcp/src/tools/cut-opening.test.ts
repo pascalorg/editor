@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerCutOpening } from './cut-opening'
 
 describe('cut_opening', () => {
@@ -15,14 +16,15 @@ describe('cut_opening', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerCutOpening(server, bridge)
+    registerCutOpening(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
   test('creates a door opening on a wall', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
     bridge.createNode(wall, level.id)
 
@@ -37,7 +39,7 @@ describe('cut_opening', () => {
       },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.openingId).toMatch(/^door_/)
     const created = bridge.getNode(parsed.openingId)
     expect((created as { wallId?: string }).wallId).toBe(wall.id)
@@ -46,7 +48,8 @@ describe('cut_opening', () => {
   })
 
   test('creates a window opening on a wall', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
     bridge.createNode(wall, level.id)
 
@@ -60,7 +63,7 @@ describe('cut_opening', () => {
         height: 1.2,
       },
     })
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.openingId).toMatch(/^window_/)
     const created = bridge.getNode(parsed.openingId)
     expect((created as { position: [number, number, number] }).position[0]).toBeCloseTo(1.25, 3)
@@ -82,7 +85,8 @@ describe('cut_opening', () => {
   })
 
   test('rejects out-of-range position', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
     bridge.createNode(wall, level.id)
 

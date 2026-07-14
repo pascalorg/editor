@@ -1,18 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { RoofSegmentNode } from '@pascal-app/core'
+import { RoofSegmentNode } from '@pascal-app/core'
 import { buildChimneyGeometry, flueXPositions } from '../geometry'
 import { ChimneyNode } from '../schema'
 
 const fixtureSegment = (): RoofSegmentNode =>
-  ({
-    object: 'node',
+  RoofSegmentNode.parse({
     id: 'rseg_fixture',
-    type: 'roof-segment',
-    parentId: null,
-    visible: true,
-    metadata: {},
-    position: [0, 0, 0],
-    rotation: 0,
     roofType: 'gable',
     width: 8,
     depth: 6,
@@ -23,7 +16,7 @@ const fixtureSegment = (): RoofSegmentNode =>
     deckThickness: 0.1,
     overhang: 0.3,
     shingleThickness: 0.05,
-  }) as RoofSegmentNode
+  })
 
 describe('buildChimneyGeometry', () => {
   test('returns body for default chimney with a non-empty position attribute', () => {

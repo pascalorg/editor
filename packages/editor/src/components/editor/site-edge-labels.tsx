@@ -7,6 +7,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useMemo, useRef, useState } from 'react'
 import type { Object3D } from 'three'
+import { at } from '../../lib/typed-access'
 
 function formatMeasurement(value: number, unit: 'metric' | 'imperial') {
   if (unit === 'imperial') {
@@ -56,11 +57,12 @@ export function SiteEdgeLabels() {
   const edges = useMemo(() => {
     const polygon = siteNode?.polygon?.points ?? []
     if (polygon.length < 2) return []
-    return polygon.map(([x1, z1], i) => {
-      const [x2, z2] = polygon[(i + 1) % polygon.length]!
-      const midX = (x1! + x2) / 2
-      const midZ = (z1! + z2) / 2
-      const dist = Math.sqrt((x2 - x1!) ** 2 + (z2 - z1!) ** 2)
+    return polygon.map((_point, i) => {
+      const [x1, z1] = at(polygon, i)
+      const [x2, z2] = at(polygon, (i + 1) % polygon.length)
+      const midX = (x1 + x2) / 2
+      const midZ = (z1 + z2) / 2
+      const dist = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2)
       return { midX, midZ, dist }
     })
   }, [siteNode?.polygon?.points])

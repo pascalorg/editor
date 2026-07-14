@@ -27,6 +27,7 @@ import {
   useState,
 } from 'react'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { getChildIds, readNodeField } from '../../../lib/typed-access'
 import useEditor from '../../../store/use-editor'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -91,7 +92,7 @@ function snapshotNode(node: AnyNode): NodeSnapshot {
   const data: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(node)) {
     if (key === 'id' || key === 'type' || key === 'object' || key === 'parentId') continue
-    data[key] = Array.isArray(value) ? [...(value as unknown[])] : value
+    data[key] = Array.isArray(value) ? [...value] : value
   }
   return { id: node.id, data }
 }
@@ -121,8 +122,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // Overrides` carries live-edit overrides from the inspector. Builders
   // read both via `getState()` inside `def.floorplan`; subscribing here
   // is what forces the layer to re-render when they change.
-  const liveOverrides = useLiveNodeOverrides((s) => s.overrides)
-  const interactiveElevators = useInteractive((s) => s.elevators)
+  useLiveNodeOverrides((s) => s.overrides)
+  useInteractive((s) => s.elevators)
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
   // Marquee preview selection — matches the legacy `highlightedIdSet` use
@@ -248,10 +249,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           out.push({ id, node: effectiveNode, base, overlay, selected, highlighted })
         }
       }
-      const childIds = (node as unknown as { children?: AnyNodeId[] }).children
-      if (Array.isArray(childIds)) {
-        for (const cid of childIds) visit(cid)
-      }
+      for (const cid of getChildIds(node)) visit(cid)
     }
 
     visit(levelId as AnyNodeId)
@@ -372,9 +370,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         const data: Record<string, unknown> = {}
         let changed = false
         for (const [key, before] of Object.entries(snap.data)) {
-          const after = (current as unknown as Record<string, unknown>)[key]
+          const after = readNodeField(current, key)
           if (!deepEqual(before, after)) {
-            data[key] = Array.isArray(after) ? [...(after as unknown[])] : after
+            data[key] = Array.isArray(after) ? [...after] : after
             changed = true
           }
         }
@@ -1144,19 +1142,18 @@ function buildContext(
 ): GeometryContext {
   const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
 
-  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
-  const children: AnyNode[] = Array.isArray(childIds)
-    ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
-    : []
+  const childIds = getChildIds(node)
+  const children: AnyNode[] = childIds
+    .map((cid) => nodes[cid])
+    .filter((n): n is AnyNode => n !== undefined)
 
   const parentId = node.parentId as AnyNodeId | null
   const parent: AnyNode | null = parentId ? (nodes[parentId] ?? null) : null
 
   let siblings: AnyNode[] = []
   if (parent) {
-    const parentChildIds = (parent as unknown as { children?: AnyNodeId[] }).children
-    if (Array.isArray(parentChildIds)) {
-      for (const sid of parentChildIds) {
+    if ('children' in parent && Array.isArray(parent.children)) {
+      for (const sid of getChildIds(parent)) {
         if (sid === node.id) continue
         const s = nodes[sid]
         if (s && s.type === node.type) siblings.push(s)

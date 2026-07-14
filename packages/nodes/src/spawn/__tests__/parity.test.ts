@@ -53,9 +53,12 @@ describe('spawn definition', () => {
   })
 
   test('renderer is a parametric lazy module reference', () => {
-    expect(spawnDefinition.renderer.kind).toBe('parametric')
-    if (spawnDefinition.renderer.kind !== 'parametric') return
-    expect(typeof spawnDefinition.renderer.module).toBe('function')
+    const { renderer } = spawnDefinition
+    expect(renderer).toBeDefined()
+    if (!renderer) return
+    expect(renderer.kind).toBe('parametric')
+    if (renderer.kind !== 'parametric') return
+    expect(typeof renderer.module).toBe('function')
   })
 
   test('tool is a lazy module reference', () => {

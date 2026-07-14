@@ -262,9 +262,12 @@ export default function DoorPanel() {
     if (!node?.parentId) return
     triggerSFX('sfx:item-pick')
     useScene.temporal.getState().pause()
-    const cloned = structuredClone(node) as any
-    delete cloned.id
-    cloned.metadata = { ...cloned.metadata, isNew: true }
+    const { id: _id, ...rest } = structuredClone(node)
+    const baseMetadata =
+      rest.metadata && typeof rest.metadata === 'object' && !Array.isArray(rest.metadata)
+        ? rest.metadata
+        : {}
+    const cloned = { ...rest, metadata: { ...baseMetadata, isNew: true } }
     const duplicate = DoorNode.parse(cloned)
     useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
     setMovingNode(duplicate)
@@ -392,8 +395,6 @@ export default function DoorPanel() {
   const doorType = node.doorType ?? 'hinged'
   const isGarageDoor = node.doorCategory === 'garage' || doorType.startsWith('garage-')
   const isSwingDoor = doorType === 'hinged' || doorType === 'double' || doorType === 'french'
-  const isSlideFoldDoor =
-    doorType === 'folding' || doorType === 'pocket' || doorType === 'barn' || doorType === 'sliding'
   const isSlidingDoor = doorType === 'pocket' || doorType === 'barn' || doorType === 'sliding'
   const isFoldingDoor = doorType === 'folding'
   const isSectionalGarageDoor = doorType === 'garage-sectional'

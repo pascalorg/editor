@@ -28,7 +28,7 @@ export type DragSessionOptions = {
   onCancel?: () => void
 }
 
-export type DragSession<Ctx, Draft> = {
+export type DragSession<Draft> = {
   /** Begin the drag — pause history, capture ctx via `action.begin`. */
   start: (input: DragSessionInput) => void
   /** Per-pointer-move tick — run preview/snap/apply and cascade dirty marks. */
@@ -54,7 +54,7 @@ export function createDragSession<Ctx, Draft>(
   action: DragAction<Ctx, Draft>,
   scene: SceneApi,
   options: DragSessionOptions = {},
-): DragSession<Ctx, Draft> {
+): DragSession<Draft> {
   let active = false
   let ctx: Ctx | null = null
   let draft: Draft | null = null

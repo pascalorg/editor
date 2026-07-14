@@ -57,8 +57,9 @@ export function registerCheckCollisions(server: McpServer, bridge: SceneOperatio
       const collisions: { aId: string; bId: string; kind: string }[] = []
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
-          const a = boxes[i]!
-          const b = boxes[j]!
+          const a = boxes[i]
+          const b = boxes[j]
+          if (!a || !b) continue
           if (aabbOverlap(a.aabb, b.aabb)) {
             collisions.push({
               aId: a.item.id as string,

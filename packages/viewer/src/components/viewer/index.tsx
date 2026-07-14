@@ -1,12 +1,13 @@
 'use client'
 
 import { StairOpeningSystem } from '@pascal-app/core'
-import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, extend, type ThreeToJSXElements, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three/webgpu'
-import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { asWebGPURenderer } from '../../lib/webgpu-renderer'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
@@ -25,7 +26,11 @@ declare module '@react-three/fiber' {
   interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
 }
 
-extend(THREE as any)
+// R3F's `extend` catalogue type accepts only constructor-valued entries, but
+// the runtime contract is to register the entire `three` namespace (which also
+// holds functions and constants). Pin to `extend`'s own parameter type — the
+// namespace doesn't structurally overlap it, so an `unknown` bridge is required.
+extend(THREE as unknown as Parameters<typeof extend>[0])
 
 // R3F's <Canvas> useLayoutEffect has no deps, so any re-render (theme switch,
 // parent re-render, StrictMode double-mount) re-invokes `configure()`. With a
@@ -43,6 +48,14 @@ extend(THREE as any)
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
 
+// R3F's `gl` factory is typed against a WebGL renderer; extract the exact
+// factory-variant param it hands us so our WebGPU factory stays assignable to
+// `GLProps` without a loose cast. The params overlap structurally with
+// `WebGPURendererParameters` (alpha, antialias, canvas, …).
+type CanvasGlProp = NonNullable<React.ComponentProps<typeof Canvas>['gl']>
+type GlFactory = Extract<CanvasGlProp, (props: never) => unknown>
+type GlFactoryProps = Parameters<GlFactory>[0]
+
 /**
  * Monitors the WebGPU device for loss / uncaptured errors and logs them.
  * WebGPU device loss can happen when:
@@ -50,30 +63,18 @@ const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGP
  *  - Driver crash or GPU reset
  *  - Browser security policy kills the context
  */
-type WebGPUDeviceLossInfo = {
-  reason?: string
-  message?: string
-}
-
-type WebGPUDeviceLike = {
-  lost: Promise<WebGPUDeviceLossInfo>
-  label?: string
-  features?: Set<string>
-  addEventListener?: (type: string, listener: EventListener) => void
-  removeEventListener?: (type: string, listener: EventListener) => void
-}
-
 function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
-    const backend = (gl as any).backend
-    const device = backend?.device as WebGPUDeviceLike | undefined
+    const renderer = asWebGPURenderer(gl)
+    const backend = renderer.backend
+    const device = backend?.device
 
     if (!device) {
       console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
         backend: backend?.constructor?.name ?? 'unknown',
-        rendererType: (gl as any).constructor?.name ?? 'unknown',
+        rendererType: renderer.constructor?.name ?? 'unknown',
       })
       return
     }
@@ -83,7 +84,7 @@ function GPUDeviceWatcher() {
       features: Array.from(device.features ?? []),
     })
 
-    device.lost.then((info: WebGPUDeviceLossInfo) => {
+    device.lost.then((info) => {
       console.error(
         `[viewer] WebGPU device lost: reason="${info.reason ?? 'unknown'}", message="${info.message ?? ''}". ` +
           'The page must be reloaded to recover the GPU context.',
@@ -185,33 +186,37 @@ const Viewer: React.FC<ViewerProps> = ({
       className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
       dpr={[1, maxDpr]}
       frameloop="never"
-      gl={
-        ((props: { canvas?: HTMLCanvasElement }) => {
-          const canvas = props.canvas
-          const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
-          if (cached) return cached
-          const promise = (async () => {
-            try {
-              const renderer = new THREE.WebGPURenderer(props as any)
-              renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = getSceneTheme(
-                useViewer.getState().sceneTheme,
-              ).toneMappingExposure
-              await renderer.init()
-              return renderer
-            } catch (err) {
-              // Drop the failed promise from the cache so a future Canvas
-              // mount on the same DOM can retry instead of inheriting the
-              // rejection forever.
-              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-              console.error('[viewer] WebGPURenderer init failed', err)
-              throw err
-            }
-          })()
-          if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
-          return promise
-        }) as any
-      }
+      gl={(props: GlFactoryProps): Promise<THREE.WebGPURenderer> => {
+        const canvas = props.canvas instanceof HTMLCanvasElement ? props.canvas : undefined
+        const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
+        if (cached) return cached
+        const promise = (async () => {
+          try {
+            // R3F hands WebGL renderer params; the overlapping subset (alpha,
+            // antialias, canvas, depth, stencil, powerPreference) is exactly
+            // what WebGPURenderer consumes here, so narrow to its constructor
+            // param type rather than widening to `any`.
+            const renderer = new THREE.WebGPURenderer(
+              props as ConstructorParameters<typeof THREE.WebGPURenderer>[0],
+            )
+            renderer.toneMapping = THREE.ACESFilmicToneMapping
+            renderer.toneMappingExposure = getSceneTheme(
+              useViewer.getState().sceneTheme,
+            ).toneMappingExposure
+            await renderer.init()
+            return renderer
+          } catch (err) {
+            // Drop the failed promise from the cache so a future Canvas
+            // mount on the same DOM can retry instead of inheriting the
+            // rejection forever.
+            if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+            console.error('[viewer] WebGPURenderer init failed', err)
+            throw err
+          }
+        })()
+        if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
+        return promise
+      }}
       resize={{
         debounce: 100,
       }}
@@ -261,22 +266,6 @@ const Viewer: React.FC<ViewerProps> = ({
       </ErrorBoundary>
     </Canvas>
   )
-}
-
-const DebugRenderer = () => {
-  useFrame(({ gl, scene, camera }) => {
-    const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-    gl.render(scene, camera)
-    if (PERF_OVERLAY_ENABLED) {
-      const queue = (gl as any).backend?.device?.queue as
-        | { onSubmittedWorkDone?: () => Promise<void> }
-        | undefined
-      queue?.onSubmittedWorkDone?.().then(() => {
-        pushGpuSample(performance.now() - submittedAt)
-      })
-    }
-  })
-  return null
 }
 
 export default Viewer

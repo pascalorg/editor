@@ -1,8 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type {
+  AnyNode,
+  ItemNode,
+  LevelNode,
+  SiteNode,
+  WallNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 import { computeSceneBoundsXZ } from './scene-bounds'
 
-function makeWall(start: [number, number], end: [number, number]): AnyNode {
+function makeWall(start: [number, number], end: [number, number]): WallNode {
   return {
     object: 'node',
     id: `wall_${start.join('_')}_${end.join('_')}`,
@@ -15,10 +22,10 @@ function makeWall(start: [number, number], end: [number, number]): AnyNode {
     end,
     frontSide: 'unknown',
     backSide: 'unknown',
-  } as unknown as AnyNode
+  }
 }
 
-function makeZone(polygon: [number, number][]): AnyNode {
+function makeZone(polygon: [number, number][]): ZoneNode {
   return {
     object: 'node',
     id: `zone_${polygon.length}_${polygon[0]?.[0] ?? 0}`,
@@ -29,10 +36,10 @@ function makeZone(polygon: [number, number][]): AnyNode {
     name: 'Zone',
     polygon,
     color: '#000000',
-  } as unknown as AnyNode
+  }
 }
 
-function makeSite(points: [number, number][]): AnyNode {
+function makeSite(points: [number, number][]): SiteNode {
   return {
     object: 'node',
     id: 'site_test',
@@ -42,7 +49,7 @@ function makeSite(points: [number, number][]): AnyNode {
     metadata: {},
     polygon: { type: 'polygon', points },
     children: [],
-  } as unknown as AnyNode
+  }
 }
 
 describe('computeSceneBoundsXZ', () => {
@@ -51,17 +58,19 @@ describe('computeSceneBoundsXZ', () => {
   })
 
   test('returns null when no geometry is found on any node', () => {
-    const barren = [
-      {
-        object: 'node',
-        id: 'building_1',
-        type: 'building',
-        parentId: null,
-        visible: true,
-        metadata: {},
-        children: [],
-      } as unknown as AnyNode,
-    ]
+    // A level node carries no XZ footprint (no start/end/polygon/position), so
+    // a scene containing only one yields no bounds.
+    const level: LevelNode = {
+      object: 'node',
+      id: 'level_1',
+      type: 'level',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      level: 0,
+    }
+    const barren: AnyNode[] = [level]
     expect(computeSceneBoundsXZ(barren)).toBeNull()
   })
 
@@ -69,10 +78,11 @@ describe('computeSceneBoundsXZ', () => {
     const nodes: AnyNode[] = [makeWall([0, 0], [4, 0]), makeWall([4, 0], [4, 3])]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
-    expect(bounds!.min).toEqual([0, 0])
-    expect(bounds!.max).toEqual([4, 3])
-    expect(bounds!.size).toEqual([4, 3])
-    expect(bounds!.center).toEqual([2, 1.5])
+    if (!bounds) return
+    expect(bounds.min).toEqual([0, 0])
+    expect(bounds.max).toEqual([4, 3])
+    expect(bounds.size).toEqual([4, 3])
+    expect(bounds.center).toEqual([2, 1.5])
   })
 
   test('includes zone polygons', () => {
@@ -86,9 +96,10 @@ describe('computeSceneBoundsXZ', () => {
     ]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
-    expect(bounds!.min).toEqual([-10, -5])
-    expect(bounds!.max).toEqual([10, 5])
-    expect(bounds!.size).toEqual([20, 10])
+    if (!bounds) return
+    expect(bounds.min).toEqual([-10, -5])
+    expect(bounds.max).toEqual([10, 5])
+    expect(bounds.size).toEqual([20, 10])
   })
 
   test('ignores the default 30×30 site bootstrap polygon', () => {
@@ -103,9 +114,10 @@ describe('computeSceneBoundsXZ', () => {
     ]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
+    if (!bounds) return
     // Only the wall should count — the default site polygon is skipped.
-    expect(bounds!.min).toEqual([1, 1])
-    expect(bounds!.max).toEqual([2, 2])
+    expect(bounds.min).toEqual([1, 1])
+    expect(bounds.max).toEqual([2, 2])
   })
 
   test('honours a non-default site polygon', () => {
@@ -119,11 +131,36 @@ describe('computeSceneBoundsXZ', () => {
     ]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
-    expect(bounds!.min).toEqual([-25, -20])
-    expect(bounds!.max).toEqual([25, 20])
+    if (!bounds) return
+    expect(bounds.min).toEqual([-25, -20])
+    expect(bounds.max).toEqual([25, 20])
   })
 
   test('combines walls, zones and positions across the flat dict', () => {
+    const item: ItemNode = {
+      object: 'node',
+      id: 'item_1',
+      type: 'item',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      position: [7, 0, 8],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      children: [],
+      asset: {
+        id: 'a',
+        category: 'furniture',
+        name: 'Chair',
+        thumbnail: '',
+        src: '',
+        source: 'library',
+        dimensions: [1, 1, 1],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    }
     const nodes: Record<string, AnyNode> = {
       wallA: makeWall([-8, -3], [4, -3]),
       wallB: makeWall([4, -3], [4, 6]),
@@ -133,51 +170,32 @@ describe('computeSceneBoundsXZ', () => {
         [4, 6],
         [-8, 6],
       ]),
-      item1: {
-        object: 'node',
-        id: 'item_1',
-        type: 'item',
-        parentId: null,
-        visible: true,
-        metadata: {},
-        position: [7, 0, 8],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        children: [],
-        asset: {
-          id: 'a',
-          category: 'furniture',
-          name: 'Chair',
-          thumbnail: '',
-          src: '',
-          dimensions: [1, 1, 1],
-          offset: [0, 0, 0],
-          rotation: [0, 0, 0],
-          scale: [1, 1, 1],
-        },
-      } as unknown as AnyNode,
+      item1: item,
     }
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
-    expect(bounds!.min).toEqual([-8, -3])
-    expect(bounds!.max).toEqual([7, 8])
+    if (!bounds) return
+    expect(bounds.min).toEqual([-8, -3])
+    expect(bounds.max).toEqual([7, 8])
   })
 
   test('handles a single degenerate point with a minimum extent', () => {
     const nodes: AnyNode[] = [makeWall([2, 2], [2, 2])]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
-    expect(bounds!.size[0]).toBeGreaterThan(0)
-    expect(bounds!.size[1]).toBeGreaterThan(0)
-    expect(bounds!.center).toEqual([2, 2])
+    if (!bounds) return
+    expect(bounds.size[0]).toBeGreaterThan(0)
+    expect(bounds.size[1]).toBeGreaterThan(0)
+    expect(bounds.center).toEqual([2, 2])
   })
 
   test('skips non-finite coordinates', () => {
     const nodes: AnyNode[] = [makeWall([Number.NaN, 0], [4, 2]), makeWall([0, 0], [1, 1])]
     const bounds = computeSceneBoundsXZ(nodes)
     expect(bounds).not.toBeNull()
+    if (!bounds) return
     // NaN should be ignored; the usable points are (4,2), (0,0), (1,1).
-    expect(bounds!.min).toEqual([0, 0])
-    expect(bounds!.max).toEqual([4, 2])
+    expect(bounds.min).toEqual([0, 0])
+    expect(bounds.max).toEqual([4, 2])
   })
 })

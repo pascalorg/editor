@@ -31,11 +31,8 @@ describe('builtinPlugin', () => {
     // (the union) and `nodes/src/index.ts` (the plugin), and this test
     // will keep them honest.
     await loadPlugin(builtinPlugin)
-    const unionKinds = new Set(
-      AnyNode.options.map((option) => {
-        const typeShape = (option as unknown as { shape: { type: { value: string } } }).shape.type
-        return typeShape.value
-      }),
+    const unionKinds = new Set<string>(
+      AnyNode.options.map((option) => option.shape.type.unwrap().value),
     )
     const registryKinds = new Set(Array.from(nodeRegistry.entries(), ([kind]) => kind))
     const missingFromRegistry = [...unionKinds].filter((k) => !registryKinds.has(k))

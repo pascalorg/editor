@@ -259,8 +259,9 @@ function calculateJunctionIntersections(
 
   // Calculate intersections between adjacent walls (exactly like demo)
   for (let i = 0; i < n; i++) {
-    const wall1 = processedWalls[i]!
-    const wall2 = processedWalls[(i + 1) % n]!
+    const wall1 = processedWalls[i]
+    const wall2 = processedWalls[(i + 1) % n]
+    if (!wall1 || !wall2) continue
 
     // Intersect left edge of wall1 with right edge of wall2
     const det = wall1.edgeA.a * wall2.edgeB.b - wall2.edgeB.a * wall1.edgeA.b
@@ -278,17 +279,15 @@ function calculateJunctionIntersections(
     // Only assign intersection to non-passthrough walls
     // Passthrough walls don't receive junction data (their geometry doesn't change)
     if (!wall1.isPassthrough) {
-      if (!wallIntersections.has(wall1.wallId)) {
-        wallIntersections.set(wall1.wallId, {})
-      }
-      wallIntersections.get(wall1.wallId)!.left = p
+      const entry = wallIntersections.get(wall1.wallId) ?? {}
+      entry.left = p
+      wallIntersections.set(wall1.wallId, entry)
     }
 
     if (!wall2.isPassthrough) {
-      if (!wallIntersections.has(wall2.wallId)) {
-        wallIntersections.set(wall2.wallId, {})
-      }
-      wallIntersections.get(wall2.wallId)!.right = p
+      const entry = wallIntersections.get(wall2.wallId) ?? {}
+      entry.right = p
+      wallIntersections.set(wall2.wallId, entry)
     }
   }
 

@@ -87,8 +87,9 @@ function walk(
  * need a `childQuery` override on the context.
  */
 function defaultChildIds(node: AnyNode, _scene: SceneApi): AnyNodeId[] {
-  const maybeChildren = (node as unknown as { children?: AnyNodeId[] }).children
-  return Array.isArray(maybeChildren) ? maybeChildren : []
+  if (!('children' in node)) return []
+  const maybeChildren: unknown = node.children
+  return Array.isArray(maybeChildren) ? (maybeChildren as AnyNodeId[]) : []
 }
 
 /**

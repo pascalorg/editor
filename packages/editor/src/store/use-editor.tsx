@@ -48,6 +48,54 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
 
+/**
+ * Node kinds that can be picked up and repositioned via the move interaction.
+ * Excludes container/root kinds (site, level, zone) and 2D-only overlays.
+ */
+export type MovingNode =
+  | ItemNode
+  | WindowNode
+  | DoorNode
+  | ElevatorNode
+  | CeilingNode
+  | ChimneyNode
+  | ColumnNode
+  | DormerNode
+  | SlabNode
+  | WallNode
+  | FenceNode
+  | RoofNode
+  | RoofSegmentNode
+  | SpawnNode
+  | StairNode
+  | StairSegmentNode
+  | BuildingNode
+
+const MOVING_NODE_TYPES: ReadonlySet<MovingNode['type']> = new Set([
+  'item',
+  'window',
+  'door',
+  'elevator',
+  'ceiling',
+  'chimney',
+  'column',
+  'dormer',
+  'slab',
+  'wall',
+  'fence',
+  'roof',
+  'roof-segment',
+  'spawn',
+  'stair',
+  'stair-segment',
+  'building',
+])
+
+/** Narrows an arbitrary node to the movable subset accepted by `setMovingNode`. */
+export function isMovingNode(node: { type: MovingNode['type'] | string }): node is MovingNode {
+  return MOVING_NODE_TYPES.has(node.type as MovingNode['type'])
+}
+
 export type Phase = 'site' | 'structure' | 'furnish'
 
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
@@ -148,46 +196,8 @@ type EditorState = {
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
   setSelectedItem: (item: AssetInput) => void
-  movingNode:
-    | ItemNode
-    | WindowNode
-    | DoorNode
-    | ElevatorNode
-    | CeilingNode
-    | ChimneyNode
-    | ColumnNode
-    | DormerNode
-    | SlabNode
-    | WallNode
-    | FenceNode
-    | RoofNode
-    | RoofSegmentNode
-    | SpawnNode
-    | StairNode
-    | StairSegmentNode
-    | BuildingNode
-    | null
-  setMovingNode: (
-    node:
-      | ItemNode
-      | WindowNode
-      | DoorNode
-      | ElevatorNode
-      | CeilingNode
-      | ChimneyNode
-      | ColumnNode
-      | DormerNode
-      | SlabNode
-      | WallNode
-      | FenceNode
-      | RoofNode
-      | RoofSegmentNode
-      | SpawnNode
-      | StairNode
-      | StairSegmentNode
-      | BuildingNode
-      | null,
-  ) => void
+  movingNode: MovingNode | null
+  setMovingNode: (node: MovingNode | null) => void
   movingWallEndpoint: MovingWallEndpoint | null
   setMovingWallEndpoint: (value: MovingWallEndpoint | null) => void
   movingFenceEndpoint: MovingFenceEndpoint | null
@@ -580,23 +590,7 @@ const useEditor = create<EditorState>()(
       setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
       setSelectedItem: (item) => set({ selectedItem: item }),
-      movingNode: null as
-        | ItemNode
-        | WindowNode
-        | DoorNode
-        | ElevatorNode
-        | CeilingNode
-        | ColumnNode
-        | SlabNode
-        | WallNode
-        | FenceNode
-        | RoofNode
-        | RoofSegmentNode
-        | SpawnNode
-        | StairNode
-        | StairSegmentNode
-        | BuildingNode
-        | null,
+      movingNode: null,
       setMovingNode: (node) => set({ movingNode: node }),
       movingWallEndpoint: null,
       setMovingWallEndpoint: (value) => set({ movingWallEndpoint: value }),

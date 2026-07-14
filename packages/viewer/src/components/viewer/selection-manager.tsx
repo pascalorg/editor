@@ -297,7 +297,6 @@ const getStrategy = (): SelectionStrategy | null => {
 }
 
 export const SelectionManager = () => {
-  const selection = useViewer((s) => s.selection)
   const clickHandledRef = useRef(false)
 
   useEffect(() => {
@@ -337,7 +336,7 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
       clickHandledRef.current = true
-      strategy.handleClick(event.node, event.nativeEvent as unknown as MouseEvent)
+      strategy.handleClick(event.node, event.nativeEvent.nativeEvent)
       // Clear hover immediately after clicking on building/level/zone
       useViewer.setState({ hoveredId: null })
     }
@@ -365,17 +364,22 @@ export const SelectionManager = () => {
     ) as SelectableNodeType[]
     const subscribedKinds = [...allTypes, ...registryKinds]
 
+    // Registry-supplied kinds are dynamic strings, so the composed
+    // `${kind}:${suffix}` key can't be proven a literal `keyof EditorEvents`.
+    // Every node-scoped enter/leave/click event carries a `NodeEvent` payload,
+    // so casting the key to a concrete node event key (e.g. `wall:enter`) keeps
+    // the handler fully type-checked against `NodeEvent` without an `any`.
     for (const type of subscribedKinds) {
-      emitter.on(`${type}:enter` as any, onEnter as any)
-      emitter.on(`${type}:leave` as any, onLeave as any)
-      emitter.on(`${type}:click` as any, onClick as any)
+      emitter.on(`${type}:enter` as 'wall:enter', onEnter)
+      emitter.on(`${type}:leave` as 'wall:leave', onLeave)
+      emitter.on(`${type}:click` as 'wall:click', onClick)
     }
 
     return () => {
       for (const type of subscribedKinds) {
-        emitter.off(`${type}:enter` as any, onEnter as any)
-        emitter.off(`${type}:leave` as any, onLeave as any)
-        emitter.off(`${type}:click` as any, onClick as any)
+        emitter.off(`${type}:enter` as 'wall:enter', onEnter)
+        emitter.off(`${type}:leave` as 'wall:leave', onLeave)
+        emitter.off(`${type}:click` as 'wall:click', onClick)
       }
     }
   }, [])

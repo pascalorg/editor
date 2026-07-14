@@ -384,11 +384,11 @@ turbo build --filter=@pascal-app/core
 
 ```bash
 # Build packages
-turbo build --filter=@pascal-app/core --filter=@pascal-app/viewer
+bun run build --filter=@pascal-app/core --filter=@pascal-app/viewer
 
-# Publish to npm
-npm publish --workspace=@pascal-app/core --access public
-npm publish --workspace=@pascal-app/viewer --access public
+# Publish to npm (bun publish operates on the package in the current directory)
+cd packages/core && bun publish --access public
+cd packages/viewer && bun publish --access public
 ```
 
 ---

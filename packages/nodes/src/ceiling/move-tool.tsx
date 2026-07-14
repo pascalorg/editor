@@ -266,10 +266,9 @@ function CeilingMovePreview({
           transparent
         />
       </mesh>
-      {/* @ts-ignore - `<line>` is a valid R3F intrinsic but conflicts with SVG line typing */}
-      <line geometry={previewOutlineGeometry} position={[0, height + 0.02, 0]}>
+      <threeLine geometry={previewOutlineGeometry} position={[0, height + 0.02, 0]}>
         <lineBasicMaterial color="#ffffff" depthWrite={false} opacity={0.95} transparent />
-      </line>
+      </threeLine>
       <CursorSphere position={cursorLocalPos} showTooltip={false} />
     </group>
   )

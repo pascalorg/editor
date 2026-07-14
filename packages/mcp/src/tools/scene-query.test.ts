@@ -15,6 +15,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
 import { registerSceneQueryTools } from './scene-query'
 
 describe('scene query tools', () => {
@@ -26,7 +27,7 @@ describe('scene query tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerSceneQueryTools(server, bridge)
+    registerSceneQueryTools(server, createSceneOperations({ bridge }))
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -35,13 +36,14 @@ describe('scene query tools', () => {
   test('list_levels returns level ids', async () => {
     const result = await client.callTool({ name: 'list_levels', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.levels).toHaveLength(1)
     expect(parsed.levels[0].id).toMatch(/^level_/)
   })
 
   test('get_level_summary includes walls, zones, and openings', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
     bridge.createNode(wall, level.id)
     const door = DoorNode.parse({ wallId: wall.id, position: [2, 1.05, 0] })
@@ -62,7 +64,7 @@ describe('scene query tools', () => {
       arguments: { levelId: level.id },
     })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.counts.walls).toBe(1)
     expect(parsed.counts.zones).toBe(1)
     expect(parsed.counts.doors).toBe(1)
@@ -71,12 +73,13 @@ describe('scene query tools', () => {
   })
 
   test('verify_scene reports practical issues without replacing validate_scene', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     bridge.createNode(WallNode.parse({ start: [0, 0], end: [4, 0] }), level.id)
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.ok).toBe(true)
     expect(parsed.valid).toBe(true)
     expect(parsed.hasIssues).toBe(true)
@@ -84,8 +87,10 @@ describe('scene query tools', () => {
   })
 
   test('verify_scene separates occupied stories from dedicated roof levels', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!ground) throw new Error('expected a ground node')
     const upper = LevelNode.parse({
       name: 'Second Floor',
       level: 1,
@@ -145,7 +150,7 @@ describe('scene query tools', () => {
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.levelCount).toBe(3)
     expect(parsed.occupiedStoryCount).toBe(2)
     expect(parsed.supportLevelCount).toBe(1)
@@ -155,7 +160,7 @@ describe('scene query tools', () => {
     const listed = await client.callTool({ name: 'list_levels', arguments: {} })
     expect(listed.isError).toBeFalsy()
     const listPayload = JSON.parse(
-      (listed.content as Array<{ type: string; text: string }>)[0]!.text,
+      (listed.content as Array<{ type: string; text: string }>)[0]?.text ?? '',
     )
     expect(listPayload.occupiedStoryCount).toBe(2)
     expect(listPayload.roofLevelIds).toEqual([roofLevel.id])
@@ -169,7 +174,8 @@ describe('scene query tools', () => {
   })
 
   test('verify_scene reports bad opening linkage and wall-local bounds', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const hostWall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5 })
     const otherWall = WallNode.parse({ start: [0, 2], end: [4, 2], height: 2.5 })
     bridge.createNode(hostWall, level.id)
@@ -185,7 +191,7 @@ describe('scene query tools', () => {
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     const issues = parsed.issues.join('\n')
     expect(issues).toContain(`window ${window.id} has wallId ${otherWall.id}`)
     expect(issues).toContain(`window ${window.id} extends outside wall ${hostWall.id}`)
@@ -193,7 +199,8 @@ describe('scene query tools', () => {
   })
 
   test('verify_scene reports stairs outside their source floor slab', async () => {
-    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!level) throw new Error('expected a level node')
     const slab = SlabNode.parse({
       polygon: [
         [0, 0],
@@ -222,15 +229,17 @@ describe('scene query tools', () => {
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.issues.join('\n')).toContain(
       'Stair Escaping Stair footprint extends outside source floor slab',
     )
   })
 
   test('verify_scene reports stair wall obstructions and missing destination slab openings', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')
+    if (!building) throw new Error('expected a building node')
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')
+    if (!ground) throw new Error('expected a ground node')
     const upper = LevelNode.parse({ name: 'Upper Floor', level: 1 })
     bridge.createNode(upper, building.id)
     const upperSlab = SlabNode.parse({
@@ -268,7 +277,7 @@ describe('scene query tools', () => {
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]?.text ?? '')
     expect(parsed.hasIssues).toBe(true)
     expect(parsed.issues.join('\n')).toContain('obstructs stair Main Stair')
     expect(parsed.issues.join('\n')).toContain('no destination slab opening')

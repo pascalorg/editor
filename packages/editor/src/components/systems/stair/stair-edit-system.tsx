@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef } from 'react'
  */
 export const StairEditSystem = () => {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const selectedStairSignature = useScene(
+  useScene(
     useCallback(
       (state) =>
         selectedIds

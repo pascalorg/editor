@@ -12,6 +12,7 @@
  */
 
 import type { AnyNode } from '@pascal-app/core/schema'
+import { at } from './typed-access'
 
 export type SceneBoundsXZ = {
   /** Min [x, z] in world units (meters). */
@@ -72,49 +73,65 @@ export function computeSceneBoundsXZ(
   }
 
   for (const node of list) {
-    if (!node || typeof node !== 'object') continue
-    const anyNode = node as unknown as Record<string, unknown>
+    switch (node.type) {
+      // Wall / fence endpoints in level coordinates.
+      case 'wall':
+      case 'fence': {
+        extendPoint(acc, node.start[0], node.start[1])
+        extendPoint(acc, node.end[0], node.end[1])
+        break
+      }
 
-    // Wall / fence endpoints in level coordinates.
-    const start = anyNode.start as unknown
-    const end = anyNode.end as unknown
-    if (Array.isArray(start) && start.length >= 2) extendPoint(acc, start[0], start[1])
-    if (Array.isArray(end) && end.length >= 2) extendPoint(acc, end[0], end[1])
-
-    // Zone / slab polygons (and explicit polygon-shaped site boundaries).
-    const polygon = anyNode.polygon as unknown
-    if (Array.isArray(polygon)) {
-      // Zones/slabs expose a plain array of [x,z] tuples. Site nodes nest the
-      // points under `polygon.points` (a discriminated PropertyLineData shape).
-      for (const point of polygon) {
-        if (Array.isArray(point) && point.length >= 2) {
+      // Zone / slab / ceiling polygons: a plain array of [x, z] tuples.
+      case 'zone':
+      case 'slab':
+      case 'ceiling': {
+        for (const point of node.polygon) {
           extendPoint(acc, point[0], point[1])
         }
+        break
       }
-    } else if (
-      polygon &&
-      typeof polygon === 'object' &&
-      Array.isArray((polygon as { points?: unknown }).points)
-    ) {
-      // Site nodes only: skip the default bootstrap square so a blank scene
-      // isn't auto-framed around an empty ±15 m box. Include any other site
-      // polygon (more than 4 points, or any coordinate beyond the default).
-      const points = (polygon as { points: unknown[] }).points
-      if (node.type === 'site' && isDefaultSitePolygon(points)) {
-        // Skip — default bootstrap polygon.
-      } else {
-        for (const point of points) {
-          if (Array.isArray(point) && point.length >= 2) {
+
+      // Site nodes nest their points under `polygon.points`. Skip the default
+      // bootstrap square so a blank scene isn't auto-framed around an empty
+      // ±15 m box; include any other site polygon.
+      case 'site': {
+        const points = node.polygon.points
+        if (!isDefaultSitePolygon(points)) {
+          for (const point of points) {
             extendPoint(acc, point[0], point[1])
           }
         }
+        break
       }
-    }
 
-    // Position on the XZ plane (3D position = [x, y, z]).
-    const position = anyNode.position as unknown
-    if (Array.isArray(position) && position.length >= 3) {
-      extendPoint(acc, position[0], position[2])
+      // Position on the XZ plane (3D position = [x, y, z]).
+      case 'building':
+      case 'item':
+      case 'guide':
+      case 'column':
+      case 'door':
+      case 'window':
+      case 'elevator':
+      case 'stair':
+      case 'stair-segment':
+      case 'roof':
+      case 'roof-segment':
+      case 'shelf':
+      case 'scan':
+      case 'spawn':
+      case 'box-vent':
+      case 'ridge-vent':
+      case 'chimney':
+      case 'solar-panel':
+      case 'skylight':
+      case 'dormer': {
+        extendPoint(acc, node.position[0], node.position[2])
+        break
+      }
+
+      default:
+        break
     }
   }
 
@@ -161,7 +178,7 @@ function isDefaultSitePolygon(points: unknown[]): boolean {
   ]
   for (let i = 0; i < 4; i++) {
     const p = points[i]
-    const e = expected[i]!
+    const e = at(expected, i)
     if (!Array.isArray(p) || p.length < 2) return false
     if (p[0] !== e[0] || p[1] !== e[1]) return false
   }
