@@ -16,7 +16,20 @@ export function getRenderableSlabPolygon(slabNode: SlabNode): Array<[number, num
 }
 
 /**
- * Expand a polygon outward by a uniform distance.
+ * The polygon to store when demoting an auto slab (`autoFromWalls: true`) to a
+ * manual one. Auto slabs render inset by `AUTO_SLAB_INSET` while manual slabs
+ * render outset by `SLAB_OUTSET`; pre-insetting the stored polygon by the sum
+ * keeps the rendered footprint where the user last saw it instead of growing
+ * by ~7cm per edge the moment the slab becomes manual.
+ */
+export function bakeAutoSlabPolygonForManual(
+  polygon: Array<[number, number]>,
+): Array<[number, number]> {
+  return outsetPolygon(polygon, -(SLAB_OUTSET + AUTO_SLAB_INSET))
+}
+
+/**
+ * Expand a polygon outward by a uniform distance (a negative amount insets).
  * Offsets each edge outward then intersects consecutive offset edges.
  */
 function outsetPolygon(polygon: Array<[number, number]>, amount: number): Array<[number, number]> {
