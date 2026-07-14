@@ -1,5 +1,5 @@
 import type { Color, Material, Side, Texture } from 'three'
-import { cos, Fn, float, instanceIndex, positionLocal, sin, time, uv } from 'three/tsl'
+import { cos, Fn, float, instanceIndex, positionGeometry, sin, time, uv } from 'three/tsl'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 
 /**
@@ -24,7 +24,7 @@ const LEAF_FREQUENCY = 1.2
 const LEAF_STRENGTH = 0.3
 
 const leafFlutter = Fn(() => {
-  const p = positionLocal.toVar()
+  const p = positionGeometry.toVar()
   const offset = float(instanceIndex).mul(0.7).add(p.x.add(p.z).mul(0.3))
   const t = time.mul(LEAF_FREQUENCY)
   const wave = sin(t.add(offset))
@@ -43,7 +43,7 @@ const STEM_FREQUENCY = 1.3
 const STEM_STRENGTH = 0.05
 
 const stemBend = Fn(() => {
-  const p = positionLocal.toVar()
+  const p = positionGeometry.toVar()
   const h = p.y.max(0)
   const phase = float(instanceIndex).mul(0.618)
   const t = time.mul(STEM_FREQUENCY).add(phase)
