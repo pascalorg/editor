@@ -122,6 +122,22 @@ ktx2Loader.setTranscoderPath('https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@mas
 const configuredRenderers = new WeakSet<object>()
 const warnedRenderers = new WeakSet<object>()
 
+let resolveKtx2Ready: () => void
+const ktx2ReadyPromise = new Promise<void>((resolve) => {
+  resolveKtx2Ready = resolve
+})
+
+/**
+ * Resolves once `detectSupport` has succeeded for any renderer. `.ktx2` loads
+ * issued before that point would throw inside KTX2Loader ("Missing
+ * initialization with `.detectSupport( renderer )`"), so texture loaders await
+ * this instead of failing — covers materials created while the renderer is
+ * still initializing (e.g. a standalone capture canvas).
+ */
+export function whenKtx2Ready(): Promise<void> {
+  return ktx2ReadyPromise
+}
+
 /** Returns true once support has been detected for this renderer (KTX2 safe to load). */
 export function ensureKtx2Support(renderer: unknown): boolean {
   const key = renderer as object | null
@@ -130,6 +146,7 @@ export function ensureKtx2Support(renderer: unknown): boolean {
   try {
     ;(ktx2Loader as unknown as { detectSupport: (r: unknown) => void }).detectSupport(renderer)
     configuredRenderers.add(key)
+    resolveKtx2Ready()
     return true
   } catch (error) {
     // Some WebGPU flows can transiently call this before backend init; don't

@@ -86,6 +86,7 @@ import {
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
+import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
@@ -126,7 +127,10 @@ import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-laye
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
-import { FloorplanRegistryLayer } from '../editor-2d/renderers/floorplan-registry-layer'
+import {
+  FloorplanRegistryLayer,
+  RotationAngleOverlay,
+} from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
@@ -1409,6 +1413,44 @@ function buildGuideRotationDraft(
     position: toPlanPointFromSvgPoint(interaction.centerSvg),
     scale: interaction.scale,
     rotation: getGuideSceneRotationFromSvgRotation(snappedRotationSvg),
+  }
+}
+
+/** Live rotation readout for a guide rotate drag — feeds the registry
+ *  layer's wedge + degree chip so guides read the same as every other
+ *  rotate affordance. Sweeps from the grabbed corner's bearing at grab to
+ *  its current (snapped) bearing; suppressed below ~0.5° so a fresh grab
+ *  doesn't flash a zero-width sliver. */
+function buildGuideRotationReadout(
+  interaction: GuideInteractionState | null,
+  draft: GuideTransformDraft | null,
+) {
+  if (
+    !(
+      interaction &&
+      draft &&
+      interaction.mode === 'rotate' &&
+      draft.guideId === interaction.guideId
+    )
+  ) {
+    return null
+  }
+
+  const delta = normalizeAngle(getGuideSvgRotation(draft.rotation) - interaction.rotationSvg)
+  if (Math.abs(delta) < 0.0087) {
+    return null
+  }
+
+  const width = getGuideWidth(interaction.scale)
+  const height = getGuideHeight(width, interaction.aspectRatio)
+  const startAngle = interaction.rotationSvg + interaction.cornerBaseAngle
+
+  return {
+    pivot: [interaction.centerSvg.x, interaction.centerSvg.y] as const,
+    startAngle,
+    endAngle: startAngle + delta,
+    radius: Math.hypot(width, height) / 2,
+    sweep: Math.abs(delta),
   }
 }
 
@@ -2695,6 +2737,39 @@ function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit)
   }
 }
 
+const REFERENCE_SCALE_LINGO_UNIT: Record<ReferenceScaleUnit, 'm' | 'cm' | 'ft' | 'in'> = {
+  meters: 'm',
+  centimeters: 'cm',
+  feet: 'ft',
+  inches: 'in',
+}
+
+/** Lingo-parse the free-text real-length input in the dropdown's unit — a
+ * bare number means the dropdown unit, while `180cm`, `1m80` or `5'11"`
+ * override it. Returns `null` when the text isn't a readable length. */
+function parseReferenceScaleLength(raw: string, unit: ReferenceScaleUnit): number | null {
+  const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
+  return parseMeasurement(
+    raw,
+    { kind: 'length', unitId },
+    { bareUnit: unitId, system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric' },
+  )
+}
+
+function referenceScaleLengthHint(raw: string, unit: ReferenceScaleUnit): string | null {
+  const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
+  return measurementHint(
+    raw,
+    { kind: 'length', unitId },
+    {
+      bareUnit: unitId,
+      system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric',
+      displayUnit: unitId,
+      precision: 2,
+    },
+  )
+}
+
 function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
   switch (unit) {
     case 'centimeters':
@@ -3149,10 +3224,17 @@ function FloorplanGuideImage({
           }}
           onPointerDown={(event) => {
             if (event.button === 0) {
-              event.stopPropagation()
-              if (isSelected && !isLocked) {
-                onGuideTranslateStart(guide, event)
+              // Only a selected, unlocked guide consumes the pointer-down (it
+              // starts a translate drag). Every other guide lets it bubble to
+              // the <svg> root so box select arms exactly as on empty canvas.
+              // A non-drag release still fires onClick (a committed box-select
+              // drag swallows the trailing click), so click-to-select → panel
+              // keeps working for locked and unselected guides alike.
+              if (isLocked || !isSelected) {
+                return
               }
+              event.stopPropagation()
+              onGuideTranslateStart(guide, event)
             }
           }}
           pointerEvents="all"
@@ -5617,6 +5699,10 @@ export function FloorplanPanel({
   const activeGuideInteractionMode = guideTransformDraft
     ? (guideInteractionRef.current?.mode ?? null)
     : null
+  const guideRotationReadout = buildGuideRotationReadout(
+    guideInteractionRef.current,
+    guideTransformDraft,
+  )
   const floorplanWalls = useMemo(() => walls.map(getFloorplanWall), [walls])
   const wallMiterData = useMemo(() => calculateLevelMiters(floorplanWalls), [floorplanWalls])
   const wallById = useMemo(() => new Map(walls.map((wall) => [wall.id, wall] as const)), [walls])
@@ -7239,8 +7325,8 @@ export function FloorplanPanel({
       return
     }
 
-    const displayLength = Number(referenceScaleValue)
-    if (!(displayLength > 0)) {
+    const displayLength = parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit)
+    if (!(displayLength && displayLength > 0)) {
       return
     }
 
@@ -10873,7 +10959,8 @@ export function FloorplanPanel({
   const floorplanNavigationCursor =
     isPanning || isRotatingFloorplan ? 'grabbing' : isSpacePanPressed ? 'grab' : null
   const isFloorplanNavigationOverlayVisible = isSpacePanPressed || isPanning || isRotatingFloorplan
-  const pendingReferenceDisplayLength = Number(referenceScaleValue)
+  const pendingReferenceDisplayLength =
+    parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit) ?? Number.NaN
   const pendingReferenceRealLengthMeters =
     pendingReferenceScale && pendingReferenceDisplayLength > 0
       ? convertReferenceLengthToMeters(pendingReferenceDisplayLength, referenceScaleUnit)
@@ -10889,9 +10976,14 @@ export function FloorplanPanel({
   const referenceScaleInputError =
     referenceScaleValue.trim() === ''
       ? 'Enter the real length of the line.'
-      : pendingReferenceDisplayLength > 0
-        ? null
-        : 'Length must be greater than 0.'
+      : Number.isNaN(pendingReferenceDisplayLength)
+        ? `Enter a length like 3.5, 180cm or 5'11".`
+        : pendingReferenceDisplayLength > 0
+          ? null
+          : 'Length must be greater than 0.'
+  const referenceScaleHint = referenceScaleInputError
+    ? null
+    : referenceScaleLengthHint(referenceScaleValue, referenceScaleUnit)
   return (
     <div
       className="pointer-events-auto flex h-full w-full flex-col overflow-hidden bg-background/95"
@@ -11005,16 +11097,9 @@ export function FloorplanPanel({
                     'h-9 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-foreground/40',
                     referenceScaleInputError ? 'border-destructive/60' : 'border-border',
                   )}
-                  inputMode="decimal"
-                  onBlur={() => {
-                    const value = Number(referenceScaleValue)
-                    if (!(value > 0)) {
-                      setReferenceScaleValue('0.0001')
-                    }
-                  }}
                   onChange={(event) => setReferenceScaleValue(event.target.value)}
-                  step="any"
-                  type="number"
+                  placeholder={`e.g. 3.5, 180cm or 5'11"`}
+                  type="text"
                   value={referenceScaleValue}
                 />
                 <select
@@ -11037,6 +11122,7 @@ export function FloorplanPanel({
                 )}
               >
                 {referenceScaleInputError ??
+                  referenceScaleHint ??
                   'Any decimal works. Use the known real length, not the drawn value.'}
               </span>
             </label>
@@ -11383,6 +11469,19 @@ export function FloorplanPanel({
                   rotationModifierPressed={rotationModifierPressed}
                   sceneRotationDeg={floorplanSceneRotationDeg}
                   showHandles={canInteractWithGuides && guideUi[selectedGuide.id]?.locked !== true}
+                />
+              )}
+
+              {guideRotationReadout && (
+                <RotationAngleOverlay
+                  overlay={guideRotationReadout}
+                  palette={{
+                    measurementLabelBackground: isDark ? '#0f172a' : '#ffffff',
+                    measurementLabelText: isDark ? '#e2e8f0' : '#171717',
+                    measurementStroke: palette.measurementStroke,
+                  }}
+                  sceneRotationDeg={floorplanSceneRotationDeg}
+                  unitsPerPixel={floorplanUnitsPerPixel}
                 />
               )}
 

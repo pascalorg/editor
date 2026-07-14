@@ -19,3 +19,12 @@ export function runRedo() {
   useScene.temporal.getState().redo()
   refreshSceneAfterHistoryJump()
 }
+
+/**
+ * ⌘Z / ⌘⇧Z (undo/redo). Pointer-drag sessions intercept these in the capture
+ * phase and cancel the gesture instead — mid-drag, "undo" means "abort what my
+ * mouse is doing", never a history jump under a live pointer.
+ */
+export function isHistoryShortcut(e: KeyboardEvent) {
+  return (e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')
+}

@@ -244,8 +244,16 @@ export function Lights() {
   return (
     <>
       {theme.lights.map((light, index) => (
+        // The user-facing shadows toggle must NOT flip `castShadow` at runtime:
+        // three r184's WebGPU node cache keys builder state by castShadow, but
+        // evicts with the post-toggle key, so flipping off disposes the shadow
+        // map's GPU texture while the shadows-on cache entry (still referencing
+        // it) survives. Re-enabling then reuses that stale state and every
+        // submit fails ("Invalid CommandBuffer ... renderContext_N"). The
+        // toggle is applied via `renderer.shadowMap.enabled` (Canvas `shadows`
+        // prop in viewer/index.tsx), which round-trips without disposing.
         <directionalLight
-          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED && shadows}
+          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED}
           key={`${index}-${light.position.join(',')}`}
           position={light.position}
           ref={(ref) => {
@@ -256,7 +264,7 @@ export function Lights() {
           shadow-normalBias={0.3}
           shadow-radius={2}
         >
-          {light.castShadow && !SHADOWS_DISABLED && shadows ? (
+          {light.castShadow && !SHADOWS_DISABLED ? (
             <orthographicCamera
               attach="shadow-camera"
               bottom={-shadowCameraSize}

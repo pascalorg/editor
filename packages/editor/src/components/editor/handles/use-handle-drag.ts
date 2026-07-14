@@ -12,6 +12,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
+import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
@@ -110,6 +111,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
   return (event: ThreeEvent<PointerEvent>) => {
+    // Only the primary button starts a handle gesture — right/middle-drag
+    // belongs to the camera, so let it propagate untouched.
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
 
@@ -185,6 +189,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (document.body.style.cursor === cursor) {
         document.body.style.cursor = ''
       }
@@ -222,9 +227,20 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       cleanup()
     }
 
+    // Escape / ⌘Z abort the drag — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 }

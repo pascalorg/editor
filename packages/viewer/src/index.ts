@@ -69,6 +69,7 @@ export {
   collectIsolationSubtree,
   isIsolationActive,
 } from './lib/isolation'
+export { ensureKtx2Support } from './lib/ktx2-loader'
 export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
@@ -107,8 +108,9 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
 export { useItemLightPool } from './store/use-item-light-pool'
-export { default as useViewer } from './store/use-viewer'
+export { applyCountryUnitDefault, default as useViewer } from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,

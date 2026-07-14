@@ -32,6 +32,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -331,6 +332,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   }, [])
 
   const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
@@ -435,6 +437,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
@@ -496,6 +499,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
@@ -525,10 +529,21 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       cleanup()
     }
 
+    // Escape / ⌘Z abort the drag — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 
   return (
@@ -607,6 +622,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
@@ -696,6 +712,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'

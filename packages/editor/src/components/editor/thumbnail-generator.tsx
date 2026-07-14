@@ -7,8 +7,10 @@ import {
   GRID_LAYER,
   getSceneTheme,
   horizonHazeColor,
+  packNormalToRGB,
   SSGI_PARAMS,
   snapLevelsToTruePositions,
+  unpackRGBToNormal,
   useViewer,
 } from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
@@ -20,10 +22,8 @@ import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js'
 import {
-  colorToDirection,
   convertToTexture,
   diffuseColor,
-  directionToColor,
   float,
   mix,
   mrt,
@@ -105,7 +105,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           mrt({
             output,
             diffuseColor,
-            normal: directionToColor(normalView),
+            normal: packNormalToRGB(normalView),
           }),
         )
 
@@ -116,7 +116,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         scenePass.getTexture('diffuseColor').type = UnsignedByteType
         scenePass.getTexture('normal').type = UnsignedByteType
 
-        const sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+        const sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
 
         const giPass = ssgi(scenePassColor, scenePassDepth, sceneNormal, cam as any)
         giPass.sliceCount.value = SSGI_PARAMS.sliceCount
@@ -131,8 +131,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
         giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-        const giTexture = (giPass as any).getTextureNode()
-        const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+        // r185: SSGI's AO lives in its own single-channel texture (getAONode)
+        // rather than the alpha of one packed rgba texture.
+        const aoTexture = (giPass as any).getAONode()
+        const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, float(1))
         const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, cam)
         denoisePass.index.value = 0
         denoisePass.radius.value = 4

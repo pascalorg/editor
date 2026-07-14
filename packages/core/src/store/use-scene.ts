@@ -1066,14 +1066,6 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
-        set({
-          nodes: cleanedNodes,
-          rootNodeIds,
-          dirtyNodes: new Set<AnyNodeId>(),
-          collections: extra?.collections ?? {},
-          materials,
-        })
-
         const normalizedRootNodeIds = normalizeRootNodeIds(cleanedNodes, rootNodeIds)
         const reachableNodeIds = collectReachableNodeIds(cleanedNodes, normalizedRootNodeIds)
         if (normalizedRootNodeIds.length > 0) {
@@ -1084,6 +1076,10 @@ const useScene: UseSceneStore = create<SceneState>()(
           }
         }
 
+        // Single tracked `set`: with zundo, every tracked write pushes the
+        // pre-write state onto `pastStates`. Writing the scene in two steps
+        // (as this used to) exposed a half-normalized intermediate state —
+        // and the pre-load (possibly empty) state — as undo targets.
         set({
           nodes: cleanedNodes,
           rootNodeIds: normalizedRootNodeIds,
@@ -1296,6 +1292,12 @@ let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
+  // Resetting the pause-depth counter without resuming would strand the
+  // temporal store in `isTracking: false` if a pause window was active when
+  // the scene was (re)loaded — every edit after the load would then be
+  // invisible to undo. Resume unconditionally so the cleared history starts
+  // tracking from the loaded baseline.
+  useScene.temporal.getState().resume()
   useScene.temporal.getState().clear()
   prevPastLength = 0
   prevFutureLength = 0

@@ -27,7 +27,7 @@
     "@pascal-app/viewer": "*",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.184",
+    "three": "^0.185",
     "zod": "^4",
     "zustand": "^5"
   },
@@ -41,7 +41,7 @@
     "@types/react": "^19.2.2",
     "@types/three": "^0.184.0",
     "react": "^19",
-    "three": "^0.184",
+    "three": "^0.185",
     "typescript": "6.0.3",
     "zod": "^4",
     "zustand": "^5"

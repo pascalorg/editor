@@ -2999,14 +2999,17 @@ const ROTATION_WEDGE_SEGMENTS = 48
  * is in plan coords; the chip counter-rotates `sceneRotationDeg` so it reads
  * horizontally regardless of the building's on-screen orientation.
  */
-function RotationAngleOverlay({
+export function RotationAngleOverlay({
   overlay,
   palette,
   unitsPerPixel,
   sceneRotationDeg,
 }: {
   overlay: RotationOverlayState
-  palette: FloorplanPalette
+  palette: Pick<
+    FloorplanPalette,
+    'measurementLabelBackground' | 'measurementLabelText' | 'measurementStroke'
+  >
   unitsPerPixel: number
   sceneRotationDeg: number
 }): React.ReactElement {

@@ -1,15 +1,6 @@
-import {
-  abs,
-  colorToDirection,
-  float,
-  max,
-  min,
-  mix,
-  screenSize,
-  screenUV,
-  smoothstep,
-  vec2,
-} from 'three/tsl'
+import { abs, float, max, min, mix, screenSize, screenUV, smoothstep, vec2 } from 'three/tsl'
+
+import { unpackRGBToNormal } from './tsl-compat'
 
 // Screen-space ink outline (SketchUp / Moebius look). Reads the scene-pass
 // depth + normal MRT and inks two signals:
@@ -62,11 +53,11 @@ export function inkedEdges({
   // ≈ metres of step / near (near≈0.1): ~5cm starts a line, ~25cm solid.
   const depthEdge = smoothstep(float(0.5), float(2.5), depthMetric).mul(noiseGate)
 
-  const nC = colorToDirection(normalTex.sample(uvN)).normalize()
-  const nR = colorToDirection(normalTex.sample(uvN.add(vec2(px.x, 0)))).normalize()
-  const nL = colorToDirection(normalTex.sample(uvN.sub(vec2(px.x, 0)))).normalize()
-  const nU = colorToDirection(normalTex.sample(uvN.add(vec2(0, px.y)))).normalize()
-  const nD = colorToDirection(normalTex.sample(uvN.sub(vec2(0, px.y)))).normalize()
+  const nC = unpackRGBToNormal(normalTex.sample(uvN)).normalize()
+  const nR = unpackRGBToNormal(normalTex.sample(uvN.add(vec2(px.x, 0)))).normalize()
+  const nL = unpackRGBToNormal(normalTex.sample(uvN.sub(vec2(px.x, 0)))).normalize()
+  const nU = unpackRGBToNormal(normalTex.sample(uvN.add(vec2(0, px.y)))).normalize()
+  const nD = unpackRGBToNormal(normalTex.sample(uvN.sub(vec2(0, px.y)))).normalize()
   // Ink is a near/mid-field affordance: fade it out with raw depth so the
   // horizon (the infinite ground disc vanishing against the backdrop) and
   // other far-field depth cliffs never draw a line across the sky junction.
