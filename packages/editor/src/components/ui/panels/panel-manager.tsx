@@ -29,6 +29,7 @@ import useEditor from '../../../store/use-editor'
 import { MobilePanelSheet } from './mobile-panel-sheet'
 import { MobileSelectionBar } from './mobile-selection-bar'
 import { getNodeDisplay } from './node-display'
+import { resetDesktopInspectorCollapsed } from './panel-wrapper'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 
@@ -185,6 +186,27 @@ export function PanelManager({ inspectorFooter }: { inspectorFooter?: React.Reac
     const id = selectedIds[0]
     return id ? (s.nodes[id as AnyNodeId] ?? null) : null
   })
+
+  // Node and reference selection are mutually exclusive: selecting a guide
+  // clears the node selection (handleGuideSelect), but node selection never
+  // cleared a lingering reference — so clicking a wall with a floorplan
+  // selected kept showing the reference panel. Clear the stale reference the
+  // moment a scene selection appears.
+  const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
+  useEffect(() => {
+    if (selectedIds.length > 0 || selectedZoneId) {
+      setSelectedReferenceId(null)
+    }
+  }, [selectedIds, selectedZoneId, setSelectedReferenceId])
+
+  // The inspector's expanded state is shared across panel swaps, but a fresh
+  // selection after everything was deselected should open collapsed again.
+  const hasAnySelection = selectedIds.length > 0 || Boolean(selectedZoneId) || Boolean(selectedReferenceId)
+  useEffect(() => {
+    if (!hasAnySelection) {
+      resetDesktopInspectorCollapsed()
+    }
+  }, [hasAnySelection])
 
   if (isMobile) {
     if (selectedReferenceId) {
