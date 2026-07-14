@@ -214,15 +214,13 @@ export function applyModifyOps(
   let totalArea = intent.targetTotalAreaSqm
   let structural = false
 
+  // Structural ops apply first, furniture ops resolve afterwards against the
+  // final room set — the outcome of a mixed plan must not depend on the order
+  // the model happened to emit the ops in ("删卫生间并移除里面的洗衣机" means
+  // the same thing whichever op comes first).
+  const removedRooms: LayoutIntentRoom[] = []
   for (const op of plan.ops) {
-    if (FURNITURE_OPS.has(op.op)) {
-      // Only the room reference is validated here; item matching against the
-      // live scene is the executor stage's job (M1).
-      const resolved = resolveRoomRef((op as FurnitureModifyOp).room, rooms)
-      if ('error' in resolved) errors.push(resolved.error)
-      else furnitureOps.push(op as FurnitureModifyOp)
-      continue
-    }
+    if (FURNITURE_OPS.has(op.op)) continue
 
     const sop = op as StructuralModifyOp
     if (sop.op === 'add_room') {
@@ -254,6 +252,7 @@ export function applyModifyOps(
       if (rooms.length <= 1) { errors.push('不能删除最后一个房间'); continue }
       const target = resolved.room
       const area = roomArea(target, profile)
+      removedRooms.push(target)
       rooms = rooms.filter(room => room.id !== target.id)
       if (adjacency) {
         adjacency = adjacency.filter(pair => pair.a !== target.id && pair.b !== target.id)
@@ -283,6 +282,39 @@ export function applyModifyOps(
       rooms = rooms.map(room => room.id === target.id ? { ...room, name: sop.name } : room)
       notes.push(`「${target.name}」更名为「${sop.name}」`)
     }
+  }
+
+  for (const op of plan.ops) {
+    if (!FURNITURE_OPS.has(op.op)) continue
+    const fop = op as FurnitureModifyOp
+    // Only the room reference is validated here; item matching against the
+    // live scene is the executor stage's job (M1). Resolution runs on the
+    // post-structural room set so refs to a room added in the same plan work;
+    // the ref is normalised to the room's final name because the executor
+    // resolves against the rebuilt rooms (a rename in the same plan would
+    // otherwise orphan it).
+    const resolved = resolveRoomRef(fop.room, rooms)
+    if ('room' in resolved) {
+      furnitureOps.push({ ...fop, room: resolved.room.name })
+      continue
+    }
+    // Pre-edit names are still valid refs: map through the original intent's
+    // id — a room renamed in the same plan keeps its furniture ops, a room
+    // removed in the same plan drops them with a note instead of an error
+    // (the furniture disappears with its room).
+    const original = resolveRoomRef(fop.room, intent.rooms)
+    if ('room' in original) {
+      const current = rooms.find(room => room.id === original.room.id)
+      if (current) {
+        furnitureOps.push({ ...fop, room: current.name })
+        continue
+      }
+      if (removedRooms.some(room => room.id === original.room.id)) {
+        notes.push(`「${original.room.name}」已随房间删除，其中的家具操作（${fop.op}）不再需要，忽略`)
+        continue
+      }
+    }
+    errors.push(resolved.error)
   }
 
   const applied: LayoutIntent = { targetTotalAreaSqm: totalArea, rooms }

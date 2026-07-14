@@ -815,4 +815,24 @@ describe('sceneDriftedFromPlan (MODIFY_REDESIGN §6)', () => {
       plan,
     )).toBe(false)
   })
+
+  test('area-preserving manual edits are drift too', () => {
+    const halfPlan = {
+      ...plan,
+      rooms: [
+        { ...plan.rooms[0]!, polygon: rect(0, 0, 4, 6) },
+        { ...plan.rooms[1]!, polygon: rect(4, 0, 8, 6) },
+      ],
+    }
+    // A wall segment moved 1m with the area compensated by reshaping both
+    // rooms into Ls: every zone area equals its plan area exactly, but the
+    // polygons no longer match the snapshot.
+    expect(sceneDriftedFromPlan(
+      [
+        { polygon: [[0, 0], [5, 0], [5, 3], [3, 3], [3, 6], [0, 6]] as Array<[number, number]> },
+        { polygon: [[5, 0], [8, 0], [8, 6], [3, 6], [3, 3], [5, 3]] as Array<[number, number]> },
+      ],
+      halfPlan,
+    )).toBe(true)
+  })
 })

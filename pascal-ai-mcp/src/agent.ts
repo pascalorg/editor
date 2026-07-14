@@ -1050,10 +1050,17 @@ export class PascalAiAgent {
               intent: localIntent,
               plan: absorbed.plan,
               planNotes: [`局部删除：「${resolved.room.name}」并入「${absorbed.absorbedInto.name}」，其余房间保持原位`],
-              strategy: session.strategy
-                ?? deriveStrategy(deriveBriefFacts(session.summary || formatSummary(session.brief)), {
-                  totalAreaSqm: localIntent.targetTotalAreaSqm,
-                }, profile),
+              // Re-derived from the post-removal intent — the absorbed plan
+              // keeps its geometry either way, but the snapshot must not
+              // carry a strategy (e.g. tanoji) the new room count no longer
+              // satisfies.
+              strategy: deriveStrategy(deriveBriefFacts(session.summary || formatSummary(session.brief)), {
+                totalAreaSqm: localIntent.targetTotalAreaSqm,
+                requiredRooms: [...localIntent.rooms.reduce((acc, room) => {
+                  acc.set(room.type, (acc.get(room.type) ?? 0) + 1)
+                  return acc
+                }, new Map<RoomType, number>())].map(([type, count]) => ({ type, count })),
+              }, profile),
               furnitureOps: [],
               appliedNotes: [],
             })
@@ -1251,8 +1258,17 @@ export class PascalAiAgent {
       try {
         await traceMcp('delete_node', { id, cascade: true })
       } catch {
-        // Already removed by an earlier cascade — expected, not an error.
+        // Swallowed on purpose: usually the node was already removed by an
+        // earlier cascade. Real failures are caught by the re-check below —
+        // building the new plan on top of leftovers would mix old and new
+        // structure into an unrecoverable hybrid.
       }
+    }
+    const leftover = Object.values(
+      snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {}))),
+    ).filter(node => clearTypes.has(String(node.type)))
+    if (leftover.length > 0) {
+      throw new Error(`清除旧结构失败：${leftover.length} 个节点未能删除，已中止重建（场景未持久化，可重试）`)
     }
     const built = await executeLayoutPlan({
       plan,
@@ -1268,13 +1284,6 @@ export class PascalAiAgent {
       polygon: planRoom.polygon,
       zoneId: built.rooms.find(entry => entry.planRoomId === planRoom.id)?.zoneId ?? null,
     }))
-    // Snapshot refresh (§2 病灶④): the next modify must see THIS state.
-    session.zoneRoomTypes = Object.fromEntries(
-      furnitureRooms.filter(room => room.zoneId !== null).map(room => [room.zoneId as string, room.type]),
-    )
-    session.layoutIntent = intent
-    session.layoutPlan = plan
-    session.strategy = strategy
     const furnished = await executeFurniturePlan({
       rooms: furnitureRooms,
       levelId,
@@ -1299,6 +1308,17 @@ export class PascalAiAgent {
       callMcp: traceMcp,
       beforeCall,
     })
+    // Snapshot refresh (§2 病灶④): the next modify must see THIS state. It is
+    // written only after every execution stage succeeded — an exception above
+    // propagates to modify()'s catch with the OLD snapshots intact, so a
+    // retried pending modification still resolves against the pre-change
+    // intent instead of a half-applied one.
+    session.zoneRoomTypes = Object.fromEntries(
+      furnitureRooms.filter(room => room.zoneId !== null).map(room => [room.zoneId as string, room.type]),
+    )
+    session.layoutIntent = intent
+    session.layoutPlan = plan
+    session.strategy = strategy
     trace.converged = true
     return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
       okDetails: [
@@ -2536,23 +2556,50 @@ export function gateTargetsForSession(
 
 /**
  * Manual-edit drift detection (MODIFY_REDESIGN.md §6): does the live scene's
- * room set still match the plan snapshot it was built from? Compares room
- * count and the sorted area profile — deliberately NOT names (renames are a
- * supported non-structural edit) and NOT wall geometry (v1 has no persisted
- * node snapshot to diff against). A hand-moved wall changes zone areas, a
- * hand-added/removed room changes the count; both trip the check.
+ * room set still match the plan snapshot it was built from? Each zone polygon
+ * must correspond to one plan room polygon (any vertex rotation/winding,
+ * ±0.15m per vertex for executor rounding) — deliberately NOT names (renames
+ * are a supported non-structural edit). Comparing polygons rather than an
+ * area profile means area-preserving edits — a translated room, two
+ * equal-size rooms swapped, a wall moved and compensated elsewhere — also
+ * count as drift, instead of being silently overwritten by the next rebuild.
  */
 export function sceneDriftedFromPlan(
   zones: Array<{ polygon: Array<[number, number]> }>,
   plan: LayoutPlan,
 ): boolean {
   if (zones.length !== plan.rooms.length) return true
-  const zoneAreas = zones.map(zone => polygonArea(zone.polygon)).sort((a, b) => a - b)
-  const planAreas = plan.rooms.map(room => polygonArea(room.polygon)).sort((a, b) => a - b)
-  for (let i = 0; i < zoneAreas.length; i++) {
-    const zone = zoneAreas[i]!
-    const planned = planAreas[i]!
-    if (Math.abs(zone - planned) > Math.max(0.8, planned * 0.1)) return true
+  const eps = 0.15
+  const dropCollinear = (poly: Array<[number, number]>): Array<[number, number]> =>
+    poly.filter((curr, i) => {
+      const prev = poly[(i - 1 + poly.length) % poly.length]!
+      const next = poly[(i + 1) % poly.length]!
+      const cross = (curr[0] - prev[0]) * (next[1] - prev[1]) - (curr[1] - prev[1]) * (next[0] - prev[0])
+      return Math.abs(cross) > 1e-6
+    })
+  const samePolygon = (a: Array<[number, number]>, b: Array<[number, number]>): boolean => {
+    if (a.length !== b.length) return false
+    const n = a.length
+    const aligned = (candidate: Array<[number, number]>): boolean => {
+      for (let offset = 0; offset < n; offset++) {
+        let ok = true
+        for (let i = 0; i < n; i++) {
+          const [x1, z1] = candidate[(i + offset) % n]!
+          const [x2, z2] = b[i]!
+          if (Math.abs(x1 - x2) > eps || Math.abs(z1 - z2) > eps) { ok = false; break }
+        }
+        if (ok) return true
+      }
+      return false
+    }
+    return aligned(a) || aligned([...a].reverse())
+  }
+  const remaining = plan.rooms.map(room => dropCollinear(room.polygon))
+  for (const zone of zones) {
+    const polygon = dropCollinear(zone.polygon)
+    const index = remaining.findIndex(candidate => samePolygon(polygon, candidate))
+    if (index === -1) return true
+    remaining.splice(index, 1)
   }
   return false
 }

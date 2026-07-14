@@ -557,7 +557,11 @@ export function unionAdjacentPolygons(
   a: Array<[number, number]>,
   b: Array<[number, number]>,
 ): Array<[number, number]> | null {
-  const key = (x: number, z: number) => `${x.toFixed(3)},${z.toFixed(3)}`
+  // Key precision must be far tighter than any real wall offset: at 1e-3 a
+  // 0.4mm gap/overlap between the two polygons collapses into a "shared"
+  // edge and the area check (±0.01㎡) waves the bogus union through. 1e-6
+  // only merges genuine float noise.
+  const key = (x: number, z: number) => `${x.toFixed(6)},${z.toFixed(6)}`
   const signedArea = (poly: Array<[number, number]>): number => {
     let sum = 0
     for (let i = 0; i < poly.length; i++) {

@@ -10,6 +10,7 @@ import {
   polygonArea,
   polygonSelfIntersects,
   sharedBoundaryLength,
+  unionAdjacentPolygons,
 } from './layout-plan'
 
 function rect(x: number, z: number, w: number, d: number): Array<[number, number]> {
@@ -166,5 +167,70 @@ describe('geometry helpers', () => {
     ], { width: 8, depth: 6 })
     expect(grid.overlapArea).toBe(0)
     expect(grid.unionArea).toBeCloseTo(48)
+  })
+})
+
+describe('unionAdjacentPolygons', () => {
+  test('full shared edge merges into one rectangle', () => {
+    const result = unionAdjacentPolygons(rect(0, 0, 2, 2), rect(2, 0, 2, 2))
+    expect(result).not.toBeNull()
+    expect(polygonArea(result!)).toBeCloseTo(8)
+    expect(result!.length).toBe(4)
+  })
+
+  test('partial shared edge produces an L-shape', () => {
+    const result = unionAdjacentPolygons(rect(0, 0, 2, 4), rect(2, 0, 2, 2))
+    expect(result).not.toBeNull()
+    expect(polygonArea(result!)).toBeCloseTo(12)
+    expect(result!.length).toBe(6)
+  })
+
+  test('winding order of inputs does not matter', () => {
+    const cw = [...rect(2, 0, 2, 2)].reverse() as Array<[number, number]>
+    const result = unionAdjacentPolygons(rect(0, 0, 2, 2), cw)
+    expect(result).not.toBeNull()
+    expect(polygonArea(result!)).toBeCloseTo(8)
+  })
+
+  test('float-noise coordinates on the shared edge still merge', () => {
+    const noisy: Array<[number, number]> = [[2 + 1e-12, 0], [4, 0], [4, 2], [2 + 1e-12, 2]]
+    const result = unionAdjacentPolygons(rect(0, 0, 2, 2), noisy)
+    expect(result).not.toBeNull()
+    expect(polygonArea(result!)).toBeCloseTo(8)
+  })
+
+  test('sub-millimetre overlap is rejected, not bridged', () => {
+    const overlapping: Array<[number, number]> = [[1.9996, 0], [4, 0], [4, 2], [1.9996, 2]]
+    expect(unionAdjacentPolygons(rect(0, 0, 2, 2), overlapping)).toBeNull()
+  })
+
+  test('sub-millimetre gap is rejected, not bridged', () => {
+    const gapped: Array<[number, number]> = [[2.0004, 0], [4, 0], [4, 2], [2.0004, 2]]
+    expect(unionAdjacentPolygons(rect(0, 0, 2, 2), gapped)).toBeNull()
+  })
+
+  test('exact overlap is rejected', () => {
+    expect(unionAdjacentPolygons(rect(0, 0, 3, 2), rect(2, 0, 2, 2))).toBeNull()
+  })
+
+  test('point contact is rejected', () => {
+    expect(unionAdjacentPolygons(rect(0, 0, 2, 2), rect(2, 2, 2, 2))).toBeNull()
+  })
+
+  test('disjoint polygons are rejected', () => {
+    expect(unionAdjacentPolygons(rect(0, 0, 2, 2), rect(5, 0, 2, 2))).toBeNull()
+  })
+
+  test('identical polygons are rejected', () => {
+    expect(unionAdjacentPolygons(rect(0, 0, 2, 2), rect(0, 0, 2, 2))).toBeNull()
+  })
+
+  test('union that would enclose a hole is rejected', () => {
+    // U-shaped polygon plus the rectangle that caps it — the union would
+    // contain an interior hole, which is not a single simple polygon.
+    const u: Array<[number, number]> = [
+      [0, 0], [6, 0], [6, 4], [4, 4], [4, 2], [2, 2], [2, 4], [0, 4],
+    ]
+    expect(unionAdjacentPolygons(u, rect(2, 4, 2, 1))).toBeNull()
   })
 })

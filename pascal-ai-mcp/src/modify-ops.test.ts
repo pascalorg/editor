@@ -171,3 +171,52 @@ describe('applyModifyOps', () => {
     expect(intent.targetTotalAreaSqm).toBe(67)
   })
 })
+
+describe('applyModifyOps mixed-op order independence (M2)', () => {
+  const profile = DEFAULT_NORM_PROFILE
+
+  test('remove_room + furniture op on the removed room: same outcome either order', () => {
+    const opsA = [
+      { op: 'remove_furniture', room: '卫生间', item: '洗衣机' },
+      { op: 'remove_room', room: '卫生间' },
+    ] as const
+    const opsB = [...opsA].reverse()
+    for (const ops of [opsA, opsB]) {
+      const applied = applyModifyOps(两居, { ops: [...ops] }, profile)
+      expect(applied.errors).toEqual([])
+      expect(applied.furnitureOps).toEqual([])
+      expect(applied.intent.rooms.some(room => room.id === 'bath-1')).toBe(false)
+      expect(applied.notes.some(note => note.includes('已随房间删除'))).toBe(true)
+    }
+  })
+
+  test('furniture op referencing a room added later in the same plan resolves', () => {
+    const applied = applyModifyOps(两居, {
+      ops: [
+        { op: 'add_furniture', room: '书房', item: '书桌' },
+        { op: 'add_room', room: { name: '书房', type: 'study', targetAreaSqm: 8 } },
+      ],
+    }, profile)
+    expect(applied.errors).toEqual([])
+    expect(applied.furnitureOps).toEqual([{ op: 'add_furniture', room: '书房', item: '书桌' }])
+  })
+
+  test('furniture op referencing the pre-rename name follows the rename', () => {
+    const applied = applyModifyOps(两居, {
+      ops: [
+        { op: 'rename_room', room: '次卧', name: '儿童房' },
+        { op: 'add_furniture', room: '次卧', item: '衣柜' },
+      ],
+    }, profile)
+    expect(applied.errors).toEqual([])
+    expect(applied.furnitureOps).toEqual([{ op: 'add_furniture', room: '儿童房', item: '衣柜' }])
+  })
+
+  test('furniture op on a genuinely unknown room is still an error', () => {
+    const applied = applyModifyOps(两居, {
+      ops: [{ op: 'add_furniture', room: '地下室', item: '跑步机' }],
+    }, profile)
+    expect(applied.errors.some(error => error.includes('地下室'))).toBe(true)
+    expect(applied.furnitureOps).toEqual([])
+  })
+})

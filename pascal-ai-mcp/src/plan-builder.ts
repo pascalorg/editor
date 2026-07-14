@@ -300,8 +300,11 @@ function evaluateIntentReply(
       failuresL10n: [...noL10n(errors), ...validation.fatalL10n],
     }
   }
-  const plan = applied.notes.length > 0
-    ? { ...partition.plan, notes: [...(partition.plan.notes ?? []), ...applied.notes] }
+  // Strategy decision rationale rides the plan notes — without this the
+  // typology/kitchen reasoning would be write-only (§ 每个字段必须有消费者).
+  const extraNotes = [...(strategy?.notes ?? []), ...applied.notes]
+  const plan = extraNotes.length > 0
+    ? { ...partition.plan, notes: [...(partition.plan.notes ?? []), ...extraNotes] }
     : partition.plan
   return { ok: true, result: { ok: true, intent, plan, validation } }
 }
