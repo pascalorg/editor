@@ -3,8 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  calculateLevelMiters,
   useRegistry,
   useScene,
+  type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
 import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
@@ -63,6 +65,23 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         .filter((child): child is AnyNode => child !== undefined),
     [node.children, sceneNodes],
   )
+  const levelWallMiterData = useMemo<{
+    walls: WallNode[]
+    miterData: WallMiterData
+  }>(() => {
+    const parent = node.parentId ? sceneNodes[node.parentId as AnyNodeId] : undefined
+    const walls =
+      parent?.type === 'level'
+        ? parent.children
+            .map((childId) => sceneNodes[childId as AnyNodeId])
+            .filter((child): child is WallNode => child?.type === 'wall')
+        : [node]
+
+    return {
+      walls,
+      miterData: calculateLevelMiters(walls),
+    }
+  }, [node, sceneNodes])
   // Subscribe to the scene-material palette so editing a `scene:` material a
   // wall slot references re-renders the wall live (the wall-system geometry
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
@@ -105,7 +124,13 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      <WallTreatments childrenNodes={childNodes} materials={extraMaterials} node={node} />
+      <WallTreatments
+        childrenNodes={childNodes}
+        levelWalls={levelWallMiterData.walls}
+        materials={extraMaterials}
+        miterData={levelWallMiterData.miterData}
+        node={node}
+      />
 
       {(node.children ?? []).map((childId) => (
         <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
