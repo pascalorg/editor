@@ -143,7 +143,7 @@ describe('planAutoCeilingsForLevel', () => {
     expect(plan.create).toHaveLength(0)
     expect(plan.delete).toHaveLength(1)
     const survivorId = plan.update[0]?.id
-    expect([leftCeiling.id, rightCeiling.id]).toContain(plan.delete[0])
+    expect([leftCeiling.id, rightCeiling.id]).toContain(plan.delete[0]!)
     expect(plan.delete[0]).not.toBe(survivorId)
   })
 
@@ -277,20 +277,9 @@ describe('planAutoSlabsForLevel', () => {
 
     const update = plan.update[0]
     expect(update?.id).toBe(painted.id)
-    expect(update?.data.autoFromWalls).toBe(false)
-    // Only the flag and the baked polygon change; paint/holes/elevation stay.
-    expect(Object.keys(update?.data ?? {}).sort()).toEqual(['autoFromWalls', 'polygon'])
-
-    // The baked polygon is inset by SLAB_OUTSET + AUTO_SLAB_INSET (0.07) so
-    // the manual render outset (+0.05) reproduces the old auto render (-0.02).
-    const baked = update?.data.polygon ?? []
-    expect(baked).toHaveLength(4)
-    const xs = baked.map((point) => point[0])
-    const ys = baked.map((point) => point[1])
-    expect(Math.min(...xs)).toBeCloseTo(0.07)
-    expect(Math.max(...xs)).toBeCloseTo(3.93)
-    expect(Math.min(...ys)).toBeCloseTo(0.07)
-    expect(Math.max(...ys)).toBeCloseTo(2.93)
+    // Demotion flips only the flag — the stored polygon stays untouched
+    // (render offsets derive from level context at geometry build time).
+    expect(update?.data).toEqual({ autoFromWalls: false })
   })
 
   test('deletes an unmatched auto slab whose area was absorbed by a room merge', () => {
@@ -325,7 +314,7 @@ describe('planAutoSlabsForLevel', () => {
     expect(plan.delete).toHaveLength(1)
     expect(plan.update).toHaveLength(1)
     const survivorId = plan.update[0]?.id
-    expect([leftSlab.id, rightSlab.id]).toContain(plan.delete[0])
+    expect([leftSlab.id, rightSlab.id]).toContain(plan.delete[0]!)
     expect(plan.delete[0]).not.toBe(survivorId)
     // The survivor stays auto — updated to the merged polygon, not demoted.
     expect(plan.update[0]?.data.autoFromWalls).toBeUndefined()

@@ -5927,7 +5927,12 @@ export function FloorplanPanel({
       const holes = (slab.holes ?? [])
         .map((hole) => toFloorplanPolygon(hole))
         .filter((hole) => hole.length >= 3)
-      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
+      const visualPolygon = toFloorplanPolygon(
+        getRenderableSlabPolygon(slab, {
+          walls: referenceWalls,
+          siblingSlabs: referenceSlabs.filter((other) => other.id !== slab.id),
+        }),
+      )
       const visualHoles = holes
 
       return [

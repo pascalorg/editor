@@ -75,7 +75,11 @@ export {
   segmentsIntersect,
 } from './lib/polygon-relations'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
-export { getRenderableSlabPolygon } from './lib/slab-polygon'
+export {
+  getRenderableSlabPolygon,
+  type SlabPolygonContext,
+  slabPolygonContextFromGeometry,
+} from './lib/slab-polygon'
 export {
   deriveSlotId,
   isSlotMaterialName,

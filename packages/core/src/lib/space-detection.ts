@@ -16,7 +16,6 @@ import {
   isCurvedWall,
 } from '../systems/wall/wall-curve'
 import { simplifyClosedPolygon } from './polygon-geometry'
-import { bakeAutoSlabPolygonForManual } from './slab-polygon'
 
 type Point2D = { x: number; y: number }
 
@@ -240,10 +239,10 @@ function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
   return covered / inside
 }
 
-// Demoted auto surfaces store a baked (inset) polygon, so their signature no
-// longer matches the room polygon they came from. Suppressing auto-creation by
-// mutual footprint coverage (rather than exact signature alone) keeps a
-// re-closed room from stacking a fresh auto surface on top of the demoted one.
+// Demoted auto surfaces keep their polygon untouched, so a re-closed room
+// usually hits the exact-signature manual check. Mutual footprint coverage
+// still guards the case where the user edited the demoted surface's polygon
+// afterwards — a fresh auto surface must not stack on top of it.
 function matchesManualFootprint(roomPolygon: Point2D[], manualPolygons: Point2D[][]) {
   return manualPolygons.some(
     (manual) =>
@@ -881,13 +880,9 @@ export function planAutoSlabsForLevel(
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
       slabsToDelete.push(slab.id)
     } else {
-      slabDemotions.push({
-        id: slab.id,
-        data: {
-          autoFromWalls: false,
-          polygon: bakeAutoSlabPolygonForManual(slab.polygon),
-        },
-      })
+      // Render offsets derive from level context at geometry build time, so
+      // demotion leaves the stored polygon untouched (same as ceilings).
+      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
     }
   }
 
@@ -1095,8 +1090,6 @@ export function planAutoCeilingsForLevel(
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
       ceilingsToDelete.push(ceiling.id)
     } else {
-      // Ceilings render the stored polygon in both auto and manual modes, so
-      // demotion needs no polygon bake (unlike slabs).
       ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
     }
   }

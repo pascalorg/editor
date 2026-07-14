@@ -4,6 +4,7 @@ import {
   type GeometryContext,
   getRenderableSlabPolygon,
   type SlabNode,
+  slabPolygonContextFromGeometry,
 } from '@pascal-app/core'
 
 /**
@@ -18,8 +19,8 @@ import {
  *   - Same three handle sets for every hole in `node.holes`, with the
  *     `holeIndex` carried in each handle's payload.
  *
- * Uses `getRenderableSlabPolygon` for the visible fill (auto-slabs
- * generated from walls clip to wall footprints), but vertex / edge /
+ * Uses `getRenderableSlabPolygon` for the visible fill (per-edge render
+ * offsets against level walls + sibling slabs), but vertex / edge /
  * midpoint handles live on the **raw** `node.polygon` — matches the
  * legacy slab boundary editor which always operates on raw data.
  */
@@ -27,7 +28,7 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   const polygon = node.polygon
   if (!polygon || polygon.length < 3) return null
 
-  const visualPolygon = getRenderableSlabPolygon(node)
+  const visualPolygon = getRenderableSlabPolygon(node, slabPolygonContextFromGeometry(ctx))
   if (!visualPolygon || visualPolygon.length < 3) return null
 
   const view = ctx.viewState

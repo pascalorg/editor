@@ -1,4 +1,9 @@
-import { type GeometryContext, getMaterialPresetByRef, type SlabNode } from '@pascal-app/core'
+import {
+  type GeometryContext,
+  getMaterialPresetByRef,
+  type SlabNode,
+  slabPolygonContextFromGeometry,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -177,7 +182,7 @@ export function buildSlabGeometry(
   sceneTheme?: string,
 ): Group {
   const group = new Group()
-  const merged = generateSlabGeometry(node)
+  const merged = generateSlabGeometry(node, slabPolygonContextFromGeometry(ctx))
   const { top, side } = splitSlabFacesByFacing(merged)
   merged.dispose()
 
