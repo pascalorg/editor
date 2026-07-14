@@ -115,7 +115,12 @@ const cancelInteractionForHistoryShortcut = () => {
   return (
     _toolCancelConsumed ||
     isActive(useInteractionScope.getState().scope) ||
-    useViewer.getState().inputDragging
+    useViewer.getState().inputDragging ||
+    // Paused history means a gesture session is live (draft placement, adopted
+    // move, …) even when no scope/drag flag is set — the preset/item draft
+    // cycle keeps temporal paused for the whole session, and a history jump
+    // against a paused store would land on a stale baseline anyway.
+    !useScene.temporal.getState().isTracking
   )
 }
 
