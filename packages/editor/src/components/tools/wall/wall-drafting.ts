@@ -315,6 +315,43 @@ function splitWallIfNeeded(
   }
 }
 
+/**
+ * Commit-time split resolution for an endpoint MOVE — the sibling of the
+ * inline resolution in `createWallOnCurrentLevel`: when a moved endpoint is
+ * dropped on another wall's interior, split that host exactly like the draw
+ * path (duplicate props, migrate attachments by span, skip the split when an
+ * opening straddles the point). Mutates the scene store (create halves /
+ * migrate attachments / delete host), so callers MUST run it inside the same
+ * `runAsSingleSceneHistoryStep` as their endpoint write.
+ *
+ * Returns the resolved endpoint (projection onto the host, or a nearby corner
+ * when the drop is within `WALL_SPLIT_ENDPOINT_EPSILON` of one — corner joins
+ * are not splits), or `null` when the point lands on no wall.
+ */
+export function resolveEndpointWallSplit(args: {
+  point: WallPlanPoint
+  /** Level the moved wall lives on — only its walls are split candidates. */
+  levelId: string | null
+  /** The moved wall + every wall receiving an endpoint update in the same commit. */
+  ignoreWallIds: string[]
+  /**
+   * Capture radius. The endpoint already snapped onto the wall body during
+   * the drag, so the tight connect radius (drop genuinely on the wall) is
+   * the default.
+   */
+  radius?: number
+}): WallPlanPoint | null {
+  const { point, levelId, ignoreWallIds, radius = WALL_CONNECT_SNAP_RADIUS } = args
+  const { nodes, createNodes, updateNodes, deleteNode } = useScene.getState()
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && (node.parentId ?? null) === levelId,
+  )
+
+  const intersection = findWallIntersection(point, walls, radius, ignoreWallIds)
+  const split = splitWallIfNeeded(intersection, walls, nodes, createNodes, updateNodes, deleteNode)
+  return split ? split.point : null
+}
+
 type SnapWallDraftArgs = {
   point: WallPlanPoint
   walls: WallNode[]

@@ -153,6 +153,7 @@ export {
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,
+  resolveEndpointWallSplit,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,

@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   DoorNode as DoorSchema,
+  runAsSingleSceneHistoryStep,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -10,7 +11,11 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
-import { createWallOnCurrentLevel, snapWallDraftPointDetailed } from './wall-drafting'
+import {
+  createWallOnCurrentLevel,
+  resolveEndpointWallSplit,
+  snapWallDraftPointDetailed,
+} from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
 
 // `updateNodes` batches its dirty-marking through requestAnimationFrame,
@@ -169,6 +174,138 @@ describe('createWallOnCurrentLevel', () => {
 
     expect(created).not.toBeNull()
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+})
+
+describe('resolveEndpointWallSplit', () => {
+  beforeEach(() => {
+    seedLevel([makeWall([0, 0], [4, 0], 'wall_host'), makeWall([2, 2], [2, 1], 'wall_moved')])
+  })
+
+  test('endpoint dropped mid-span splits the host and returns the projection', () => {
+    const resolved = resolveEndpointWallSplit({
+      point: [2, 0.02],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved'],
+    })
+
+    expect(resolved).toEqual([2, 0])
+    expect(useScene.getState().nodes['wall_host' as AnyNodeId]).toBeUndefined()
+    const walls = levelWalls()
+    expect(walls).toHaveLength(3)
+    expect(
+      walls.some((wall) => wall.start[0] === 0 && wall.end[0] === 2 && wall.end[1] === 0),
+    ).toBe(true)
+    expect(
+      walls.some((wall) => wall.start[0] === 2 && wall.start[1] === 0 && wall.end[0] === 4),
+    ).toBe(true)
+  })
+
+  test('mid-span split migrates host attachments to the covering half', () => {
+    const door = DoorSchema.parse({
+      position: [1, 1.05, 0],
+      parentId: 'wall_host',
+      wallId: 'wall_host',
+    })
+    seedLevel(
+      [
+        { ...makeWall([0, 0], [4, 0], 'wall_host'), children: [door.id] },
+        makeWall([2, 2], [2, 1], 'wall_moved'),
+      ],
+      [door as AnyNode],
+    )
+
+    const resolved = resolveEndpointWallSplit({
+      point: [2, 0],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved'],
+    })
+
+    expect(resolved).toEqual([2, 0])
+    const firstHalf = levelWalls().find((wall) => wall.start[0] === 0 && wall.end[0] === 2)
+    expect(firstHalf).toBeDefined()
+    const migratedDoor = useScene.getState().nodes[door.id as AnyNodeId]
+    expect(migratedDoor?.parentId).toBe(firstHalf?.id)
+    expect(firstHalf?.children).toContain(door.id)
+  })
+
+  test('a drop near an existing corner resolves to the corner without splitting', () => {
+    const resolved = resolveEndpointWallSplit({
+      point: [3.99, 0],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved'],
+    })
+
+    expect(resolved).toEqual([4, 0])
+    expect(useScene.getState().nodes['wall_host' as AnyNodeId]).toBeDefined()
+    expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('an opening straddling the drop point skips the split but still resolves the point', () => {
+    const door = DoorSchema.parse({
+      position: [2, 1.05, 0],
+      parentId: 'wall_host',
+      wallId: 'wall_host',
+    })
+    seedLevel(
+      [
+        { ...makeWall([0, 0], [4, 0], 'wall_host'), children: [door.id] },
+        makeWall([2, 2], [2, 1], 'wall_moved'),
+      ],
+      [door as AnyNode],
+    )
+
+    const resolved = resolveEndpointWallSplit({
+      point: [2, 0.02],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved'],
+    })
+
+    expect(resolved).toEqual([2, 0])
+    expect(useScene.getState().nodes['wall_host' as AnyNodeId]).toBeDefined()
+    expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('a drop beyond the connect radius resolves nothing and splits nothing', () => {
+    const resolved = resolveEndpointWallSplit({
+      point: [2, 0.2],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved'],
+    })
+
+    expect(resolved).toBeNull()
+    expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('ignored walls (the moved wall and its commit siblings) are never split', () => {
+    const resolved = resolveEndpointWallSplit({
+      point: [2, 0],
+      levelId: LEVEL_ID,
+      ignoreWallIds: ['wall_moved', 'wall_host'],
+    })
+
+    expect(resolved).toBeNull()
+    expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('split + endpoint write compose into a single history step', () => {
+    const before = useScene.temporal.getState().pastStates.length
+
+    runAsSingleSceneHistoryStep(useScene, () => {
+      const resolved = resolveEndpointWallSplit({
+        point: [2, 0],
+        levelId: LEVEL_ID,
+        ignoreWallIds: ['wall_moved'],
+      })
+      useScene
+        .getState()
+        .updateNodes([{ id: 'wall_moved' as AnyNodeId, data: { end: resolved ?? [2, 0] } }])
+    })
+
+    expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+    expect(levelWalls()).toHaveLength(3)
+    const moved = useScene.getState().nodes['wall_moved' as AnyNodeId] as WallNode
+    expect(moved.end).toEqual([2, 0])
   })
 })
 

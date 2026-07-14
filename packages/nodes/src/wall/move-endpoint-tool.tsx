@@ -11,6 +11,7 @@ import {
   pauseSceneHistory,
   resolveAlignment,
   resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -26,6 +27,7 @@ import {
   isSegmentLongEnough,
   MeasurementPill,
   markToolCancelConsumed,
+  resolveEndpointWallSplit,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -484,20 +486,46 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         // Drop the live overrides; the store write below is the source of truth.
         // The store sat at the pre-drag (original) values the whole drag — only
         // overrides moved — so one resume+write records original→final as a
-        // single tracked change (one Ctrl-Z reverts to original).
+        // single tracked change (one Ctrl-Z reverts to original). The split
+        // ops (create halves, migrate attachments, delete host) would each
+        // push their own entry, so the whole commit runs as one history step.
         clearPreviewOverrides()
         resumeSceneHistory(useScene)
-        useScene.getState().updateNodes([
-          { id: nodeId as AnyNodeId, data: { start: preview.start, end: preview.end } },
-          ...linkedUpdates.map((u) => ({
-            id: u.id as AnyNodeId,
-            data: { start: u.start, end: u.end },
-          })),
-        ])
-        useScene.getState().markDirty(nodeId as AnyNodeId)
-        for (const u of linkedUpdates) {
-          useScene.getState().markDirty(u.id as AnyNodeId)
-        }
+        runAsSingleSceneHistoryStep(useScene, () => {
+          // Dropping the endpoint on another wall's interior splits that host
+          // like the draw path does. Linked walls updated in this commit share
+          // the drop point as an endpoint (a corner join, not a split), so
+          // they're excluded along with the moved wall — in Alt-detach mode
+          // `linkedUpdates` is empty and a stationary former sibling can be
+          // split like any other host.
+          const movingPoint = target.endpoint === 'start' ? preview.start : preview.end
+          const resolved = resolveEndpointWallSplit({
+            point: movingPoint,
+            levelId: target.wall.parentId ?? null,
+            ignoreWallIds: [nodeId, ...linkedUpdates.map((u) => String(u.id))],
+          })
+          const finalPoint = resolved ?? movingPoint
+          useScene.getState().updateNodes([
+            {
+              id: nodeId as AnyNodeId,
+              data: {
+                start: target.endpoint === 'start' ? finalPoint : preview.start,
+                end: target.endpoint === 'end' ? finalPoint : preview.end,
+              },
+            },
+            ...linkedUpdates.map((u) => ({
+              id: u.id as AnyNodeId,
+              data: {
+                start: samePoint(u.start, movingPoint) ? finalPoint : u.start,
+                end: samePoint(u.end, movingPoint) ? finalPoint : u.end,
+              },
+            })),
+          ])
+          useScene.getState().markDirty(nodeId as AnyNodeId)
+          for (const u of linkedUpdates) {
+            useScene.getState().markDirty(u.id as AnyNodeId)
+          }
+        })
         pauseSceneHistory(useScene)
         triggerSFX('sfx:item-place')
       }
