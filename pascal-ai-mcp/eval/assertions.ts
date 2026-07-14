@@ -13,7 +13,7 @@
 
 import { findVocabularyOption } from '../src/furniture-checklist'
 import { ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
-import { ROOM_TYPE_PATTERNS } from './evaluate-run'
+import { countZonesOfType, ROOM_TYPE_PATTERNS, zoneNameMatchesType } from './evaluate-run'
 
 export type ZoneInfo = {
   id: string
@@ -136,7 +136,7 @@ function wallHostZoneIds(wall: WallInfo, zones: ZoneInfo[]): string[] {
 // Room-type classification (name-based — the only signal zones carry).
 // ---------------------------------------------------------------------------
 
-export const KNOWN_ROOM_TYPES = ['卧室', '客厅', '厨房', '卫生间', '书房', '餐厅'] as const
+export const KNOWN_ROOM_TYPES = ['卧室', '客厅', '厨房', '卫生间', '书房', '餐厅', '玄关'] as const
 export type KnownRoomType = (typeof KNOWN_ROOM_TYPES)[number]
 
 function roomTypePattern(type: string): RegExp | undefined {
@@ -144,12 +144,14 @@ function roomTypePattern(type: string): RegExp | undefined {
 }
 
 function zoneIsType(zone: ZoneInfo, type: string): boolean {
-  const pattern = roomTypePattern(type)
-  return pattern ? pattern.test(zone.name) : false
+  // Canonical classification + merged-space semantics — shared with the
+  // corpus-level checks so roomCount/adjacency/forbidden all agree.
+  return zoneNameMatchesType(type, zone.name)
 }
 
 function countRoomsOfType(zones: ZoneInfo[], type: string): number {
-  return zones.filter(z => zoneIsType(z, type)).length
+  // Merged-space stand-in rule lives in countZonesOfType (evaluate-run).
+  return countZonesOfType(type, zones.map(zone => zone.name))
 }
 
 // "Public circulation" room types a bedroom is allowed to reach through.
@@ -593,9 +595,12 @@ export type ModificationChecks = {
   /**
    * Local-removal cases (§6 吸收语义): every before-zone whose name is not in
    * `except` must reappear after with an identical polygon (±2cm) — proves
-   * the modify moved nothing it wasn't asked to touch.
+   * the modify moved nothing it wasn't asked to touch. Matching is geometric
+   * (name-independent), so renames don't read as movement.
    */
   preserveRoomPolygons?: { except: string[] }
+  /** Rename cases: these zone names must exist after the modification. */
+  requireZoneNames?: string[]
 }
 
 function snapshotZones(snapshot: SceneSnapshot): ZoneInfo[] {
@@ -894,8 +899,12 @@ export function assertModification(
   }
 
   if (config.preserveRoomPolygons) {
-    const except = new Set(config.preserveRoomPolygons.except)
-    const beforeZones = snapshotZones(before).filter(zone => zone.name && !except.has(zone.name))
+    // except entries match by substring both ways（「玄关」covers「玄关换鞋区」）
+    // — display names drift; identity does not need to be exact here because
+    // the MAIN check below is geometric and name-independent.
+    const isExcept = (name: string) =>
+      config.preserveRoomPolygons!.except.some(entry => name.includes(entry) || entry.includes(name))
+    const beforeZones = snapshotZones(before).filter(zone => zone.name && !isExcept(zone.name))
     const samePolygon = (a: Array<[number, number]>, b: Array<[number, number]>): boolean => {
       if (a.length !== b.length) return false
       // Allow rotation of the vertex ring; orientation must match (executor
@@ -908,10 +917,12 @@ export function assertModification(
       }
       return false
     }
-    const moved = beforeZones.filter(zone => {
-      const after2 = afterScene.zones.filter(z => z.name === zone.name)
-      return !after2.some(z => samePolygon(zone.polygon, z.polygon))
-    }).map(zone => zone.name)
+    // Geometry-based: a before-zone survives if ANY after-zone has the same
+    // polygon, regardless of name — renames keep their footprint and must
+    // not read as movement (eval case-24).
+    const moved = beforeZones.filter(zone =>
+      !afterScene.zones.some(z => samePolygon(zone.polygon, z.polygon)),
+    ).map(zone => zone.name)
     results.push({
       name: 'modification:preserveRoomPolygons',
       status: moved.length === 0 ? 'pass' : 'fail',
@@ -919,6 +930,19 @@ export function assertModification(
       actual: moved.length === 0 ? '未移动' : moved,
       reason: moved.length === 0 ? undefined : `以下房间被移动/改形：${moved.join('、')}`,
     })
+  }
+
+  if (config.requireZoneNames) {
+    for (const name of config.requireZoneNames) {
+      const present = afterScene.zones.some(zone => zone.name === name)
+      results.push({
+        name: `modification:requireZoneName:${name}`,
+        status: present ? 'pass' : 'fail',
+        expected: `修改后存在名为「${name}」的房间`,
+        actual: present ? '存在' : afterScene.zones.map(zone => zone.name),
+        reason: present ? undefined : `修改后的场景中找不到「${name}」`,
+      })
+    }
   }
 
   if (config.itemChanges) {

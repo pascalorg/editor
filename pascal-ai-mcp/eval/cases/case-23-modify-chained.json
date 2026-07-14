@@ -1,0 +1,33 @@
+{
+  "id": "case-23-modify-chained",
+  "category": "修改已有场景：连续两次结构修改（快照刷新 §2 病灶④）",
+  "difficulty": "modify",
+  "setupFrom": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把卫生间删掉，其他房间都不要动。"
+    },
+    {
+      "action": "confirm"
+    },
+    {
+      "role": "user",
+      "message": "再加一间6平米左右的书房。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "厨房": 1,
+    "书房": 1
+  },
+  "forbiddenRoomTypes": ["卫生间"],
+  "requireAllRoomsReachable": true,
+  "maxModelCalls": 2,
+  "notes": "验证连续修改的快照一致性：第一轮删卫生间走局部吸收（layoutIntent/layoutPlan 快照随之刷新），第二轮 add_room 必须基于删卫后的快照重分区——若第二轮仍看到旧快照（卫生间还在 intent 里），最终会多出卫生间或书房定位失败。第一轮吸收产生的 L 形并集房间也顺带验证重分区对非矩形 previousPlan 的兼容。maxModelCalls 只统计最后一轮 modify（每轮 modify 开头重置 toolTrace），预算 2 = 翻译 1 + 修正重试 ≤1。footprint 先缩（§8-2 删房）后扩（加房），不断言轮廓。"
+}

@@ -10,7 +10,9 @@ import {
   determineSuccess,
   findCorpusLevelProblems,
   resolveDependencySceneId,
+  countZonesOfType,
   validateCaseStructure,
+  zoneNameMatchesType,
   type EvalCase,
 } from './evaluate-run'
 import type { SceneResult } from '../src/types'
@@ -411,5 +413,50 @@ describe('findCorpusLevelProblems', () => {
       { ...base, id: 'case-c', basedOn: 'case-b' },
     ]
     expect(findCorpusLevelProblems(cases)).toEqual([])
+  })
+})
+
+describe('zoneNameMatchesType（2026-07-14 全量复盘修正）', () => {
+  test('衣帽间不再计为卧室（case-11 根因）', () => {
+    expect(zoneNameMatchesType('卧室', '主卧步入式衣帽间')).toBe(false)
+    expect(zoneNameMatchesType('卧室', '次卧一步入式衣帽间')).toBe(false)
+    expect(zoneNameMatchesType('卧室', '主卧')).toBe(true)
+    expect(zoneNameMatchesType('卧室', '客卧')).toBe(true)
+  })
+
+  test('主卧卫生间是卫生间不是卧室', () => {
+    expect(zoneNameMatchesType('卧室', '主卧卫生间')).toBe(false)
+    expect(zoneNameMatchesType('卫生间', '主卧卫生间')).toBe(true)
+  })
+
+  test('合并客餐厨同时满足客厅/厨房（case-08/11 根因）', () => {
+    for (const name of ['客餐厨', '客餐厨一体空间', '客厅+开放式厨房', '客厅与开放式厨房']) {
+      expect(zoneNameMatchesType('客厅', name)).toBe(true)
+      expect(zoneNameMatchesType('厨房', name)).toBe(true)
+      expect(zoneNameMatchesType('卧室', name)).toBe(false)
+    }
+    // 餐厅只在名字确实含 D（餐/LDK）时由合并空间承担——否则独立餐厅会被
+    // 数成第二间（case-11）。
+    expect(zoneNameMatchesType('餐厅', '客餐厨')).toBe(true)
+    expect(zoneNameMatchesType('餐厅', 'LDK')).toBe(true)
+    expect(zoneNameMatchesType('餐厅', '客厅与开放式厨房')).toBe(false)
+  })
+
+  test('checkBedroomCount 用同一套匹配', () => {
+    const check = checkBedroomCount(['主卧', '次卧', '主卧步入式衣帽间', '客餐厨'], 2)
+    expect(check.ok).toBe(true)
+    expect(check.actual).toBe(2)
+  })
+})
+
+describe('countZonesOfType：merged 只作缺位兜底，不与独立房间叠加', () => {
+  test('LDK 之外又建独立餐厅时餐厅数=1', () => {
+    expect(countZonesOfType('餐厅', ['餐厅', '客餐厨一体空间', '主卧'])).toBe(1)
+    expect(countZonesOfType('厨房', ['厨房', '客餐厨一体空间'])).toBe(1)
+  })
+  test('只有 merged 时由它充当', () => {
+    expect(countZonesOfType('客厅', ['客餐厨一体空间', '主卧'])).toBe(1)
+    expect(countZonesOfType('餐厅', ['客餐厨一体空间'])).toBe(1)
+    expect(countZonesOfType('餐厅', ['客厅与开放式厨房'])).toBe(0)
   })
 })

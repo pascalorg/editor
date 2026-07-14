@@ -1,0 +1,30 @@
+{
+  "id": "case-22-modify-mixed-ops",
+  "category": "修改已有场景：结构+家具混合请求（op 顺序无关）",
+  "difficulty": "modify",
+  "setupFrom": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把次卧删掉，另外在主卧加一张书桌。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 1,
+    "客厅": 1,
+    "厨房": 1,
+    "卫生间": 1
+  },
+  "requireAllRoomsReachable": true,
+  "maxModelCalls": 2,
+  "modificationChecks": {
+    "itemChanges": {
+      "addedMatching": ["书桌"]
+    }
+  },
+  "notes": "验证 2026-07-14 M2 修复：混合 op 结果不得依赖模型输出顺序——applyModifyOps 结构先、家具后两遍扫描，家具 op 统一在最终房间集上解析并延迟到重建后的房间执行。断言：次卧消失（卧室 2→1）、主卧新增书桌。两个 op 非单独 remove_room，走稳定性重分区而非吸收，footprint 按 §8-2 缩小，故刻意不断言轮廓/多边形。"
+}

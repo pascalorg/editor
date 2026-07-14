@@ -233,7 +233,15 @@ export function evaluateCompletionGates(
       }
     }
     if (entry.type === 'bedroom') {
+      // A bedroom with its own dressing room (a storage zone whose name
+      // carries the bedroom's name, e.g. 「主卧步入式衣帽间」) satisfies the
+      // wardrobe requirement by design — the walk-in closet IS the wardrobe
+      // (2026-07-14 case-11 复盘).
+      const bedroomName = label(entry.zone)
+      const hasDressingRoom = typed.some(other =>
+        other.type === 'storage' && bedroomName.length > 0 && (other.zone.name ?? '').includes(bedroomName))
       for (const missing of findMissingFurniture('bedroom', names)) {
+        if (hasDressingRoom && /衣柜|wardrobe|closet|クローゼット/i.test(missing.label)) continue
         failures.push({
           gate: 7,
           id: 'missing-bedroom-furniture',

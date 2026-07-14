@@ -4,16 +4,37 @@
   "difficulty": "standard",
   "description": "日式住宅习惯，两室一厅，玄关换鞋区",
   "turns": [
-    { "role": "user", "message": "设计一个约60平米的两室一厅一厨一卫户型，入口设置玄关换鞋区，两间卧室都要有窗，并采用榻榻米风格。" },
-    { "action": "confirm" }
+    {
+      "role": "user",
+      "message": "设计一个约60平米的两室一厅一厨一卫户型，入口设置玄关换鞋区，两间卧室都要有窗，并采用榻榻米风格。"
+    },
+    {
+      "action": "confirm"
+    }
   ],
   "expectedFacts": {
     "bedroom_count": 2,
-    "requiredRoomTypes": ["卧室", "客厅", "厨房", "卫生间"]
+    "requiredRoomTypes": [
+      "卧室",
+      "客厅",
+      "厨房",
+      "卫生间"
+    ]
   },
-  "expectedRoomCounts": { "卧室": 2, "客厅": 1, "厨房": 1, "卫生间": 1 },
-  "totalArea": { "target": 60, "tolerance": 0.12 },
-  "windowsRequiredFor": ["卧室"],
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "厨房": 1,
+    "卫生间": 1,
+    "玄关": 1
+  },
+  "totalArea": {
+    "target": 60,
+    "tolerance": 0.12
+  },
+  "windowsRequiredFor": [
+    "卧室"
+  ],
   "requireAllRoomsReachable": true,
-  "notes": "通用结构自动检查；玄关换鞋区和榻榻米风格属于地区化/家具表现，暂由人工审核"
+  "notes": "通用结构自动检查；玄关换鞋区和榻榻米风格属于地区化/家具表现，暂由人工审核 玄关:1 断言兼作 case-21 的配套哨兵：brief 明确要求玄关换鞋区，生成必须切出独立玄关间——否则 case-21 的删玄关修改无从谈起。"
 }

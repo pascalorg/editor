@@ -155,7 +155,7 @@ M0–M2 核心为确定性代码，模型服务不可用也能开发（ModifyOp 
 | 修正 | 内容 |
 |---|---|
 | delete/create 意图接入 | 快速路径的门从 `operation==='update'` 放开为全部意图（翻译器统一判定；删除的二次确认在进 modify 前已完成）——此前"把次卧删掉"这类 delete 分类请求一直走 legacy，删除恰是豁免保护的最危险操作。eval case-19（删次卧）验证：modelCalls=1、gates 全过 ✅ |
-| gates 需求真相 | `gateTargetsForSession`：plan-first 场景的 gates 以 `layoutIntent` 快照为需求真相（modify 随手更新），legacy 场景仍用 brief——否则确认删房后 gates 拿旧 brief 永远报缺卧室/面积偏差 |
+| gates 需求真相 | `gateTargetsForSession`：**仅当 `programEditedByModify`（结构修改重建时置位）后**以 `layoutIntent` 为需求真相，生成时 brief 仍是独立检验（2026-07-14 修正：否则模型少出一间卧室会自己给自己判卷——case-04 复盘）；legacy 场景恒用 brief |
 | 手动家具重放（§6 兑现） | `isChecklistItem` + `replayManualItems`：重建前从场景快照采集非清单 item（含原房间归属），重建后按房间名重扫描摆放；房间没了/放不下/资产失效 → 逐件列入回复，不静默丢弃 |
 | 补偿 plan 未用 bug | resize 欠额补偿产出的 `plan`/`planNotes` 此前未被重建与快照使用（仍用 `partition.plan`，case-14 因未触发补偿而侥幸通过）——重建/`session.layoutPlan`/notes 全部改用补偿后结果 |
 | 旧场景注明（§7 兑现） | 无快照场景走 legacy 时回复追加 `modifyLegacyNoSnapshot` 说明 |

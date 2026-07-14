@@ -359,3 +359,35 @@ describe('Codex review fixes (strategy)', () => {
     expect(intent.rooms.some(room => room.type === 'kitchen')).toBe(false)
   })
 })
+
+describe('applyStrategy area clamp (§4 tier-1, case-04 补齐)', () => {
+  test('a 23㎡ kitchen clamps to the band softMax with a note, silently', () => {
+    const decision = deriveStrategy({}, { totalAreaSqm: 110 }, DEFAULT_NORM_PROFILE)
+    const intent: LayoutIntent = {
+      targetTotalAreaSqm: 110,
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 28 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 16 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 12 },
+        { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 23 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+      ],
+    }
+    const { intent: applied, notes } = applyStrategy(intent, decision, DEFAULT_NORM_PROFILE)
+    const kitchen = applied.rooms.find(room => room.id === 'kitchen-1')!
+    expect(kitchen.targetAreaSqm).toBeLessThan(23)
+    expect(notes.join()).toContain('策略修正')
+    expect(notes.join()).toContain('厨房')
+    // In-band rooms untouched.
+    expect(applied.rooms.find(room => room.id === 'bedroom-1')?.targetAreaSqm).toBe(16)
+  })
+
+  test('without a profile the clamp is skipped (legacy call shape)', () => {
+    const decision = deriveStrategy({}, { totalAreaSqm: 110 }, DEFAULT_NORM_PROFILE)
+    const intent: LayoutIntent = {
+      targetTotalAreaSqm: 110,
+      rooms: [{ id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 23 }],
+    }
+    expect(applyStrategy(intent, decision).intent.rooms[0]!.targetAreaSqm).toBe(23)
+  })
+})

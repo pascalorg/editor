@@ -20,8 +20,12 @@
     "targetRoomArea": {
       "type": "卧室",
       "min": 16,
-      "nameIncludes": ["主卧", "master"]
+      "nameIncludes": [
+        "主卧",
+        "master"
+      ]
     }
   },
-  "notes": "M2 结构管线回归：同 session 先跑 case-04 生成（setupFrom），修改轮再扩主卧。断言按重建语义（MODIFY_REDESIGN.md §4/§6）：主卧 ≥16㎡、房间数量不变、footprint 锁宽（深度随总面积微浮动）。旧的原墙/原门窗保留断言已删除——v1 是结构全量重建；位移幅度由离线分区断言（layout-partitioner.test.ts 的 case-14 复刻，位移合计<3m）把关。非目标房间面积是否仍合理由人工审核。"
+  "notes": "M2 结构管线回归：同 session 先跑 case-04 生成（setupFrom），修改轮再扩主卧。断言按重建语义（MODIFY_REDESIGN.md §4/§6）：主卧 ≥16㎡、房间数量不变、footprint 锁宽（深度随总面积微浮动）。旧的原墙/原门窗保留断言已删除——v1 是结构全量重建；位移幅度由离线分区断言（layout-partitioner.test.ts 的 case-14 复刻，位移合计<3m）把关。非目标房间面积是否仍合理由人工审核。 maxModelCalls=2 硬断言 plan-first 路径（翻译 1 + 修正重试 ≤1，每轮 modify 开头重置 toolTrace，legacy 自由编辑路径远超此预算）。",
+  "maxModelCalls": 2
 }

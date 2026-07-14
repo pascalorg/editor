@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  bedroomCountFromBriefText,
+  briefFactsFor,
   buildOpeningRepairData,
   describeRemainingIssues,
   sceneDriftedFromPlan,
@@ -834,5 +836,67 @@ describe('sceneDriftedFromPlan (MODIFY_REDESIGN §6)', () => {
       ],
       halfPlan,
     )).toBe(true)
+  })
+})
+
+describe('briefFactsFor（P0：结构化 brief 尺寸优先于摘要正则）', () => {
+  const emptyBrief = {
+    existingCondition: [],
+    designGoals: [],
+    hardConstraints: [],
+    assumptions: [],
+    uncertainties: [],
+    conflicts: [],
+    questions: [],
+    overallConfidence: 1,
+  }
+
+  test('summary 措辞漏检时从结构化事实拿到地块尺寸（case-06 根因）', () => {
+    const brief = {
+      ...emptyBrief,
+      hardConstraints: [{
+        key: 'boundary_dimensions',
+        label: '地块边界',
+        value: '宽 5 米 × 长 18 米',
+        source: 'user',
+        confidence: 1,
+      }],
+    }
+    // 摘要被改写成不含尺寸模式的散文。
+    const facts = briefFactsFor(brief as never, '硬性约束：地块为狭长长方形。设计目标：两室一厅。')
+    expect(facts.siteHint).toEqual({ widthM: 5, depthM: 18 })
+  })
+
+  test('摘要能解析时结构化扫描不介入', () => {
+    const facts = briefFactsFor(emptyBrief as never, '地块宽 6 米、长 15 米')
+    expect(facts.siteHint).toEqual({ widthM: 6, depthM: 15 })
+  })
+})
+
+describe('bedroomCountFromBriefText（case-04：无数字 bedroom_count 时的兜底）', () => {
+  const baseBrief = {
+    existingCondition: [],
+    designGoals: [],
+    hardConstraints: [],
+    assumptions: [],
+    uncertainties: [],
+    conflicts: [],
+  }
+  const goal = (label: string, value: string) => ({
+    ...baseBrief,
+    designGoals: [{ key: 'room_program', label, value, source: 'user', confidence: 1, confirmationStatus: 'confirmed' }],
+  })
+
+  test('从房间构成文本解析卧室数（中/英/LDK）', () => {
+    expect(bedroomCountFromBriefText(goal('房间构成', '三室两厅两卫') as never)).toBe(3)
+    expect(bedroomCountFromBriefText(goal('户型', '2卧1卫') as never)).toBe(2)
+    expect(bedroomCountFromBriefText(goal('program', '3 bedrooms with 2 baths') as never)).toBe(3)
+    expect(bedroomCountFromBriefText(goal('間取り', '3LDK') as never)).toBe(3)
+    expect(bedroomCountFromBriefText(goal('风格', '日式榻榻米') as never)).toBeUndefined()
+  })
+
+  test('buildPlanTargets 在缺数字事实时用兜底解析出卧室要求', () => {
+    const targets = buildPlanTargets(goal('房间构成', '三室两厅两卫') as never)
+    expect(targets.requiredRooms).toContainEqual({ type: 'bedroom', count: 3 })
   })
 })

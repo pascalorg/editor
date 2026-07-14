@@ -271,7 +271,7 @@ function evaluateIntentReply(
   // Tier-1 strategy enforcement (LAYOUT_STRATEGY_DESIGN.md §4): silent
   // deterministic corrections instead of a model correction round. The
   // applied intent is what gets partitioned AND what the caller persists.
-  const applied = strategy ? applyStrategy(parsed.intent, strategy) : { intent: parsed.intent, notes: [] }
+  const applied = strategy ? applyStrategy(parsed.intent, strategy, profile) : { intent: parsed.intent, notes: [] }
   const intent = applied.intent
   // Recoverable parse defects (dropped fields, renamed ids) don't block on
   // their own — the partitioned plan is judged on its merits below.

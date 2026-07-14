@@ -1,0 +1,30 @@
+{
+  "id": "case-21-modify-remove-entry-local",
+  "category": "修改已有场景：删除玄关（entry 宿主吸收 · 入户门重挂）",
+  "difficulty": "modify",
+  "setupFrom": "case-10-japanese-style",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把玄关去掉，其他房间保持不变。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "厨房": 1,
+    "卫生间": 1
+  },
+  "forbiddenRoomTypes": ["玄关"],
+  "requireAllRoomsReachable": true,
+  "maxModelCalls": 2,
+  "modificationChecks": {
+    "preserveExteriorBounds": true,
+    "preserveRoomPolygons": { "except": ["玄关", "客厅", "走廊"] }
+  },
+  "notes": "验证 2026-07-14 entry 宿主吸收修复：删玄关必须走局部吸收而非全局重分区——玄关并入共享边最长的合规邻室（客厅/走廊，白名单 living/living_kitchen/dining/hallway），plan.entry 重挂到吸收方，其余房间多边形逐点不变、外轮廓不变。gates 里「没有通向室外的入户门」正好卡死入户门重挂：不重挂必红。maxModelCalls=2 钉住 plan-first 路径（翻译 1 + 修正重试 ≤1）。已知盲区：若 setup 生成阶段就没切出独立玄关间，修改会被拒且本用例可能假绿——case-10 的 expectedRoomCounts 已加「玄关:1」作为配套哨兵，读报告时两个要一起看。"
+}

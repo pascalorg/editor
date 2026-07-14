@@ -182,6 +182,12 @@ export type WorkflowSession = {
   sceneResult?: SceneResult
   pendingModification?: string
   pendingOperation?: 'create' | 'update' | 'delete'
+  // Set by the plan-first structural rebuild: the user has EDITED the room
+  // program via modify ops, so the completion gates must judge against the
+  // (kept-current) layoutIntent instead of the original brief. Never set by
+  // fresh generation — there the brief stays the independent authority
+  // (case-04 regression: an under-delivered intent must still fail gate 1).
+  programEditedByModify?: boolean
   // Plan-first modify (MODIFY_REDESIGN.md §6): set when the drift warning
   // was issued for the pending structural modification, so the follow-up
   // confirm proceeds with the rebuild instead of warning again.

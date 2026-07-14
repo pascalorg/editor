@@ -22,7 +22,7 @@ import type { RoomType } from '../layout-plan'
 // 厨房", "リビングダイニングキッチン", "2LDK の LDK"), otherwise the 厨房/
 // キッチン substring misclassifies the whole open-plan zone as a kitchen.
 export const LIVING_KITCHEN_PATTERN =
-  /(客厅|起居|living|リビング|居間)[^,;，；]*(厨房|kitchen|キッチン|台所)|开放式?厨房|living[-_ ]?kitchen|\bldk\b|オープンキッチン/i
+  /(客厅|起居|living|リビング|居間)[^,;，；]*(厨房|kitchen|キッチン|台所)|开放式?厨房|living[-_ ]?kitchen|\bldk\b|オープンキッチン|客餐厨|餐厨一体/i
 
 export const WINDOW_PATTERN = /窗|window|窓/i
 
@@ -42,7 +42,7 @@ export const ROOM_NAME_PATTERNS: Record<Exclude<RoomType, 'other' | 'living_kitc
   study: /书房|书斋|study|office|書斎/i,
   hallway: /走廊|过道|corridor|hallway|\bhall\b|廊下/i,
   entry: /玄关|门厅|entry|foyer|玄関/i,
-  storage: /储物|储藏|storage|closet|収納|納戸|押入|クローゼット/i,
+  storage: /储物|储藏|衣帽|storage|closet|walk-?in|収納|納戸|押入|クローゼット|ウォークイン/i,
   balcony: /阳台|balcony|バルコニー|ベランダ/i,
 }
 
@@ -60,8 +60,12 @@ export function classifyRoomTypeByName(name: string): RoomType {
   if (LIVING_KITCHEN_PATTERN.test(name)) return 'living_kitchen'
   if (ROOM_NAME_PATTERNS.hallway.test(name)) return 'hallway'
   if (ROOM_NAME_PATTERNS.entry.test(name)) return 'entry'
-  if (ROOM_NAME_PATTERNS.bedroom.test(name)) return 'bedroom'
+  // Service rooms resolve BEFORE the broad /卧/ match: 「主卧卫生间」is a
+  // bathroom and 「主卧步入式衣帽间」is storage — the bedroom prefix only
+  // says whose it is (case-11 counted three dressing rooms as bedrooms).
   if (ROOM_NAME_PATTERNS.bathroom.test(name)) return 'bathroom'
+  if (ROOM_NAME_PATTERNS.storage.test(name)) return 'storage'
+  if (ROOM_NAME_PATTERNS.bedroom.test(name)) return 'bedroom'
   if (ROOM_NAME_PATTERNS.kitchen.test(name)) return 'kitchen'
   if (ROOM_NAME_PATTERNS.dining.test(name)) return 'dining'
   if (ROOM_NAME_PATTERNS.living.test(name)) return 'living'

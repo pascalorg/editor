@@ -776,6 +776,13 @@ function renderSummaryMarkdown(summary: ReturnType<typeof buildSummary>, results
         `- 诊断：doorlessRooms=${result.sceneResult.doorlessRooms.length}, strayWindows=${result.sceneResult.strayWindows.length}, requirementMismatches=${result.sceneResult.requirementMismatches.length}, isolatedBedrooms=${result.sceneResult.isolatedBedrooms.length}, collisions=${result.sceneResult.collisions.length}`,
         `- 门槛/质量：gates=${result.sceneResult.gateFailures ? (result.sceneResult.gateFailures.length === 0 ? '全过' : result.sceneResult.gateFailures.join('；')) : '无数据'}，layoutQuality=${result.sceneResult.layoutQuality ?? '无数据'}，模型调用=${result.sceneResult.modelCallsUsed ?? '无数据'}${result.sceneResult.furniture ? `，家具放置 ${result.sceneResult.furniture.placed}/${result.sceneResult.furniture.required}` : ''}`,
       )
+      // P2（2026-07-14 复盘）：碰撞只报数量没法诊断——保留冲突对（节点 id +
+      // 类型），raw JSON 里有完整 sceneResult 可再深挖。
+      if (result.sceneResult.collisions.length > 0) {
+        lines.push(`- 碰撞明细：${result.sceneResult.collisions
+          .map(entry => `${entry.aId}×${entry.bId}（${entry.kind}）`)
+          .join('、')}`)
+      }
     }
     if (result.furniture && result.furniture.total > 0) {
       lines.push(

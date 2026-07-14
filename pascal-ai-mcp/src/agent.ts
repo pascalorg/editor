@@ -3,8 +3,9 @@ import { evaluateCompletionGates, type GateFailure, type GateReport, type GateWa
 import type { AppConfig } from './config'
 import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
 import { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
+import { detectSiteHint } from './lang/strategy-vocab'
 import { resolveNormProfile } from './norms/profile'
-import { deriveBriefFacts, deriveStrategy, type StrategyDecision } from './strategy'
+import { deriveBriefFacts, deriveStrategy, type BriefFacts, type StrategyDecision } from './strategy'
 import {
   classifyRoomTypeByName,
   ROOM_NAME_PATTERNS,
@@ -1035,7 +1036,7 @@ export class PascalAiAgent {
           if (localAdjacency && localAdjacency.length > 0) localIntent.adjacency = localAdjacency
           const localValidation = validateLayoutPlan(
             absorbed.plan,
-            gateTargetsForSession({ brief: session.brief, layoutIntent: localIntent }),
+            gateTargetsForSession({ brief: session.brief, layoutIntent: localIntent, programEditedByModify: true }),
             profile,
           )
           if (localValidation.fatal.length === 0) {
@@ -1126,7 +1127,7 @@ export class PascalAiAgent {
     }, new Map<RoomType, number>())].map(([type, count]) => ({ type, count }))
     const targets: PlanTargets = { totalAreaSqm: intent.targetTotalAreaSqm, requiredRooms }
     const briefSummary = session.summary || formatSummary(session.brief)
-    const strategy = deriveStrategy(deriveBriefFacts(briefSummary), targets, profile)
+    const strategy = deriveStrategy(briefFactsFor(session.brief, briefSummary), targets, profile)
     const partition = partitionLayout(intent, profile, strategy, { previousPlan: session.layoutPlan })
     if (!partition.ok) {
       return this.rejectPlanFirstModify(session, [
@@ -1319,6 +1320,9 @@ export class PascalAiAgent {
     session.layoutIntent = intent
     session.layoutPlan = plan
     session.strategy = strategy
+    // The room program is now user-edited: gates judge against the intent
+    // from here on (see gateTargetsForSession).
+    session.programEditedByModify = true
     trace.converged = true
     return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
       okDetails: [
@@ -1487,7 +1491,7 @@ export class PascalAiAgent {
 
 输出字段：existingCondition、designGoals、hardConstraints、assumptions、uncertainties、conflicts、questions、overallConfidence、imageUsable、imageReason。
 conflicts 格式：{"key":"...","existingValue":"...","requestedValue":"...","question":"..."}。
-常见信息用稳定 key：总面积 "total_area"、房间构成 "room_program"、边界/开间进深 "boundary_dimensions"。
+常见信息用稳定 key：总面积 "total_area"、房间构成 "room_program"、卧室数 "bedroom_count"（数字）、边界/开间进深 "boundary_dimensions"。用户给出"N室/N卧/NLDK"时必须同时产出数字型 bedroom_count。
 用户给出总面积或房间构成时，它们是已确认的设计目标（designGoals，confidence≥0.9），不要因"面积口径未说明"之类的次要歧义把它们降级或列为 uncertainties——按建筑面积理解即可。
 questions 每次最多 3 个，只问会改变空间结构的问题；questions 和所有 label 使用用户输入的语言（无法判断时用英语）。
 已有需求：${JSON.stringify(session.brief)}
@@ -1911,7 +1915,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
     // Deterministic strategy decision (LAYOUT_STRATEGY_DESIGN.md §2) —
     // persisted on the session so modify turns and eval reports can see what
     // was decided and why.
-    const strategy = deriveStrategy(deriveBriefFacts(briefSummary), targets, profile)
+    const strategy = deriveStrategy(briefFactsFor(session.brief, briefSummary), targets, profile)
     session.strategy = strategy
     const result = await buildLayoutPlan(
       {
@@ -2539,9 +2543,13 @@ function isCompletedPhase(phase: WorkflowSession['phase']): boolean {
  * intent's circulation/service rooms are layout output, not user asks.
  */
 export function gateTargetsForSession(
-  session: Pick<WorkflowSession, 'brief' | 'layoutIntent'>,
+  session: Pick<WorkflowSession, 'brief' | 'layoutIntent' | 'programEditedByModify'>,
 ): PlanTargets {
-  const intent = session.layoutIntent
+  // The intent becomes the requirement truth ONLY after the user edited the
+  // program through modify ops. At generation time the brief stays the
+  // independent check — otherwise a model intent that under-delivers
+  // (case-04: 2 bedrooms for a 3-bedroom brief) would grade its own homework.
+  const intent = session.programEditedByModify ? session.layoutIntent : undefined
   if (!intent) return buildPlanTargets(session.brief)
   const counts = new Map<RoomType, number>()
   for (const room of intent.rooms) counts.set(room.type, (counts.get(room.type) ?? 0) + 1)
@@ -2552,6 +2560,30 @@ export function gateTargetsForSession(
     ...(intent.targetTotalAreaSqm > 0 ? { totalAreaSqm: intent.targetTotalAreaSqm } : {}),
     ...(requiredRooms.length > 0 ? { requiredRooms } : {}),
   }
+}
+
+/**
+ * P0 (eval case-06): brief facts for the strategy layer. Lot dimensions come
+ * FIRST from the structured brief facts — the model-written summary
+ * rephrases the user's wording ("宽 5 米、长 18 米" → prose the regex scan
+ * misses), while the extraction prompt pins dimensions under stable keys.
+ * Prose parsing over the summary stays as the fallback.
+ */
+export function briefFactsFor(brief: DesignBrief, briefSummary: string): BriefFacts {
+  const facts = deriveBriefFacts(briefSummary)
+  if (!facts.siteHint) {
+    const pools = [brief.hardConstraints, brief.existingCondition, brief.designGoals, brief.assumptions]
+    for (const pool of pools) {
+      for (const fact of pool) {
+        const hint = detectSiteHint(`${fact.key} ${fact.label} ${formatValue(fact.value)}`)
+        if (hint) {
+          facts.siteHint = hint
+          return facts
+        }
+      }
+    }
+  }
+  return facts
 }
 
 /**
@@ -4051,14 +4083,36 @@ export function formatSummary(brief: DesignBrief): string {
 // names a single room; an entry that embeds its own quantity ("两个卫生间")
 // would make entry-counting wrong in both directions, so that type is left
 // to the post-build checks instead.
+// Deterministic bedroom-count fallback when the extraction produced no
+// numeric bedroom_count fact (case-04: "三室两厅两卫" landed only as a
+// room_program string, leaving the validator and gate 1 with nothing to
+// check). Scans every fact's label+value text for N室/N卧/N bedrooms/NLDK.
+const CJK_DIGITS: Record<string, number> = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 }
+const BEDROOM_COUNT_TEXT_PATTERN =
+  /([0-9０-９一两二三四五六七八九])\s*(?:间?卧|室(?![内外]))|(\d+)\s*bed(?:room)?s?\b|(\d+)\s*[sl]?l?dk/i
+
+export function bedroomCountFromBriefText(brief: DesignBrief): number | undefined {
+  const facts = [...brief.designGoals, ...brief.hardConstraints, ...brief.existingCondition]
+  for (const fact of facts) {
+    const match = BEDROOM_COUNT_TEXT_PATTERN.exec(`${fact.label} ${formatValue(fact.value)}`)
+    if (!match) continue
+    const raw = match[1] ?? match[2] ?? match[3]
+    if (!raw) continue
+    const count = CJK_DIGITS[raw] ?? Number.parseInt(raw.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xfee0)), 10)
+    if (Number.isFinite(count) && count > 0 && count <= 9) return count
+  }
+  return undefined
+}
+
 export function buildPlanTargets(brief: DesignBrief): PlanTargets {
   const totalAreaSqm = numberFact(brief, FLOOR_AREA_FACT_KEYS)
   const requiredRooms: Array<{ type: RoomType; count: number }> = []
   const bedrooms = numberFact(brief, ['bedroom_count', 'bedrooms'])
+    ?? bedroomCountFromBriefText(brief)
   if (bedrooms !== undefined && bedrooms > 0) {
     requiredRooms.push({ type: 'bedroom', count: bedrooms })
   }
-  const requested = arrayFact(brief, ['rooms', 'required_rooms', 'function_spaces'])
+  const requested = arrayFact(brief, ['rooms', 'required_rooms', 'room_program', 'function_spaces'])
   const presencePatterns: Array<[RoomType, RegExp]> = [
     ['kitchen', ROOM_NAME_PATTERNS.kitchen],
     ['bathroom', ROOM_NAME_PATTERNS.bathroom],

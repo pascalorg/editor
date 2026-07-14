@@ -16,6 +16,7 @@
 import type { LayoutIntent } from './layout-plan'
 import { detectKitchenPreference, detectLShape, detectNarrowLot, detectSiteHint } from './lang/strategy-vocab'
 import type { NormProfile } from './norms/profile'
+import { TYPE_TO_KIND } from './plan-validator'
 
 export type AreaBand = 'tiny' | 'compact' | 'standard' | 'large'
 
@@ -178,6 +179,7 @@ export function strategyPromptLines(decision: StrategyDecision): string {
 export function applyStrategy(
   intent: LayoutIntent,
   decision: StrategyDecision,
+  profile?: NormProfile,
 ): { intent: LayoutIntent; notes: string[] } {
   const notes: string[] = []
   let rooms = [...intent.rooms]
@@ -268,6 +270,29 @@ export function applyStrategy(
     while (ids.has(id)) id = `entry-${++n}`
     rooms = [...rooms, { id, name: '玄関', type: 'entry' }]
     notes.push('策略修正：自动补充玄関（日本档案 J5）')
+  }
+
+  // §4 tier-1（case-04 欠账补齐）：模型给出的目标面积越过档位的 fatal 界时，
+  // 静默夹到舒适界并记 note——确定性可修复的问题不烧模型修正轮（23㎡ 厨房
+  // 曾把三轮全部耗在 plan_rejected 上）。soft 界外 fatal 界内的轻微越界保留
+  // 原值，由 validator 记 warning。
+  if (profile) {
+    const bedroomCount = rooms.filter(room => room.type === 'bedroom').length
+    const bounds = profile.roomAreaBounds({ totalAreaSqm: intent.targetTotalAreaSqm, bedroomCount })
+    rooms = rooms.map(room => {
+      if (room.targetAreaSqm === undefined) return room
+      const bound = bounds[TYPE_TO_KIND[room.type]]
+      if (!bound) return room
+      if (room.targetAreaSqm > bound.fatalMax) {
+        notes.push(`策略修正：「${room.name}」目标面积 ${room.targetAreaSqm}㎡ 超出该房型合理区间，调整为 ${bound.softMax}㎡`)
+        return { ...room, targetAreaSqm: bound.softMax }
+      }
+      if (room.targetAreaSqm < bound.fatalMin) {
+        notes.push(`策略修正：「${room.name}」目标面积 ${room.targetAreaSqm}㎡ 低于该房型合理区间，调整为 ${bound.softMin}㎡`)
+        return { ...room, targetAreaSqm: bound.softMin }
+      }
+      return room
+    })
   }
 
   if (notes.length === 0) return { intent, notes }

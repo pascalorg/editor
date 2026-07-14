@@ -3,7 +3,8 @@
 // without spending tokens or spinning up the scene server. `run-eval.ts`
 // imports these rather than reimplementing the logic inline.
 
-import { ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
+import { classifyRoomTypeByName, ROOM_NAME_PATTERNS } from '../src/lang/room-vocab'
+import type { RoomType } from '../src/layout-plan'
 import type { SceneResult, WorkflowPhase } from '../src/types'
 
 // Case configs address room types by their Chinese labels; the patterns that
@@ -16,6 +17,48 @@ export const ROOM_TYPE_PATTERNS: Record<string, RegExp> = {
   厨房: ROOM_NAME_PATTERNS.kitchen,
   书房: ROOM_NAME_PATTERNS.study,
   餐厅: ROOM_NAME_PATTERNS.dining,
+  玄关: ROOM_NAME_PATTERNS.entry,
+}
+
+const TYPE_KEY_TO_ROOM_TYPE: Record<string, RoomType> = {
+  卧室: 'bedroom',
+  客厅: 'living',
+  卫生间: 'bathroom',
+  厨房: 'kitchen',
+  书房: 'study',
+  餐厅: 'dining',
+  玄关: 'entry',
+}
+
+// Canonical zone-name → case-type matching, shared by every room check here
+// and in assertions.ts. Two fixes over raw substring tests (2026-07-14 全量
+// 复盘): ① classification instead of substring — 「主卧步入式衣帽间」 is
+// storage, not a bedroom hit on /卧/; ② merged-space semantics (策略层 §3.3)
+// — a living_kitchen zone (「客餐厨」「客厅+开放式厨房」) satisfies 客厅、
+// 厨房 and 餐厅 at once.
+export function zoneNameMatchesType(type: string, zoneName: string): boolean {
+  const target = TYPE_KEY_TO_ROOM_TYPE[type]
+  if (!target) return false
+  const classified = classifyRoomTypeByName(zoneName)
+  if (classified === target) return true
+  if (classified !== 'living_kitchen') return false
+  if (target === 'living' || target === 'kitchen') return true
+  // Dining only when the merged zone's NAME claims it（「客餐厨」「LDK」——
+  // D 在名字里）；「客厅与开放式厨房」没有餐的部分，旁边的独立餐厅不该
+  // 被数成第二个（case-11 复盘）。
+  return target === 'dining' && /餐|dining|ダイニング|l?dk/i.test(zoneName)
+}
+
+// Counting semantics on top of zoneNameMatchesType: a merged zone stands in
+// for a missing 客厅/厨房/餐厅 but never ADDS to standalone rooms of the same
+// type — the model occasionally builds an LDK plus a separate 餐厅, and the
+// duplicated function must not count as two dining rooms (case-11 复盘).
+export function countZonesOfType(type: string, zoneNames: string[]): number {
+  const target = TYPE_KEY_TO_ROOM_TYPE[type]
+  if (!target) return 0
+  const direct = zoneNames.filter(name => classifyRoomTypeByName(name) === target).length
+  if (direct > 0) return direct
+  return zoneNames.filter(name => zoneNameMatchesType(type, name)).length
 }
 
 export type SuccessDetermination = { ok: boolean; error?: string }
@@ -188,7 +231,7 @@ export type BedroomCountCheck = { ok: boolean; expected: number; actual: number 
  */
 export function checkBedroomCount(zoneNames: string[] | undefined, expectedBedroomCount: number): BedroomCountCheck {
   if (!zoneNames) return { ok: false, expected: expectedBedroomCount, actual: null }
-  const actual = zoneNames.filter(name => ROOM_TYPE_PATTERNS.卧室.test(name)).length
+  const actual = zoneNames.filter(name => zoneNameMatchesType('卧室', name)).length
   return { ok: actual === expectedBedroomCount, expected: expectedBedroomCount, actual }
 }
 
@@ -212,7 +255,7 @@ function checkRoomTypes(
       configErrors.push(`未知房间类型模式 "${type}"（不在 ROOM_TYPE_PATTERNS 里）——检查用例配置是否写错，不能静默跳过`)
       continue
     }
-    const present = zoneNames.some(name => pattern.test(name))
+    const present = zoneNames.some(name => zoneNameMatchesType(type, name))
     if (mode === 'required' && !present) flagged.push(type)
     if (mode === 'forbidden' && present) flagged.push(type)
   }
@@ -337,6 +380,8 @@ export type EvalCase = {
     }
     /** Local-removal (§6 吸收): non-excepted zones must keep identical polygons. */
     preserveRoomPolygons?: { except: string[] }
+    /** Rename cases: these zone names must exist after the modification. */
+    requireZoneNames?: string[]
   }
   notes?: string
 }

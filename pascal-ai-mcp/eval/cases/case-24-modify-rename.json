@@ -1,0 +1,39 @@
+{
+  "id": "case-24-modify-rename",
+  "category": "修改已有场景：改名（纯元数据路径，不触发重建）",
+  "difficulty": "modify",
+  "setupFrom": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把次卧改名叫客卧，其他都不要动。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "厨房": 1,
+    "卫生间": 1
+  },
+  "requireAllRoomsReachable": true,
+  "maxModelCalls": 2,
+  "modificationChecks": {
+    "preserveExteriorBounds": true,
+    "preserveRoomPolygons": {
+      "except": [
+        "次卧"
+      ]
+    },
+    "itemChanges": {
+      "structureUntouched": true
+    },
+    "requireZoneNames": [
+      "客卧"
+    ]
+  },
+  "notes": "rename_room 是唯一无 case 覆盖的 op。§3 拍板：改名是 zone 元数据 patch，不重分区不重建——structureUntouched（零结构节点增删）+ preserveRoomPolygons（除被改名房间外逐点不变，改名后旧名 zone 消失所以 except 次卧）双保险卡住「改名触发全量重建」的回归。改名目标选「客卧」而非「儿童房」：客卧仍命中卧室词表（/卧/），expectedRoomCounts 卧室:2 在改名前后都成立；儿童房不在词表里会让类型统计漂移。已知盲区：改名正确性由 requireZoneNames:[\"客卧\"] 显式断言（改名静默失败即红），配合几何版 preserveRoomPolygons（改名不改形不算移动）。"
+}
