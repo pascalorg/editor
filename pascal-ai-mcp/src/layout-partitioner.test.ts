@@ -578,11 +578,65 @@ describe('absorbRoomInPlan: local removal by absorption (MODIFY_REDESIGN §6 修
     expect(result.plan.footprint).toEqual(plan.footprint)
   })
 
-  test('corridor, entry host and orphan-producing removals bail to re-partition', () => {
+  test('entry-host removal (玄关) absorbs and re-homes the front door; nothing else moves', () => {
+    const withEntry: LayoutIntent = {
+      targetTotalAreaSqm: 70,
+      rooms: [
+        { id: 'living-kitchen', name: 'LDK', type: 'living_kitchen', targetAreaSqm: 24 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 14 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 10 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+        { id: 'entry-1', name: '玄关', type: 'entry', targetAreaSqm: 3 },
+      ],
+    }
+    const plan = planOf(withEntry)
+    expect(plan.entry.roomId).toBe('entry-1')
+    const result = absorbRoomInPlan(plan, 'entry-1')
+    if (!result) throw new Error('expected absorption')
+    // The front door re-homes onto the absorber, which must be a type that
+    // may face the entry (never a bedroom/bathroom).
+    expect(result.plan.entry.roomId).toBe(result.absorbedInto.id)
+    expect(['living', 'living_kitchen', 'dining', 'hallway']).toContain(result.absorbedInto.type)
+    // The absorber keeps an exterior edge to host the entry door.
+    const onBoundary = result.absorbedInto.polygon.some(([x, z]) =>
+      x === 0 || z === 0 || x === result.plan.footprint.width || z === result.plan.footprint.depth)
+    expect(onBoundary).toBe(true)
+    // 玄关's doors remap to the absorber instead of vanishing.
+    expect(result.plan.connections.some(c => c.from === 'entry-1' || c.to === 'entry-1')).toBe(false)
+    // Everyone else stays byte-identical.
+    for (const room of plan.rooms) {
+      if (room.id === 'entry-1' || room.id === result.absorbedInto.id) continue
+      expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
+    }
+    expect(result.plan.footprint).toEqual(plan.footprint)
+  })
+
+  test('entry-host removal never absorbs into a bedroom or bathroom', () => {
+    // Fabricated plan: the entry's ONLY union-compatible neighbor is a
+    // bedroom — absorption must bail to re-partition instead of opening the
+    // front door into it.
+    const plan = {
+      footprint: { width: 6, depth: 4 },
+      entry: { roomId: 'entry-1' },
+      rooms: [
+        { id: 'entry-1', name: '玄关', type: 'entry' as const, polygon: [[0, 0], [2, 0], [2, 4], [0, 4]] as Array<[number, number]>, requiresExteriorWindow: false },
+        { id: 'bedroom-1', name: '卧室', type: 'bedroom' as const, polygon: [[2, 0], [6, 0], [6, 4], [2, 4]] as Array<[number, number]>, requiresExteriorWindow: true },
+      ],
+      connections: [{ from: 'entry-1', to: 'bedroom-1', type: 'door' as const }],
+    }
+    expect(absorbRoomInPlan(plan, 'entry-1')).toBeNull()
+  })
+
+  test('corridor and orphan-producing removals bail to re-partition', () => {
     const plan = planOf(两居)
     const corridor = plan.rooms.find(room => room.type === 'hallway')
     if (corridor) expect(absorbRoomInPlan(plan, corridor.id)).toBeNull()
-    expect(absorbRoomInPlan(plan, plan.entry.roomId)).toBeNull()
+    // 两居 has no 玄关 room: when the entry host is the corridor itself it
+    // stays un-absorbable via the hallway rule.
+    const entryHost = plan.rooms.find(room => room.id === plan.entry.roomId)
+    if (entryHost?.type === 'hallway') {
+      expect(absorbRoomInPlan(plan, plan.entry.roomId)).toBeNull()
+    }
     // Orphan: a fabricated plan where the study's only door goes through the
     // bedroom — removing the bedroom must bail.
     const orphanPlan = {

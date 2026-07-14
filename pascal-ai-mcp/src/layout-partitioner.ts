@@ -1485,16 +1485,24 @@ export function planRoomAreas(plan: LayoutPlan): Map<string, number> {
 // the caller falls back to the stability re-partition.
 // ---------------------------------------------------------------------------
 
+// Room types a front door may open into when the entry host is absorbed.
+// Private/service rooms (bedroom, bathroom, storage…) never host the entry.
+const ENTRY_HOST_TYPES = new Set<RoomType>(['living', 'living_kitchen', 'dining', 'hallway'])
+
 export function absorbRoomInPlan(
   plan: LayoutPlan,
   roomId: string,
 ): { plan: LayoutPlan; absorbedInto: LayoutPlanRoom } | null {
   const target = plan.rooms.find(room => room.id === roomId)
   if (!target) return null
-  // Circulation infrastructure and the entry host anchor the whole layout —
-  // removing them is a genuine re-partition.
+  // Circulation infrastructure anchors the whole layout — removing the
+  // corridor is a genuine re-partition.
   if (target.type === 'hallway') return null
-  if (plan.entry.roomId === roomId) return null
+  // Removing the entry host is absorbable too: the union polygon keeps the
+  // target's exterior edges, so the executor can re-open the front door on
+  // the absorber ("去掉玄关" = 进门即客厅) — but only into a room type that
+  // may face the front door.
+  const hostsEntry = plan.entry.roomId === roomId
   // A room whose ONLY door connection is the target would be orphaned.
   for (const room of plan.rooms) {
     if (room.id === roomId) continue
@@ -1505,13 +1513,16 @@ export function absorbRoomInPlan(
   }
 
   // Longest shared edge wins; the corridor is a last resort (a widened
-  // corridor bump reads as a mistake, not a bigger room).
+  // corridor bump reads as a mistake, not a bigger room) — except for the
+  // entry host, where merging into the corridor is the natural outcome.
   const candidates = plan.rooms
     .filter(room => room.id !== roomId)
+    .filter(room => !hostsEntry || ENTRY_HOST_TYPES.has(room.type))
     .map(room => ({ room, shared: sharedBoundaryLength(room.polygon, target.polygon) }))
     .filter(entry => entry.shared >= 0.05)
     .sort((x, y) =>
-      (Number(x.room.type === 'hallway') - Number(y.room.type === 'hallway')) || y.shared - x.shared)
+      (hostsEntry ? 0 : Number(x.room.type === 'hallway') - Number(y.room.type === 'hallway'))
+      || y.shared - x.shared)
   for (const { room: neighbor } of candidates) {
     const union = unionAdjacentPolygons(neighbor.polygon, target.polygon)
     if (!union) continue
@@ -1519,8 +1530,18 @@ export function absorbRoomInPlan(
     const rooms = plan.rooms
       .filter(room => room.id !== roomId)
       .map(room => (room.id === neighbor.id ? absorbedInto : room))
-    const connections = plan.connections.filter(c => c.from !== roomId && c.to !== roomId)
-    return { plan: { ...plan, rooms, connections }, absorbedInto }
+    // Entry-host removal remaps the target's doors onto the absorber (the
+    // union contains every wall the target shared, so each remapped door
+    // still has a host edge); other removals just prune them — the orphan
+    // check above guarantees circulation survives.
+    const connections = hostsEntry
+      ? dedupeConnections(plan.connections.map(c => ({
+          from: c.from === roomId ? neighbor.id : c.from,
+          to: c.to === roomId ? neighbor.id : c.to,
+        })))
+      : plan.connections.filter(c => c.from !== roomId && c.to !== roomId)
+    const entry = hostsEntry ? { ...plan.entry, roomId: neighbor.id } : plan.entry
+    return { plan: { ...plan, entry, rooms, connections }, absorbedInto }
   }
   return null
 }
