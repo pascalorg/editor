@@ -19,6 +19,13 @@ const DRAG_MARGIN = 8
 const CLICK_SLOP = 4
 let desktopInspectorCollapsed = true
 
+/** Forget the shared expanded state. Called when the last selection clears so
+ * a fresh selection opens the inspector collapsed — the sharing is only meant
+ * to survive swaps between panels (roof ↔ segment), not a close/reopen. */
+export function resetDesktopInspectorCollapsed() {
+  desktopInspectorCollapsed = true
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max))
 }

@@ -14,6 +14,7 @@ Three.js `Layers` control which objects each camera and render pass sees. We use
 | `OVERLAY_LAYER` | `1` | `@pascal-app/viewer` | Editor overlays: gizmos, move handles, tool previews, cursor meshes, snap guides. Composited on top in its own pass. |
 | `ZONE_LAYER` | `2` | `@pascal-app/viewer` | Zone floor fills and wall borders — composited in a separate post-processing pass |
 | `GRID_LAYER` | `3` | `@pascal-app/viewer` | The editor ground grid — rendered *in* the scene pass for correct depth occlusion |
+| `SHADOW_ONLY_LAYER` | `4` | `@pascal-app/viewer` | Shadow-caster-only geometry: hidden roofs/levels in cutaway/solo views. No color pass or camera enables it — only the sun's shadow camera (`lights.tsx`), so the geometry keeps shadowing interiors. Applied per-object via `lib/shadow-only.ts` (`applyShadowOnly`/`clearShadowOnly`). |
 
 `apps/editor` exposes `EDITOR_LAYER` for editor-helper meshes; it **re-exports** `OVERLAY_LAYER` (`EDITOR_LAYER === OVERLAY_LAYER`) so the editor stays decoupled from the viewer's pass numbering while landing on the same layer.
 

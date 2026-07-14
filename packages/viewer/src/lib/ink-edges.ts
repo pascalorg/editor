@@ -1,15 +1,6 @@
-import {
-  abs,
-  colorToDirection,
-  float,
-  max,
-  min,
-  mix,
-  screenSize,
-  screenUV,
-  smoothstep,
-  vec2,
-} from 'three/tsl'
+import { abs, float, max, min, mix, screenSize, screenUV, smoothstep, vec2 } from 'three/tsl'
+
+import { unpackRGBToNormal } from './tsl-compat'
 
 // Screen-space ink outline (SketchUp / Moebius look). Reads the scene-pass
 // depth + normal MRT and inks two signals:
@@ -41,8 +32,9 @@ export function inkedEdges({
   // Line thickness in px (the detected band is ~2×radius) and final line
   // darkness — these are what distinguish soft (thin/faint) from strong
   // (thick/solid); the edge masks themselves saturate, so a gain wouldn't.
+  // Opacity may be a TSL node (theme-driven scaling) or a plain number.
   radius: number
-  opacity: number
+  opacity: any
   sceneRgb: any
 }) {
   const px = vec2(1, 1).div(screenSize).mul(radius)
@@ -61,11 +53,17 @@ export function inkedEdges({
   // ≈ metres of step / near (near≈0.1): ~5cm starts a line, ~25cm solid.
   const depthEdge = smoothstep(float(0.5), float(2.5), depthMetric).mul(noiseGate)
 
-  const nC = colorToDirection(normalTex.sample(uvN)).normalize()
-  const nR = colorToDirection(normalTex.sample(uvN.add(vec2(px.x, 0)))).normalize()
-  const nL = colorToDirection(normalTex.sample(uvN.sub(vec2(px.x, 0)))).normalize()
-  const nU = colorToDirection(normalTex.sample(uvN.add(vec2(0, px.y)))).normalize()
-  const nD = colorToDirection(normalTex.sample(uvN.sub(vec2(0, px.y)))).normalize()
+  const nC = unpackRGBToNormal(normalTex.sample(uvN)).normalize()
+  const nR = unpackRGBToNormal(normalTex.sample(uvN.add(vec2(px.x, 0)))).normalize()
+  const nL = unpackRGBToNormal(normalTex.sample(uvN.sub(vec2(px.x, 0)))).normalize()
+  const nU = unpackRGBToNormal(normalTex.sample(uvN.add(vec2(0, px.y)))).normalize()
+  const nD = unpackRGBToNormal(normalTex.sample(uvN.sub(vec2(0, px.y)))).normalize()
+  // Ink is a near/mid-field affordance: fade it out with raw depth so the
+  // horizon (the infinite ground disc vanishing against the backdrop) and
+  // other far-field depth cliffs never draw a line across the sky junction.
+  // ~full ink below ≈150 m, none beyond ≈350 m (perspective near 0.1/far 1000).
+  const distanceFade = float(1).sub(smoothstep(float(0.9994), float(0.9998), dC))
+
   const nDiff = max(
     max(float(1).sub(nC.dot(nR)), float(1).sub(nC.dot(nL))),
     max(float(1).sub(nC.dot(nU)), float(1).sub(nC.dot(nD))),
@@ -74,6 +72,6 @@ export function inkedEdges({
 
   // TSL's typed overloads are finicky across versions; the runtime is proven in
   // the aesthetic sandbox, so cast at the mask/mix boundary.
-  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity), float(1))
+  const edgeMask: any = min(max(depthEdge, normalEdge).mul(opacity).mul(distanceFade), float(1))
   return (mix as any)(sceneRgb, inkColor, edgeMask)
 }

@@ -9,7 +9,10 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  backdropGradient,
+  deepSkyColor,
   getSceneTheme,
+  horizonHazeColor,
   NodeRenderer,
   unionPolygons,
   useNodeEvents,
@@ -18,15 +21,21 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
+  CircleGeometry,
   Float32BufferAttribute,
   type Group,
   Path,
   Shape,
   ShapeGeometry,
 } from 'three'
+import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 
 const Y_OFFSET = 0.01
+
+// The horizon disc is presentation-only — clicks must fall through to the
+// real site polygon / grid, so its raycast is a no-op.
+const noopRaycast = () => {}
 
 /**
  * Creates simple line geometry for site boundary
@@ -63,10 +72,37 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useRegistry(node.id, 'site', ref)
 
   const bgColor = useViewer((state) => getSceneTheme(state.sceneTheme).ground)
+  const backgroundColor = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  const skyColor = useViewer((state) => {
+    const theme = getSceneTheme(state.sceneTheme)
+    return theme.backgroundSky ?? theme.background
+  })
+  const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
+  const maxLightIntensity = useViewer((state) =>
+    Math.max(1, ...getSceneTheme(state.sceneTheme).lights.map((light) => light.intensity)),
+  )
   const livePolygon = useLiveNodeOverrides(
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
   const polygonPoints = livePolygon?.points ?? node.polygon?.points
+
+  // Centroid + radius of the lot polygon, for the presentation fade below.
+  const fadeBounds = useMemo(() => {
+    if (!polygonPoints || polygonPoints.length < 3) return null
+    let cx = 0
+    let cz = 0
+    for (const [x, z] of polygonPoints) {
+      cx += x ?? 0
+      cz += z ?? 0
+    }
+    cx /= polygonPoints.length
+    cz /= polygonPoints.length
+    let radius = 0
+    for (const [x, z] of polygonPoints) {
+      radius = Math.max(radius, Math.hypot((x ?? 0) - cx, (z ?? 0) - cz))
+    }
+    return { cx, cz, radius }
+  }, [polygonPoints])
 
   // Lit (not Basic) so the site ground receives the directional shadow — Basic
   // is unlit, which is why shadows used to stop dead at the slab edge. polygonOffset
@@ -78,6 +114,61 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffsetUnits = 1
     return material
   }, [bgColor])
+
+  // Presentation horizon: a large ground disc under the lot, in the same
+  // theme ground colour, fading radially into the theme background so the
+  // scene sits on an "infinite" plane that dissolves into the sky instead of
+  // a hard-edged plate floating on the backdrop. Never pickable.
+  const horizonMaterial = useMemo(() => {
+    if (!fadeBounds) return null
+    const material = new MeshLambertNodeMaterial({ color: bgColor })
+    const center = vec2(fadeBounds.cx, fadeBounds.cz)
+    const dist = positionWorld.xz.sub(center).length()
+    const fade = smoothstep(float(fadeBounds.radius * 1.05), float(fadeBounds.radius * 5), dist)
+    // Contact vignette: a soft darkening that hugs the lot so the parcel
+    // reads as sitting on the ground instead of floating on an even field.
+    // The linear cut competes with the tone mapper's shoulder — bright themes
+    // (studio's key light runs at intensity 4) compress a fixed 15% to almost
+    // nothing — so the strength scales with the theme's strongest light.
+    const vignetteStrength = Math.min(0.45, 0.13 * maxLightIntensity)
+    const halo = float(1)
+      .sub(smoothstep(float(fadeBounds.radius * 0.95), float(fadeBounds.radius * 2.6), dist))
+      .mul(vignetteStrength)
+    const haloFactor = float(1).sub(halo)
+    material.colorNode = mix(color(bgColor), color('#000000'), fade).mul(haloFactor)
+    // Dissolve, not tint: the albedo (lighting response, incl. shadows) fades
+    // to black while an emissive term fades up to the backdrop gradient — the
+    // exact formula the post pipeline composites (viewer lib/backdrop.ts),
+    // evaluated with this fragment's view direction, so the far end is
+    // literally the backdrop (incl. the horizon haze) from any camera pose.
+    const viewDirY = positionWorld.sub(cameraPosition).normalize().y
+    const backdrop = backdropGradient({
+      dirY: viewDirY,
+      background: color(backgroundColor),
+      haze: color(horizonHazeColor(skyColor, appearance)),
+      sky: color(skyColor),
+      skyDeep: color(deepSkyColor(skyColor)),
+    })
+    // The halo also scales the in-band emissive: the dissolve starts at 1.05R,
+    // so without it the (bright) backdrop dilutes the vignette exactly where
+    // it should read. halo is 0 past 2.6R while the dissolve completes at 5R,
+    // so the far field stays the pure backdrop — the seam guarantee holds.
+    ;(material as unknown as { emissiveNode: unknown }).emissiveNode = mix(
+      color('#000000'),
+      backdrop,
+      fade,
+    ).mul(haloFactor)
+    material.polygonOffset = true
+    material.polygonOffsetFactor = 2
+    material.polygonOffsetUnits = 2
+    return material
+  }, [bgColor, backgroundColor, skyColor, appearance, maxLightIntensity, fadeBounds])
+
+  const horizonGeometry = useMemo(() => {
+    if (!fadeBounds) return null
+    return new CircleGeometry(Math.max(fadeBounds.radius * 8, 400), 64)
+  }, [fadeBounds])
+  useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
 
   // Cache slab polygon references to keep the selector stable across unrelated store updates
   const slabPolygonsCache = useRef<[number, number][][]>([])
@@ -172,6 +263,18 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           geometry={groundGeometry}
           material={groundMaterial}
           position={[0, -0.05, 0]}
+          receiveShadow
+          rotation={[-Math.PI / 2, 0, 0]}
+        />
+      )}
+
+      {/* Infinite-ground presentation disc fading into the sky at the horizon */}
+      {horizonGeometry && horizonMaterial && fadeBounds && (
+        <mesh
+          geometry={horizonGeometry}
+          material={horizonMaterial}
+          position={[fadeBounds.cx, -0.07, fadeBounds.cz]}
+          raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}
         />

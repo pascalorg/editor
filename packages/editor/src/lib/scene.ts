@@ -1,6 +1,12 @@
 'use client'
 
-import { nodeRegistry, resolveLevelId, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  clearSceneHistory,
+  nodeRegistry,
+  resolveLevelId,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
   hasCustomPersistedEditorUiState,
@@ -384,6 +390,12 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   } else {
     useScene.getState().clearScene()
   }
+
+  // The loaded scene is the undo floor. Loading records history entries of
+  // its own (`unloadScene` + `setScene`/`clearScene` are tracked writes), so
+  // without this reset a few Ctrl+Z presses could step past the load into the
+  // pre-load — often empty — state and wipe the whole project.
+  clearSceneHistory()
 
   syncEditorSelectionFromCurrentScene()
 }

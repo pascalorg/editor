@@ -8,6 +8,7 @@ import type {
   OrthographicCamera,
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
@@ -23,9 +24,11 @@ const SHADOWS_DISABLED =
   ).has('shadows')
 
 // Shadow darkness for the bright key lights (themes drive most lights past
-// intensity 1). The aesthetic prototype runs these near-black (≈1.0); this is a
-// deliberate middle ground — present, but not the heavy contact shadow there.
-const MAX_SHADOW_INTENSITY = 0.55
+// intensity 1). Runs high so shadowed areas actually lose the sun's
+// contribution — the ambient/hemisphere/IBL stack provides the fill. The old
+// 0.55 clamp leaked 45% of the key light into shadow and flattened interiors;
+// 0.9 read too heavy in review.
+const MAX_SHADOW_INTENSITY = 0.75
 
 // Shadow frustum framing. The frustum is fit to the BUILDING geometry (not the
 // camera): we union the bounds of all registered scene nodes, fit a sphere, and
@@ -151,6 +154,9 @@ export function Lights() {
         // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
+          // Shadow-caster-only geometry (hidden roofs/levels in cutaway views)
+          // is visible to the shadow pass alone — see lib/shadow-only.ts.
+          cam.layers.enable(SHADOW_ONLY_LAYER)
           cam.left = -size
           cam.right = size
           cam.top = size
@@ -238,8 +244,16 @@ export function Lights() {
   return (
     <>
       {theme.lights.map((light, index) => (
+        // The user-facing shadows toggle must NOT flip `castShadow` at runtime:
+        // three r184's WebGPU node cache keys builder state by castShadow, but
+        // evicts with the post-toggle key, so flipping off disposes the shadow
+        // map's GPU texture while the shadows-on cache entry (still referencing
+        // it) survives. Re-enabling then reuses that stale state and every
+        // submit fails ("Invalid CommandBuffer ... renderContext_N"). The
+        // toggle is applied via `renderer.shadowMap.enabled` (Canvas `shadows`
+        // prop in viewer/index.tsx), which round-trips without disposing.
         <directionalLight
-          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED && shadows}
+          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED}
           key={`${index}-${light.position.join(',')}`}
           position={light.position}
           ref={(ref) => {
@@ -248,9 +262,9 @@ export function Lights() {
           shadow-bias={-0.002}
           shadow-mapSize={[1024, 1024]}
           shadow-normalBias={0.3}
-          shadow-radius={1.5}
+          shadow-radius={2}
         >
-          {light.castShadow && !SHADOWS_DISABLED && shadows ? (
+          {light.castShadow && !SHADOWS_DISABLED ? (
             <orthographicCamera
               attach="shadow-camera"
               bottom={-shadowCameraSize}
