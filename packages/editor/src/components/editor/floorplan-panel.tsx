@@ -3224,18 +3224,17 @@ function FloorplanGuideImage({
           }}
           onPointerDown={(event) => {
             if (event.button === 0) {
-              // A locked guide never starts a drag, so let the pointer-down
-              // bubble to the <svg> root — box select then arms exactly as on
-              // empty canvas. A non-drag release still fires onClick (a
-              // committed box-select drag swallows the trailing click), so
-              // click-to-select → panel → unlock keeps working.
-              if (isLocked) {
+              // Only a selected, unlocked guide consumes the pointer-down (it
+              // starts a translate drag). Every other guide lets it bubble to
+              // the <svg> root so box select arms exactly as on empty canvas.
+              // A non-drag release still fires onClick (a committed box-select
+              // drag swallows the trailing click), so click-to-select → panel
+              // keeps working for locked and unselected guides alike.
+              if (isLocked || !isSelected) {
                 return
               }
               event.stopPropagation()
-              if (isSelected) {
-                onGuideTranslateStart(guide, event)
-              }
+              onGuideTranslateStart(guide, event)
             }
           }}
           pointerEvents="all"
