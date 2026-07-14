@@ -505,4 +505,17 @@ const useViewer = create<ViewerState>()(
   ),
 )
 
+/** Apply an authoritative country code (e.g. IP-derived by the host app) as
+ * the unit default. Stronger signal than the timezone heuristic used at store
+ * creation, but still a default: it never overrides an explicit user choice
+ * and is not persisted (the unit only sticks once the user touches the
+ * toggle). */
+export function applyCountryUnitDefault(country: string | null | undefined) {
+  if (!country) return
+  const state = useViewer.getState()
+  if (state.unitExplicit) return
+  const unit = IMPERIAL_REGIONS.includes(country.toUpperCase()) ? 'imperial' : 'metric'
+  if (state.unit !== unit) useViewer.setState({ unit })
+}
+
 export default useViewer
