@@ -5,6 +5,7 @@ import {
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
   type WallNode,
@@ -30,6 +31,7 @@ import {
 // The pure snap geometry lives in `./wall-snap-geometry`; re-exported here so
 // existing importers (fence drafting, the editor barrel) keep their paths.
 export {
+  chainEndJoinsExistingWall,
   findWallSnapTarget,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
@@ -96,6 +98,7 @@ function pointsEqual(a: WallPlanPoint, b: WallPlanPoint, tolerance = 1e-6): bool
 function findWallIntersection(
   point: WallPlanPoint,
   walls: WallNode[],
+  radius: number,
   ignoreWallIds?: string[],
 ): WallSplitIntersection | null {
   const ignore = new Set(ignoreWallIds ?? [])
@@ -110,7 +113,7 @@ function findWallIntersection(
 
     const candidateDistanceSquared = distanceSquared(point, projected)
     if (
-      candidateDistanceSquared > WALL_JOIN_SNAP_RADIUS * WALL_JOIN_SNAP_RADIUS ||
+      candidateDistanceSquared > radius * radius ||
       candidateDistanceSquared >= bestDistanceSquared
     ) {
       continue
@@ -432,12 +435,19 @@ export function createWallOnCurrentLevel(
   let resolvedStart = start
   let resolvedEnd = end
 
-  // The corner-join / wall-split snap on commit is a magnetic (line) snap, so
-  // it must be gated by the snapping mode like the draft preview is. Without
-  // this gate `'off'` (and `'angles'`) still snapped the committed endpoint to
-  // existing wall geometry — the residual snap the draft path no longer does.
-  if (isMagneticSnapActive()) {
-    const endIntersection = findWallIntersection(resolvedEnd, workingWalls)
+  // The corner-join / wall-split resolution follows the snapping mode like the
+  // draft preview does: magnetic ('lines') keeps the generous join radius,
+  // every other mode uses the same tight connect radius the draft path already
+  // sticks endpoints with. So an endpoint the user saw connect to a wall body
+  // actually splits that wall (and redistributes its attachments) in every
+  // mode, while `'off'` / `'angles'` gain no residual long-range snap.
+  const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
+
+  // One undo step for the whole commit: the split ops (create halves, migrate
+  // attachments, delete host) plus the new wall each push their own history
+  // entry, and a single Ctrl-Z must not strand a half-split wall network.
+  return runAsSingleSceneHistoryStep(useScene, () => {
+    const endIntersection = findWallIntersection(resolvedEnd, workingWalls, joinRadius)
     const splitEnd = splitWallIfNeeded(
       endIntersection,
       workingWalls,
@@ -451,7 +461,7 @@ export function createWallOnCurrentLevel(
       resolvedEnd = splitEnd.point
     }
 
-    const startIntersection = findWallIntersection(resolvedStart, workingWalls)
+    const startIntersection = findWallIntersection(resolvedStart, workingWalls, joinRadius)
     const splitStart = splitWallIfNeeded(
       startIntersection,
       workingWalls,
@@ -464,35 +474,38 @@ export function createWallOnCurrentLevel(
       workingWalls = splitStart.walls
       resolvedStart = splitStart.point
     }
-  }
 
-  if (!isSegmentLongEnough(resolvedStart, resolvedEnd) || pointsEqual(resolvedStart, resolvedEnd)) {
-    return null
-  }
+    if (
+      !isSegmentLongEnough(resolvedStart, resolvedEnd) ||
+      pointsEqual(resolvedStart, resolvedEnd)
+    ) {
+      return null
+    }
 
-  const duplicateWall = workingWalls.some(
-    (wall) =>
-      (pointsEqual(wall.start, resolvedStart) && pointsEqual(wall.end, resolvedEnd)) ||
-      (pointsEqual(wall.start, resolvedEnd) && pointsEqual(wall.end, resolvedStart)),
-  )
-  if (duplicateWall) {
-    return null
-  }
+    const duplicateWall = workingWalls.some(
+      (wall) =>
+        (pointsEqual(wall.start, resolvedStart) && pointsEqual(wall.end, resolvedEnd)) ||
+        (pointsEqual(wall.start, resolvedEnd) && pointsEqual(wall.end, resolvedStart)),
+    )
+    if (duplicateWall) {
+      return null
+    }
 
-  const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
-  // A placed wall preset seeds `toolDefaults.wall` (thickness, height,
-  // materials, sides) before the tool activates; merge those first so the
-  // drawn wall reproduces the preset. Identity + endpoints always win.
-  const defaults = useEditor.getState().toolDefaults.wall ?? {}
-  const wall = WallSchema.parse({
-    ...defaults,
-    name: `Wall ${wallCount + 1}`,
-    start: resolvedStart,
-    end: resolvedEnd,
+    const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
+    // A placed wall preset seeds `toolDefaults.wall` (thickness, height,
+    // materials, sides) before the tool activates; merge those first so the
+    // drawn wall reproduces the preset. Identity + endpoints always win.
+    const defaults = useEditor.getState().toolDefaults.wall ?? {}
+    const wall = WallSchema.parse({
+      ...defaults,
+      name: `Wall ${wallCount + 1}`,
+      start: resolvedStart,
+      end: resolvedEnd,
+    })
+
+    createNode(wall, currentLevelId)
+    sfxEmitter.emit('sfx:structure-build')
+
+    return wall
   })
-
-  createNode(wall, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
-
-  return wall
 }

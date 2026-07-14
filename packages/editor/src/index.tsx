@@ -149,6 +149,7 @@ export {
 } from './components/tools/stair/stair-defaults'
 export { ToolManager } from './components/tools/tool-manager'
 export {
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,

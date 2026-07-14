@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  DoorNode as DoorSchema,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -11,6 +12,15 @@ import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import { createWallOnCurrentLevel, snapWallDraftPointDetailed } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
+
+// `updateNodes` batches its dirty-marking through requestAnimationFrame,
+// which bun's test runtime doesn't provide.
+if (typeof globalThis.requestAnimationFrame === 'undefined') {
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) =>
+    setTimeout(() => callback(0), 0)) as unknown as typeof requestAnimationFrame
+  globalThis.cancelAnimationFrame = ((id: number) =>
+    clearTimeout(id)) as typeof cancelAnimationFrame
+}
 
 const LEVEL_ID = 'level_test' as AnyNodeId
 
@@ -22,7 +32,7 @@ function makeWall(start: WallPlanPoint, end: WallPlanPoint, id: string): WallNod
   }
 }
 
-function seedLevel(walls: WallNode[]) {
+function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
   useScene.setState({
     nodes: Object.fromEntries([
       [
@@ -39,6 +49,7 @@ function seedLevel(walls: WallNode[]) {
         } as AnyNode,
       ],
       ...walls.map((wall) => [wall.id, wall] as const),
+      ...extraNodes.map((node) => [node.id, node] as const),
     ]),
     rootNodeIds: [LEVEL_ID],
     dirtyNodes: new Set(),
@@ -62,10 +73,11 @@ describe('createWallOnCurrentLevel', () => {
         selectedIds: [],
       },
     } as never)
-    // The commit-time corner-join / wall-split is a magnetic ('lines') snap, so
-    // these cases only apply in a magnetic context. A reshaping-endpoint scope
-    // resolves to the 'wall' context without needing the node registry (which
-    // isn't loaded in this package's tests).
+    // 'lines' keeps the generous commit-time join radius; the other modes
+    // still resolve + split within the tight connect radius (covered by the
+    // grid-mode cases below). A reshaping-endpoint scope resolves to the
+    // 'wall' context without needing the node registry (which isn't loaded in
+    // this package's tests).
     useEditor.getState().setSnappingMode('wall', 'lines')
     useInteractionScope
       .getState()
@@ -109,6 +121,54 @@ describe('createWallOnCurrentLevel', () => {
   test('exact duplicate segment is rejected', () => {
     expect(createWallOnCurrentLevel([0, 0], [4, 0])).toBeNull()
     expect(levelWalls()).toHaveLength(1)
+  })
+
+  test('grid mode: endpoint resolved onto a wall body still splits the host', () => {
+    useEditor.getState().setSnappingMode('wall', 'grid')
+
+    const created = createWallOnCurrentLevel([2, 2], [2, 0])
+
+    expect(created?.end).toEqual([2, 0])
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeUndefined()
+    expect(levelWalls()).toHaveLength(3)
+  })
+
+  test('grid mode: endpoint beyond the connect radius is left alone (no residual snap)', () => {
+    useEditor.getState().setSnappingMode('wall', 'grid')
+
+    const created = createWallOnCurrentLevel([2, 2], [2, 0.2])
+
+    expect(created?.end).toEqual([2, 0.2])
+    expect(useScene.getState().nodes['wall_a' as AnyNodeId]).toBeDefined()
+    expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('mid-span split migrates the host attachments to the covering half', () => {
+    const door = DoorSchema.parse({
+      position: [1, 1.05, 0],
+      parentId: 'wall_a',
+      wallId: 'wall_a',
+    })
+    seedLevel([{ ...makeWall([0, 0], [4, 0], 'wall_a'), children: [door.id] }], [door as AnyNode])
+
+    const created = createWallOnCurrentLevel([2, 2], [2, 0])
+
+    expect(created?.end).toEqual([2, 0])
+    const walls = levelWalls()
+    const firstHalf = walls.find((wall) => wall.start[0] === 0 && wall.end[0] === 2)
+    expect(firstHalf).toBeDefined()
+    const migratedDoor = useScene.getState().nodes[door.id as AnyNodeId]
+    expect(migratedDoor?.parentId).toBe(firstHalf?.id)
+    expect(firstHalf?.children).toContain(door.id)
+  })
+
+  test('a splitting commit lands as a single undo step', () => {
+    const before = useScene.temporal.getState().pastStates.length
+
+    const created = createWallOnCurrentLevel([2, 2], [2, 0])
+
+    expect(created).not.toBeNull()
+    expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 })
 
