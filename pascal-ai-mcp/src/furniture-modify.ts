@@ -37,6 +37,10 @@ export type FurnitureModifyResult = {
   ok: boolean
   // zh internal, re-rendered at the reply boundary like executor reports.
   detail: string
+  // Set whenever a scene item was actually deleted (remove / swap, even a
+  // swap whose replacement then failed) — the modify gates use it to waive
+  // "missing equipment" failures the user's own removal caused.
+  removed?: { roomName: string; itemName: string }
 }
 
 export type FurnitureModifyReport = {
@@ -258,6 +262,7 @@ export async function executeFurnitureModifyOps(options: {
             ? `已删除「${room.name}」的「${target.name}」（匹配到 ${matches.length} 件，删除了最后放置的一件）`
             : `已删除「${room.name}」的「${target.name}」`
           : `删除「${target.name}」失败`,
+        ...(ok ? { removed: { roomName: room.name, itemName: target.name } } : {}),
       })
     } else if (op.op === 'add_furniture') {
       const catalog = await searchTerm(callMcp, op.item, issues, beforeCall)
@@ -303,9 +308,10 @@ export async function executeFurnitureModifyOps(options: {
         continue
       }
       const placed = await placeCandidate(room, newCatalog, targetFp)
+      const removedInfo = { removed: { roomName: room.name, itemName: target.name } }
       results.push('reason' in placed
-        ? { op, ok: false, detail: `已删除「${target.name}」但「${op.to}」放置失败：${placed.reason}` }
-        : { op, ok: true, detail: `已将「${room.name}」的「${target.name}」换为「${placed.candidate.name}」` })
+        ? { op, ok: false, detail: `已删除「${target.name}」但「${op.to}」放置失败：${placed.reason}`, ...removedInfo }
+        : { op, ok: true, detail: `已将「${room.name}」的「${target.name}」换为「${placed.candidate.name}」`, ...removedInfo })
     }
   }
 

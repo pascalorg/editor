@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   bedroomCountFromBriefText,
   briefFactsFor,
+  effectiveGateFailures,
   ensureSiteDimensionFact,
   buildOpeningRepairData,
   describeRemainingIssues,
@@ -32,6 +33,7 @@ import {
   type WallWithOpenings,
   type ZoneSummary,
 } from './agent'
+import { requirementLabelsSatisfiedBy } from './furniture-checklist'
 import type { ChatInput, DesignBrief, RequirementFact, WorkflowSession } from './types'
 
 const thresholds = { usableConfidence: 0.8, partialConfidence: 0.5 }
@@ -907,6 +909,59 @@ describe('briefFactsFor（P0：结构化 brief 尺寸优先于摘要正则）', 
     const brief = structuredClone(emptyBrief)
     ensureSiteDimensionFact(brief as never, '想要一个三居室，采光好一点', 'zh')
     expect(brief.hardConstraints).toHaveLength(0)
+  })
+})
+
+describe('effectiveGateFailures（§6 三修：修改路径 gates 只追责本次新引入的失败）', () => {
+  const failure = (message: string, l10n?: { id: string; params: Record<string, string | number | boolean> }) =>
+    ({ gate: 6, id: 'missing-equipment', message, ...(l10n ? { l10n } : {}) })
+  const missingEquipment = (room: string, label: string) =>
+    failure(`厨房「${room}」缺少必备设备：${label}`, { id: 'gateMissingEquipment', params: { roomKind: '厨房', room, label } })
+
+  test('基线差分：修改前已存在的失败降级为 waived，新失败照常计入', () => {
+    const stale = missingEquipment('厨房', '灶台')
+    const fresh = missingEquipment('厨房', '冰箱')
+    const { effective, waived } = effectiveGateFailures([stale, fresh], [stale], [])
+    expect(effective).toEqual([fresh])
+    expect(waived).toEqual([stale])
+  })
+
+  test('意图豁免：用户要求删掉的设备不算 AI 的失败（水槽柜删除 → 对应失败 waived，灶台不受牵连）', () => {
+    const sink = missingEquipment('厨房', '水槽柜')
+    const stove = missingEquipment('厨房', '灶台')
+    const { effective, waived } = effectiveGateFailures(
+      [sink, stove], [], [{ roomName: '厨房', itemName: 'Kitchen Sink Cabinet' }],
+    )
+    expect(waived).toEqual([sink])
+    expect(effective).toEqual([stove])
+  })
+
+  test('意图豁免只看同一房间：删了厨房的冰箱不豁免另一间厨房的失败', () => {
+    const other = missingEquipment('开放式厨房', '冰箱')
+    const matched = missingEquipment('厨房', '冰箱')
+    const removals = [{ roomName: '厨房', itemName: '冰箱' }]
+    expect(effectiveGateFailures([matched], [], removals).waived).toEqual([matched])
+    // 双向包含语义：op.room「厨房」⊂ zone「开放式厨房」也算同一间——与家具
+    // 执行器 resolveRoom 的宽匹配保持一致；真正不同名的房间不豁免。
+    const unrelated = missingEquipment('主卧', '衣柜')
+    expect(effectiveGateFailures([unrelated], [], removals).effective).toEqual([unrelated])
+    expect(effectiveGateFailures([other], [], removals).waived).toEqual([other])
+  })
+
+  test('卧室家具同样可豁免；结构类 gate（缺房间）永远不被删除豁免', () => {
+    const wardrobe = failure('卧室「主卧」缺少必备家具：衣柜', {
+      id: 'gateMissingBedroomFurniture', params: { room: '主卧', label: '衣柜' },
+    })
+    const missingRoom = failure('缺少房间：卫生间', { id: 'gateMissingRoom', params: { type: 'bathroom', actual: 0, expected: 1 } })
+    const removals = [{ roomName: '主卧', itemName: 'Wardrobe' }]
+    expect(effectiveGateFailures([wardrobe], [], removals).waived).toEqual([wardrobe])
+    expect(effectiveGateFailures([missingRoom], [], removals).effective).toEqual([missingRoom])
+  })
+
+  test('requirementLabelsSatisfiedBy：删除物名映射回清单需求标签（含或选项）', () => {
+    expect(requirementLabelsSatisfiedBy('冰箱')).toEqual(['冰箱'])
+    expect(requirementLabelsSatisfiedBy('Shower Enclosure')).toEqual(['淋浴或浴缸'])
+    expect(requirementLabelsSatisfiedBy('装饰画')).toEqual([])
   })
 })
 

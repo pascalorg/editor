@@ -100,6 +100,22 @@ export function findVocabularyOption(term: string): FurnitureOption | null {
   return null
 }
 
+// Which checklist requirements did this (just deleted) item satisfy? Feeds
+// the modify gates' intent exemption: an item removed at the user's explicit
+// request must not resurface as "the AI failed to equip the room" — the gate
+// failure whose requirement this item used to fulfil is waived for that turn.
+export function requirementLabelsSatisfiedBy(itemName: string): string[] {
+  const labels = new Set<string>()
+  for (const requirements of Object.values(CHECKLISTS)) {
+    for (const requirement of requirements) {
+      if (requirement.options.some(option => option.match.test(itemName))) {
+        labels.add(requirement.label)
+      }
+    }
+  }
+  return [...labels]
+}
+
 // Which requirements are NOT satisfied by the given item names.
 export function findMissingFurniture(
   type: RoomType,

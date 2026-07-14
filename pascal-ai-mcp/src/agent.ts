@@ -12,6 +12,7 @@ import {
   roomNamePattern,
   WINDOW_PATTERN,
 } from './lang/room-vocab'
+import { requirementLabelsSatisfiedBy } from './furniture-checklist'
 import { executeFurniturePlan, type FurnitureRoom } from './furniture-executor'
 import {
   executeFurnitureModifyOps,
@@ -976,6 +977,13 @@ export class PascalAiAgent {
     // to the legacy path.
     if (!parsed?.plan || parsed.errors.length > 0) return null
 
+    // §6 三修 gates 归责基线：修改前场景已有的 gate 失败（用户此前手动
+    // 删过的设备等）是继承状态，不是本次修改的账——收尾时只对新增失败
+    // 判 phase（见 effectiveGateFailures）。纯本地 MCP 读取，零模型调用。
+    const baselineGateFailures = (await this.evaluateGates(session)).report.failures
+    const removalsOf = (report: FurnitureModifyReport | null): IntentRemoval[] =>
+      report?.results.flatMap(result => (result.removed ? [result.removed] : [])) ?? []
+
     const furnitureOnly = parsed.plan.ops.every(op =>
       op.op === 'add_furniture' || op.op === 'remove_furniture' || op.op === 'swap_furniture')
     if (furnitureOnly) {
@@ -992,6 +1000,8 @@ export class PascalAiAgent {
       return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
         okDetails: report.results.filter(r => r.ok).map(r => r.detail),
         failedDetails: report.results.filter(r => !r.ok).map(r => r.detail),
+        baselineGateFailures,
+        intentRemovals: removalsOf(report),
       })
     }
 
@@ -1066,6 +1076,7 @@ export class PascalAiAgent {
               }, profile),
               furnitureOps: [],
               appliedNotes: [],
+              baselineGateFailures,
             })
           }
         }
@@ -1116,6 +1127,8 @@ export class PascalAiAgent {
       return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
         okDetails: [...applied.notes, ...(furnReport?.results.filter(r => r.ok).map(r => r.detail) ?? [])],
         failedDetails: furnReport?.results.filter(r => !r.ok).map(r => r.detail) ?? [],
+        baselineGateFailures,
+        intentRemovals: removalsOf(furnReport),
       })
     }
 
@@ -1200,6 +1213,7 @@ export class PascalAiAgent {
       strategy,
       furnitureOps: applied.furnitureOps,
       appliedNotes: applied.notes,
+      baselineGateFailures,
     })
   }
 
@@ -1221,10 +1235,12 @@ export class PascalAiAgent {
     strategy: StrategyDecision
     furnitureOps: FurnitureModifyOp[]
     appliedNotes: string[]
+    baselineGateFailures: GateFailure[]
   }): Promise<Partial<WorkflowGraphState> | null> {
     const {
       session, sceneId, loadedVersion, trace, traceMcp, beforeCall,
       zones, intent, plan, planNotes, strategy, furnitureOps, appliedNotes,
+      baselineGateFailures,
     } = options
     const nodes = snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {})))
     const levelId = Object.entries(nodes).find(([, node]) => node.type === 'level')?.[0] ?? null
@@ -1342,6 +1358,8 @@ export class PascalAiAgent {
         ...replay.executionIssues,
       ],
       previousVersion: loadedVersion,
+      baselineGateFailures,
+      intentRemovals: furnReport?.results.flatMap(result => (result.removed ? [result.removed] : [])) ?? [],
     })
   }
 
@@ -1371,7 +1389,15 @@ export class PascalAiAgent {
     sceneId: string,
     loadedVersion: number | null,
     trace: { toolCounts: Record<string, number> },
-    results: { okDetails: string[]; failedDetails: string[]; previousVersion?: number | null },
+    results: {
+      okDetails: string[]
+      failedDetails: string[]
+      previousVersion?: number | null
+      // §6 三修 gates 归责：修改前的失败基线 + 本次按用户要求删除的家具，
+      // 见 effectiveGateFailures。
+      baselineGateFailures: GateFailure[]
+      intentRemovals?: IntentRemoval[]
+    },
   ): Promise<Partial<WorkflowGraphState>> {
     const diagnostics = await this.collectDiagnostics(session)
     const sceneVersion = await this.persistScene(
@@ -1381,6 +1407,11 @@ export class PascalAiAgent {
       loadedVersion,
     )
     const gates = await this.evaluateGates(session)
+    const { effective, waived } = effectiveGateFailures(
+      gates.report.failures,
+      results.baselineGateFailures,
+      results.intentRemovals ?? [],
+    )
     // Failed ops surface through the furniture-issue channel; successful op
     // details ride the reply below (zh internal strings, same policy as the
     // executor reports).
@@ -1402,10 +1433,10 @@ export class PascalAiAgent {
       repairRounds: 0,
       remainingIssueCount,
       modelCallsUsed: (session.toolTrace ?? []).reduce((sum, entry) => sum + entry.modelCalls, 0),
-      gateFailures: gates.report.failures.map(failure => failure.message),
+      gateFailures: effective.map(failure => failure.message),
       layoutQuality: gates.layoutQuality,
     }
-    session.phase = remainingIssueCount === 0 && gates.report.passed
+    session.phase = remainingIssueCount === 0 && effective.length === 0
       ? 'completed'
       : 'completed_with_issues'
     delete session.pendingModification
@@ -1417,15 +1448,20 @@ export class PascalAiAgent {
       diagnostics,
       toolNamesUsed: new Set(Object.keys(trace.toolCounts)),
       furnitureIssues,
-      gateFailures: gates.report.failures,
+      gateFailures: effective,
     })
     const okDetails = results.okDetails.map(detail => `- ${detail}`)
+    // Waived failures (pre-existing or user-requested removals) surface as
+    // one neutral line — visible, but never re-litigated as this turn's fault.
+    const waivedNote = waived.length > 0
+      ? [t(session.language, 'modifyGatesWaived', { count: waived.length })]
+      : []
     // §6 版本安全: the pre-change version rides the reply so the user can
     // roll a structural rebuild back through the store's version history.
     const versionNote = typeof results.previousVersion === 'number'
       ? [t(session.language, 'modifyPreviousVersion', { version: results.previousVersion })]
       : []
-    const reply = [base, ...okDetails, ...versionNote].join('\n')
+    const reply = [base, ...okDetails, ...waivedNote, ...versionNote].join('\n')
     session.messages.push({ role: 'assistant', content: reply })
     return { session, reply, next: 'finish' }
   }
@@ -2571,6 +2607,45 @@ export function gateTargetsForSession(
  * misses), while the extraction prompt pins dimensions under stable keys.
  * Prose parsing over the summary stays as the fallback.
  */
+// 修改路径的 gates 归责语义（MODIFY_REDESIGN §6 三修，用户实测反馈驱动）：
+// gates 的职责是兜住「AI 本次做砸的、且用户没要求的」，不是对用户自己的
+// 决定做规范审计。两层过滤：
+// ① 基线差分——修改前就存在的失败（比如用户此前手动删光了厨房家具）不算
+//   本次修改的账，否则之后每一轮无关修改都会重复追责一次；
+// ② 意图豁免——本次 ops 里用户明确要求删除的家具，其对应的 missing-
+//   equipment/furniture 新失败同样不计（「把灶台删掉」执行成功却报
+//   「厨房缺少灶台」，是把执行成功误判成失败）。
+// 被滤掉的失败降级为一句不影响 phase 的中性备注。生成路径（全新建）没有
+// 基线也没有删除意图，仍然全量跑，安全网不受影响。
+export type IntentRemoval = { roomName: string; itemName: string }
+
+export function effectiveGateFailures(
+  failures: GateFailure[],
+  baseline: GateFailure[],
+  removals: IntentRemoval[],
+): { effective: GateFailure[]; waived: GateFailure[] } {
+  const baselineKeys = new Set(baseline.map(failure => failure.message))
+  const removalCovers = (failure: GateFailure): boolean => {
+    const l10n = failure.l10n
+    if (!l10n || (l10n.id !== 'gateMissingEquipment' && l10n.id !== 'gateMissingBedroomFurniture')) return false
+    const room = String(l10n.params.room ?? '')
+    const label = String(l10n.params.label ?? '')
+    // Room matching is bidirectional-substring, same posture as the eval
+    // assertions: op.room is user wording（「厨房」）, the gate's room is the
+    // zone label（「厨房」or「开放式厨房」）.
+    return removals.some(removal =>
+      room.length > 0 && removal.roomName.length > 0 &&
+      (room.includes(removal.roomName) || removal.roomName.includes(room)) &&
+      requirementLabelsSatisfiedBy(removal.itemName).includes(label))
+  }
+  const effective: GateFailure[] = []
+  const waived: GateFailure[] = []
+  for (const failure of failures) {
+    (baselineKeys.has(failure.message) || removalCovers(failure) ? waived : effective).push(failure)
+  }
+  return { effective, waived }
+}
+
 // P0（case-06 复盘二修）：抽取模型（temp=1）会偶发丢掉用户口述的地块尺寸
 // （「宽 5 米、长 18 米」→ brief 里只剩 plot_shape），prompt 补丁治标不治本。
 // ingest 后对用户原话跑确定性提取；brief 里没有任何可解析出尺寸的事实时，

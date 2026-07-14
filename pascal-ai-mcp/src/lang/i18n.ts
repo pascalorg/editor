@@ -95,6 +95,11 @@ export const MESSAGES = {
     () => '補足：このシーンにはプランのスナップショットがない（旧版で生成）ため、今回の修正は互換パスで実行されました。',
     () => 'Note: this scene has no plan snapshot (generated before plan-first), so this change ran through the compatibility path.',
   ),
+  modifyGatesWaived: def<{ count: number }>(
+    p => `另有 ${p.count} 项完成度提示与本次修改无关（此前已存在，或是按你的要求删除所致），未计入本次结果。`,
+    p => `このほか ${p.count} 件の完成度に関する指摘は今回の修正とは無関係のため（以前から存在していたか、ご要望による削除の結果）、今回の判定には含めていません。`,
+    p => `${p.count} other completion note(s) are unrelated to this change (pre-existing, or the result of removals you requested) and were not counted against it.`,
+  ),
   modifyPreviousVersion: def<{ version: number }>(
     p => `修改前的场景版本为 v${p.version}，如需回滚可恢复该版本。`,
     p => `修正前のシーンバージョンは v${p.version} です。必要であればこのバージョンに戻せます。`,
