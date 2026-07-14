@@ -99,12 +99,38 @@ export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
 }
 
+// Escape's fall-through when no tool consumed the cancel: drop back to the
+// select tool (keeping building/level context) and close panels. Tools like
+// preset/item placement rely on this — they pass no coordinator onCancel, and
+// it is the mode switch unmounting them that destroys the draft.
+const exitToSelectAfterUnconsumedCancel = () => {
+  const currentPhase = useEditor.getState().phase
+  const currentStructureLayer = useEditor.getState().structureLayer
+
+  useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
+
+  // From zone mode, return to structure select
+  if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
+    useEditor.getState().setStructureLayer('elements')
+    useEditor.getState().setMode('select')
+  } else {
+    // Return to the default select tool while keeping the active building/level context.
+    useEditor.getState().setMode('select')
+  }
+
+  useEditor.getState().setFloorplanSelectionTool('click')
+
+  // Clear selections to close UI panels, but KEEP the active building and level context.
+  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+  useEditor.getState().setSelectedReferenceId(null)
+}
+
 // ⌘Z pressed mid-interaction (moving a node, drawing a wall, mid-placement…)
-// reads as "abort this action", not history undo — route it through the same
-// cancel path as Escape and report whether anything was in flight so the
-// undo/redo arms know to skip the history jump. Pointer drags that only
-// listen for their own capture-phase keydown never reach here — they
-// stopPropagation first (see isHistoryShortcut call sites).
+// reads as "abort this action", not history undo — behave exactly like Escape
+// and report whether anything was in flight so the undo/redo arms know to
+// skip the history jump. Pointer drags that only listen for their own
+// capture-phase keydown never reach here — they stopPropagation first (see
+// isHistoryShortcut call sites).
 const cancelInteractionForHistoryShortcut = () => {
   if (useEditor.getState().referenceScaleActiveGuideId) {
     guideEmitter.emit('guide:cancel-reference-scale')
@@ -112,8 +138,8 @@ const cancelInteractionForHistoryShortcut = () => {
   }
   _toolCancelConsumed = false
   emitter.emit('tool:cancel')
-  return (
-    _toolCancelConsumed ||
+  if (_toolCancelConsumed) return true
+  if (
     isActive(useInteractionScope.getState().scope) ||
     useViewer.getState().inputDragging ||
     // Paused history means a gesture session is live (draft placement, adopted
@@ -121,7 +147,14 @@ const cancelInteractionForHistoryShortcut = () => {
     // cycle keeps temporal paused for the whole session, and a history jump
     // against a paused store would land on a stale baseline anyway.
     !useScene.temporal.getState().isTracking
-  )
+  ) {
+    // A gesture is live but nothing consumed the cancel: finish it the way
+    // Escape does — the mode switch is what actually cancels tools that hook
+    // their teardown to unmount (preset/item placement).
+    exitToSelectAfterUnconsumedCancel()
+    return true
+  }
+  return false
 }
 
 export const useKeyboard = ({
@@ -259,27 +292,7 @@ export const useKeyboard = ({
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         if (!_toolCancelConsumed) {
-          const currentPhase = useEditor.getState().phase
-          const currentStructureLayer = useEditor.getState().structureLayer
-
-          useInteractionScope
-            .getState()
-            .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
-
-          // From zone mode, return to structure select
-          if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
-            useEditor.getState().setStructureLayer('elements')
-            useEditor.getState().setMode('select')
-          } else {
-            // Return to the default select tool while keeping the active building/level context.
-            useEditor.getState().setMode('select')
-          }
-
-          useEditor.getState().setFloorplanSelectionTool('click')
-
-          // Clear selections to close UI panels, but KEEP the active building and level context.
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-          useEditor.getState().setSelectedReferenceId(null)
+          exitToSelectAfterUnconsumedCancel()
         }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
