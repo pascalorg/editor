@@ -56,7 +56,7 @@ export const StairNode = BaseNode.extend({
   railingMode: StairRailingMode.default('none'),
   railingHeight: z.number().default(0.92),
   // Child stair segment IDs
-  children: z.array(StairSegmentNode.shape.id).default([]),
+  children: z.array(z.union([StairSegmentNode.shape.id, objectId('measurement')])).default([]),
 }).describe(
   dedent`
   Stair node - a container for stair segments.

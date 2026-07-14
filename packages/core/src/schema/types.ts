@@ -22,6 +22,7 @@ import { ItemNode } from './nodes/item'
 import { LevelNode } from './nodes/level'
 import { LinesetNode } from './nodes/lineset'
 import { LiquidLineNode } from './nodes/liquid-line'
+import { MeasurementNode } from './nodes/measurement'
 import { PipeFittingNode } from './nodes/pipe-fitting'
 import { PipeSegmentNode } from './nodes/pipe-segment'
 import { PipeTrapNode } from './nodes/pipe-trap'
@@ -83,6 +84,7 @@ export const AnyNode = z.discriminatedUnion('type', [
   HvacEquipmentNode,
   LinesetNode,
   LiquidLineNode,
+  MeasurementNode,
   PipeSegmentNode,
   PipeFittingNode,
   PipeTrapNode,

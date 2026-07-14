@@ -68,6 +68,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const showMeasurements = useEditor((state) => state.showMeasurements)
   const movingNode = useMovingNode()
   const movingNodeOrigin = useEditor((state) => state.movingNodeOrigin)
   const endpointReshape = useEndpointReshape()
@@ -335,10 +336,11 @@ export const ToolManager: React.FC = () => {
             onPlaced={handlePlacedElevatorSelected}
           />
         )}
-        {!movingNode && showBuildTool && tool === 'measurement' ? (
+        {showMeasurements || (!movingNode && showBuildTool && tool === 'measurement') ? (
           <MeasurementTool
             appearance={appearance}
             buildingId={(buildingId as AnyNodeId | null) ?? null}
+            interactive={!movingNode && showBuildTool && tool === 'measurement'}
             unit={unit}
           />
         ) : null}

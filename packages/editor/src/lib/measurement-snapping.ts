@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import type {
   MeasurementPoint,
+  MeasurementPointAttachment,
   MeasurementSegment,
   MeasurementSnapKind,
   MeasurementSnapSettings,
@@ -16,6 +17,7 @@ import type {
 } from '../store/use-measurement-tool'
 
 export type MeasurementSnapAnchor = {
+  attachment?: MeasurementPointAttachment
   kind?: MeasurementSnapKind
   label: string
   point: MeasurementPoint
@@ -27,6 +29,7 @@ export type MeasurementSnapAnchor = {
 }
 
 export type MeasurementSnapSegment = {
+  attachment?: MeasurementPointAttachment
   kind?: MeasurementSnapKind
   label: string
   sourceId?: string
@@ -134,7 +137,7 @@ function projectPointToPlanSegment(
   point: MeasurementPoint,
   start: MeasurementPoint,
   end: MeasurementPoint,
-): MeasurementPoint | null {
+): { point: MeasurementPoint; t: number } | null {
   const dx = end[0] - start[0]
   const dz = end[2] - start[2]
   const lengthSq = dx * dx + dz * dz
@@ -143,7 +146,10 @@ function projectPointToPlanSegment(
     1,
     Math.max(0, ((point[0] - start[0]) * dx + (point[2] - start[2]) * dz) / lengthSq),
   )
-  return [start[0] + dx * t, start[1] + (end[1] - start[1]) * t, start[2] + dz * t]
+  return {
+    point: [start[0] + dx * t, start[1] + (end[1] - start[1]) * t, start[2] + dz * t],
+    t,
+  }
 }
 
 function addPolygonGeometry(
@@ -500,15 +506,9 @@ export function collectPlanMeasurementSnapGeometry(
   >
 
   for (const node of nodes) {
-    const measurement = nodeRegistry.get(node.type)?.measurement
-    const contributed = measurement?.snapGeometry?.(
-      node as never,
-      measurementGeometryContext(node, nodesById),
-    )
-    if (contributed && addDefinitionSnapGeometry(geometry, contributed)) continue
-    if (addGenericPolygonGeometry(geometry, node)) continue
-    if (addPathGeometry(geometry, node)) continue
-    addAlignmentAnchorGeometry(geometry, node, nodesById)
+    const contribution = collectNodePlanMeasurementSnapGeometry(node, nodesById)
+    geometry.anchors.push(...contribution.anchors)
+    geometry.segments.push(...contribution.segments)
   }
 
   for (let i = 0; i < geometry.segments.length; i += 1) {
@@ -520,6 +520,40 @@ export function collectPlanMeasurementSnapGeometry(
   }
 
   return geometry
+}
+
+export function collectNodePlanMeasurementSnapGeometry(
+  node: AnyNode,
+  nodesById: Readonly<Record<string, AnyNode>>,
+): MeasurementSnapGeometry {
+  const geometry: MeasurementSnapGeometry = { anchors: [], segments: [] }
+  const measurement = nodeRegistry.get(node.type)?.measurement
+  const contributed = measurement?.snapGeometry?.(
+    node as never,
+    measurementGeometryContext(node, nodesById),
+  )
+  if (!(contributed && addDefinitionSnapGeometry(geometry, contributed))) {
+    if (!addGenericPolygonGeometry(geometry, node) && !addPathGeometry(geometry, node)) {
+      addAlignmentAnchorGeometry(geometry, node, nodesById)
+    }
+  }
+
+  return {
+    anchors: geometry.anchors.map((anchor, index) => ({
+      ...anchor,
+      attachment: {
+        feature: { index, kind: 'plan-anchor' },
+        nodeId: node.id,
+      },
+    })),
+    segments: geometry.segments.map((segment, index) => ({
+      ...segment,
+      attachment: {
+        feature: { index, kind: 'plan-segment', t: 0 },
+        nodeId: node.id,
+      },
+    })),
+  }
 }
 
 export function collectCommittedMeasurementSnapGeometry(
@@ -606,9 +640,18 @@ export function resolvePlanMeasurementSnap(
     const projection = projectPointToPlanSegment(point, segment.start, segment.end)
     if (!projection) continue
     consider({
+      attachment: segment.attachment
+        ? {
+            ...segment.attachment,
+            feature:
+              segment.attachment.feature.kind === 'plan-segment'
+                ? { ...segment.attachment.feature, t: projection.t }
+                : segment.attachment.feature,
+          }
+        : undefined,
       kind: segment.kind,
       label: segment.label,
-      point: projection,
+      point: projection.point,
       priority: segment.priority,
       targetLine: {
         end: segment.end,
@@ -634,6 +677,7 @@ export function resolvePlanMeasurementSnap(
     target: closest
       ? {
           kind: closest.kind ?? measurementSnapKindFromLabel(closest.label),
+          attachment: closest.attachment,
           label: closest.label,
           point: closest.point,
           targetLine: closest.targetLine,
@@ -725,7 +769,7 @@ export function resolvePlanMeasurementConstraint(
     const segmentKind = segment.kind ?? measurementSnapKindFromLabel(segment.label)
     if (!isMeasurementSnapKindEnabled(segmentKind, options.enabledSnapKinds)) continue
 
-    const hostPoint = projectPointToPlanSegment(start, segment.start, segment.end)
+    const hostPoint = projectPointToPlanSegment(start, segment.start, segment.end)?.point
     if (!hostPoint || planDistanceSq(start, hostPoint) > maxDistanceSq) continue
 
     const segmentDx = segment.end[0] - segment.start[0]

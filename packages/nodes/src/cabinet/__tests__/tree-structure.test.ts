@@ -25,6 +25,54 @@ function treeContainsDescendant(
 }
 
 describe('cabinet tree structure', () => {
+  test('preserves measurement children on cabinet runs and modules', () => {
+    const run = {
+      ...CabinetNode.parse({
+        id: 'cabinet_measurement-tree-run',
+        parentId: 'level_measurement_tree' as AnyNodeId,
+      }),
+      children: ['cabinet-module_measurement-tree-module', 'measurement_run'],
+    }
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_measurement-tree-module',
+      parentId: run.id,
+      children: ['measurement_module'],
+    })
+    const runMeasurement = {
+      id: 'measurement_run',
+      type: 'measurement',
+      object: 'node',
+      parentId: run.id,
+      visible: true,
+      metadata: {},
+      measurementId: 'measurement-run',
+      start: [0, 0, 0],
+      end: [1, 0, 0],
+      view: '3d',
+    } as AnyNode
+    const moduleMeasurement = {
+      id: 'measurement_module',
+      type: 'measurement',
+      object: 'node',
+      parentId: module.id,
+      visible: true,
+      metadata: {},
+      measurementId: 'measurement-module',
+      start: [0, 0, 0],
+      end: [1, 0, 0],
+      view: '3d',
+    } as AnyNode
+    const nodes = {
+      [run.id]: run,
+      [module.id]: module,
+      [runMeasurement.id]: runMeasurement,
+      [moduleMeasurement.id]: moduleMeasurement,
+    } as Record<AnyNodeId, AnyNode>
+
+    expect(treeChildIds(run.id, nodes)).toEqual([module.id, runMeasurement.id])
+    expect(treeChildIds(module.id, nodes)).toEqual([moduleMeasurement.id])
+  })
+
   test('flattens hidden corner runs from the real scene graph into the requested sidebar hierarchy', () => {
     const sourceRun = {
       ...CabinetNode.parse({

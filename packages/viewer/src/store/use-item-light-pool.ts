@@ -1,4 +1,4 @@
-import type { AnyNodeId, Interactive, LightEffect, SliderControl } from '@pascal-app/core'
+import type { AnyNodeId, Control, Interactive, LightEffect, SliderControl } from '@pascal-app/core'
 import { create } from 'zustand'
 
 export type LightRegistration = {
@@ -21,8 +21,12 @@ export const useItemLightPool = create<ItemLightPoolStore>((set) => ({
   registrations: new Map(),
 
   register: (key, nodeId, effect, interactive) => {
-    const toggleIndex = interactive.controls.findIndex((c) => c.kind === 'toggle')
-    const sliderIndex = interactive.controls.findIndex((c) => c.kind === 'slider')
+    const toggleIndex = interactive.controls.findIndex(
+      (control: Control) => control.kind === 'toggle',
+    )
+    const sliderIndex = interactive.controls.findIndex(
+      (control: Control) => control.kind === 'slider',
+    )
     const sliderControl =
       sliderIndex >= 0 ? (interactive.controls[sliderIndex] as SliderControl) : null
 

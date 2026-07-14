@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
-import { type AnyNode, useScene } from '@pascal-app/core'
+import { AnyNode, ItemNode, useScene } from '@pascal-app/core'
 import { registerMeasurementTestNodes } from '../lib/register-measurement-test-nodes'
 import {
   axisLockedMeasurementPoint,
@@ -86,6 +86,208 @@ describe('useMeasurementTool', () => {
     expect(state.selectedId).toBe(state.segments[0]?.id ?? null)
   })
 
+  test('parents attached linear measurements to the snapped mesh', () => {
+    useScene.setState({
+      nodes: {
+        level_measurement: {
+          id: 'level_measurement',
+          type: 'level',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: ['item_measurement'],
+          level: 0,
+        } as never,
+        item_measurement: ItemNode.parse({
+          id: 'item_measurement',
+          parentId: 'level_measurement',
+          asset: {
+            id: 'asset_measurement',
+            category: 'furniture',
+            name: 'Measured item',
+            thumbnail: '/item.webp',
+            src: '/item.glb',
+          },
+        }),
+      },
+      rootNodeIds: ['level_measurement' as never],
+    })
+
+    useMeasurementTool
+      .getState()
+      .addSegment(
+        '3d',
+        [0, 0, 0],
+        [1, 0, 0],
+        undefined,
+        { feature: { kind: 'node-bounds', normalized: [0, 0, 0] }, nodeId: 'item_measurement' },
+        { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_measurement' },
+      )
+
+    const segment = useMeasurementTool.getState().segments[0]!
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      measurementId: segment.id,
+      parentId: 'item_measurement',
+      startAttachment: { nodeId: 'item_measurement' },
+      endAttachment: { nodeId: 'item_measurement' },
+    })
+    expect(sceneNode).toBeDefined()
+    expect(
+      (useScene.getState().nodes.item_measurement as { children: string[] }).children,
+    ).toContain(sceneNode!.id)
+    expect(AnyNode.safeParse(useScene.getState().nodes.item_measurement).success).toBe(true)
+  })
+
+  test('creates the item child list when an attached measurement is parented to an unparsed item', () => {
+    useScene.setState({
+      nodes: {
+        item_measurement: {
+          id: 'item_measurement',
+          type: 'item',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          asset: {
+            id: 'asset_measurement',
+            category: 'furniture',
+            name: 'Measured item',
+            thumbnail: '/item.webp',
+            src: '/item.glb',
+          },
+        } as never,
+      },
+      rootNodeIds: ['item_measurement' as never],
+    })
+
+    useMeasurementTool
+      .getState()
+      .addSegment(
+        '3d',
+        [0, 0, 0],
+        [1, 0, 0],
+        undefined,
+        { feature: { kind: 'node-bounds', normalized: [0, 0, 0] }, nodeId: 'item_measurement' },
+        { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_measurement' },
+      )
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode?.parentId).toBe('item_measurement')
+    expect(
+      (useScene.getState().nodes.item_measurement as { children?: string[] }).children,
+    ).toContain(sceneNode!.id)
+    expect(AnyNode.safeParse(useScene.getState().nodes.item_measurement).success).toBe(true)
+  })
+
+  test('adds unattached linear measurements at the scene root', () => {
+    useMeasurementTool.getState().addSegment('3d', [0, 0, 0], [1, 0, 0])
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({ parentId: null })
+    expect(sceneNode).toBeDefined()
+    expect(useScene.getState().rootNodeIds).toContain(sceneNode!.id)
+  })
+
+  test('uses the start attachment as owner when endpoints attach to different meshes', () => {
+    useScene.setState({
+      nodes: {
+        item_start: {
+          id: 'item_start',
+          type: 'item',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: [],
+        } as never,
+        item_end: {
+          id: 'item_end',
+          type: 'item',
+          object: 'node',
+          parentId: null,
+          visible: true,
+          metadata: {},
+          children: [],
+        } as never,
+      },
+      rootNodeIds: ['item_start' as never, 'item_end' as never],
+    })
+
+    useMeasurementTool
+      .getState()
+      .addSegment(
+        '3d',
+        [0, 0, 0],
+        [1, 0, 0],
+        undefined,
+        { feature: { kind: 'node-bounds', normalized: [0, 0, 0] }, nodeId: 'item_start' },
+        { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_end' },
+      )
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode?.parentId).toBe('item_start')
+  })
+
+  test('parents attached measurements under non-item scene nodes automatically', () => {
+    useScene.setState({
+      nodes: {
+        sseg_measured_segment: {
+          attachmentSide: 'front',
+          children: [],
+          fillToFloor: true,
+          height: 2.5,
+          id: 'sseg_measured_segment',
+          length: 3,
+          metadata: {},
+          object: 'node',
+          parentId: null,
+          position: [0, 0, 0],
+          rotation: 0,
+          segmentType: 'stair',
+          stepCount: 10,
+          thickness: 0.25,
+          type: 'stair-segment',
+          visible: true,
+          width: 1,
+        } as never,
+      },
+      rootNodeIds: ['sseg_measured_segment' as never],
+    })
+
+    useMeasurementTool.getState().addSegment(
+      '3d',
+      [0, 0, 0],
+      [1, 0, 0],
+      undefined,
+      {
+        feature: { kind: 'node-bounds', normalized: [0, 0, 0] },
+        nodeId: 'sseg_measured_segment',
+      },
+      {
+        feature: { kind: 'node-bounds', normalized: [1, 0, 0] },
+        nodeId: 'sseg_measured_segment',
+      },
+    )
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    const parent = useScene.getState().nodes.sseg_measured_segment as { children?: string[] }
+    expect(sceneNode?.parentId).toBe('sseg_measured_segment')
+    expect(parent.children).toContain(sceneNode!.id)
+    expect(AnyNode.safeParse(useScene.getState().nodes.sseg_measured_segment).success).toBe(true)
+  })
+
   test('continuous distance mode starts the next segment from the committed endpoint', () => {
     const measurement = useMeasurementTool.getState()
     measurement.setContinuousMeasurement(true)
@@ -160,6 +362,25 @@ describe('useMeasurementTool', () => {
     expect(distanceBetweenMeasurements(second!.start, second!.end)).toBeCloseTo(Math.sqrt(13))
   })
 
+  test('does not publish a segment endpoint update when the drag state is unchanged', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('3d', [0, 0, 0], [2, 0, 0], 2)
+    const segmentId = useMeasurementTool.getState().segments[0]!.id
+
+    measurement.startSegmentEndpointDrag(segmentId, 'end')
+    measurement.updateSegmentEndpoint(segmentId, 'end', [3, 0, 0])
+
+    let publishCount = 0
+    const unsubscribe = useMeasurementTool.subscribe(() => {
+      publishCount += 1
+    })
+
+    measurement.updateSegmentEndpoint(segmentId, 'end', [3, 0, 0])
+
+    unsubscribe()
+    expect(publishCount).toBe(0)
+  })
+
   test('Alt detaches a linked endpoint and release-time Alt state decides the final link', () => {
     const measurement = useMeasurementTool.getState()
     measurement.addSegment('2d', [0, 0, 0], [2, 0, 0], 2)
@@ -197,6 +418,34 @@ describe('useMeasurementTool', () => {
       measuredDistanceMeters: 3,
       start: [2, 0, 0],
     })
+  })
+
+  test('moves linked endpoint attachments together and restores them when Alt detaches', () => {
+    const measurement = useMeasurementTool.getState()
+    const originalAttachment = {
+      feature: { index: 0, kind: 'plan-anchor' as const },
+      nodeId: 'original-node',
+    }
+    const nextAttachment = {
+      feature: { index: 2, kind: 'plan-anchor' as const },
+      nodeId: 'next-node',
+    }
+    measurement.addSegment('2d', [0, 0, 0], [2, 0, 0], 2, undefined, originalAttachment)
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('2d', [2, 0, 0], [2, 0, 3], 3, originalAttachment, undefined)
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    measurement.updateSegmentEndpoint(firstId, 'end', [4, 0, 0], false, nextAttachment)
+    expect(useMeasurementTool.getState().segments).toMatchObject([
+      { endAttachment: nextAttachment },
+      { startAttachment: nextAttachment },
+    ])
+
+    measurement.updateSegmentEndpoint(firstId, 'end', [5, 0, 0], true, null)
+    expect(useMeasurementTool.getState().segments).toMatchObject([
+      { endAttachment: undefined },
+      { startAttachment: originalAttachment },
+    ])
   })
 
   test('does not link measurement endpoints separated by elevation', () => {
@@ -477,7 +726,11 @@ describe('useMeasurementTool', () => {
 
   test('serializes and hydrates committed measurements without transient draft state', () => {
     const measurement = useMeasurementTool.getState()
-    measurement.addSegment('2d', [0, 0, 0], [1, 0, 0])
+    const startAttachment = {
+      feature: { index: 1, kind: 'plan-anchor' as const },
+      nodeId: 'persisted-node',
+    }
+    measurement.addSegment('2d', [0, 0, 0], [1, 0, 0], undefined, startAttachment)
     measurement.addArea('3d', [0.5, 0, 0.5], 6, [
       [0, 0, 0],
       [1, 0, 0],
@@ -504,6 +757,7 @@ describe('useMeasurementTool', () => {
       segments: persisted.segments,
     })
     expect(useMeasurementTool.getState().angles).toEqual(persisted.angles)
+    expect(useMeasurementTool.getState().segments[0]?.startAttachment).toEqual(startAttachment)
   })
 
   test('hydrates legacy surface perimeters with display boundary points', () => {

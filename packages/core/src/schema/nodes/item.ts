@@ -130,7 +130,7 @@ export const ItemNode = BaseNode.extend({
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   scale: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]),
   side: z.enum(['front', 'back']).optional(),
-  children: z.array(objectId('item')).default([]),
+  children: z.array(z.union([objectId('item'), objectId('measurement')])).default([]),
 
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),

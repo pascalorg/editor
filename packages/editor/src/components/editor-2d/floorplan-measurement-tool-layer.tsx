@@ -16,6 +16,11 @@ import { type PointerEvent, useEffect, useMemo } from 'react'
 import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { getRotatedRectanglePolygon } from '../../lib/floorplan/geometry'
 import {
+  createPlanMeasurementAttachment,
+  getResolvedMeasurementSegments,
+  useResolvedMeasurementSegments,
+} from '../../lib/measurement-attachments'
+import {
   collectCommittedMeasurementSnapGeometry,
   collectPlanMeasurementSnapGeometry,
   mergeMeasurementSnapGeometry,
@@ -29,6 +34,7 @@ import {
   formatLinearMeasurement,
   type LinearUnit,
 } from '../../lib/measurements'
+import useEditor from '../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import useInteractionScope from '../../store/use-interaction-scope'
 import {
@@ -366,7 +372,7 @@ function resolveFloorplanMeasurementSnap(
     point,
     mergeMeasurementSnapGeometry(
       collectPlanMeasurementSnapGeometry(nodes),
-      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments),
+      collectCommittedMeasurementSnapGeometry(getResolvedMeasurementSegments()),
     ),
     {
       enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
@@ -388,7 +394,7 @@ function resolveFloorplanMeasurementConstraint(
     point,
     mergeMeasurementSnapGeometry(
       collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
-      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments),
+      collectCommittedMeasurementSnapGeometry(getResolvedMeasurementSegments()),
     ),
     {
       enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
@@ -577,9 +583,20 @@ export function handleFloorplanMeasurementNodeClick2D(
   if (!quickMeasure) return false
   const segment = directLengthSegmentFromNode(node, options.cursorPoint ?? null)
   if (!segment) return false
+  const tracksEndpointDistance =
+    Math.abs(
+      distanceBetweenMeasurements(segment.start, segment.end) - segment.measuredDistanceMeters,
+    ) < 1e-4
   useMeasurementTool
     .getState()
-    .addSegment('2d', segment.start, segment.end, segment.measuredDistanceMeters)
+    .addSegment(
+      '2d',
+      segment.start,
+      segment.end,
+      segment.measuredDistanceMeters,
+      tracksEndpointDistance ? createPlanMeasurementAttachment(node.id, segment.start) : undefined,
+      tracksEndpointDistance ? createPlanMeasurementAttachment(node.id, segment.end) : undefined,
+    )
   return true
 }
 
@@ -792,7 +809,7 @@ function AngleMeasurementLabel({
   angle: MeasurementAngle
   displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
-  onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
+  onPointerDown?: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
   sceneRotationDeg: number
   unitsPerPixel: number
@@ -811,9 +828,9 @@ function AngleMeasurementLabel({
   return (
     <g
       className="floorplan-measurement-tool"
-      onPointerDown={(event) => onPointerDown(angle.id, event)}
-      pointerEvents="auto"
-      style={{ cursor: 'pointer', userSelect: 'none' }}
+      onPointerDown={onPointerDown ? (event) => onPointerDown(angle.id, event) : undefined}
+      pointerEvents={onPointerDown ? 'auto' : 'none'}
+      style={{ cursor: onPointerDown ? 'pointer' : undefined, userSelect: 'none' }}
     >
       <line
         stroke={palette.measurementStroke}
@@ -886,7 +903,7 @@ function AreaMeasurementLabel({
   area: MeasurementArea
   displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
-  onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
+  onPointerDown?: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
   sceneRotationDeg: number
   unit: LinearUnit
@@ -898,9 +915,13 @@ function AreaMeasurementLabel({
   return (
     <g
       className="floorplan-measurement-tool"
-      onPointerDown={(event) => onPointerDown(area.id, event)}
-      pointerEvents="auto"
-      style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0.4, userSelect: 'none' }}
+      onPointerDown={onPointerDown ? (event) => onPointerDown(area.id, event) : undefined}
+      pointerEvents={onPointerDown ? 'auto' : 'none'}
+      style={{
+        cursor: onPointerDown ? 'pointer' : undefined,
+        opacity: isSelected ? 1 : 0.4,
+        userSelect: 'none',
+      }}
     >
       {boundaryPoints && boundaryPoints.length >= 3 ? (
         <AreaMeasurementBoundary2D
@@ -962,7 +983,7 @@ function PerimeterMeasurementLabel({
 }: {
   displayPrecision: MeasurementDisplayPrecision
   isSelected: boolean
-  onPointerDown: (id: string, event: PointerEvent<SVGGElement>) => void
+  onPointerDown?: (id: string, event: PointerEvent<SVGGElement>) => void
   palette: FloorplanMeasurementToolLayerProps['palette']
   perimeter: MeasurementPerimeter
   sceneRotationDeg: number
@@ -978,9 +999,13 @@ function PerimeterMeasurementLabel({
   return (
     <g
       className="floorplan-measurement-tool"
-      onPointerDown={(event) => onPointerDown(perimeter.id, event)}
-      pointerEvents="auto"
-      style={{ cursor: 'pointer', opacity: isSelected ? 1 : 0.4, userSelect: 'none' }}
+      onPointerDown={onPointerDown ? (event) => onPointerDown(perimeter.id, event) : undefined}
+      pointerEvents={onPointerDown ? 'auto' : 'none'}
+      style={{
+        cursor: onPointerDown ? 'pointer' : undefined,
+        opacity: isSelected ? 1 : 0.4,
+        userSelect: 'none',
+      }}
     >
       {displayBoundaryPoints ? (
         <AreaMeasurementBoundary2D
@@ -1253,7 +1278,7 @@ function resolveFloorplanEditablePoint(event: GridEvent): {
   const drag = measurement.draggingSegmentEndpoint
   if (!drag) return snap
 
-  const segment = measurement.segments.find((entry) => entry.id === drag.id)
+  const segment = getResolvedMeasurementSegments().find((entry) => entry.id === drag.id)
   const anchor =
     drag.endpoint === 'start'
       ? (segment?.end ?? null)
@@ -1342,6 +1367,7 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (resolved.target?.attachment ?? null),
     )
     measurement.setSnapTarget(resolved.target)
     setMeasurementCursorPoint(resolved.point)
@@ -1382,6 +1408,7 @@ export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (resolved.target?.attachment ?? null),
     )
     measurement.setSnapTarget(resolved.target)
     setMeasurementCursorPoint(resolved.point)
@@ -1407,9 +1434,9 @@ export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
   if (handlePolygonGridClick2D(point)) return
   if (measurement.mode !== 'distance') return
   if (measurement.draft) {
-    measurement.commit(point)
+    measurement.commit(point, undefined, target?.attachment)
   } else {
-    measurement.begin('2d', point)
+    measurement.begin('2d', point, undefined, target?.attachment)
   }
 }
 
@@ -1419,8 +1446,10 @@ export function FloorplanMeasurementToolLayer({
   sceneRotationDeg,
   unit,
 }: FloorplanMeasurementToolLayerProps) {
+  const showMeasurements = useEditor((state) => state.showMeasurements)
   const renderContext = useFloorplanRender()
-  const segments = useMeasurementTool((state) => state.segments)
+  const storedSegments = useMeasurementTool((state) => state.segments)
+  const segments = useResolvedMeasurementSegments(storedSegments)
   const areas = useMeasurementTool((state) => state.areas)
   const perimeters = useMeasurementTool((state) => state.perimeters)
   const angles = useMeasurementTool((state) => state.angles)
@@ -1439,6 +1468,8 @@ export function FloorplanMeasurementToolLayer({
     ...palette,
     measurementStroke: FLOORPLAN_MEASUREMENT_COLOR,
   }
+  const showPersistedMeasurements = active || showMeasurements
+  const displaySelectedId = active ? selectedId : null
 
   useEffect(() => {
     if (!active) return
@@ -1520,26 +1551,38 @@ export function FloorplanMeasurementToolLayer({
   }, [active])
 
   const measurements = useMemo(() => {
-    if (!active) return []
+    if (!showPersistedMeasurements) return []
     const overlays = [
-      ...segments,
-      ...(draft?.view === '2d' && draft.end
+      ...(showPersistedMeasurements ? segments : []),
+      ...(active && draft?.view === '2d' && draft.end
         ? [{ id: 'measurement-draft', start: draft.start, end: draft.end }]
         : []),
-      ...(!draft && previewSegment?.view === '2d' ? [previewSegment] : []),
+      ...(active && !draft && previewSegment?.view === '2d' ? [previewSegment] : []),
     ]
-      .map((segment) => toOverlay(segment, unit, selectedId, displayPrecision, unitsPerPixel))
+      .map((segment) =>
+        toOverlay(segment, unit, displaySelectedId, displayPrecision, unitsPerPixel),
+      )
       .filter((measurement): measurement is NonNullable<typeof measurement> => measurement !== null)
     return staggerFloorplanMeasurementLabels(overlays)
-  }, [active, displayPrecision, draft, previewSegment, segments, selectedId, unit, unitsPerPixel])
+  }, [
+    active,
+    displayPrecision,
+    draft,
+    displaySelectedId,
+    previewSegment,
+    segments,
+    showPersistedMeasurements,
+    unit,
+    unitsPerPixel,
+  ])
 
-  const areaMeasurements = active
-    ? [...areas, ...(previewArea?.view === '2d' ? [previewArea] : [])]
+  const areaMeasurements = showPersistedMeasurements
+    ? [...areas, ...(active && previewArea?.view === '2d' ? [previewArea] : [])]
     : []
-  const perimeterMeasurements = active
-    ? [...perimeters, ...(previewPerimeter?.view === '2d' ? [previewPerimeter] : [])]
+  const perimeterMeasurements = showPersistedMeasurements
+    ? [...perimeters, ...(active && previewPerimeter?.view === '2d' ? [previewPerimeter] : [])]
     : []
-  const angleMeasurements = active ? angles : []
+  const angleMeasurements = showPersistedMeasurements ? angles : []
   const draftAngle =
     active && angleDraft?.view === '2d' && angleDraft.vertex && angleDraft.second
       ? {
@@ -1570,7 +1613,7 @@ export function FloorplanMeasurementToolLayer({
       )
     : null
 
-  if (!active) return null
+  if (!(active || showMeasurements)) return null
 
   return (
     <>
@@ -1578,21 +1621,21 @@ export function FloorplanMeasurementToolLayer({
         <FloorplanMeasurementsLayer
           className="floorplan-measurement-tool"
           measurements={measurements}
-          onMeasurementPointerDown={handleMeasurementPointerDown}
+          onMeasurementPointerDown={active ? handleMeasurementPointerDown : undefined}
           palette={measurementPalette}
           sceneRotationDeg={sceneRotationDeg}
         />
       ) : null}
-      {polygonDraft?.view === '2d' ? (
+      {active && polygonDraft?.view === '2d' ? (
         <PolygonDraftOutline2D draft={polygonDraft} palette={measurementPalette} />
       ) : null}
       {areaMeasurements.map((area) => (
         <AreaMeasurementLabel
           area={area}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === area.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === area.id : true}
           key={area.id}
-          onPointerDown={handleMeasurementPointerDown}
+          onPointerDown={active ? handleMeasurementPointerDown : undefined}
           palette={measurementPalette}
           sceneRotationDeg={sceneRotationDeg}
           unit={unit}
@@ -1602,9 +1645,9 @@ export function FloorplanMeasurementToolLayer({
       {perimeterMeasurements.map((perimeter) => (
         <PerimeterMeasurementLabel
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === perimeter.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === perimeter.id : true}
           key={perimeter.id}
-          onPointerDown={handleMeasurementPointerDown}
+          onPointerDown={active ? handleMeasurementPointerDown : undefined}
           palette={measurementPalette}
           perimeter={perimeter}
           sceneRotationDeg={sceneRotationDeg}
@@ -1616,9 +1659,9 @@ export function FloorplanMeasurementToolLayer({
         <AngleMeasurementLabel
           angle={angle}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === angle.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === angle.id : true}
           key={angle.id}
-          onPointerDown={handleMeasurementPointerDown}
+          onPointerDown={active ? handleMeasurementPointerDown : undefined}
           palette={measurementPalette}
           sceneRotationDeg={sceneRotationDeg}
           unitsPerPixel={unitsPerPixel}
@@ -1635,10 +1678,10 @@ export function FloorplanMeasurementToolLayer({
           unitsPerPixel={unitsPerPixel}
         />
       ) : null}
-      {snapTarget?.view === '2d' ? (
+      {active && snapTarget?.view === '2d' ? (
         <FloorplanSnapTargetMarker target={snapTarget} unitsPerPixel={unitsPerPixel} />
       ) : null}
-      {selectedSegment ? (
+      {active && selectedSegment ? (
         <g className="floorplan-measurement-endpoint-handles" pointerEvents="auto">
           {(['start', 'end'] as const).map((endpoint) => {
             const point = selectedSegment[endpoint]

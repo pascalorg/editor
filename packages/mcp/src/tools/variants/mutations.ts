@@ -51,6 +51,11 @@ const WALL_THICKNESS_OPTIONS = [0.1, 0.15, 0.2, 0.25] as const
 const WALL_HEIGHT_OPTIONS = [2.4, 2.6, 2.7, 3.0] as const
 const FENCE_STYLES = ['privacy', 'slat', 'rail'] as const
 
+type Segment2DNode = {
+  end?: [number, number]
+  start?: [number, number]
+}
+
 /** Fisher–Yates shuffle in place using the provided RNG. */
 function shuffleInPlace<T>(arr: T[], rng: Rng): void {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -95,7 +100,7 @@ function siteBounds(
  * still exercise something on partial scenes).
  */
 function isPerimeterWall(
-  wall: AnyNode & { start?: [number, number]; end?: [number, number] },
+  wall: Segment2DNode,
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null,
   epsilon = 0.01,
 ): boolean {
@@ -148,10 +153,7 @@ function applyRoomProportions(graph: SceneGraph, rng: Rng): SceneGraph {
   const bounds = siteBounds(out)
   for (const node of Object.values(out.nodes)) {
     if (node.type !== 'wall') continue
-    const wall = node as AnyNode & {
-      start?: [number, number]
-      end?: [number, number]
-    }
+    const wall = node as Segment2DNode
     if (!(wall.start && wall.end)) continue
     if (isPerimeterWall(wall, bounds)) continue
     // Nudge each endpoint by ±10% of its current value.
@@ -174,7 +176,7 @@ function applyOpenPlan(graph: SceneGraph, rng: Rng): SceneGraph {
   const interiorWallIds: AnyNodeId[] = []
   for (const [id, node] of Object.entries(out.nodes)) {
     if (node.type !== 'wall') continue
-    if (isPerimeterWall(node as AnyNode, bounds)) continue
+    if (isPerimeterWall(node as Segment2DNode, bounds)) continue
     interiorWallIds.push(id as AnyNodeId)
   }
   if (interiorWallIds.length === 0) return out

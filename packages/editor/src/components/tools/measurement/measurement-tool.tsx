@@ -6,6 +6,7 @@ import {
   emitter,
   type GeometryContext,
   type GridEvent,
+  getRoofSegmentSurfaceY,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionDirectLength,
   type MeasurementDefinitionPerimeter,
@@ -13,11 +14,13 @@ import {
   type NodeEvent,
   nodeRegistry,
   sceneRegistry,
+  useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { type PointerEvent, type ReactNode, useEffect, useMemo, useRef } from 'react'
+import { type PointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box3,
   BoxGeometry,
@@ -33,6 +36,13 @@ import {
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import {
+  createNodeBoundsAttachment,
+  getResolvedMeasurementSegments,
+  refreshRenderedBoundsMeasurementSegments,
+  sameResolvedMeasurementSegments,
+  useResolvedMeasurementSegments,
+} from '../../../lib/measurement-attachments'
 import {
   collectCommittedMeasurementSnapGeometry,
   collectPlanMeasurementSnapGeometry,
@@ -237,7 +247,7 @@ function resolveGridMeasurementSnap3D(point: MeasurementPoint): {
     point,
     mergeMeasurementSnapGeometry(
       collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
-      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments),
+      collectCommittedMeasurementSnapGeometry(getResolvedMeasurementSegments()),
     ),
     {
       enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
@@ -259,7 +269,7 @@ function resolveGridMeasurementConstraint3D(
     point,
     mergeMeasurementSnapGeometry(
       collectPlanMeasurementSnapGeometry(Object.values(useScene.getState().nodes)),
-      collectCommittedMeasurementSnapGeometry(useMeasurementTool.getState().segments),
+      collectCommittedMeasurementSnapGeometry(getResolvedMeasurementSegments()),
     ),
     {
       enabledSnapKinds: useMeasurementTool.getState().enabledSnapKinds,
@@ -285,6 +295,105 @@ function measurementPointFromNodeEvent(
   buildingId: AnyNodeId | null,
 ): MeasurementPoint {
   return worldToBuildingLocal(event.position, buildingId)
+}
+
+function measurementOwnerNodeIdFromEvent(event: NodeEvent): AnyNodeId {
+  const nodes = useScene.getState().nodes
+  const worldPoint = new Vector3(...event.position)
+  if (event.node.type === 'cabinet') {
+    const cabinetObject = sceneRegistry.nodes.get(event.node.id)
+    const cabinetChildren = (event.node as { children?: unknown }).children
+    if (cabinetObject && Array.isArray(cabinetChildren)) {
+      cabinetObject.updateWorldMatrix(true, false)
+      const local = cabinetObject.worldToLocal(worldPoint.clone())
+      let best: { id: AnyNodeId; score: number } | null = null
+
+      for (const childId of cabinetChildren) {
+        if (typeof childId !== 'string') continue
+        const module = nodes[childId as AnyNodeId]
+        if (module?.type !== 'cabinet-module') continue
+        const position = module.position ?? [0, 0, 0]
+        const halfWidth = module.width / 2 + Math.max(module.countertopOverhang ?? 0, 0.05)
+        const halfDepth =
+          module.depth / 2 +
+          Math.max(module.countertopOverhang ?? 0, module.countertopBackOverhang ?? 0, 0.05)
+        const dx = Math.abs(local.x - position[0])
+        const dz = Math.abs(local.z - position[2])
+        if (dx > halfWidth || dz > halfDepth) continue
+        const score = dx / Math.max(halfWidth, 1e-4) + dz / Math.max(halfDepth, 1e-4)
+        if (!best || score < best.score) best = { id: module.id as AnyNodeId, score }
+      }
+
+      if (best) return best.id
+    }
+    return event.node.id
+  }
+
+  if (event.node.type !== 'roof') return event.node.id
+
+  let firstSegmentId: AnyNodeId | null = null
+  let best: { id: AnyNodeId; score: number } | null = null
+  const roofChildren = (event.node as { children?: unknown }).children
+
+  if (!Array.isArray(roofChildren)) return event.node.id
+
+  for (const childId of roofChildren) {
+    if (typeof childId !== 'string') continue
+    const segment = nodes[childId as AnyNodeId]
+    if (segment?.type !== 'roof-segment') continue
+    const segmentObject = sceneRegistry.nodes.get(segment.id)
+    if (!segmentObject) continue
+    segmentObject.updateWorldMatrix(true, false)
+    const local = segmentObject.worldToLocal(worldPoint.clone())
+    firstSegmentId ??= segment.id
+
+    const overhang = segment.overhang ?? 0
+    const halfWidth = segment.width / 2 + overhang
+    const halfDepth = segment.depth / 2 + overhang
+    if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) continue
+
+    const surfaceY = getRoofSegmentSurfaceY(segment, local.x, local.z)
+    const score = Math.abs(local.y - surfaceY)
+    if (!best || score < best.score) {
+      best = { id: segment.id, score }
+    }
+  }
+
+  return best?.id ?? firstSegmentId ?? event.node.id
+}
+
+function createNodeEventMeasurementAttachment(
+  event: NodeEvent,
+  point: MeasurementPoint,
+  buildingId: AnyNodeId | null,
+) {
+  const attachment = createNodeBoundsAttachment(event.node.id, point, buildingId ?? undefined)
+  return attachEventMeasurementOwner(event, attachment)
+}
+
+function attachEventMeasurementOwner<
+  T extends { attachment?: MeasurementSnapAnchor['attachment'] },
+>(event: NodeEvent, value: T): T
+function attachEventMeasurementOwner(
+  event: NodeEvent,
+  attachment: MeasurementSnapAnchor['attachment'],
+): MeasurementSnapAnchor['attachment']
+function attachEventMeasurementOwner<
+  T extends { attachment?: MeasurementSnapAnchor['attachment'] },
+>(
+  event: NodeEvent,
+  value: T | MeasurementSnapAnchor['attachment'],
+): T | MeasurementSnapAnchor['attachment'] {
+  const attachment =
+    value && 'attachment' in value
+      ? value.attachment
+      : (value as MeasurementSnapAnchor['attachment'])
+  if (!attachment) return value && 'attachment' in value ? value : undefined
+  const ownerNodeId = measurementOwnerNodeIdFromEvent(event)
+  const ownedAttachment =
+    ownerNodeId === event.node.id ? attachment : { ...attachment, ownerNodeId }
+  if (value && 'attachment' in value) return { ...value, attachment: ownedAttachment } as T
+  return ownedAttachment
 }
 
 function measurementNormalFromNodeEvent(
@@ -394,8 +503,12 @@ function snapAnchorsFromDefinition(node: AnyNode): MeasurementSnapAnchor[] {
     node as never,
     measurementGeometryContextForNode(node),
   ) as MeasurementDefinitionSnapGeometry | null | undefined
-  return (geometry?.anchors ?? []).map((anchor) => ({
+  return (geometry?.anchors ?? []).map((anchor, index) => ({
     ...anchor,
+    attachment: {
+      feature: { index, kind: 'plan-anchor' },
+      nodeId: node.id,
+    },
     point: definitionPoint(anchor.point),
     targetLine: anchor.targetLine
       ? {
@@ -836,11 +949,15 @@ function boundingBoxMeasurementAnchors(
     new Vector3(center.x, center.y, max.z),
   ]
 
-  return [...corners, ...edgeMidpoints, ...faceCenters, center].map((point, index) => ({
-    label:
-      index < 8 ? 'Box corner' : index < 20 ? 'Box edge' : index < 26 ? 'Face center' : 'Center',
-    point: worldToBuildingLocal([point.x, point.y, point.z], buildingId),
-  }))
+  return [...corners, ...edgeMidpoints, ...faceCenters, center].map((point, index) => {
+    const measurementPoint = worldToBuildingLocal([point.x, point.y, point.z], buildingId)
+    return {
+      attachment: createNodeBoundsAttachment(node.id, measurementPoint, buildingId ?? undefined),
+      label:
+        index < 8 ? 'Box corner' : index < 20 ? 'Box edge' : index < 26 ? 'Face center' : 'Center',
+      point: measurementPoint,
+    }
+  })
 }
 
 function nodeMeasurementAnchors(
@@ -859,31 +976,39 @@ function resolveNodeMeasurementSnap(
   target: MeasurementSnapTarget | null
 } {
   const anchors = [
-    ...meshSnapCandidatesFromEvent(event).map((candidate) => ({
-      kind: candidate.kind,
-      label: candidate.label,
-      point: measurementPointFromObjectLocalPoint(event.object, candidate.localPoint, buildingId),
-      priority: candidate.priority,
-      targetLine: candidate.localTargetLine
-        ? {
-            end: measurementPointFromObjectLocalPoint(
-              event.object,
-              candidate.localTargetLine.end,
-              buildingId,
-            ),
-            start: measurementPointFromObjectLocalPoint(
-              event.object,
-              candidate.localTargetLine.start,
-              buildingId,
-            ),
-          }
-        : undefined,
-    })),
+    ...meshSnapCandidatesFromEvent(event).map((candidate) => {
+      const candidatePoint = measurementPointFromObjectLocalPoint(
+        event.object,
+        candidate.localPoint,
+        buildingId,
+      )
+      return {
+        attachment: createNodeEventMeasurementAttachment(event, candidatePoint, buildingId),
+        kind: candidate.kind,
+        label: candidate.label,
+        point: candidatePoint,
+        priority: candidate.priority,
+        targetLine: candidate.localTargetLine
+          ? {
+              end: measurementPointFromObjectLocalPoint(
+                event.object,
+                candidate.localTargetLine.end,
+                buildingId,
+              ),
+              start: measurementPointFromObjectLocalPoint(
+                event.object,
+                candidate.localTargetLine.start,
+                buildingId,
+              ),
+            }
+          : undefined,
+      }
+    }),
     ...nodeMeasurementAnchors(event.node, buildingId).map((anchor) => ({
       ...anchor,
       priority: anchor.priority ?? 3,
     })),
-  ]
+  ].map((anchor) => attachEventMeasurementOwner(event, anchor))
   const enabledSnapKinds = useMeasurementTool.getState().enabledSnapKinds
   const enabledAnchors = anchors.filter((anchor) => {
     const kind = anchor.kind ?? measurementSnapKindFromLabel(anchor.label)
@@ -916,6 +1041,7 @@ function resolveNodeMeasurementSnap(
     target: closest
       ? {
           kind: closest.kind ?? measurementSnapKindFromLabel(closest.label),
+          attachment: closest.attachment,
           label: closest.label,
           point: closest.point,
           targetLine: closest.targetLine,
@@ -934,7 +1060,7 @@ function resolveGridEditablePoint3D(event: GridEvent): {
   const drag = measurement.draggingSegmentEndpoint
   if (!drag) return snap
 
-  const segment = measurement.segments.find((entry) => entry.id === drag.id)
+  const segment = getResolvedMeasurementSegments().find((entry) => entry.id === drag.id)
   const anchor =
     drag.endpoint === 'start'
       ? (segment?.end ?? null)
@@ -1025,6 +1151,7 @@ export function handleMeasurementGridMove3D(
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (resolved.target?.attachment ?? null),
     )
     measurement.setSnapTarget(resolved.target)
     measurement.setCursor('3d', resolved.point)
@@ -1071,6 +1198,7 @@ export function handleMeasurementGridClick3D(
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (resolved.target?.attachment ?? null),
     )
     measurement.setSnapTarget(resolved.target)
     measurement.setCursor('3d', resolved.point)
@@ -1101,9 +1229,9 @@ export function handleMeasurementGridClick3D(
   if (handlePolygonGridClick3D(point)) return
   if (measurement.mode !== 'distance') return
   if (measurement.draft) {
-    measurement.commit(point)
+    measurement.commit(point, undefined, target?.attachment)
   } else {
-    measurement.begin('3d', point)
+    measurement.begin('3d', point, undefined, target?.attachment)
   }
 }
 
@@ -1127,6 +1255,8 @@ export function handleMeasurementNodeClick3D(
   const snap = resolveNodeMeasurementSnap(event, rawPoint, buildingId)
   const surfaceNormal = measurementNormalFromNodeEvent(event, buildingId)
   const point = snap.point
+  const pointAttachment =
+    snap.target?.attachment ?? createNodeEventMeasurementAttachment(event, point, buildingId)
   const quickMeasure = Boolean(
     event.nativeEvent.altKey || event.nativeEvent.ctrlKey || event.nativeEvent.metaKey,
   )
@@ -1138,6 +1268,7 @@ export function handleMeasurementNodeClick3D(
       measurement.draggingSegmentEndpoint.endpoint,
       point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (pointAttachment ?? null),
     )
     measurement.endSegmentEndpointDrag()
     return
@@ -1176,7 +1307,23 @@ export function handleMeasurementNodeClick3D(
     if (measurement.mode === 'distance' && quickMeasure) {
       const segment = directLengthSegmentFromNode(event.node, buildingId, rawPoint, surfaceNormal)
       if (segment) {
-        measurement.addSegment('3d', segment.start, segment.end, segment.measuredDistanceMeters)
+        const tracksEndpointDistance =
+          Math.abs(
+            distanceBetweenMeasurements(segment.start, segment.end) -
+              segment.measuredDistanceMeters,
+          ) < 1e-4
+        measurement.addSegment(
+          '3d',
+          segment.start,
+          segment.end,
+          segment.measuredDistanceMeters,
+          tracksEndpointDistance
+            ? createNodeEventMeasurementAttachment(event, segment.start, buildingId)
+            : undefined,
+          tracksEndpointDistance
+            ? createNodeEventMeasurementAttachment(event, segment.end, buildingId)
+            : undefined,
+        )
         return
       }
     }
@@ -1202,10 +1349,10 @@ export function handleMeasurementNodeClick3D(
       })
       measurement.commit(surfaceDistance.end, surfaceDistance.measuredDistanceMeters)
     } else {
-      measurement.commit(point)
+      measurement.commit(point, undefined, pointAttachment)
     }
   } else {
-    measurement.begin('3d', point, surfaceNormal ?? undefined)
+    measurement.begin('3d', point, surfaceNormal ?? undefined, pointAttachment)
   }
 }
 
@@ -1241,6 +1388,7 @@ export function handleMeasurementNodeMove3D(
       measurement.draggingSegmentEndpoint.endpoint,
       point,
       event.nativeEvent.altKey,
+      event.nativeEvent.altKey ? null : (snap.target?.attachment ?? null),
     )
     measurement.setCursor('3d', point)
     measurement.setSnapTarget(snap.target)
@@ -1508,7 +1656,7 @@ function MeasurementArea3D({
   area: MeasurementArea
   displayPrecision: ReturnType<typeof useMeasurementTool.getState>['displayPrecision']
   isSelected: boolean
-  onSelect: (id: string, event: PointerEvent<HTMLElement>) => void
+  onSelect?: (id: string, event: PointerEvent<HTMLElement>) => void
   unit: LinearUnit
 }) {
   const isDark = appearance === 'dark'
@@ -1534,7 +1682,7 @@ function MeasurementArea3D({
       >
         <MeasurementValueLabel
           isSelected={isSelected}
-          onPointerDown={(event) => onSelect(area.id, event)}
+          onPointerDown={onSelect ? (event) => onSelect(area.id, event) : undefined}
         >
           {formatAreaMeasurement(area.areaSquareMeters, unit, { precision: displayPrecision })}
         </MeasurementValueLabel>
@@ -1604,7 +1752,7 @@ function MeasurementPerimeter3D({
   appearance: MeasurementAppearance
   displayPrecision: ReturnType<typeof useMeasurementTool.getState>['displayPrecision']
   isSelected: boolean
-  onSelect: (id: string, event: PointerEvent<HTMLElement>) => void
+  onSelect?: (id: string, event: PointerEvent<HTMLElement>) => void
   perimeter: MeasurementPerimeter
   unit: LinearUnit
 }) {
@@ -1633,7 +1781,7 @@ function MeasurementPerimeter3D({
       >
         <MeasurementValueLabel
           isSelected={isSelected}
-          onPointerDown={(event) => onSelect(perimeter.id, event)}
+          onPointerDown={onSelect ? (event) => onSelect(perimeter.id, event) : undefined}
         >
           {`P ${formatLinearMeasurement(perimeter.lengthMeters, unit, { precision: displayPrecision })}`}
         </MeasurementValueLabel>
@@ -2072,14 +2220,28 @@ function MeasurementAngle3D({
 export function MeasurementTool({
   appearance,
   buildingId,
+  interactive = true,
   unit,
 }: {
   appearance: MeasurementAppearance
   buildingId: AnyNodeId | null
+  interactive?: boolean
   unit: LinearUnit
 }) {
   const canvas = useThree((state) => state.gl.domElement)
-  const segments = useMeasurementTool((state) => state.segments)
+  const storedSegments = useMeasurementTool((state) => state.segments)
+  const reactivelyResolvedSegments = useResolvedMeasurementSegments(storedSegments)
+  const hasRenderedBoundsAttachment = useMemo(
+    () =>
+      storedSegments.some(
+        (segment) =>
+          segment.startAttachment?.feature.kind === 'node-bounds' ||
+          segment.endAttachment?.feature.kind === 'node-bounds',
+      ),
+    [storedSegments],
+  )
+  const [segments, setSegments] = useState(reactivelyResolvedSegments)
+  const segmentsRef = useRef(reactivelyResolvedSegments)
   const areas = useMeasurementTool((state) => state.areas)
   const perimeters = useMeasurementTool((state) => state.perimeters)
   const angles = useMeasurementTool((state) => state.angles)
@@ -2097,6 +2259,27 @@ export function MeasurementTool({
   const lastSurfaceEventAtRef = useRef(0)
 
   useEffect(() => {
+    if (sameResolvedMeasurementSegments(segmentsRef.current, reactivelyResolvedSegments)) return
+    segmentsRef.current = reactivelyResolvedSegments
+    setSegments(reactivelyResolvedSegments)
+  }, [reactivelyResolvedSegments])
+
+  useFrame(() => {
+    if (!hasRenderedBoundsAttachment) return
+    const refreshed = refreshRenderedBoundsMeasurementSegments(
+      segmentsRef.current,
+      storedSegments,
+      useScene.getState().nodes,
+      useLiveTransforms.getState().transforms,
+      useLiveNodeOverrides.getState().overrides,
+    )
+    if (refreshed === segmentsRef.current) return
+    segmentsRef.current = refreshed
+    setSegments(refreshed)
+  })
+
+  useEffect(() => {
+    if (!interactive) return
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'measurement' })
     return () => {
       useInteractionScope
@@ -2105,9 +2288,10 @@ export function MeasurementTool({
       useMeasurementTool.getState().cancelDraft()
       useMeasurementTool.getState().setCursor('3d', null)
     }
-  }, [])
+  }, [interactive])
 
   useEffect(() => {
+    if (!interactive) return
     const kinds = measurableNodeKinds()
     const noteSurfaceEvent = () => {
       lastSurfaceEventAtRef.current = performance.now()
@@ -2185,9 +2369,10 @@ export function MeasurementTool({
         emitter.off(`${kind}:click` as never, handleNodeClick as never)
       }
     }
-  }, [buildingId, canvas])
+  }, [buildingId, canvas, interactive])
 
   useEffect(() => {
+    if (!interactive) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.key === 'Delete' || event.key === 'Backspace')) return
       const target = event.target instanceof HTMLElement ? event.target : null
@@ -2207,7 +2392,7 @@ export function MeasurementTool({
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [])
+  }, [interactive])
 
   const handleSelectMeasurement = (id: string, event: PointerEvent<HTMLElement>) => {
     event.preventDefault()
@@ -2215,7 +2400,7 @@ export function MeasurementTool({
     useMeasurementTool.getState().selectMeasurement(id)
   }
   const draftAngle =
-    angleDraft?.view === '3d' && angleDraft.vertex && angleDraft.second
+    interactive && angleDraft?.view === '3d' && angleDraft.vertex && angleDraft.second
       ? {
           first: angleDraft.first,
           id: 'measurement-angle-draft',
@@ -2224,7 +2409,10 @@ export function MeasurementTool({
           view: angleDraft.view,
         }
       : null
-  const selectedSegment = selectedId ? segments.find((segment) => segment.id === selectedId) : null
+  const displaySelectedId = interactive ? selectedId : null
+  const selectedSegment = displaySelectedId
+    ? segments.find((segment) => segment.id === displaySelectedId)
+    : null
   const segmentLabelPositions = useMemo(() => {
     const layouts = staggerMeasurementLabelLayouts3D(
       segments.map((segment) => measurementLineLayout3D(segment)),
@@ -2232,7 +2420,7 @@ export function MeasurementTool({
     return new Map(layouts.map((layout) => [layout.id, layout.labelPosition]))
   }, [segments])
   const polygonDraftSegments =
-    polygonDraft?.view === '3d'
+    interactive && polygonDraft?.view === '3d'
       ? polygonDraftPointsWithCursor(polygonDraft).flatMap((point, index, points) => {
           const next = points[index + 1] ?? (points.length >= 3 ? points[0] : null)
           return next
@@ -2253,15 +2441,15 @@ export function MeasurementTool({
         <MeasurementLine3D
           appearance={appearance}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === segment.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === segment.id : true}
           key={segment.id}
           labelPosition={segmentLabelPositions.get(segment.id)}
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           segment={segment}
           unit={unit}
         />
       ))}
-      {draft?.view === '3d' && draft.end ? (
+      {interactive && draft?.view === '3d' && draft.end ? (
         <MeasurementLine3D
           appearance={appearance}
           displayPrecision={displayPrecision}
@@ -2270,7 +2458,7 @@ export function MeasurementTool({
           unit={unit}
         />
       ) : null}
-      {!draft && previewSegment?.view === '3d' ? (
+      {interactive && !draft && previewSegment?.view === '3d' ? (
         <MeasurementLine3D
           appearance={appearance}
           displayPrecision={displayPrecision}
@@ -2295,19 +2483,19 @@ export function MeasurementTool({
           appearance={appearance}
           area={area}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === area.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === area.id : true}
           key={area.id}
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           unit={unit}
         />
       ))}
-      {previewArea?.view === '3d' ? (
+      {interactive && previewArea?.view === '3d' ? (
         <MeasurementArea3D
           appearance={appearance}
           area={previewArea}
           displayPrecision={displayPrecision}
           isSelected
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           unit={unit}
         />
       ) : null}
@@ -2315,19 +2503,19 @@ export function MeasurementTool({
         <MeasurementPerimeter3D
           appearance={appearance}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === perimeter.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === perimeter.id : true}
           key={perimeter.id}
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           perimeter={perimeter}
           unit={unit}
         />
       ))}
-      {previewPerimeter?.view === '3d' ? (
+      {interactive && previewPerimeter?.view === '3d' ? (
         <MeasurementPerimeter3D
           appearance={appearance}
           displayPrecision={displayPrecision}
           isSelected
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           perimeter={previewPerimeter}
           unit={unit}
         />
@@ -2337,9 +2525,9 @@ export function MeasurementTool({
           appearance={appearance}
           angle={angle}
           displayPrecision={displayPrecision}
-          isSelected={selectedId ? selectedId === angle.id : true}
+          isSelected={displaySelectedId ? displaySelectedId === angle.id : true}
           key={angle.id}
-          onSelect={handleSelectMeasurement}
+          onSelect={interactive ? handleSelectMeasurement : undefined}
           unit={unit}
         />
       ))}
@@ -2353,17 +2541,17 @@ export function MeasurementTool({
           unit={unit}
         />
       ) : null}
-      {snapTarget?.view === '3d' ? (
+      {interactive && snapTarget?.view === '3d' ? (
         <MeasurementSnapTarget3D appearance={appearance} target={snapTarget} />
       ) : null}
-      {selectedSegment ? (
+      {interactive && selectedSegment ? (
         <MeasurementEndpointHandles3D
           appearance={appearance}
           draggingEndpoint={draggingSegmentEndpoint}
           segment={selectedSegment}
         />
       ) : null}
-      {cursor?.view === '3d' ? (
+      {interactive && cursor?.view === '3d' ? (
         <MeasurementCursor3D appearance={appearance} point={cursor.point} />
       ) : null}
     </>

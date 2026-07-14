@@ -2,9 +2,11 @@ import { type AnyNode, type AnyNodeId, emitter, nodeRegistry, useScene } from '@
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { forwardRef, memo, useEffect, useRef } from 'react'
+import { forwardRef, memo, useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { resolveNodeSelectionTarget } from '../../../../../lib/selection-routing'
 import useEditor from '../../../../../store/use-editor'
+import { resolveTreeChildIds } from './tree-structure'
 
 export function handleTreeSelection(
   e: React.MouseEvent,
@@ -93,6 +95,7 @@ import { FenceTreeNode } from './fence-tree-node'
 import { GutterTreeNode } from './gutter-tree-node'
 import { ItemTreeNode } from './item-tree-node'
 import { LevelTreeNode } from './level-tree-node'
+import { MeasurementTreeNode } from './measurement-tree-node'
 import { RegistryTreeNode } from './registry-tree-node'
 import { RoofTreeNode } from './roof-tree-node'
 import { ShelfTreeNode } from './shelf-tree-node'
@@ -170,6 +173,7 @@ const treeNodeByType: Record<
     nodeId: AnyNodeId
   }>,
   item: ItemTreeNode,
+  measurement: MeasurementTreeNode,
 }
 
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
@@ -238,6 +242,36 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     ref,
   ) {
     const rowRef = useRef<HTMLDivElement>(null)
+    const [autoExpanded, setAutoExpanded] = useState(true)
+    const autoChildIds = useScene(
+      useShallow((state) =>
+        nodeId && children === undefined
+          ? resolveTreeChildIds(nodeId as AnyNodeId, state.nodes)
+          : ([] as AnyNodeId[]),
+      ),
+    )
+    const hasAutoChildren = children === undefined && autoChildIds.length > 0
+    const effectiveChildren =
+      children ??
+      (hasAutoChildren
+        ? autoChildIds.map((childId, index) => (
+            <TreeNode
+              depth={depth + 1}
+              isLast={index === autoChildIds.length - 1}
+              key={childId}
+              nodeId={childId}
+            />
+          ))
+        : undefined)
+    const effectiveHasChildren = hasChildren || hasAutoChildren
+    const effectiveExpanded = hasAutoChildren ? autoExpanded : expanded
+    const handleToggle = () => {
+      if (hasAutoChildren) {
+        setAutoExpanded((previous) => !previous)
+        return
+      }
+      onToggle()
+    }
 
     useEffect(() => {
       if (isSelected && rowRef.current) {
@@ -282,7 +316,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             style={{ left: (depth - 1) * 12 + 20, width: 4 }}
           />
           {/* Line down to children */}
-          {hasChildren && expanded && (
+          {effectiveHasChildren && effectiveExpanded && (
             <div
               className="pointer-events-none absolute top-1/2 bottom-0 w-px bg-border/50"
               style={{ left: depth * 12 + 20 }}
@@ -293,12 +327,12 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             className="z-10 flex h-4 w-4 shrink-0 items-center justify-center bg-inherit"
             onClick={(e) => {
               e.stopPropagation()
-              onToggle()
+              handleToggle()
             }}
           >
-            {hasChildren ? (
+            {effectiveHasChildren ? (
               <motion.div
-                animate={{ rotate: expanded ? 90 : 0 }}
+                animate={{ rotate: effectiveExpanded ? 90 : 0 }}
                 initial={false}
                 transition={{ duration: 0.2 }}
               >
@@ -336,7 +370,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
           )}
         </div>
         <AnimatePresence initial={false}>
-          {expanded && children && (
+          {effectiveExpanded && effectiveChildren && (
             <motion.div
               animate={{ height: 'auto', opacity: 1 }}
               className="overflow-hidden"
@@ -344,7 +378,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
               initial={{ height: 0, opacity: 0 }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
             >
-              {children}
+              {effectiveChildren}
             </motion.div>
           )}
         </AnimatePresence>

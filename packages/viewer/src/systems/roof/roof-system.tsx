@@ -472,6 +472,18 @@ function getMergedRoofSegmentBrushes(
   return cloned
 }
 
+export function getMergeableRoofSegments(
+  roofNode: Pick<RoofNode, 'children'>,
+  nodes: Record<string, AnyNode>,
+): RoofSegmentNode[] {
+  return (roofNode.children ?? []).flatMap((id) => {
+    const node = nodes[id]
+    if (node?.type !== 'roof-segment') return []
+    const segment = getEffectiveNode(node as RoofSegmentNode)
+    return hasSegmentMaterialOverride(segment) ? [] : [segment]
+  })
+}
+
 function updateMergedRoofGeometry(
   roofNode: RoofNode,
   group: THREE.Group,
@@ -489,12 +501,7 @@ function updateMergedRoofGeometry(
   // Merge each child through `getEffectiveNode` so an in-flight handle
   // drag (live override on width / depth / wallHeight / pitch / rotation)
   // is reflected in the merged shell during the drag, not only on commit.
-  const children = (roofNode.children ?? [])
-    .map((id) => {
-      const scn = nodes[id] as RoofSegmentNode | undefined
-      return scn ? getEffectiveNode(scn) : undefined
-    })
-    .filter((n): n is RoofSegmentNode => n !== undefined && !hasSegmentMaterialOverride(n))
+  const children = getMergeableRoofSegments(roofNode, nodes)
 
   if (children.length === 0) {
     mergedMesh.geometry.dispose()

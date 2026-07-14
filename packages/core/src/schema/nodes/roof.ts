@@ -26,7 +26,7 @@ export const RoofNode = BaseNode.extend({
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   // Child roof segment IDs
-  children: z.array(RoofSegmentNode.shape.id).default([]),
+  children: z.array(z.union([RoofSegmentNode.shape.id, objectId('measurement')])).default([]),
 }).describe(
   dedent`
   Roof node - a container for roof segments.

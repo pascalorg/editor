@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  type Control,
   type ItemNode,
   pointInPolygon,
   sceneRegistry,
@@ -132,7 +133,7 @@ const ItemControlsOverlay = ({
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {controls.map((control, i) => (
+        {controls.map((control: Control, i: number) => (
           <ControlWidget
             control={control}
             key={i}

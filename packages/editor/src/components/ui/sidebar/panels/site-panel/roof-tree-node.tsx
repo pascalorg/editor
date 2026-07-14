@@ -1,4 +1,10 @@
-import { type AnyNodeId, type RoofNode, type RoofSegmentNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type RoofNode,
+  type RoofSegmentNode,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
@@ -31,19 +37,20 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const setRoofHostDragArmedId = useEditor((state) => state.setRoofHostDragArmedId)
   const { drag, dropTarget } = useTreeNodeDrag()
 
-  const segments = useScene(
+  const childNodes = useScene(
     useShallow((s) => {
       const n = s.nodes[nodeId] as RoofNode | undefined
-      if (!n) return [] as RoofSegmentNode[]
+      if (!n) return [] as AnyNode[]
       return (n.children ?? [])
-        .map((childId) => s.nodes[childId as AnyNodeId] as RoofSegmentNode | undefined)
-        .filter((n): n is RoofSegmentNode => n?.type === 'roof-segment')
+        .map((childId) => s.nodes[childId as AnyNodeId])
+        .filter((child): child is AnyNode => Boolean(child))
     }),
   )
+  const segments = childNodes.filter((n): n is RoofSegmentNode => n.type === 'roof-segment')
 
-  // Targeted selector — only re-renders when a segment of THIS roof is selected/deselected
+  // Targeted selector — only re-renders when a child of THIS roof is selected/deselected
   const hasSelectedChild = useViewer((state) =>
-    segments.some((seg) => state.selection.selectedIds.includes(seg.id)),
+    childNodes.some((child) => state.selection.selectedIds.includes(child.id)),
   )
 
   const handleClick = useCallback(
@@ -90,7 +97,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const defaultName = `Roof (${segmentCount} segment${segmentCount !== 1 ? 's' : ''})`
 
   // Hide the dragged segment from every roof while dragging
-  const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
+  const visibleChildren = drag ? childNodes.filter((child) => child.id !== drag.nodeId) : childNodes
 
   const isValidDropTarget = drag !== null && drag.nodeId !== nodeId
 
@@ -100,7 +107,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         actions={<TreeNodeActions nodeId={nodeId} />}
         depth={depth}
         expanded={expanded}
-        hasChildren={segments.length > 0}
+        hasChildren={childNodes.length > 0}
         icon={
           <Image alt="" className="object-contain" height={14} src="/icons/roof.webp" width={14} />
         }
@@ -125,24 +132,32 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         onMouseLeave={handleMouseLeave}
         onToggle={handleToggle}
       >
-        {visibleSegments.map((seg, i) => {
+        {visibleChildren.map((child, i) => {
           const showIndicatorBefore = isDropTarget && dropTarget?.insertIndex === i
           const showIndicatorAfter =
             isDropTarget &&
-            i === visibleSegments.length - 1 &&
+            i === visibleChildren.length - 1 &&
             dropTarget?.insertIndex !== undefined &&
             dropTarget.insertIndex > i
 
           return (
-            <div key={seg.id}>
+            <div key={child.id}>
               <AnimatePresence>
                 {showIndicatorBefore && <DropIndicatorLine key="indicator-before" />}
               </AnimatePresence>
-              <RoofSegmentTreeNode
-                depth={depth + 1}
-                isLast={isLast && i === visibleSegments.length - 1 && !showIndicatorAfter}
-                node={seg}
-              />
+              {child.type === 'roof-segment' ? (
+                <RoofSegmentTreeNode
+                  depth={depth + 1}
+                  isLast={isLast && i === visibleChildren.length - 1 && !showIndicatorAfter}
+                  node={child}
+                />
+              ) : (
+                <TreeNode
+                  depth={depth + 1}
+                  isLast={isLast && i === visibleChildren.length - 1 && !showIndicatorAfter}
+                  nodeId={child.id}
+                />
+              )}
               <AnimatePresence>
                 {showIndicatorAfter && <DropIndicatorLine key="indicator-after" />}
               </AnimatePresence>
@@ -150,7 +165,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
           )
         })}
         <AnimatePresence>
-          {isDropTarget && visibleSegments.length === 0 && <DropIndicatorLine />}
+          {isDropTarget && visibleChildren.length === 0 && <DropIndicatorLine />}
         </AnimatePresence>
       </TreeNodeWrapper>
     </div>

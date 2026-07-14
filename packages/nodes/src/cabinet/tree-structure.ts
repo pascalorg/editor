@@ -82,7 +82,10 @@ function resolveCabinetRunChildIds(
       resolved.push(child.id as AnyNodeId)
       continue
     }
-    if (!isCabinetRun(child)) continue
+    if (!isCabinetRun(child)) {
+      if (child) resolved.push(child.id as AnyNodeId)
+      continue
+    }
     const link = cornerDerivedRunLink(child.metadata)
     if (link?.role === 'base-leg') {
       resolved.push(...resolveCabinetRunChildIds(child, nodes))
@@ -137,7 +140,10 @@ export function cabinetTreeChildIds(
       resolved.push(child.id as AnyNodeId)
       continue
     }
-    if (!isCabinetRun(child)) continue
+    if (!isCabinetRun(child)) {
+      if (child) resolved.push(child.id as AnyNodeId)
+      continue
+    }
     const link = cornerDerivedRunLink(child.metadata)
     if (link) {
       resolved.push(...cabinetModuleChildren(child, nodes).map((module) => module.id as AnyNodeId))

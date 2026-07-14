@@ -55,6 +55,18 @@ const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeom
   return geometry
 }
 
+export function createRenderableSiteGroundGeometry(shape: Shape): ShapeGeometry | null {
+  const geometry = new ShapeGeometry(shape)
+  const position = geometry.getAttribute('position')
+  const drawableVertexCount = geometry.index ? geometry.index.count : (position?.count ?? 0)
+  if (!position || drawableVertexCount < 3) {
+    geometry.dispose()
+    return null
+  }
+  if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
+  return geometry
+}
+
 type S = ReturnType<typeof useScene.getState>
 
 export const SiteRenderer = ({ node }: { node: SiteNode }) => {
@@ -149,7 +161,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
 
   const groundGeometry = useMemo(() => {
     if (!groundShape) return null
-    return new ShapeGeometry(groundShape)
+    return createRenderableSiteGroundGeometry(groundShape)
   }, [groundShape])
   useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 

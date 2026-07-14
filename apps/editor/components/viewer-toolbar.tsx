@@ -34,6 +34,7 @@ import {
   Grid2X2,
   Magnet,
   PenLine,
+  Ruler,
   SlidersHorizontal,
   Sparkles,
   SwatchBook,
@@ -293,6 +294,8 @@ function DisplayMenu() {
   const setShadows = useViewer((state) => state.setShadows)
   const magneticSnap = useEditor((state) => state.magneticSnap)
   const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+  const showMeasurements = useEditor((state) => state.showMeasurements)
+  const setShowMeasurements = useEditor((state) => state.setShowMeasurements)
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -339,6 +342,15 @@ function DisplayMenu() {
           <span>Magnetic snap</span>
           <span className="ml-auto text-muted-foreground text-xs">
             {magneticSnap ? 'On' : 'Off'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+        >
+          <Ruler className="h-4 w-4" />
+          <span>Measurements</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {showMeasurements ? 'On' : 'Off'}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>

@@ -1,5 +1,13 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { sceneRegistry } from '@pascal-app/core'
+import { BoxGeometry, Group, Mesh } from 'three'
 import type { MeasurementSegment } from '../store/use-measurement-tool'
+import { EDITOR_LAYER } from './constants'
+import {
+  createNodeBoundsAttachment,
+  refreshRenderedBoundsMeasurementSegments,
+  resolveAttachedMeasurementSegments,
+} from './measurement-attachments'
 import {
   collectCommittedMeasurementSnapGeometry,
   collectPlanMeasurementSnapGeometry,
@@ -56,6 +64,282 @@ describe('measurement snapping', () => {
       start: [0, 0, 0],
       end: [4, 0, 0],
     })
+  })
+
+  test('keeps plan attachments on the same node feature as geometry changes', () => {
+    const wall = {
+      object: 'node',
+      id: 'attached-wall',
+      type: 'wall',
+      name: 'Attached wall',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      start: [0, 0],
+      end: [4, 0],
+    } as any
+    const geometry = collectPlanMeasurementSnapGeometry([wall])
+    const snap = resolvePlanMeasurementSnap([1.7, 0, 0.04], geometry, {
+      enabledSnapKinds: { grid: false },
+      radiusMeters: 0.1,
+      view: '2d',
+    })
+
+    expect(snap.target?.attachment).toMatchObject({
+      feature: { kind: 'plan-segment' },
+      nodeId: wall.id,
+    })
+
+    const measurement: MeasurementSegment = {
+      id: 'attached-measurement',
+      start: [0, 0, 1],
+      end: snap.point,
+      endAttachment: snap.target?.attachment,
+      view: '2d',
+    }
+    const resizedWall = { ...wall, end: [8, 0] }
+    const [resolved] = resolveAttachedMeasurementSegments([measurement], {
+      [resizedWall.id]: resizedWall,
+    })
+
+    expect(resolved?.end).toEqual([3.4, 0, 0])
+  })
+
+  test('allows the two measurement endpoints to follow different nodes', () => {
+    const firstWall = {
+      object: 'node',
+      id: 'first-attached-wall',
+      type: 'wall',
+      name: 'First wall',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      start: [0, 0],
+      end: [2, 0],
+    } as any
+    const secondWall = { ...firstWall, id: 'second-attached-wall', start: [4, 0], end: [6, 0] }
+    const firstGeometry = collectPlanMeasurementSnapGeometry([firstWall])
+    const secondGeometry = collectPlanMeasurementSnapGeometry([secondWall])
+    const startAttachment = firstGeometry.anchors.find(
+      (anchor) => anchor.kind === 'endpoint' && anchor.point[0] === 0,
+    )?.attachment
+    const endAttachment = secondGeometry.anchors.find(
+      (anchor) => anchor.kind === 'endpoint' && anchor.point[0] === 6,
+    )?.attachment
+    const measurement: MeasurementSegment = {
+      id: 'two-owner-measurement',
+      start: [0, 0, 0],
+      end: [6, 0, 0],
+      startAttachment,
+      endAttachment,
+      view: '2d',
+    }
+    const movedFirst = { ...firstWall, start: [1, 0], end: [3, 0] }
+    const movedSecond = { ...secondWall, start: [7, 0], end: [9, 0] }
+
+    const [resolved] = resolveAttachedMeasurementSegments([measurement], {
+      [movedFirst.id]: movedFirst,
+      [movedSecond.id]: movedSecond,
+    })
+
+    expect(resolved?.start).toEqual([1, 0, 0])
+    expect(resolved?.end).toEqual([9, 0, 0])
+  })
+
+  test('resolves attached endpoints from live shape overrides and move transforms', () => {
+    const wall = {
+      object: 'node',
+      id: 'live-attached-wall',
+      type: 'wall',
+      name: 'Live attached wall',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      start: [0, 0],
+      end: [4, 0],
+    } as any
+    const wallEndAttachment = collectPlanMeasurementSnapGeometry([wall]).anchors.find(
+      (anchor) => anchor.kind === 'endpoint' && anchor.point[0] === 4,
+    )?.attachment
+    const wallMeasurement: MeasurementSegment = {
+      id: 'live-wall-measurement',
+      start: [0, 0, 1],
+      end: [4, 0, 0],
+      endAttachment: wallEndAttachment,
+      view: '2d',
+    }
+    const [liveWallMeasurement] = resolveAttachedMeasurementSegments(
+      [wallMeasurement],
+      { [wall.id]: wall },
+      new Map(),
+      new Map([[wall.id, { end: [7, 0] }]]),
+    )
+    expect(liveWallMeasurement?.end).toEqual([7, 0, 0])
+
+    const zone = {
+      object: 'node',
+      id: 'live-attached-zone',
+      type: 'zone',
+      name: 'Live attached zone',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 2],
+        [0, 2],
+      ],
+    } as any
+    const zoneAttachment = collectPlanMeasurementSnapGeometry([zone]).anchors.find(
+      (anchor) => anchor.kind === 'vertex' && anchor.point[0] === 0 && anchor.point[2] === 0,
+    )?.attachment
+    const [liveZoneMeasurement] = resolveAttachedMeasurementSegments(
+      [
+        {
+          id: 'live-zone-measurement',
+          start: [0, 0, 0],
+          end: [1, 0, 1],
+          startAttachment: zoneAttachment,
+          view: '2d',
+        },
+      ],
+      { [zone.id]: zone },
+      new Map([[zone.id, { position: [3, 0, 4], rotation: 0 }]]),
+    )
+    expect(liveZoneMeasurement?.start).toEqual([3, 0, 4])
+  })
+
+  test('keeps 3D bounds attachments on the same corner through resize and movement', () => {
+    const nodeId = 'rendered-bounds-node'
+    const root = new Group()
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2))
+    root.add(mesh)
+    root.updateWorldMatrix(true, true)
+    sceneRegistry.nodes.set(nodeId as never, root)
+
+    const attachment = createNodeBoundsAttachment(nodeId, [1, 1, 1])
+    expect(attachment).toMatchObject({
+      feature: { kind: 'node-bounds', normalized: [1, 1, 1] },
+      nodeId,
+    })
+
+    mesh.scale.x = 2
+    root.position.x = 3
+    root.updateWorldMatrix(true, true)
+    const [resolved] = resolveAttachedMeasurementSegments(
+      [
+        {
+          id: 'rendered-bounds-measurement',
+          start: [0, 0, 0],
+          end: [1, 1, 1],
+          endAttachment: attachment,
+          measuredDistanceMeters: 2,
+          view: '3d',
+        },
+      ],
+      { [nodeId]: { id: nodeId } as never },
+    )
+
+    expect(resolved?.end).toEqual([5, 1, 1])
+    expect(resolved?.measuredDistanceMeters).toBeUndefined()
+    sceneRegistry.nodes.delete(nodeId as never)
+    mesh.geometry.dispose()
+  })
+
+  test('refreshes a rendered bounds attachment after an imperative mesh resize', () => {
+    const nodeId = 'rendered-bounds-refresh-node'
+    const root = new Group()
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2))
+    root.add(mesh)
+    root.updateWorldMatrix(true, true)
+    sceneRegistry.nodes.set(nodeId as never, root)
+
+    const segment: MeasurementSegment = {
+      id: 'rendered-bounds-refresh-measurement',
+      start: [0, 0, 0],
+      end: [1, 1, 1],
+      endAttachment: createNodeBoundsAttachment(nodeId, [1, 1, 1]),
+      view: '3d',
+    }
+    const nodes = { [nodeId]: { id: nodeId } as never }
+    const initial = resolveAttachedMeasurementSegments([segment], nodes)
+
+    mesh.scale.x = 2
+    root.updateWorldMatrix(true, true)
+    const refreshed = refreshRenderedBoundsMeasurementSegments(initial, [segment], nodes)
+
+    expect(refreshed).not.toBe(initial)
+    expect(refreshed[0]?.end).toEqual([2, 1, 1])
+    sceneRegistry.nodes.delete(nodeId as never)
+    mesh.geometry.dispose()
+  })
+
+  test('ignores editor handles when resolving rendered bounds attachments', () => {
+    const nodeId = 'rendered-bounds-editor-handle-node'
+    const root = new Group()
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2))
+    root.add(mesh)
+    root.updateWorldMatrix(true, true)
+    sceneRegistry.nodes.set(nodeId as never, root)
+
+    const attachment = createNodeBoundsAttachment(nodeId, [1, 1, 1])
+    const overlayHandle = new Mesh(new BoxGeometry(20, 20, 20))
+    overlayHandle.position.set(100, 0, 0)
+    overlayHandle.renderOrder = 1010
+    root.add(overlayHandle)
+    const overlayLayerHandle = new Mesh(new BoxGeometry(20, 20, 20))
+    overlayLayerHandle.position.set(-100, 0, 0)
+    overlayLayerHandle.layers.set(EDITOR_LAYER)
+    root.add(overlayLayerHandle)
+    root.updateWorldMatrix(true, true)
+
+    const [resolved] = resolveAttachedMeasurementSegments(
+      [
+        {
+          id: 'rendered-bounds-editor-handle-measurement',
+          start: [0, 0, 0],
+          end: [1, 1, 1],
+          endAttachment: attachment,
+          view: '3d',
+        },
+      ],
+      { [nodeId]: { id: nodeId } as never },
+    )
+
+    expect(resolved?.end).toEqual([1, 1, 1])
+    sceneRegistry.nodes.delete(nodeId as never)
+    mesh.geometry.dispose()
+    overlayHandle.geometry.dispose()
+    overlayLayerHandle.geometry.dispose()
+  })
+
+  test('keeps rendered bounds refresh identity when geometry did not move', () => {
+    const nodeId = 'rendered-bounds-refresh-stable-node'
+    const root = new Group()
+    const mesh = new Mesh(new BoxGeometry(2, 2, 2))
+    root.add(mesh)
+    root.updateWorldMatrix(true, true)
+    sceneRegistry.nodes.set(nodeId as never, root)
+
+    const segment: MeasurementSegment = {
+      id: 'rendered-bounds-refresh-stable-measurement',
+      start: [0, 0, 0],
+      end: [1, 1, 1],
+      endAttachment: createNodeBoundsAttachment(nodeId, [1, 1, 1]),
+      view: '3d',
+    }
+    const nodes = { [nodeId]: { id: nodeId } as never }
+    const initial = resolveAttachedMeasurementSegments([segment], nodes)
+    const refreshed = refreshRenderedBoundsMeasurementSegments(initial, [segment], nodes)
+
+    expect(refreshed).toBe(initial)
+    sceneRegistry.nodes.delete(nodeId as never)
+    mesh.geometry.dispose()
   })
 
   test('uses grid as fallback when no geometry is close enough', () => {

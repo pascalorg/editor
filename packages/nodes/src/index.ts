@@ -22,6 +22,7 @@ import { itemDefinition } from './item'
 import { levelDefinition } from './level'
 import { linesetDefinition } from './lineset'
 import { liquidLineDefinition } from './liquid-line'
+import { measurementDefinition } from './measurement'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
@@ -107,6 +108,7 @@ export const builtinPlugin: Plugin = {
     hvacEquipmentDefinition as unknown as AnyNodeDefinition,
     linesetDefinition as unknown as AnyNodeDefinition,
     liquidLineDefinition as unknown as AnyNodeDefinition,
+    measurementDefinition as unknown as AnyNodeDefinition,
     // DWV plumbing — Phase 2 of the research doc's plan.
     pipeSegmentDefinition as unknown as AnyNodeDefinition,
     pipeFittingDefinition as unknown as AnyNodeDefinition,
@@ -145,6 +147,7 @@ export { itemDefinition } from './item'
 export { levelDefinition } from './level'
 export { linesetDefinition } from './lineset'
 export { liquidLineDefinition, useLiquidLineToolOptions } from './liquid-line'
+export { measurementDefinition } from './measurement'
 export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'

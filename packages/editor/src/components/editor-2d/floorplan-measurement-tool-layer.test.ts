@@ -548,6 +548,10 @@ describe('floorplan measurement grid handlers', () => {
     expect(segment?.end[0]).toBeCloseTo(4)
     expect(segment?.end[1]).toBeCloseTo(0)
     expect(segment?.end[2]).toBeCloseTo(0)
+    expect(segment?.endAttachment).toMatchObject({
+      feature: { kind: 'plan-anchor' },
+      nodeId: 'wall_measurement_2d',
+    })
     expect(useMeasurementTool.getState().draggingSegmentEndpoint).toBeNull()
     expect(useMeasurementTool.getState().snapTarget).toMatchObject({
       kind: 'endpoint',

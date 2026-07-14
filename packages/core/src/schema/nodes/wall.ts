@@ -131,7 +131,9 @@ export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
   children: z
-    .array(z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id]))
+    .array(
+      z.union([ItemNode.shape.id, DoorNode.shape.id, WindowNode.shape.id, objectId('measurement')]),
+    )
     .default([]),
   // Legacy single-material wall finish. Read for backward compatibility only.
   material: MaterialSchema.optional(),

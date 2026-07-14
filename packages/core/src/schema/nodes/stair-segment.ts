@@ -29,6 +29,7 @@ export const StairSegmentNode = BaseNode.extend({
   height: z.number().default(2.5),
   // Number of steps (only used for stair type)
   stepCount: z.number().default(10),
+  children: z.array(objectId('measurement')).default([]),
   // Which side of the previous segment to attach to
   attachmentSide: AttachmentSide.default('front'),
   // Whether to fill the underside down to floor level

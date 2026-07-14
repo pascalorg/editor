@@ -2,6 +2,8 @@
 
 import {
   type AnyNodeId,
+  type Control,
+  type Effect,
   type Interactive,
   type LightEffect,
   pointInPolygon,
@@ -107,7 +109,7 @@ export function GlbInteractive({
     const store = useInteractive.getState()
     for (const item of items) {
       store.initItem(item.pascalId, item.interactive)
-      item.interactive.controls.forEach((control, i) => {
+      item.interactive.controls.forEach((control: Control, i: number) => {
         if (control.kind === 'toggle') store.setControlValue(item.pascalId, i, true)
       })
     }
@@ -118,7 +120,10 @@ export function GlbInteractive({
   }, [items])
 
   const animationItems = useMemo(
-    () => items.filter((item) => item.interactive.effects.some((e) => e.kind === 'animation')),
+    () =>
+      items.filter((item) =>
+        item.interactive.effects.some((effect: Effect) => effect.kind === 'animation'),
+      ),
     [items],
   )
 
@@ -134,8 +139,8 @@ export function GlbInteractive({
       const object = identity.get(item.pascalId)
       if (!object) continue
       const controls = item.interactive.controls
-      const toggleIndex = controls.findIndex((c) => c.kind === 'toggle')
-      const sliderIndex = controls.findIndex((c) => c.kind === 'slider')
+      const toggleIndex = controls.findIndex((control: Control) => control.kind === 'toggle')
+      const sliderIndex = controls.findIndex((control: Control) => control.kind === 'slider')
       const slider = sliderIndex >= 0 ? (controls[sliderIndex] as SliderControl) : null
       regs.push({
         key: item.pascalId,
@@ -465,7 +470,9 @@ function GlbItemAnimation({
   actions: Record<string, AnimationAction | null>
 }) {
   const values = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
-  const toggleIndex = item.interactive.controls.findIndex((c) => c.kind === 'toggle')
+  const toggleIndex = item.interactive.controls.findIndex(
+    (control: Control) => control.kind === 'toggle',
+  )
   const isOn = toggleIndex >= 0 ? Boolean(values?.[toggleIndex] ?? true) : true
 
   useEffect(() => {
@@ -558,7 +565,7 @@ function GlbItemControls({
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {item.interactive.controls.map((control, i) => (
+        {item.interactive.controls.map((control: Control, i: number) => (
           <ControlWidget
             control={control}
             key={i}

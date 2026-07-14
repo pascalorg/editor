@@ -8,7 +8,7 @@ import { SurfaceHoleMetadata } from './surface-hole-metadata'
 export const CeilingNode = BaseNode.extend({
   id: objectId('ceiling'),
   type: nodeType('ceiling'),
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z.array(z.union([ItemNode.shape.id, objectId('measurement')])).default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Per-slot material overrides on the unified slot model, mirroring

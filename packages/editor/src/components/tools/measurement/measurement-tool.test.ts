@@ -2,7 +2,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:te
 import {
   type AnyNode,
   type AnyNodeId,
+  CabinetModuleNode,
+  CabinetNode,
   type GridEvent,
+  ItemNode,
   type NodeEvent,
   sceneRegistry,
   useScene,
@@ -1043,6 +1046,10 @@ describe('measurement 3D grid handlers', () => {
 
     expect(useMeasurementTool.getState().draft).toMatchObject({
       start: [0, 0, 0],
+      startAttachment: {
+        feature: { kind: 'plan-anchor' },
+        nodeId: 'wall_measurement',
+      },
       view: '3d',
     })
     expect(useMeasurementTool.getState().snapTarget).toMatchObject({
@@ -2055,5 +2062,182 @@ describe('measurement 3D grid handlers', () => {
       end: [-1, 0, 1.5],
       view: '3d',
     })
+  })
+
+  test('alt-click on an item parents the quick measurement scene node under that item', () => {
+    const item = ItemNode.parse({
+      id: 'item_measurement_quick',
+      asset: {
+        id: 'asset_measurement_quick',
+        category: 'furniture',
+        name: 'Measured item',
+        thumbnail: '/item.webp',
+        src: '/item.glb',
+      },
+    })
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    seedScene([item])
+    sceneRegistry.nodes.set(item.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(item, [0, 0, 0], { altKey: true, object: mesh }))
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      parentId: item.id,
+    })
+    expect((useScene.getState().nodes[item.id] as { children: string[] }).children).toContain(
+      sceneNode!.id,
+    )
+  })
+
+  test('two normal item surface clicks parent the measurement scene node under that item', () => {
+    const item = ItemNode.parse({
+      id: 'item_measurement_drawn',
+      asset: {
+        id: 'asset_measurement_drawn',
+        category: 'furniture',
+        name: 'Measured item',
+        thumbnail: '/item.webp',
+        src: '/item.glb',
+      },
+    })
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    seedScene([item])
+    sceneRegistry.nodes.set(item.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(item, [-1, 0, -1.5], { object: mesh }))
+    handleMeasurementNodeClick3D(nodeEvent(item, [1, 0, -1.5], { object: mesh }))
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      parentId: item.id,
+    })
+    expect((useScene.getState().nodes[item.id] as { children: string[] }).children).toContain(
+      sceneNode!.id,
+    )
+  })
+
+  test('two normal merged roof surface clicks parent the measurement scene node under the hit segment', () => {
+    const roof = roofNode()
+    const segment = roofSegmentNode()
+    const roofMesh = new Mesh(new BoxGeometry(4, 2, 2))
+    const segmentMesh = new Mesh(new BoxGeometry(4, 2, 2))
+    seedScene([roof, segment])
+    sceneRegistry.nodes.set(roof.id as AnyNodeId, roofMesh)
+    sceneRegistry.nodes.set(segment.id as AnyNodeId, segmentMesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(roof, [0, 0, 0]))
+    handleMeasurementNodeClick3D(nodeEvent(roof, [1, 0, 0]))
+
+    const segmentState = useMeasurementTool.getState().segments[0]
+    expect(segmentState?.startAttachment).toMatchObject({
+      nodeId: roof.id,
+      ownerNodeId: segment.id,
+    })
+    expect(segmentState?.endAttachment).toMatchObject({
+      nodeId: roof.id,
+      ownerNodeId: segment.id,
+    })
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      parentId: segment.id,
+    })
+    expect((useScene.getState().nodes[segment.id] as { children: string[] }).children).toContain(
+      sceneNode!.id,
+    )
+    expect((useScene.getState().nodes[roof.id] as { children: string[] }).children).not.toContain(
+      sceneNode!.id,
+    )
+    roofMesh.geometry.dispose()
+    segmentMesh.geometry.dispose()
+  })
+
+  test('two normal cabinet run surface clicks parent the measurement scene node under the hit module', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_measurement_drawn',
+      children: ['cabinet-module_measurement_left', 'cabinet-module_measurement_right'],
+    })
+    const leftModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_measurement_left',
+      parentId: run.id,
+      position: [-1, 0, 0],
+      width: 2,
+      depth: 1,
+    })
+    const rightModule = CabinetModuleNode.parse({
+      id: 'cabinet-module_measurement_right',
+      parentId: run.id,
+      position: [1, 0, 0],
+      width: 2,
+      depth: 1,
+    })
+    const mesh = new Mesh(new BoxGeometry(4, 1, 1))
+    mesh.position.y = 0.5
+    seedScene([run, leftModule, rightModule])
+    sceneRegistry.nodes.set(run.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(run, [1.2, 0, 0], { object: mesh }))
+    handleMeasurementNodeClick3D(nodeEvent(run, [1.8, 0, 0], { object: mesh }))
+
+    const segmentState = useMeasurementTool.getState().segments[0]
+    expect(segmentState?.startAttachment).toMatchObject({
+      nodeId: run.id,
+      ownerNodeId: rightModule.id,
+    })
+    expect(segmentState?.endAttachment).toMatchObject({
+      nodeId: run.id,
+      ownerNodeId: rightModule.id,
+    })
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      parentId: rightModule.id,
+    })
+    expect(
+      (useScene.getState().nodes[rightModule.id] as { children: string[] }).children,
+    ).toContain(sceneNode!.id)
+    expect((useScene.getState().nodes[run.id] as { children: string[] }).children).not.toContain(
+      sceneNode!.id,
+    )
+    mesh.geometry.dispose()
+  })
+
+  test('two unsnapped item surface clicks still attach the measurement scene node to that item', () => {
+    const item = ItemNode.parse({
+      id: 'item_measurement_unsnapped',
+      asset: {
+        id: 'asset_measurement_unsnapped',
+        category: 'furniture',
+        name: 'Measured item',
+        thumbnail: '/item.webp',
+        src: '/item.glb',
+      },
+    })
+    const mesh = new Mesh(new BoxGeometry(2, 1, 3))
+    mesh.position.y = 0.5
+    seedScene([item])
+    sceneRegistry.nodes.set(item.id as AnyNodeId, mesh)
+
+    handleMeasurementNodeClick3D(nodeEvent(item, [0.23, 0.42, 0.31], { object: mesh }))
+    handleMeasurementNodeClick3D(nodeEvent(item, [0.67, 0.48, 0.94], { object: mesh }))
+
+    const sceneNode = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement',
+    )
+    expect(sceneNode).toMatchObject({
+      parentId: item.id,
+    })
+    expect((useScene.getState().nodes[item.id] as { children: string[] }).children).toContain(
+      sceneNode!.id,
+    )
   })
 })

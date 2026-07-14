@@ -3,9 +3,11 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  AnyNode as AnyNodeSchema,
   type GeometryContext,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionPerimeter,
+  MeasurementNode,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -16,12 +18,24 @@ export type MeasurementView = '2d' | '3d'
 export type MeasurementMode = 'distance' | 'area' | 'perimeter' | 'angle'
 export type MeasurementDisplayPrecision = 'coarse' | 'standard' | 'fine'
 
+export type MeasurementPointAttachment = {
+  buildingId?: string
+  feature:
+    | { index: number; kind: 'plan-anchor' }
+    | { index: number; kind: 'plan-segment'; t: number }
+    | { kind: 'node-bounds'; normalized: MeasurementPoint }
+  nodeId: string
+  ownerNodeId?: string
+}
+
 export type MeasurementSegment = {
   id: string
   start: MeasurementPoint
   end: MeasurementPoint
   view: MeasurementView
   measuredDistanceMeters?: number
+  startAttachment?: MeasurementPointAttachment
+  endAttachment?: MeasurementPointAttachment
 }
 
 export type MeasurementArea = {
@@ -53,6 +67,7 @@ export type MeasurementDraft = {
   end: MeasurementPoint | null
   view: MeasurementView
   surfaceNormal?: MeasurementPoint
+  startAttachment?: MeasurementPointAttachment
 }
 
 export type MeasurementAngleDraft = {
@@ -78,6 +93,7 @@ export type MeasurementCursor = {
 }
 
 export type MeasurementSnapTarget = {
+  attachment?: MeasurementPointAttachment
   guideLine?: {
     end: MeasurementPoint
     start: MeasurementPoint
@@ -107,6 +123,7 @@ export type MeasurementSnapKind =
 export type MeasurementSnapSettings = Record<MeasurementSnapKind, boolean>
 export type MeasurementSegmentEndpoint = 'end' | 'start'
 export type DraggingMeasurementSegmentEndpoint = {
+  attachment?: MeasurementPointAttachment | null
   detachLinkedEndpoints?: boolean
   endpoint: MeasurementSegmentEndpoint
   hasMoved?: boolean
@@ -116,6 +133,7 @@ export type DraggingMeasurementSegmentEndpoint = {
     id: string
     measuredDistanceMeters?: number
     point: MeasurementPoint
+    attachment?: MeasurementPointAttachment
   }>
 }
 
@@ -160,10 +178,19 @@ type MeasurementToolState = {
   draggingSegmentEndpoint: DraggingMeasurementSegmentEndpoint | null
   suppressNextPlacementClick: boolean
   selectedId: string | null
-  begin: (view: MeasurementView, start: MeasurementPoint, surfaceNormal?: MeasurementPoint) => void
+  begin: (
+    view: MeasurementView,
+    start: MeasurementPoint,
+    surfaceNormal?: MeasurementPoint,
+    startAttachment?: MeasurementPointAttachment,
+  ) => void
   update: (end: MeasurementPoint) => void
   updateDraftLength: (lengthMeters: number) => void
-  commit: (end?: MeasurementPoint, measuredDistanceMeters?: number) => void
+  commit: (
+    end?: MeasurementPoint,
+    measuredDistanceMeters?: number,
+    endAttachment?: MeasurementPointAttachment,
+  ) => void
   beginAngle: (
     view: MeasurementView,
     first: MeasurementPoint,
@@ -195,6 +222,7 @@ type MeasurementToolState = {
     endpoint: MeasurementSegmentEndpoint,
     point: MeasurementPoint,
     detachLinkedEndpoints?: boolean,
+    attachment?: MeasurementPointAttachment | null,
   ) => void
   endSegmentEndpointDrag: (options?: {
     detachLinkedEndpoints?: boolean
@@ -208,6 +236,8 @@ type MeasurementToolState = {
     start: MeasurementPoint,
     end: MeasurementPoint,
     measuredDistanceMeters?: number,
+    startAttachment?: MeasurementPointAttachment,
+    endAttachment?: MeasurementPointAttachment,
   ) => void
   updateSegmentLength: (id: string, lengthMeters: number) => void
   addArea: (
@@ -231,8 +261,109 @@ const MEASUREMENT_ENDPOINT_LINK_TOLERANCE_METERS = 1e-5
 const PERIMETER_BACKFILL_LABEL_TOLERANCE_METERS = 0.05
 const PERIMETER_BACKFILL_LENGTH_TOLERANCE_METERS = 1e-3
 
+function measurementSceneParentId(
+  segment: MeasurementSegment,
+  nodes: Readonly<Record<string, AnyNode>>,
+): AnyNodeId | null {
+  for (const attachment of [segment.startAttachment, segment.endAttachment]) {
+    if (attachment?.ownerNodeId && nodes[attachment.ownerNodeId]) {
+      return attachment.ownerNodeId as AnyNodeId
+    }
+    if (attachment && nodes[attachment.nodeId]) return attachment.nodeId as AnyNodeId
+  }
+  return null
+}
+
+function appendMeasurementSceneChild(parent: AnyNode, id: AnyNodeId): AnyNode {
+  const currentChildren = (parent as { children?: unknown }).children
+  const children = Array.isArray(currentChildren) ? currentChildren : []
+  const candidate = {
+    ...parent,
+    children: Array.from(new Set([...children, id])),
+  }
+
+  const schema = nodeRegistry.get(parent.type)?.schema ?? AnyNodeSchema
+  return schema.safeParse(candidate).success ? (candidate as AnyNode) : parent
+}
+
+function syncLinearMeasurementSceneNodes(segments: ReadonlyArray<MeasurementSegment>) {
+  useScene.setState((state) => {
+    const existing = Object.values(state.nodes).filter(
+      (node): node is Extract<AnyNode, { type: 'measurement' }> => node.type === 'measurement',
+    )
+    const existingIds = new Set<string>(existing.map((node) => node.id))
+    const existingByMeasurementId = new Map(existing.map((node) => [node.measurementId, node]))
+    const nodes = Object.fromEntries(
+      Object.entries(state.nodes)
+        .filter(([id]) => !existingIds.has(id as AnyNodeId))
+        .map(([id, node]) => {
+          const children = (node as { children?: unknown }).children
+          if (!Array.isArray(children)) return [id, node]
+          return [
+            id,
+            { ...node, children: children.filter((childId) => !existingIds.has(childId)) },
+          ]
+        }),
+    ) as Record<AnyNodeId, AnyNode>
+    const rootNodeIds = state.rootNodeIds.filter((id) => !existingIds.has(id))
+
+    for (const segment of segments) {
+      const parentId = measurementSceneParentId(segment, nodes)
+      const id = `measurement_${segment.id}` as AnyNodeId
+      nodes[id] = MeasurementNode.parse({
+        ...existingByMeasurementId.get(segment.id),
+        end: segment.end,
+        endAttachment: segment.endAttachment,
+        id,
+        measuredDistanceMeters: segment.measuredDistanceMeters,
+        measurementId: segment.id,
+        parentId,
+        start: segment.start,
+        startAttachment: segment.startAttachment,
+        view: segment.view,
+      })
+
+      if (!parentId) {
+        rootNodeIds.push(id)
+        continue
+      }
+      const parent = nodes[parentId]
+      if (parent) {
+        nodes[parentId] = appendMeasurementSceneChild(parent, id)
+      }
+    }
+
+    return { nodes, rootNodeIds }
+  })
+}
+
 export function distanceBetweenMeasurements(a: MeasurementPoint, b: MeasurementPoint): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+}
+
+function sameMeasurementPoint(a: MeasurementPoint | undefined, b: MeasurementPoint | undefined) {
+  return Boolean(a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2])
+}
+
+function sameMeasurementPointAttachment(
+  a: MeasurementPointAttachment | null | undefined,
+  b: MeasurementPointAttachment | null | undefined,
+) {
+  if (!a || !b) return a == null && b == null
+  if (a.nodeId !== b.nodeId || a.ownerNodeId !== b.ownerNodeId || a.buildingId !== b.buildingId) {
+    return false
+  }
+  if (a.feature.kind !== b.feature.kind) return false
+  if (a.feature.kind === 'node-bounds' && b.feature.kind === 'node-bounds') {
+    return sameMeasurementPoint(a.feature.normalized, b.feature.normalized)
+  }
+  if (a.feature.kind === 'plan-anchor' && b.feature.kind === 'plan-anchor') {
+    return a.feature.index === b.feature.index
+  }
+  if (a.feature.kind === 'plan-segment' && b.feature.kind === 'plan-segment') {
+    return a.feature.index === b.feature.index && a.feature.t === b.feature.t
+  }
+  return false
 }
 
 export function isDraggingMeasurementEndpoint(
@@ -258,6 +389,7 @@ function collectLinkedMeasurementEndpoints(
       const dz = candidate[2] - point[2]
       if (dx * dx + dy * dy + dz * dz <= toleranceSq) {
         linkedEndpoints.push({
+          attachment: segment[`${endpoint}Attachment`],
           endpoint,
           id: segment.id,
           measuredDistanceMeters: segment.measuredDistanceMeters,
@@ -356,6 +488,51 @@ function normalizePoint(value: unknown): MeasurementPoint | null {
   const point = value.map((entry) => (typeof entry === 'number' ? entry : Number.NaN))
   if (!point.every(Number.isFinite)) return null
   return point as MeasurementPoint
+}
+
+function normalizePointAttachment(value: unknown): MeasurementPointAttachment | undefined {
+  if (!(value && typeof value === 'object')) return undefined
+  const source = value as Partial<MeasurementPointAttachment>
+  if (
+    typeof source.nodeId !== 'string' ||
+    !(source.feature && typeof source.feature === 'object')
+  ) {
+    return undefined
+  }
+
+  const feature = source.feature as MeasurementPointAttachment['feature']
+  if (feature.kind === 'plan-anchor' && Number.isInteger(feature.index) && feature.index >= 0) {
+    return {
+      nodeId: source.nodeId,
+      buildingId: typeof source.buildingId === 'string' ? source.buildingId : undefined,
+      ownerNodeId: typeof source.ownerNodeId === 'string' ? source.ownerNodeId : undefined,
+      feature: { kind: feature.kind, index: feature.index },
+    }
+  }
+  if (
+    feature.kind === 'plan-segment' &&
+    Number.isInteger(feature.index) &&
+    feature.index >= 0 &&
+    Number.isFinite(feature.t)
+  ) {
+    return {
+      nodeId: source.nodeId,
+      buildingId: typeof source.buildingId === 'string' ? source.buildingId : undefined,
+      ownerNodeId: typeof source.ownerNodeId === 'string' ? source.ownerNodeId : undefined,
+      feature: { kind: feature.kind, index: feature.index, t: Math.min(1, Math.max(0, feature.t)) },
+    }
+  }
+  if (feature.kind === 'node-bounds') {
+    const normalized = normalizePoint(feature.normalized)
+    if (!normalized) return undefined
+    return {
+      nodeId: source.nodeId,
+      buildingId: typeof source.buildingId === 'string' ? source.buildingId : undefined,
+      ownerNodeId: typeof source.ownerNodeId === 'string' ? source.ownerNodeId : undefined,
+      feature: { kind: feature.kind, normalized },
+    }
+  }
+  return undefined
 }
 
 function measurementGeometryContextForNode(node: AnyNode): GeometryContext {
@@ -584,6 +761,8 @@ export function normalizePersistedMeasurements(value: unknown): PersistedMeasure
         start,
         end,
         view: segment.view,
+        startAttachment: normalizePointAttachment(segment.startAttachment),
+        endAttachment: normalizePointAttachment(segment.endAttachment),
         measuredDistanceMeters: Number.isFinite(segment.measuredDistanceMeters)
           ? segment.measuredDistanceMeters
           : undefined,
@@ -698,6 +877,7 @@ export function hydrateMeasurements(value: unknown) {
     snapTarget: null,
     suppressNextPlacementClick: false,
   })
+  syncLinearMeasurementSceneNodes(measurements.segments)
 }
 
 export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
@@ -720,9 +900,9 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
   draggingSegmentEndpoint: null,
   suppressNextPlacementClick: false,
   selectedId: null,
-  begin: (view, start, surfaceNormal) =>
+  begin: (view, start, surfaceNormal, startAttachment) =>
     set({
-      draft: { start, end: null, surfaceNormal, view },
+      draft: { start, end: null, surfaceNormal, startAttachment, view },
       polygonDraft: null,
       previewArea: null,
       previewPerimeter: null,
@@ -745,7 +925,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       return { draft: { ...state.draft, end } }
     })
   },
-  commit: (end, measuredDistanceMeters) => {
+  commit: (end, measuredDistanceMeters, endAttachment) => {
     const draft = get().draft
     if (!draft) return
 
@@ -764,7 +944,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     const id = `measurement-${nextMeasurementId++}`
     set((state) => ({
       draft: state.continuousMeasurement
-        ? { start: resolvedEnd, end: null, view: draft.view }
+        ? { start: resolvedEnd, end: null, startAttachment: endAttachment, view: draft.view }
         : null,
       previewArea: null,
       previewPerimeter: null,
@@ -776,11 +956,14 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           id,
           start: draft.start,
           end: resolvedEnd,
+          startAttachment: draft.startAttachment,
+          endAttachment,
           view: draft.view,
           measuredDistanceMeters,
         },
       ],
     }))
+    syncLinearMeasurementSceneNodes(get().segments)
   },
   beginAngle: (view, vertex, referenceLine) =>
     set({
@@ -1038,6 +1221,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         : []
       return {
         draggingSegmentEndpoint: {
+          attachment: segment?.[`${endpoint}Attachment`] ?? null,
           detachLinkedEndpoints: false,
           endpoint,
           hasMoved: false,
@@ -1048,7 +1232,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         suppressNextPlacementClick: false,
       }
     }),
-  updateSegmentEndpoint: (id, endpoint, point, detachLinkedEndpoints = false) =>
+  updateSegmentEndpoint: (id, endpoint, point, detachLinkedEndpoints = false, attachment) => {
     set((state) => {
       const drag = state.draggingSegmentEndpoint
       const activeDrag = drag?.id === id && drag.endpoint === endpoint ? drag : null
@@ -1058,6 +1242,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         : sourceSegment
           ? [
               {
+                attachment: sourceSegment[`${endpoint}Attachment`],
                 endpoint,
                 id,
                 measuredDistanceMeters: sourceSegment.measuredDistanceMeters,
@@ -1071,34 +1256,80 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         endpoints.push(linkedEndpoint)
         linkedBySegment.set(linkedEndpoint.id, endpoints)
       }
+      const nextDraggingSegmentEndpoint = activeDrag
+        ? {
+            ...activeDrag,
+            attachment: attachment === undefined ? activeDrag.attachment : attachment,
+            detachLinkedEndpoints,
+            hasMoved: true,
+          }
+        : state.draggingSegmentEndpoint
+      const draggingChanged =
+        nextDraggingSegmentEndpoint !== state.draggingSegmentEndpoint &&
+        (nextDraggingSegmentEndpoint?.detachLinkedEndpoints !== activeDrag?.detachLinkedEndpoints ||
+          nextDraggingSegmentEndpoint?.hasMoved !== activeDrag?.hasMoved ||
+          !sameMeasurementPointAttachment(
+            nextDraggingSegmentEndpoint?.attachment,
+            activeDrag?.attachment,
+          ))
+      let segmentsChanged = false
+      const nextSegments = state.segments.map((segment) => {
+        const endpoints = linkedBySegment.get(segment.id)
+        if (!endpoints) return segment
+        let start = segment.start
+        let end = segment.end
+        let startAttachment = segment.startAttachment
+        let endAttachment = segment.endAttachment
+        for (const linkedEndpoint of endpoints) {
+          const isPrimary = linkedEndpoint.id === id && linkedEndpoint.endpoint === endpoint
+          const nextPoint = isPrimary || !detachLinkedEndpoints ? point : linkedEndpoint.point
+          const nextAttachment =
+            isPrimary || !detachLinkedEndpoints
+              ? attachment === undefined
+                ? linkedEndpoint.attachment
+                : (attachment ?? undefined)
+              : linkedEndpoint.attachment
+          if (linkedEndpoint.endpoint === 'start') {
+            start = nextPoint
+            startAttachment = nextAttachment
+          } else {
+            end = nextPoint
+            endAttachment = nextAttachment
+          }
+        }
+        const measuredDistanceMeters =
+          segment.id === id || !detachLinkedEndpoints
+            ? undefined
+            : endpoints[0]?.measuredDistanceMeters
+        if (
+          sameMeasurementPoint(segment.start, start) &&
+          sameMeasurementPoint(segment.end, end) &&
+          sameMeasurementPointAttachment(segment.startAttachment, startAttachment) &&
+          sameMeasurementPointAttachment(segment.endAttachment, endAttachment) &&
+          segment.measuredDistanceMeters === measuredDistanceMeters
+        ) {
+          return segment
+        }
+        segmentsChanged = true
+        return {
+          ...segment,
+          start,
+          end,
+          startAttachment,
+          endAttachment,
+          measuredDistanceMeters,
+        }
+      })
+
+      if (!draggingChanged && !segmentsChanged) return state
 
       return {
-        draggingSegmentEndpoint: activeDrag
-          ? { ...activeDrag, detachLinkedEndpoints, hasMoved: true }
-          : state.draggingSegmentEndpoint,
-        segments: state.segments.map((segment) => {
-          const endpoints = linkedBySegment.get(segment.id)
-          if (!endpoints) return segment
-          let start = segment.start
-          let end = segment.end
-          for (const linkedEndpoint of endpoints) {
-            const isPrimary = linkedEndpoint.id === id && linkedEndpoint.endpoint === endpoint
-            const nextPoint = isPrimary || !detachLinkedEndpoints ? point : linkedEndpoint.point
-            if (linkedEndpoint.endpoint === 'start') start = nextPoint
-            else end = nextPoint
-          }
-          return {
-            ...segment,
-            start,
-            end,
-            measuredDistanceMeters:
-              segment.id === id || !detachLinkedEndpoints
-                ? undefined
-                : endpoints[0]?.measuredDistanceMeters,
-          }
-        }),
+        draggingSegmentEndpoint: nextDraggingSegmentEndpoint,
+        segments: nextSegments,
       }
-    }),
+    })
+    syncLinearMeasurementSceneNodes(get().segments)
+  },
   endSegmentEndpointDrag: (options) => {
     const drag = get().draggingSegmentEndpoint
     if (
@@ -1113,6 +1344,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           drag.endpoint,
           segment[drag.endpoint],
           options.detachLinkedEndpoints,
+          drag.attachment,
         )
       }
     }
@@ -1126,20 +1358,22 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     if (shouldSuppress) set({ suppressNextPlacementClick: false })
     return shouldSuppress
   },
-  removeMeasurement: (id) =>
+  removeMeasurement: (id) => {
     set((state) => ({
       areas: state.areas.filter((area) => area.id !== id),
       angles: state.angles.filter((angle) => angle.id !== id),
       perimeters: state.perimeters.filter((perimeter) => perimeter.id !== id),
       selectedId: state.selectedId === id ? null : state.selectedId,
       segments: state.segments.filter((segment) => segment.id !== id),
-    })),
+    }))
+    syncLinearMeasurementSceneNodes(get().segments)
+  },
   deleteSelected: () => {
     const selectedId = get().selectedId
     if (!selectedId) return
     get().removeMeasurement(selectedId)
   },
-  addSegment: (view, start, end, measuredDistanceMeters) => {
+  addSegment: (view, start, end, measuredDistanceMeters, startAttachment, endAttachment) => {
     if (distanceBetweenMeasurements(start, end) < 1e-4) {
       set({ draft: null, previewArea: null, previewPerimeter: null, previewSegment: null })
       return
@@ -1159,11 +1393,14 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           id,
           start,
           end,
+          startAttachment,
+          endAttachment,
           view,
           measuredDistanceMeters,
         },
       ],
     }))
+    syncLinearMeasurementSceneNodes(get().segments)
   },
   updateSegmentLength: (id, lengthMeters) => {
     if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-4)) return
@@ -1178,9 +1415,10 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
           segment.start[1] + (segment.end[1] - segment.start[1]) * scale,
           segment.start[2] + (segment.end[2] - segment.start[2]) * scale,
         ]
-        return { ...segment, end, measuredDistanceMeters: lengthMeters }
+        return { ...segment, end, endAttachment: undefined, measuredDistanceMeters: lengthMeters }
       }),
     }))
+    syncLinearMeasurementSceneNodes(get().segments)
   },
   addArea: (view, labelPoint, areaSquareMeters, boundaryPoints) => {
     if (!(Number.isFinite(areaSquareMeters) && areaSquareMeters > 1e-6)) {
@@ -1259,7 +1497,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       snapTarget: null,
       suppressNextPlacementClick: false,
     }),
-  clear: () =>
+  clear: () => {
     set({
       angleDraft: null,
       angles: [],
@@ -1276,5 +1514,7 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       segments: [],
       snapTarget: null,
       suppressNextPlacementClick: false,
-    }),
+    })
+    syncLinearMeasurementSceneNodes([])
+  },
 }))

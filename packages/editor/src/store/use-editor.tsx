@@ -443,6 +443,9 @@ type EditorState = {
   showReferenceFloor: boolean
   toggleReferenceFloor: () => void
   setShowReferenceFloor: (show: boolean) => void
+  showMeasurements: boolean
+  toggleMeasurements: () => void
+  setShowMeasurements: (show: boolean) => void
   referenceFloorOffset: number
   setReferenceFloorOffset: (offset: number) => void
   referenceFloorOpacity: number
@@ -491,6 +494,7 @@ type PersistedEditorLayoutState = Pick<
   | 'snappingModeByContext'
   | 'continuationByContext'
   | 'showReferenceFloor'
+  | 'showMeasurements'
   | 'referenceFloorOffset'
   | 'referenceFloorOpacity'
 >
@@ -525,6 +529,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     cabinet: CONTINUATION_PROFILES.cabinet.default,
   },
   showReferenceFloor: false,
+  showMeasurements: false,
   referenceFloorOffset: 1,
   referenceFloorOpacity: 0.35,
 }
@@ -692,6 +697,7 @@ function normalizePersistedEditorLayoutState(
     },
     continuationByContext: normalizeContinuationByContext(state),
     showReferenceFloor: state?.showReferenceFloor === true,
+    showMeasurements: state?.showMeasurements === true,
     referenceFloorOffset:
       typeof state?.referenceFloorOffset === 'number' && state.referenceFloorOffset >= 1
         ? Math.floor(state.referenceFloorOffset)
@@ -1194,6 +1200,9 @@ const useEditor = create<EditorState>()(
       toggleReferenceFloor: () =>
         set((state) => ({ showReferenceFloor: !state.showReferenceFloor })),
       setShowReferenceFloor: (show) => set({ showReferenceFloor: show }),
+      showMeasurements: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.showMeasurements,
+      toggleMeasurements: () => set((state) => ({ showMeasurements: !state.showMeasurements })),
+      setShowMeasurements: (show) => set({ showMeasurements: show }),
       referenceFloorOffset: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.referenceFloorOffset,
       setReferenceFloorOffset: (offset) =>
         set({ referenceFloorOffset: Math.max(1, Math.floor(offset)) }),
@@ -1285,6 +1294,7 @@ const useEditor = create<EditorState>()(
         snappingModeByContext: state.snappingModeByContext,
         continuationByContext: state.continuationByContext,
         showReferenceFloor: state.showReferenceFloor,
+        showMeasurements: state.showMeasurements,
         referenceFloorOffset: state.referenceFloorOffset,
         referenceFloorOpacity: state.referenceFloorOpacity,
       }),
