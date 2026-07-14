@@ -57,7 +57,7 @@ export type SurfacePlanSnapResult = {
   wallIds: string[]
 }
 
-function getLevelWalls(
+export function getLevelWalls(
   nodes: Readonly<Record<string, AnyNode>>,
   levelId: string | null | undefined,
   walls?: readonly WallNode[],

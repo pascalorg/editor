@@ -60,8 +60,26 @@ export type PolygonAffordanceSnapContext<N extends PolygonShape & { id: AnyNodeI
   mode: PolygonAffordanceMode
 }
 
+export type PolygonEdgeSnapContext<N extends PolygonShape & { id: AnyNodeId }> = {
+  node: N
+  nodes: Record<AnyNodeId, AnyNode>
+  /** Candidate edge (after the perpendicular translation), in ring order. */
+  edge: [[number, number], [number, number]]
+  rawPoint: WallPlanPoint
+  modifiers: FloorplanAffordanceModifiers
+  holeIndex?: number
+}
+
 type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
   resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
+  /**
+   * `move-edge` only: absolute edge snap. The point-based resolver runs
+   * on the CURSOR, so any grab offset between the pointer and the edge
+   * line gets baked into a point snap; an edge that must land exactly on
+   * a target line (wall centerline) snaps here instead — return the
+   * translated edge, or `null` to keep the candidate.
+   */
+  snapEdge?: (context: PolygonEdgeSnapContext<N>) => [[number, number], [number, number]] | null
 }
 
 type PolygonShape = {
@@ -334,8 +352,33 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
             holeIndex,
             mode: 'move-edge',
           })
-          const normalDistance =
+          let normalDistance =
             (snappedPoint[0] - startX) * normalX + (snappedPoint[1] - startY) * normalY
+          if (options?.snapEdge) {
+            const candidate: [[number, number], [number, number]] = [
+              [
+                startVertex[0] + normalX * normalDistance,
+                startVertex[1] + normalY * normalDistance,
+              ],
+              [endVertex[0] + normalX * normalDistance, endVertex[1] + normalY * normalDistance],
+            ]
+            const snappedEdge = options.snapEdge({
+              node,
+              nodes,
+              edge: candidate,
+              rawPoint,
+              modifiers,
+              holeIndex,
+            })
+            if (snappedEdge) {
+              // Measure the final travel from the ORIGINAL edge so the
+              // stored edge lands exactly on the snapped line — grab
+              // offset and pointer position drop out entirely.
+              normalDistance =
+                (snappedEdge[0][0] - startVertex[0]) * normalX +
+                (snappedEdge[0][1] - startVertex[1]) * normalY
+            }
+          }
           const nextRing: [number, number][] = originalRing.map((p, i) => {
             if (i === edgeStartIndex || i === edgeEndIndex) {
               return [p[0] + normalX * normalDistance, p[1] + normalY * normalDistance]

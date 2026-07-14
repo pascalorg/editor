@@ -338,8 +338,11 @@ export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
 export {
   clearSlabSnapFeedback,
+  resolveSlabEdgeBandSnap,
   resolveSlabPlanPointSnap,
   SLAB_ALIGNMENT_THRESHOLD_M,
+  type SlabEdgeBandSnapInput,
+  type SlabEdgeBandSnapResult,
   type SlabPlanSnapInput,
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'

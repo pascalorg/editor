@@ -77,8 +77,10 @@ export {
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   getRenderableSlabPolygon,
+  type SlabEdgeWallBandSnap,
   type SlabPolygonContext,
   slabPolygonContextFromGeometry,
+  snapSlabEdgeToWallBand,
 } from './lib/slab-polygon'
 export {
   deriveSlotId,

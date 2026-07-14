@@ -1,3 +1,4 @@
+import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
@@ -393,7 +394,7 @@ function polylineInsideLength(
   return total
 }
 
-type WallOverlapInput = {
+export type WallOverlapInput = {
   start: [number, number]
   end: [number, number]
   curveOffset?: number
@@ -516,6 +517,74 @@ export function wallOverlapsPolygon(
   }
   const threshold = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, centerLength * 0.5))
   return overlap >= threshold
+}
+
+/**
+ * Highest elevation among the slabs a wall stands on, or 0 when it
+ * stands on none. Overlap is evaluated against each slab's RENDERED
+ * footprint (`getRenderableSlabPolygon` with the level walls +
+ * siblings), not the stored polygon — legacy polygons stored at wall
+ * faces or with old baked offsets fall short of the wall body, but
+ * their band-adopted rendered edge reaches the wall's outer face, so
+ * the wall-on-slab decision matches what the user sees. Holes are
+ * data (never render-offset), so hole exclusion keeps using stored
+ * hole polygons. Pure; exported for tests.
+ */
+export function computeWallSlabElevation(
+  wallLike: WallOverlapInput,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): number {
+  const { start, end, curveOffset = 0 } = wallLike
+  const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
+  const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
+    ? sampleWallCenterline(wallLike, 8)
+    : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
+        x: start[0] + (end[0] - start[0]) * t,
+        y: start[1] + (end[1] - start[1]) * t,
+      }))
+
+  let maxElevation = Number.NEGATIVE_INFINITY
+  for (const slab of slabs) {
+    if (slab.polygon.length < 3) continue
+    const renderedPolygon = getRenderableSlabPolygon(slab, {
+      walls: levelWalls,
+      siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+    })
+    if (!wallOverlapsPolygon(wallLike, renderedPolygon)) continue
+
+    const holes = slab.holes || []
+    if (holes.length === 0) {
+      // No holes: wall is on this slab
+      const elevation = slab.elevation ?? 0.05
+      if (elevation > maxElevation) maxElevation = elevation
+      continue
+    }
+
+    // Sample multiple points along the wall to check whether any portion lies on
+    // solid slab (not inside any hole). Checking only the midpoint fails when the
+    // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
+    let hasValidPoint = false
+    for (const sample of holeSamplePoints) {
+      let inHole = false
+      for (const hole of holes) {
+        if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
+          inHole = true
+          break
+        }
+      }
+      if (!inHole) {
+        hasValidPoint = true
+        break
+      }
+    }
+
+    if (hasValidPoint) {
+      const elevation = slab.elevation ?? 0.05
+      if (elevation > maxElevation) maxElevation = elevation
+    }
+  }
+  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
 }
 
 export class SpatialGridManager {
@@ -959,7 +1028,6 @@ export class SpatialGridManager {
 
   /**
    * Get the slab elevation for a wall by checking if it overlaps with any slab polygon (excluding holes).
-   * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    *
    * Accepts an optional `curveOffset` so curved walls evaluate overlap
@@ -975,52 +1043,47 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return 0
 
-    const wallLike: WallOverlapInput = { start, end, curveOffset, thickness }
-    const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
-    const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
-      ? sampleWallCenterline(wallLike, 8)
-      : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
-          x: start[0] + (end[0] - start[0]) * t,
-          y: start[1] + (end[1] - start[1]) * t,
-        }))
+    return computeWallSlabElevation(
+      { start, end, curveOffset, thickness },
+      [...slabMap.values()],
+      this.getLevelWallNodes(levelId),
+    )
+  }
 
-    let maxElevation = Number.NEGATIVE_INFINITY
-    for (const slab of slabMap.values()) {
-      if (slab.polygon.length < 3) continue
-      if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
+  /**
+   * Walls on a level, resolved fresh from the scene store (the manager's
+   * own wall map is only maintained on create/delete, not on updates).
+   * Cached per scene `nodes` record so per-pointer-tick callers
+   * (door/window move) don't rescan the node map.
+   */
+  private readonly levelWallsCache = new WeakMap<object, Map<string, WallNode[]>>()
 
-      const holes = slab.holes || []
-      if (holes.length === 0) {
-        // No holes: wall is on this slab
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) maxElevation = elevation
-        continue
+  private getLevelWallNodes(levelId: string): WallNode[] {
+    const nodes = useScene.getState().nodes
+    let byLevel = this.levelWallsCache.get(nodes)
+    if (!byLevel) {
+      byLevel = new Map()
+      this.levelWallsCache.set(nodes, byLevel)
+    }
+    const cached = byLevel.get(levelId)
+    if (cached) return cached
+
+    const walls: WallNode[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'wall') continue
+      // Walk the parent chain to the owning level (guarded against cycles).
+      let current: AnyNode | undefined = node
+      let guard = 0
+      while (current && current.type !== 'level' && guard < 16) {
+        current = current.parentId ? nodes[current.parentId as AnyNode['id']] : undefined
+        guard += 1
       }
-
-      // Sample multiple points along the wall to check whether any portion lies on
-      // solid slab (not inside any hole). Checking only the midpoint fails when the
-      // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
-      let hasValidPoint = false
-      for (const sample of holeSamplePoints) {
-        let inHole = false
-        for (const hole of holes) {
-          if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
-            inHole = true
-            break
-          }
-        }
-        if (!inHole) {
-          hasValidPoint = true
-          break
-        }
-      }
-
-      if (hasValidPoint) {
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) maxElevation = elevation
+      if (current?.type === 'level' && current.id === levelId) {
+        walls.push(node as WallNode)
       }
     }
-    return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+    byLevel.set(levelId, walls)
+    return walls
   }
 
   /**

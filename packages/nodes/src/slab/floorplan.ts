@@ -85,6 +85,27 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
 
   // Boundary editor — visible only when the slab is the active selection.
   if (isSelected) {
+    // Handles operate on the STORED polygon while the fill shows the
+    // band-healed render polygon; when the two diverge (edges projected
+    // onto wall faces / interior reliefs), a dashed skeleton of the
+    // stored boundary shows what the handles actually grab.
+    const rawDiffersFromVisual =
+      polygon.length !== visualPolygon.length ||
+      polygon.some((point, index) => {
+        const visual = visualPolygon[index]!
+        return Math.abs(point[0] - visual[0]) > 0.005 || Math.abs(point[1] - visual[1]) > 0.005
+      })
+    if (rawDiffersFromVisual) {
+      children.push({
+        kind: 'path',
+        d: ring(polygon.map(([x, z]) => [x, z] as FloorplanPoint)),
+        fill: 'none',
+        stroke: palette ? palette.selectedStroke : '#475569',
+        strokeWidth: 0.015,
+        strokeOpacity: 0.55,
+        strokeDasharray: '0.08 0.06',
+      })
+    }
     appendRingEditor(children, polygon, undefined)
     holes.forEach((hole, holeIndex) => {
       if (hole.length >= 3) appendRingEditor(children, hole, holeIndex)

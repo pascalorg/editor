@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
-import { wallOverlapsPolygon } from './spatial-grid-manager'
+import { SlabNode, WallNode } from '../../schema'
+import { computeWallSlabElevation, wallOverlapsPolygon } from './spatial-grid-manager'
 
 // 4×4 square slab, like an auto-slab derived from a room's wall centerlines.
 const SLAB: Array<[number, number]> = [
@@ -71,5 +72,90 @@ describe('wallOverlapsPolygon', () => {
   it('supports the legacy (start, end, polygon) call shape', () => {
     expect(wallOverlapsPolygon([1, 1], [3, 3], SLAB)).toBe(true)
     expect(wallOverlapsPolygon([2, 4], [2, 7], SLAB)).toBe(false)
+  })
+})
+
+describe('computeWallSlabElevation', () => {
+  const parseWall = (start: [number, number], end: [number, number], thickness = 0.1) =>
+    WallNode.parse({ start, end, thickness })
+
+  it('lifts a wall standing on an auto slab stored at the centerlines', () => {
+    const walls = [
+      parseWall([0, 0], [4, 0]),
+      parseWall([4, 0], [4, 4]),
+      parseWall([4, 4], [0, 4]),
+      parseWall([0, 4], [0, 0]),
+    ]
+    const slab = SlabNode.parse({ polygon: SLAB, elevation: 0.1 })
+
+    const bottom = walls[0]!
+    expect(
+      computeWallSlabElevation(
+        { start: bottom.start, end: bottom.end, thickness: bottom.thickness },
+        [slab],
+        walls,
+      ),
+    ).toBeCloseTo(0.1)
+  })
+
+  it('lifts a wall whose body a legacy stored polygon falls short of', () => {
+    // Legacy hand-adjusted slab: edges 6cm inside the wall centerlines —
+    // 1cm short of even the inner faces, so the STORED polygon never
+    // touches the wall body and the old stored-polygon test returned 0.
+    // The rendered footprint band-adopts the edges out to the outer
+    // faces, so the wall stands on the slab.
+    const walls = [
+      parseWall([0, 0], [4, 0]),
+      parseWall([4, 0], [4, 4]),
+      parseWall([4, 4], [0, 4]),
+      parseWall([0, 4], [0, 0]),
+    ]
+    const slab = SlabNode.parse({
+      polygon: [
+        [0.06, 0.06],
+        [3.94, 0.06],
+        [3.94, 3.94],
+        [0.06, 3.94],
+      ],
+      elevation: 0.1,
+    })
+
+    const bottom = walls[0]!
+    expect(
+      computeWallSlabElevation(
+        { start: bottom.start, end: bottom.end, thickness: bottom.thickness },
+        [slab],
+        walls,
+      ),
+    ).toBeCloseTo(0.1)
+  })
+
+  it('does not lift a wall clearly off the slab', () => {
+    const walls = [parseWall([0, 0], [4, 0])]
+    const slab = SlabNode.parse({ polygon: SLAB, elevation: 0.1 })
+
+    expect(
+      computeWallSlabElevation({ start: [0, -1], end: [4, -1], thickness: 0.1 }, [slab], walls),
+    ).toBe(0)
+  })
+
+  it('ignores a slab when the wall runs entirely inside a hole', () => {
+    const walls = [parseWall([1, 2], [3, 2])]
+    const slab = SlabNode.parse({
+      polygon: SLAB,
+      elevation: 0.1,
+      holes: [
+        [
+          [0.5, 0.5],
+          [3.5, 0.5],
+          [3.5, 3.5],
+          [0.5, 3.5],
+        ],
+      ],
+    })
+
+    expect(
+      computeWallSlabElevation({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [slab], walls),
+    ).toBe(0)
   })
 })
