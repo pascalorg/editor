@@ -6,7 +6,10 @@ import {
   RGBAFormat,
   UnsignedByteType,
 } from 'three'
-import { KTX2Loader } from 'three/examples/jsm/Addons.js'
+// Deep path, NOT the `Addons.js` aggregate: the aggregate re-exports
+// LottieLoader/TTFLoader, whose CDN URL imports (`lottie-web`, `opentype.js`)
+// crash bun's test runtime for every consumer of the viewer barrel.
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 
 /** The private KTX2Loader surface this module relies on (stable across three
  *  releases but not part of the public types). */
