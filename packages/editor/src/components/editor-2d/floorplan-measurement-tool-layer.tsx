@@ -1341,6 +1341,7 @@ export function handleFloorplanMeasurementGridMove(event: GridEvent): void {
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
+      event.nativeEvent.altKey,
     )
     measurement.setSnapTarget(resolved.target)
     setMeasurementCursorPoint(resolved.point)
@@ -1380,6 +1381,7 @@ export function handleFloorplanMeasurementGridClick(event: GridEvent): void {
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
+      event.nativeEvent.altKey,
     )
     measurement.setSnapTarget(resolved.target)
     setMeasurementCursorPoint(resolved.point)
@@ -1485,10 +1487,13 @@ export function FloorplanMeasurementToolLayer({
       event.stopPropagation()
       measurement.deleteSelected()
     }
-    const handlePointerUp = () => {
+    const handlePointerUp = (event: globalThis.PointerEvent) => {
       const measurement = useMeasurementTool.getState()
       if (!measurement.draggingSegmentEndpoint) return
-      measurement.endSegmentEndpointDrag({ suppressNextClick: true })
+      measurement.endSegmentEndpointDrag({
+        detachLinkedEndpoints: event.altKey,
+        suppressNextClick: true,
+      })
     }
 
     window.addEventListener('click', handleGeometryClick, true)

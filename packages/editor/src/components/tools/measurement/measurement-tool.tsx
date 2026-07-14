@@ -1024,6 +1024,7 @@ export function handleMeasurementGridMove3D(
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
+      event.nativeEvent.altKey,
     )
     measurement.setSnapTarget(resolved.target)
     measurement.setCursor('3d', resolved.point)
@@ -1069,6 +1070,7 @@ export function handleMeasurementGridClick3D(
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       resolved.point,
+      event.nativeEvent.altKey,
     )
     measurement.setSnapTarget(resolved.target)
     measurement.setCursor('3d', resolved.point)
@@ -1135,6 +1137,7 @@ export function handleMeasurementNodeClick3D(
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       point,
+      event.nativeEvent.altKey,
     )
     measurement.endSegmentEndpointDrag()
     return
@@ -1237,6 +1240,7 @@ export function handleMeasurementNodeMove3D(
       measurement.draggingSegmentEndpoint.id,
       measurement.draggingSegmentEndpoint.endpoint,
       point,
+      event.nativeEvent.altKey,
     )
     measurement.setCursor('3d', point)
     measurement.setSnapTarget(snap.target)
@@ -2118,10 +2122,13 @@ export function MeasurementTool({
     const handleClick = (event: GridEvent) => {
       handleMeasurementGridClick3D(event, canvas, shouldIgnoreGridEvent)
     }
-    const handlePointerUp = () => {
+    const handlePointerUp = (event: globalThis.PointerEvent) => {
       const measurement = useMeasurementTool.getState()
       if (!measurement.draggingSegmentEndpoint) return
-      measurement.endSegmentEndpointDrag({ suppressNextClick: true })
+      measurement.endSegmentEndpointDrag({
+        detachLinkedEndpoints: event.altKey,
+        suppressNextClick: true,
+      })
     }
 
     const handleNodeMove = (event: NodeEvent) => {

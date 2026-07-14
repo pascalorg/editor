@@ -73,12 +73,13 @@ test('builds floorplan angle measurement as a wedge with a pill anchor', () => {
 
 function gridEvent(
   localPosition: [number, number, number],
-  options: { shiftKey?: boolean; target?: unknown } = {},
+  options: { altKey?: boolean; shiftKey?: boolean; target?: unknown } = {},
 ): GridEvent {
   return {
     position: localPosition,
     localPosition,
     nativeEvent: {
+      altKey: options.altKey ?? false,
       shiftKey: options.shiftKey ?? false,
       target: options.target ?? {},
     } as never,
@@ -552,6 +553,28 @@ describe('floorplan measurement grid handlers', () => {
       kind: 'endpoint',
       point: [4, 0, 0],
       view: '2d',
+    })
+  })
+
+  test('Alt detaches a linked 2D measurement endpoint while dragging', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [1, 0, 1], [2, 0, 1], 1)
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('2d', [2, 0, 1], [2, 0, 3], 2)
+    const secondId = useMeasurementTool.getState().segments[1]!.id
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    handleFloorplanMeasurementGridMove(gridEvent([3, 0, 1], { altKey: true }))
+    handleFloorplanMeasurementGridClick(gridEvent([3, 0, 1], { altKey: true }))
+
+    const segments = useMeasurementTool.getState().segments
+    expect(segments.find((segment) => segment.id === firstId)).toMatchObject({
+      end: [3, 0, 1],
+      measuredDistanceMeters: undefined,
+    })
+    expect(segments.find((segment) => segment.id === secondId)).toMatchObject({
+      measuredDistanceMeters: 2,
+      start: [2, 0, 1],
     })
   })
 

@@ -87,12 +87,13 @@ test('builds 3D angle measurement arc layout in the measured plane', () => {
 function gridEvent(
   localPosition: [number, number, number],
   canvas: HTMLCanvasElement,
-  options: { shiftKey?: boolean; target?: unknown } = {},
+  options: { altKey?: boolean; shiftKey?: boolean; target?: unknown } = {},
 ): GridEvent {
   return {
     position: localPosition,
     localPosition,
     nativeEvent: {
+      altKey: options.altKey ?? false,
       shiftKey: options.shiftKey ?? false,
       target: options.target ?? canvas,
     } as never,
@@ -535,6 +536,29 @@ describe('measurement 3D grid handlers', () => {
       kind: 'endpoint',
       point: [4, 0, 0],
       view: '3d',
+    })
+  })
+
+  test('Alt detaches a linked 3D measurement endpoint while dragging', () => {
+    const canvas = new globalThis.HTMLCanvasElement()
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('3d', [1, 0, 1], [2, 0, 1], 1)
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('3d', [2, 0, 1], [2, 0, 3], 2)
+    const secondId = useMeasurementTool.getState().segments[1]!.id
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    handleMeasurementGridMove3D(gridEvent([3, 0, 1], canvas, { altKey: true }), canvas)
+    handleMeasurementGridClick3D(gridEvent([3, 0, 1], canvas, { altKey: true }), canvas)
+
+    const segments = useMeasurementTool.getState().segments
+    expect(segments.find((segment) => segment.id === firstId)).toMatchObject({
+      end: [3, 0, 1],
+      measuredDistanceMeters: undefined,
+    })
+    expect(segments.find((segment) => segment.id === secondId)).toMatchObject({
+      measuredDistanceMeters: 2,
+      start: [2, 0, 1],
     })
   })
 

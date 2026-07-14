@@ -107,8 +107,16 @@ export type MeasurementSnapKind =
 export type MeasurementSnapSettings = Record<MeasurementSnapKind, boolean>
 export type MeasurementSegmentEndpoint = 'end' | 'start'
 export type DraggingMeasurementSegmentEndpoint = {
+  detachLinkedEndpoints?: boolean
   endpoint: MeasurementSegmentEndpoint
+  hasMoved?: boolean
   id: string
+  linkedEndpoints?: Array<{
+    endpoint: MeasurementSegmentEndpoint
+    id: string
+    measuredDistanceMeters?: number
+    point: MeasurementPoint
+  }>
 }
 
 export const DEFAULT_MEASUREMENT_SNAP_SETTINGS: MeasurementSnapSettings = {
@@ -186,8 +194,12 @@ type MeasurementToolState = {
     id: string,
     endpoint: MeasurementSegmentEndpoint,
     point: MeasurementPoint,
+    detachLinkedEndpoints?: boolean,
   ) => void
-  endSegmentEndpointDrag: (options?: { suppressNextClick?: boolean }) => void
+  endSegmentEndpointDrag: (options?: {
+    detachLinkedEndpoints?: boolean
+    suppressNextClick?: boolean
+  }) => void
   consumeSuppressedPlacementClick: () => boolean
   removeMeasurement: (id: string) => void
   deleteSelected: () => void
@@ -215,6 +227,7 @@ type MeasurementToolState = {
 }
 
 let nextMeasurementId = 1
+const MEASUREMENT_ENDPOINT_LINK_TOLERANCE_METERS = 1e-5
 const PERIMETER_BACKFILL_LABEL_TOLERANCE_METERS = 0.05
 const PERIMETER_BACKFILL_LENGTH_TOLERANCE_METERS = 1e-3
 
@@ -228,6 +241,33 @@ export function isDraggingMeasurementEndpoint(
   endpoint: MeasurementSegmentEndpoint,
 ): boolean {
   return dragging?.id === id && dragging.endpoint === endpoint
+}
+
+function collectLinkedMeasurementEndpoints(
+  segments: MeasurementSegment[],
+  point: MeasurementPoint,
+): NonNullable<DraggingMeasurementSegmentEndpoint['linkedEndpoints']> {
+  const toleranceSq = MEASUREMENT_ENDPOINT_LINK_TOLERANCE_METERS ** 2
+  const linkedEndpoints: NonNullable<DraggingMeasurementSegmentEndpoint['linkedEndpoints']> = []
+
+  for (const segment of segments) {
+    for (const endpoint of ['start', 'end'] as const) {
+      const candidate = segment[endpoint]
+      const dx = candidate[0] - point[0]
+      const dy = candidate[1] - point[1]
+      const dz = candidate[2] - point[2]
+      if (dx * dx + dy * dy + dz * dz <= toleranceSq) {
+        linkedEndpoints.push({
+          endpoint,
+          id: segment.id,
+          measuredDistanceMeters: segment.measuredDistanceMeters,
+          point: [...candidate] as MeasurementPoint,
+        })
+      }
+    }
+  }
+
+  return linkedEndpoints
 }
 
 export function axisLockedMeasurementPoint(
@@ -991,28 +1031,96 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
     })),
   selectMeasurement: (id) => set({ selectedId: id }),
   startSegmentEndpointDrag: (id, endpoint) =>
-    set({
-      draggingSegmentEndpoint: { endpoint, id },
-      selectedId: id,
-      suppressNextPlacementClick: false,
+    set((state) => {
+      const segment = state.segments.find((candidate) => candidate.id === id)
+      const linkedEndpoints = segment
+        ? collectLinkedMeasurementEndpoints(state.segments, segment[endpoint])
+        : []
+      return {
+        draggingSegmentEndpoint: {
+          detachLinkedEndpoints: false,
+          endpoint,
+          hasMoved: false,
+          id,
+          linkedEndpoints,
+        },
+        selectedId: id,
+        suppressNextPlacementClick: false,
+      }
     }),
-  updateSegmentEndpoint: (id, endpoint, point) =>
-    set((state) => ({
-      segments: state.segments.map((segment) =>
-        segment.id === id
-          ? {
-              ...segment,
-              [endpoint]: point,
-              measuredDistanceMeters: undefined,
-            }
-          : segment,
-      ),
-    })),
-  endSegmentEndpointDrag: (options) =>
+  updateSegmentEndpoint: (id, endpoint, point, detachLinkedEndpoints = false) =>
+    set((state) => {
+      const drag = state.draggingSegmentEndpoint
+      const activeDrag = drag?.id === id && drag.endpoint === endpoint ? drag : null
+      const sourceSegment = state.segments.find((segment) => segment.id === id)
+      const linkedEndpoints = activeDrag?.linkedEndpoints?.length
+        ? activeDrag.linkedEndpoints
+        : sourceSegment
+          ? [
+              {
+                endpoint,
+                id,
+                measuredDistanceMeters: sourceSegment.measuredDistanceMeters,
+                point: [...sourceSegment[endpoint]] as MeasurementPoint,
+              },
+            ]
+          : []
+      const linkedBySegment = new Map<string, typeof linkedEndpoints>()
+      for (const linkedEndpoint of linkedEndpoints) {
+        const endpoints = linkedBySegment.get(linkedEndpoint.id) ?? []
+        endpoints.push(linkedEndpoint)
+        linkedBySegment.set(linkedEndpoint.id, endpoints)
+      }
+
+      return {
+        draggingSegmentEndpoint: activeDrag
+          ? { ...activeDrag, detachLinkedEndpoints, hasMoved: true }
+          : state.draggingSegmentEndpoint,
+        segments: state.segments.map((segment) => {
+          const endpoints = linkedBySegment.get(segment.id)
+          if (!endpoints) return segment
+          let start = segment.start
+          let end = segment.end
+          for (const linkedEndpoint of endpoints) {
+            const isPrimary = linkedEndpoint.id === id && linkedEndpoint.endpoint === endpoint
+            const nextPoint = isPrimary || !detachLinkedEndpoints ? point : linkedEndpoint.point
+            if (linkedEndpoint.endpoint === 'start') start = nextPoint
+            else end = nextPoint
+          }
+          return {
+            ...segment,
+            start,
+            end,
+            measuredDistanceMeters:
+              segment.id === id || !detachLinkedEndpoints
+                ? undefined
+                : endpoints[0]?.measuredDistanceMeters,
+          }
+        }),
+      }
+    }),
+  endSegmentEndpointDrag: (options) => {
+    const drag = get().draggingSegmentEndpoint
+    if (
+      drag?.hasMoved &&
+      typeof options?.detachLinkedEndpoints === 'boolean' &&
+      options.detachLinkedEndpoints !== (drag.detachLinkedEndpoints ?? false)
+    ) {
+      const segment = get().segments.find((candidate) => candidate.id === drag.id)
+      if (segment) {
+        get().updateSegmentEndpoint(
+          drag.id,
+          drag.endpoint,
+          segment[drag.endpoint],
+          options.detachLinkedEndpoints,
+        )
+      }
+    }
     set({
       draggingSegmentEndpoint: null,
       suppressNextPlacementClick: Boolean(options?.suppressNextClick),
-    }),
+    })
+  },
   consumeSuppressedPlacementClick: () => {
     const shouldSuppress = get().suppressNextPlacementClick
     if (shouldSuppress) set({ suppressNextPlacementClick: false })

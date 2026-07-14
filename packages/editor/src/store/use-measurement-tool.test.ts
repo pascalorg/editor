@@ -4,6 +4,7 @@ import { registerMeasurementTestNodes } from '../lib/register-measurement-test-n
 import {
   axisLockedMeasurementPoint,
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
+  distanceBetweenMeasurements,
   hydrateMeasurements,
   isDraggingMeasurementEndpoint,
   normalizePersistedMeasurements,
@@ -130,6 +131,88 @@ describe('useMeasurementTool', () => {
     })
     expect(useMeasurementTool.getState().draggingSegmentEndpoint).toBeNull()
     expect(useMeasurementTool.getState().selectedId).toBe(segmentId)
+  })
+
+  test('moves every measurement endpoint sharing the dragged coordinate', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [0, 0, 0], [2, 0, 0], 2)
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('3d', [2, 0, 0], [2, 0, 3], 3)
+    const secondId = useMeasurementTool.getState().segments[1]!.id
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    measurement.updateSegmentEndpoint(firstId, 'end', [3, 0, 0])
+    measurement.updateSegmentEndpoint(firstId, 'end', [4, 0, 0])
+    measurement.endSegmentEndpointDrag()
+
+    const segments = useMeasurementTool.getState().segments
+    const first = segments.find((segment) => segment.id === firstId)
+    const second = segments.find((segment) => segment.id === secondId)
+    expect(first).toMatchObject({
+      end: [4, 0, 0],
+      measuredDistanceMeters: undefined,
+    })
+    expect(second).toMatchObject({
+      start: [4, 0, 0],
+      measuredDistanceMeters: undefined,
+    })
+    expect(distanceBetweenMeasurements(first!.start, first!.end)).toBe(4)
+    expect(distanceBetweenMeasurements(second!.start, second!.end)).toBeCloseTo(Math.sqrt(13))
+  })
+
+  test('Alt detaches a linked endpoint and release-time Alt state decides the final link', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('2d', [0, 0, 0], [2, 0, 0], 2)
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('2d', [2, 0, 0], [2, 0, 3], 3)
+    const secondId = useMeasurementTool.getState().segments[1]!.id
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    measurement.updateSegmentEndpoint(firstId, 'end', [3, 0, 0])
+    expect(useMeasurementTool.getState().segments[1]).toMatchObject({
+      measuredDistanceMeters: undefined,
+      start: [3, 0, 0],
+    })
+
+    measurement.updateSegmentEndpoint(firstId, 'end', [4, 0, 0], true)
+    expect(useMeasurementTool.getState().segments[1]).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [2, 0, 0],
+    })
+
+    measurement.updateSegmentEndpoint(firstId, 'end', [5, 0, 0], false)
+    expect(useMeasurementTool.getState().segments[1]).toMatchObject({
+      measuredDistanceMeters: undefined,
+      start: [5, 0, 0],
+    })
+
+    measurement.endSegmentEndpointDrag({ detachLinkedEndpoints: true })
+
+    const segments = useMeasurementTool.getState().segments
+    expect(segments.find((segment) => segment.id === firstId)).toMatchObject({
+      end: [5, 0, 0],
+      measuredDistanceMeters: undefined,
+    })
+    expect(segments.find((segment) => segment.id === secondId)).toMatchObject({
+      measuredDistanceMeters: 3,
+      start: [2, 0, 0],
+    })
+  })
+
+  test('does not link measurement endpoints separated by elevation', () => {
+    const measurement = useMeasurementTool.getState()
+    measurement.addSegment('3d', [0, 0, 0], [2, 0, 0])
+    const firstId = useMeasurementTool.getState().segments[0]!.id
+    measurement.addSegment('3d', [2, 1, 0], [2, 1, 3])
+    const secondId = useMeasurementTool.getState().segments[1]!.id
+
+    measurement.startSegmentEndpointDrag(firstId, 'end')
+    measurement.updateSegmentEndpoint(firstId, 'end', [4, 0, 0])
+    measurement.endSegmentEndpointDrag()
+
+    expect(
+      useMeasurementTool.getState().segments.find((segment) => segment.id === secondId)?.start,
+    ).toEqual([2, 1, 0])
   })
 
   test('cancelDraft clears an active segment endpoint drag', () => {
