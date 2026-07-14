@@ -86,6 +86,7 @@ import {
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { guideEmitter } from '../../lib/guide-events'
+import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
@@ -2734,6 +2735,39 @@ function convertReferenceLengthToMeters(value: number, unit: ReferenceScaleUnit)
     default:
       return value
   }
+}
+
+const REFERENCE_SCALE_LINGO_UNIT: Record<ReferenceScaleUnit, 'm' | 'cm' | 'ft' | 'in'> = {
+  meters: 'm',
+  centimeters: 'cm',
+  feet: 'ft',
+  inches: 'in',
+}
+
+/** Lingo-parse the free-text real-length input in the dropdown's unit — a
+ * bare number means the dropdown unit, while `180cm`, `1m80` or `5'11"`
+ * override it. Returns `null` when the text isn't a readable length. */
+function parseReferenceScaleLength(raw: string, unit: ReferenceScaleUnit): number | null {
+  const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
+  return parseMeasurement(
+    raw,
+    { kind: 'length', unitId },
+    { bareUnit: unitId, system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric' },
+  )
+}
+
+function referenceScaleLengthHint(raw: string, unit: ReferenceScaleUnit): string | null {
+  const unitId = REFERENCE_SCALE_LINGO_UNIT[unit]
+  return measurementHint(
+    raw,
+    { kind: 'length', unitId },
+    {
+      bareUnit: unitId,
+      system: unit === 'feet' || unit === 'inches' ? 'us' : 'metric',
+      displayUnit: unitId,
+      precision: 2,
+    },
+  )
 }
 
 function getReferenceScaleUnitLabel(unit: ReferenceScaleUnit) {
@@ -7292,8 +7326,8 @@ export function FloorplanPanel({
       return
     }
 
-    const displayLength = Number(referenceScaleValue)
-    if (!(displayLength > 0)) {
+    const displayLength = parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit)
+    if (!(displayLength && displayLength > 0)) {
       return
     }
 
@@ -10926,7 +10960,8 @@ export function FloorplanPanel({
   const floorplanNavigationCursor =
     isPanning || isRotatingFloorplan ? 'grabbing' : isSpacePanPressed ? 'grab' : null
   const isFloorplanNavigationOverlayVisible = isSpacePanPressed || isPanning || isRotatingFloorplan
-  const pendingReferenceDisplayLength = Number(referenceScaleValue)
+  const pendingReferenceDisplayLength =
+    parseReferenceScaleLength(referenceScaleValue, referenceScaleUnit) ?? Number.NaN
   const pendingReferenceRealLengthMeters =
     pendingReferenceScale && pendingReferenceDisplayLength > 0
       ? convertReferenceLengthToMeters(pendingReferenceDisplayLength, referenceScaleUnit)
@@ -10942,9 +10977,14 @@ export function FloorplanPanel({
   const referenceScaleInputError =
     referenceScaleValue.trim() === ''
       ? 'Enter the real length of the line.'
-      : pendingReferenceDisplayLength > 0
-        ? null
-        : 'Length must be greater than 0.'
+      : Number.isNaN(pendingReferenceDisplayLength)
+        ? `Enter a length like 3.5, 180cm or 5'11".`
+        : pendingReferenceDisplayLength > 0
+          ? null
+          : 'Length must be greater than 0.'
+  const referenceScaleHint = referenceScaleInputError
+    ? null
+    : referenceScaleLengthHint(referenceScaleValue, referenceScaleUnit)
   return (
     <div
       className="pointer-events-auto flex h-full w-full flex-col overflow-hidden bg-background/95"
@@ -11058,16 +11098,9 @@ export function FloorplanPanel({
                     'h-9 rounded-lg border bg-background px-3 text-sm outline-none transition focus:border-foreground/40',
                     referenceScaleInputError ? 'border-destructive/60' : 'border-border',
                   )}
-                  inputMode="decimal"
-                  onBlur={() => {
-                    const value = Number(referenceScaleValue)
-                    if (!(value > 0)) {
-                      setReferenceScaleValue('0.0001')
-                    }
-                  }}
                   onChange={(event) => setReferenceScaleValue(event.target.value)}
-                  step="any"
-                  type="number"
+                  placeholder={`e.g. 3.5, 180cm or 5'11"`}
+                  type="text"
                   value={referenceScaleValue}
                 />
                 <select
@@ -11090,6 +11123,7 @@ export function FloorplanPanel({
                 )}
               >
                 {referenceScaleInputError ??
+                  referenceScaleHint ??
                   'Any decimal works. Use the known real length, not the drawn value.'}
               </span>
             </label>
