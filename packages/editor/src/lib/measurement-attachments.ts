@@ -31,21 +31,8 @@ function applyLiveTransform(node: AnyNode, live: LiveTransform | undefined): Any
     ?.floorplanLiveTransform
   if (parentFrameProjection) return parentFrameProjection({ node, live })
 
-  if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-    const surface = node as AnyNode & {
-      holes?: Array<Array<[number, number]>>
-      polygon: Array<[number, number]>
-    }
-    return {
-      ...node,
-      holes: (surface.holes ?? []).map((hole) =>
-        hole.map(([x, z]) => [x + live.position[0], z + live.position[2]] as [number, number]),
-      ),
-      polygon: surface.polygon.map(
-        ([x, z]) => [x + live.position[0], z + live.position[2]] as [number, number],
-      ),
-    } as AnyNode
-  }
+  const measurementProjection = nodeRegistry.get(node.type)?.measurement?.applyLiveTransform
+  if (measurementProjection) return measurementProjection(node as never, live)
 
   if (!Array.isArray((node as { position?: unknown }).position)) return node
   const currentRotation = (node as { rotation?: unknown }).rotation

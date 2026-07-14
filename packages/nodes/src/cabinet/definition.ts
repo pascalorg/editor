@@ -10,7 +10,8 @@ import type {
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
-import { findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
+import { findLevelAncestorId, sceneRegistry, selectionProxyIdFromMetadata } from '@pascal-app/core'
+import { Vector3 } from 'three'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -67,6 +68,40 @@ type CabinetLocalBounds = {
   maxZ: number
   size: [number, number, number]
   center: [number, number, number]
+}
+
+function resolveCabinetMeasurementOwnerId({
+  ctx,
+  node,
+  worldPoint,
+}: {
+  ctx: { children: AnyNode[] }
+  node: CabinetNodeType
+  worldPoint: readonly [number, number, number]
+}): AnyNodeId | null {
+  const cabinetObject = sceneRegistry.nodes.get(node.id)
+  if (!cabinetObject) return null
+
+  cabinetObject.updateWorldMatrix(true, false)
+  const local = cabinetObject.worldToLocal(new Vector3(...worldPoint))
+  let best: { id: AnyNodeId; score: number } | null = null
+
+  for (const child of ctx.children) {
+    if (child.type !== 'cabinet-module') continue
+    const module = child as CabinetModuleNodeType
+    const position = module.position ?? [0, 0, 0]
+    const halfWidth = module.width / 2 + Math.max(module.countertopOverhang ?? 0, 0.05)
+    const halfDepth =
+      module.depth / 2 +
+      Math.max(module.countertopOverhang ?? 0, module.countertopBackOverhang ?? 0, 0.05)
+    const dx = Math.abs(local.x - position[0])
+    const dz = Math.abs(local.z - position[2])
+    if (dx > halfWidth || dz > halfDepth) continue
+    const score = dx / Math.max(halfWidth, 1e-4) + dz / Math.max(halfDepth, 1e-4)
+    if (!best || score < best.score) best = { id: module.id as AnyNodeId, score }
+  }
+
+  return best?.id ?? null
 }
 
 function isCabinetDuplicableNode(node: AnyNode | null | undefined): node is CabinetDuplicableNode {
@@ -974,6 +1009,10 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     paint: cabinetPaint,
     sceneAction: cabinetSceneAction,
     slots: () => cabinetSlots(),
+  },
+
+  measurement: {
+    resolveOwnerId: resolveCabinetMeasurementOwnerId,
   },
 
   // Dirty-cascade: a dirtied run re-marks its hosted modules so their

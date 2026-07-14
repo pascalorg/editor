@@ -15,8 +15,10 @@ import {
   registerNode,
   sampleFenceCenterline,
   sampleWallCenterline,
+  sceneRegistry,
   stairFootprintAABB,
 } from '@pascal-app/core'
+import { Vector3 } from 'three'
 import { z } from 'zod'
 
 const CURVE_SNAP_SEGMENTS = 32
@@ -422,6 +424,17 @@ function surfaceMeasurement(): MeasurementDefinition<TestNode> {
     node.type === 'slab' ? getRenderableSlabPolygon(node as never) : node.polygon
 
   return {
+    applyLiveTransform: (node, live) =>
+      ({
+        ...node,
+        holes: (node.holes ?? []).map((hole: [number, number][]) =>
+          hole.map(([x, z]) => [x + live.position[0], z + live.position[2]] as [number, number]),
+        ),
+        polygon: node.polygon.map(
+          ([x, z]: [number, number]) =>
+            [x + live.position[0], z + live.position[2]] as [number, number],
+        ),
+      }) as AnyNode,
     area: (node) => {
       const boundary = boundaryPolygon(node)
       const outer = polygonAreaAndCentroid(boundary)
@@ -474,6 +487,7 @@ function surfacePerimeterWithoutBoundaryMeasurement(): MeasurementDefinition<Tes
   const measurement = surfaceMeasurement()
   return {
     area: measurement.area,
+    applyLiveTransform: measurement.applyLiveTransform,
     perimeter: (node, ctx) => {
       const perimeter = measurement.perimeter?.(node, ctx)
       if (!perimeter) return null
@@ -882,6 +896,39 @@ function skylightMeasurement(): MeasurementDefinition<TestNode> {
   }
 }
 
+function roofMeasurement(): MeasurementDefinition<TestNode> {
+  return {
+    resolveOwnerId: ({ ctx }) =>
+      (ctx.children.find((child) => child.type === 'roof-segment')?.id as never) ?? null,
+  }
+}
+
+function cabinetMeasurement(): MeasurementDefinition<TestNode> {
+  return {
+    resolveOwnerId: ({ ctx, node, worldPoint }) => {
+      const cabinetObject = sceneRegistry.nodes.get(node.id)
+      const local = cabinetObject
+        ? cabinetObject.worldToLocal(new Vector3(...worldPoint))
+        : new Vector3(...worldPoint)
+      let best: { id: string; score: number } | null = null
+      for (const child of ctx.children) {
+        if (child.type !== 'cabinet-module') continue
+        const position = child.position ?? [0, 0, 0]
+        const halfWidth = child.width / 2 + Math.max(child.countertopOverhang ?? 0, 0.05)
+        const halfDepth =
+          child.depth / 2 +
+          Math.max(child.countertopOverhang ?? 0, child.countertopBackOverhang ?? 0, 0.05)
+        const dx = Math.abs(local.x - position[0])
+        const dz = Math.abs(local.z - position[2])
+        if (dx > halfWidth || dz > halfDepth) continue
+        const score = dx / Math.max(halfWidth, 1e-4) + dz / Math.max(halfDepth, 1e-4)
+        if (!best || score < best.score) best = { id: child.id, score }
+      }
+      return (best?.id as never) ?? null
+    },
+  }
+}
+
 export function registerMeasurementTestNodes() {
   for (const [kind, measurement] of [
     ['wall', wallMeasurement()],
@@ -893,7 +940,9 @@ export function registerMeasurementTestNodes() {
     ['door', openingMeasurement()],
     ['window', openingMeasurement()],
     ['stair', stairMeasurement()],
+    ['roof', roofMeasurement()],
     ['roof-segment', roofSegmentMeasurement()],
+    ['cabinet', cabinetMeasurement()],
     ['skylight', skylightMeasurement()],
     ['surface-perimeter-without-boundary', surfacePerimeterWithoutBoundaryMeasurement()],
   ] as const) {

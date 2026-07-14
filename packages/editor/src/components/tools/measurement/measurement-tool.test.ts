@@ -11,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { BoxGeometry, BufferGeometry, Float32BufferAttribute, Group, Mesh, Vector3 } from 'three'
+import { syncLinearMeasurementSceneNodes } from '../../../lib/measurement-scene-nodes'
 import { registerMeasurementTestNodes } from '../../../lib/register-measurement-test-nodes'
 import {
   DEFAULT_MEASUREMENT_SNAP_SETTINGS,
@@ -412,6 +413,10 @@ function seedScene(nodes: AnyNode[]) {
     dirtyNodes: new Set(),
     collections: {},
   } as never)
+}
+
+function syncMeasurementSceneNodesForTest() {
+  syncLinearMeasurementSceneNodes(useMeasurementTool.getState().segments)
 }
 
 function triangleMesh() {
@@ -2081,6 +2086,7 @@ describe('measurement 3D grid handlers', () => {
     sceneRegistry.nodes.set(item.id as AnyNodeId, mesh)
 
     handleMeasurementNodeClick3D(nodeEvent(item, [0, 0, 0], { altKey: true, object: mesh }))
+    syncMeasurementSceneNodesForTest()
 
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
@@ -2111,6 +2117,7 @@ describe('measurement 3D grid handlers', () => {
 
     handleMeasurementNodeClick3D(nodeEvent(item, [-1, 0, -1.5], { object: mesh }))
     handleMeasurementNodeClick3D(nodeEvent(item, [1, 0, -1.5], { object: mesh }))
+    syncMeasurementSceneNodesForTest()
 
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
@@ -2134,6 +2141,7 @@ describe('measurement 3D grid handlers', () => {
 
     handleMeasurementNodeClick3D(nodeEvent(roof, [0, 0, 0]))
     handleMeasurementNodeClick3D(nodeEvent(roof, [1, 0, 0]))
+    syncMeasurementSceneNodesForTest()
 
     const segmentState = useMeasurementTool.getState().segments[0]
     expect(segmentState?.startAttachment).toMatchObject({
@@ -2186,6 +2194,7 @@ describe('measurement 3D grid handlers', () => {
 
     handleMeasurementNodeClick3D(nodeEvent(run, [1.2, 0, 0], { object: mesh }))
     handleMeasurementNodeClick3D(nodeEvent(run, [1.8, 0, 0], { object: mesh }))
+    syncMeasurementSceneNodesForTest()
 
     const segmentState = useMeasurementTool.getState().segments[0]
     expect(segmentState?.startAttachment).toMatchObject({
@@ -2229,6 +2238,7 @@ describe('measurement 3D grid handlers', () => {
 
     handleMeasurementNodeClick3D(nodeEvent(item, [0.23, 0.42, 0.31], { object: mesh }))
     handleMeasurementNodeClick3D(nodeEvent(item, [0.67, 0.48, 0.94], { object: mesh }))
+    syncMeasurementSceneNodesForTest()
 
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',

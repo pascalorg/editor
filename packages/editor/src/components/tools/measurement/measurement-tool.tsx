@@ -6,7 +6,6 @@ import {
   emitter,
   type GeometryContext,
   type GridEvent,
-  getRoofSegmentSurfaceY,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionDirectLength,
   type MeasurementDefinitionPerimeter,
@@ -298,68 +297,12 @@ function measurementPointFromNodeEvent(
 }
 
 function measurementOwnerNodeIdFromEvent(event: NodeEvent): AnyNodeId {
-  const nodes = useScene.getState().nodes
-  const worldPoint = new Vector3(...event.position)
-  if (event.node.type === 'cabinet') {
-    const cabinetObject = sceneRegistry.nodes.get(event.node.id)
-    const cabinetChildren = (event.node as { children?: unknown }).children
-    if (cabinetObject && Array.isArray(cabinetChildren)) {
-      cabinetObject.updateWorldMatrix(true, false)
-      const local = cabinetObject.worldToLocal(worldPoint.clone())
-      let best: { id: AnyNodeId; score: number } | null = null
-
-      for (const childId of cabinetChildren) {
-        if (typeof childId !== 'string') continue
-        const module = nodes[childId as AnyNodeId]
-        if (module?.type !== 'cabinet-module') continue
-        const position = module.position ?? [0, 0, 0]
-        const halfWidth = module.width / 2 + Math.max(module.countertopOverhang ?? 0, 0.05)
-        const halfDepth =
-          module.depth / 2 +
-          Math.max(module.countertopOverhang ?? 0, module.countertopBackOverhang ?? 0, 0.05)
-        const dx = Math.abs(local.x - position[0])
-        const dz = Math.abs(local.z - position[2])
-        if (dx > halfWidth || dz > halfDepth) continue
-        const score = dx / Math.max(halfWidth, 1e-4) + dz / Math.max(halfDepth, 1e-4)
-        if (!best || score < best.score) best = { id: module.id as AnyNodeId, score }
-      }
-
-      if (best) return best.id
-    }
-    return event.node.id
-  }
-
-  if (event.node.type !== 'roof') return event.node.id
-
-  let firstSegmentId: AnyNodeId | null = null
-  let best: { id: AnyNodeId; score: number } | null = null
-  const roofChildren = (event.node as { children?: unknown }).children
-
-  if (!Array.isArray(roofChildren)) return event.node.id
-
-  for (const childId of roofChildren) {
-    if (typeof childId !== 'string') continue
-    const segment = nodes[childId as AnyNodeId]
-    if (segment?.type !== 'roof-segment') continue
-    const segmentObject = sceneRegistry.nodes.get(segment.id)
-    if (!segmentObject) continue
-    segmentObject.updateWorldMatrix(true, false)
-    const local = segmentObject.worldToLocal(worldPoint.clone())
-    firstSegmentId ??= segment.id
-
-    const overhang = segment.overhang ?? 0
-    const halfWidth = segment.width / 2 + overhang
-    const halfDepth = segment.depth / 2 + overhang
-    if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) continue
-
-    const surfaceY = getRoofSegmentSurfaceY(segment, local.x, local.z)
-    const score = Math.abs(local.y - surfaceY)
-    if (!best || score < best.score) {
-      best = { id: segment.id, score }
-    }
-  }
-
-  return best?.id ?? firstSegmentId ?? event.node.id
+  const ownerId = registryMeasurementForNode(event.node)?.resolveOwnerId?.({
+    ctx: measurementGeometryContextForNode(event.node),
+    node: event.node as never,
+    worldPoint: event.position,
+  }) as AnyNodeId | null | undefined
+  return ownerId ?? event.node.id
 }
 
 function createNodeEventMeasurementAttachment(

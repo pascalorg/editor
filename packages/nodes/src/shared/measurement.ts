@@ -1,4 +1,5 @@
 import type {
+  AnyNode,
   CeilingNode,
   DoorNode,
   FenceNode,
@@ -453,6 +454,16 @@ export function fenceMeasurement(): MeasurementDefinition<FenceNode> {
 
 export function surfaceMeasurement<N extends SurfaceNode>(): MeasurementDefinition<N> {
   return {
+    applyLiveTransform: (node, live) =>
+      ({
+        ...node,
+        holes: ('holes' in node ? (node.holes ?? []) : []).map((hole) =>
+          hole.map(([x, z]) => [x + live.position[0], z + live.position[2]] as [number, number]),
+        ),
+        polygon: node.polygon.map(
+          ([x, z]) => [x + live.position[0], z + live.position[2]] as [number, number],
+        ),
+      }) as AnyNode,
     area: (node) => {
       const boundary = surfaceBoundaryPolygon(node)
       const outer = polygonAreaAndCentroid(boundary)

@@ -23,6 +23,7 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
+import { MeasurementSceneGraphSync } from '../../lib/measurement-scene-nodes'
 import {
   applySceneGraphToEditor,
   loadSceneFromLocalStorage,
@@ -1077,6 +1078,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
+          <MeasurementSceneGraphSync />
           <Viewer
             defaultRender={EDITOR_DEFAULT_RENDER}
             hoverStyles={EDITOR_HOVER_STYLES}

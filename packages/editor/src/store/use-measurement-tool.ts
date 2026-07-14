@@ -3,11 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  AnyNode as AnyNodeSchema,
   type GeometryContext,
   type MeasurementDefinitionArea,
   type MeasurementDefinitionPerimeter,
-  MeasurementNode,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -260,82 +258,6 @@ let nextMeasurementId = 1
 const MEASUREMENT_ENDPOINT_LINK_TOLERANCE_METERS = 1e-5
 const PERIMETER_BACKFILL_LABEL_TOLERANCE_METERS = 0.05
 const PERIMETER_BACKFILL_LENGTH_TOLERANCE_METERS = 1e-3
-
-function measurementSceneParentId(
-  segment: MeasurementSegment,
-  nodes: Readonly<Record<string, AnyNode>>,
-): AnyNodeId | null {
-  for (const attachment of [segment.startAttachment, segment.endAttachment]) {
-    if (attachment?.ownerNodeId && nodes[attachment.ownerNodeId]) {
-      return attachment.ownerNodeId as AnyNodeId
-    }
-    if (attachment && nodes[attachment.nodeId]) return attachment.nodeId as AnyNodeId
-  }
-  return null
-}
-
-function appendMeasurementSceneChild(parent: AnyNode, id: AnyNodeId): AnyNode {
-  const currentChildren = (parent as { children?: unknown }).children
-  const children = Array.isArray(currentChildren) ? currentChildren : []
-  const candidate = {
-    ...parent,
-    children: Array.from(new Set([...children, id])),
-  }
-
-  const schema = nodeRegistry.get(parent.type)?.schema ?? AnyNodeSchema
-  return schema.safeParse(candidate).success ? (candidate as AnyNode) : parent
-}
-
-function syncLinearMeasurementSceneNodes(segments: ReadonlyArray<MeasurementSegment>) {
-  useScene.setState((state) => {
-    const existing = Object.values(state.nodes).filter(
-      (node): node is Extract<AnyNode, { type: 'measurement' }> => node.type === 'measurement',
-    )
-    const existingIds = new Set<string>(existing.map((node) => node.id))
-    const existingByMeasurementId = new Map(existing.map((node) => [node.measurementId, node]))
-    const nodes = Object.fromEntries(
-      Object.entries(state.nodes)
-        .filter(([id]) => !existingIds.has(id as AnyNodeId))
-        .map(([id, node]) => {
-          const children = (node as { children?: unknown }).children
-          if (!Array.isArray(children)) return [id, node]
-          return [
-            id,
-            { ...node, children: children.filter((childId) => !existingIds.has(childId)) },
-          ]
-        }),
-    ) as Record<AnyNodeId, AnyNode>
-    const rootNodeIds = state.rootNodeIds.filter((id) => !existingIds.has(id))
-
-    for (const segment of segments) {
-      const parentId = measurementSceneParentId(segment, nodes)
-      const id = `measurement_${segment.id}` as AnyNodeId
-      nodes[id] = MeasurementNode.parse({
-        ...existingByMeasurementId.get(segment.id),
-        end: segment.end,
-        endAttachment: segment.endAttachment,
-        id,
-        measuredDistanceMeters: segment.measuredDistanceMeters,
-        measurementId: segment.id,
-        parentId,
-        start: segment.start,
-        startAttachment: segment.startAttachment,
-        view: segment.view,
-      })
-
-      if (!parentId) {
-        rootNodeIds.push(id)
-        continue
-      }
-      const parent = nodes[parentId]
-      if (parent) {
-        nodes[parentId] = appendMeasurementSceneChild(parent, id)
-      }
-    }
-
-    return { nodes, rootNodeIds }
-  })
-}
 
 export function distanceBetweenMeasurements(a: MeasurementPoint, b: MeasurementPoint): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
@@ -877,7 +799,6 @@ export function hydrateMeasurements(value: unknown) {
     snapTarget: null,
     suppressNextPlacementClick: false,
   })
-  syncLinearMeasurementSceneNodes(measurements.segments)
 }
 
 export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
@@ -963,7 +884,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         },
       ],
     }))
-    syncLinearMeasurementSceneNodes(get().segments)
   },
   beginAngle: (view, vertex, referenceLine) =>
     set({
@@ -1328,7 +1248,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         segments: nextSegments,
       }
     })
-    syncLinearMeasurementSceneNodes(get().segments)
   },
   endSegmentEndpointDrag: (options) => {
     const drag = get().draggingSegmentEndpoint
@@ -1366,7 +1285,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       selectedId: state.selectedId === id ? null : state.selectedId,
       segments: state.segments.filter((segment) => segment.id !== id),
     }))
-    syncLinearMeasurementSceneNodes(get().segments)
   },
   deleteSelected: () => {
     const selectedId = get().selectedId
@@ -1400,7 +1318,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         },
       ],
     }))
-    syncLinearMeasurementSceneNodes(get().segments)
   },
   updateSegmentLength: (id, lengthMeters) => {
     if (!(Number.isFinite(lengthMeters) && lengthMeters > 1e-4)) return
@@ -1418,7 +1335,6 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
         return { ...segment, end, endAttachment: undefined, measuredDistanceMeters: lengthMeters }
       }),
     }))
-    syncLinearMeasurementSceneNodes(get().segments)
   },
   addArea: (view, labelPoint, areaSquareMeters, boundaryPoints) => {
     if (!(Number.isFinite(areaSquareMeters) && areaSquareMeters > 1e-6)) {
@@ -1515,6 +1431,5 @@ export const useMeasurementTool = create<MeasurementToolState>((set, get) => ({
       snapTarget: null,
       suppressNextPlacementClick: false,
     })
-    syncLinearMeasurementSceneNodes([])
   },
 }))

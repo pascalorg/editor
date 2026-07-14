@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { AnyNode, ItemNode, useScene } from '@pascal-app/core'
+import { syncLinearMeasurementSceneNodes } from '../lib/measurement-scene-nodes'
 import { registerMeasurementTestNodes } from '../lib/register-measurement-test-nodes'
 import {
   axisLockedMeasurementPoint,
@@ -44,6 +45,10 @@ function zoneNode(): AnyNode {
       [0, 3],
     ],
   } as never
+}
+
+function syncMeasurementSceneNodesForTest() {
+  syncLinearMeasurementSceneNodes(useMeasurementTool.getState().segments)
 }
 
 describe('useMeasurementTool', () => {
@@ -125,6 +130,7 @@ describe('useMeasurementTool', () => {
         { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_measurement' },
       )
 
+    syncMeasurementSceneNodesForTest()
     const segment = useMeasurementTool.getState().segments[0]!
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
@@ -175,6 +181,7 @@ describe('useMeasurementTool', () => {
         { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_measurement' },
       )
 
+    syncMeasurementSceneNodesForTest()
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
     )
@@ -187,6 +194,7 @@ describe('useMeasurementTool', () => {
 
   test('adds unattached linear measurements at the scene root', () => {
     useMeasurementTool.getState().addSegment('3d', [0, 0, 0], [1, 0, 0])
+    syncMeasurementSceneNodesForTest()
 
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
@@ -232,6 +240,7 @@ describe('useMeasurementTool', () => {
         { feature: { kind: 'node-bounds', normalized: [1, 0, 0] }, nodeId: 'item_end' },
       )
 
+    syncMeasurementSceneNodesForTest()
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
     )
@@ -279,6 +288,7 @@ describe('useMeasurementTool', () => {
       },
     )
 
+    syncMeasurementSceneNodesForTest()
     const sceneNode = Object.values(useScene.getState().nodes).find(
       (node) => node.type === 'measurement',
     )

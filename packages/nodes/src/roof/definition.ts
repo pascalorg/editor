@@ -1,12 +1,16 @@
 import {
+  type AnyNode,
   type AnyNodeId,
+  getRoofSegmentSurfaceY,
   type HandleDescriptor,
   type NodeDefinition,
   RoofNode as RoofNodeSchema,
   type RoofNode as RoofNodeType,
   type RoofSegmentNode,
   type SceneApi,
+  sceneRegistry,
 } from '@pascal-app/core'
+import { Vector3 } from 'three'
 import { buildRoofFloorplan } from './floorplan'
 import { roofParametrics } from './parametrics'
 import { RoofNode } from './schema'
@@ -78,6 +82,43 @@ function roofMoveHandle(): HandleDescriptor<RoofNodeType> {
 }
 
 const roofHandles: HandleDescriptor<RoofNodeType>[] = [roofMoveHandle()]
+const roofMeasurementWorldPoint = new Vector3()
+const roofMeasurementLocalPoint = new Vector3()
+
+function resolveRoofMeasurementOwnerId({
+  ctx,
+  worldPoint,
+}: {
+  ctx: { children: AnyNode[] }
+  worldPoint: readonly [number, number, number]
+}): AnyNodeId | null {
+  roofMeasurementWorldPoint.set(worldPoint[0], worldPoint[1], worldPoint[2])
+  let firstSegmentId: AnyNodeId | null = null
+  let best: { id: AnyNodeId; score: number } | null = null
+
+  for (const child of ctx.children) {
+    if (child.type !== 'roof-segment') continue
+    const segment = child as RoofSegmentNode
+    const segmentObject = sceneRegistry.nodes.get(segment.id)
+    if (!segmentObject) continue
+    segmentObject.updateWorldMatrix(true, false)
+    const local = segmentObject.worldToLocal(
+      roofMeasurementLocalPoint.copy(roofMeasurementWorldPoint),
+    )
+    firstSegmentId ??= segment.id
+
+    const overhang = segment.overhang ?? 0
+    const halfWidth = segment.width / 2 + overhang
+    const halfDepth = segment.depth / 2 + overhang
+    if (Math.abs(local.x) > halfWidth || Math.abs(local.z) > halfDepth) continue
+
+    const surfaceY = getRoofSegmentSurfaceY(segment, local.x, local.z)
+    const score = Math.abs(local.y - surfaceY)
+    if (!best || score < best.score) best = { id: segment.id, score }
+  }
+
+  return best?.id ?? firstSegmentId
+}
 
 /**
  * Roof — Stage A registration. Wrap-exports the legacy `RoofRenderer`
@@ -165,6 +206,10 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   // / stair-segment via `shared/move-roof-tool`.
   affordanceTools: {
     move: () => import('../shared/move-roof-tool'),
+  },
+
+  measurement: {
+    resolveOwnerId: resolveRoofMeasurementOwnerId,
   },
 
   parametrics: roofParametrics,

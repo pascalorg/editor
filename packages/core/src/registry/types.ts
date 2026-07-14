@@ -814,8 +814,15 @@ export type MeasurementDefinitionPerimeter = {
   lengthMeters: number
 }
 
+export type MeasurementOwnerResolveArgs<N> = {
+  node: N
+  ctx: GeometryContext
+  worldPoint: MeasurementDefinitionPoint
+}
+
 export type MeasurementDefinition<N> = {
   area?: (node: N, ctx: GeometryContext) => MeasurementDefinitionArea | null
+  applyLiveTransform?: (node: N, live: LiveTransformLike) => AnyNode
   directLength?: (
     node: N,
     ctx: GeometryContext,
@@ -824,6 +831,7 @@ export type MeasurementDefinition<N> = {
   ) => MeasurementDefinitionDirectLength | null
   perimeter?: (node: N, ctx: GeometryContext) => MeasurementDefinitionPerimeter | null
   pick3D?: boolean
+  resolveOwnerId?: (args: MeasurementOwnerResolveArgs<N>) => AnyNodeId | null
   snapGeometry?: (node: N, ctx: GeometryContext) => MeasurementDefinitionSnapGeometry | null
 }
 
