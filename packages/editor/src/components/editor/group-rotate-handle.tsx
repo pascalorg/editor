@@ -159,6 +159,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
   }
 
   const activate = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
 

@@ -1250,6 +1250,7 @@ function RoofTrimHandles() {
   }
 
   const startDrag = (side: RoofTrimSide, event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     const source = sceneRegistry.nodes.get(segment.id)
     if (!source) return

@@ -110,6 +110,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
   return (event: ThreeEvent<PointerEvent>) => {
+    // Only the primary button starts a handle gesture — right/middle-drag
+    // belongs to the camera, so let it propagate untouched.
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
 

@@ -331,6 +331,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   }, [])
 
   const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
@@ -435,6 +436,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
@@ -607,6 +609,7 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
@@ -696,6 +699,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
