@@ -122,7 +122,7 @@ type ModifyPlan = { ops: ModifyOp[]; note?: string }   // note：模型对歧义
 | # | 问题 | 建议 |
 |---|---|---|
 | 1 | 手动编辑政策：漂移时结构修改是"确认后重建"（方案 A）还是"拒绝并引导用户手动改"（方案 B） | A——B 会让 AI 修改在真实使用中大概率不可用 |
-| 2 | remove_room 后的面积语义：footprint 缩小（总面积减）还是其余房间瓜分（总面积不变） | 缩小为默认；"把书房并进主卧"这类瓜分语义等有真实需求再加 merge_rooms op |
+| 2 | remove_room 后的面积语义：footprint 缩小（总面积减）还是其余房间瓜分（总面积不变） | ~~缩小为默认~~ **2026-07-14 修订（用户实测反馈：删卫生间导致全户型重排不可接受）**：单独 remove_room 优先**局部吸收**——被删房间矩形并入共享边最长的邻室（`absorbRoomInPlan`：走廊为最后候选；删走廊/玄关宿主/致孤房/并集不成单一多边形/面积 fatal 时回退稳定性重分区，此时 footprint 缩小语义生效）。吸收路径 footprint 与总面积不变、其余房间坐标零变化，拓扑无关（band 凹格/田の字格子/线性段通用） |
 | 3 | 稳定性位移阈值（§4 的 0.5m）与 deviationWeight 数值 | 落码时以 eval/预览实测定，文档只定语义 |
 | 4 | 旧流程退役时间 | case-13/14 + 新家具 eval case 全绿后删 legacy 路径 |
 
@@ -161,3 +161,4 @@ M0–M2 核心为确定性代码，模型服务不可用也能开发（ModifyOp 
 | 旧场景注明（§7 兑现） | 无快照场景走 legacy 时回复追加 `modifyLegacyNoSnapshot` 说明 |
 | 版本号（§6 兑现） | 结构重建回复追加 `modifyPreviousVersion`（修改前版本号，可回滚） |
 | case-19 断言教训 | 删除大房间会让"双带+走廊"退化为单带，锁旧宽几何无解 → 分区器按 §4 放开轮廓重搜（设计内行为）——remove 类案例不断言锁宽，锁宽断言只适用于 add/resize |
+| **局部删除吸收（2026-07-14）** | 用户实测：田の字下删卫生间导致全户型重排（格子拓扑房间数变化 = 格子重分配，稳定性机制无候选可选）。修复：`unionAdjacentPolygons`（layout-plan，边消除法轴对齐多边形并集）+ `absorbRoomInPlan`（partitioner，§8-2 修订语义）+ agent 吸收优先路径（验证过 validator 才走，fatal 回退重分区）+ 重建尾段抽出 `rebuildScenePlanFirst` 共享 + eval `preserveRoomPolygons` 断言（非豁免房间多边形逐点比对）+ case-20 线上 ✅（删卫生间：外轮廓不变、其余房间零移动、gates 过） |

@@ -543,3 +543,111 @@ export function analyzePolygonGrid(
   }
   return { unionArea, overlapArea, overlapPairs }
 }
+
+// ---------------------------------------------------------------------------
+// Union of two adjacent axis-aligned polygons (MODIFY_REDESIGN.md §6 局部删除
+// 吸收). Edge-cancellation: split every edge at the combined coordinate
+// breakpoints, cancel opposite-direction segment pairs (the shared boundary),
+// stitch the remainder into one loop. Returns null whenever the result would
+// not be ONE simple polygon — overlapping inputs, point-contact, disjoint,
+// or branching boundaries all bail; the caller falls back to re-partition.
+// ---------------------------------------------------------------------------
+
+export function unionAdjacentPolygons(
+  a: Array<[number, number]>,
+  b: Array<[number, number]>,
+): Array<[number, number]> | null {
+  const key = (x: number, z: number) => `${x.toFixed(3)},${z.toFixed(3)}`
+  const signedArea = (poly: Array<[number, number]>): number => {
+    let sum = 0
+    for (let i = 0; i < poly.length; i++) {
+      const [x1, z1] = poly[i]!
+      const [x2, z2] = poly[(i + 1) % poly.length]!
+      sum += x1 * z2 - x2 * z1
+    }
+    return sum / 2
+  }
+  const ccw = (poly: Array<[number, number]>) => (signedArea(poly) >= 0 ? poly : [...poly].reverse())
+
+  // Collect breakpoints on both axes so shared partial edges split into
+  // exactly matching atomic segments.
+  const xs = new Set<number>()
+  const zs = new Set<number>()
+  for (const poly of [a, b]) {
+    for (const [x, z] of poly) {
+      xs.add(x)
+      zs.add(z)
+    }
+  }
+  const xCuts = [...xs].sort((p, q) => p - q)
+  const zCuts = [...zs].sort((p, q) => p - q)
+
+  type Segment = { x1: number; z1: number; x2: number; z2: number }
+  const segments = new Map<string, Segment>()
+  const segKey = (s: Segment) => `${key(s.x1, s.z1)}>${key(s.x2, s.z2)}`
+
+  const addPolygon = (input: Array<[number, number]>): boolean => {
+    const poly = ccw(input)
+    for (let i = 0; i < poly.length; i++) {
+      const [x1, z1] = poly[i]!
+      const [x2, z2] = poly[(i + 1) % poly.length]!
+      if (Math.abs(x1 - x2) > 1e-6 && Math.abs(z1 - z2) > 1e-6) return false // diagonal edge
+      const cuts = Math.abs(x1 - x2) > 1e-6 ? xCuts : zCuts
+      const fixed = Math.abs(x1 - x2) > 1e-6 ? null : x1
+      const from = fixed === null ? x1 : z1
+      const to = fixed === null ? x2 : z2
+      const inner = cuts.filter(c => (from < to ? c > from + 1e-9 && c < to - 1e-9 : c < from - 1e-9 && c > to + 1e-9))
+      if (from > to) inner.reverse()
+      const points = [from, ...inner, to]
+      for (let j = 0; j < points.length - 1; j++) {
+        const s: Segment = fixed === null
+          ? { x1: points[j]!, z1, x2: points[j + 1]!, z2: z1 }
+          : { x1: fixed, z1: points[j]!, x2: fixed, z2: points[j + 1]! }
+        const reverse = `${key(s.x2, s.z2)}>${key(s.x1, s.z1)}`
+        if (segments.has(reverse)) segments.delete(reverse) // shared boundary cancels
+        else if (segments.has(segKey(s))) return false // duplicate direction ⇒ overlap
+        else segments.set(segKey(s), s)
+      }
+    }
+    return true
+  }
+  if (!addPolygon(a) || !addPolygon(b)) return null
+  if (segments.size === 0) return null
+
+  // Every remaining segment start must be unique for a single simple loop.
+  const byStart = new Map<string, Segment>()
+  for (const s of segments.values()) {
+    const startKey = key(s.x1, s.z1)
+    if (byStart.has(startKey)) return null // branching boundary (point contact / hole)
+    byStart.set(startKey, s)
+  }
+  const first = [...segments.values()][0]!
+  const loop: Array<[number, number]> = []
+  let cursor = first
+  for (let i = 0; i <= segments.size; i++) {
+    loop.push([cursor.x1, cursor.z1])
+    const next = byStart.get(key(cursor.x2, cursor.z2))
+    if (!next) return null
+    if (next === first) break
+    cursor = next
+    if (i === segments.size) return null // did not close ⇒ multiple loops
+  }
+  if (loop.length !== segments.size) return null // leftover segments ⇒ disjoint parts
+
+  // Merge collinear runs.
+  const simplified: Array<[number, number]> = []
+  for (let i = 0; i < loop.length; i++) {
+    const prev = loop[(i - 1 + loop.length) % loop.length]!
+    const curr = loop[i]!
+    const next = loop[(i + 1) % loop.length]!
+    const collinear = (Math.abs(prev[0] - curr[0]) < 1e-9 && Math.abs(curr[0] - next[0]) < 1e-9)
+      || (Math.abs(prev[1] - curr[1]) < 1e-9 && Math.abs(curr[1] - next[1]) < 1e-9)
+    if (!collinear) simplified.push(curr)
+  }
+  if (simplified.length < 4) return null
+
+  // Disjoint polygons cancel nothing — catch by area conservation.
+  const total = polygonArea(a) + polygonArea(b)
+  if (Math.abs(polygonArea(simplified) - total) > Math.max(0.01, total * 0.001)) return null
+  return simplified
+}

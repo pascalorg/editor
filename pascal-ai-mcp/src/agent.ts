@@ -4,7 +4,7 @@ import type { AppConfig } from './config'
 import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
 import { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
 import { resolveNormProfile } from './norms/profile'
-import { deriveBriefFacts, deriveStrategy } from './strategy'
+import { deriveBriefFacts, deriveStrategy, type StrategyDecision } from './strategy'
 import {
   classifyRoomTypeByName,
   ROOM_NAME_PATTERNS,
@@ -19,15 +19,15 @@ import {
   type FurnitureModifyReport,
   type ManualItem,
 } from './furniture-modify'
-import { partitionLayout } from './layout-partitioner'
+import { absorbRoomInPlan, partitionLayout } from './layout-partitioner'
 import { applyModifyOps, parseModifyOps, resolveRoomRef, type FurnitureModifyOp } from './modify-ops'
 import { computeLayoutQuality } from './layout-metrics'
-import type { IssueL10n, LayoutPlan, RoomType } from './layout-plan'
+import type { IssueL10n, LayoutIntent, LayoutPlan, RoomType } from './layout-plan'
 import { PascalMcpClient } from './mcp'
 import { OpenAiCompatibleClient, type RequestHooks } from './openai-compatible'
 import { buildLayoutPlan, type PlanBuildResult } from './plan-builder'
 import { validateLayoutPlan, type PlanTargets } from './plan-validator'
-import { executeLayoutPlan, toolPayload, type SceneExecutionReport } from './scene-executor'
+import { executeLayoutPlan, toolPayload, type McpCaller, type SceneExecutionReport } from './scene-executor'
 
 // Re-exported for eval/run-eval.ts, which historically imported it from here.
 export { toolPayload }
@@ -1009,6 +1009,59 @@ export class PascalAiAgent {
     }
     delete session.modifyDriftConfirmed
     const profile = resolveNormProfile(this.config.normProfile)
+
+    // 局部删除吸收（§6，2026-07-14 语义修订，用户实测反馈驱动）：单独的
+    // remove_room 优先把房间矩形并入共享边最长的邻室——其余房间坐标一个
+    // 不动，footprint/总面积不变。吸收在几何上不可行（删走廊、玄关宿主、
+    // 会产生孤房、并集不成单一多边形）或并集触发面积 fatal 时，才落回下面
+    // 的稳定性重分区（此时布局变化不可避免，notes 如实告知）。
+    if (parsed.plan.ops.length === 1 && parsed.plan.ops[0]!.op === 'remove_room') {
+      const removeOp = parsed.plan.ops[0] as { op: 'remove_room'; room: string }
+      const resolved = resolveRoomRef(removeOp.room, session.layoutIntent.rooms)
+      if ('room' in resolved) {
+        const absorbed = absorbRoomInPlan(session.layoutPlan, resolved.room.id)
+        if (absorbed) {
+          const localRooms = session.layoutIntent.rooms
+            .filter(room => room.id !== resolved.room.id)
+            .map(room => room.id === absorbed.absorbedInto.id
+              ? { ...room, targetAreaSqm: Math.round(polygonArea(absorbed.absorbedInto.polygon) * 10) / 10 }
+              : room)
+          const localIntent: LayoutIntent = {
+            targetTotalAreaSqm: session.layoutIntent.targetTotalAreaSqm,
+            rooms: localRooms,
+          }
+          const localAdjacency = session.layoutIntent.adjacency
+            ?.filter(pair => pair.a !== resolved.room.id && pair.b !== resolved.room.id)
+          if (localAdjacency && localAdjacency.length > 0) localIntent.adjacency = localAdjacency
+          const localValidation = validateLayoutPlan(
+            absorbed.plan,
+            gateTargetsForSession({ brief: session.brief, layoutIntent: localIntent }),
+            profile,
+          )
+          if (localValidation.fatal.length === 0) {
+            return this.rebuildScenePlanFirst({
+              session,
+              sceneId,
+              loadedVersion,
+              trace,
+              traceMcp,
+              beforeCall,
+              zones,
+              intent: localIntent,
+              plan: absorbed.plan,
+              planNotes: [`局部删除：「${resolved.room.name}」并入「${absorbed.absorbedInto.name}」，其余房间保持原位`],
+              strategy: session.strategy
+                ?? deriveStrategy(deriveBriefFacts(session.summary || formatSummary(session.brief)), {
+                  totalAreaSqm: localIntent.targetTotalAreaSqm,
+                }, profile),
+              furnitureOps: [],
+              appliedNotes: [],
+            })
+          }
+        }
+      }
+    }
+
     // Rename pairs resolve against the PRE-edit intent (old name → zone).
     const renames = parsed.plan.ops.flatMap(op => {
       if (op.op !== 'rename_room') return []
@@ -1123,7 +1176,46 @@ export class PascalAiAgent {
     const validation = validateLayoutPlan(plan, targets, profile)
     if (validation.fatal.length > 0) return this.rejectPlanFirstModify(session, validation.fatal)
 
-    // --- rebuild: clear old structure, execute the new plan ---
+    return this.rebuildScenePlanFirst({
+      session,
+      sceneId,
+      loadedVersion,
+      trace,
+      traceMcp,
+      beforeCall,
+      zones,
+      intent,
+      plan,
+      planNotes,
+      strategy,
+      furnitureOps: applied.furnitureOps,
+      appliedNotes: applied.notes,
+    })
+  }
+
+  // Shared structural-rebuild tail (§6): clear → executeLayoutPlan →
+  // checklist furnishing → deferred furniture ops → manual-item replay →
+  // snapshot refresh → diagnostics/gates/reply. Used by both the local
+  // absorption removal and the stability re-partition path.
+  private async rebuildScenePlanFirst(options: {
+    session: WorkflowSession
+    sceneId: string
+    loadedVersion: number | null
+    trace: ReturnType<typeof startPhaseTrace>
+    traceMcp: McpCaller
+    beforeCall: () => void
+    zones: ZoneSummary[]
+    intent: LayoutIntent
+    plan: LayoutPlan
+    planNotes: string[]
+    strategy: StrategyDecision
+    furnitureOps: FurnitureModifyOp[]
+    appliedNotes: string[]
+  }): Promise<Partial<WorkflowGraphState> | null> {
+    const {
+      session, sceneId, loadedVersion, trace, traceMcp, beforeCall,
+      zones, intent, plan, planNotes, strategy, furnitureOps, appliedNotes,
+    } = options
     const nodes = snapshotSceneNodes(toolPayload(await this.callMcp(session.sessionId, 'get_scene', {})))
     const levelId = Object.entries(nodes).find(([, node]) => node.type === 'level')?.[0] ?? null
     if (!levelId) return null
@@ -1191,9 +1283,9 @@ export class PascalAiAgent {
     })
     // Deferred furniture ops run against the rebuilt rooms.
     let furnReport: FurnitureModifyReport | null = null
-    if (applied.furnitureOps.length > 0) {
+    if (furnitureOps.length > 0) {
       furnReport = await executeFurnitureModifyOps({
-        ops: applied.furnitureOps,
+        ops: furnitureOps,
         rooms: furnitureRooms,
         levelId,
         callMcp: traceMcp,
@@ -1210,7 +1302,7 @@ export class PascalAiAgent {
     trace.converged = true
     return this.finishPlanFirstModify(session, sceneId, loadedVersion, trace, {
       okDetails: [
-        ...applied.notes,
+        ...appliedNotes,
         ...planNotes,
         ...(furnReport?.results.filter(r => r.ok).map(r => r.detail) ?? []),
         ...replay.replaced.map(name => `手动家具「${name}」已在重建后重新放置`),

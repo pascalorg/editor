@@ -335,6 +335,8 @@ export type EvalCase = {
       deletedMatching?: string[]
       structureUntouched?: boolean
     }
+    /** Local-removal (§6 吸收): non-excepted zones must keep identical polygons. */
+    preserveRoomPolygons?: { except: string[] }
   }
   notes?: string
 }

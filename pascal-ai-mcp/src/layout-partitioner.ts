@@ -34,6 +34,7 @@ import {
   longestExteriorEdge,
   polygonArea,
   sharedBoundaryLength,
+  unionAdjacentPolygons,
   type IssueL10n,
   type LayoutIntent,
   type LayoutPlan,
@@ -1472,4 +1473,54 @@ function dedupeConnections(
 // Actual polygon area of every room (post-rounding), for reporting.
 export function planRoomAreas(plan: LayoutPlan): Map<string, number> {
   return new Map(plan.rooms.map(room => [room.id, polygonArea(room.polygon)]))
+}
+
+// ---------------------------------------------------------------------------
+// Local room removal by absorption (MODIFY_REDESIGN.md §6, 2026-07-14 语义修订).
+// The removed room's area merges into the neighbor with the longest shared
+// edge — every other room keeps its exact polygon, footprint and total area
+// unchanged. Deterministic and topology-agnostic: works for band carves,
+// tanoji wing cells and narrow-lot stack segments alike. Returns null when
+// absorption cannot produce one simple polygon or would break circulation —
+// the caller falls back to the stability re-partition.
+// ---------------------------------------------------------------------------
+
+export function absorbRoomInPlan(
+  plan: LayoutPlan,
+  roomId: string,
+): { plan: LayoutPlan; absorbedInto: LayoutPlanRoom } | null {
+  const target = plan.rooms.find(room => room.id === roomId)
+  if (!target) return null
+  // Circulation infrastructure and the entry host anchor the whole layout —
+  // removing them is a genuine re-partition.
+  if (target.type === 'hallway') return null
+  if (plan.entry.roomId === roomId) return null
+  // A room whose ONLY door connection is the target would be orphaned.
+  for (const room of plan.rooms) {
+    if (room.id === roomId) continue
+    const connections = plan.connections.filter(c => c.from === room.id || c.to === room.id)
+    if (connections.length > 0 && connections.every(c => c.from === roomId || c.to === roomId)) {
+      return null
+    }
+  }
+
+  // Longest shared edge wins; the corridor is a last resort (a widened
+  // corridor bump reads as a mistake, not a bigger room).
+  const candidates = plan.rooms
+    .filter(room => room.id !== roomId)
+    .map(room => ({ room, shared: sharedBoundaryLength(room.polygon, target.polygon) }))
+    .filter(entry => entry.shared >= 0.05)
+    .sort((x, y) =>
+      (Number(x.room.type === 'hallway') - Number(y.room.type === 'hallway')) || y.shared - x.shared)
+  for (const { room: neighbor } of candidates) {
+    const union = unionAdjacentPolygons(neighbor.polygon, target.polygon)
+    if (!union) continue
+    const absorbedInto: LayoutPlanRoom = { ...neighbor, polygon: union }
+    const rooms = plan.rooms
+      .filter(room => room.id !== roomId)
+      .map(room => (room.id === neighbor.id ? absorbedInto : room))
+    const connections = plan.connections.filter(c => c.from !== roomId && c.to !== roomId)
+    return { plan: { ...plan, rooms, connections }, absorbedInto }
+  }
+  return null
 }

@@ -590,6 +590,12 @@ export type ModificationChecks = {
     deletedMatching?: string[]
     structureUntouched?: boolean
   }
+  /**
+   * Local-removal cases (§6 吸收语义): every before-zone whose name is not in
+   * `except` must reappear after with an identical polygon (±2cm) — proves
+   * the modify moved nothing it wasn't asked to touch.
+   */
+  preserveRoomPolygons?: { except: string[] }
 }
 
 function snapshotZones(snapshot: SceneSnapshot): ZoneInfo[] {
@@ -885,6 +891,34 @@ export function assertModification(
         reason: matched ? undefined : `匹配的 ${type} 面积未达到要求`,
       })
     }
+  }
+
+  if (config.preserveRoomPolygons) {
+    const except = new Set(config.preserveRoomPolygons.except)
+    const beforeZones = snapshotZones(before).filter(zone => zone.name && !except.has(zone.name))
+    const samePolygon = (a: Array<[number, number]>, b: Array<[number, number]>): boolean => {
+      if (a.length !== b.length) return false
+      // Allow rotation of the vertex ring; orientation must match (executor
+      // rebuilds from the identical plan polygon).
+      for (let offset = 0; offset < b.length; offset++) {
+        if (a.every(([x, z], i) => {
+          const [bx, bz] = b[(i + offset) % b.length]!
+          return Math.abs(x - bx) <= 0.02 && Math.abs(z - bz) <= 0.02
+        })) return true
+      }
+      return false
+    }
+    const moved = beforeZones.filter(zone => {
+      const after2 = afterScene.zones.filter(z => z.name === zone.name)
+      return !after2.some(z => samePolygon(zone.polygon, z.polygon))
+    }).map(zone => zone.name)
+    results.push({
+      name: 'modification:preserveRoomPolygons',
+      status: moved.length === 0 ? 'pass' : 'fail',
+      expected: `除 ${config.preserveRoomPolygons.except.join('、')} 外全部房间多边形保持原样`,
+      actual: moved.length === 0 ? '未移动' : moved,
+      reason: moved.length === 0 ? undefined : `以下房间被移动/改形：${moved.join('、')}`,
+    })
   }
 
   if (config.itemChanges) {

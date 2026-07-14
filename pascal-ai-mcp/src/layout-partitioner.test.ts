@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { partitionLayout, planDeviation, planRoomAreas } from './layout-partitioner'
+import { absorbRoomInPlan, partitionLayout, planDeviation, planRoomAreas } from './layout-partitioner'
 import { validateLayoutPlan, type PlanTargets } from './plan-validator'
 import { polygonArea, type LayoutIntent } from './layout-plan'
 
@@ -512,5 +512,92 @@ describe('partitionLayout: l_shape topology (S5)', () => {
     )).toBe(true)
     const validation = validateLayoutPlan(result.plan, { totalAreaSqm: 55 })
     expect(validation.fatal).toEqual([])
+  })
+})
+
+describe('absorbRoomInPlan: local removal by absorption (MODIFY_REDESIGN §6 修订)', () => {
+  const planOf = (intent: LayoutIntent, strategy?: Parameters<typeof partitionLayout>[2]) => {
+    const result = partitionLayout(intent, undefined, strategy)
+    if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+    return result.plan
+  }
+
+  test('band hub carve (bathroom) fills back into the living room; nothing else moves', () => {
+    const plan = planOf(两居)
+    const result = absorbRoomInPlan(plan, 'bath-1')
+    if (!result) throw new Error('expected absorption')
+    expect(result.plan.rooms.some(room => room.id === 'bath-1')).toBe(false)
+    // Absorber gained exactly the bathroom's area.
+    const before = planRoomAreas(plan)
+    const after = planRoomAreas(result.plan)
+    expect(after.get(result.absorbedInto.id)!).toBeCloseTo(
+      before.get(result.absorbedInto.id)! + before.get('bath-1')!, 1)
+    // Every other room's polygon is byte-identical.
+    for (const room of plan.rooms) {
+      if (room.id === 'bath-1' || room.id === result.absorbedInto.id) continue
+      expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
+    }
+    // Footprint untouched, connections to the bathroom pruned.
+    expect(result.plan.footprint).toEqual(plan.footprint)
+    expect(result.plan.connections.some(c => c.from === 'bath-1' || c.to === 'bath-1')).toBe(false)
+  })
+
+  test('band column (bedroom) absorbs into its adjacent room', () => {
+    const plan = planOf(两居)
+    const result = absorbRoomInPlan(plan, 'bedroom-2')
+    if (!result) throw new Error('expected absorption')
+    const before = planRoomAreas(plan)
+    const after = planRoomAreas(result.plan)
+    expect(after.get(result.absorbedInto.id)!).toBeCloseTo(
+      before.get(result.absorbedInto.id)! + before.get('bedroom-2')!, 1)
+    for (const room of plan.rooms) {
+      if (room.id === 'bedroom-2' || room.id === result.absorbedInto.id) continue
+      expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
+    }
+  })
+
+  test('tanoji wing cell (bathroom) absorbs without reshuffling the grid (scene 6420b772c9fe 场景复刻)', () => {
+    const tanoji2ldk: LayoutIntent = {
+      targetTotalAreaSqm: 70,
+      rooms: [
+        { id: 'living-kitchen', name: 'LDK', type: 'living_kitchen', targetAreaSqm: 24 },
+        { id: 'bedroom-1', name: '主卧', type: 'bedroom', targetAreaSqm: 14 },
+        { id: 'bedroom-2', name: '次卧', type: 'bedroom', targetAreaSqm: 10 },
+        { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 5 },
+        { id: 'entry-1', name: '玄关', type: 'entry', targetAreaSqm: 3 },
+      ],
+    }
+    const plan = planOf(tanoji2ldk, { typology: 'tanoji' })
+    expect(plan.rooms.some(room => room.id === 'bath-1')).toBe(true)
+    const result = absorbRoomInPlan(plan, 'bath-1')
+    if (!result) throw new Error('expected absorption')
+    for (const room of plan.rooms) {
+      if (room.id === 'bath-1' || room.id === result.absorbedInto.id) continue
+      expect(result.plan.rooms.find(r => r.id === room.id)?.polygon).toEqual(room.polygon)
+    }
+    expect(result.plan.footprint).toEqual(plan.footprint)
+  })
+
+  test('corridor, entry host and orphan-producing removals bail to re-partition', () => {
+    const plan = planOf(两居)
+    const corridor = plan.rooms.find(room => room.type === 'hallway')
+    if (corridor) expect(absorbRoomInPlan(plan, corridor.id)).toBeNull()
+    expect(absorbRoomInPlan(plan, plan.entry.roomId)).toBeNull()
+    // Orphan: a fabricated plan where the study's only door goes through the
+    // bedroom — removing the bedroom must bail.
+    const orphanPlan = {
+      footprint: { width: 9, depth: 4 },
+      entry: { roomId: 'living-1' },
+      rooms: [
+        { id: 'living-1', name: '客厅', type: 'living' as const, polygon: [[0, 0], [3, 0], [3, 4], [0, 4]] as Array<[number, number]>, requiresExteriorWindow: true },
+        { id: 'bedroom-1', name: '卧室', type: 'bedroom' as const, polygon: [[3, 0], [6, 0], [6, 4], [3, 4]] as Array<[number, number]>, requiresExteriorWindow: true },
+        { id: 'study-1', name: '书房', type: 'study' as const, polygon: [[6, 0], [9, 0], [9, 4], [6, 4]] as Array<[number, number]>, requiresExteriorWindow: true },
+      ],
+      connections: [
+        { from: 'living-1', to: 'bedroom-1', type: 'door' as const },
+        { from: 'study-1', to: 'bedroom-1', type: 'door' as const },
+      ],
+    }
+    expect(absorbRoomInPlan(orphanPlan, 'bedroom-1')).toBeNull()
   })
 })

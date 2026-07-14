@@ -1,0 +1,28 @@
+{
+  "id": "case-20-modify-remove-room-local",
+  "category": "修改已有场景：局部删除吸收（§6 修订 · 删卫生间其他房间不动）",
+  "difficulty": "modify",
+  "setupFrom": "case-03-two-bed-standard",
+  "turns": [
+    {
+      "role": "user",
+      "message": "把卫生间删掉，其他房间都不要动。"
+    },
+    {
+      "action": "confirm"
+    }
+  ],
+  "expectedFacts": {},
+  "expectedRoomCounts": {
+    "卧室": 2,
+    "客厅": 1,
+    "厨房": 1
+  },
+  "forbiddenRoomTypes": ["卫生间"],
+  "requireAllRoomsReachable": true,
+  "modificationChecks": {
+    "preserveExteriorBounds": true,
+    "preserveRoomPolygons": { "except": ["卫生间", "客厅"] }
+  },
+  "notes": "验证 2026-07-14 语义修订（用户实测反馈：删卫生间不该重排全户型）：单独 remove_room 走吸收路径——卫生间矩形并入共享边最长的邻室（case-03 布局中为客厅/枢纽），其余房间多边形逐点不变（preserveRoomPolygons except 卫生间+客厅）、外轮廓完全不变（preserveExteriorBounds，比锁宽更强）。gates 以 layoutIntent 为需求真相，删卫后不报缺卫。若此断言失败说明吸收路径没生效、走了重分区。"
+}
