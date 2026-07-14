@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { SlabNode, WallNode } from '../schema'
+import { pointInPolygon } from './polygon-relations'
 import { getRenderableSlabPolygon, snapSlabEdgeToWallBand } from './slab-polygon'
 
 function wallOf(start: [number, number], end: [number, number], thickness = 0.1) {
@@ -16,6 +17,14 @@ function xs(polygon: Array<[number, number]>) {
 
 function zs(polygon: Array<[number, number]>) {
   return polygon.map((point) => point[1])
+}
+
+/** Assert the ring contains every expected vertex (order-independent). */
+function expectRingToInclude(polygon: Array<[number, number]>, points: Array<[number, number]>) {
+  const missing = points.filter(
+    ([x, z]) => !polygon.some((p) => Math.abs(p[0] - x) < 1e-6 && Math.abs(p[1] - z) < 1e-6),
+  )
+  expect(missing).toEqual([])
 }
 
 const roomA: Array<[number, number]> = [
@@ -146,11 +155,19 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.min(...xs(bayPoly))).toBeCloseTo(0.95)
     expect(Math.max(...xs(bayPoly))).toBeCloseTo(3.05)
 
-    // The big slab's bottom edge has a partial neighbour across it — the
-    // whole edge classifies interior (v1 majority rule) and pulls back.
+    // The big slab's bottom edge is backed differently along its span:
+    // interior relief across the bay (z=+0.02), facade-flush elsewhere
+    // (z=-0.05), joined by step connectors at the bay junction walls
+    // x=1 and x=3 (the old whole-edge rule pulled the entire edge back).
     const bigPoly = getRenderableSlabPolygon(big, { walls, siblingSlabs: [bay] })
-    expect(Math.min(...zs(bigPoly))).toBeCloseTo(0.02)
+    expect(Math.min(...zs(bigPoly))).toBeCloseTo(-0.05)
     expect(Math.max(...zs(bigPoly))).toBeCloseTo(5.05)
+    expectRingToInclude(bigPoly, [
+      [1, -0.05],
+      [1, 0.02],
+      [3, 0.02],
+      [3, -0.05],
+    ])
   })
 
   test('an edge on a wall longer than itself still reaches the facade', () => {
@@ -326,6 +343,159 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.max(...xs(polyA))).toBeCloseTo(3.98)
     expect(Math.min(...xs(polyB))).toBeCloseTo(4.02)
     expect(Math.max(...xs(polyA))).toBeLessThan(Math.min(...xs(polyB)))
+  })
+
+  test('offset rooms sharing a partial wall span: interior beside the sibling, facade elsewhere', () => {
+    // Rooms offset diagonally share the x=4 wall only for z ∈ [1.5, 3].
+    // Each room's long edge is interior for the shared span and exterior
+    // (its own facade) for the rest — the case sub-edge classification
+    // exists for.
+    const offsetA = slabOf([
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ])
+    const offsetB = slabOf([
+      [4, 1.5],
+      [8, 1.5],
+      [8, 4.5],
+      [4, 4.5],
+    ])
+    const walls = [
+      wallOf([0, 0], [4, 0]),
+      wallOf([0, 3], [0, 0]),
+      wallOf([0, 3], [4, 3]),
+      wallOf([4, 0], [4, 4.5]),
+      wallOf([4, 1.5], [8, 1.5]),
+      wallOf([8, 1.5], [8, 4.5]),
+      wallOf([8, 4.5], [4, 4.5]),
+    ]
+
+    const polyA = getRenderableSlabPolygon(offsetA, { walls, siblingSlabs: [offsetB] })
+    const polyB = getRenderableSlabPolygon(offsetB, { walls, siblingSlabs: [offsetA] })
+
+    // A's right edge: facade-flush below the junction, interior relief
+    // beside B, joined by the step connector at the junction z=1.5.
+    expectRingToInclude(polyA, [
+      [4.05, -0.05],
+      [4.05, 1.5],
+      [3.98, 1.5],
+      [3.98, 3.05],
+    ])
+    // B's left edge mirrors it: interior relief beside A, facade-flush
+    // above, step at the junction z=3.
+    expectRingToInclude(polyB, [
+      [4.02, 1.45],
+      [4.02, 3],
+      [3.95, 3],
+      [3.95, 4.55],
+    ])
+
+    // Along the shared span the slabs stay strictly apart with the
+    // relief gap straddling the wall centerline...
+    for (let z = 1.6; z <= 2.95; z += 0.1) {
+      expect(pointInPolygon([4, z], polyA)).toBe(false)
+      expect(pointInPolygon([4, z], polyB)).toBe(false)
+      expect(pointInPolygon([3.97, z], polyA, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([4.03, z], polyB, { includeBoundary: false })).toBe(true)
+    }
+    // ...while each unshared portion reaches its own facade face.
+    expect(pointInPolygon([4.04, 0.75], polyA, { includeBoundary: false })).toBe(true)
+    expect(pointInPolygon([3.96, 3.75], polyB, { includeBoundary: false })).toBe(true)
+
+    // Any residual overlap is confined to the shared wall's footprint
+    // right at the junction corners — hidden under the wall bodies, the
+    // same corner pockets the outer-face projection has always produced
+    // where two rooms' facades meet a wall junction.
+    for (let x = 3.5; x <= 4.5; x += 0.02) {
+      for (let z = -0.2; z <= 4.7; z += 0.02) {
+        const overlapping =
+          pointInPolygon([x, z], polyA, { includeBoundary: false }) &&
+          pointInPolygon([x, z], polyB, { includeBoundary: false })
+        if (!overlapping) continue
+        expect(Math.abs(x - 4)).toBeLessThanOrEqual(0.05 + 1e-9)
+        expect(Math.min(Math.abs(z - 1.5), Math.abs(z - 3))).toBeLessThanOrEqual(0.05 + 1e-9)
+      }
+    }
+  })
+
+  test('a wall backing only part of an edge: flush over the wall, as drawn beyond it', () => {
+    const poly = getRenderableSlabPolygon(
+      slabOf(
+        [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+        false,
+      ),
+      { walls: [wallOf([0, 0], [2, 0])], siblingSlabs: [] },
+    )
+
+    expectRingToInclude(poly, [
+      [0, -0.05],
+      [2, -0.05],
+      [2, 0],
+      [4, 0],
+    ])
+    expect(Math.min(...zs(poly))).toBeCloseTo(-0.05)
+    expect(Math.max(...xs(poly))).toBeCloseTo(4)
+  })
+
+  test('two collinear walls of different thickness along one edge: each face wins its own span', () => {
+    const poly = getRenderableSlabPolygon(
+      slabOf(
+        [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+        false,
+      ),
+      { walls: [wallOf([0, 0], [2, 0]), wallOf([2, 0], [4, 0], 0.3)], siblingSlabs: [] },
+    )
+
+    // Thin-wall face for x < 2, thick-wall face beyond, stepped at x=2
+    // (the old whole-edge rule let one wall win the entire edge).
+    expectRingToInclude(poly, [
+      [0, -0.05],
+      [2, -0.05],
+      [2, -0.15],
+      [4, -0.15],
+    ])
+  })
+
+  test('breakpoints within the minimum sub-edge length merge into one step', () => {
+    // The wall ends at x=2; the sibling starts at x=2.02 — the two
+    // breakpoints are 2cm apart, under the 5cm minimum, so they collapse
+    // into a single step at x=2 instead of leaving a sliver sub-edge.
+    const sibling = slabOf([
+      [2.02, -2],
+      [4, -2],
+      [4, 0],
+      [2.02, 0],
+    ])
+    const poly = getRenderableSlabPolygon(
+      slabOf(
+        [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+        false,
+      ),
+      { walls: [wallOf([0, 0], [2, 0])], siblingSlabs: [sibling] },
+    )
+
+    expectRingToInclude(poly, [
+      [2, -0.05],
+      [2, 0.02],
+    ])
+    expect(poly).toHaveLength(6)
   })
 })
 

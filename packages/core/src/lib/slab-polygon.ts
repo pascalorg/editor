@@ -8,22 +8,34 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  *
  * Slab nodes store the wall-centerline polygon (auto slabs) or the drawn
  * polygon (manual slabs) — render offsets are NEVER stored in node data.
- * At geometry build time each polygon edge is classified against the
- * slab's level context and PROJECTED onto an absolute target line:
+ * At geometry build time each polygon edge is SPLIT at the clipped span
+ * boundaries of every overlapping candidate (sibling slab edges and wall
+ * centerlines in the adoption band) and each sub-edge is classified
+ * independently — a single stored edge can be backed differently along
+ * its span (two rooms offset diagonally share a wall only where they
+ * overlap, so one room's edge is interior beside the sibling and its own
+ * facade elsewhere). Each sub-edge is PROJECTED onto an absolute target
+ * line:
  *
  *  - INTERIOR — a sibling slab has a collinear, overlapping edge across
  *    it (directly, or across the same wall's footprint band). Projected
- *    to the shared line (wall centerline when a wall backs the edge,
+ *    to the shared line (wall centerline when a wall backs the sub-edge,
  *    the midline between the two stored edges otherwise) minus a small
  *    relief so adjacent slabs tile with a hidden gap under the shared
  *    wall instead of overlapping or z-fighting.
- *  - WALL-BACKED — no slab neighbour, but the edge lies inside a wall's
- *    footprint band (lateral distance from the centerline within
+ *  - WALL-BACKED — no slab neighbour, but the sub-edge lies inside a
+ *    wall's footprint band (lateral distance from the centerline within
  *    half-thickness + adoption tolerance). Projected to the wall's OUTER
  *    face line so the slab reaches flush with the facade regardless of
  *    where the stored edge sits inside the band — this self-heals legacy
  *    data stored at wall faces or with old baked render offsets.
  *  - FREE — no neighbour, no wall. Rendered exactly as drawn.
+ *
+ * Sub-edges of one edge with different projections are joined by a
+ * perpendicular STEP connector at the breakpoint. Breakpoints sit on
+ * candidate span boundaries — wall junctions — so the step's vertical
+ * face lands inside the crossing wall's footprint and stays hidden
+ * under the wall body.
  */
 
 /** Relief inset applied to edges shared with a sibling slab. */
@@ -41,6 +53,12 @@ const SLAB_NEIGHBOR_LATERAL_TOLERANCE = 0.05
 const WALL_ADOPTION_TOLERANCE = 0.06
 /** Minimum collinear overlap (m) before a candidate drives the classification. */
 const MIN_CLASSIFYING_OVERLAP = 0.05
+/**
+ * Minimum sub-edge length (m) when splitting an edge at candidate span
+ * boundaries. Breakpoints closer than this to the previous one or to an
+ * edge endpoint are dropped, so slivers never survive into the ring.
+ */
+const MIN_SUBEDGE_LENGTH = 0.05
 /**
  * Two candidate walls whose centerlines sit within this lateral
  * difference count as equally near; the larger span overlap wins
@@ -97,12 +115,12 @@ export function getRenderableSlabPolygon(
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
 
-  const offsets = computeEdgeOffsets(polygon, context)
-  if (offsets.every((amount) => amount === 0)) {
+  const subSpans = computeEdgeSubSpans(polygon, context)
+  if (subSpans.every((spans) => spans.length === 1 && spans[0]!.offset === 0)) {
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
 
-  return offsetPolygonPerEdge(polygon, offsets)
+  return offsetPolygonPerEdge(polygon, subSpans)
 }
 
 type SegmentMatch = {
@@ -114,6 +132,10 @@ type SegmentMatch = {
    * left normal `n = (dirZ, -dirX)`.
    */
   lateral: number
+  /** Clipped span start along the edge axis (param from the edge start). */
+  start: number
+  /** Clipped span end along the edge axis (param from the edge start). */
+  end: number
 }
 
 /**
@@ -155,7 +177,7 @@ function clipCollinearSegment(
 
   const tMid = (low + high) / 2
   const u = Math.abs(t1 - t0) < 1e-12 ? 0.5 : (tMid - t0) / (t1 - t0)
-  return { overlap, lateral: latP + (latQ - latP) * u }
+  return { overlap, lateral: latP + (latQ - latP) * u, start: low, end: high }
 }
 
 function wallCenterlineSegments(wall: WallNode): Segment[] {
@@ -283,13 +305,29 @@ export function snapSlabEdgeToWallBand(
   }
 }
 
-/** Per-edge offset amounts (positive = outward) for `polygon`'s edges. */
-function computeEdgeOffsets(
+/**
+ * A contiguous run of one polygon edge sharing a single classification.
+ * `start`/`end` are arc-length params from the edge start; `offset` is
+ * along the edge's outward normal (negative insets). `key` names the
+ * classification + target so same-target neighbours re-fuse.
+ */
+type EdgeSubSpan = {
+  start: number
+  end: number
+  offset: number
+  key: string
+}
+
+/**
+ * Split every polygon edge at candidate span boundaries and classify
+ * each sub-span independently. Returns one non-empty span list per
+ * edge, covering [0, edgeLength] without gaps.
+ */
+function computeEdgeSubSpans(
   polygon: Array<[number, number]>,
   context: SlabPolygonContext,
-): number[] {
+): EdgeSubSpan[][] {
   const n = polygon.length
-  const offsets = new Array<number>(n).fill(0)
 
   // Winding sign: the outward normal of an edge with direction `dir` is
   // `s * (dirZ, -dirX)`, so a target lateral `L` measured along
@@ -318,32 +356,52 @@ function computeEdgeOffsets(
     halfThickness: getWallThickness(wall) / 2,
   }))
 
+  // Sibling breakpoints also matter for legacy face-aligned polygons up
+  // to a full wall band away from the edge (the band-sibling interior
+  // rule in classifySpan), so clip them with the widest band reach any
+  // level wall allows. Over-collection is harmless — same-target
+  // neighbours re-fuse after classification.
+  let siblingBreakTolerance = SLAB_NEIGHBOR_LATERAL_TOLERANCE
+  for (const candidate of wallCandidates) {
+    siblingBreakTolerance = Math.max(
+      siblingBreakTolerance,
+      2 * (candidate.halfThickness + WALL_ADOPTION_TOLERANCE),
+    )
+  }
+
+  const subSpans: EdgeSubSpan[][] = []
   for (let index = 0; index < n; index += 1) {
     const a = polygon[index]!
     const b = polygon[(index + 1) % n]!
     const dx = b[0] - a[0]
     const dz = b[1] - a[1]
     const edgeLength = Math.hypot(dx, dz)
-    if (edgeLength < 1e-9) continue
+    if (edgeLength < 1e-9) {
+      subSpans.push([{ start: 0, end: edgeLength, offset: 0, key: 'free' }])
+      continue
+    }
     const dirX = dx / edgeLength
     const dirZ = dz / edgeLength
-    // Short edges still need classification — require at most half their span.
-    const requiredOverlap = Math.min(MIN_CLASSIFYING_OVERLAP, edgeLength * 0.5)
 
-    const wallMatch = matchEdgeWallBand(
-      a[0],
-      a[1],
-      dirX,
-      dirZ,
-      edgeLength,
-      requiredOverlap,
-      wallCandidates,
-    )
-
-    // Direct neighbour: a sibling edge collinear within the tight
-    // tolerance regardless of any wall (slabs butted against each other).
-    let directOverlap = 0
-    let directWeightedLateral = 0
+    const rawBreakpoints: number[] = []
+    for (const candidate of wallCandidates) {
+      const tolerance = candidate.halfThickness + WALL_ADOPTION_TOLERANCE
+      for (const [px, pz, qx, qz] of candidate.segments) {
+        const match = clipCollinearSegment(
+          a[0],
+          a[1],
+          dirX,
+          dirZ,
+          edgeLength,
+          px,
+          pz,
+          qx,
+          qz,
+          tolerance,
+        )
+        if (match) rawBreakpoints.push(match.start, match.end)
+      }
+    }
     for (const [px, pz, qx, qz] of neighborSegments) {
       const match = clipCollinearSegment(
         a[0],
@@ -355,65 +413,188 @@ function computeEdgeOffsets(
         pz,
         qx,
         qz,
-        SLAB_NEIGHBOR_LATERAL_TOLERANCE,
+        siblingBreakTolerance,
       )
-      if (!match) continue
-      directOverlap += match.overlap
-      directWeightedLateral += match.lateral * match.overlap
+      if (match) rawBreakpoints.push(match.start, match.end)
+    }
+    rawBreakpoints.sort((left, right) => left - right)
+
+    const breakpoints: number[] = []
+    let previous = 0
+    for (const t of rawBreakpoints) {
+      if (t - previous < MIN_SUBEDGE_LENGTH) continue
+      // Sorted ascending — every later breakpoint is even closer to the end.
+      if (edgeLength - t < MIN_SUBEDGE_LENGTH) break
+      breakpoints.push(t)
+      previous = t
     }
 
-    let interiorLateral: number | null = null
-    if (directOverlap >= requiredOverlap) {
-      interiorLateral = wallMatch ? wallMatch.lateral : directWeightedLateral / directOverlap / 2
-    } else if (wallMatch) {
-      // Rooms across a shared wall: legacy face-aligned polygons sit a
-      // full thickness apart — far beyond the direct tolerance — but
-      // both edges live inside the same wall band. Both sides must
-      // classify interior, otherwise each would project to the opposite
-      // outer face and overlap under the wall.
-      const bandTolerance = wallMatch.halfThickness + WALL_ADOPTION_TOLERANCE
-      const looseTolerance = Math.abs(wallMatch.lateral) + bandTolerance
-      let bandOverlap = 0
-      for (const [px, pz, qx, qz] of neighborSegments) {
-        const match = clipCollinearSegment(
-          a[0],
-          a[1],
+    const bounds = [0, ...breakpoints, edgeLength]
+    const spans: EdgeSubSpan[] = []
+    for (let k = 0; k + 1 < bounds.length; k += 1) {
+      spans.push(
+        classifySpan(
+          a,
           dirX,
           dirZ,
-          edgeLength,
-          px,
-          pz,
-          qx,
-          qz,
-          looseTolerance,
+          bounds[k]!,
+          bounds[k + 1]!,
+          s,
+          wallCandidates,
+          neighborSegments,
+        ),
+      )
+    }
+
+    // Re-fuse same-target neighbours, reclassifying over the fused span:
+    // curved-wall sampling collapses back to one span per contiguous
+    // band, and an edge fully backed by one target reproduces the
+    // whole-edge projection exactly.
+    let fused = true
+    while (fused && spans.length > 1) {
+      fused = false
+      for (let k = 0; k + 1 < spans.length; k += 1) {
+        if (spans[k]!.key !== spans[k + 1]!.key) continue
+        const merged = classifySpan(
+          a,
+          dirX,
+          dirZ,
+          spans[k]!.start,
+          spans[k + 1]!.end,
+          s,
+          wallCandidates,
+          neighborSegments,
         )
-        if (!match) continue
-        if (Math.abs(match.lateral - wallMatch.lateral) > bandTolerance) continue
-        bandOverlap += match.overlap
-      }
-      if (bandOverlap >= requiredOverlap) {
-        interiorLateral = wallMatch.lateral
+        spans.splice(k, 2, merged)
+        fused = true
+        break
       }
     }
 
-    if (interiorLateral !== null) {
-      offsets[index] = s * interiorLateral - INTERIOR_EDGE_INSET
-    } else if (wallMatch) {
-      offsets[index] = s * wallMatch.lateral + wallMatch.halfThickness
-    }
+    subSpans.push(spans)
   }
 
-  return offsets
+  return subSpans
 }
 
 /**
- * Offset each polygon edge along its outward normal by its own amount
- * (negative insets), then intersect consecutive offset edge-lines to
- * rebuild the vertices.
+ * Classify one span of the edge `a + t·dir`, `t ∈ [start, end]`, with
+ * the whole-edge rules: direct sibling wins, sibling across the same
+ * wall band forces interior, otherwise the matched wall's outer face,
+ * otherwise free.
+ */
+function classifySpan(
+  a: [number, number],
+  dirX: number,
+  dirZ: number,
+  start: number,
+  end: number,
+  s: number,
+  wallCandidates: readonly WallCandidate[],
+  neighborSegments: readonly Segment[],
+): EdgeSubSpan {
+  const sx = a[0] + dirX * start
+  const sz = a[1] + dirZ * start
+  const spanLength = end - start
+  // Short spans still need classification — require at most half their span.
+  const requiredOverlap = Math.min(MIN_CLASSIFYING_OVERLAP, spanLength * 0.5)
+
+  const wallMatch = matchEdgeWallBand(
+    sx,
+    sz,
+    dirX,
+    dirZ,
+    spanLength,
+    requiredOverlap,
+    wallCandidates,
+  )
+
+  // Direct neighbour: a sibling edge collinear within the tight
+  // tolerance regardless of any wall (slabs butted against each other).
+  let directOverlap = 0
+  let directWeightedLateral = 0
+  for (const [px, pz, qx, qz] of neighborSegments) {
+    const match = clipCollinearSegment(
+      sx,
+      sz,
+      dirX,
+      dirZ,
+      spanLength,
+      px,
+      pz,
+      qx,
+      qz,
+      SLAB_NEIGHBOR_LATERAL_TOLERANCE,
+    )
+    if (!match) continue
+    directOverlap += match.overlap
+    directWeightedLateral += match.lateral * match.overlap
+  }
+
+  let interiorLateral: number | null = null
+  if (directOverlap >= requiredOverlap) {
+    interiorLateral = wallMatch ? wallMatch.lateral : directWeightedLateral / directOverlap / 2
+  } else if (wallMatch) {
+    // Rooms across a shared wall: legacy face-aligned polygons sit a
+    // full thickness apart — far beyond the direct tolerance — but
+    // both edges live inside the same wall band. Both sides must
+    // classify interior, otherwise each would project to the opposite
+    // outer face and overlap under the wall.
+    const bandTolerance = wallMatch.halfThickness + WALL_ADOPTION_TOLERANCE
+    const looseTolerance = Math.abs(wallMatch.lateral) + bandTolerance
+    let bandOverlap = 0
+    for (const [px, pz, qx, qz] of neighborSegments) {
+      const match = clipCollinearSegment(
+        sx,
+        sz,
+        dirX,
+        dirZ,
+        spanLength,
+        px,
+        pz,
+        qx,
+        qz,
+        looseTolerance,
+      )
+      if (!match) continue
+      if (Math.abs(match.lateral - wallMatch.lateral) > bandTolerance) continue
+      bandOverlap += match.overlap
+    }
+    if (bandOverlap >= requiredOverlap) {
+      interiorLateral = wallMatch.lateral
+    }
+  }
+
+  if (interiorLateral !== null) {
+    return {
+      start,
+      end,
+      offset: s * interiorLateral - INTERIOR_EDGE_INSET,
+      key: `interior|${wallMatch ? wallMatch.wall.id : '~'}`,
+    }
+  }
+  if (wallMatch) {
+    return {
+      start,
+      end,
+      offset: s * wallMatch.lateral + wallMatch.halfThickness,
+      key: `wall|${wallMatch.wall.id}`,
+    }
+  }
+  return { start, end, offset: 0, key: 'free' }
+}
+
+/**
+ * Offset each edge's sub-spans along the edge's outward normal by their
+ * own amounts (negative insets), then rebuild the ring: consecutive
+ * sub-spans of one edge with different offsets are joined by a
+ * perpendicular step connector at the breakpoint (both boundary points
+ * share the breakpoint param), and corners between different edges
+ * intersect the offset lines of the adjoining sub-spans.
  */
 function offsetPolygonPerEdge(
   polygon: Array<[number, number]>,
-  amounts: number[],
+  subSpans: EdgeSubSpan[][],
 ): Array<[number, number]> {
   const n = polygon.length
   if (n < 3) return polygon.map(([x, z]) => [x, z] as [number, number])
@@ -426,43 +607,71 @@ function offsetPolygonPerEdge(
   }
   const s = area2 >= 0 ? 1 : -1
 
-  // Offset each edge outward by its amount
-  const offEdges: Array<[number, number, number, number]> = []
+  type EdgeFrame = { ax: number; az: number; dx: number; dz: number; dirX: number; dirZ: number }
+  const frames: EdgeFrame[] = []
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
     const dx = polygon[j]![0] - polygon[i]![0]
     const dz = polygon[j]![1] - polygon[i]![1]
-    const len = Math.sqrt(dx * dx + dz * dz)
-    if (len < 1e-9) {
-      offEdges.push([polygon[i]![0], polygon[i]![1], dx, dz])
-      continue
-    }
-    const amount = amounts[i] ?? 0
-    const nx = ((s * dz) / len) * amount
-    const nz = ((s * -dx) / len) * amount
-    offEdges.push([polygon[i]![0] + nx, polygon[i]![1] + nz, dx, dz])
+    const length = Math.hypot(dx, dz)
+    const dirX = length < 1e-9 ? 0 : dx / length
+    const dirZ = length < 1e-9 ? 0 : dz / length
+    frames.push({ ax: polygon[i]![0], az: polygon[i]![1], dx, dz, dirX, dirZ })
   }
 
-  // Intersect consecutive offset edges to get new vertices
+  const pointAt = (edge: number, t: number, offset: number): [number, number] => {
+    const frame = frames[edge]!
+    return [
+      frame.ax + frame.dirX * t + s * frame.dirZ * offset,
+      frame.az + frame.dirZ * t - s * frame.dirX * offset,
+    ]
+  }
+
   const result: Array<[number, number]> = []
+  const push = (point: [number, number]) => {
+    const previous = result[result.length - 1]
+    if (previous && Math.hypot(previous[0] - point[0], previous[1] - point[1]) < 1e-9) return
+    result.push(point)
+  }
+
   for (let i = 0; i < n; i++) {
+    const spans = subSpans[i]!
+
+    // Step connectors between differently-projected sub-spans of edge i.
+    // Equal offsets (different walls sharing a face line) collapse to a
+    // single collinear vertex via the coincident-point guard in `push`.
+    for (let k = 1; k < spans.length; k += 1) {
+      push(pointAt(i, spans[k - 1]!.end, spans[k - 1]!.offset))
+      push(pointAt(i, spans[k]!.start, spans[k]!.offset))
+    }
+
+    // Corner between edge i and edge j: intersect the offset lines of
+    // edge i's last sub-span and edge j's first sub-span.
     const j = (i + 1) % n
-    const [ax, az, adx, adz] = offEdges[i]!
-    const [bx, bz, bdx, bdz] = offEdges[j]!
-    const denom = adx * bdz - adz * bdx
+    const last = spans[spans.length - 1]!
+    const first = subSpans[j]![0]!
+    const [ax, az] = pointAt(i, last.start, last.offset)
+    const [bx, bz] = pointAt(j, first.start, first.offset)
+    const frameI = frames[i]!
+    const frameJ = frames[j]!
+    const denom = frameI.dx * frameJ.dz - frameI.dz * frameJ.dx
     if (Math.abs(denom) < 1e-9) {
       // Parallel edges have no unique intersection. Emit both offset
       // endpoints — collinear edges with different offsets need the step
       // between them.
-      const endAx = ax + adx
-      const endAz = az + adz
-      result.push([endAx, endAz])
-      if (Math.hypot(bx - endAx, bz - endAz) > 1e-9) {
-        result.push([bx, bz])
-      }
+      push(pointAt(i, last.end, last.offset))
+      push([bx, bz])
     } else {
-      const t = ((bx - ax) * bdz - (bz - az) * bdx) / denom
-      result.push([ax + t * adx, az + t * adz])
+      const t = ((bx - ax) * frameJ.dz - (bz - az) * frameJ.dx) / denom
+      push([ax + t * frameI.dx, az + t * frameI.dz])
+    }
+  }
+
+  if (result.length > 1) {
+    const firstPoint = result[0]!
+    const lastPoint = result[result.length - 1]!
+    if (Math.hypot(firstPoint[0] - lastPoint[0], firstPoint[1] - lastPoint[1]) < 1e-9) {
+      result.pop()
     }
   }
 
