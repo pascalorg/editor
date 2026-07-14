@@ -52,6 +52,15 @@ function LeftColumn({
     }
   }, [activePanel])
 
+  // Closing (collapsing) the sidebar disarms any build tool back to select
+  useEffect(() => {
+    if (!isCollapsed) return
+    const { mode, setMode } = useEditor.getState()
+    if (mode === 'build') {
+      setMode('select')
+    }
+  }, [isCollapsed])
+
   const handleResizerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
