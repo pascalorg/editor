@@ -32,7 +32,7 @@ export type CabinetPreset = {
 
 const baseShared = (run?: CabinetNode): Partial<CabinetModuleNode> => ({
   cabinetType: 'base',
-  depth: run?.depth ?? 0.58,
+  depth: run?.depth ?? 0.5,
   carcassHeight: run?.carcassHeight ?? 0.72,
   plinthHeight: run?.plinthHeight ?? 0.1,
   toeKickDepth: run?.toeKickDepth ?? 0.075,
@@ -42,7 +42,7 @@ const baseShared = (run?: CabinetNode): Partial<CabinetModuleNode> => ({
   withCountertop: false,
 })
 
-const runDepth = (run?: CabinetNode) => run?.depth ?? 0.58
+const runDepth = (run?: CabinetNode) => run?.depth ?? 0.5
 
 export const CABINET_PRESETS: CabinetPreset[] = [
   {
@@ -51,7 +51,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Base Cabinet',
-      width: 0.6,
+      width: 0.5,
       handleStyle: 'bar',
       handlePosition: 'auto',
       frontOverlay: 'inset',
@@ -67,7 +67,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
     createPatch: (run) => ({
       ...baseShared(run),
       name: 'Drawer Base',
-      width: 0.6,
+      width: 0.5,
       handleStyle: 'bar',
       handlePosition: 'top',
       frontOverlay: 'full',
@@ -133,8 +133,8 @@ export const CABINET_PRESETS: CabinetPreset[] = [
     createPatch: (run) => ({
       cabinetType: 'tall',
       name: 'Tall Pantry',
-      width: 0.6,
-      depth: run?.depth ?? 0.58,
+      width: 0.5,
+      depth: run?.depth ?? 0.5,
       carcassHeight: 2.07,
       plinthHeight: 0.1,
       toeKickDepth: 0.075,
@@ -155,7 +155,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       cabinetType: 'tall',
       name: 'Oven Tower',
       width: MICROWAVE_STANDARD_WIDTH,
-      depth: run?.depth ?? 0.58,
+      depth: run?.depth ?? 0.5,
       carcassHeight: 2.07,
       plinthHeight: 0.1,
       toeKickDepth: 0.075,

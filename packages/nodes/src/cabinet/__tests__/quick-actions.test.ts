@@ -42,6 +42,39 @@ function sceneApiFixture(seed: AnyNode[]): SceneApi {
 }
 
 describe('cabinet quick actions', () => {
+  test.each([
+    'left',
+    'right',
+  ] as const)('selects the outer base cabinet after an L %s action', (side) => {
+    const levelId = `level_quick-actions-select-outer-${side}` as AnyNodeId
+    const run = CabinetNode.parse({
+      id: `cabinet_run-quick-actions-select-outer-${side}`,
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: [`cabinet-module_source-quick-actions-select-outer-${side}`],
+    })
+    const source = CabinetModuleNode.parse({
+      id: `cabinet-module_source-quick-actions-select-outer-${side}`,
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, source as AnyNode])
+    const action = cabinetQuickActions({ node: source, nodes: sceneApi.nodes() }).find(
+      (candidate) => candidate.id === `cabinet:add-corner-${side}`,
+    )
+
+    expect(action?.disabled).toBeFalsy()
+    const selectedId = action?.run({ sceneApi })?.selectedIds?.[0]
+    const selected = selectedId ? sceneApi.get<CabinetModuleNode>(selectedId) : null
+
+    expect(selected?.name).toBe('Base Cabinet')
+    expect(selected?.moduleKind).toBe('standard')
+  })
+
   test('offers and runs an L-corner action from run selection using the end module', () => {
     const levelId = 'level_quick_actions_corner' as AnyNodeId
     const run = CabinetNode.parse({
@@ -235,7 +268,7 @@ describe('cabinet quick actions', () => {
     const result = cornerAction!.run({ sceneApi })
 
     expect(result?.selectedIds?.length).toBe(1)
-    expect(sceneApi.get<CabinetModuleNode>(source.id)?.width).toBeCloseTo(0.59)
+    expect(sceneApi.get<CabinetModuleNode>(source.id)?.width).toBeCloseTo(0.67)
   })
 
   test('disables blocked side and corner actions instead of hiding them', () => {
@@ -358,8 +391,8 @@ describe('cabinet quick actions', () => {
     const blockingWall = WallNode.parse({
       id: 'wall_quick-actions-disabled-corner-wall',
       parentId: levelId,
-      start: [-1, 0.65],
-      end: [2, 0.65],
+      start: [-1, 0.55],
+      end: [2, 0.55],
       thickness: 0.2,
     })
     const sceneApi = sceneApiFixture([run as AnyNode, source as AnyNode, blockingWall as AnyNode])
@@ -449,6 +482,6 @@ describe('cabinet quick actions', () => {
     const result = cornerLeftAction!.run({ sceneApi })
 
     expect(result?.selectedIds?.length).toBe(1)
-    expect(sceneApi.get<CabinetModuleNode>(left.id)?.width).toBeCloseTo(0.17)
+    expect(sceneApi.get<CabinetModuleNode>(left.id)?.width).toBeCloseTo(0.25)
   })
 })

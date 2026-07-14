@@ -233,7 +233,7 @@ export function NodeArrowHandles() {
     if (!(node && def?.handles)) return null
     const all =
       typeof def.handles === 'function'
-        ? def.handles(node as never)
+        ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
     // The whole-node move-cross gizmo is gone: moving is now click-to-move on
     // the selected node body (see selection-manager). Drop both flavours — the
@@ -734,6 +734,7 @@ function LinearArrow({
       // when the (snapped + clamped) value actually changes, so the cue
       // tracks real size steps instead of every sub-pixel pointer jitter.
       let lastTickValue = initialValue
+      const previewOverrideIds = new Set<AnyNodeId>()
 
       return {
         overrideId,
@@ -755,6 +756,10 @@ function LinearArrow({
         onEnd: () => {
           useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
           if (onDrag) useOpeningGuides.getState().clear()
+          for (const previewId of previewOverrideIds) {
+            useLiveNodeOverrides.getState().clear(previewId)
+            useScene.getState().markDirty(previewId)
+          }
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
@@ -775,6 +780,21 @@ function LinearArrow({
             sfxEmitter.emit('sfx:resize')
           }
           const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          if (descriptor.kind === 'linear-resize' && descriptor.previewOverrides) {
+            const previewEntries = descriptor.previewOverrides(initialNode as never, next, sceneApi)
+            useLiveNodeOverrides
+              .getState()
+              .setMany(
+                previewEntries.map(([id, previewPatch]) => [
+                  id,
+                  previewPatch as Record<string, unknown>,
+                ]),
+              )
+            for (const [previewId] of previewEntries) {
+              previewOverrideIds.add(previewId)
+              useScene.getState().markDirty(previewId)
+            }
+          }
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
           return patch

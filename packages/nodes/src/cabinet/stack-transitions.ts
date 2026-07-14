@@ -28,7 +28,7 @@ import {
   TALL_CABINET_CARCASS_HEIGHT,
 } from './stack'
 
-const BASE_MODULE_WIDTH = 0.6
+const BASE_MODULE_WIDTH = 0.5
 const BASE_CARCASS_HEIGHT = 0.72
 const WALL_CARCASS_HEIGHT = 0.72
 const TALL_CARCASS_HEIGHT = TALL_CABINET_CARCASS_HEIGHT
@@ -78,7 +78,7 @@ export function resolveCompartmentTransition({
             : next.type === 'fridge-double'
               ? FRIDGE_WIDE_WIDTH
               : FRIDGE_COLUMN_WIDTH,
-          depth: parentRun?.depth ?? 0.58,
+          depth: parentRun?.depth ?? 0.5,
           carcassHeight: TALL_CARCASS_HEIGHT,
           plinthHeight: 0.1,
           toeKickDepth: 0.075,
@@ -100,7 +100,7 @@ export function resolveCompartmentTransition({
                 : enteringCooktop
                   ? COOKTOP_STANDARD_WIDTH
                   : BASE_MODULE_WIDTH,
-          depth: parentRun?.depth ?? 0.58,
+          depth: parentRun?.depth ?? 0.5,
           carcassHeight: parentRun?.carcassHeight ?? BASE_CARCASS_HEIGHT,
           plinthHeight: parentRun?.plinthHeight ?? 0.1,
           toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
@@ -114,7 +114,7 @@ export function resolveCompartmentTransition({
     ? {
         cabinetType: 'base',
         width: DISHWASHER_STANDARD_WIDTH,
-        depth: parentRun?.depth ?? 0.58,
+        depth: parentRun?.depth ?? 0.5,
         carcassHeight: DISHWASHER_STANDARD_HEIGHT,
         plinthHeight: parentRun?.plinthHeight ?? 0.1,
         toeKickDepth: parentRun?.toeKickDepth ?? 0.075,
