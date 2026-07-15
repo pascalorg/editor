@@ -1,6 +1,6 @@
 import type { Color, Material, Side, Texture } from 'three'
 import { cos, Fn, float, instanceIndex, positionLocal, sin, time, uv } from 'three/tsl'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { MeshStandardNodeMaterial, type Node, type NodeBuilder } from 'three/webgpu'
 
 /**
  * Always-on wind for the plant kinds, done in TSL so it runs on the editor's
@@ -53,6 +53,33 @@ const stemBend = Fn(() => {
 })
 const STEM_BEND = stemBend()
 
+/**
+ * Standard node material whose wind displacement runs **before** the instance
+ * transform. The wind nodes read `positionLocal` expecting raw geometry-local
+ * coordinates — leaf phase from the card's position inside its own tree, stem
+ * height from the plant's own base — with the per-instance scale/rotation/
+ * translation applied on top. three r184 happened to emit `positionNode`
+ * statements in exactly that order; r185 fixed the emission order so
+ * `positionNode` now runs *after* instancing, which put the wind in level
+ * space: sway stopped scaling with the instance, leaf phase followed world
+ * placement, and STEM_BEND's height term read the floor elevation, so plants
+ * on upper levels slid around rigidly. Assigning `positionLocal` inside
+ * `setupPosition` before `super` applies instancing restores the r184
+ * (geometry-space) semantics on r185.
+ */
+class WindNodeMaterial extends MeshStandardNodeMaterial {
+  windNode: Node | null = null
+
+  setupPosition(builder: NodeBuilder): Node {
+    if (this.windNode !== null) positionLocal.assign(this.windNode)
+    return super.setupPosition(builder)
+  }
+
+  customProgramCacheKey(): string {
+    return `${super.customProgramCacheKey()}|wind:${this.windNode ? this.windNode.id : 'none'}`
+  }
+}
+
 /** The classic-material fields we carry over — enough to reproduce ez-tree's
  * bark/leaf look (textured, tinted, alpha-cut billboards). */
 type ClassicMaterial = Material & {
@@ -76,7 +103,7 @@ export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
   const cached = cache.get(material)
   if (cached) return cached
   const src = material as ClassicMaterial
-  const node = new MeshStandardNodeMaterial({
+  const node = new WindNodeMaterial({
     map: src.map ?? null,
     alphaMap: src.alphaMap ?? null,
     color: src.color,
@@ -88,7 +115,7 @@ export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
     roughness: 1,
     metalness: 0,
   })
-  if (material.name === 'leaves') node.positionNode = LEAF_FLUTTER
+  if (material.name === 'leaves') node.windNode = LEAF_FLUTTER
   cache.set(material, node)
   return node
 }
@@ -97,14 +124,14 @@ export function toWindMaterial(material: Material): MeshStandardNodeMaterial {
 export function windStandardMaterial(
   params: ConstructorParameters<typeof MeshStandardNodeMaterial>[0],
 ): MeshStandardNodeMaterial {
-  const material = new MeshStandardNodeMaterial(params)
-  material.positionNode = STEM_BEND
+  const material = new WindNodeMaterial(params)
+  material.windNode = STEM_BEND
   return material
 }
 
 const staticCache = new WeakMap<Material, Material>()
 
-/** Windless twin of a wind material — same look, no `positionNode`. The outline
+/** Windless twin of a wind material — same look, no wind node. The outline
  * mask pass renders outlined meshes with a shared override material, so an
  * outline can never follow the GPU sway; the selection proxy renders this twin
  * instead, so the outlined silhouette and the visible mesh match exactly (the
