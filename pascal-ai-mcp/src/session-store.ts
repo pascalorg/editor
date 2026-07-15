@@ -18,6 +18,13 @@ export class SessionStore {
     this.db = this.read()
   }
 
+  // Snapshot of every persisted session — used by the startup stuck-state
+  // sweep (agent constructor). Cloned like get() so callers can't mutate the
+  // store through the returned objects.
+  allSessions(): WorkflowSession[] {
+    return Object.values(this.db.sessions).map(session => structuredClone(session))
+  }
+
   get(sessionId: string): WorkflowSession | undefined {
     const value = this.db.sessions[sessionId]
     return value ? structuredClone(value) : undefined

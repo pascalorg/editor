@@ -25,6 +25,7 @@ import {
   publicEditorUrl,
   shouldModifyExistingScene,
   shouldRouteAsExistingSceneRequest,
+  staleSessionRecovery,
   structuralDrift,
   windowRoomTypesFromBrief,
   isSceneQuestion,
@@ -1010,5 +1011,36 @@ describe('1K 豁免（kitchenIsCirculation，TEMPLATES.md 体检 #2）', () => {
       doorWall('w-kit-bed', [0, 3], [3.2, 3]),
     ]
     expect(findIsolatedBedrooms(zones, walls)).toEqual([])
+  })
+})
+
+describe('staleSessionRecovery（stuck 状态守卫）', () => {
+  const base = { pendingModification: undefined, sceneResult: undefined }
+  const sceneResult = { sceneId: 's1' } as never
+
+  test('generating 卡死 → 回到待确认（发确认即重新生成）', () => {
+    expect(staleSessionRecovery({ ...base, phase: 'generating' })).toEqual({
+      phase: 'awaiting_confirmation',
+      template: 'staleGenerating',
+    })
+  })
+
+  test('modifying 卡死：有 pending 修改 → 可确认重试；无 pending 有场景 → completed_with_issues', () => {
+    expect(staleSessionRecovery({ phase: 'modifying', pendingModification: '删掉卫生间', sceneResult })).toEqual({
+      phase: 'awaiting_modification_confirmation',
+      template: 'staleModifying',
+    })
+    expect(staleSessionRecovery({ phase: 'modifying', pendingModification: undefined, sceneResult })).toEqual({
+      phase: 'completed_with_issues',
+      template: 'staleModifying',
+    })
+  })
+
+  test('inspecting 卡死 → 按有无场景回落；等待型/终态 phase 不动', () => {
+    expect(staleSessionRecovery({ ...base, phase: 'inspecting', sceneResult })?.phase).toBe('completed_with_issues')
+    expect(staleSessionRecovery({ ...base, phase: 'inspecting' })?.phase).toBe('failed')
+    for (const phase of ['clarifying', 'awaiting_confirmation', 'awaiting_modification_confirmation', 'completed', 'completed_with_issues', 'failed', 'cancelled', 'intake'] as const) {
+      expect(staleSessionRecovery({ ...base, phase })).toBeNull()
+    }
   })
 })

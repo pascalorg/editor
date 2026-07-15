@@ -105,6 +105,21 @@ export const MESSAGES = {
     p => `修正前のシーンバージョンは v${p.version} です。必要であればこのバージョンに戻せます。`,
     p => `The scene version before this change was v${p.version}; restore it to roll back if needed.`,
   ),
+  staleGenerating: def<Record<string, never>>(
+    () => '上次的户型生成因服务中断而未完成。已确认的需求仍然有效——发送确认即可重新生成；场景可能停留在中断时的中间状态。',
+    () => '前回の間取り生成はサービス中断のため完了しませんでした。確認済みの要件は有効です。確認を送信すると再生成します。シーンは中断時点の状態のままの可能性があります。',
+    () => 'The previous floor-plan generation was interrupted by a service restart. Your confirmed requirements are intact — send a confirmation to regenerate. The scene may be in a partial state from the interruption.',
+  ),
+  staleModifying: def<Record<string, never>>(
+    () => '上次的修改因服务中断而未完成，场景保持中断前最后一次保存的状态。若存在待确认的修改，发送确认即可重试；也可以直接描述新的修改。',
+    () => '前回の修正はサービス中断のため完了しませんでした。シーンは中断前に保存された状態のままです。保留中の修正があれば確認を送信して再試行できます。新しい修正内容を入力しても構いません。',
+    () => 'The previous modification was interrupted by a service restart; the scene remains at its last saved state. If a pending change exists, send a confirmation to retry it — or describe a new change.',
+  ),
+  staleInspecting: def<Record<string, never>>(
+    () => '上次的场景核对因服务中断而未完成；场景没有被修改。',
+    () => '前回のシーン確認はサービス中断のため完了しませんでした。シーンは変更されていません。',
+    () => 'The previous scene inspection was interrupted by a service restart; the scene was not modified.',
+  ),
   modifyNoScene: def<Record<string, never>>(
     () => '找不到需要修改的场景，请重新生成户型。',
     () => '修正対象のシーンが見つかりません。間取りを再生成してください。',

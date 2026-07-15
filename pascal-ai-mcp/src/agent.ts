@@ -230,6 +230,12 @@ export class PascalAiAgent {
       })
     }
     this.sessions = new SessionStore(config.sessionFile)
+    // Startup sweep: a fresh process has no in-flight work by definition —
+    // every persisted in-flight phase is a stuck leftover from the previous
+    // process and gets downgraded to a retryable state immediately.
+    for (const session of this.sessions.allSessions()) {
+      this.recoverIfStale(session)
+    }
     this.graph = createWorkflowGraph({
       ingest: state => this.ingest(state),
       evaluate: state => this.evaluate(state),
@@ -265,7 +271,26 @@ export class PascalAiAgent {
   }
 
   getSession(sessionId: string): WorkflowSession | undefined {
-    return this.sessions.get(sessionId)
+    const session = this.sessions.get(sessionId)
+    if (!session) return undefined
+    // A live run holds the session lock; an in-flight phase WITHOUT a lock is
+    // a stuck leftover (restart / escaped exception) — downgrade before the
+    // frontend renders a forever-spinning state.
+    if (this.sessionLocks.has(sessionId)) return session
+    return this.recoverIfStale(session)
+  }
+
+  // Applies staleSessionRecovery, appends the explanation to the transcript
+  // and persists — idempotent (recovered sessions are no longer in-flight).
+  private recoverIfStale(session: WorkflowSession): WorkflowSession {
+    const recovery = staleSessionRecovery(session)
+    if (!recovery) return session
+    const updated = structuredClone(session)
+    updated.phase = recovery.phase
+    const reply = t(updated.language, recovery.template, {})
+    updated.messages.push({ role: 'assistant', content: reply })
+    this.sessions.set(updated.sessionId, updated)
+    return updated
   }
 
   deleteSession(sessionId: string): boolean {
@@ -274,7 +299,10 @@ export class PascalAiAgent {
 
   private async runChat(input: ChatInput): Promise<ChatResult> {
     const now = new Date().toISOString()
-    const session = this.sessions.get(input.sessionId) ?? createSession(input, now)
+    let session = this.sessions.get(input.sessionId) ?? createSession(input, now)
+    // Under the session lock the previous run has finished — an in-flight
+    // phase here can only be a stuck leftover.
+    session = this.recoverIfStale(session)
     if (input.sceneId) session.sceneId = input.sceneId
 
     // Per-session cumulative cost ceiling. Cancel is always allowed through so
@@ -2742,6 +2770,38 @@ export function sceneDriftedFromPlan(
     remaining.splice(index, 1)
   }
   return false
+}
+
+// —— stuck-state guard（状态持久化审计缺口，2026-07-15）——
+// generating/modifying/inspecting 是内存中的异步任务：进程重启（或极端情况
+// 下逃逸了 catch 的异常）会让持久化的 session 永远停在 in-flight phase，用户
+// 回来面对一个卡死的状态。恢复语义：
+// - generating → 回到 awaiting_confirmation（brief 已确认，发确认即重新生成）；
+// - modifying  → 复用 modifyFailureRecovery（有 pending 修改可确认重试）；
+// - inspecting → 只读操作，按有无 sceneResult 回落到完成态/failed。
+// 场景可能停在中断时的中间状态——恢复消息里如实说明，不静默。
+const IN_FLIGHT_PHASES: ReadonlySet<WorkflowSession['phase']> = new Set([
+  'generating', 'modifying', 'inspecting',
+])
+
+export function staleSessionRecovery(
+  session: Pick<WorkflowSession, 'phase' | 'pendingModification' | 'sceneResult'>,
+): { phase: WorkflowSession['phase']; template: 'staleGenerating' | 'staleModifying' | 'staleInspecting' } | null {
+  if (!IN_FLIGHT_PHASES.has(session.phase)) return null
+  if (session.phase === 'generating') {
+    return { phase: 'awaiting_confirmation', template: 'staleGenerating' }
+  }
+  if (session.phase === 'modifying') {
+    const recovery = modifyFailureRecovery(
+      Boolean(session.pendingModification),
+      Boolean(session.sceneResult),
+    )
+    return { phase: recovery.phase, template: 'staleModifying' }
+  }
+  return {
+    phase: session.sceneResult ? 'completed_with_issues' : 'failed',
+    template: 'staleInspecting',
+  }
 }
 
 export function modifyFailureRecovery(
