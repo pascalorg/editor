@@ -19,6 +19,7 @@ import {
   buildMeasurementDraftLinePositions,
   castVisibleMeasurementSurface,
   closestMeasurementExtrusionHeight,
+  collectMeasurementAxisSurfaceIntersections,
   collectMeasurementSurfaceRoots,
   isMeasurementSurfaceMaterialVisible,
   localNormalToPreviewFrame,
@@ -252,6 +253,48 @@ describe('measurement surface visibility', () => {
     expect(resolved?.guide).toMatchObject({ axis: 'x', proximity: true, snapped: true })
     expect(resolved?.hit.point).toEqual(resolved?.guide?.to)
     geometry.dispose()
+    material.dispose()
+  })
+
+  test('finds the visible surfaces crossed by each anchor axis', () => {
+    const scene = new Group()
+    const level = new Group()
+    const material = new MeshBasicMaterial({ side: DoubleSide })
+    const surfaces = [
+      new Mesh(new PlaneGeometry(6, 6), material),
+      new Mesh(new PlaneGeometry(6, 6), material),
+      new Mesh(new PlaneGeometry(6, 6), material),
+    ]
+    surfaces[0]!.position.x = 2
+    surfaces[0]!.rotation.y = Math.PI / 2
+    surfaces[1]!.position.y = 3
+    surfaces[1]!.rotation.x = Math.PI / 2
+    surfaces[2]!.position.z = 4
+    level.add(...surfaces)
+    scene.add(level)
+    scene.updateMatrixWorld(true)
+    surfaces.forEach((surface, index) => {
+      sceneRegistry.nodes.set(`surface_${index}`, surface)
+    })
+    useScene.setState({
+      nodes: {
+        surface_0: { type: 'wall' },
+        surface_1: { type: 'ceiling' },
+        surface_2: { type: 'wall' },
+      },
+    } as never)
+
+    const intersections = collectMeasurementAxisSurfaceIntersections(scene, level, [0, 0, 0])
+
+    const x = intersections.find(({ axis }) => axis === 'x')?.point
+    const y = intersections.find(({ axis }) => axis === 'y')?.point
+    const z = intersections.find(({ axis }) => axis === 'z')?.point
+    expect(x?.[0]).toBeCloseTo(2)
+    expect(y?.[1]).toBeCloseTo(3)
+    expect(z?.[2]).toBeCloseTo(4)
+    surfaces.forEach((surface) => {
+      surface.geometry.dispose()
+    })
     material.dispose()
   })
 })

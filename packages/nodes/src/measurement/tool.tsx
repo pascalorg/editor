@@ -29,6 +29,7 @@ import {
   isGridSnapActive,
   type LinearUnit,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
   type MeasurementAxis,
   type MeasurementAxisGuide,
   type MeasurementPoint,
@@ -79,8 +80,10 @@ const MAX_DRAFT_DASH_SEGMENTS = 512
 const SURFACE_VERIFY_HALF_SPAN = 0.08
 const SURFACE_VERIFY_TOLERANCE = 0.012
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
-const DRAFT_COLOR = '#22d3ee'
-const RETICLE_COLOR = '#4f46e5'
+const AXIS_INTERSECTION_MIN_DISTANCE = 0.05
+const MAX_AXIS_INTERSECTIONS_PER_DIRECTION = 4
+const DRAFT_COLOR = MEASUREMENT_ACTIVE_COLOR
+const RETICLE_COLOR = MEASUREMENT_ACTIVE_COLOR
 const GUIDE_COLORS: Record<MeasurementAxis, string> = {
   x: '#ef4444',
   y: '#22c55e',
@@ -107,6 +110,11 @@ export type LocalSurfaceHit = {
 }
 
 export type MeasurementAxisProjection = {
+  axis: MeasurementAxis
+  point: MeasurementPoint
+}
+
+export type MeasurementAxisSurfaceIntersection = {
   axis: MeasurementAxis
   point: MeasurementPoint
 }
@@ -361,8 +369,16 @@ export function castVisibleMeasurementSurface(
   raycaster: Raycaster,
   context: MeasurementRaycastContext,
 ): WorldSurfaceHit | null {
+  return collectVisibleMeasurementSurfaceHits(raycaster, context)[0] ?? null
+}
+
+function collectVisibleMeasurementSurfaceHits(
+  raycaster: Raycaster,
+  context: MeasurementRaycastContext,
+): WorldSurfaceHit[] {
   const nodes = useScene.getState().nodes as Record<string, { type: string } | undefined>
   const intersections = raycaster.intersectObjects(context.roots, true)
+  const hits: WorldSurfaceHit[] = []
   for (const intersection of intersections) {
     if (!intersection.face) continue
     if (
@@ -376,9 +392,75 @@ export function castVisibleMeasurementSurface(
       const type = nodes[targetNodeId]?.type
       if (!type || type === 'measurement' || type === 'guide' || type === 'scan') continue
     }
-    return { intersection, targetNodeId }
+    hits.push({ intersection, targetNodeId })
   }
-  return null
+  return hits
+}
+
+export function collectMeasurementAxisSurfaceIntersections(
+  scene: Object3D,
+  levelObject: Object3D,
+  anchor: MeasurementPoint,
+  maxDistance = AXIS_GUIDE_HALF_LENGTH,
+): MeasurementAxisSurfaceIntersection[] {
+  if (!(Number.isFinite(maxDistance) && maxDistance > AXIS_INTERSECTION_MIN_DISTANCE)) return []
+  const context = getMeasurementRaycastContext(scene)
+  if (context.roots.length === 0) return []
+
+  levelObject.updateWorldMatrix(true, false)
+  const origin = levelObject.localToWorld(new Vector3(...anchor))
+  const levelRotation = levelObject.getWorldQuaternion(new Quaternion())
+  const raycaster = new Raycaster()
+  raycaster.layers.set(SCENE_LAYER)
+  raycaster.near = 0
+  raycaster.far = maxDistance
+  const intersections: MeasurementAxisSurfaceIntersection[] = []
+
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const localDirection =
+      axis === 'x'
+        ? new Vector3(1, 0, 0)
+        : axis === 'y'
+          ? new Vector3(0, 1, 0)
+          : new Vector3(0, 0, 1)
+    for (const sign of [-1, 1] as const) {
+      const direction = localDirection
+        .clone()
+        .multiplyScalar(sign)
+        .applyQuaternion(levelRotation)
+        .normalize()
+      raycaster.set(
+        origin.clone().addScaledVector(direction, AXIS_INTERSECTION_MIN_DISTANCE),
+        direction,
+      )
+      const hits = collectVisibleMeasurementSurfaceHits(raycaster, context)
+      let accepted = 0
+      for (const hit of hits) {
+        const worldDistance = hit.intersection.point.distanceTo(origin)
+        if (
+          worldDistance < AXIS_INTERSECTION_MIN_DISTANCE ||
+          worldDistance > maxDistance + AXIS_INTERSECTION_MIN_DISTANCE
+        ) {
+          continue
+        }
+        const local = levelObject.worldToLocal(hit.intersection.point.clone())
+        const point: MeasurementPoint = [local.x, local.y, local.z]
+        if (
+          intersections.some(
+            (candidate) =>
+              candidate.axis === axis && measurementDistance(candidate.point, point) < 0.025,
+          )
+        ) {
+          continue
+        }
+        intersections.push({ axis, point })
+        accepted += 1
+        if (accepted >= MAX_AXIS_INTERSECTIONS_PER_DIRECTION) break
+      }
+    }
+  }
+
+  return intersections
 }
 
 export function measurementIntersectionWorldNormal(intersection: Intersection<Object3D>): Vector3 {
@@ -839,12 +921,71 @@ function DraftLine({
   )
 }
 
+function AxisSurfaceIntersectionMarker({
+  active,
+  axis,
+  locked,
+  position,
+}: {
+  active: boolean
+  axis: MeasurementAxis
+  locked: boolean
+  position: Vector3
+}) {
+  const materials = useMemo(
+    () => ({
+      halo: new MeshBasicNodeMaterial({
+        color: '#f8fafc',
+        depthTest: false,
+        depthWrite: false,
+        opacity: active ? 0.95 : 0.68,
+        transparent: true,
+      }),
+      target: new MeshBasicNodeMaterial({
+        color: GUIDE_COLORS[axis],
+        depthTest: false,
+        depthWrite: false,
+        opacity: active ? 1 : 0.72,
+        transparent: true,
+      }),
+    }),
+    [active, axis],
+  )
+
+  useEffect(
+    () => () => {
+      materials.halo.dispose()
+      materials.target.dispose()
+    },
+    [materials],
+  )
+
+  const scale = locked ? 1.45 : active ? 1.2 : 1
+  return (
+    <group position={position} scale={scale} userData={{ measurementSurface: false }}>
+      <mesh layers={EDITOR_LAYER} material={materials.halo} raycast={NO_RAYCAST} renderOrder={1002}>
+        <sphereGeometry args={[0.065, 16, 12]} />
+      </mesh>
+      <mesh
+        layers={EDITOR_LAYER}
+        material={materials.target}
+        raycast={NO_RAYCAST}
+        renderOrder={1003}
+      >
+        <sphereGeometry args={[0.038, 16, 12]} />
+      </mesh>
+    </group>
+  )
+}
+
 function SurfaceReticle({
+  activeAxis,
   axisDirections,
   normal,
   position,
   snappedAxis,
 }: {
+  activeAxis: MeasurementAxis | null
   axisDirections: Record<MeasurementAxis, Vector3>
   normal: Vector3
   position: Vector3
@@ -872,7 +1013,7 @@ function SurfaceReticle({
       ) as Record<MeasurementAxis, Vector3[]>,
     [axisDirections],
   )
-  const color = snappedAxis ? GUIDE_COLORS[snappedAxis] : RETICLE_COLOR
+  const color = snappedAxis ? DRAFT_COLOR : RETICLE_COLOR
   const materials = useMemo(
     () => ({
       center: new MeshBasicNodeMaterial({
@@ -968,7 +1109,8 @@ function SurfaceReticle({
           <DraftLine
             color={GUIDE_COLORS[axis]}
             key={`measurement-reticle-${axis}`}
-            lineWidth={1.5}
+            lineWidth={activeAxis === axis ? (snappedAxis === axis ? 3 : 2.25) : 1.1}
+            opacity={activeAxis === axis ? 1 : 0.52}
             points={axisPoints[axis]}
           />
         ))}
@@ -1002,7 +1144,7 @@ function DraftLabel({
                   ? 'border-red-700/70 text-red-700 dark:border-red-400/70 dark:text-red-400'
                   : tone === 'secondary'
                     ? 'border-border/50 text-muted-foreground'
-                    : 'border-cyan-400/70 text-foreground'
+                    : 'border-indigo-400/70 text-foreground'
               }`
         }`}
         style={
@@ -1087,7 +1229,7 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
           </span>
           <input
             aria-label="Extrusion height"
-            className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-6 text-sm outline-none focus:border-cyan-400"
+            className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-6 text-sm outline-none focus:border-indigo-400"
             id="measurement-3d-extrusion-height"
             inputMode="decimal"
             onBlur={() => {
@@ -1121,7 +1263,7 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
           V {volumeLabel}
         </span>
         <button
-          className="h-8 shrink-0 rounded-full bg-cyan-500 px-3 font-medium text-black text-xs disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-8 shrink-0 rounded-full bg-indigo-500 px-3 font-medium text-white text-xs disabled:cursor-not-allowed disabled:opacity-40"
           disabled={Math.abs(extrusionHeight) < 0.001}
           onClick={commit}
           type="button"
@@ -1137,6 +1279,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
   buildingId,
   levelId,
 }) => {
+  const { scene } = useThree()
   const capturedLevelId = useMeasurementDraft((state) => state.levelId)
   const points = useMeasurementDraft((state) => state.points)
   const hover = useMeasurementDraft((state) => state.hover)
@@ -1149,6 +1292,11 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
   const extrusionHeight = useMeasurementDraft((state) => state.extrusionHeight)
   const error = useMeasurementDraft((state) => state.error)
   const unit = useViewer((state) => state.unit)
+  const axisIntersectionCache = useRef<{
+    intersections: MeasurementAxisSurfaceIntersection[]
+    key: string
+    timestamp: number
+  } | null>(null)
   const draftPointMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -1239,6 +1387,34 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         }
       : null
     const guideAnchor = vertexDrag && axisGuide ? axisGuide.from : points.at(-1)
+    let axisSurfaceIntersections: Array<{ axis: MeasurementAxis; position: Vector3 }> = []
+    if (guideAnchor) {
+      const cacheKey = `${previewLevelId}:${guideAnchor.join(':')}:${levelObject.matrixWorld.elements
+        .map((value) => value.toFixed(5))
+        .join(':')}`
+      const now = performance.now()
+      if (
+        !axisIntersectionCache.current ||
+        axisIntersectionCache.current.key !== cacheKey ||
+        now - axisIntersectionCache.current.timestamp > 250
+      ) {
+        axisIntersectionCache.current = {
+          intersections: collectMeasurementAxisSurfaceIntersections(
+            scene,
+            levelObject,
+            guideAnchor,
+          ),
+          key: cacheKey,
+          timestamp: now,
+        }
+      }
+      axisSurfaceIntersections = axisIntersectionCache.current.intersections.map(
+        ({ axis, point }) => ({
+          axis,
+          position: localToPreviewFrame(levelObject, buildingObject, point),
+        }),
+      )
+    }
     const axisTriad = guideAnchor
       ? (['x', 'y', 'z'] as const).map((axis) => {
           const axisIndex = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
@@ -1347,6 +1523,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       errorPosition,
       extrusionControlPosition,
       guide,
+      axisSurfaceIntersections,
       axisTriad,
       label,
       livePoints,
@@ -1369,6 +1546,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
     kind,
     levelId,
     points,
+    scene,
     stage,
     unit,
     vertexDrag,
@@ -1385,18 +1563,28 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
     <group>
       {preview.axisTriad.map((guide) => {
         const active = axisGuide?.axis === guide.axis
+        const locked = active && Boolean(axisGuide?.snapped)
         return (
           <DraftLine
             color={GUIDE_COLORS[guide.axis]}
             dashSize={0.12}
             gapSize={0.08}
             key={`measurement-axis-${guide.axis}`}
-            lineWidth={active ? 1.75 : 1}
-            opacity={active ? (axisGuide?.snapped ? 0.95 : 0.68) : 0.34}
+            lineWidth={active ? (locked ? 3 : 2) : 1}
+            opacity={active ? (locked ? 1 : 0.8) : 0.28}
             points={[guide.fromWorld, guide.toWorld]}
           />
         )
       })}
+      {preview.axisSurfaceIntersections.map(({ axis, position }) => (
+        <AxisSurfaceIntersectionMarker
+          active={axisGuide?.axis === axis}
+          axis={axis}
+          key={`measurement-axis-surface-${axis}-${position.toArray().join(':')}`}
+          locked={axisGuide?.axis === axis && Boolean(axisGuide.snapped)}
+          position={position}
+        />
+      ))}
       {liveClosed.length >= 2 && stage === 'collecting' ? (
         <DraftLine color={DRAFT_COLOR} lineWidth={2} opacity={0.95} points={liveClosed} />
       ) : null}
@@ -1471,6 +1659,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       {preview.reticle ? (
         <>
           <SurfaceReticle
+            activeAxis={axisGuide?.axis ?? null}
             axisDirections={preview.reticle.axisDirections}
             normal={preview.reticle.normal}
             position={preview.reticle.position}

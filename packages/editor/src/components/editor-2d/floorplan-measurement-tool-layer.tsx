@@ -27,6 +27,7 @@ import {
   formatVolumeLabel,
   getLinearUnitLabel,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
 } from '../../lib/measurements'
 import useEditor from '../../store/use-editor'
@@ -41,10 +42,10 @@ import { formatAngleRadians } from '../tools/shared/segment-angle'
 import { useFloorplanRender } from './floorplan-render-context'
 import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
-const DRAFT_COLOR = '#22d3ee'
+const DRAFT_COLOR = MEASUREMENT_ACTIVE_COLOR
 const X_AXIS_COLOR = '#ef4444'
 const Z_AXIS_COLOR = '#3b82f6'
-const RETICLE_COLOR = '#4f46e5'
+const RETICLE_COLOR = MEASUREMENT_ACTIVE_COLOR
 const AXIS_SNAP_DISTANCE_PX = 12
 const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
 const PROXIMITY_GUIDE_DISTANCE_PX = 32
@@ -1266,8 +1267,8 @@ export function FloorplanMeasurementToolLayer() {
           <line
             stroke={X_AXIS_COLOR}
             strokeDasharray="6 5"
-            strokeOpacity={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 0.95 : 0.68) : 0.34}
-            strokeWidth={axisGuide?.axis === 'x' ? 1.75 : 1}
+            strokeOpacity={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 1 : 0.8) : 0.28}
+            strokeWidth={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 3 : 2) : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0] - guideHalfLength}
             x2={guideAnchor[0] + guideHalfLength}
@@ -1277,8 +1278,8 @@ export function FloorplanMeasurementToolLayer() {
           <line
             stroke={Z_AXIS_COLOR}
             strokeDasharray="6 5"
-            strokeOpacity={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 0.95 : 0.68) : 0.34}
-            strokeWidth={axisGuide?.axis === 'z' ? 1.75 : 1}
+            strokeOpacity={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 1 : 0.8) : 0.28}
+            strokeWidth={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 3 : 2) : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0]}
             x2={guideAnchor[0]}

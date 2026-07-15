@@ -17,10 +17,9 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   measurementPolygonLabelAnchor,
+  measurementPresentationColor,
 } from '@pascal-app/editor'
 import { resolveMeasurementNode } from './resolve'
-
-const FALLBACK_STROKE = '#0f766e'
 
 const projectPoint = (point: MeasurementPoint): FloorplanPoint => [point[0], point[2]]
 
@@ -48,13 +47,7 @@ export function buildMeasurementFloorplan(
   const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
   const measurement = resolved.payload
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
-  const palette = ctx.viewState?.palette
-  const stroke =
-    resolved.dangling.length > 0
-      ? '#dc2626'
-      : selected
-        ? (palette?.selectedStroke ?? FALLBACK_STROKE)
-        : (palette?.measurementStroke ?? FALLBACK_STROKE)
+  const stroke = measurementPresentationColor(resolved.dangling.length > 0, Boolean(selected))
   const style = lineStyle(stroke)
   const statusPrefix = resolved.dangling.length > 0 ? 'Unlinked · ' : ''
 

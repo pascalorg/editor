@@ -19,6 +19,7 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   measurementPolygonLabelAnchor,
+  measurementPresentationColor,
   triangulateMeasurementPolygon,
 } from '@pascal-app/editor'
 import { OVERLAY_LAYER, useNodeEvents, useViewer } from '@pascal-app/viewer'
@@ -40,8 +41,6 @@ import {
   type ResolvedMeasurementPayload,
   resolveMeasurementNode,
 } from './resolve'
-
-const MEASUREMENT_COLOR = '#14b8a6'
 
 type MeasurementRenderData = {
   fillGeometry: BufferGeometry | null
@@ -198,6 +197,10 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
   const handlers = useNodeEvents(node, 'measurement')
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const unit = useViewer((state) => state.unit)
+  const active = useViewer(
+    (state) =>
+      state.hoveredId === node.id || state.selection.selectedIds.some((id) => id === node.id),
+  )
   const dependencyIds = measurementDependencyIds(
     node.measurement,
     (id) => useScene.getState().nodes[id],
@@ -215,7 +218,7 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
     const value = formatMeasurement(resolved.payload, unit)
     return resolved.dangling.length > 0 ? `Unlinked · ${value}` : value
   }, [resolved, unit])
-  const color = resolved.dangling.length > 0 ? '#dc2626' : MEASUREMENT_COLOR
+  const color = measurementPresentationColor(resolved.dangling.length > 0, active)
   const markerGeometry = useMemo(() => new SphereGeometry(0.035, 12, 8), [])
   const lineMaterial = useMemo(
     () =>

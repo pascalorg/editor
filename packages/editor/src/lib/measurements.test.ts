@@ -9,9 +9,22 @@ import {
   getVolumeUnitLabel,
   linearControlValueToMeters,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementPresentationColor,
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './measurements'
+
+describe('measurement presentation', () => {
+  test('uses black at rest, indigo while active, and red for dangling references', () => {
+    expect(measurementPresentationColor(false, false)).toBe(MEASUREMENT_PERSISTENT_COLOR)
+    expect(measurementPresentationColor(false, true)).toBe(MEASUREMENT_ACTIVE_COLOR)
+    expect(measurementPresentationColor(true, false)).toBe(MEASUREMENT_DANGLING_COLOR)
+    expect(measurementPresentationColor(true, true)).toBe(MEASUREMENT_DANGLING_COLOR)
+  })
+})
 
 describe('linear measurements', () => {
   test('formats metric measurements in meters', () => {

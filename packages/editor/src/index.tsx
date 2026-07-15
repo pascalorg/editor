@@ -314,6 +314,10 @@ export {
   type LinearUnit,
   linearControlValueToMeters,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementPresentationColor,
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'

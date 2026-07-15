@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, MeasurementNode } from '@pascal-app/core'
+import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_PERSISTENT_COLOR } from '@pascal-app/editor'
 import { buildMeasurementFloorplan } from './floorplan'
 
 const palette = {
@@ -20,13 +21,13 @@ const palette = {
   measurementLabelText: '#0f172a',
 }
 
-const context = (unit: 'metric' | 'imperial'): GeometryContext => ({
+const context = (unit: 'metric' | 'imperial', selected = false): GeometryContext => ({
   resolve: () => undefined,
   children: [],
   siblings: [],
   parent: null,
   viewState: {
-    selected: false,
+    selected,
     unit,
     highlighted: false,
     hovered: false,
@@ -66,6 +67,29 @@ describe('buildMeasurementFloorplan', () => {
     expect(
       metric && flattenGeometry(metric).find((entry) => entry.kind === 'dimension-label'),
     ).toMatchObject({ appearance: 'outlined' })
+  })
+
+  test('uses black persistently and indigo while active', () => {
+    const node = MeasurementNode.parse({
+      id: 'measurement_appearance',
+      type: 'measurement',
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [1, 0, 0],
+        ],
+      },
+    })
+
+    const persistent = buildMeasurementFloorplan(node, context('metric'))
+    const active = buildMeasurementFloorplan(node, context('metric', true))
+    expect(
+      persistent && flattenGeometry(persistent).find((entry) => entry.kind === 'line'),
+    ).toMatchObject({ stroke: MEASUREMENT_PERSISTENT_COLOR })
+    expect(active && flattenGeometry(active).find((entry) => entry.kind === 'line')).toMatchObject({
+      stroke: MEASUREMENT_ACTIVE_COLOR,
+    })
   })
 
   test('emits semantic polygon geometry and derived area and volume labels', () => {
