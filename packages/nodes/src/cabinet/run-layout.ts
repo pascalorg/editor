@@ -14,6 +14,12 @@ const ADJACENT_RUN_Z_TOLERANCE = 0.03
 
 type ModuleLike = Pick<CabinetModuleNode, 'id' | 'position' | 'width'>
 
+type ReflowRunModulesOptions = {
+  minimumWidth?: number
+  preserveExtent?: boolean
+  restorableWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
+}
+
 export function sortRunModules<T extends ModuleLike>(modules: readonly T[]): T[] {
   return [...modules].sort((a, b) => a.position[0] - b.position[0])
 }
@@ -374,13 +380,62 @@ export function reflowRunModules<T extends ModuleLike>(
   modules: readonly T[],
   selectedId: CabinetModuleNode['id'],
   selectedWidth: number,
+  options: ReflowRunModulesOptions = {},
 ): Array<{ id: T['id']; position: T['position']; width: number }> {
   const sorted = sortRunModules(modules)
-  if (!sorted.some((module) => module.id === selectedId)) return []
+  const selectedIndex = sorted.findIndex((module) => module.id === selectedId)
+  if (selectedIndex < 0) return []
+
+  const widths = new Map(sorted.map((module) => [module.id, module.width]))
+  widths.set(selectedId, selectedWidth)
+
+  const selected = sorted[selectedIndex]!
+  let remainingGrowth = selectedWidth - selected.width
+  if (options.preserveExtent && remainingGrowth > RUN_ADJACENCY_EPSILON) {
+    const minimumWidth = options.minimumWidth ?? 0.3
+    const left = sorted.slice(0, selectedIndex).reverse()
+    const right = sorted.slice(selectedIndex + 1)
+    const capacity = (candidates: readonly T[]) =>
+      candidates.reduce((total, module) => total + Math.max(0, module.width - minimumWidth), 0)
+    const candidates = capacity(left) > capacity(right) ? [...left, ...right] : [...right, ...left]
+
+    for (const module of candidates) {
+      if (remainingGrowth <= RUN_ADJACENCY_EPSILON) break
+      const available = Math.max(0, module.width - minimumWidth)
+      const reduction = Math.min(available, remainingGrowth)
+      widths.set(module.id, module.width - reduction)
+      remainingGrowth -= reduction
+    }
+  }
+
+  let remainingFreedWidth = selected.width - selectedWidth
+  if (
+    options.preserveExtent &&
+    remainingFreedWidth > RUN_ADJACENCY_EPSILON &&
+    options.restorableWidthById
+  ) {
+    const left = sorted.slice(0, selectedIndex).reverse()
+    const right = sorted.slice(selectedIndex + 1)
+    const restorable = (candidates: readonly T[]) =>
+      candidates.reduce(
+        (total, module) => total + (options.restorableWidthById?.get(module.id) ?? 0),
+        0,
+      )
+    const candidates =
+      restorable(left) > restorable(right) ? [...left, ...right] : [...right, ...left]
+
+    for (const module of candidates) {
+      if (remainingFreedWidth <= RUN_ADJACENCY_EPSILON) break
+      const available = Math.max(0, options.restorableWidthById.get(module.id) ?? 0)
+      const restoration = Math.min(available, remainingFreedWidth)
+      widths.set(module.id, module.width + restoration)
+      remainingFreedWidth -= restoration
+    }
+  }
 
   let nextLeft = runMinX(sorted)
   return sorted.map((module) => {
-    const width = module.id === selectedId ? selectedWidth : module.width
+    const width = widths.get(module.id) ?? module.width
     const position: T['position'] = [
       nextLeft + width / 2,
       module.position[1],

@@ -2171,12 +2171,14 @@ export function addWallChildAbove({
   run,
   sceneApi,
   openSide,
+  frontOverlay = 'full',
 }: {
   kind: 'cabinet' | 'hood'
   module: CabinetModuleNode
   run: CabinetNode
   sceneApi: SceneApi
   openSide?: CabinetModuleNode['openSide']
+  frontOverlay?: CabinetModuleNode['frontOverlay']
 }): AnyNodeId | null {
   if (resolveCabinetType(module, run) !== 'base') return null
   if (wallChildOf(module, sceneApi.nodes())) return null
@@ -2205,7 +2207,7 @@ export function addWallChildAbove({
     withCountertop: false,
     stack: isHood ? [newCabinetCompartment('hood-pyramid')] : doorStack(1),
     frontStyle: module.frontStyle,
-    frontOverlay: module.frontOverlay,
+    frontOverlay,
     handleStyle: module.handleStyle,
     handlePosition: module.handlePosition,
     ...(openSide ? { openSide } : {}),
@@ -2258,6 +2260,7 @@ function ensureWallCabinetAbove({
     run,
     sceneApi,
     openSide,
+    frontOverlay: module.frontOverlay,
   })
   if (!wallChildId) return null
 

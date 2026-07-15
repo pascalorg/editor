@@ -21,6 +21,7 @@ import {
   addCabinetModuleSide,
   backAlignZ,
   bumpCabinetRunLayoutRevision,
+  cabinetMetadataRecord,
   cornerLinkedSourceModuleForRun,
   runModuleBaseY,
   syncCornerRunsFromSourceModule,
@@ -43,6 +44,7 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
   'handlePosition',
 ])
 const RUN_DEPTH_PATCH_KEY = 'depth'
+const PRESET_WIDTH_DEBT_KEY = 'cabinetPresetWidthDebtBySource'
 
 const FRONT_STYLE_OPTIONS = [
   { value: 'slab', label: 'Slab' },
@@ -85,20 +87,59 @@ export function bumpRunLayoutRevisionViaStore(
   scene.markDirty(run.id as AnyNodeId)
 }
 
+function presetWidthDebt(
+  module: CabinetModuleNodeType,
+  sourceId: CabinetModuleNodeType['id'],
+): number {
+  const value = cabinetMetadataRecord(module.metadata)[PRESET_WIDTH_DEBT_KEY]
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0
+  const debt = (value as Record<string, unknown>)[sourceId]
+  return typeof debt === 'number' && debt > 0 ? debt : 0
+}
+
+function metadataWithPresetWidthDebt(
+  module: CabinetModuleNodeType,
+  sourceId: CabinetModuleNodeType['id'],
+  widthDelta: number,
+): CabinetModuleNodeType['metadata'] {
+  const metadata = cabinetMetadataRecord(module.metadata)
+  const value = metadata[PRESET_WIDTH_DEBT_KEY]
+  const debts =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? { ...(value as Record<string, unknown>) }
+      : {}
+  const nextDebt = Math.max(0, presetWidthDebt(module, sourceId) - widthDelta)
+  if (nextDebt > 1e-4) debts[sourceId] = nextDebt
+  else delete debts[sourceId]
+
+  if (Object.keys(debts).length > 0) {
+    return { ...metadata, [PRESET_WIDTH_DEBT_KEY]: debts } as CabinetModuleNodeType['metadata']
+  }
+  const { [PRESET_WIDTH_DEBT_KEY]: _removed, ...rest } = metadata
+  return rest as CabinetModuleNodeType['metadata']
+}
+
 export function reflowRunModules({
   modules,
   parentRun,
   patch,
+  preserveExtent = false,
   scene,
   selected,
 }: {
   modules: CabinetModuleNodeType[]
   parentRun: CabinetNodeType
   patch: Partial<CabinetModuleNodeType>
+  preserveExtent?: boolean
   scene: ReturnType<typeof useScene.getState>
   selected: CabinetModuleNodeType
 }) {
-  const reflowed = reflowCabinetRunModules(modules, selected.id, patch.width ?? selected.width)
+  const reflowed = reflowCabinetRunModules(modules, selected.id, patch.width ?? selected.width, {
+    preserveExtent,
+    restorableWidthById: new Map(
+      modules.map((module) => [module.id, presetWidthDebt(module, selected.id)]),
+    ),
+  })
   if (reflowed.length === 0) return
 
   const reflowById = new Map(reflowed.map((entry) => [entry.id, entry]))
@@ -106,7 +147,13 @@ export function reflowRunModules({
     const reflow = reflowById.get(module.id)
     if (!reflow) continue
     const isSelected = module.id === selected.id
-    const nextPatch: Partial<CabinetModuleNodeType> = isSelected ? { ...patch } : {}
+    const nextPatch: Partial<CabinetModuleNodeType> = isSelected
+      ? { ...patch, width: reflow.width }
+      : { width: reflow.width }
+    const widthDelta = reflow.width - module.width
+    if (!isSelected && preserveExtent && Math.abs(widthDelta) > 1e-4) {
+      nextPatch.metadata = metadataWithPresetWidthDebt(module, selected.id, widthDelta)
+    }
     const nextPosition: CabinetModuleNodeType['position'] = [
       reflow.position[0],
       isSelected && patch.position ? patch.position[1] : reflow.position[1],

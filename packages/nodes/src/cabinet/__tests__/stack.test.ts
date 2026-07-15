@@ -476,6 +476,63 @@ describe('reflowCabinetRunModules', () => {
     expect(reflowed[0]!.position[1]).toBeCloseTo(0.1)
     expect(reflowed[2]!.position[1]).toBeCloseTo(0.1)
   })
+
+  test('fits a wider preset inside the existing run by reducing adjacent modules', () => {
+    const modules = [
+      { id: 'left', position: [-0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.5, 0.1, 0] as [number, number, number], width: 0.5 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.75, {
+      preserveExtent: true,
+    })
+
+    expect(reflowed[0]!.position[0] - reflowed[0]!.width / 2).toBeCloseTo(-0.75)
+    expect(reflowed[2]!.position[0] + reflowed[2]!.width / 2).toBeCloseTo(0.75)
+    expect(reflowed[0]!.width).toBeCloseTo(0.45)
+    expect(reflowed[1]!.width).toBeCloseTo(0.75)
+    expect(reflowed[2]!.width).toBeCloseTo(0.3)
+  })
+
+  test('uses the side with more reducible width before changing the opposite side', () => {
+    const modules = [
+      { id: 'left', position: [-0.6, 0.1, 0] as [number, number, number], width: 0.7 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.45, 0.1, 0] as [number, number, number], width: 0.4 },
+    ]
+
+    const reflowed = reflowCabinetRunModules(modules, 'middle', 0.75, {
+      preserveExtent: true,
+    })
+
+    expect(reflowed[0]!.width).toBeCloseTo(0.45)
+    expect(reflowed[1]!.width).toBeCloseTo(0.75)
+    expect(reflowed[2]!.width).toBeCloseTo(0.4)
+  })
+
+  test('restores the exact donor widths when a wider preset switches back', () => {
+    const modules = [
+      { id: 'left', position: [-0.6, 0.1, 0] as [number, number, number], width: 0.7 },
+      { id: 'middle', position: [0, 0.1, 0] as [number, number, number], width: 0.5 },
+      { id: 'right', position: [0.45, 0.1, 0] as [number, number, number], width: 0.4 },
+    ]
+    const widened = reflowCabinetRunModules(modules, 'middle', 0.75, {
+      preserveExtent: true,
+    })
+    const restorableWidthById = new Map(
+      modules.map((module, index) => [module.id, module.width - widened[index]!.width]),
+    )
+
+    const restored = reflowCabinetRunModules(widened, 'middle', 0.5, {
+      preserveExtent: true,
+      restorableWidthById,
+    })
+
+    expect(restored.map((module) => module.width)).toEqual([0.7, 0.5, 0.4])
+    expect(restored[0]!.position[0] - restored[0]!.width / 2).toBeCloseTo(-0.95)
+    expect(restored[2]!.position[0] + restored[2]!.width / 2).toBeCloseTo(0.65)
+  })
 })
 
 describe('backAnchoredModuleZ', () => {

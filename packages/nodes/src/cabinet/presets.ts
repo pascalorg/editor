@@ -54,7 +54,7 @@ export const CABINET_PRESETS: CabinetPreset[] = [
       width: 0.5,
       handleStyle: 'bar',
       handlePosition: 'auto',
-      frontOverlay: 'inset',
+      frontOverlay: 'full',
       stack: [
         { ...newCabinetCompartment('drawer'), height: 0.44, drawerCount: 3 },
         { ...newCabinetCompartment('door'), doorType: 'double', shelfCount: 2 },
