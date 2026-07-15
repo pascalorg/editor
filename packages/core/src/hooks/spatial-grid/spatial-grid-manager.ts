@@ -613,26 +613,45 @@ const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
  * than `WALL_SLAB_MIN_OVERLAP` of the wall is ignored entirely (point
  * contact, endpoint grazes).
  *
- * Same-elevation slabs pool their coverage, then the wall sits on the
- * highest elevation covering at least `WALL_SLAB_SUPPORT_MAJORITY` of
- * the wall's length. When no elevation reaches majority (e.g. a wall
- * half on a platform, half in the air), the best-covered elevation
- * wins, ties going to the higher slab; with no support at all the wall
- * stays at 0. A raised slab touching only one endpoint therefore no
- * longer lifts a wall that mostly stands on a lower floor. Pure;
+ * Same-elevation slabs pool their coverage. `elevation` preserves the
+ * existing wall-relative origin: the highest elevation covering at
+ * least `WALL_SLAB_SUPPORT_MAJORITY` of the wall, or the best-covered
+ * elevation when none reaches majority. `baseElevation` only fills down
+ * where a lower support remains exposed on a wall face after higher,
+ * overlapping support is accounted for. Coincident floor/platform slabs
+ * therefore keep the wall on the platform, while slabs on opposite wall
+ * sides bridge correctly. A slab touching only one endpoint never enters
+ * either result. Pure;
  * exported for tests.
  */
-export function computeWallSlabElevation(
+export type WallSlabSupport = {
+  /** Existing wall-relative floor elevation used by hosted children and wall height. */
+  elevation: number
+  /** Lowest exposed adjacent support; wall geometry fills down to this elevation. */
+  baseElevation: number
+  /** Piecewise bottom elevation along the wall centerline, in normalized arc-length units. */
+  baseSegments: WallSlabSupportSegment[]
+}
+
+export type WallSlabSupportSegment = {
+  start: number
+  end: number
+  elevation: number
+}
+
+export function computeWallSlabSupport(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
-): number {
+): WallSlabSupport {
   const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
   const halfThickness = Math.max(thickness / 2, 0)
   const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
   const polylineLengths = polylines.map(polylineLength)
   const wallLength = polylineLengths[0]!
-  if (wallLength < 1e-9) return 0
+  if (wallLength < 1e-9) {
+    return { elevation: 0, baseElevation: 0, baseSegments: [] }
+  }
 
   const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
 
@@ -672,33 +691,116 @@ export function computeWallSlabElevation(
     }
   }
 
-  let majorityElevation = Number.NEGATIVE_INFINITY
-  let bestElevation = Number.NEGATIVE_INFINITY
-  let bestCoverage = -1
-  for (const group of groups) {
+  type EvaluatedGroup = ElevationGroup & {
+    coverage: number
+    mergedPerPolyline: LengthInterval[][]
+  }
+  const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => {
     let coverage = 0
+    const mergedPerPolyline = group.perPolyline.map(mergeIntervals)
     for (let i = 0; i < group.perPolyline.length; i++) {
       const lineLength = polylineLengths[i]!
       if (lineLength < 1e-9) continue
-      coverage = Math.max(
-        coverage,
-        intervalsLength(mergeIntervals(group.perPolyline[i]!)) / lineLength,
-      )
+      coverage = Math.max(coverage, intervalsLength(mergedPerPolyline[i]!) / lineLength)
     }
-    if (coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+    return { ...group, coverage, mergedPerPolyline }
+  })
+
+  let majorityElevation = Number.NEGATIVE_INFINITY
+  let bestElevation = Number.NEGATIVE_INFINITY
+  let bestCoverage = -1
+  for (const group of evaluatedGroups) {
+    if (group.coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
       majorityElevation = Math.max(majorityElevation, group.elevation)
     }
     if (
-      coverage > bestCoverage + 1e-6 ||
-      (Math.abs(coverage - bestCoverage) <= 1e-6 && group.elevation > bestElevation)
+      group.coverage > bestCoverage + 1e-6 ||
+      (Math.abs(group.coverage - bestCoverage) <= 1e-6 && group.elevation > bestElevation)
     ) {
-      bestCoverage = coverage
+      bestCoverage = group.coverage
       bestElevation = group.elevation
     }
   }
 
-  if (majorityElevation !== Number.NEGATIVE_INFINITY) return majorityElevation
-  return bestElevation === Number.NEGATIVE_INFINITY ? 0 : bestElevation
+  const elevation =
+    majorityElevation !== Number.NEGATIVE_INFINITY
+      ? majorityElevation
+      : bestElevation === Number.NEGATIVE_INFINITY
+        ? 0
+        : bestElevation
+  const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
+    const lineLength = polylineLengths[polylineIndex]!
+    if (lineLength < 1e-9) return []
+    return group.mergedPerPolyline[polylineIndex]!.map(
+      ([intervalStart, intervalEnd]) =>
+        [intervalStart / lineLength, intervalEnd / lineLength] as LengthInterval,
+    )
+  }
+
+  const normalizedByGroup = evaluatedGroups.map((group) => ({
+    elevation: group.elevation,
+    perPolyline: group.mergedPerPolyline.map((_, index) => normalizedIntervals(group, index)),
+  }))
+  const breakpoints = [0, 1]
+  for (const group of normalizedByGroup) {
+    for (const intervals of group.perPolyline) {
+      for (const [intervalStart, intervalEnd] of intervals) {
+        breakpoints.push(intervalStart, intervalEnd)
+      }
+    }
+  }
+  breakpoints.sort((left, right) => left - right)
+  const uniqueBreakpoints = breakpoints.filter(
+    (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
+  )
+
+  const highestAt = (polylineIndex: number, t: number) => {
+    let highest = Number.NEGATIVE_INFINITY
+    for (const group of normalizedByGroup) {
+      if (
+        group.perPolyline[polylineIndex]?.some(
+          ([intervalStart, intervalEnd]) => t >= intervalStart - 1e-7 && t <= intervalEnd + 1e-7,
+        )
+      ) {
+        highest = Math.max(highest, group.elevation)
+      }
+    }
+    return highest
+  }
+
+  const baseSegments: WallSlabSupportSegment[] = []
+  for (let index = 1; index < uniqueBreakpoints.length; index++) {
+    const start = uniqueBreakpoints[index - 1]!
+    const end = uniqueBreakpoints[index]!
+    if (end - start < 1e-7) continue
+    const midpoint = (start + end) / 2
+    const leftElevation = polylines.length >= 3 ? highestAt(1, midpoint) : Number.NEGATIVE_INFINITY
+    const rightElevation = polylines.length >= 3 ? highestAt(2, midpoint) : Number.NEGATIVE_INFINITY
+    const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
+    const segmentElevation =
+      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(highestAt(0, midpoint), 0)
+    const previous = baseSegments[baseSegments.length - 1]
+    if (
+      previous &&
+      Math.abs(previous.elevation - segmentElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+    ) {
+      previous.end = end
+    } else {
+      baseSegments.push({ start, end, elevation: segmentElevation })
+    }
+  }
+
+  if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
+  const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
+  return { elevation, baseElevation, baseSegments }
+}
+
+export function computeWallSlabElevation(
+  wallLike: WallOverlapInput,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): number {
+  return computeWallSlabSupport(wallLike, slabs, levelWalls).elevation
 }
 
 export class SpatialGridManager {
@@ -1154,10 +1256,26 @@ export class SpatialGridManager {
     curveOffset = 0,
     thickness = DEFAULT_WALL_THICKNESS,
   ): number {
-    const slabMap = this.slabsByLevel.get(levelId)
-    if (!slabMap) return 0
+    return this.getSlabSupportForWall(levelId, start, end, curveOffset, thickness).elevation
+  }
 
-    return computeWallSlabElevation(
+  getSlabSupportForWall(
+    levelId: string,
+    start: [number, number],
+    end: [number, number],
+    curveOffset = 0,
+    thickness = DEFAULT_WALL_THICKNESS,
+  ): WallSlabSupport {
+    const slabMap = this.slabsByLevel.get(levelId)
+    if (!slabMap) {
+      return {
+        elevation: 0,
+        baseElevation: 0,
+        baseSegments: [{ start: 0, end: 1, elevation: 0 }],
+      }
+    }
+
+    return computeWallSlabSupport(
       { start, end, curveOffset, thickness },
       [...slabMap.values()],
       this.getLevelWallNodes(levelId),

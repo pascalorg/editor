@@ -25,6 +25,7 @@ import {
   useScene,
   type WallMiterData,
   type WallNode,
+  type WallSlabSupportSegment,
   type WallSurfaceSide,
   type WallSurfaceSlotId,
   type WindowNode,
@@ -691,13 +692,14 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
-  const slabElevation = spatialGridManager.getSlabElevationForWall(
+  const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
     node.start,
     node.end,
     node.curveOffset ?? 0,
     node.thickness,
   )
+  const slabElevation = slabSupport.elevation
 
   const childrenIds = node.children || []
   // Merge live overrides into door / window children so cutouts track an
@@ -720,7 +722,14 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       return { ...effective, position: live.position }
     })
 
-  const builtGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
+  const builtGeo = generateExtrudedWall(
+    node,
+    childrenNodes,
+    miterData,
+    slabElevation,
+    slabSupport.baseElevation,
+    slabSupport.baseSegments,
+  )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
   // Reproduce it here so the UVs can be projected in WORLD space — see
@@ -737,7 +746,14 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
-    const collisionGeo = generateExtrudedWall(node, [], miterData, slabElevation)
+    const collisionGeo = generateExtrudedWall(
+      node,
+      [],
+      miterData,
+      slabElevation,
+      slabSupport.baseElevation,
+      slabSupport.baseSegments,
+    )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
   }
@@ -823,13 +839,18 @@ export function generateExtrudedWall(
   childrenNodes: AnyNode[],
   miterData: WallMiterData,
   slabElevation = 0,
+  baseElevation = slabElevation,
+  baseSegments: readonly WallSlabSupportSegment[] = [
+    { start: 0, end: 1, elevation: baseElevation },
+  ],
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  // Positive slab: shift the whole wall up (full height preserved)
-  // Negative slab: extend wall downward so top stays fixed at wallNode.height
   const wallHeight = wallNode.height ?? DEFAULT_WALL_HEIGHT
-  const height = slabElevation > 0 ? wallHeight : wallHeight - slabElevation
+  const topElevation = slabElevation > 0 ? slabElevation + wallHeight : wallHeight
+  const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
+  const localBottom = effectiveBaseElevation - slabElevation
+  const height = topElevation - effectiveBaseElevation
 
   const thickness = getWallThickness(wallNode)
 
@@ -888,12 +909,107 @@ export function generateExtrudedWall(
 
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
+  if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
   geometry.computeVertexNormals()
   assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
   ensureRenderableGeometryAttributes(geometry)
 
-  // Apply CSG subtraction for cutouts (doors/windows)
-  const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
+  // Start with the lowest required wall prism, then remove the volume below
+  // each higher-supported run. This keeps the existing mitered footprint and
+  // opening CSG while giving one wall a stepped longitudinal base.
+  const baseProfileCutouts: Brush[] = []
+  for (const segment of baseSegments) {
+    const segmentElevation = Math.min(segment.elevation, slabElevation)
+    const cutHeight = segmentElevation - effectiveBaseElevation
+    if (cutHeight <= 1e-6 || segment.end - segment.start <= 1e-7) continue
+
+    const segmentStart = THREE.MathUtils.clamp(segment.start, 0, 1)
+    const segmentEnd = THREE.MathUtils.clamp(segment.end, 0, 1)
+    const cutHalfWidth = Math.max(thickness * 2, 0.2)
+    const worldCutoutPoints: Point2D[] = []
+
+    if (isCurvedWall(wallNode)) {
+      const sampleCount = Math.max(2, Math.ceil((segmentEnd - segmentStart) * 24))
+      const left: Point2D[] = []
+      const right: Point2D[] = []
+      for (let index = 0; index <= sampleCount; index++) {
+        const t = segmentStart + ((segmentEnd - segmentStart) * index) / sampleCount
+        const frame = getWallCurveFrameAt(wallNode, t)
+        const endpointExtension =
+          index === 0 && segmentStart <= 1e-7
+            ? -cutHalfWidth
+            : index === sampleCount && segmentEnd >= 1 - 1e-7
+              ? cutHalfWidth
+              : 0
+        const center = {
+          x: frame.point.x + frame.tangent.x * endpointExtension,
+          y: frame.point.y + frame.tangent.y * endpointExtension,
+        }
+        left.push({
+          x: center.x + frame.normal.x * cutHalfWidth,
+          y: center.y + frame.normal.y * cutHalfWidth,
+        })
+        right.push({
+          x: center.x - frame.normal.x * cutHalfWidth,
+          y: center.y - frame.normal.y * cutHalfWidth,
+        })
+      }
+      worldCutoutPoints.push(...left, ...right.reverse())
+    } else {
+      const tangentX = v.x / L
+      const tangentY = v.y / L
+      const normalX = -tangentY
+      const normalY = tangentX
+      const startExtension = segmentStart <= 1e-7 ? cutHalfWidth : 0
+      const endExtension = segmentEnd >= 1 - 1e-7 ? cutHalfWidth : 0
+      const startPoint = {
+        x: wallStart.x + tangentX * (segmentStart * L - startExtension),
+        y: wallStart.y + tangentY * (segmentStart * L - startExtension),
+      }
+      const endPoint = {
+        x: wallStart.x + tangentX * (segmentEnd * L + endExtension),
+        y: wallStart.y + tangentY * (segmentEnd * L + endExtension),
+      }
+      worldCutoutPoints.push(
+        {
+          x: startPoint.x + normalX * cutHalfWidth,
+          y: startPoint.y + normalY * cutHalfWidth,
+        },
+        { x: endPoint.x + normalX * cutHalfWidth, y: endPoint.y + normalY * cutHalfWidth },
+        { x: endPoint.x - normalX * cutHalfWidth, y: endPoint.y - normalY * cutHalfWidth },
+        {
+          x: startPoint.x - normalX * cutHalfWidth,
+          y: startPoint.y - normalY * cutHalfWidth,
+        },
+      )
+    }
+
+    const localCutoutPoints = worldCutoutPoints.map(worldToLocal)
+    if (localCutoutPoints.length < 3) continue
+    const cutoutShape = new THREE.Shape()
+    cutoutShape.moveTo(localCutoutPoints[0]!.x, -localCutoutPoints[0]!.z)
+    for (let index = 1; index < localCutoutPoints.length; index++) {
+      cutoutShape.lineTo(localCutoutPoints[index]!.x, -localCutoutPoints[index]!.z)
+    }
+    cutoutShape.closePath()
+
+    const cutoutBottom = localBottom - 0.01
+    const cutoutTop = segmentElevation - slabElevation
+    const cutoutGeometry = new THREE.ExtrudeGeometry(cutoutShape, {
+      depth: cutoutTop - cutoutBottom,
+      bevelEnabled: false,
+    })
+    cutoutGeometry.rotateX(-Math.PI / 2)
+    cutoutGeometry.translate(0, cutoutBottom, 0)
+    computeGeometryBoundsTree(cutoutGeometry)
+    baseProfileCutouts.push(new Brush(cutoutGeometry))
+  }
+
+  // Apply base-profile and opening cutouts in one CSG pass.
+  const cutoutBrushes = [
+    ...baseProfileCutouts,
+    ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
+  ]
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
       geometry,

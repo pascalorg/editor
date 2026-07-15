@@ -48,7 +48,11 @@ export {
   getFloorPlacedFootprints,
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
-export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
+export {
+  pointInPolygon,
+  spatialGridManager,
+  type WallSlabSupportSegment,
+} from './hooks/spatial-grid/spatial-grid-manager'
 export {
   findLevelAncestorId,
   initSpatialGridSync,

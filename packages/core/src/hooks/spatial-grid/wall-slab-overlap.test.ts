@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import { SlabNode, WallNode } from '../../schema'
-import { computeWallSlabElevation, wallOverlapsPolygon } from './spatial-grid-manager'
+import {
+  computeWallSlabElevation,
+  computeWallSlabSupport,
+  wallOverlapsPolygon,
+} from './spatial-grid-manager'
 
 // 4×4 square slab, like an auto-slab derived from a room's wall centerlines.
 const SLAB: Array<[number, number]> = [
@@ -290,6 +294,119 @@ describe('computeWallSlabElevation', () => {
         [],
       ),
     ).toBeCloseTo(0.6)
+  })
+
+  it('keeps a wall pushed up on a raised platform above a coincident floor', () => {
+    const floor = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    const platform = SlabNode.parse({ polygon: SLAB, elevation: 0.6 })
+
+    expect(
+      computeWallSlabSupport({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [floor, platform], []),
+    ).toEqual({
+      elevation: 0.6,
+      baseElevation: 0.6,
+      baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
+    })
+  })
+
+  it('fills down only when a lower support is exposed beyond a partial platform', () => {
+    const floor = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    const platform = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [2.5, 0],
+        [2.5, 4],
+        [0, 4],
+      ],
+      elevation: 0.6,
+    })
+
+    expect(
+      computeWallSlabSupport(
+        { start: [0.5, 2], end: [3.5, 2], thickness: 0.1 },
+        [floor, platform],
+        [],
+      ),
+    ).toEqual({
+      elevation: 0.6,
+      baseElevation: 0.05,
+      baseSegments: [
+        { start: 0, end: 2 / 3, elevation: 0.6 },
+        { start: 2 / 3, end: 1, elevation: 0.05 },
+      ],
+    })
+  })
+
+  it('keeps a shared wall on the higher slab that carries the full wall band', () => {
+    const sharedWall = parseWall([4, 0], [4, 4])
+    const low = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    const high = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 4],
+        [4, 4],
+      ],
+      elevation: 0.6,
+    })
+
+    expect(
+      computeWallSlabSupport(
+        { start: sharedWall.start, end: sharedWall.end, thickness: sharedWall.thickness },
+        [low, high],
+        [sharedWall],
+      ),
+    ).toEqual({
+      elevation: 0.6,
+      baseElevation: 0.6,
+      baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
+    })
+  })
+
+  it('profiles an offset-room wall as high-only, shared, then low-only', () => {
+    const sharedWall = parseWall([4, 0], [4, 4.5])
+    const walls = [
+      parseWall([0, 0], [4, 0]),
+      parseWall([0, 3], [0, 0]),
+      parseWall([0, 3], [4, 3]),
+      sharedWall,
+      parseWall([4, 1.5], [8, 1.5]),
+      parseWall([8, 1.5], [8, 4.5]),
+      parseWall([8, 4.5], [4, 4.5]),
+    ]
+    const high = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      elevation: 0.6,
+    })
+    const low = SlabNode.parse({
+      polygon: [
+        [4, 1.5],
+        [8, 1.5],
+        [8, 4.5],
+        [4, 4.5],
+      ],
+      elevation: 0.05,
+    })
+
+    expect(
+      computeWallSlabSupport(
+        { start: sharedWall.start, end: sharedWall.end, thickness: sharedWall.thickness },
+        [high, low],
+        walls,
+      ),
+    ).toEqual({
+      elevation: 0.6,
+      baseElevation: 0.05,
+      baseSegments: [
+        { start: 0, end: 3.05 / 4.5, elevation: 0.6 },
+        { start: 3.05 / 4.5, end: 1, elevation: 0.05 },
+      ],
+    })
   })
 
   it('lifts a tiny stub wall standing fully on a slab', () => {

@@ -20,29 +20,22 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  *  - INTERIOR — a sibling slab has a collinear, overlapping edge across
  *    it (directly, or across the same wall's footprint band). Projected
  *    EXACTLY onto a shared line so both neighbours emit the same seam
- *    and tile with no gap or overlap. Which line depends on the two
- *    slabs' elevations (slabs extrude 0 → elevation, and the wall's base
- *    sits on the HIGHER supporting slab):
- *      · equal elevations — the wall centerline (or the midline between
- *        the two stored edges when no wall backs the seam), classic
- *        mitering at t/2 from each face.
- *      · unequal elevations across a wall — the wall face on the LOWER
- *        room's side. The higher slab runs through the whole band (the
- *        wall stands on it, its seam face sits flush under the wall
- *        face) and the lower slab stops at that same visible face line.
- *        Meeting at the centerline instead would leave a half-band open
- *        pocket between the lower slab's top and the wall base. Wall-less
- *        unequal seams keep the midline — a butted step face with no wall
- *        to hide under.
+ *    and tile with no gap or overlap. Equal-height rooms partition the
+ *    real wall band at its centerline. At an unequal-height boundary, the
+ *    higher slab carries the full band to the lower room's wall face and
+ *    the lower slab terminates at that same plane. This closes the step
+ *    below the raised wall without lowering the wall or exposing a pocket.
+ *    Without a wall, the target is the midline between the stored edges.
  *    The coincident vertical seam faces carry opposite outward
  *    normals and every slab material is front-side, so at most one face
  *    renders per view — no z-fighting.
- *  - WALL-BACKED — no slab neighbour, but the sub-edge lies inside a
- *    wall's footprint band (lateral distance from the centerline within
- *    half-thickness + adoption tolerance). Projected to the wall's OUTER
- *    face line so the slab reaches flush with the facade regardless of
- *    where the stored edge sits inside the band — this self-heals legacy
- *    data stored at wall faces or with old baked render offsets.
+ *  - WALL-BACKED — no slab neighbour across the edge, but the sub-edge
+ *    lies inside a wall's footprint band (lateral distance from the
+ *    centerline within half-thickness + adoption tolerance). Projected
+ *    to the wall's OUTER face line so the slab reaches flush with the
+ *    facade regardless of where the stored edge sits inside the band —
+ *    this self-heals legacy data stored at wall faces or with old baked
+ *    render offsets.
  *  - FREE — no neighbour, no wall. Rendered exactly as drawn.
  *
  * Sub-edges of one edge with different projections are joined by a
@@ -79,12 +72,6 @@ const MIN_SUBEDGE_LENGTH = 0.05
  */
 const WALL_LATERAL_TIE_EPSILON = 0.02
 const CURVED_WALL_SAMPLE_SEGMENTS = 32
-/**
- * Elevations closer than this count as the same floor height for seam
- * projection (matches the wall-elevation pooling epsilon) — the seam
- * stays at the centerline. Beyond it the wall base sits on the higher
- * slab only, so the seam moves to the lower side's wall face.
- */
 const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
 const DEFAULT_SLAB_ELEVATION = 0.05
 
@@ -98,10 +85,22 @@ export type SlabPolygonContext = {
 /** [ax, az, bx, bz] segment in plan space. */
 type Segment = [number, number, number, number]
 
-/** A sibling slab's edge segment plus the sibling's extrusion height. */
+/** A sibling slab edge and the direction of its polygon interior. */
 type NeighborSegment = {
   segment: Segment
   elevation: number
+  /** Unit normal pointing into the sibling polygon at this edge. */
+  inwardX: number
+  inwardZ: number
+}
+
+function polygonWindingSign(polygon: Array<[number, number]>): 1 | -1 {
+  let area2 = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const next = (index + 1) % polygon.length
+    area2 += polygon[index]![0] * polygon[next]![1] - polygon[next]![0] * polygon[index]![1]
+  }
+  return area2 >= 0 ? 1 : -1
 }
 
 /**
@@ -363,22 +362,27 @@ function computeEdgeSubSpans(
   // Winding sign: the outward normal of an edge with direction `dir` is
   // `s * (dirZ, -dirX)`, so a target lateral `L` measured along
   // `(dirZ, -dirX)` is `s * L` along the outward normal.
-  let area2 = 0
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n
-    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
-  }
-  const s = area2 >= 0 ? 1 : -1
+  const s = polygonWindingSign(polygon)
 
   const neighborSegments: NeighborSegment[] = []
   for (const sibling of context.siblingSlabs) {
     const siblingPolygon = sibling.polygon
     if (siblingPolygon.length < 2) continue
     const elevation = sibling.elevation ?? DEFAULT_SLAB_ELEVATION
+    const siblingWinding = polygonWindingSign(siblingPolygon)
     for (let index = 0; index < siblingPolygon.length; index += 1) {
       const from = siblingPolygon[index]!
       const to = siblingPolygon[(index + 1) % siblingPolygon.length]!
-      neighborSegments.push({ segment: [from[0], from[1], to[0], to[1]], elevation })
+      const dx = to[0] - from[0]
+      const dz = to[1] - from[1]
+      const length = Math.hypot(dx, dz)
+      if (length < 1e-9) continue
+      neighborSegments.push({
+        segment: [from[0], from[1], to[0], to[1]],
+        elevation,
+        inwardX: (-siblingWinding * dz) / length,
+        inwardZ: (siblingWinding * dx) / length,
+      })
     }
   }
 
@@ -434,9 +438,17 @@ function computeEdgeSubSpans(
         if (match) rawBreakpoints.push(match.start, match.end)
       }
     }
+    const inwardX = -s * dirZ
+    const inwardZ = s * dirX
     for (const {
       segment: [px, pz, qx, qz],
+      inwardX: siblingInwardX,
+      inwardZ: siblingInwardZ,
     } of neighborSegments) {
+      // Coincident/stacked slabs have their interiors on the same side of
+      // the edge. Only an edge whose sibling interior is across this edge
+      // can form a room-to-room seam.
+      if (inwardX * siblingInwardX + inwardZ * siblingInwardZ >= -0.5) continue
       const match = clipCollinearSegment(
         a[0],
         a[1],
@@ -518,8 +530,8 @@ function computeEdgeSubSpans(
  * the whole-edge rules: direct sibling wins, sibling across the same
  * wall band forces interior, otherwise the matched wall's outer face,
  * otherwise free. Interior spans backed by a wall project onto the
- * centerline when both slabs share an elevation, and onto the lower
- * side's wall face when they differ (see the module header).
+ * wall centerline at equal heights. At unequal heights both slabs target
+ * the lower room's wall face, giving the higher slab the full band.
  */
 function classifySpan(
   a: [number, number],
@@ -537,6 +549,8 @@ function classifySpan(
   const spanLength = end - start
   // Short spans still need classification — require at most half their span.
   const requiredOverlap = Math.min(MIN_CLASSIFYING_OVERLAP, spanLength * 0.5)
+  const inwardX = -s * dirZ
+  const inwardZ = s * dirX
 
   const wallMatch = matchEdgeWallBand(
     sx,
@@ -556,7 +570,10 @@ function classifySpan(
   for (const {
     segment: [px, pz, qx, qz],
     elevation,
+    inwardX: siblingInwardX,
+    inwardZ: siblingInwardZ,
   } of neighborSegments) {
+    if (inwardX * siblingInwardX + inwardZ * siblingInwardZ >= -0.5) continue
     const match = clipCollinearSegment(
       sx,
       sz,
@@ -597,7 +614,10 @@ function classifySpan(
     for (const {
       segment: [px, pz, qx, qz],
       elevation,
+      inwardX: siblingInwardX,
+      inwardZ: siblingInwardZ,
     } of neighborSegments) {
+      if (inwardX * siblingInwardX + inwardZ * siblingInwardZ >= -0.5) continue
       const match = clipCollinearSegment(
         sx,
         sz,
@@ -627,24 +647,19 @@ function classifySpan(
     if (wallMatch && siblingElevation !== null) {
       const elevationDelta = selfElevation - siblingElevation
       if (elevationDelta > SLAB_SEAM_ELEVATION_EPSILON) {
-        // Higher room: run through the whole band to the wall face on the
-        // sibling's side — the wall base sits on this slab, and the seam
-        // face lands flush under the wall face the lower room sees.
         return {
           start,
           end,
           offset: s * wallMatch.lateral + wallMatch.halfThickness,
-          key: `interior|${wallMatch.wall.id}|over`,
+          key: `interior|${wallMatch.wall.id}|higher`,
         }
       }
       if (elevationDelta < -SLAB_SEAM_ELEVATION_EPSILON) {
-        // Lower room: stop at the wall face on the own side — the same
-        // line the higher slab projects to from across the band.
         return {
           start,
           end,
           offset: s * wallMatch.lateral - wallMatch.halfThickness,
-          key: `interior|${wallMatch.wall.id}|under`,
+          key: `interior|${wallMatch.wall.id}|lower`,
         }
       }
     }

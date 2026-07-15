@@ -372,15 +372,13 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.max(...xs(polyA))).toBeLessThanOrEqual(Math.min(...xs(polyB)) + 1e-9)
   })
 
-  test('rooms at different elevations seam at the lower side wall face — no pocket under the wall', () => {
+  test('the higher room carries the wall band to the lower room face', () => {
     // Real user repro shape: two rooms in an L/offset arrangement share the
     // z=0 wall over x ∈ [-1, 0.5] only; the north room's floor is raised
     // (0.34) above the south room's (0.05). Slabs extrude 0 → elevation and
-    // the wall base sits on the HIGHER slab, so a centerline seam would
-    // leave a half-band open pocket between the low slab's top and the wall
-    // base, visible from the low room. Instead the high slab runs through
-    // the whole band to the wall face on the LOW side, and the low slab
-    // stops at that same line.
+    // the higher slab closes the full wall band while the lower slab meets
+    // it at its own wall face. The reach comes from the matched wall's real
+    // thickness, not a default-width expansion.
     const walls = [
       wallOf([-1, 3], [-1, 0]),
       wallOf([-1, 0], [0.5, 0]),
@@ -415,24 +413,15 @@ describe('getRenderableSlabPolygon', () => {
     const polyHigh = getRenderableSlabPolygon(high, { walls, siblingSlabs: [low] })
     const polyLow = getRenderableSlabPolygon(low, { walls, siblingSlabs: [high] })
 
-    // The high slab's south boundary lands on the LOW side's wall face
-    // (z=-0.05) across the shared span and fuses with the facade span of
-    // the same wall run beyond the sibling.
+    // The shared and facade spans fuse because both land on z=-0.05.
     expectRingToInclude(polyHigh, [
       [0.5, -0.05],
       [2.05, -0.05],
     ])
     expect(Math.min(...zs(polyHigh))).toBeCloseTo(-0.05)
-    // The low slab stops at the same line: its top face ends where the
-    // visible wall face starts, instead of running under the band.
     expect(Math.max(...zs(polyLow))).toBeCloseTo(-0.05)
 
-    // Both rings emit the identical seam plane — flush, no gap, no overlap.
-    expect(Math.max(...zs(polyLow))).toBeLessThanOrEqual(Math.min(...zs(polyHigh)) + 1e-9)
-
-    // The shared wall's footprint band is fully solid up to the wall base:
-    // every band sample is inside the HIGH slab (whose extrusion reaches
-    // the wall base at 0.34) — the see-through pocket is gone.
+    // The high slab owns the entire band; the lower room begins at its face.
     for (let x = -0.95; x <= 0.4501; x += 0.05) {
       for (let z = -0.045; z <= 0.0451; z += 0.015) {
         expect(pointInPolygon([x, z], polyHigh, { includeBoundary: false })).toBe(true)
@@ -440,11 +429,11 @@ describe('getRenderableSlabPolygon', () => {
     }
   })
 
-  test('legacy face-aligned rooms at different elevations self-heal onto the lower side face', () => {
+  test('legacy face-aligned unequal rooms self-heal to the lower room face', () => {
     // Same stored-at-inner-faces legacy data as above (edges a full 0.3
     // apart across the t=0.3 wall at x=4), but with the west room raised.
-    // Both edges must classify interior through the band-sibling rule and
-    // project to the SAME line — the wall face on the lower (east) side.
+    // Both edges classify interior through the band-sibling rule and adopt
+    // the east/lower room face despite being stored at opposite faces.
     const walls = [
       wallOf([0, 0], [8, 0]),
       wallOf([8, 0], [8, 3]),
@@ -479,6 +468,50 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.max(...xs(polyHigh))).toBeCloseTo(4.15)
     expect(Math.min(...xs(polyLow))).toBeCloseTo(4.15)
     expect(Math.max(...xs(polyHigh))).toBeLessThanOrEqual(Math.min(...xs(polyLow)) + 1e-9)
+  })
+
+  test('stacked slabs are not mistaken for rooms across a wall', () => {
+    const floor = slabOf(roomA, false, 0.05)
+    const platform = slabOf(roomA, false, 0.4)
+    const walls = [
+      wallOf([0, 0], [4, 0]),
+      wallOf([4, 0], [4, 3]),
+      wallOf([4, 3], [0, 3]),
+      wallOf([0, 3], [0, 0]),
+    ]
+
+    const floorPolygon = getRenderableSlabPolygon(floor, {
+      walls,
+      siblingSlabs: [platform],
+    })
+    const platformPolygon = getRenderableSlabPolygon(platform, {
+      walls,
+      siblingSlabs: [floor],
+    })
+
+    for (const polygon of [floorPolygon, platformPolygon]) {
+      expect(Math.min(...xs(polygon))).toBeCloseTo(-0.05)
+      expect(Math.max(...xs(polygon))).toBeCloseTo(4.05)
+      expect(Math.min(...zs(polygon))).toBeCloseTo(-0.05)
+      expect(Math.max(...zs(polygon))).toBeCloseTo(3.05)
+    }
+  })
+
+  test('sibling winding does not change a shared seam decision', () => {
+    const slabA = slabOf(roomA)
+    const slabB = slabOf([...roomB].reverse())
+
+    const polyA = getRenderableSlabPolygon(slabA, {
+      walls: twoRoomWalls,
+      siblingSlabs: [slabB],
+    })
+    const polyB = getRenderableSlabPolygon(slabB, {
+      walls: twoRoomWalls,
+      siblingSlabs: [slabA],
+    })
+
+    expect(Math.max(...xs(polyA))).toBeCloseTo(4)
+    expect(Math.min(...xs(polyB))).toBeCloseTo(4)
   })
 
   test('wall-less butted slabs at different elevations keep the midline seam', () => {
@@ -589,6 +622,57 @@ describe('getRenderableSlabPolygon', () => {
         expect(Math.abs(x - 4)).toBeLessThanOrEqual(0.05 + 1e-9)
         expect(Math.min(Math.abs(z - 1.5), Math.abs(z - 3))).toBeLessThanOrEqual(0.05 + 1e-9)
       }
+    }
+  })
+
+  test('offset unequal rooms give the higher slab the full shared wall band', () => {
+    const high = slabOf(
+      [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      true,
+      0.4,
+    )
+    const low = slabOf(
+      [
+        [4, 1.5],
+        [8, 1.5],
+        [8, 4.5],
+        [4, 4.5],
+      ],
+      true,
+      0.05,
+    )
+    const walls = [
+      wallOf([0, 0], [4, 0]),
+      wallOf([0, 3], [0, 0]),
+      wallOf([0, 3], [4, 3]),
+      wallOf([4, 0], [4, 4.5]),
+      wallOf([4, 1.5], [8, 1.5]),
+      wallOf([8, 1.5], [8, 4.5]),
+      wallOf([8, 4.5], [4, 4.5]),
+    ]
+
+    const highPolygon = getRenderableSlabPolygon(high, { walls, siblingSlabs: [low] })
+    const lowPolygon = getRenderableSlabPolygon(low, { walls, siblingSlabs: [high] })
+
+    expect(Math.max(...xs(highPolygon))).toBeCloseTo(4.05)
+    expectRingToInclude(lowPolygon, [
+      [4.05, 1.45],
+      [4.05, 3],
+      [3.95, 3],
+    ])
+
+    for (let z = 1.6; z <= 2.95; z += 0.1) {
+      expect(pointInPolygon([3.975, z], highPolygon, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([3.975, z], lowPolygon, { includeBoundary: false })).toBe(false)
+      expect(pointInPolygon([4.025, z], highPolygon, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([4.025, z], lowPolygon, { includeBoundary: false })).toBe(false)
+      expect(pointInPolygon([4.075, z], lowPolygon, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([4.075, z], highPolygon, { includeBoundary: false })).toBe(false)
     }
   })
 
