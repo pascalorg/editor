@@ -107,21 +107,8 @@ function updateSlabGeometry(node: SlabNode, context: SlabPolygonContext, mesh: T
 
   // For negative elevation, shift the mesh down so the top face sits at Y=elevation
   // rather than at Y=0. Positive elevation stays at Y=0 (slab sits at floor level).
-  // A deterministic sub-3mm per-node lift breaks the coplanarity of slabs
-  // duplicated at the exact same position — identical depths z-fight, and no
-  // camera near/far tuning can separate them. Render-only: node data,
-  // snapping and measurements are untouched.
   const elevation = node.elevation ?? 0.05
-  mesh.position.y = (elevation < 0 ? elevation : 0) + coplanarityEpsilon(node.id)
-}
-
-// Stable id hash → 0..2.7 mm in 0.3 mm steps.
-function coplanarityEpsilon(id: string): number {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) {
-    hash = (hash * 31 + id.charCodeAt(i)) | 0
-  }
-  return (Math.abs(hash) % 10) * 0.0003
+  mesh.position.y = elevation < 0 ? elevation : 0
 }
 
 /**

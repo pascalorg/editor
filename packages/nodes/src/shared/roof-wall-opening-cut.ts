@@ -1,6 +1,6 @@
 import type { DoorNode, RoofSegmentNode, WindowNode } from '@pascal-app/core'
 import { getRoofWallFaceFrame, roofFacePointToSegment } from '@pascal-app/core'
-import { buildOpeningCutoutGeometry, hasFlatOpeningCutoutBottom } from '@pascal-app/viewer'
+import { buildOpeningCutoutGeometry, getOpeningCutoutBottomPadding } from '@pascal-app/viewer'
 import * as THREE from 'three'
 
 /**
@@ -31,7 +31,7 @@ export function buildRoofWallOpeningCut(
   // Only a flat bottom chord may extend; a rounded bottom is never
   // coplanar and shifting it would distort the profile.
   const bottom = node.position[1] - node.height / 2
-  const bottomPad = bottom < 0.005 && hasFlatOpeningCutoutBottom(node) ? 0.02 : 0
+  const bottomPad = getOpeningCutoutBottomPadding(node, bottom)
 
   const center = roofFacePointToSegment(hostSegment, node.roofFace, [
     node.position[0],

@@ -30,6 +30,12 @@ const SHADOWS_DISABLED =
 // 0.9 read too heavy in review.
 const MAX_SHADOW_INTENSITY = 0.75
 
+// `normalBias` is measured in world units. The previous 0.3 moved shadow
+// lookups 30 cm off their surfaces, visibly detaching wall shadows at the
+// floor. Keep only a small offset for acne, with a tiny depth bias alongside it.
+const SHADOW_DEPTH_BIAS = -0.0001
+const SHADOW_NORMAL_BIAS = 0.02
+
 // Shadow frustum framing. The frustum is fit to the BUILDING geometry (not the
 // camera): we union the bounds of all registered scene nodes, fit a sphere, and
 // size the directional light's ortho shadow camera to that sphere plus a margin.
@@ -259,9 +265,9 @@ export function Lights() {
           ref={(ref) => {
             lightRefs.current[index] = ref
           }}
-          shadow-bias={-0.002}
+          shadow-bias={SHADOW_DEPTH_BIAS}
           shadow-mapSize={[1024, 1024]}
-          shadow-normalBias={0.3}
+          shadow-normalBias={SHADOW_NORMAL_BIAS}
           shadow-radius={2}
         >
           {light.castShadow && !SHADOWS_DISABLED ? (

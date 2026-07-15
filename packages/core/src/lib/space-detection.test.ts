@@ -181,8 +181,14 @@ describe('detectSpacesForLevel', () => {
   }
 
   test('detects an isolated four-wall room', () => {
-    const { roomPolygons } = detectSpacesForLevel('level-1', squareWalls())
+    const walls = squareWalls()
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', walls)
     expect(roomPolygons).toHaveLength(1)
+    expect(spaces[0]?.wallIds.sort()).toEqual(walls.map((wall) => wall.id).sort())
+    expect(spaces[0]?.boundaryFaces).toHaveLength(4)
+    expect(
+      spaces[0]?.boundaryFaces.map((boundary) => [boundary.wallId, boundary.face]).sort(),
+    ).toEqual(walls.map((wall) => [wall.id, 'front']).sort())
   })
 
   test('detects a room closed against the middle of an existing wall (T-junction)', () => {
@@ -200,12 +206,24 @@ describe('detectSpacesForLevel', () => {
       WallNode.parse({ start: [3, -2], end: [3, 0] }),
     ]
 
-    const { roomPolygons } = detectSpacesForLevel('level-1', walls)
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', walls)
     const areas = roomPolygons.map((poly) => areaOf(poly)).sort((a, b) => a - b)
 
     expect(roomPolygons).toHaveLength(2)
     expect(areas[0]).toBeCloseTo(4, 1) // small room: 2×2
     expect(areas[1]).toBeCloseTo(30, 1) // big room: 6×5
+
+    const longWallId = walls[0]!.id
+    const longWallBoundaries = spaces.flatMap((space) =>
+      space.boundaryFaces.filter((boundary) => boundary.wallId === longWallId),
+    )
+    expect(longWallBoundaries).toHaveLength(4)
+    expect(longWallBoundaries.filter((boundary) => boundary.face === 'back')).toHaveLength(1)
+    expect(longWallBoundaries.filter((boundary) => boundary.face === 'front')).toHaveLength(3)
+    expect(longWallBoundaries.map((boundary) => boundary.points)).toContainEqual([
+      [1, 0],
+      [3, 0],
+    ])
   })
 })
 
@@ -328,6 +346,33 @@ describe('planAutoSlabsForLevel', () => {
     expect(demoted.autoFromWalls).toBe(false)
 
     const plan = planAutoSlabsForLevel([roomPolygon()], [demoted])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+  })
+
+  test('manual slabs that split one room suppress a replacement full-room slab', () => {
+    const left = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 3],
+        [0, 3],
+      ],
+      autoFromWalls: false,
+    })
+    const right = SlabNode.parse({
+      polygon: [
+        [2, 0],
+        [4, 0],
+        [4, 3],
+        [2, 3],
+      ],
+      autoFromWalls: false,
+    })
+
+    const plan = planAutoSlabsForLevel([roomPolygon()], [left, right])
 
     expect(plan.create).toHaveLength(0)
     expect(plan.update).toHaveLength(0)

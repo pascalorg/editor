@@ -3,7 +3,6 @@
 import {
   type AnyNodeId,
   type SiteNode,
-  type SlabNode,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -21,7 +20,6 @@ import {
 import { useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
-  CircleGeometry,
   Float32BufferAttribute,
   type Group,
   Path,
@@ -30,6 +28,7 @@ import {
 } from 'three'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
 
 const Y_OFFSET = 0.01
 
@@ -65,6 +64,45 @@ const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeom
 }
 
 type S = ReturnType<typeof useScene.getState>
+
+function polygonsMatch(
+  a: Array<Array<[number, number]>>,
+  b: Array<Array<[number, number]>>,
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (polygon, polygonIndex) =>
+        polygon.length === b[polygonIndex]?.length &&
+        polygon.every(
+          (point, pointIndex) =>
+            point[0] === b[polygonIndex]?.[pointIndex]?.[0] &&
+            point[1] === b[polygonIndex]?.[pointIndex]?.[1],
+        ),
+    )
+  )
+}
+
+function addSlabHoles(
+  shape: Shape,
+  slabPolygons: Array<Array<[number, number]>>,
+  originX = 0,
+  originZ = 0,
+) {
+  const localPolygons = slabPolygons.map((polygon) =>
+    polygon.map(([x, z]): [number, number] => [x - originX, -(z - originZ)]),
+  )
+  for (const ring of unionPolygons(localPolygons)) {
+    if (ring.length < 3) continue
+    const hole = new Path()
+    hole.moveTo(ring[0]![0], ring[0]![1])
+    for (let index = 1; index < ring.length; index += 1) {
+      hole.lineTo(ring[index]![0], ring[index]![1])
+    }
+    hole.closePath()
+    shape.holes.push(hole)
+  }
+}
 
 export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   const ref = useRef<Group>(null!)
@@ -164,45 +202,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return material
   }, [bgColor, backgroundColor, skyColor, appearance, maxLightIntensity, fadeBounds])
 
-  const horizonGeometry = useMemo(() => {
-    if (!fadeBounds) return null
-    return new CircleGeometry(Math.max(fadeBounds.radius * 8, 400), 64)
-  }, [fadeBounds])
-  useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
-
-  // Cache slab polygon references to keep the selector stable across unrelated store updates
+  // Cache computed polygons to keep the selector stable across unrelated store updates.
   const slabPolygonsCache = useRef<[number, number][][]>([])
   const slabPolygons = useScene((state: S) => {
-    const nodeList = Object.values(state.nodes)
-
-    const levelIndexById = new Map<string, number>()
-    let lowestLevelIndex = Number.POSITIVE_INFINITY
-    nodeList.forEach((n) => {
-      if (n.type !== 'level') return
-      levelIndexById.set(n.id, n.level)
-      lowestLevelIndex = Math.min(lowestLevelIndex, n.level)
-    })
-
-    const next = nodeList
-      .filter(
-        (n): n is SlabNode =>
-          n.type === 'slab' &&
-          n.visible &&
-          n.polygon.length >= 3 &&
-          // Only recessed slabs should punch through the site ground.
-          // Positive slabs are real floor geometry and should not create a
-          // ghost footprint in the background ground fill.
-          (n.elevation ?? 0.05) < 0,
-      )
-      .filter((n) => {
-        if (!Number.isFinite(lowestLevelIndex)) return true
-        const parentLevel = n.parentId ? levelIndexById.get(n.parentId as string) : undefined
-        return parentLevel === lowestLevelIndex
-      })
-      .map((n) => n.polygon as [number, number][])
+    const next = getRecessedSlabGroundHoles(state.nodes)
 
     const prev = slabPolygonsCache.current
-    if (next.length === prev.length && next.every((p, i) => p === prev[i])) return prev
+    if (polygonsMatch(next, prev)) return prev
     slabPolygonsCache.current = next
     return next
   })
@@ -217,19 +223,26 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i]![0], -pts[i]![1])
     shape.closePath()
 
-    if (slabPolygons.length > 0) {
-      for (const ring of unionPolygons(slabPolygons.map((p) => p.map((pt) => [pt[0], -pt[1]])))) {
-        if (ring.length < 3) continue
-        const hole = new Path()
-        hole.moveTo(ring[0]![0], ring[0]![1])
-        for (let i = 1; i < ring.length; i++) hole.lineTo(ring[i]![0], ring[i]![1])
-        hole.closePath()
-        shape.holes.push(hole)
-      }
-    }
+    addSlabHoles(shape, slabPolygons)
 
     return shape
   }, [polygonPoints, slabPolygons])
+
+  const horizonGeometry = useMemo(() => {
+    if (!fadeBounds) return null
+    const radius = Math.max(fadeBounds.radius * 8, 400)
+    const shape = new Shape()
+    const segments = 64
+    shape.moveTo(radius, 0)
+    for (let index = 1; index <= segments; index += 1) {
+      const angle = (index / segments) * Math.PI * 2
+      shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
+    }
+    shape.closePath()
+    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
+    return new ShapeGeometry(shape)
+  }, [fadeBounds, slabPolygons])
+  useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
 
   // Create boundary line geometry
   const lineGeometry = useMemo(() => {

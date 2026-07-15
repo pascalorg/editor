@@ -23,6 +23,7 @@ import {
  * Simpler model, no UX downside in practice.
  */
 const slabSnapOptions = {
+  boundaryCommitData: { autoFromWalls: false },
   resolvePlanPoint({
     node,
     nodes,

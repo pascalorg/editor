@@ -35,7 +35,10 @@ import * as THREE from 'three'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
-import { buildOpeningCutoutGeometry } from './opening-cutout-geometry'
+import {
+  buildOpeningCutoutGeometry,
+  getOpeningCutoutBottomPadding,
+} from './opening-cutout-geometry'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
@@ -713,9 +716,8 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       if (child.type !== 'door' && child.type !== 'window') return child
       // `getEffectiveNode` folds in resize overrides (width/height arrows).
       // Position moves publish to `useLiveTransforms` instead, so fold that
-      // in too — otherwise shaped openings (arch/rounded/`opening`), whose
-      // cutout brush is rebuilt from `node.position`, lag the live move
-      // (rectangular cutouts already track via the live mesh matrixWorld).
+      // in too — opening cutout brushes are rebuilt directly from the
+      // effective node position rather than from the rendered proxy mesh.
       const effective = getEffectiveNode(child)
       const live = useLiveTransforms.getState().get(child.id)
       if (!live?.position) return effective
@@ -1060,8 +1062,9 @@ export function generateExtrudedWall(
 }
 
 /**
- * Collects cutout brushes from child items for CSG subtraction
- * The cutout mesh is a plane, so we extrude it into a box that goes through the wall
+ * Collects opening and item cutout brushes for CSG subtraction. Door/window
+ * cuts come directly from node geometry; item proxy meshes are transformed
+ * into wall-local boxes that pass through the wall.
  */
 function collectCutoutBrushes(
   wallNode: WallNode,
@@ -1079,17 +1082,8 @@ function collectCutoutBrushes(
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
-    if (
-      (child.type === 'door' && child.openingKind === 'opening') ||
-      (child.type === 'door' &&
-        child.openingKind === 'door' &&
-        (child.openingShape === 'arch' || child.openingShape === 'rounded')) ||
-      (child.type === 'window' && child.openingKind === 'opening') ||
-      (child.type === 'window' &&
-        child.openingKind === 'window' &&
-        (child.openingShape === 'arch' || child.openingShape === 'rounded'))
-    ) {
-      brushes.push(createShapedOpeningCutoutBrush(child, wallThickness))
+    if (child.type === 'door' || child.type === 'window') {
+      brushes.push(createOpeningCutoutBrush(child, wallThickness))
       continue
     }
 
@@ -1147,17 +1141,16 @@ function collectCutoutBrushes(
   return brushes
 }
 
-function createShapedOpeningCutoutBrush(
-  opening: DoorNode | WindowNode,
-  wallThickness: number,
-): Brush {
+function createOpeningCutoutBrush(opening: DoorNode | WindowNode, wallThickness: number): Brush {
   const halfWidth = opening.width / 2
+  const bottom = opening.position[1] - opening.height / 2
+  const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
       left: opening.position[0] - halfWidth,
       right: opening.position[0] + halfWidth,
-      bottom: opening.position[1] - opening.height / 2,
+      bottom: bottom - bottomPadding,
       top: opening.position[1] + opening.height / 2,
     },
     wallThickness * 2,

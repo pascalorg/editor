@@ -25,7 +25,7 @@ const MODIFIERS = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: fal
  * Level + one wall (centerline z=0, t=0.1) + one manual slab whose bottom
  * edge starts 0.5m away from the wall.
  */
-function seedScene() {
+function seedScene(autoFromWalls = false) {
   const levelId = 'level_slab-move-edge' as AnyNodeId
   const wall = WallNode.parse({
     start: [0, 0],
@@ -40,7 +40,7 @@ function seedScene() {
       [4, 3],
       [0, 3],
     ],
-    autoFromWalls: false,
+    autoFromWalls,
     parentId: levelId,
   })
   const level = {
@@ -114,5 +114,23 @@ describe('slabMoveEdgeAffordance', () => {
     const updated = useScene.getState().nodes[slab.id] as SlabNodeType
     expect(updated.polygon[0]![1]).toBeCloseTo(1.5, 5)
     expect(updated.polygon[1]![1]).toBeCloseTo(1.5, 5)
+  })
+
+  test('editing an auto-generated outer boundary makes the slab manual', () => {
+    const { slab } = seedScene(true)
+    const nodes = useScene.getState().nodes
+
+    const session = slabMoveEdgeAffordance.start({
+      node: nodes[slab.id] as SlabNodeType,
+      payload: { edgeIndex: 0 },
+      nodes,
+      initialPlanPoint: [2, 0.5],
+      gridSnapStep: 0.1,
+    } as never)
+
+    session.apply({ planPoint: [2, 1.5], modifiers: MODIFIERS })
+
+    const updated = useScene.getState().nodes[slab.id] as SlabNodeType
+    expect(updated.autoFromWalls).toBe(false)
   })
 })
