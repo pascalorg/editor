@@ -52,7 +52,7 @@ const twoRoomWalls = [
 ]
 
 describe('getRenderableSlabPolygon', () => {
-  test('adjacent room slabs tile without overlapping', () => {
+  test('adjacent room slabs share the exact centerline seam without gap or overlap', () => {
     const slabA = slabOf(roomA)
     const slabB = slabOf(roomB)
 
@@ -66,17 +66,40 @@ describe('getRenderableSlabPolygon', () => {
     })
 
     // A: exterior edges flush with the 0.1-thick facade (+0.05), shared
-    // edge relieved off the centerline (-0.02).
+    // edge exactly on the wall centerline x=4.
     expect(Math.min(...xs(polyA))).toBeCloseTo(-0.05)
-    expect(Math.max(...xs(polyA))).toBeCloseTo(3.98)
+    expect(Math.max(...xs(polyA))).toBeCloseTo(4)
     expect(Math.min(...zs(polyA))).toBeCloseTo(-0.05)
     expect(Math.max(...zs(polyA))).toBeCloseTo(3.05)
 
-    expect(Math.min(...xs(polyB))).toBeCloseTo(4.02)
+    expect(Math.min(...xs(polyB))).toBeCloseTo(4)
     expect(Math.max(...xs(polyB))).toBeCloseTo(8.05)
 
-    // No overlap across the shared wall.
-    expect(Math.max(...xs(polyA))).toBeLessThan(Math.min(...xs(polyB)))
+    // No overlap across the shared wall (FP noise only)...
+    expect(Math.max(...xs(polyA))).toBeLessThanOrEqual(Math.min(...xs(polyB)) + 1e-9)
+
+    // ...and the seam is EXACTLY shared: both rings project the shared
+    // edge onto the same centerline x=4 with matching endpoints.
+    const seamZs = (poly: Array<[number, number]>) =>
+      poly
+        .filter((point) => point[0] === 4)
+        .map((point) => point[1])
+        .sort((left, right) => left - right)
+    const seamA = seamZs(polyA)
+    const seamB = seamZs(polyB)
+    expect(seamA).toHaveLength(2)
+    expect(seamB).toHaveLength(2)
+    expect(seamA[0]!).toBeCloseTo(seamB[0]!, 12)
+    expect(seamA[1]!).toBeCloseTo(seamB[1]!, 12)
+
+    // Grid-sample the strip under the shared wall band: every point is
+    // inside at least one slab — the old relief slit is gone, so deleting
+    // the wall would expose a continuous floor.
+    for (let x = 3.95; x <= 4.0501; x += 0.01) {
+      for (let z = 0; z <= 3.001; z += 0.15) {
+        expect(pointInPolygon([x, z], polyA) || pointInPolygon([x, z], polyB)).toBe(true)
+      }
+    }
   })
 
   test('exterior edge expands by half of THAT wall thickness', () => {
@@ -118,7 +141,7 @@ describe('getRenderableSlabPolygon', () => {
       siblingSlabs: [slabOf(roomB)],
     })
 
-    expect(Math.max(...xs(poly))).toBeCloseTo(3.98)
+    expect(Math.max(...xs(poly))).toBeCloseTo(4)
     expect(Math.min(...xs(poly))).toBeCloseTo(-0.05)
   })
 
@@ -148,15 +171,16 @@ describe('getRenderableSlabPolygon', () => {
     ]
 
     // The bay's top edge lies on a sub-segment of the big slab's bottom
-    // edge — interior relief, while its free-standing sides stay on-wall.
+    // edge — interior, seamed on the shared wall centerline z=0, while
+    // its free-standing sides stay on-wall.
     const bayPoly = getRenderableSlabPolygon(bay, { walls, siblingSlabs: [big] })
-    expect(Math.max(...zs(bayPoly))).toBeCloseTo(-0.02)
+    expect(Math.max(...zs(bayPoly))).toBeCloseTo(0)
     expect(Math.min(...zs(bayPoly))).toBeCloseTo(-2.05)
     expect(Math.min(...xs(bayPoly))).toBeCloseTo(0.95)
     expect(Math.max(...xs(bayPoly))).toBeCloseTo(3.05)
 
     // The big slab's bottom edge is backed differently along its span:
-    // interior relief across the bay (z=+0.02), facade-flush elsewhere
+    // centerline seam across the bay (z=0), facade-flush elsewhere
     // (z=-0.05), joined by step connectors at the bay junction walls
     // x=1 and x=3 (the old whole-edge rule pulled the entire edge back).
     const bigPoly = getRenderableSlabPolygon(big, { walls, siblingSlabs: [bay] })
@@ -164,8 +188,8 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.max(...zs(bigPoly))).toBeCloseTo(5.05)
     expectRingToInclude(bigPoly, [
       [1, -0.05],
-      [1, 0.02],
-      [3, 0.02],
+      [1, 0],
+      [3, 0],
       [3, -0.05],
     ])
   })
@@ -309,8 +333,9 @@ describe('getRenderableSlabPolygon', () => {
     // Both rooms stored at the INNER faces of the shared t=0.3 wall at x=4
     // (edges 0.3 apart — far beyond the direct sibling tolerance). Each edge
     // is inside the wall band with the sibling across the same band, so both
-    // classify interior and relieve off the CENTERLINE instead of projecting
-    // to opposite outer faces (which would overlap by a full thickness).
+    // classify interior and land exactly on the CENTERLINE instead of
+    // projecting to opposite outer faces (which would overlap by a full
+    // thickness).
     const walls = [
       wallOf([0, 0], [8, 0]),
       wallOf([8, 0], [8, 3]),
@@ -340,9 +365,9 @@ describe('getRenderableSlabPolygon', () => {
     const polyA = getRenderableSlabPolygon(legacyA, { walls, siblingSlabs: [legacyB] })
     const polyB = getRenderableSlabPolygon(legacyB, { walls, siblingSlabs: [legacyA] })
 
-    expect(Math.max(...xs(polyA))).toBeCloseTo(3.98)
-    expect(Math.min(...xs(polyB))).toBeCloseTo(4.02)
-    expect(Math.max(...xs(polyA))).toBeLessThan(Math.min(...xs(polyB)))
+    expect(Math.max(...xs(polyA))).toBeCloseTo(4)
+    expect(Math.min(...xs(polyB))).toBeCloseTo(4)
+    expect(Math.max(...xs(polyA))).toBeLessThanOrEqual(Math.min(...xs(polyB)) + 1e-9)
   })
 
   test('offset rooms sharing a partial wall span: interior beside the sibling, facade elsewhere', () => {
@@ -375,30 +400,34 @@ describe('getRenderableSlabPolygon', () => {
     const polyA = getRenderableSlabPolygon(offsetA, { walls, siblingSlabs: [offsetB] })
     const polyB = getRenderableSlabPolygon(offsetB, { walls, siblingSlabs: [offsetA] })
 
-    // A's right edge: facade-flush below the junction, interior relief
-    // beside B, joined by the step connector at the junction z=1.5.
+    // A's right edge: facade-flush below the junction, exactly on the
+    // centerline beside B, joined by the step connector at the junction z=1.5.
     expectRingToInclude(polyA, [
       [4.05, -0.05],
       [4.05, 1.5],
-      [3.98, 1.5],
-      [3.98, 3.05],
+      [4, 1.5],
+      [4, 3.05],
     ])
-    // B's left edge mirrors it: interior relief beside A, facade-flush
+    // B's left edge mirrors it: centerline seam beside A, facade-flush
     // above, step at the junction z=3.
     expectRingToInclude(polyB, [
-      [4.02, 1.45],
-      [4.02, 3],
+      [4, 1.45],
+      [4, 3],
       [3.95, 3],
       [3.95, 4.55],
     ])
 
-    // Along the shared span the slabs stay strictly apart with the
-    // relief gap straddling the wall centerline...
+    // Along the shared span both slabs reach exactly the wall centerline:
+    // the strip under the shared wall is fully covered with no interior
+    // overlap — deleting the wall would expose a continuous floor...
     for (let z = 1.6; z <= 2.95; z += 0.1) {
-      expect(pointInPolygon([4, z], polyA)).toBe(false)
-      expect(pointInPolygon([4, z], polyB)).toBe(false)
-      expect(pointInPolygon([3.97, z], polyA, { includeBoundary: false })).toBe(true)
-      expect(pointInPolygon([4.03, z], polyB, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([3.99, z], polyA, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([4.01, z], polyB, { includeBoundary: false })).toBe(true)
+      expect(pointInPolygon([4.01, z], polyA, { includeBoundary: false })).toBe(false)
+      expect(pointInPolygon([3.99, z], polyB, { includeBoundary: false })).toBe(false)
+      for (let x = 3.96; x <= 4.0401; x += 0.01) {
+        expect(pointInPolygon([x, z], polyA) || pointInPolygon([x, z], polyB)).toBe(true)
+      }
     }
     // ...while each unshared portion reaches its own facade face.
     expect(pointInPolygon([4.04, 0.75], polyA, { includeBoundary: false })).toBe(true)
@@ -493,7 +522,7 @@ describe('getRenderableSlabPolygon', () => {
 
     expectRingToInclude(poly, [
       [2, -0.05],
-      [2, 0.02],
+      [2, 0],
     ])
     expect(poly).toHaveLength(6)
   })

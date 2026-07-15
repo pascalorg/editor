@@ -12,7 +12,7 @@ import { useEffect } from 'react'
 /**
  * Slab dependency tracker. The renderable slab polygon derives from level
  * context — wall centerlines/thickness (exterior flush offsets) and sibling
- * slab polygons (interior relief insets) — none of which lives on the slab
+ * slab polygons (interior centerline seams) — none of which lives on the slab
  * node itself. Store updates only dirty the node that changed, so a wall
  * thickness edit or a neighbour slab add/remove/reshape would leave stale
  * slab meshes. Watch a per-level signature of those inputs and dirty every

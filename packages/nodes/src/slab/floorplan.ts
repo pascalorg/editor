@@ -87,7 +87,7 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   if (isSelected) {
     // Handles operate on the STORED polygon while the fill shows the
     // band-healed render polygon; when the two diverge (edges projected
-    // onto wall faces / interior reliefs), a dashed skeleton of the
+    // onto wall faces / interior centerline seams), a dashed skeleton of the
     // stored boundary shows what the handles actually grab.
     const rawDiffersFromVisual =
       polygon.length !== visualPolygon.length ||

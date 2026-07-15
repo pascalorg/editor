@@ -219,10 +219,11 @@ describe('computeWallSlabElevation', () => {
   })
 
   it('pools same-elevation slabs so a shared wall follows their common level', () => {
-    // Rooms A and B at the same elevation each cover just under half the
-    // wall (interior edges inset 2cm at x=2); a raised slab covers a bit
-    // more than either alone. Pooled, the common level covers ~99% and
-    // must win — without pooling the raised slab's 0.4975 would.
+    // Rooms A and B at the same elevation each cover exactly half the
+    // wall (interior edges seam at the x=2 midline); a raised slab covers
+    // just under half. Pooled, the common level covers 100% and must
+    // win — without pooling the raised slab's 0.4975 would beat either
+    // half alone.
     const roomA = SlabNode.parse({
       polygon: [
         [0, 0],

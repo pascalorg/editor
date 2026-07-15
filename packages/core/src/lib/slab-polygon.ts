@@ -19,10 +19,12 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  *
  *  - INTERIOR — a sibling slab has a collinear, overlapping edge across
  *    it (directly, or across the same wall's footprint band). Projected
- *    to the shared line (wall centerline when a wall backs the sub-edge,
- *    the midline between the two stored edges otherwise) minus a small
- *    relief so adjacent slabs tile with a hidden gap under the shared
- *    wall instead of overlapping or z-fighting.
+ *    EXACTLY onto the shared line (wall centerline when a wall backs the
+ *    sub-edge, the midline between the two stored edges otherwise), so
+ *    both neighbours emit the same seam line and tile with no gap or
+ *    overlap. The coincident vertical seam faces carry opposite outward
+ *    normals and every slab material is front-side, so at most one face
+ *    renders per view — no z-fighting.
  *  - WALL-BACKED — no slab neighbour, but the sub-edge lies inside a
  *    wall's footprint band (lateral distance from the centerline within
  *    half-thickness + adoption tolerance). Projected to the wall's OUTER
@@ -38,8 +40,6 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  * under the wall body.
  */
 
-/** Relief inset applied to edges shared with a sibling slab. */
-const INTERIOR_EDGE_INSET = 0.02
 /** Lateral distance within which a sibling slab edge counts as directly "across" an edge. */
 const SLAB_NEIGHBOR_LATERAL_TOLERANCE = 0.05
 /**
@@ -533,6 +533,10 @@ function classifySpan(
 
   let interiorLateral: number | null = null
   if (directOverlap >= requiredOverlap) {
+    // No-wall fallback: half the mean sibling separation — the midline
+    // between the two stored edges. Symmetric: the sibling measures the
+    // same separation with opposite sign from its own line, so both
+    // project onto the same line and the seam stays gapless.
     interiorLateral = wallMatch ? wallMatch.lateral : directWeightedLateral / directOverlap / 2
   } else if (wallMatch) {
     // Rooms across a shared wall: legacy face-aligned polygons sit a
@@ -569,7 +573,7 @@ function classifySpan(
     return {
       start,
       end,
-      offset: s * interiorLateral - INTERIOR_EDGE_INSET,
+      offset: s * interiorLateral,
       key: `interior|${wallMatch ? wallMatch.wall.id : '~'}`,
     }
   }
