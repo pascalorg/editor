@@ -6,6 +6,7 @@ import {
   addCornerRun,
   backAlignedRunDepthOverrides,
   backAlignZ,
+  cabinetModulesForRun,
   cornerSourceWidthOverridesForDerivedDepth,
   previewCornerAdditionLayout,
   previewCornerRunsFromRunSources,
@@ -839,6 +840,23 @@ describe('addCornerRun', () => {
       expect(previewOverrides.get(filler.id as AnyNodeId)?.width).toBeCloseTo(0.78)
       expect(filler.width).toBeCloseTo(0.58)
     }
+    const previewConnectedCabinets = Object.values(sceneApi.nodes()).filter(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Base Cabinet',
+    )
+    expect(previewConnectedCabinets).toHaveLength(2)
+    for (const cabinet of previewConnectedCabinets) {
+      expect(previewOverrides.get(cabinet.id as AnyNodeId)?.width).toBeCloseTo(0.4)
+      expect(cabinet.width).toBeCloseTo(0.6)
+    }
+    const connectedWallCabinets = previewConnectedCabinets
+      .map((cabinet) => wallChildOf(cabinet, sceneApi.nodes()))
+      .filter((cabinet): cabinet is CabinetModuleNode => cabinet != null)
+    expect(connectedWallCabinets).toHaveLength(2)
+    for (const wallCabinet of connectedWallCabinets) {
+      expect(previewOverrides.get(wallCabinet.id as AnyNodeId)?.width).toBeCloseTo(0.4)
+      expect(wallCabinet.width).toBeCloseTo(0.6)
+    }
     const cornerWallFillers = Object.values(sceneApi.nodes()).filter(
       (node): node is CabinetModuleNode =>
         node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
@@ -851,7 +869,17 @@ describe('addCornerRun', () => {
     expect(bridgeWallFillers).toHaveLength(2)
     const bridgeWidths = new Map(bridgeWallFillers.map((filler) => [filler.id, filler.width]))
     for (const filler of cornerWallFillers) {
-      expect(previewOverrides.get(filler.id as AnyNodeId)?.width).toBeCloseTo(0.78)
+      const preview = previewOverrides.get(filler.id as AnyNodeId)!
+      expect(preview.width).toBeCloseTo(0.78)
+      const parentRun = sceneApi.get<CabinetNode>(filler.parentId as AnyNodeId)!
+      const side = (parentRun.metadata as Record<string, { side?: 'left' | 'right' }> | null)
+        ?.cabinetCornerDerivedRun?.side
+      const previewX = preview.position?.[0] ?? filler.position[0]
+      if (side === 'left') {
+        expect(previewX + preview.width! / 2).toBeCloseTo(filler.position[0] + filler.width / 2)
+      } else {
+        expect(previewX - preview.width! / 2).toBeCloseTo(filler.position[0] - filler.width / 2)
+      }
     }
     for (const filler of bridgeWallFillers) {
       expect(previewOverrides.get(filler.id as AnyNodeId)?.width).toBeUndefined()
@@ -903,8 +931,10 @@ describe('addCornerRun', () => {
         0.78,
       )
       expect(derivedModules.find((module) => module.name === 'Base Cabinet')?.width).toBeCloseTo(
-        0.6,
+        0.4,
       )
+      const connectedBase = derivedModules.find((module) => module.name === 'Base Cabinet')!
+      expect(wallChildOf(connectedBase, sceneApi.nodes())?.width).toBeCloseTo(0.4)
       expect(derivedRun.depth).toBeCloseTo(0.58)
     }
     for (const filler of cornerWallFillers) {
@@ -923,6 +953,78 @@ describe('addCornerRun', () => {
       const originalWorld = wallRunWorldPositions.get(wallRun.id)!
       expect(committedWorld.position[0]).toBeCloseTo(originalWorld[0])
       expect(committedWorld.position[2]).toBeCloseTo(originalWorld[2])
+    }
+
+    for (const wallCabinet of connectedWallCabinets) {
+      const liveWall = sceneApi.get<CabinetModuleNode>(wallCabinet.id as AnyNodeId)!
+      sceneApi.update(liveWall.id as AnyNodeId, {
+        position: [0.05, liveWall.position[1], liveWall.position[2]],
+      })
+    }
+
+    const shrunkRun = { ...sceneApi.get<CabinetNode>(run.id)!, depth: 0.48 }
+    sceneApi.update(run.id as AnyNodeId, { depth: shrunkRun.depth })
+    syncCornerRunsFromRunSources({ baseLayout: 'width-only', run: shrunkRun, sceneApi })
+
+    for (const derivedRun of derivedBaseRuns) {
+      const derivedModules = derivedRun.children
+        .map((id) => sceneApi.get<CabinetModuleNode>(id as AnyNodeId))
+        .filter((module): module is CabinetModuleNode => module?.type === 'cabinet-module')
+      expect(derivedModules.find((module) => module.name === 'Corner Filler')?.width).toBeCloseTo(
+        0.48,
+      )
+      expect(derivedModules.find((module) => module.name === 'Base Cabinet')?.width).toBeCloseTo(
+        0.7,
+      )
+      const connectedBase = derivedModules.find((module) => module.name === 'Base Cabinet')!
+      expect(wallChildOf(connectedBase, sceneApi.nodes())?.width).toBeCloseTo(0.7)
+    }
+    for (const filler of cornerWallFillers) {
+      expect(sceneApi.get<CabinetModuleNode>(filler.id as AnyNodeId)?.width).toBeCloseTo(0.48)
+    }
+    for (const derivedRun of derivedBaseRuns) {
+      const side = (derivedRun.metadata as Record<string, { side?: 'left' | 'right' }> | null)
+        ?.cabinetCornerDerivedRun?.side
+      const connectedBase = derivedRun.children
+        .map((id) => sceneApi.get<CabinetModuleNode>(id as AnyNodeId))
+        .find((module) => module?.type === 'cabinet-module' && module.name === 'Base Cabinet')!
+      const connectedWall = wallChildOf(connectedBase, sceneApi.nodes())!
+      const cornerWallId = cornerWallFillers.find((filler) => {
+        const parentRun = sceneApi.get<CabinetNode>(filler.parentId as AnyNodeId)
+        return (
+          (parentRun?.metadata as Record<string, { side?: 'left' | 'right' }> | null)
+            ?.cabinetCornerDerivedRun?.side === side
+        )
+      })!.id
+      const liveConnectedWall = sceneApi.get<CabinetModuleNode>(connectedWall.id as AnyNodeId)!
+      const liveCornerWall = sceneApi.get<CabinetModuleNode>(cornerWallId as AnyNodeId)!
+      expect(liveConnectedWall.position[0]).toBeCloseTo(0)
+      const runWorld = resolveCabinetWorldTransform(
+        derivedRun,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      const wallWorld = resolveCabinetWorldTransform(
+        liveConnectedWall,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      const cornerWorld = resolveCabinetWorldTransform(
+        liveCornerWall,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      const localX = (position: [number, number, number]) => {
+        const dx = position[0] - runWorld.position[0]
+        const dz = position[2] - runWorld.position[2]
+        return Math.cos(runWorld.rotation) * dx - Math.sin(runWorld.rotation) * dz
+      }
+      if (side === 'right') {
+        expect(localX(cornerWorld.position) + liveCornerWall.width / 2).toBeCloseTo(
+          localX(wallWorld.position) - liveConnectedWall.width / 2,
+        )
+      } else {
+        expect(localX(wallWorld.position) + liveConnectedWall.width / 2).toBeCloseTo(
+          localX(cornerWorld.position) - liveCornerWall.width / 2,
+        )
+      }
     }
   })
 
@@ -963,6 +1065,134 @@ describe('addCornerRun', () => {
     )
     expect(baseFillers).toHaveLength(2)
     expect(baseFillers.every((filler) => Math.abs(filler.width - 0.78) < 1e-6)).toBe(true)
+  })
+
+  test('keeps a chained right corner attached when the upstream run changes depth', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-chained-depth',
+      depth: 0.58,
+      children: ['cabinet-module_source-chained-depth'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-chained-depth',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    const middleModuleId = addCornerRun({ module, run, sceneApi, side: 'right' })!
+    const middleModule = sceneApi.get<CabinetModuleNode>(middleModuleId)!
+    const middleRun = sceneApi.get<CabinetNode>(middleModule.parentId as AnyNodeId)!
+    const thirdModuleId = addCornerRun({
+      module: middleModule,
+      run: middleRun,
+      sceneApi,
+      side: 'right',
+    })!
+    const thirdModule = sceneApi.get<CabinetModuleNode>(thirdModuleId)!
+    const thirdRun = sceneApi.get<CabinetNode>(thirdModule.parentId as AnyNodeId)!
+    const initialMiddleX = middleModule.position[0]
+    const initialMiddleWidth = middleModule.width
+    const initialMiddleRightEdge = middleModule.position[0] + middleModule.width / 2
+    const initialThirdRunX = thirdRun.position[0]
+    const resizedRun = { ...sceneApi.get<CabinetNode>(run.id)!, depth: 0.78 }
+
+    for (const [id, override] of backAlignedRunDepthOverrides(
+      resizedRun,
+      sceneApi.nodes(),
+      resizedRun.depth,
+    )) {
+      sceneApi.update(id, override)
+    }
+    sceneApi.update(run.id as AnyNodeId, { depth: resizedRun.depth })
+    syncCornerRunsFromRunSources({ baseLayout: 'width-only', run: resizedRun, sceneApi })
+
+    const resizedMiddle = sceneApi.get<CabinetModuleNode>(middleModule.id)!
+    const resizedThirdRun = sceneApi.get<CabinetNode>(thirdRun.id)!
+    const moduleShift = resizedMiddle.position[0] - initialMiddleX
+    const runShift = resizedThirdRun.position[0] - initialThirdRunX
+    expect(resizedMiddle.width).toBeCloseTo(initialMiddleWidth - 0.2)
+    expect(resizedMiddle.position[0] + resizedMiddle.width / 2).toBeCloseTo(initialMiddleRightEdge)
+    expect(moduleShift).toBeCloseTo(0.1)
+    expect(runShift).toBeCloseTo(0)
+  })
+
+  test('opposite-turn depth growth resizes the cabinet in front instead of the one behind', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-opposite-turn-depth',
+      depth: 0.58,
+      children: ['cabinet-module_source-opposite-turn-depth'],
+    })
+    const source = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-opposite-turn-depth',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, source as AnyNode])
+    const firstSelectedId = addCornerRun({ module: source, run, sceneApi, side: 'right' })!
+    const firstSelected = sceneApi.get<CabinetModuleNode>(firstSelectedId)!
+    const firstRun = sceneApi.get<CabinetNode>(firstSelected.parentId as AnyNodeId)!
+    const extendedId = addCabinetModuleSide({
+      anchorModule: firstSelected,
+      run: firstRun,
+      sceneApi,
+      side: 'right',
+    })!
+    const behind = sceneApi.get<CabinetModuleNode>(extendedId)!
+    const targetSelectedId = addCornerRun({
+      module: behind,
+      run: firstRun,
+      sceneApi,
+      side: 'left',
+    })!
+    const targetSelected = sceneApi.get<CabinetModuleNode>(targetSelectedId)!
+    const targetRun = sceneApi.get<CabinetNode>(targetSelected.parentId as AnyNodeId)!
+    const frontSelectedId = addCornerRun({
+      module: targetSelected,
+      run: targetRun,
+      sceneApi,
+      side: 'right',
+    })!
+    const front = sceneApi.get<CabinetModuleNode>(frontSelectedId)!
+    const initialBehindWidth = behind.width
+    const initialFrontWidth = front.width
+    const initialBack = Math.min(
+      ...targetRun.children
+        .map((id) => sceneApi.get<CabinetModuleNode>(id as AnyNodeId))
+        .filter((module): module is CabinetModuleNode => module?.type === 'cabinet-module')
+        .map((module) => module.position[2] - module.depth / 2),
+    )
+    const depth = 0.68
+
+    for (const [id, override] of cornerSourceWidthOverridesForDerivedDepth(
+      targetRun,
+      sceneApi.nodes(),
+      depth,
+    )) {
+      sceneApi.update(id, override)
+    }
+    for (const [id, override] of backAlignedRunDepthOverrides(targetRun, sceneApi.nodes(), depth)) {
+      sceneApi.update(id, override)
+    }
+    sceneApi.update(targetRun.id as AnyNodeId, { depth })
+    syncCornerRunsFromRunSources({
+      baseLayout: 'width-only',
+      run: { ...targetRun, depth },
+      sceneApi,
+    })
+
+    expect(sceneApi.get<CabinetModuleNode>(behind.id)?.width).toBeCloseTo(initialBehindWidth)
+    expect(sceneApi.get<CabinetModuleNode>(front.id)?.width).toBeCloseTo(initialFrontWidth - 0.1)
+    const resizedBack = Math.min(
+      ...targetRun.children
+        .map((id) => sceneApi.get<CabinetModuleNode>(id as AnyNodeId))
+        .filter((module): module is CabinetModuleNode => module?.type === 'cabinet-module')
+        .map((module) => module.position[2] - module.depth / 2),
+    )
+    expect(resizedBack).toBeCloseTo(initialBack)
   })
 
   test.each([
@@ -1160,6 +1390,67 @@ describe('addCornerRun', () => {
         node.type === 'cabinet' || node.type === 'cabinet-module',
     )
     expect(allCabinets.every((node) => node.frontStyle === 'raised-arch')).toBe(true)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('%s corner filler keeps resizing after its leg gains another cabinet', (side) => {
+    const run = CabinetNode.parse({
+      id: `cabinet_source-run-extended-depth-${side}`,
+      depth: 0.58,
+      children: [`cabinet-module_source-extended-depth-${side}`],
+    })
+    const module = CabinetModuleNode.parse({
+      id: `cabinet-module_source-extended-depth-${side}`,
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    const connectedId = addCornerRun({ module, run, sceneApi, side })!
+    const connected = sceneApi.get<CabinetModuleNode>(connectedId)!
+    const leg = sceneApi.get<CabinetNode>(connected.parentId as AnyNodeId)!
+    const extraId = addCabinetModuleSide({
+      anchorModule: connected,
+      run: leg,
+      sceneApi,
+      side,
+    })!
+    const initialExtra = sceneApi.get<CabinetModuleNode>(extraId)!
+    const initialLegModules = cabinetModulesForRun(leg, sceneApi.nodes())
+    const initialFiller = initialLegModules.find((entry) => entry.name === 'Corner Filler')!
+    const initialConnected = initialLegModules.find((entry) => entry.name === 'Base Cabinet')!
+    const cornerPairWidth = initialFiller.width + initialConnected.width
+
+    for (const depth of [0.48, 0.68]) {
+      const resizedRun = { ...sceneApi.get<CabinetNode>(run.id)!, depth }
+      sceneApi.update(run.id as AnyNodeId, { depth })
+      syncCornerRunsFromRunSources({ baseLayout: 'width-only', run: resizedRun, sceneApi })
+
+      const liveLeg = sceneApi.get<CabinetNode>(leg.id)!
+      const liveModules = cabinetModulesForRun(liveLeg, sceneApi.nodes()).sort(
+        (a, b) => a.position[0] - b.position[0],
+      )
+      const filler = liveModules.find((entry) => entry.name === 'Corner Filler')!
+      const liveConnected = liveModules.find((entry) => entry.name === 'Base Cabinet')!
+      const liveExtra = sceneApi.get<CabinetModuleNode>(extraId)!
+
+      expect(filler.width).toBeCloseTo(depth)
+      expect(liveConnected.width).toBeCloseTo(cornerPairWidth - depth)
+      expect(wallChildOf(liveConnected, sceneApi.nodes())?.width).toBeCloseTo(
+        cornerPairWidth - depth,
+      )
+      expect(liveExtra.width).toBeCloseTo(initialExtra.width)
+      for (let index = 1; index < liveModules.length; index++) {
+        const previous = liveModules[index - 1]!
+        const current = liveModules[index]!
+        expect(previous.position[0] + previous.width / 2).toBeCloseTo(
+          current.position[0] - current.width / 2,
+        )
+      }
+    }
   })
 
   test('anchors the right bridge filler to the live source wall cabinet edge', () => {

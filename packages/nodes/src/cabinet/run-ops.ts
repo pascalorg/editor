@@ -10,6 +10,7 @@ import {
   selectionProxyIdFromMetadata,
   type WallNode,
 } from '@pascal-app/core'
+import { MAX_CABINET_WIDTH, MIN_CABINET_WIDTH } from './resize-limits'
 import {
   moduleMaxX,
   moduleMinX,
@@ -349,7 +350,7 @@ export function cornerSourceWidthOverridesForDerivedDepth(
   depth: number,
 ): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
   const link = cornerDerivedRunLink(run.metadata)
-  if (link?.role !== 'base-leg') return []
+  if (link?.role !== 'base-leg' || link.turnSide !== link.side) return []
   const sourceModule = nodes[link.sourceModuleId]
   const sourceRun = nodes[link.sourceRunId]
   if (sourceModule?.type !== 'cabinet-module' || sourceRun?.type !== 'cabinet') return []
@@ -379,11 +380,7 @@ export function cornerSourceWidthOverridesForDerivedDepth(
       wallChild.id as AnyNodeId,
       {
         width,
-        position: [
-          wallChild.position[0],
-          wallChild.position[1],
-          backAlignZ(sourceModule.depth, wallChild.depth),
-        ],
+        position: [0, wallChild.position[1], backAlignZ(sourceModule.depth, wallChild.depth)],
       } as Partial<AnyNode>,
     ])
   }
@@ -1516,20 +1513,45 @@ function syncDerivedCornerRun({
     ]),
   )
 
-  const currentSpecs = modules.map((entry) => specByName.get(entry.name)).filter(Boolean)
+  const currentSpecs = modules
+    .map((entry) => {
+      const spec = specByName.get(entry.name)
+      if (spec) return { ...spec }
+      if (baseLayout !== 'width-only') return null
+      return {
+        width: entry.width,
+        openSide: entry.openSide,
+        moduleKind: entry.moduleKind,
+        cornerShelf: entry.cornerShelf,
+      }
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry != null)
   if (currentSpecs.length !== modules.length) return
-  const currentWidths = currentSpecs.map((entry) => entry!.width)
+  if (baseLayout === 'width-only' && (role === 'base-leg' || role === 'wall-leg')) {
+    const fillerName = role === 'base-leg' ? 'Corner Filler' : 'Corner Wall Filler'
+    const connectedName = role === 'base-leg' ? 'Base Cabinet' : 'Wall Cabinet'
+    const fillerIndex = modules.findIndex((entry) => entry.name === fillerName)
+    const connectedIndex = modules.findIndex((entry) => entry.name === connectedName)
+    if (fillerIndex >= 0 && connectedIndex >= 0) {
+      const pairWidth = modules[fillerIndex]!.width + modules[connectedIndex]!.width
+      const currentConnectedWidth = modules[connectedIndex]!.width
+      const minConnectedWidth = Math.min(currentConnectedWidth, MIN_CABINET_WIDTH)
+      const maxConnectedWidth = Math.max(currentConnectedWidth, MAX_CABINET_WIDTH)
+      currentSpecs[connectedIndex]!.width = Math.min(
+        maxConnectedWidth,
+        Math.max(minConnectedWidth, pairWidth - currentSpecs[fillerIndex]!.width),
+      )
+    }
+  }
+  const currentWidths = currentSpecs.map((entry) => entry.width)
   const currentCenters = chainModuleCenters(currentWidths)
-  const firstName = modules[0]!.name
-  const firstIndex = fullNames.indexOf(firstName)
-  if (firstIndex < 0) return
 
   if (baseLayout === 'width-only' && (role === 'base-leg' || role === 'wall-leg')) {
+    const nextTotalWidth = currentWidths.reduce((sum, width) => sum + width, 0)
     const fixedEdge =
       side === 'right'
         ? Math.min(...modules.map((entry) => entry.position[0] - entry.width / 2))
-        : Math.max(...modules.map((entry) => entry.position[0] + entry.width / 2)) -
-          currentWidths.reduce((sum, width) => sum + width, 0)
+        : Math.max(...modules.map((entry) => entry.position[0] + entry.width / 2)) - nextTotalWidth
     let cursor = fixedEdge
     modules.forEach((entry, index) => {
       const spec = currentSpecs[index]
@@ -1544,9 +1566,30 @@ function syncDerivedCornerRun({
         } as Partial<AnyNode>,
       )
       const parentShiftX = positionX - entry.position[0]
+      const sourceLink = cornerSourceLink(entry.metadata)
+      const sourceEdgeShift =
+        sourceLink?.side === 'right'
+          ? positionX + spec.width / 2 - (entry.position[0] + entry.width / 2)
+          : sourceLink?.side === 'left'
+            ? positionX - spec.width / 2 - (entry.position[0] - entry.width / 2)
+            : parentShiftX
       for (const childId of entry.children ?? []) {
         const child = sceneApi.get<CabinetNode>(childId as AnyNodeId)
         if (child?.type !== 'cabinet') continue
+        const derivedLink = cornerDerivedRunLink(child.metadata)
+        if (derivedLink?.sourceModuleId === entry.id && derivedLink.sourceRunId === run.id) {
+          sceneApi.update(
+            child.id as AnyNodeId,
+            {
+              position: [
+                child.position[0] + sourceEdgeShift - parentShiftX,
+                child.position[1],
+                child.position[2],
+              ],
+            } as Partial<AnyNode>,
+          )
+          continue
+        }
         sceneApi.update(
           child.id as AnyNodeId,
           {
@@ -1554,14 +1597,43 @@ function syncDerivedCornerRun({
           } as Partial<AnyNode>,
         )
       }
+      const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run
+      for (const childId of liveRun.children ?? []) {
+        const child = sceneApi.get<CabinetNode>(childId as AnyNodeId)
+        if (child?.type !== 'cabinet') continue
+        const derivedLink = cornerDerivedRunLink(child.metadata)
+        if (
+          derivedLink?.role !== 'base-leg' ||
+          derivedLink.sourceModuleId !== entry.id ||
+          derivedLink.sourceRunId !== run.id
+        ) {
+          continue
+        }
+        sceneApi.update(
+          child.id as AnyNodeId,
+          {
+            position: [child.position[0] + sourceEdgeShift, child.position[1], child.position[2]],
+          } as Partial<AnyNode>,
+        )
+      }
       const wallChild = wallChildOf(entry, sceneApi.nodes())
       if (wallChild) {
-        sceneApi.update(wallChild.id as AnyNodeId, { width: spec.width } as Partial<AnyNode>)
+        sceneApi.update(
+          wallChild.id as AnyNodeId,
+          {
+            width: spec.width,
+            position: [0, wallChild.position[1], wallChild.position[2]],
+          } as Partial<AnyNode>,
+        )
       }
     })
     bumpCabinetRunLayoutRevision(sceneApi, sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run)
     return
   }
+
+  const firstName = modules[0]!.name
+  const firstIndex = fullNames.indexOf(firstName)
+  if (firstIndex < 0) return
 
   const sourceWallTop = wallChildOf(sourceModule, sceneApi.nodes())
   const isStandaloneBridgeFillerRun =

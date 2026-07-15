@@ -23,6 +23,14 @@ import { cabinetPaint } from './paint'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
 import useCabinetPlacementType from './placement-type'
 import { cabinetQuickActions } from './quick-actions'
+import {
+  cabinetConnectedDepthBounds,
+  cabinetResizeUpperBound,
+  MAX_CABINET_DEPTH,
+  MAX_CABINET_WIDTH,
+  MIN_CABINET_DEPTH,
+  MIN_CABINET_WIDTH,
+} from './resize-limits'
 import { moduleSideOpen } from './run-layout'
 import {
   backAlignedRunDepthOverrides,
@@ -224,8 +232,6 @@ const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
 const ROTATE_CORNER_OFFSET = 0.32
 const ROTATE_RING_OFFSET = 0.04
-const MIN_CABINET_WIDTH = 0.3
-const MIN_CABINET_DEPTH = 0.3
 const MIN_CABINET_CARCASS_HEIGHT = 0.4
 const CABINET_ADJACENCY_EPSILON = 1e-4
 
@@ -761,6 +767,7 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     axis: 'x',
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_CABINET_WIDTH,
+    max: (node) => cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH),
     currentValue: (node) => node.width,
     apply: (node, width) => ({
       width,
@@ -800,6 +807,7 @@ function cabinetDepthHandle(): LinearResizeHandle<CabinetEditableNode> {
     axis: 'z',
     anchor: 'min',
     min: MIN_CABINET_DEPTH,
+    max: (node) => cabinetResizeUpperBound(node.depth, MAX_CABINET_DEPTH),
     currentValue: (node) => node.depth,
     apply: cabinetDepthResizePatch,
     commit: commitCabinetResize,
@@ -901,11 +909,48 @@ function cabinetConnectedRunDepthHandle(
   const frontZ = Math.cos(relativeRotation)
   const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
   const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
+  const targetDepthBounds = () => {
+    const compensatedWidths: number[] = []
+    const derived = cabinetMetadataRecord(target.metadata).cabinetCornerDerivedRun
+    if (derived && typeof derived === 'object' && !Array.isArray(derived)) {
+      const role = (derived as { role?: unknown }).role
+      const side = (derived as { side?: unknown }).side
+      const turnSide = (derived as { turnSide?: unknown }).turnSide
+      const sourceModuleId = (derived as { sourceModuleId?: unknown }).sourceModuleId
+      const sourceModule =
+        role === 'base-leg' &&
+        (turnSide === side || (turnSide !== 'left' && turnSide !== 'right')) &&
+        typeof sourceModuleId === 'string'
+          ? sceneApi.get<CabinetModuleNodeType>(sourceModuleId as AnyNodeId)
+          : undefined
+      if (sourceModule?.type === 'cabinet-module') {
+        compensatedWidths.push(sourceModule.width)
+      }
+    }
+    for (const childId of target.children ?? []) {
+      const child = sceneApi.get<CabinetNodeType>(childId as AnyNodeId)
+      if (child?.type !== 'cabinet') continue
+      const childDerived = cabinetMetadataRecord(child.metadata).cabinetCornerDerivedRun
+      if (!childDerived || typeof childDerived !== 'object' || Array.isArray(childDerived)) continue
+      if (
+        (childDerived as { role?: unknown }).role !== 'base-leg' ||
+        (childDerived as { sourceRunId?: unknown }).sourceRunId !== target.id
+      ) {
+        continue
+      }
+      const connectedModule = cabinetModulesForRun(child, sceneApi.nodes()).find(
+        (module) => module.name === 'Base Cabinet',
+      )
+      if (connectedModule) compensatedWidths.push(connectedModule.width)
+    }
+    return cabinetConnectedDepthBounds(target.depth, compensatedWidths)
+  }
   return {
     kind: 'linear-resize',
     axis,
     anchor: positive ? 'min' : 'max',
-    min: MIN_CABINET_DEPTH,
+    min: () => targetDepthBounds().min,
+    max: () => targetDepthBounds().max,
     currentValue: (node) =>
       node.id === target.id
         ? node.depth

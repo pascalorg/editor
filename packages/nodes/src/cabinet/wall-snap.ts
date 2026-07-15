@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import type { WallHit } from '../shared/wall-attach-target'
 import { findClosestWallInPlan, projectWallLocalPointToPlan } from '../shared/wall-attach-target'
+import { snapCabinetFootprintCenter } from './placement-snap'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 
 const EDGE_SNAP_THRESHOLD = 0.08
@@ -31,11 +32,6 @@ export type CabinetWallSnapPlacement = {
     start: [number, number, number]
     end: [number, number, number]
   }
-}
-
-function snap(value: number, step: number): number {
-  if (step <= 0) return value
-  return Math.round(value / step) * step
 }
 
 function angleDelta(a: number, b: number): number {
@@ -225,7 +221,7 @@ export function resolveCabinetWallSnapPlacement({
   if (hit.wallLength <= 1e-6) return null
 
   const halfWidth = width / 2
-  const snappedLocalX = snap(hit.localX, gridStep)
+  const snappedLocalX = snapCabinetFootprintCenter(hit.localX, width, gridStep)
   const clampedLocalX =
     hit.wallLength > width
       ? Math.min(hit.wallLength - halfWidth, Math.max(halfWidth, snappedLocalX))

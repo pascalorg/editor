@@ -15,6 +15,7 @@ import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
+import { commitHandleDragPatch } from './handle-drag-history'
 
 export type HandleDragControls = {
   onStart: (index: number, snapshot: AnyNode) => void
@@ -174,6 +175,13 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     session.onBegin?.()
 
     let lastPatch: Partial<AnyNode> | null = null
+    let historyPaused = true
+
+    const resumeHistory = () => {
+      if (!historyPaused) return
+      historyPaused = false
+      useScene.temporal.getState().resume()
+    }
 
     const onMove = (moveEvent: PointerEvent) => {
       const patch = session.move({ event: moveEvent, getPointerRay, intersectPlane })
@@ -193,7 +201,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       if (document.body.style.cursor === cursor) {
         document.body.style.cursor = ''
       }
-      useScene.temporal.getState().resume()
+      resumeHistory()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
       session.onEnd?.()
@@ -212,11 +220,11 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
       if (lastPatch) {
-        if (session.commit) {
-          session.commit(lastPatch)
-        } else {
-          sceneApi.update(overrideId, lastPatch)
-        }
+        commitHandleDragPatch({
+          patch: lastPatch,
+          resumeHistory,
+          commit: session.commit ?? ((patch) => sceneApi.update(overrideId, patch)),
+        })
       }
       clearOverride()
       cleanup()
