@@ -344,6 +344,147 @@ export function backAlignedRunDepthOverrides(
   return overrides
 }
 
+export function wallCornerWidthOverridesForDepthTargets({
+  clampWidths = true,
+  depth,
+  nodes,
+  targets,
+}: {
+  clampWidths?: boolean
+  depth: number
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
+  targets: readonly CabinetEditableNode[]
+}): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const initialDepth = targets[0]?.depth
+  if (typeof initialDepth !== 'number') return []
+  const depthDelta = depth - initialDepth
+
+  const targetIds = new Set(targets.map((target) => target.id as AnyNodeId))
+  const runs = Object.values(nodes).filter((node): node is CabinetNode => node?.type === 'cabinet')
+  const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
+  const setWidth = (
+    node: CabinetModuleNode | null,
+    requestedWidth: number,
+    anchor: 'min' | 'max',
+  ) => {
+    if (!node) return
+    const existing = overrides.get(node.id as AnyNodeId) as Partial<CabinetModuleNode> | undefined
+    const existingPosition = existing?.position
+    const currentWidth = typeof existing?.width === 'number' ? existing.width : node.width
+    const width = clampWidths ? Math.max(0, requestedWidth) : requestedWidth
+    const appliedWidthDelta = width - currentWidth
+    const centerDelta = anchor === 'min' ? appliedWidthDelta / 2 : -appliedWidthDelta / 2
+    overrides.set(node.id as AnyNodeId, {
+      ...existing,
+      width,
+      position: [
+        (existingPosition?.[0] ?? node.position[0]) + centerDelta,
+        existingPosition?.[1] ?? node.position[1],
+        existingPosition?.[2] ?? node.position[2],
+      ],
+    })
+  }
+
+  for (const wallLegRun of runs) {
+    const link = cornerDerivedRunLink(wallLegRun.metadata)
+    if (link?.role !== 'wall-leg') continue
+    const sameCorner = (run: CabinetNode, role: CornerDerivedRunRole) => {
+      const candidate = cornerDerivedRunLink(run.metadata)
+      return (
+        candidate?.role === role &&
+        candidate.sourceModuleId === link.sourceModuleId &&
+        candidate.sourceRunId === link.sourceRunId
+      )
+    }
+    const baseLegRun = runs.find((run) => sameCorner(run, 'base-leg'))
+    const bridgeRun = runs.find((run) => sameCorner(run, 'bridge'))
+    const sourceModule = nodes[link.sourceModuleId]
+    const sourceRun = nodes[link.sourceRunId]
+    if (sourceModule?.type !== 'cabinet-module') continue
+    const sourceWall = wallChildOf(sourceModule, nodes)
+    const wallLegModules = cabinetModulesForRun(wallLegRun, nodes)
+    const connectedWallInRun =
+      wallLegModules.find((module) => module.name === 'Wall Cabinet') ?? null
+    const connectedBase = baseLegRun
+      ? (cabinetModulesForRun(baseLegRun, nodes).find((module) => module.name === 'Base Cabinet') ??
+        null)
+      : null
+    const connectedWall =
+      connectedWallInRun ?? (connectedBase ? wallChildOf(connectedBase, nodes) : null)
+    const bridgeModules = bridgeRun ? cabinetModulesForRun(bridgeRun, nodes) : []
+    const bridgeFiller =
+      bridgeModules.find((module) => module.name === 'Wall Bridge Filler') ?? null
+    const standaloneBridgeFiller = bridgeModules.length === 1 && bridgeModules[0] === bridgeFiller
+    const anchor =
+      bridgeFiller?.openSide === 'left'
+        ? 'min'
+        : bridgeFiller?.openSide === 'right'
+          ? 'max'
+          : link.side === 'right'
+            ? 'min'
+            : 'max'
+    const sourceDirectionChanged =
+      (sourceWall && targetIds.has(sourceWall.id as AnyNodeId)) ||
+      (bridgeRun && targetIds.has(bridgeRun.id as AnyNodeId))
+    const connectedDirectionChanged =
+      (connectedWall && targetIds.has(connectedWall.id as AnyNodeId)) ||
+      targetIds.has(wallLegRun.id as AnyNodeId)
+
+    if (sourceDirectionChanged || connectedDirectionChanged) {
+      const depthReferenceRun =
+        connectedDirectionChanged && baseLegRun
+          ? baseLegRun
+          : sourceRun?.type === 'cabinet'
+            ? sourceRun
+            : null
+      const requestedWidth =
+        depthReferenceRun?.type === 'cabinet'
+          ? depthReferenceRun.depth - depth
+          : (bridgeFiller?.width ?? 0) - depthDelta
+      setWidth(bridgeFiller, requestedWidth, anchor)
+      if (standaloneBridgeFiller && bridgeRun && bridgeFiller && sourceRun?.type === 'cabinet') {
+        const fillerPatch = overrides.get(bridgeFiller.id as AnyNodeId) as
+          | Partial<CabinetModuleNode>
+          | undefined
+        const bridgeWidth = fillerPatch?.width ?? bridgeFiller.width
+        overrides.set(
+          bridgeFiller.id as AnyNodeId,
+          {
+            ...fillerPatch,
+            position: [0, bridgeFiller.position[1], 0],
+          } as Partial<AnyNode>,
+        )
+        const bridgeSide =
+          bridgeFiller.openSide === 'left'
+            ? 'right'
+            : bridgeFiller.openSide === 'right'
+              ? 'left'
+              : link.side
+        const bridgeWorldPosition = anchoredBridgeRunWorldPosition({
+          sourceWallTop: sourceWall,
+          sourceRun,
+          bridgeWidth,
+          side: bridgeSide,
+          fallbackPosition: resolveCabinetWorldTransform(bridgeRun, nodes).position,
+          nodes,
+        })
+        const frameParent = cabinetFrameParent(bridgeRun, nodes)
+        overrides.set(
+          bridgeRun.id as AnyNodeId,
+          {
+            ...(overrides.get(bridgeRun.id as AnyNodeId) ?? {}),
+            position: frameParent
+              ? worldToCabinetLocalPosition(frameParent, nodes, bridgeWorldPosition)
+              : bridgeWorldPosition,
+          } as Partial<AnyNode>,
+        )
+      }
+    }
+  }
+
+  return [...overrides] as ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+}
+
 export function cornerSourceWidthOverridesForDerivedDepth(
   run: CabinetNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
@@ -1659,10 +1800,22 @@ function syncDerivedCornerRun({
           : layout.bridgeRunPosition
   const sourceRunWorld = resolveCabinetWorldTransform(sourceRun, sceneApi.nodes())
   const rotation = role === 'bridge' ? sourceRunWorld.rotation : layout.legRotation
-  const depth = role === 'base-leg' ? run.depth : CABINET_WALL_DEPTH
+  const depth = run.depth
+  const depthAdjustedAnchorPosition =
+    role !== 'base-leg' && !isStandaloneBridgeFillerRun
+      ? runLocalToPlan({ position: anchorPosition, rotation }, [
+          0,
+          0,
+          (depth - CABINET_WALL_DEPTH) / 2,
+        ])
+      : anchorPosition
   const runWorldPosition = isStandaloneBridgeFillerRun
-    ? anchorPosition
-    : runLocalToPlan({ position: anchorPosition, rotation }, [fullCenters[firstIndex] ?? 0, 0, 0])
+    ? depthAdjustedAnchorPosition
+    : runLocalToPlan({ position: depthAdjustedAnchorPosition, rotation }, [
+        fullCenters[firstIndex] ?? 0,
+        0,
+        0,
+      ])
   // Place relative to the derived run's ACTUAL parent frame — source run for
   // new scenes, source module for legacy scenes that nested legs under it.
   const frameParent = cabinetFrameParent(run, sceneApi.nodes()) ?? sourceRun
@@ -2304,16 +2457,17 @@ function ensureWallCabinetAbove({
 }): AnyNodeId | null {
   const existingWall = wallChildOf(module, sceneApi.nodes())
   if (existingWall) {
+    const depth = existingWall.depth
     sceneApi.update(
       existingWall.id as AnyNodeId,
       {
         width: module.width,
-        depth: CABINET_WALL_DEPTH,
+        depth,
         carcassHeight: CABINET_WALL_CARCASS_HEIGHT,
         position: [
           0,
           wallBottomHeightForTallAlignment() - module.position[1],
-          backAlignZ(module.depth, CABINET_WALL_DEPTH),
+          backAlignZ(module.depth, depth),
         ],
         frontStyle: module.frontStyle,
         frontOverlay: module.frontOverlay,
