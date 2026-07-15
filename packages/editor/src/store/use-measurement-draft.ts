@@ -493,3 +493,22 @@ export function commitMeasurementDraft(owner: MeasurementDraftOwner): Measuremen
   draft.reset()
   return node.id
 }
+
+export function finishMeasurementDraft(
+  owner: MeasurementDraftOwner,
+  preferredNormal?: MeasurementPoint,
+): boolean {
+  const draft = useMeasurementDraft.getState()
+  if (draft.stage === 'collecting') {
+    if (draft.kind === 'distance' || draft.kind === 'angle') return false
+    if (!draft.closeBase(owner, preferredNormal)) return false
+    if (draft.kind === 'area' || draft.kind === 'perimeter') {
+      return commitMeasurementDraft(owner) !== null
+    }
+    return true
+  }
+  if (draft.stage === 'extruding') {
+    if (!draft.finishExtrusion(owner)) return false
+  }
+  return commitMeasurementDraft(owner) !== null
+}

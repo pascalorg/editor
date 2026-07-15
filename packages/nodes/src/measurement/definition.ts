@@ -45,7 +45,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
     { key: 'Left click', label: 'Place measurement point' },
     { key: 'Enter', label: 'Finish measurement' },
     { key: 'Backspace', label: 'Remove last point' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Esc', label: 'Finish and continue' },
   ],
 
   presentation: {

@@ -8,7 +8,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { commitMeasurementDraft, useMeasurementDraft } from './use-measurement-draft'
+import {
+  commitMeasurementDraft,
+  finishMeasurementDraft,
+  useMeasurementDraft,
+} from './use-measurement-draft'
 
 const point = (x: number, y: number, z: number): [number, number, number] => [x, y, z]
 
@@ -222,6 +226,26 @@ describe('measurement draft transitions', () => {
       stage: 'collecting',
       points: [],
     })
+  })
+
+  test('finishes a valid polygon and stays ready for another measurement of the same kind', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('area')
+    draft.addPoint('2d', point(0, 0, 0))
+    draft.addPoint('2d', point(2, 0, 0))
+    draft.addPoint('2d', point(2, 0, 2))
+
+    expect(finishMeasurementDraft('2d', point(0, 1, 0))).toBe(true)
+    expect(
+      Object.values(useScene.getState().nodes).filter((node) => node.type === 'measurement'),
+    ).toHaveLength(1)
+    expect(useMeasurementDraft.getState()).toMatchObject({
+      kind: 'area',
+      owner: null,
+      stage: 'collecting',
+      points: [],
+    })
+    expect(useMeasurementDraft.getState().addPoint('2d', point(4, 0, 4))).toBe(true)
   })
 
   test('commits one parseable level child in one undoable scene write', () => {

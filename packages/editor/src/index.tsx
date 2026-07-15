@@ -418,6 +418,7 @@ export {
 } from './store/use-interaction-scope'
 export {
   commitMeasurementDraft,
+  finishMeasurementDraft,
   type MeasurementAxis,
   type MeasurementAxisGuide,
   type MeasurementDraftOwner,

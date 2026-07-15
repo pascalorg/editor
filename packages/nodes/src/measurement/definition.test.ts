@@ -20,6 +20,7 @@ describe('measurementDefinition', () => {
       'Backspace',
       'Esc',
     ])
+    expect(measurementDefinition.toolHints?.at(-1)?.label).toBe('Finish and continue')
   })
 
   test('produces schema-valid defaults', () => {

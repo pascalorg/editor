@@ -98,6 +98,6 @@ The 3D hover reticle is a screen-sized, double-sided ring oriented to the resolv
 - Before closure, pressing and dragging an existing draft point repositions it through the same valid-surface and magnetic-snap path; tapping the first point still closes, while tapping another point is a no-op.
 - Dragging an edge midpoint inserts a new point and continues the same surface-snapped gesture; cancel restores the original ring.
 - Backspace removes the latest base point and reopens a closed base.
-- Escape clears the draft through the shared drafting interaction scope.
+- Escape attempts the same validated completion as Enter. A valid area or perimeter commits, and a ready volume commits after extrusion; the draft resets while preserving its kind so the tool remains armed for another measurement. For volume, the first Escape after a valid base advances to extrusion. An incomplete draft is cleared without creating a node, and Escape is still consumed so measurement mode remains active.
 
 Keep action-bar kind selection, the `M` shortcut, shortcut help, scene-tree presentation, inspector values, and Display visibility controls wired whenever the measurement kind is extended.

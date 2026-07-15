@@ -18,6 +18,7 @@ import {
 import {
   commitMeasurementDraft,
   EDITOR_LAYER,
+  finishMeasurementDraft,
   formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
@@ -28,7 +29,6 @@ import {
   linearUnitToMeters,
   type MeasurementAxis,
   type MeasurementAxisGuide,
-  type MeasurementDraftOwner,
   type MeasurementPoint,
   markToolCancelConsumed,
   measurementPolygonLabelAnchor,
@@ -643,24 +643,6 @@ function extrusionHeightFromPointer(
     if (step > 0) height = Math.round(height / step) * step
   }
   return height
-}
-
-function closeBaseAndMaybeCommit(owner: MeasurementDraftOwner): boolean {
-  const draft = useMeasurementDraft.getState()
-  if (draft.kind === 'distance' || draft.kind === 'angle') return false
-  if (!draft.closeBase(owner)) return false
-  if (draft.kind === 'area' || draft.kind === 'perimeter') commitMeasurementDraft(owner)
-  return true
-}
-
-function finishDraft(owner: MeasurementDraftOwner): boolean {
-  const draft = useMeasurementDraft.getState()
-  if (draft.stage === 'collecting') return closeBaseAndMaybeCommit(owner)
-  if (draft.stage === 'extruding') {
-    if (!draft.finishExtrusion(owner)) return false
-    return commitMeasurementDraft(owner) !== null
-  }
-  return commitMeasurementDraft(owner) !== null
 }
 
 function shouldIgnoreKeyboardTarget(target: EventTarget | null): boolean {
@@ -1530,12 +1512,14 @@ export const MeasurementTool: FC = () => {
   useEffect(() => {
     const onCancel = () => {
       const draft = useMeasurementDraft.getState()
-      const hasDraft =
-        draft.owner !== null || draft.points.length > 0 || draft.stage !== 'collecting'
-      if (!hasDraft) return
+      const owner = draft.owner
+      if (!owner) return
       markToolCancelConsumed()
       cancelVertexGesture.current()
-      draft.reset()
+      const preferredNormal: MeasurementPoint | undefined = owner === '2d' ? [0, 1, 0] : undefined
+      if (!finishMeasurementDraft(owner, preferredNormal)) {
+        useMeasurementDraft.getState().reset()
+      }
     }
     emitter.on('tool:cancel', onCancel)
     return () => emitter.off('tool:cancel', onCancel)
@@ -1738,7 +1722,7 @@ export const MeasurementTool: FC = () => {
       clearVertexGesture(true)
       if (!wasEngaged && source === 'vertex') {
         const draft = useMeasurementDraft.getState()
-        if (vertexIndex === 0 && draft.points.length >= 3) closeBaseAndMaybeCommit('3d')
+        if (vertexIndex === 0 && draft.points.length >= 3) finishMeasurementDraft('3d')
       }
       suppressNextClick.current = true
       setTimeout(() => {
@@ -1765,7 +1749,7 @@ export const MeasurementTool: FC = () => {
       if (event.detail > 1) return
 
       if (draft.owner === '3d' && draft.stage === 'extruding') {
-        finishDraft('3d')
+        finishMeasurementDraft('3d')
         return
       }
       if (draft.stage !== 'collecting') return
@@ -1776,7 +1760,7 @@ export const MeasurementTool: FC = () => {
         draft.kind === 'distance' ? null : closestVertexIndex(event, levelObject, draft.points)
       if (vertexIndex !== null) {
         if (vertexIndex === 0 && draft.points.length >= 3 && draft.kind !== 'angle') {
-          closeBaseAndMaybeCommit('3d')
+          finishMeasurementDraft('3d')
         }
         return
       }
@@ -1806,7 +1790,7 @@ export const MeasurementTool: FC = () => {
         suppressNextClick.current = false
         return
       }
-      closeBaseAndMaybeCommit('3d')
+      finishMeasurementDraft('3d')
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1821,7 +1805,7 @@ export const MeasurementTool: FC = () => {
       } else if (event.key === 'Enter') {
         event.preventDefault()
         event.stopImmediatePropagation()
-        finishDraft(draft.owner)
+        finishMeasurementDraft(draft.owner, draft.owner === '2d' ? [0, 1, 0] : undefined)
       }
     }
 
