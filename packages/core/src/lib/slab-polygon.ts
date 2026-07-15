@@ -19,10 +19,22 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  *
  *  - INTERIOR — a sibling slab has a collinear, overlapping edge across
  *    it (directly, or across the same wall's footprint band). Projected
- *    EXACTLY onto the shared line (wall centerline when a wall backs the
- *    sub-edge, the midline between the two stored edges otherwise), so
- *    both neighbours emit the same seam line and tile with no gap or
- *    overlap. The coincident vertical seam faces carry opposite outward
+ *    EXACTLY onto a shared line so both neighbours emit the same seam
+ *    and tile with no gap or overlap. Which line depends on the two
+ *    slabs' elevations (slabs extrude 0 → elevation, and the wall's base
+ *    sits on the HIGHER supporting slab):
+ *      · equal elevations — the wall centerline (or the midline between
+ *        the two stored edges when no wall backs the seam), classic
+ *        mitering at t/2 from each face.
+ *      · unequal elevations across a wall — the wall face on the LOWER
+ *        room's side. The higher slab runs through the whole band (the
+ *        wall stands on it, its seam face sits flush under the wall
+ *        face) and the lower slab stops at that same visible face line.
+ *        Meeting at the centerline instead would leave a half-band open
+ *        pocket between the lower slab's top and the wall base. Wall-less
+ *        unequal seams keep the midline — a butted step face with no wall
+ *        to hide under.
+ *    The coincident vertical seam faces carry opposite outward
  *    normals and every slab material is front-side, so at most one face
  *    renders per view — no z-fighting.
  *  - WALL-BACKED — no slab neighbour, but the sub-edge lies inside a
@@ -67,6 +79,14 @@ const MIN_SUBEDGE_LENGTH = 0.05
  */
 const WALL_LATERAL_TIE_EPSILON = 0.02
 const CURVED_WALL_SAMPLE_SEGMENTS = 32
+/**
+ * Elevations closer than this count as the same floor height for seam
+ * projection (matches the wall-elevation pooling epsilon) — the seam
+ * stays at the centerline. Beyond it the wall base sits on the higher
+ * slab only, so the seam moves to the lower side's wall face.
+ */
+const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
+const DEFAULT_SLAB_ELEVATION = 0.05
 
 export type SlabPolygonContext = {
   /** Walls on the slab's level. */
@@ -77,6 +97,12 @@ export type SlabPolygonContext = {
 
 /** [ax, az, bx, bz] segment in plan space. */
 type Segment = [number, number, number, number]
+
+/** A sibling slab's edge segment plus the sibling's extrusion height. */
+type NeighborSegment = {
+  segment: Segment
+  elevation: number
+}
 
 /**
  * Derive a {@link SlabPolygonContext} from a registry `GeometryContext`:
@@ -115,7 +141,11 @@ export function getRenderableSlabPolygon(
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
 
-  const subSpans = computeEdgeSubSpans(polygon, context)
+  const subSpans = computeEdgeSubSpans(
+    polygon,
+    slabNode.elevation ?? DEFAULT_SLAB_ELEVATION,
+    context,
+  )
   if (subSpans.every((spans) => spans.length === 1 && spans[0]!.offset === 0)) {
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
@@ -325,6 +355,7 @@ type EdgeSubSpan = {
  */
 function computeEdgeSubSpans(
   polygon: Array<[number, number]>,
+  selfElevation: number,
   context: SlabPolygonContext,
 ): EdgeSubSpan[][] {
   const n = polygon.length
@@ -339,14 +370,15 @@ function computeEdgeSubSpans(
   }
   const s = area2 >= 0 ? 1 : -1
 
-  const neighborSegments: Segment[] = []
+  const neighborSegments: NeighborSegment[] = []
   for (const sibling of context.siblingSlabs) {
     const siblingPolygon = sibling.polygon
     if (siblingPolygon.length < 2) continue
+    const elevation = sibling.elevation ?? DEFAULT_SLAB_ELEVATION
     for (let index = 0; index < siblingPolygon.length; index += 1) {
       const from = siblingPolygon[index]!
       const to = siblingPolygon[(index + 1) % siblingPolygon.length]!
-      neighborSegments.push([from[0], from[1], to[0], to[1]])
+      neighborSegments.push({ segment: [from[0], from[1], to[0], to[1]], elevation })
     }
   }
 
@@ -402,7 +434,9 @@ function computeEdgeSubSpans(
         if (match) rawBreakpoints.push(match.start, match.end)
       }
     }
-    for (const [px, pz, qx, qz] of neighborSegments) {
+    for (const {
+      segment: [px, pz, qx, qz],
+    } of neighborSegments) {
       const match = clipCollinearSegment(
         a[0],
         a[1],
@@ -440,6 +474,7 @@ function computeEdgeSubSpans(
           bounds[k]!,
           bounds[k + 1]!,
           s,
+          selfElevation,
           wallCandidates,
           neighborSegments,
         ),
@@ -462,6 +497,7 @@ function computeEdgeSubSpans(
           spans[k]!.start,
           spans[k + 1]!.end,
           s,
+          selfElevation,
           wallCandidates,
           neighborSegments,
         )
@@ -481,7 +517,9 @@ function computeEdgeSubSpans(
  * Classify one span of the edge `a + t·dir`, `t ∈ [start, end]`, with
  * the whole-edge rules: direct sibling wins, sibling across the same
  * wall band forces interior, otherwise the matched wall's outer face,
- * otherwise free.
+ * otherwise free. Interior spans backed by a wall project onto the
+ * centerline when both slabs share an elevation, and onto the lower
+ * side's wall face when they differ (see the module header).
  */
 function classifySpan(
   a: [number, number],
@@ -490,8 +528,9 @@ function classifySpan(
   start: number,
   end: number,
   s: number,
+  selfElevation: number,
   wallCandidates: readonly WallCandidate[],
-  neighborSegments: readonly Segment[],
+  neighborSegments: readonly NeighborSegment[],
 ): EdgeSubSpan {
   const sx = a[0] + dirX * start
   const sz = a[1] + dirZ * start
@@ -513,7 +552,11 @@ function classifySpan(
   // tolerance regardless of any wall (slabs butted against each other).
   let directOverlap = 0
   let directWeightedLateral = 0
-  for (const [px, pz, qx, qz] of neighborSegments) {
+  let directSiblingElevation: number | null = null
+  for (const {
+    segment: [px, pz, qx, qz],
+    elevation,
+  } of neighborSegments) {
     const match = clipCollinearSegment(
       sx,
       sz,
@@ -529,15 +572,19 @@ function classifySpan(
     if (!match) continue
     directOverlap += match.overlap
     directWeightedLateral += match.lateral * match.overlap
+    directSiblingElevation =
+      directSiblingElevation === null ? elevation : Math.max(directSiblingElevation, elevation)
   }
 
   let interiorLateral: number | null = null
+  let siblingElevation: number | null = null
   if (directOverlap >= requiredOverlap) {
     // No-wall fallback: half the mean sibling separation — the midline
     // between the two stored edges. Symmetric: the sibling measures the
     // same separation with opposite sign from its own line, so both
     // project onto the same line and the seam stays gapless.
     interiorLateral = wallMatch ? wallMatch.lateral : directWeightedLateral / directOverlap / 2
+    siblingElevation = directSiblingElevation
   } else if (wallMatch) {
     // Rooms across a shared wall: legacy face-aligned polygons sit a
     // full thickness apart — far beyond the direct tolerance — but
@@ -547,7 +594,10 @@ function classifySpan(
     const bandTolerance = wallMatch.halfThickness + WALL_ADOPTION_TOLERANCE
     const looseTolerance = Math.abs(wallMatch.lateral) + bandTolerance
     let bandOverlap = 0
-    for (const [px, pz, qx, qz] of neighborSegments) {
+    for (const {
+      segment: [px, pz, qx, qz],
+      elevation,
+    } of neighborSegments) {
       const match = clipCollinearSegment(
         sx,
         sz,
@@ -563,13 +613,41 @@ function classifySpan(
       if (!match) continue
       if (Math.abs(match.lateral - wallMatch.lateral) > bandTolerance) continue
       bandOverlap += match.overlap
+      siblingElevation =
+        siblingElevation === null ? elevation : Math.max(siblingElevation, elevation)
     }
     if (bandOverlap >= requiredOverlap) {
       interiorLateral = wallMatch.lateral
+    } else {
+      siblingElevation = null
     }
   }
 
   if (interiorLateral !== null) {
+    if (wallMatch && siblingElevation !== null) {
+      const elevationDelta = selfElevation - siblingElevation
+      if (elevationDelta > SLAB_SEAM_ELEVATION_EPSILON) {
+        // Higher room: run through the whole band to the wall face on the
+        // sibling's side — the wall base sits on this slab, and the seam
+        // face lands flush under the wall face the lower room sees.
+        return {
+          start,
+          end,
+          offset: s * wallMatch.lateral + wallMatch.halfThickness,
+          key: `interior|${wallMatch.wall.id}|over`,
+        }
+      }
+      if (elevationDelta < -SLAB_SEAM_ELEVATION_EPSILON) {
+        // Lower room: stop at the wall face on the own side — the same
+        // line the higher slab projects to from across the band.
+        return {
+          start,
+          end,
+          offset: s * wallMatch.lateral - wallMatch.halfThickness,
+          key: `interior|${wallMatch.wall.id}|under`,
+        }
+      }
+    }
     return {
       start,
       end,

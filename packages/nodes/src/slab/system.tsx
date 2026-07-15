@@ -40,7 +40,12 @@ function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string,
       )
     } else if (node.type === 'slab') {
       const slab = node as SlabNode
-      push(levelId, `s|${slab.id}|${slab.polygon.map(([x, z]) => `${x},${z}`).join(';')}`)
+      // Elevation is a seam input: an unequal-elevation seam projects to
+      // the lower side's wall face, so a height change reshapes siblings.
+      push(
+        levelId,
+        `s|${slab.id}|${slab.elevation ?? ''}|${slab.polygon.map(([x, z]) => `${x},${z}`).join(';')}`,
+      )
     }
   }
 

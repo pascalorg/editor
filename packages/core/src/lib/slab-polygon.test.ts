@@ -7,8 +7,10 @@ function wallOf(start: [number, number], end: [number, number], thickness = 0.1)
   return WallNode.parse({ start, end, thickness })
 }
 
-function slabOf(polygon: Array<[number, number]>, autoFromWalls = true) {
-  return SlabNode.parse({ polygon, autoFromWalls })
+function slabOf(polygon: Array<[number, number]>, autoFromWalls = true, elevation?: number) {
+  return SlabNode.parse(
+    elevation === undefined ? { polygon, autoFromWalls } : { polygon, autoFromWalls, elevation },
+  )
 }
 
 function xs(polygon: Array<[number, number]>) {
@@ -368,6 +370,147 @@ describe('getRenderableSlabPolygon', () => {
     expect(Math.max(...xs(polyA))).toBeCloseTo(4)
     expect(Math.min(...xs(polyB))).toBeCloseTo(4)
     expect(Math.max(...xs(polyA))).toBeLessThanOrEqual(Math.min(...xs(polyB)) + 1e-9)
+  })
+
+  test('rooms at different elevations seam at the lower side wall face — no pocket under the wall', () => {
+    // Real user repro shape: two rooms in an L/offset arrangement share the
+    // z=0 wall over x ∈ [-1, 0.5] only; the north room's floor is raised
+    // (0.34) above the south room's (0.05). Slabs extrude 0 → elevation and
+    // the wall base sits on the HIGHER slab, so a centerline seam would
+    // leave a half-band open pocket between the low slab's top and the wall
+    // base, visible from the low room. Instead the high slab runs through
+    // the whole band to the wall face on the LOW side, and the low slab
+    // stops at that same line.
+    const walls = [
+      wallOf([-1, 3], [-1, 0]),
+      wallOf([-1, 0], [0.5, 0]),
+      wallOf([0.5, 0], [2, 0]),
+      wallOf([2, 0], [2, 3]),
+      wallOf([2, 3], [-1, 3]),
+      wallOf([0.5, 0], [0.5, -4]),
+      wallOf([0.5, -4], [-1, -4]),
+      wallOf([-1, -4], [-1, 0]),
+    ]
+    const high = slabOf(
+      [
+        [-1, 3],
+        [-1, 0],
+        [2, 0],
+        [2, 3],
+      ],
+      false,
+      0.34,
+    )
+    const low = slabOf(
+      [
+        [0.5, 0],
+        [-1, 0],
+        [-1, -4],
+        [0.5, -4],
+      ],
+      true,
+      0.05,
+    )
+
+    const polyHigh = getRenderableSlabPolygon(high, { walls, siblingSlabs: [low] })
+    const polyLow = getRenderableSlabPolygon(low, { walls, siblingSlabs: [high] })
+
+    // The high slab's south boundary lands on the LOW side's wall face
+    // (z=-0.05) across the shared span and fuses with the facade span of
+    // the same wall run beyond the sibling.
+    expectRingToInclude(polyHigh, [
+      [0.5, -0.05],
+      [2.05, -0.05],
+    ])
+    expect(Math.min(...zs(polyHigh))).toBeCloseTo(-0.05)
+    // The low slab stops at the same line: its top face ends where the
+    // visible wall face starts, instead of running under the band.
+    expect(Math.max(...zs(polyLow))).toBeCloseTo(-0.05)
+
+    // Both rings emit the identical seam plane — flush, no gap, no overlap.
+    expect(Math.max(...zs(polyLow))).toBeLessThanOrEqual(Math.min(...zs(polyHigh)) + 1e-9)
+
+    // The shared wall's footprint band is fully solid up to the wall base:
+    // every band sample is inside the HIGH slab (whose extrusion reaches
+    // the wall base at 0.34) — the see-through pocket is gone.
+    for (let x = -0.95; x <= 0.4501; x += 0.05) {
+      for (let z = -0.045; z <= 0.0451; z += 0.015) {
+        expect(pointInPolygon([x, z], polyHigh, { includeBoundary: false })).toBe(true)
+      }
+    }
+  })
+
+  test('legacy face-aligned rooms at different elevations self-heal onto the lower side face', () => {
+    // Same stored-at-inner-faces legacy data as above (edges a full 0.3
+    // apart across the t=0.3 wall at x=4), but with the west room raised.
+    // Both edges must classify interior through the band-sibling rule and
+    // project to the SAME line — the wall face on the lower (east) side.
+    const walls = [
+      wallOf([0, 0], [8, 0]),
+      wallOf([8, 0], [8, 3]),
+      wallOf([8, 3], [0, 3]),
+      wallOf([0, 3], [0, 0]),
+      wallOf([4, 0], [4, 3], 0.3),
+    ]
+    const legacyHigh = slabOf(
+      [
+        [0, 0],
+        [3.85, 0],
+        [3.85, 3],
+        [0, 3],
+      ],
+      false,
+      0.4,
+    )
+    const legacyLow = slabOf(
+      [
+        [4.15, 0],
+        [8, 0],
+        [8, 3],
+        [4.15, 3],
+      ],
+      false,
+      0.05,
+    )
+
+    const polyHigh = getRenderableSlabPolygon(legacyHigh, { walls, siblingSlabs: [legacyLow] })
+    const polyLow = getRenderableSlabPolygon(legacyLow, { walls, siblingSlabs: [legacyHigh] })
+
+    expect(Math.max(...xs(polyHigh))).toBeCloseTo(4.15)
+    expect(Math.min(...xs(polyLow))).toBeCloseTo(4.15)
+    expect(Math.max(...xs(polyHigh))).toBeLessThanOrEqual(Math.min(...xs(polyLow)) + 1e-9)
+  })
+
+  test('wall-less butted slabs at different elevations keep the midline seam', () => {
+    // No wall backs the seam, so there is no band to hide a pocket under —
+    // the exposed step face at the joint is correct. Elevation must not
+    // move a wall-less seam off the midline.
+    const stepHigh = slabOf(
+      [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      false,
+      0.3,
+    )
+    const stepLow = slabOf(
+      [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      false,
+      0.05,
+    )
+
+    const polyHigh = getRenderableSlabPolygon(stepHigh, { walls: [], siblingSlabs: [stepLow] })
+    const polyLow = getRenderableSlabPolygon(stepLow, { walls: [], siblingSlabs: [stepHigh] })
+
+    expect(Math.max(...xs(polyHigh))).toBeCloseTo(4)
+    expect(Math.min(...xs(polyLow))).toBeCloseTo(4)
   })
 
   test('offset rooms sharing a partial wall span: interior beside the sibling, facade elsewhere', () => {
