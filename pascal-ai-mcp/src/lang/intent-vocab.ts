@@ -9,7 +9,10 @@
 // 「修正を続けて」, so all three MUST classify as `update` here.
 // ---------------------------------------------------------------------------
 
-export type SceneIntent = 'query' | 'create' | 'update' | 'delete' | 'ambiguous'
+// `off_topic` is only ever produced by the model classifier; the regex
+// fallback below never returns it — when the API is down, letting a stray
+// chat message fall through to query/ambiguous is an acceptable cost.
+export type SceneIntent = 'query' | 'create' | 'update' | 'delete' | 'ambiguous' | 'off_topic'
 
 // Order matters and mirrors classifySceneIntentFallback: delete before
 // create/update (「取り除いて」 must never read as create), actions before

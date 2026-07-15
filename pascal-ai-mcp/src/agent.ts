@@ -144,6 +144,7 @@ type ExtractionResponse = {
   overallConfidence?: unknown
   imageUsable?: unknown
   imageReason?: unknown
+  relevant?: unknown
 }
 
 type Evaluation = {
@@ -402,6 +403,14 @@ export class PascalAiAgent {
 
     try {
       const extracted = await this.extractRequirements(session, message, input.imageDataUrl)
+      // Off-topic input (weather, small talk…): reply and stop before it
+      // pollutes the brief or burns a clarification round. Only an explicit
+      // `false` short-circuits, so models that omit the field behave as before.
+      if (extracted.relevant === false) {
+        const reply = t(session.language, 'offTopic', {})
+        session.messages.push({ role: 'assistant', content: reply })
+        return { session, reply, next: 'finish' }
+      }
       session.brief = mergeBrief(session.brief, extracted)
       ensureSiteDimensionFact(session.brief, message, session.language ?? 'zh')
       session.questions = stringArray(extracted.questions).slice(0, 3)
@@ -447,6 +456,14 @@ export class PascalAiAgent {
   ): Promise<Partial<WorkflowGraphState>> {
     session.messages.push({ role: 'user', content: message })
     const intent = await this.classifySceneIntent(session, message)
+    if (intent === 'off_topic') {
+      session.phase = session.sceneResult?.remainingIssueCount
+        ? 'completed_with_issues'
+        : 'completed'
+      const reply = t(session.language, 'offTopic', {})
+      session.messages.push({ role: 'assistant', content: reply })
+      return { session, reply, next: 'finish' }
+    }
     if (intent === 'query') {
       session.phase = 'inspecting'
       return { session, reply: t(session.language, 'inspectStarting', {}), next: 'inspect' }
@@ -491,7 +508,7 @@ export class PascalAiAgent {
           [
             {
               role: 'system',
-              content: 'Classify a request about an existing architectural scene. Use the recent conversation to resolve references like pronouns, "that one", or "same as before". Return JSON only: {"intent":"query|create|update|delete|ambiguous"}. Query must be read-only. Use ambiguous when the requested action or target is unclear even with context.',
+              content: 'Classify a request about an existing architectural scene. Use the recent conversation to resolve references like pronouns, "that one", or "same as before". Return JSON only: {"intent":"query|create|update|delete|ambiguous|off_topic"}. Query must be read-only. Use off_topic only when the message is clearly unrelated to both this scene and architectural/interior design (e.g. weather, small talk, general knowledge). Use ambiguous when the message plausibly concerns the scene but the requested action or target is unclear even with context.',
             },
             {
               role: 'user',
@@ -1519,7 +1536,7 @@ export class PascalAiAgent {
       {
         role: 'system',
         content:
-          'Inspect the active Pascal scene and answer the user accurately. Use read-only tools when needed. Never mutate the scene. State what you verified, identify relevant node ids when useful, and distinguish measured facts from uncertainty. Use the recent conversation to resolve references like "that wall" or "the one I mentioned". Reply in the language of the user\'s message (default to English if unclear).',
+          'Inspect the active Pascal scene and answer the user accurately. Use read-only tools when needed. Never mutate the scene. State what you verified, identify relevant node ids when useful, and distinguish measured facts from uncertainty. Use the recent conversation to resolve references like "that wall" or "the one I mentioned". If the question is unrelated to the scene and to architectural/interior design (e.g. weather, small talk), do not call any tools — briefly say you can only help with the floor plan. Reply in the language of the user\'s message (default to English if unclear).',
       },
       { role: 'user', content: `${history}${question}` },
     ]
@@ -1556,7 +1573,8 @@ export class PascalAiAgent {
 每个信息项格式：
 {"key":"稳定的snake_case键","label":"用户语言的名称","value":"值或数组","source":"user|system_recognition|agent_inference|default_assumption|pending_confirmation","confidence":0到1,"confirmationStatus":"unconfirmed|confirmed|rejected","evidence":"简短依据"}
 
-输出字段：existingCondition、designGoals、hardConstraints、assumptions、uncertainties、conflicts、questions、overallConfidence、imageUsable、imageReason。
+输出字段：existingCondition、designGoals、hardConstraints、assumptions、uncertainties、conflicts、questions、overallConfidence、imageUsable、imageReason、relevant。
+relevant 为布尔值：仅当输入（文字和图片都算）与住宅户型、房间布局、室内设计完全无关时才为 false（如问天气、闲聊、常识问答）；只要沾边或含户型图就为 true。relevant 为 false 时其余字段返回空即可。
 conflicts 格式：{"key":"...","existingValue":"...","requestedValue":"...","question":"..."}。
 常见信息用稳定 key：总面积 "total_area"、房间构成 "room_program"、卧室数 "bedroom_count"（数字）、边界/开间进深 "boundary_dimensions"。用户给出"N室/N卧/NLDK"时必须同时产出数字型 bedroom_count。
 用户给出总面积或房间构成时，它们是已确认的设计目标（designGoals，confidence≥0.9），不要因"面积口径未说明"之类的次要歧义把它们降级或列为 uncertainties——按建筑面积理解即可。
@@ -4567,7 +4585,7 @@ export function shouldModifyExistingScene(count: number): boolean {
 
 function isSceneIntent(value: unknown): value is SceneIntent {
   return value === 'query' || value === 'create' || value === 'update' ||
-    value === 'delete' || value === 'ambiguous'
+    value === 'delete' || value === 'ambiguous' || value === 'off_topic'
 }
 
 function isCollision(value: unknown): value is { aId: string; bId: string; kind: string } {

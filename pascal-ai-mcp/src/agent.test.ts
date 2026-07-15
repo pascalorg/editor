@@ -183,6 +183,13 @@ test('existing scene requests are routed by CRUD intent', () => {
   expect(classifySceneIntentFallback('客厅东边的窗户')).toBe('ambiguous')
 })
 
+test('fallback never classifies as off_topic — that verdict is reserved for the model classifier', () => {
+  // When the model is unavailable, off-topic chat degrades to ambiguous
+  // (no question mark) or query (question-shaped) instead of being blocked.
+  expect(classifySceneIntentFallback('今天天气怎么样')).toBe('ambiguous')
+  expect(classifySceneIntentFallback('今天天气怎么样？')).toBe('query')
+})
+
 test('fallback intent classification understands all three reply-hint languages', () => {
   // The reply templates tell users to answer with these exact phrases — the
   // deterministic fallback must classify every one of them as update.

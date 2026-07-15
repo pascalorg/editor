@@ -307,6 +307,11 @@ export const MESSAGES = {
     () => 'ご要望が現在の間取りの確認なのか、追加・修正・削除なのか判断できませんでした。操作と対象を明確にしてください。例：「この壁の長さを確認して」「リビング東側の窓を削除して」。',
     () => "I can't tell whether you want to inspect the current floor plan or add, modify, or delete something. Please state the action and target, e.g. \"check how long this wall is\" or \"delete the window on the east side of the living room\".",
   ),
+  offTopic: def<Record<string, never>>(
+    () => '我是户型设计助手，只能处理与户型、房间布局和室内设计相关的问题。请描述你的户型需求，例如“设计一个 90㎡ 的三室两厅”或“把主卧的窗户加宽”。',
+    () => '私は間取り設計アシスタントです。間取り・部屋のレイアウト・インテリアに関するご質問のみ対応できます。例：「90㎡の3LDKを設計して」「主寝室の窓を広げて」。',
+    () => "I'm a floor-plan design assistant and can only help with floor plans, room layouts, and interior design. Please describe your floor-plan request, e.g. \"design a 90㎡ three-bedroom apartment\" or \"widen the window in the master bedroom\".",
+  ),
   deleteConfirm: def<{ message: string }>(
     p => `准备删除当前户型内容：${p.message}\n\n这是删除操作，确认后目标节点及其关联内容可能被移除。请确认后再执行，确认前不会更改场景。`,
     p => `間取りから次の内容を削除しようとしています：${p.message}\n\nこれは削除操作です。確認後、対象ノードと関連する内容が取り除かれる可能性があります。確認するまでシーンは変更されません。`,
