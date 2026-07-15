@@ -228,7 +228,7 @@ function usePolygonArrowMaterial(): MeshBasicNodeMaterial {
     () =>
       new MeshBasicNodeMaterial({
         color: new Color(EDGE_ARROW_COLOR),
-        depthTest: true,
+        depthTest: false,
         depthWrite: true,
         opacity: 1,
         side: DoubleSide,
@@ -239,8 +239,7 @@ function usePolygonArrowMaterial(): MeshBasicNodeMaterial {
 }
 
 // One mesh per handle: lives on SCENE_LAYER with a node material so the
-// post-processing ink-edge pass outlines it. The visual material still
-// depth-tests, so walls/items in front can occlude it.
+// post-processing ink-edge pass outlines it.
 function OutlinedCylinderHandle({
   radius,
   height,
@@ -885,8 +884,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   const edgeHandleY = editY + handleHeight - EDGE_HANDLE_HEIGHT / 2
 
   // Interactive handles are SCENE_LAYER node-material meshes so the ink-edge
-  // pass outlines them while normal scene depth can hide them. The edge BAR and
-  // border line stay on EDITOR_LAYER, visual-only
+  // pass outlines them. Edge arrows ignore scene depth so the active resize
+  // affordance remains visible through walls and slabs. The edge BAR and border
+  // line stay on EDITOR_LAYER, visual-only
   // (raycast disabled) so they never steal clicks from the vertex/midpoint
   // handles overlapping them — edge dragging starts from the chevron arrow
   // outside the polygon edge.
