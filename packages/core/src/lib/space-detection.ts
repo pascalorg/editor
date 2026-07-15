@@ -589,10 +589,45 @@ function extractRooms(walls: WallNode[]): ExtractedRoom[] {
     return outgoing[nextIdx] ?? null
   }
 
+  const splitIntoSimpleCycles = (walkEdgeIds: string[]) => {
+    const cycles: string[][] = []
+    const firstEdge = halfEdges.get(walkEdgeIds[0] ?? '')
+    if (!firstEdge) return cycles
+
+    const pathEdges: string[] = []
+    const pathVertices = [firstEdge.fromKey]
+    const vertexIndex = new Map([[firstEdge.fromKey, 0]])
+
+    for (const edgeId of walkEdgeIds) {
+      const edge = halfEdges.get(edgeId)
+      if (!edge || edge.fromKey !== pathVertices[pathVertices.length - 1]) return []
+
+      pathEdges.push(edgeId)
+      const repeatedIndex = vertexIndex.get(edge.toKey)
+      if (repeatedIndex === undefined) {
+        pathVertices.push(edge.toKey)
+        vertexIndex.set(edge.toKey, pathVertices.length - 1)
+        continue
+      }
+
+      const cycle = pathEdges.slice(repeatedIndex)
+      if (cycle.length >= 3) cycles.push(cycle)
+
+      for (let index = repeatedIndex + 1; index < pathVertices.length; index += 1) {
+        vertexIndex.delete(pathVertices[index]!)
+      }
+      pathVertices.length = repeatedIndex + 1
+      pathEdges.length = repeatedIndex
+    }
+
+    return pathEdges.length === 0 && pathVertices.length === 1 ? cycles : []
+  }
+
   const visitedDirected = new Set<string>()
   const rooms: ExtractedRoom[] = []
-  // A single face cannot revisit a half-edge, so the half-edge count bounds the
-  // longest possible cycle. Splitting at junctions can multiply edges per wall.
+  // A face walk cannot revisit a half-edge, so the half-edge count bounds its
+  // length. It can revisit a vertex when dangling walls or other graph bridges
+  // are traced out and back; those excursions are removed below.
   const maxSteps = Math.min(2000, halfEdges.size + 10)
 
   for (const edgeId of halfEdges.keys()) {
@@ -601,6 +636,7 @@ function extractRooms(walls: WallNode[]): ExtractedRoom[] {
     const cycleEdgeIds: string[] = []
     let currentEdgeId = edgeId
     let valid = true
+    let closed = false
 
     for (let step = 0; step < maxSteps; step += 1) {
       const currentEdge = halfEdges.get(currentEdgeId)
@@ -619,41 +655,46 @@ function extractRooms(walls: WallNode[]): ExtractedRoom[] {
       }
 
       currentEdgeId = next
-      if (currentEdgeId === edgeId) break
+      if (currentEdgeId === edgeId) {
+        closed = true
+        break
+      }
     }
 
-    if (!valid || cycleEdgeIds.length < 3) continue
+    if (!(valid && closed) || cycleEdgeIds.length < 3) continue
 
-    const polygon = dedupeSequentialPoints(
-      cycleEdgeIds.flatMap((id, index) => {
-        const points = halfEdges.get(id)?.points ?? []
-        return index === cycleEdgeIds.length - 1 ? points : points.slice(0, -1)
-      }),
-    )
+    for (const simpleCycleEdgeIds of splitIntoSimpleCycles(cycleEdgeIds)) {
+      const polygon = dedupeSequentialPoints(
+        simpleCycleEdgeIds.flatMap((id, index) => {
+          const points = halfEdges.get(id)?.points ?? []
+          return index === simpleCycleEdgeIds.length - 1 ? points : points.slice(0, -1)
+        }),
+      )
 
-    if (polygon.length < 3) continue
+      if (polygon.length < 3) continue
 
-    const signedArea = polygonArea(polygon)
-    if (signedArea <= 0) continue
-    if (signedArea < 0.5 || signedArea > 10_000) continue
+      const signedArea = polygonArea(polygon)
+      if (signedArea <= 0) continue
+      if (signedArea < 0.5 || signedArea > 10_000) continue
 
-    const signature = polygonSignature(polygon)
-    if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue
+      const signature = polygonSignature(polygon)
+      if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue
 
-    rooms.push({
-      polygon,
-      boundaryFaces: cycleEdgeIds.flatMap((id) => {
-        const edge = halfEdges.get(id)
-        if (!edge) return []
-        return [
-          {
-            wallId: edge.wallId,
-            face: edge.face,
-            points: edge.points.map(pointToTuple),
-          },
-        ]
-      }),
-    })
+      rooms.push({
+        polygon,
+        boundaryFaces: simpleCycleEdgeIds.flatMap((id) => {
+          const edge = halfEdges.get(id)
+          if (!edge) return []
+          return [
+            {
+              wallId: edge.wallId,
+              face: edge.face,
+              points: edge.points.map(pointToTuple),
+            },
+          ]
+        }),
+      })
+    }
   }
 
   rooms.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))

@@ -191,6 +191,19 @@ describe('detectSpacesForLevel', () => {
     ).toEqual(walls.map((wall) => [wall.id, 'front']).sort())
   })
 
+  test('excludes dangling wall branches from a room boundary', () => {
+    const roomWalls = squareWalls()
+    const branch = WallNode.parse({ start: [0, 0], end: [1, 1] })
+
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', [...roomWalls, branch])
+
+    expect(roomPolygons).toHaveLength(1)
+    expect(roomPolygons[0]).toHaveLength(4)
+    expect(areaOf(roomPolygons[0]!)).toBeCloseTo(12)
+    expect(spaces[0]?.wallIds.sort()).toEqual(roomWalls.map((wall) => wall.id).sort())
+    expect(spaces[0]?.boundaryFaces).toHaveLength(4)
+  })
+
   test('detects a room closed against the middle of an existing wall (T-junction)', () => {
     // Big 6×5 room; a smaller room hangs below, its two verticals landing on the
     // interior of the big room's bottom wall (x=1 and x=3, not endpoints). Before
