@@ -324,13 +324,14 @@ describe('measurement draft vertex editing', () => {
           from: point(0, 0, 0),
           to: point(3, 0, 0),
           snapped: true,
+          proximity: true,
         },
       ),
     ).toBe(true)
     expect(useMeasurementDraft.getState()).toMatchObject({
       points: [point(0, 0, 0), point(3, 0, 0), point(2, 0, 2)],
       hoverOwner: '3d',
-      axisGuide: { axis: 'x', snapped: true },
+      axisGuide: { axis: 'x', proximity: true, snapped: true },
     })
     expect(useScene.temporal.getState().pastStates.length).toBe(pastCount)
 

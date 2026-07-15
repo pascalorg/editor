@@ -24,6 +24,7 @@ export type MeasurementAxisGuide = {
   from: MeasurementPoint
   to: MeasurementPoint
   snapped: boolean
+  proximity?: boolean
 }
 
 export type MeasurementSurfacePoint = {
@@ -290,6 +291,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
             from: clonePoint(axisGuide.from),
             to: clonePoint(axisGuide.to),
             snapped: axisGuide.snapped,
+            proximity: axisGuide.proximity,
           }
         : null,
       error: null,

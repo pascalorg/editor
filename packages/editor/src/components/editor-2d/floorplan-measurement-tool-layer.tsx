@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   closestMeasurementFeatureBinding,
+  collectAlignmentAnchors,
   emitter,
   type GeometryContext,
   type MeasurementFeatureAnchor,
@@ -46,6 +47,7 @@ const Z_AXIS_COLOR = '#3b82f6'
 const RETICLE_COLOR = '#4f46e5'
 const AXIS_SNAP_DISTANCE_PX = 12
 const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
+const PROXIMITY_GUIDE_DISTANCE_PX = 32
 const VERTEX_HANDLE_DISTANCE_PX = 12
 const MIDPOINT_HANDLE_DISTANCE_PX = 10
 const VERTEX_DRAG_ACTIVATION_PX = 4
@@ -357,6 +359,7 @@ export function resolveFloorplanMeasurementAxisSnap(
   threshold = AXIS_SNAP_DISTANCE_PX,
   lockedAxis: 'x' | 'z' | null = null,
   releaseThreshold = AXIS_SNAP_RELEASE_DISTANCE_PX,
+  proximity = false,
 ): { point: MeasurementPoint; guide: MeasurementAxisGuide } {
   const candidates = [
     {
@@ -388,6 +391,7 @@ export function resolveFloorplanMeasurementAxisSnap(
       from: [...anchor],
       to: [...guideCandidate.to],
       snapped: selected !== null,
+      ...(proximity ? { proximity: true } : {}),
     },
   }
 }
@@ -435,9 +439,13 @@ function snapPlanPoint(
   clientY: number,
   allowAxisSnap = true,
   lockedGuide: MeasurementAxisGuide | null = null,
+  proximityAnchors: readonly MeasurementPoint[] = [],
 ): { point: MeasurementPoint; guide: MeasurementAxisGuide | null } {
-  if (anchors.length === 0) return { point: raw, guide: null }
-  const candidates = anchors.flatMap((anchor) => {
+  if (anchors.length === 0 && proximityAnchors.length === 0) return { point: raw, guide: null }
+  const candidates = [
+    ...anchors.map((anchor) => ({ anchor, proximity: false })),
+    ...proximityAnchors.map((anchor) => ({ anchor, proximity: true })),
+  ].flatMap(({ anchor, proximity }) => {
     const xPoint: MeasurementPoint = [raw[0], anchor[1], anchor[2]]
     const zPoint: MeasurementPoint = [anchor[0], anchor[1], raw[2]]
     return [
@@ -445,12 +453,14 @@ function snapPlanPoint(
         anchor,
         axis: 'x' as const,
         point: xPoint,
+        proximity,
         screenDistance: screenDistanceToPlanPoint(group, xPoint, clientX, clientY),
       },
       {
         anchor,
         axis: 'z' as const,
         point: zPoint,
+        proximity,
         screenDistance: screenDistanceToPlanPoint(group, zPoint, clientX, clientY),
       },
     ]
@@ -461,6 +471,7 @@ function snapPlanPoint(
     ? candidates.reduce<(typeof candidates)[number] | null>((best, candidate) => {
         if (
           candidate.axis !== lockedGuide.axis ||
+          candidate.proximity !== Boolean(lockedGuide.proximity) ||
           candidate.anchor.some(
             (value, index) => Math.abs(value - lockedGuide.from[index]!) > 1e-9,
           ) ||
@@ -470,11 +481,16 @@ function snapPlanPoint(
         return !best || candidate.screenDistance < best.screenDistance ? candidate : best
       }, null)
     : null
-  const closest = candidates.reduce<(typeof candidates)[number] | null>(
-    (best, candidate) =>
-      !best || candidate.screenDistance < best.screenDistance ? candidate : best,
-    null,
-  )
+  const closest = candidates
+    .filter(
+      (candidate) =>
+        !candidate.proximity || candidate.screenDistance <= PROXIMITY_GUIDE_DISTANCE_PX,
+    )
+    .reduce<(typeof candidates)[number] | null>(
+      (best, candidate) =>
+        !best || candidate.screenDistance < best.screenDistance ? candidate : best,
+      null,
+    )
   if (!closest) return { point: raw, guide: null }
   const selected = locked ?? (closest.screenDistance <= threshold ? closest : null)
   const guideCandidate = selected ?? closest
@@ -485,6 +501,7 @@ function snapPlanPoint(
       from: [...guideCandidate.anchor],
       to: [...guideCandidate.point],
       snapped: selected !== null,
+      ...(guideCandidate.proximity ? { proximity: true } : {}),
     },
   }
 }
@@ -777,13 +794,37 @@ export function FloorplanMeasurementToolLayer() {
     const group = groupRef.current
     const svg = group?.ownerSVGElement
     if (!(active && group && svg) || owner === '3d') return
-    let projectedGeometry: ReturnType<typeof collectRegisteredFloorplanSnapGeometry> | null = null
+    let projectedGeometry:
+      | (ReturnType<typeof collectRegisteredFloorplanSnapGeometry> & {
+          proximityAnchors: MeasurementPoint[]
+        })
+      | null = null
     let projectedGeometryTimestamp = Number.NEGATIVE_INFINITY
 
     const getProjectedGeometry = () => {
       const now = performance.now()
       if (!projectedGeometry || now - projectedGeometryTimestamp > 120) {
-        projectedGeometry = collectRegisteredFloorplanSnapGeometry(svg)
+        const geometry = collectRegisteredFloorplanSnapGeometry(svg)
+        const seen = new Set<string>()
+        const sceneAnchors = collectAlignmentAnchors(
+          useScene.getState().nodes,
+          '',
+          activeLevelId,
+        ).map(({ x, z }) => [x, 0, z] as MeasurementPoint)
+        const proximityAnchors = [
+          ...sceneAnchors,
+          ...geometry.vertices.flatMap((vertex) => {
+            const plan = clientToPlanPoint(group, vertex.x, vertex.z)
+            if (!plan) return []
+            return [[plan.x, 0, plan.z] as MeasurementPoint]
+          }),
+        ].filter((anchor) => {
+          const key = `${Math.round(anchor[0] * 1_000)}:${Math.round(anchor[2] * 1_000)}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        projectedGeometry = { ...geometry, proximityAnchors }
         projectedGeometryTimestamp = now
       }
       return projectedGeometry
@@ -844,6 +885,7 @@ export function FloorplanMeasurementToolLayer() {
         event.clientY,
         true,
         draft.axisGuide?.snapped && draft.axisGuide.axis !== 'y' ? draft.axisGuide : null,
+        projectedGeometry.proximityAnchors,
       )
       if (projectedSnap && resolved.guide?.snapped) {
         const candidate = planPointToClient(group, resolved.point)
@@ -864,6 +906,7 @@ export function FloorplanMeasurementToolLayer() {
             event.clientY,
             false,
             null,
+            projectedGeometry.proximityAnchors,
           )
           return { ...surfaceOnly, targetNodeId: projectedSnap.nodeId }
         }
@@ -1086,7 +1129,7 @@ export function FloorplanMeasurementToolLayer() {
       svg.removeEventListener('dblclick', onDoubleClick, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [active, owner])
+  }, [active, activeLevelId, owner])
 
   const preview = useMemo(() => {
     const livePoints =
@@ -1223,7 +1266,7 @@ export function FloorplanMeasurementToolLayer() {
           <line
             stroke={X_AXIS_COLOR}
             strokeDasharray="6 5"
-            strokeOpacity={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 0.9 : 0.55) : 0.25}
+            strokeOpacity={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 0.95 : 0.68) : 0.34}
             strokeWidth={axisGuide?.axis === 'x' ? 1.75 : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0] - guideHalfLength}
@@ -1234,7 +1277,7 @@ export function FloorplanMeasurementToolLayer() {
           <line
             stroke={Z_AXIS_COLOR}
             strokeDasharray="6 5"
-            strokeOpacity={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 0.9 : 0.55) : 0.25}
+            strokeOpacity={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 0.95 : 0.68) : 0.34}
             strokeWidth={axisGuide?.axis === 'z' ? 1.75 : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0]}
@@ -1314,10 +1357,20 @@ export function FloorplanMeasurementToolLayer() {
       {axisGuide ? (
         <g pointerEvents="none">
           <line
+            stroke="#f8fafc"
+            strokeOpacity={axisGuide.snapped ? 0.8 : 0.35}
+            strokeWidth={4}
+            vectorEffect="non-scaling-stroke"
+            x1={axisGuide.from[0]}
+            x2={axisGuide.to[0]}
+            y1={axisGuide.from[2]}
+            y2={axisGuide.to[2]}
+          />
+          <line
             stroke={axisGuide.axis === 'x' ? X_AXIS_COLOR : Z_AXIS_COLOR}
             strokeDasharray={axisGuide.snapped ? undefined : '5 4'}
-            strokeOpacity={axisGuide.snapped ? 1 : 0.55}
-            strokeWidth={1.5}
+            strokeOpacity={axisGuide.snapped ? 1 : 0.72}
+            strokeWidth={axisGuide.snapped ? 2.5 : 1.75}
             vectorEffect="non-scaling-stroke"
             x1={axisGuide.from[0]}
             x2={axisGuide.to[0]}
@@ -1332,10 +1385,22 @@ export function FloorplanMeasurementToolLayer() {
             textAnchor="middle"
             transform={`rotate(${-sceneRotationDeg} ${axisGuide.to[0]} ${axisGuide.to[2]})`}
             x={axisGuide.to[0]}
-            y={axisGuide.to[2] - 8 * unitsPerPixel}
+            y={axisGuide.to[2] - 24 * unitsPerPixel}
           >
+            {axisGuide.proximity ? 'ALIGN ' : ''}
             {axisGuide.axis.toUpperCase()}
           </text>
+          {axisGuide.proximity && axisGuide.snapped ? (
+            <circle
+              cx={axisGuide.from[0]}
+              cy={axisGuide.from[2]}
+              fill={labelBackground}
+              r={5 * unitsPerPixel}
+              stroke={axisGuide.axis === 'x' ? X_AXIS_COLOR : Z_AXIS_COLOR}
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
         </g>
       ) : null}
       {points.map((point, index) => (

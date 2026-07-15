@@ -34,6 +34,21 @@ describe('resolveFloorplanMeasurementAxisSnap', () => {
       guide: { axis: 'z', from: [1, 0, 1], to: [1, 0, 2], snapped: true },
     })
   })
+
+  test('marks scene-anchor alignment as a proximity guide', () => {
+    expect(
+      resolveFloorplanMeasurementAxisSnap([3, 0, 2], [1, 0, 1], 4, 9, 12, null, 18, true),
+    ).toEqual({
+      point: [3, 0, 1],
+      guide: {
+        axis: 'x',
+        from: [1, 0, 1],
+        to: [3, 0, 1],
+        snapped: true,
+        proximity: true,
+      },
+    })
+  })
 })
 
 describe('resolveProjectedFloorplanSnap', () => {

@@ -1,7 +1,9 @@
 'use client'
 
 import {
+  type AlignmentAnchor,
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type MeasurementFeatureAnchor,
   type MeasurementSnapKind,
@@ -67,6 +69,7 @@ import { matchMeasurementFeatureForNode } from './resolve'
 
 const AXIS_SNAP_DISTANCE_PX = 12
 const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
+const PROXIMITY_GUIDE_DISTANCE_PX = 32
 const VERTEX_HANDLE_DISTANCE_PX = 12
 const MIDPOINT_HANDLE_DISTANCE_PX = 10
 const VERTEX_DRAG_ACTIVATION_PX = 4
@@ -110,6 +113,7 @@ export type MeasurementAxisProjection = {
 
 type MeasurementAxisCandidate = MeasurementAxisProjection & {
   anchor?: MeasurementPoint
+  proximity?: boolean
   screenDistance: number
   verified: boolean
 }
@@ -164,6 +168,15 @@ export function projectMeasurementPointToAxes(
     { axis: 'y', point: [anchor[0], point[1], anchor[2]] },
     { axis: 'z', point: [anchor[0], anchor[1], point[2]] },
   ]
+}
+
+export function projectMeasurementPointToPlanarAxes(
+  anchor: MeasurementPoint,
+  point: MeasurementPoint,
+): MeasurementAxisProjection[] {
+  return projectMeasurementPointToAxes(anchor, point).filter(
+    (candidate) => candidate.axis === 'x' || candidate.axis === 'z',
+  )
 }
 
 export function selectClosestVerifiedAxisProjection(
@@ -435,11 +448,12 @@ function axisGuideToPoint(
   from: MeasurementPoint,
   point: MeasurementPoint,
   snapped: boolean,
+  proximity = false,
 ): MeasurementAxisGuide {
   const to: MeasurementPoint = [...from]
   const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
   to[index] = point[index]
-  return { axis, from: [...from], to, snapped }
+  return { axis, from: [...from], to, snapped, ...(proximity ? { proximity: true } : {}) }
 }
 
 function verifyProjectedSurfacePoint(
@@ -474,6 +488,7 @@ export function resolveSurfacePoint(
   levelObject: Object3D,
   anchorOrAnchors: MeasurementPoint | readonly MeasurementPoint[] | null,
   lockedGuide: MeasurementAxisGuide | null = null,
+  planarProximityAnchors: readonly AlignmentAnchor[] = [],
 ): { hit: LocalSurfaceHit; guide: MeasurementAxisGuide | null } | null {
   const context = getMeasurementRaycastContext(scene)
   if (context.roots.length === 0) return null
@@ -484,29 +499,47 @@ export function resolveSurfacePoint(
   const rawWorldHit = castVisibleMeasurementSurface(raycaster, context)
   if (!rawWorldHit) return null
   const rawHit = toLocalSurfaceHit(rawWorldHit, levelObject)
-  if (!anchorOrAnchors) return { hit: rawHit, guide: null }
-  const anchors: readonly MeasurementPoint[] =
-    typeof anchorOrAnchors[0] === 'number'
+  const anchors: readonly MeasurementPoint[] = !anchorOrAnchors
+    ? []
+    : typeof anchorOrAnchors[0] === 'number'
       ? [anchorOrAnchors as MeasurementPoint]
       : (anchorOrAnchors as readonly MeasurementPoint[])
-  if (anchors.length === 0) return { hit: rawHit, guide: null }
+  const supportsPlanarProximity = Math.abs(rawHit.normal[1]) >= 0.65
+  if (anchors.length === 0 && (!supportsPlanarProximity || planarProximityAnchors.length === 0)) {
+    return { hit: rawHit, guide: null }
+  }
 
   levelObject.updateWorldMatrix(true, false)
   const levelRotation = levelObject.getWorldQuaternion(new Quaternion())
   const rawNormalWorld = new Vector3(...rawHit.normal).applyQuaternion(levelRotation).normalize()
-  const projectedCandidates = anchors.flatMap((anchor) =>
-    projectMeasurementPointToAxes(anchor, rawHit.point).map((candidate) => {
-      const candidateWorld = levelObject.localToWorld(new Vector3(...candidate.point))
-      return {
+  const projectedCandidates = [
+    ...anchors.flatMap((anchor) =>
+      projectMeasurementPointToAxes(anchor, rawHit.point).map((candidate) => ({
         ...candidate,
         anchor,
-        candidateWorld,
-        screenDistance: worldPointScreenDistance(candidateWorld, event, camera, canvas),
-        verified: false,
-        verifiedHit: null as WorldSurfaceHit | null,
-      }
-    }),
-  )
+        proximity: false,
+      })),
+    ),
+    ...(supportsPlanarProximity
+      ? planarProximityAnchors.flatMap((proximityAnchor) => {
+          const anchor: MeasurementPoint = [proximityAnchor.x, rawHit.point[1], proximityAnchor.z]
+          return projectMeasurementPointToPlanarAxes(anchor, rawHit.point).map((candidate) => ({
+            ...candidate,
+            anchor,
+            proximity: true,
+          }))
+        })
+      : []),
+  ].map((candidate) => {
+    const candidateWorld = levelObject.localToWorld(new Vector3(...candidate.point))
+    return {
+      ...candidate,
+      candidateWorld,
+      screenDistance: worldPointScreenDistance(candidateWorld, event, camera, canvas),
+      verified: false,
+      verifiedHit: null as WorldSurfaceHit | null,
+    }
+  })
   const candidateToVerify = selectAxisCandidateForSurfaceVerification(
     projectedCandidates,
     AXIS_SNAP_DISTANCE_PX,
@@ -535,19 +568,32 @@ export function resolveSurfacePoint(
   if (selected) {
     if (selected.verifiedHit) {
       const surfaceHit = toLocalSurfaceHit(selected.verifiedHit, levelObject)
-      const guide = axisGuideToPoint(selected.axis, selected.anchor, selected.point, true)
+      const guide = axisGuideToPoint(
+        selected.axis,
+        selected.anchor!,
+        selected.point,
+        true,
+        selected.proximity,
+      )
       return { hit: { ...surfaceHit, point: [...selected.point] }, guide }
     }
   }
 
-  const passive = projectedCandidates.reduce<(typeof projectedCandidates)[number] | null>(
-    (closest, candidate) =>
-      !closest || candidate.screenDistance < closest.screenDistance ? candidate : closest,
-    null,
-  )
+  const passive = projectedCandidates
+    .filter(
+      (candidate) =>
+        !candidate.proximity || candidate.screenDistance <= PROXIMITY_GUIDE_DISTANCE_PX,
+    )
+    .reduce<(typeof projectedCandidates)[number] | null>(
+      (closest, candidate) =>
+        !closest || candidate.screenDistance < closest.screenDistance ? candidate : closest,
+      null,
+    )
   return {
     hit: rawHit,
-    guide: passive ? axisGuideToPoint(passive.axis, passive.anchor, passive.point, false) : null,
+    guide: passive
+      ? axisGuideToPoint(passive.axis, passive.anchor!, passive.point, false, passive.proximity)
+      : null,
   }
 }
 
@@ -1346,7 +1392,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
             gapSize={0.08}
             key={`measurement-axis-${guide.axis}`}
             lineWidth={active ? 1.75 : 1}
-            opacity={active ? (axisGuide?.snapped ? 0.9 : 0.55) : 0.25}
+            opacity={active ? (axisGuide?.snapped ? 0.95 : 0.68) : 0.34}
             points={[guide.fromWorld, guide.toWorld]}
           />
         )
@@ -1383,14 +1429,21 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       {preview.guide ? (
         <>
           <DraftLine
+            color="#f8fafc"
+            lineWidth={4}
+            opacity={preview.guide.snapped ? 0.72 : 0.28}
+            points={[preview.guide.fromWorld, preview.guide.toWorld]}
+          />
+          <DraftLine
             color={GUIDE_COLORS[preview.guide.axis]}
             dashSize={preview.guide.snapped ? 0 : 0.08}
             gapSize={preview.guide.snapped ? 0 : 0.05}
-            lineWidth={preview.guide.snapped ? 2 : 1.5}
-            opacity={preview.guide.snapped ? 1 : 0.55}
+            lineWidth={preview.guide.snapped ? 2.5 : 1.75}
+            opacity={preview.guide.snapped ? 1 : 0.72}
             points={[preview.guide.fromWorld, preview.guide.toWorld]}
           />
-          <DraftLabel position={preview.guide.toWorld}>
+          <DraftLabel offset position={preview.guide.toWorld}>
+            {preview.guide.proximity ? 'Align ' : ''}
             {preview.guide.axis.toUpperCase()}
           </DraftLabel>
         </>
@@ -1527,6 +1580,21 @@ export const MeasurementTool: FC = () => {
 
   useEffect(() => {
     const canvas = gl.domElement
+    let planarProximityAnchors: AlignmentAnchor[] = []
+    let planarProximityAnchorsTimestamp = Number.NEGATIVE_INFINITY
+
+    const getPlanarProximityAnchors = () => {
+      const now = performance.now()
+      if (now - planarProximityAnchorsTimestamp > 120) {
+        planarProximityAnchors = collectAlignmentAnchors(
+          useScene.getState().nodes,
+          '',
+          currentLevelId,
+        )
+        planarProximityAnchorsTimestamp = now
+      }
+      return planarProximityAnchors
+    }
 
     const getLevelObject = () =>
       currentLevelId ? (sceneRegistry.nodes.get(currentLevelId) ?? null) : null
@@ -1653,6 +1721,7 @@ export const MeasurementTool: FC = () => {
           levelObject,
           anchors,
           activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
+          getPlanarProximityAnchors(),
         )
         if (resolved) {
           const hit = associateSurfaceHit(resolved.hit)
@@ -1697,6 +1766,7 @@ export const MeasurementTool: FC = () => {
         levelObject,
         draft.points[draft.points.length - 1] ?? null,
         draft.axisGuide?.snapped ? draft.axisGuide : null,
+        getPlanarProximityAnchors(),
       )
       draft.setHover(
         '3d',
@@ -1774,6 +1844,7 @@ export const MeasurementTool: FC = () => {
         levelObject,
         draft.points[draft.points.length - 1] ?? null,
         draft.axisGuide?.snapped ? draft.axisGuide : null,
+        getPlanarProximityAnchors(),
       )
       if (!resolved) return
       const hit = associateSurfaceHit(resolved.hit)

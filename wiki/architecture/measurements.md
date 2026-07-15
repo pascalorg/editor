@@ -63,7 +63,9 @@ The registered 3D tool raycasts visible geometry under registered scene roots an
 
 Axis assistance starts from the previous vertex. X, Y, or Z becomes a snap only when the projected candidate is verified on the hit surface within the screen-space threshold. Otherwise the raw surface hit remains authoritative and the nearest axis is shown as a passive guide. A magnetic lock enters at 12 screen pixels and retains the same axis and anchor until 18 pixels; it must release immediately if that candidate no longer verifies on the surface.
 
-The 2D layer reads registered floor-plan SVG geometry. It gives vertices priority over edges, bounds element and segment collection, and applies X/Z assistance in plan space. Both views use the same draft transitions and commit path.
+Measurements also treat the active level's structural alignment anchors as proximity axes. In 3D this assistance is limited to near-horizontal hit surfaces and every acquired X/Z projection is recast onto the original surface before it can move the point. In both views a nearby scene axis may be advertised up to 32 screen pixels away, becomes magnetic at the ordinary 12-pixel acquisition threshold, and retains the exact source anchor through the 18-pixel release threshold. Keep this state in the measurement draft until the shared alignment-guide store has owner-aware sessions; publishing ownerless global guides would let the inactive pane overwrite the active measurement.
+
+The 2D layer reads registered floor-plan SVG geometry and the same structural alignment anchors used by placement tools. It gives vertices priority over edges, bounds element and segment collection, de-duplicates proximity anchors in plan space, and applies X/Z assistance in plan space. Both views use the same draft transitions and commit path.
 
 After ordinary surface/plan snapping, the winning registered node may refine the hit through `NodeDefinition.measurement.match`. A successful match stores the semantic feature anchor and uses its resolved point; unsupported nodes retain the ordinary free point. This keeps generic picking available to every rendered node without pretending that unstable mesh triangles are persistent topology.
 
@@ -87,7 +89,7 @@ Labels use a restrained hierarchy: distance shows one value offset from its segm
 
 Draft strokes use finite, non-indexed `BufferGeometry` with WebGPU node line materials. Do not use Drei's wide `Line` helper here: it creates WebGL `LineMaterial` and instanced geometry that the WebGPU post-processing pass cannot render.
 
-The 3D hover reticle is a screen-sized, double-sided ring oriented to the resolved surface normal. Its short RGB axes stay in the level measurement frame, while a neutral stem communicates the surface normal. After the first point, full X/Y/Z guides pass through the active anchor; 2D mirrors this with an upright reticle and X/Z guides. Locked guides and reticles use the acquired axis color, while passive guides remain dashed and subdued.
+The 3D hover reticle is a screen-sized, double-sided ring oriented to the resolved surface normal. Its short RGB axes stay in the level measurement frame, while a neutral stem communicates the surface normal. After the first point, full X/Y/Z guides pass through the active anchor; 2D mirrors this with an upright reticle and X/Z guides. Locked guides and reticles use the acquired axis color, while passive guides remain dashed and subdued. A scene-proximity guide uses a white halo beneath the axis color, an `Align X/Y/Z` label, and, in 2D, a source beacon so the relationship remains legible over dense geometry.
 
 ## Interaction completion
 

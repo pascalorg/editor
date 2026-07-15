@@ -26,6 +26,7 @@ import {
   measurementVertexSnapAnchors,
   parseMeasurementExtrusionHeight,
   projectMeasurementPointToAxes,
+  projectMeasurementPointToPlanarAxes,
   resolveSurfacePoint,
   selectAxisCandidateForSurfaceVerification,
   selectClosestMeasurementVertexIndex,
@@ -213,6 +214,46 @@ describe('measurement surface visibility', () => {
     expect(resolved?.hit.point).toEqual(resolved?.guide?.to)
     cleanup()
   })
+
+  test('magnetically aligns a horizontal surface hit to a nearby scene anchor', () => {
+    const scene = new Group()
+    const level = new Group()
+    const geometry = new PlaneGeometry(10, 10)
+    const material = new MeshBasicMaterial({ side: DoubleSide })
+    const surface = new Mesh(geometry, material)
+    surface.rotation.x = -Math.PI / 2
+    level.add(surface)
+    scene.add(level)
+    scene.updateMatrixWorld(true)
+    sceneRegistry.nodes.set('slab_surface', surface)
+    useScene.setState({ nodes: { slab_surface: { type: 'slab' } } } as never)
+
+    const camera = new PerspectiveCamera(50, 1, 0.1, 100)
+    camera.position.set(0, 10, 0)
+    camera.up.set(0, 0, -1)
+    camera.lookAt(0, 0, 0)
+    camera.updateProjectionMatrix()
+    camera.updateMatrixWorld(true)
+    const resolved = resolveSurfacePoint(
+      { clientX: 100, clientY: 100 } as PointerEvent,
+      camera,
+      {
+        getBoundingClientRect: () => ({ height: 200, left: 0, top: 0, width: 200 }),
+      } as unknown as HTMLCanvasElement,
+      new Raycaster(),
+      new Vector2(),
+      scene,
+      level,
+      null,
+      null,
+      [{ nodeId: 'wall_1', kind: 'corner', x: 2, z: 0.1 }],
+    )
+
+    expect(resolved?.guide).toMatchObject({ axis: 'x', proximity: true, snapped: true })
+    expect(resolved?.hit.point).toEqual(resolved?.guide?.to)
+    geometry.dispose()
+    material.dispose()
+  })
 })
 
 describe('closestMeasurementExtrusionHeight', () => {
@@ -293,6 +334,10 @@ describe('measurement axis projection', () => {
     expect(projectMeasurementPointToAxes([1, 0, 2], [4, 0, 7])).toEqual([
       { axis: 'x', point: [4, 0, 2] },
       { axis: 'y', point: [1, 0, 2] },
+      { axis: 'z', point: [1, 0, 7] },
+    ])
+    expect(projectMeasurementPointToPlanarAxes([1, 0, 2], [4, 0, 7])).toEqual([
+      { axis: 'x', point: [4, 0, 2] },
       { axis: 'z', point: [1, 0, 7] },
     ])
   })
