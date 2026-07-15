@@ -67,6 +67,13 @@ const WALL_ROOM_BOUNDARY_TOLERANCE = 0.08
 // A wall endpoint within this distance of another wall's interior is treated as a
 // T-junction and splits that wall (see `splitStraightWallAtVertices`).
 const WALL_JUNCTION_TOLERANCE = 0.08
+// An unmatched auto slab/ceiling whose polygon is still substantially covered
+// by a detected room was absorbed by a room merge — the surviving auto surface
+// owns that area, so keeping it would z-fight and it is deleted. Below this
+// coverage the room genuinely ceased to exist (e.g. an enclosing wall was
+// deleted) and the node is demoted to manual so user data survives.
+const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
+const COVERAGE_SAMPLE_STEPS = 12
 
 export type AutoCeilingPlanningContext = {
   walls?: WallNode[]
@@ -198,6 +205,50 @@ function bboxOverlapArea(a: ReturnType<typeof bboxOf>, b: ReturnType<typeof bbox
   const ix = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX))
   const iy = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY))
   return ix * iy
+}
+
+// Fraction of `subject`'s area lying inside any of `covers`, estimated by
+// sampling a grid of cell centers over the subject's bbox. Cheap and robust
+// enough for the merge-vs-demote decision; exact polygon clipping would be a
+// heavy dependency for a 60% threshold.
+function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
+  if (subject.length < 3 || covers.length === 0) return 0
+
+  const bbox = bboxOf(subject)
+  const width = bbox.maxX - bbox.minX
+  const height = bbox.maxY - bbox.minY
+
+  let inside = 0
+  let covered = 0
+  for (let i = 0; i < COVERAGE_SAMPLE_STEPS; i += 1) {
+    for (let j = 0; j < COVERAGE_SAMPLE_STEPS; j += 1) {
+      const point = {
+        x: bbox.minX + ((i + 0.5) / COVERAGE_SAMPLE_STEPS) * width,
+        y: bbox.minY + ((j + 0.5) / COVERAGE_SAMPLE_STEPS) * height,
+      }
+      if (!pointInPolygon(point, subject)) continue
+      inside += 1
+      if (pointInAnyPolygon(point, covers)) covered += 1
+    }
+  }
+
+  if (inside === 0) {
+    return pointInAnyPolygon(polygonCentroid(subject), covers) ? 1 : 0
+  }
+
+  return covered / inside
+}
+
+// Demoted auto surfaces keep their polygon untouched, so a re-closed room
+// usually hits the exact-signature manual check. Mutual footprint coverage
+// still guards the case where the user edited the demoted surface's polygon
+// afterwards — a fresh auto surface must not stack on top of it.
+function matchesManualFootprint(roomPolygon: Point2D[], manualPolygons: Point2D[][]) {
+  return manualPolygons.some(
+    (manual) =>
+      polygonCoverageRatio(roomPolygon, [manual]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD &&
+      polygonCoverageRatio(manual, [roomPolygon]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD,
+  )
 }
 
 function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
@@ -728,8 +779,9 @@ export function planAutoSlabsForLevel(
   const manualSignatures = new Set(
     manualSlabs.map((slab) => polygonSignature(slab.polygon.map(pointFromTuple))),
   )
+  const manualPolygons = manualSlabs.map((slab) => slab.polygon.map(pointFromTuple))
 
-  const detected: DetectedRoom[] = roomPolygons
+  const detectedAll: DetectedRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -746,7 +798,10 @@ export function planAutoSlabsForLevel(
       area: Math.abs(polygonArea(room.poly)),
       bbox: bboxOf(room.poly),
     }))
-    .filter(({ sig }) => !manualSignatures.has(sig))
+
+  const detected = detectedAll.filter(
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+  )
 
   const existingAuto = existingSlabs.filter((slab) => slab.autoFromWalls)
   const existingAutoMeta = existingAuto.map((slab) => {
@@ -815,18 +870,33 @@ export function planAutoSlabsForLevel(
     updatesById.set(bestMatch.entry.slab.id, room.poly.map(pointToTuple))
   }
 
-  const slabsToDelete = existingAuto
-    .filter((slab) => !updatesById.has(slab.id))
-    .map((slab) => slab.id)
+  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
+  const slabsToDelete: Array<SlabNodeType['id']> = []
+  const slabDemotions: AutoSlabSyncPlan['update'] = []
+  for (const slab of existingAuto) {
+    if (updatesById.has(slab.id)) continue
 
-  const slabsToUpdate = existingAuto
-    .filter((slab) => updatesById.has(slab.id))
-    .flatMap((slab) => {
-      const polygon = updatesById.get(slab.id)
-      if (!polygon) return []
+    const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
+    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
+      slabsToDelete.push(slab.id)
+    } else {
+      // Render offsets derive from level context at geometry build time, so
+      // demotion leaves the stored polygon untouched (same as ceilings).
+      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
+    }
+  }
 
-      return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
-    })
+  const slabsToUpdate = [
+    ...existingAuto
+      .filter((slab) => updatesById.has(slab.id))
+      .flatMap((slab) => {
+        const polygon = updatesById.get(slab.id)
+        if (!polygon) return []
+
+        return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
+      }),
+    ...slabDemotions,
+  ]
 
   const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
   const slabsToCreate: SlabNodeType[] = []
@@ -912,8 +982,9 @@ export function planAutoCeilingsForLevel(
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
   )
+  const manualPolygons = manualCeilings.map((ceiling) => ceiling.polygon.map(pointFromTuple))
 
-  const detected: DetectedCeilingRoom[] = roomPolygons
+  const detectedAll: DetectedCeilingRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -931,7 +1002,10 @@ export function planAutoCeilingsForLevel(
       bbox: bboxOf(room.poly),
       ceilingHeight: resolveAutoCeilingHeight(room.poly, context),
     }))
-    .filter(({ sig }) => !manualSignatures.has(sig))
+
+  const detected = detectedAll.filter(
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+  )
 
   const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
   const existingAutoMeta = existingAuto.map((ceiling) => {
@@ -1006,29 +1080,42 @@ export function planAutoCeilingsForLevel(
     })
   }
 
-  const ceilingsToDelete = existingAuto
-    .filter((ceiling) => !updatesById.has(ceiling.id))
-    .map((ceiling) => ceiling.id)
+  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
+  const ceilingsToDelete: Array<CeilingNodeType['id']> = []
+  const ceilingDemotions: AutoCeilingSyncPlan['update'] = []
+  for (const ceiling of existingAuto) {
+    if (updatesById.has(ceiling.id)) continue
 
-  const ceilingsToUpdate = existingAuto
-    .filter((ceiling) => updatesById.has(ceiling.id))
-    .flatMap((ceiling) => {
-      const update = updatesById.get(ceiling.id)
-      if (!update) return []
+    const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
+    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
+      ceilingsToDelete.push(ceiling.id)
+    } else {
+      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
+    }
+  }
 
-      const data: Partial<CeilingNodeType> = {}
-      if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
-        data.polygon = update.polygon
-      }
-      if (
-        Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
-        CEILING_HEIGHT_EPSILON
-      ) {
-        data.height = update.height
-      }
+  const ceilingsToUpdate = [
+    ...existingAuto
+      .filter((ceiling) => updatesById.has(ceiling.id))
+      .flatMap((ceiling) => {
+        const update = updatesById.get(ceiling.id)
+        if (!update) return []
 
-      return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
-    })
+        const data: Partial<CeilingNodeType> = {}
+        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
+          data.polygon = update.polygon
+        }
+        if (
+          Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
+          CEILING_HEIGHT_EPSILON
+        ) {
+          data.height = update.height
+        }
+
+        return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
+      }),
+    ...ceilingDemotions,
+  ]
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
   const ceilingsToCreate: CeilingNodeType[] = []

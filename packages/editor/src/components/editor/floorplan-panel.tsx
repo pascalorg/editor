@@ -51,6 +51,7 @@ import {
   WallNode as WallNodeSchema,
   type WindowNode,
   WindowNode as WindowNodeSchema,
+  wallClosesRoom,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
@@ -173,6 +174,7 @@ import {
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
 import {
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
@@ -5340,6 +5342,9 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
+  // Walls committed by the current 2D-only chain — exclusion set for the
+  // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
+  const wallChainWallIdsRef = useRef<string[]>([])
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
@@ -5922,7 +5927,12 @@ export function FloorplanPanel({
       const holes = (slab.holes ?? [])
         .map((hole) => toFloorplanPolygon(hole))
         .filter((hole) => hole.length >= 3)
-      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
+      const visualPolygon = toFloorplanPolygon(
+        getRenderableSlabPolygon(slab, {
+          walls: referenceWalls,
+          siblingSlabs: referenceSlabs.filter((other) => other.id !== slab.id),
+        }),
+      )
       const visualHoles = holes
 
       return [
@@ -7829,6 +7839,7 @@ export function FloorplanPanel({
   const clearWallPlacementDraft = useCallback(() => {
     setDraftStart(null)
     setWallChainFirstVertex(null)
+    wallChainWallIdsRef.current = []
     setDraftEnd(null)
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
@@ -9673,8 +9684,11 @@ export function FloorplanPanel({
       // `display:none`, so the tool never commits. Mirror the slab /
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
-      const createdWall =
-        useEditor.getState().viewMode === '2d' ? createWallOnCurrentLevel(draftStart, point) : null
+      const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const createdWall = viewIs2DOnly ? createWallOnCurrentLevel(draftStart, point) : null
+      if (createdWall) {
+        wallChainWallIdsRef.current.push(createdWall.id)
+      }
 
       // Chain the next segment from the resolved commit endpoint (it may
       // have corner-snapped or split-adjusted): the wall we just made in
@@ -9694,11 +9708,48 @@ export function FloorplanPanel({
         return
       }
 
+      if (createdWall) {
+        // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
+        // segment seals a room against the wall network, or when its resolved
+        // end tees into wall geometry outside the chain — continuing from a
+        // T-junction only drafts on top of existing walls.
+        const levelWalls = Object.values(useScene.getState().nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+        )
+        if (
+          chainEndJoinsExistingWall(
+            createdWall.end as WallPlanPoint,
+            levelWalls,
+            wallChainWallIdsRef.current,
+          ) ||
+          wallClosesRoom(levelWalls, createdWall)
+        ) {
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+          return
+        }
+      } else if (!(viewIs2DOnly || publishedNextStart)) {
+        // Split view: the 3D tool owns both the commit and the continuation
+        // decision, and it clears the published chain start whenever it stops
+        // drafting (room close, T-junction, single). Mirror that here instead
+        // of chaining the 2D draft from a dead point.
+        clearWallPlacementDraft()
+        setCursorPoint(null)
+        return
+      }
+
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
-    [clearWallPlacementDraft, draftStart, wallChainFirstVertex, setDraftEnd, setCursorPoint],
+    [
+      clearWallPlacementDraft,
+      draftStart,
+      levelId,
+      wallChainFirstVertex,
+      setDraftEnd,
+      setCursorPoint,
+    ],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,

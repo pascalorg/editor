@@ -1,12 +1,9 @@
+import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
-import {
-  getWallCurveFrameAt,
-  isCurvedWall,
-  sampleWallCenterline,
-} from '../../systems/wall/wall-curve'
+import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
@@ -332,23 +329,70 @@ function pointOnPolygonBoundary(px: number, pz: number, polygon: Array<[number, 
   return false
 }
 
+/** Sub-interval along a segment or polyline: [start, end] in length units. */
+type LengthInterval = [number, number]
+
+function mergeIntervals(intervals: LengthInterval[]): LengthInterval[] {
+  if (intervals.length <= 1) return intervals
+  const sorted = [...intervals].sort((a, b) => a[0] - b[0])
+  const merged: LengthInterval[] = [[sorted[0]![0], sorted[0]![1]]]
+  for (let i = 1; i < sorted.length; i++) {
+    const [intervalStart, intervalEnd] = sorted[i]!
+    const last = merged[merged.length - 1]!
+    if (intervalStart <= last[1] + 1e-9) {
+      last[1] = Math.max(last[1], intervalEnd)
+    } else {
+      merged.push([intervalStart, intervalEnd])
+    }
+  }
+  return merged
+}
+
+/** Total length of a merged (sorted, disjoint) interval list. */
+function intervalsLength(intervals: readonly LengthInterval[]): number {
+  let total = 0
+  for (const [intervalStart, intervalEnd] of intervals) total += intervalEnd - intervalStart
+  return total
+}
+
+/** `base` minus `cut`. Both inputs may be unsorted; the result is merged. */
+function subtractIntervals(base: LengthInterval[], cut: LengthInterval[]): LengthInterval[] {
+  if (base.length === 0 || cut.length === 0) return mergeIntervals(base)
+  const cuts = mergeIntervals(cut)
+  const result: LengthInterval[] = []
+  for (const [baseStart, baseEnd] of mergeIntervals(base)) {
+    let cursor = baseStart
+    for (const [cutStart, cutEnd] of cuts) {
+      if (cutEnd <= cursor) continue
+      if (cutStart >= baseEnd) break
+      if (cutStart > cursor) result.push([cursor, cutStart])
+      cursor = cutEnd
+      if (cursor >= baseEnd) break
+    }
+    if (cursor < baseEnd) result.push([cursor, baseEnd])
+  }
+  return result
+}
+
 /**
- * Length of the sub-intervals of segment (ax,az)→(bx,bz) that lie inside the
- * polygon or on its boundary. The segment is split at every crossing with a
- * polygon edge and each sub-interval is classified by its midpoint, so no
- * test point ever sits on a crossing.
+ * Sub-intervals of segment (ax,az)→(bx,bz) that lie inside the polygon (and,
+ * when `includeBoundary`, on its boundary), as [t0, t1] fractions of the
+ * segment. The segment is split at every crossing with a polygon edge and
+ * each sub-interval is classified by its midpoint, so no test point ever
+ * sits on a crossing.
  */
-function segmentInsideLength(
+function segmentInsideIntervals(
   ax: number,
   az: number,
   bx: number,
   bz: number,
   polygon: Array<[number, number]>,
-): number {
+  includeBoundary: boolean,
+): LengthInterval[] {
   const dx = bx - ax
   const dz = bz - az
   const length = Math.hypot(dx, dz)
-  if (length < 1e-9) return 0
+  if (length < 1e-9) return []
 
   const ts = [0, 1]
   const n = polygon.length
@@ -365,7 +409,7 @@ function segmentInsideLength(
   }
   ts.sort((a, b) => a - b)
 
-  let inside = 0
+  const inside: LengthInterval[] = []
   for (let i = 1; i < ts.length; i++) {
     const t0 = ts[i - 1]!
     const t1 = ts[i]!
@@ -373,27 +417,58 @@ function segmentInsideLength(
     const tm = (t0 + t1) / 2
     const mx = ax + dx * tm
     const mz = az + dz * tm
-    if (pointOnPolygonBoundary(mx, mz, polygon) || pointInPolygon(mx, mz, polygon)) {
-      inside += (t1 - t0) * length
-    }
+    const midpointInside = pointOnPolygonBoundary(mx, mz, polygon)
+      ? includeBoundary
+      : pointInPolygon(mx, mz, polygon)
+    if (midpointInside) inside.push([t0, t1])
   }
   return inside
+}
+
+function polylineLength(points: Array<{ x: number; y: number }>): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y)
+  }
+  return total
+}
+
+/**
+ * Inside sub-intervals of a polyline against a polygon, in cumulative
+ * arc-length units from the polyline start (merged, disjoint). Boundary
+ * contact counts as inside for slab support (walls sit exactly on slab
+ * edges — see ON_BOUNDARY_EPSILON above); hole callers pass
+ * `includeBoundary: false` so a wall running along a stairwell hole's
+ * rim keeps the rim's support.
+ */
+function polylineInsideIntervals(
+  points: Array<{ x: number; y: number }>,
+  polygon: Array<[number, number]>,
+  includeBoundary = true,
+): LengthInterval[] {
+  const intervals: LengthInterval[] = []
+  let offset = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const segmentLength = Math.hypot(b.x - a.x, b.y - a.y)
+    if (segmentLength < 1e-9) continue
+    for (const [t0, t1] of segmentInsideIntervals(a.x, a.y, b.x, b.y, polygon, includeBoundary)) {
+      intervals.push([offset + t0 * segmentLength, offset + t1 * segmentLength])
+    }
+    offset += segmentLength
+  }
+  return mergeIntervals(intervals)
 }
 
 function polylineInsideLength(
   points: Array<{ x: number; y: number }>,
   polygon: Array<[number, number]>,
 ): number {
-  let total = 0
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!
-    const b = points[i]!
-    total += segmentInsideLength(a.x, a.y, b.x, b.y, polygon)
-  }
-  return total
+  return intervalsLength(polylineInsideIntervals(points, polygon))
 }
 
-type WallOverlapInput = {
+export type WallOverlapInput = {
   start: [number, number]
   end: [number, number]
   curveOffset?: number
@@ -503,11 +578,7 @@ export function wallOverlapsPolygon(
   const halfThickness = Math.max(thickness / 2, 0)
 
   const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
-  const center = polylines[0]!
-  let centerLength = 0
-  for (let i = 1; i < center.length; i++) {
-    centerLength += Math.hypot(center[i]!.x - center[i - 1]!.x, center[i]!.y - center[i - 1]!.y)
-  }
+  const centerLength = polylineLength(polylines[0]!)
   if (centerLength < 1e-9) return false
 
   let overlap = 0
@@ -516,6 +587,220 @@ export function wallOverlapsPolygon(
   }
   const threshold = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, centerLength * 0.5))
   return overlap >= threshold
+}
+
+// A slab elevation must support at least this fraction of the wall's
+// length before it can dictate the wall's base. Below majority, a raised
+// slab reaching one endpoint would hoist the whole wall off the floor
+// that actually carries it.
+const WALL_SLAB_SUPPORT_MAJORITY = 0.5
+
+// Slabs whose elevations differ by less than this pool their support:
+// a wall shared between two rooms' slabs is covered roughly half by
+// each, and must still follow their common elevation.
+const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
+
+/**
+ * Base elevation for a wall, decided by which slabs actually SUPPORT it.
+ *
+ * Support is measured as covered length: the wall's centerline and face
+ * lines are clipped against each slab's RENDERED footprint
+ * (`getRenderableSlabPolygon` with the level walls + siblings, not the
+ * stored polygon — legacy polygons stored at wall faces or with old
+ * baked offsets fall short of the wall body, but their band-adopted
+ * rendered edge reaches the wall's outer face) minus the slab's stored
+ * holes (holes are data, never render-offset). A slab supporting less
+ * than `WALL_SLAB_MIN_OVERLAP` of the wall is ignored entirely (point
+ * contact, endpoint grazes).
+ *
+ * Same-elevation slabs pool their coverage. `elevation` preserves the
+ * existing wall-relative origin: the highest elevation covering at
+ * least `WALL_SLAB_SUPPORT_MAJORITY` of the wall, or the best-covered
+ * elevation when none reaches majority. `baseElevation` only fills down
+ * where a lower support remains exposed on a wall face after higher,
+ * overlapping support is accounted for. Coincident floor/platform slabs
+ * therefore keep the wall on the platform, while slabs on opposite wall
+ * sides bridge correctly. A slab touching only one endpoint never enters
+ * either result. Pure;
+ * exported for tests.
+ */
+export type WallSlabSupport = {
+  /** Existing wall-relative floor elevation used by hosted children and wall height. */
+  elevation: number
+  /** Lowest exposed adjacent support; wall geometry fills down to this elevation. */
+  baseElevation: number
+  /** Piecewise bottom elevation along the wall centerline, in normalized arc-length units. */
+  baseSegments: WallSlabSupportSegment[]
+}
+
+export type WallSlabSupportSegment = {
+  start: number
+  end: number
+  elevation: number
+}
+
+export function computeWallSlabSupport(
+  wallLike: WallOverlapInput,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): WallSlabSupport {
+  const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
+  const halfThickness = Math.max(thickness / 2, 0)
+  const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
+  const polylineLengths = polylines.map(polylineLength)
+  const wallLength = polylineLengths[0]!
+  if (wallLength < 1e-9) {
+    return { elevation: 0, baseElevation: 0, baseSegments: [] }
+  }
+
+  const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
+
+  type ElevationGroup = { elevation: number; perPolyline: LengthInterval[][] }
+  const groups: ElevationGroup[] = []
+
+  for (const slab of slabs) {
+    if (slab.polygon.length < 3) continue
+    const renderedPolygon = getRenderableSlabPolygon(slab, {
+      walls: levelWalls,
+      siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+    })
+
+    let supported = 0
+    const perPolyline = polylines.map((line) => {
+      let intervals = polylineInsideIntervals(line, renderedPolygon)
+      for (const hole of slab.holes || []) {
+        if (intervals.length === 0) break
+        if (hole.length < 3) continue
+        intervals = subtractIntervals(intervals, polylineInsideIntervals(line, hole, false))
+      }
+      supported = Math.max(supported, intervalsLength(intervals))
+      return intervals
+    })
+    if (supported < minSupport) continue
+
+    const elevation = slab.elevation ?? 0.05
+    let group = groups.find(
+      (candidate) => Math.abs(candidate.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
+    )
+    if (!group) {
+      group = { elevation, perPolyline: polylines.map(() => []) }
+      groups.push(group)
+    }
+    for (let i = 0; i < perPolyline.length; i++) {
+      group.perPolyline[i]!.push(...perPolyline[i]!)
+    }
+  }
+
+  type EvaluatedGroup = ElevationGroup & {
+    coverage: number
+    mergedPerPolyline: LengthInterval[][]
+  }
+  const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => {
+    let coverage = 0
+    const mergedPerPolyline = group.perPolyline.map(mergeIntervals)
+    for (let i = 0; i < group.perPolyline.length; i++) {
+      const lineLength = polylineLengths[i]!
+      if (lineLength < 1e-9) continue
+      coverage = Math.max(coverage, intervalsLength(mergedPerPolyline[i]!) / lineLength)
+    }
+    return { ...group, coverage, mergedPerPolyline }
+  })
+
+  let majorityElevation = Number.NEGATIVE_INFINITY
+  let bestElevation = Number.NEGATIVE_INFINITY
+  let bestCoverage = -1
+  for (const group of evaluatedGroups) {
+    if (group.coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+      majorityElevation = Math.max(majorityElevation, group.elevation)
+    }
+    if (
+      group.coverage > bestCoverage + 1e-6 ||
+      (Math.abs(group.coverage - bestCoverage) <= 1e-6 && group.elevation > bestElevation)
+    ) {
+      bestCoverage = group.coverage
+      bestElevation = group.elevation
+    }
+  }
+
+  const elevation =
+    majorityElevation !== Number.NEGATIVE_INFINITY
+      ? majorityElevation
+      : bestElevation === Number.NEGATIVE_INFINITY
+        ? 0
+        : bestElevation
+  const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
+    const lineLength = polylineLengths[polylineIndex]!
+    if (lineLength < 1e-9) return []
+    return group.mergedPerPolyline[polylineIndex]!.map(
+      ([intervalStart, intervalEnd]) =>
+        [intervalStart / lineLength, intervalEnd / lineLength] as LengthInterval,
+    )
+  }
+
+  const normalizedByGroup = evaluatedGroups.map((group) => ({
+    elevation: group.elevation,
+    perPolyline: group.mergedPerPolyline.map((_, index) => normalizedIntervals(group, index)),
+  }))
+  const breakpoints = [0, 1]
+  for (const group of normalizedByGroup) {
+    for (const intervals of group.perPolyline) {
+      for (const [intervalStart, intervalEnd] of intervals) {
+        breakpoints.push(intervalStart, intervalEnd)
+      }
+    }
+  }
+  breakpoints.sort((left, right) => left - right)
+  const uniqueBreakpoints = breakpoints.filter(
+    (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
+  )
+
+  const highestAt = (polylineIndex: number, t: number) => {
+    let highest = Number.NEGATIVE_INFINITY
+    for (const group of normalizedByGroup) {
+      if (
+        group.perPolyline[polylineIndex]?.some(
+          ([intervalStart, intervalEnd]) => t >= intervalStart - 1e-7 && t <= intervalEnd + 1e-7,
+        )
+      ) {
+        highest = Math.max(highest, group.elevation)
+      }
+    }
+    return highest
+  }
+
+  const baseSegments: WallSlabSupportSegment[] = []
+  for (let index = 1; index < uniqueBreakpoints.length; index++) {
+    const start = uniqueBreakpoints[index - 1]!
+    const end = uniqueBreakpoints[index]!
+    if (end - start < 1e-7) continue
+    const midpoint = (start + end) / 2
+    const leftElevation = polylines.length >= 3 ? highestAt(1, midpoint) : Number.NEGATIVE_INFINITY
+    const rightElevation = polylines.length >= 3 ? highestAt(2, midpoint) : Number.NEGATIVE_INFINITY
+    const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
+    const segmentElevation =
+      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(highestAt(0, midpoint), 0)
+    const previous = baseSegments[baseSegments.length - 1]
+    if (
+      previous &&
+      Math.abs(previous.elevation - segmentElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+    ) {
+      previous.end = end
+    } else {
+      baseSegments.push({ start, end, elevation: segmentElevation })
+    }
+  }
+
+  if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
+  const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
+  return { elevation, baseElevation, baseSegments }
+}
+
+export function computeWallSlabElevation(
+  wallLike: WallOverlapInput,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): number {
+  return computeWallSlabSupport(wallLike, slabs, levelWalls).elevation
 }
 
 export class SpatialGridManager {
@@ -959,7 +1244,6 @@ export class SpatialGridManager {
 
   /**
    * Get the slab elevation for a wall by checking if it overlaps with any slab polygon (excluding holes).
-   * Uses wallOverlapsPolygon which handles edge cases (points on boundary, collinear segments).
    * Returns the highest slab elevation found, or 0 if none.
    *
    * Accepts an optional `curveOffset` so curved walls evaluate overlap
@@ -972,55 +1256,66 @@ export class SpatialGridManager {
     curveOffset = 0,
     thickness = DEFAULT_WALL_THICKNESS,
   ): number {
+    return this.getSlabSupportForWall(levelId, start, end, curveOffset, thickness).elevation
+  }
+
+  getSlabSupportForWall(
+    levelId: string,
+    start: [number, number],
+    end: [number, number],
+    curveOffset = 0,
+    thickness = DEFAULT_WALL_THICKNESS,
+  ): WallSlabSupport {
     const slabMap = this.slabsByLevel.get(levelId)
-    if (!slabMap) return 0
-
-    const wallLike: WallOverlapInput = { start, end, curveOffset, thickness }
-    const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
-    const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
-      ? sampleWallCenterline(wallLike, 8)
-      : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
-          x: start[0] + (end[0] - start[0]) * t,
-          y: start[1] + (end[1] - start[1]) * t,
-        }))
-
-    let maxElevation = Number.NEGATIVE_INFINITY
-    for (const slab of slabMap.values()) {
-      if (slab.polygon.length < 3) continue
-      if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
-
-      const holes = slab.holes || []
-      if (holes.length === 0) {
-        // No holes: wall is on this slab
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) maxElevation = elevation
-        continue
-      }
-
-      // Sample multiple points along the wall to check whether any portion lies on
-      // solid slab (not inside any hole). Checking only the midpoint fails when the
-      // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
-      let hasValidPoint = false
-      for (const sample of holeSamplePoints) {
-        let inHole = false
-        for (const hole of holes) {
-          if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
-            inHole = true
-            break
-          }
-        }
-        if (!inHole) {
-          hasValidPoint = true
-          break
-        }
-      }
-
-      if (hasValidPoint) {
-        const elevation = slab.elevation ?? 0.05
-        if (elevation > maxElevation) maxElevation = elevation
+    if (!slabMap) {
+      return {
+        elevation: 0,
+        baseElevation: 0,
+        baseSegments: [{ start: 0, end: 1, elevation: 0 }],
       }
     }
-    return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+
+    return computeWallSlabSupport(
+      { start, end, curveOffset, thickness },
+      [...slabMap.values()],
+      this.getLevelWallNodes(levelId),
+    )
+  }
+
+  /**
+   * Walls on a level, resolved fresh from the scene store (the manager's
+   * own wall map is only maintained on create/delete, not on updates).
+   * Cached per scene `nodes` record so per-pointer-tick callers
+   * (door/window move) don't rescan the node map.
+   */
+  private readonly levelWallsCache = new WeakMap<object, Map<string, WallNode[]>>()
+
+  private getLevelWallNodes(levelId: string): WallNode[] {
+    const nodes = useScene.getState().nodes
+    let byLevel = this.levelWallsCache.get(nodes)
+    if (!byLevel) {
+      byLevel = new Map()
+      this.levelWallsCache.set(nodes, byLevel)
+    }
+    const cached = byLevel.get(levelId)
+    if (cached) return cached
+
+    const walls: WallNode[] = []
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'wall') continue
+      // Walk the parent chain to the owning level (guarded against cycles).
+      let current: AnyNode | undefined = node
+      let guard = 0
+      while (current && current.type !== 'level' && guard < 16) {
+        current = current.parentId ? nodes[current.parentId as AnyNode['id']] : undefined
+        guard += 1
+      }
+      if (current?.type === 'level' && current.id === levelId) {
+        walls.push(node as WallNode)
+      }
+    }
+    byLevel.set(levelId, walls)
+    return walls
   }
 
   /**

@@ -48,7 +48,11 @@ export {
   getFloorPlacedFootprints,
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
-export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
+export {
+  pointInPolygon,
+  spatialGridManager,
+  type WallSlabSupportSegment,
+} from './hooks/spatial-grid/spatial-grid-manager'
 export {
   findLevelAncestorId,
   initSpatialGridSync,
@@ -75,7 +79,13 @@ export {
   segmentsIntersect,
 } from './lib/polygon-relations'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
-export { getRenderableSlabPolygon } from './lib/slab-polygon'
+export {
+  getRenderableSlabPolygon,
+  type SlabEdgeWallBandSnap,
+  type SlabPolygonContext,
+  slabPolygonContextFromGeometry,
+  snapSlabEdgeToWallBand,
+} from './lib/slab-polygon'
 export {
   deriveSlotId,
   isSlotMaterialName,

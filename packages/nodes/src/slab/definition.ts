@@ -188,6 +188,15 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   // Stage B: pure geometry function.
   geometry: buildSlabGeometry,
+  // Dependency tracker only — dirties level slabs when walls / sibling
+  // slabs change, since the renderable polygon derives from level context.
+  system: {
+    module: () => import('./system'),
+    priority: 4,
+  },
+  // The fill reads walls + sibling slabs via ctx (per-edge render offsets),
+  // so committed sibling edits must invalidate the cached floor-plan entry.
+  floorplanDependsOnSiblings: true,
   // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
   // to [] when slab is registered (see floorplan-panel.tsx).
   floorplan: buildSlabFloorplan,

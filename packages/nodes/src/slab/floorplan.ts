@@ -4,6 +4,7 @@ import {
   type GeometryContext,
   getRenderableSlabPolygon,
   type SlabNode,
+  slabPolygonContextFromGeometry,
 } from '@pascal-app/core'
 
 /**
@@ -18,8 +19,8 @@ import {
  *   - Same three handle sets for every hole in `node.holes`, with the
  *     `holeIndex` carried in each handle's payload.
  *
- * Uses `getRenderableSlabPolygon` for the visible fill (auto-slabs
- * generated from walls clip to wall footprints), but vertex / edge /
+ * Uses `getRenderableSlabPolygon` for the visible fill (per-edge render
+ * offsets against level walls + sibling slabs), but vertex / edge /
  * midpoint handles live on the **raw** `node.polygon` — matches the
  * legacy slab boundary editor which always operates on raw data.
  */
@@ -27,7 +28,7 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   const polygon = node.polygon
   if (!polygon || polygon.length < 3) return null
 
-  const visualPolygon = getRenderableSlabPolygon(node)
+  const visualPolygon = getRenderableSlabPolygon(node, slabPolygonContextFromGeometry(ctx))
   if (!visualPolygon || visualPolygon.length < 3) return null
 
   const view = ctx.viewState
@@ -84,6 +85,27 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
 
   // Boundary editor — visible only when the slab is the active selection.
   if (isSelected) {
+    // Handles operate on the STORED polygon while the fill shows the
+    // band-healed render polygon; when the two diverge (edges projected
+    // onto wall faces / interior centerline seams), a dashed skeleton of the
+    // stored boundary shows what the handles actually grab.
+    const rawDiffersFromVisual =
+      polygon.length !== visualPolygon.length ||
+      polygon.some((point, index) => {
+        const visual = visualPolygon[index]!
+        return Math.abs(point[0] - visual[0]) > 0.005 || Math.abs(point[1] - visual[1]) > 0.005
+      })
+    if (rawDiffersFromVisual) {
+      children.push({
+        kind: 'path',
+        d: ring(polygon.map(([x, z]) => [x, z] as FloorplanPoint)),
+        fill: 'none',
+        stroke: palette ? palette.selectedStroke : '#475569',
+        strokeWidth: 0.015,
+        strokeOpacity: 0.55,
+        strokeDasharray: '0.08 0.06',
+      })
+    }
     appendRingEditor(children, polygon, undefined)
     holes.forEach((hole, holeIndex) => {
       if (hole.length >= 3) appendRingEditor(children, hole, holeIndex)

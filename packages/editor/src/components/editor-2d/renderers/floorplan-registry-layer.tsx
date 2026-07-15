@@ -127,6 +127,12 @@ type ActiveDrag = {
   snapshots: NodeSnapshot[]
   historyPaused: boolean
   /**
+   * Last plan point handed to `session.apply` (the grab point until the first
+   * move). Lets the modifier-key listeners re-run the session immediately on
+   * an Alt/Shift flip instead of waiting for the next pointer move.
+   */
+  lastPlanPoint: FloorplanPoint
+  /**
    * Set only for rotate-arrow drags (handles that carry a `pivot`). Drives
    * the live angle wedge + degree readout — the 2D twin of the 3D rotate
    * gizmo's readout. The bearing sweep is measured the same way every
@@ -922,6 +928,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         session,
         snapshots,
         historyPaused: true,
+        lastPlanPoint: initialPlanPoint,
         rotation,
         reshapeScopeNodeId: reshapeScope ? nodeId : undefined,
       }
@@ -955,6 +962,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const planPoint = clientToPlan(event.clientX, event.clientY)
       if (!planPoint) return
 
+      drag.lastPlanPoint = planPoint
       drag.session.apply({
         planPoint,
         modifiers: {
@@ -1102,13 +1110,43 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       setRotationOverlay(null)
     }
 
+    // Re-run the active session the moment a modifier key flips so behaviors
+    // like the wall endpoint's Alt-detach / re-attach take effect immediately
+    // instead of waiting for the next pointer move. `event.altKey` & co
+    // already reflect the post-transition state on both keydown and keyup.
+    const onModifierKeyChange = (event: KeyboardEvent) => {
+      const drag = dragRef.current
+      if (!drag || event.repeat) return
+      if (
+        event.key !== 'Alt' &&
+        event.key !== 'Shift' &&
+        event.key !== 'Control' &&
+        event.key !== 'Meta'
+      ) {
+        return
+      }
+      drag.session.apply({
+        planPoint: drag.lastPlanPoint,
+        modifiers: {
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+        },
+      })
+    }
+
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerCancel)
+    window.addEventListener('keydown', onModifierKeyChange)
+    window.addEventListener('keyup', onModifierKeyChange)
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
+      window.removeEventListener('keydown', onModifierKeyChange)
+      window.removeEventListener('keyup', onModifierKeyChange)
       // Component unmounted mid-drag — restore the baseline and unpause
       // history so we don't leak a paused store across mounts. Also
       // drop any live overrides the session published so the next

@@ -1,0 +1,54 @@
+// @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
+// depend on @types/bun so the import type is unresolved at compile time.
+import { describe, expect, test } from 'bun:test'
+import { calculateLevelMiters, WallNode } from '@pascal-app/core'
+import { generateExtrudedWall } from './wall-system'
+
+describe('wall support extension', () => {
+  test('preserves the raised wall origin and top while filling down to the lower support', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
+    const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 0.6, 0.05)
+    geometry.computeBoundingBox()
+
+    expect(geometry.boundingBox?.min.y).toBeCloseTo(-0.55)
+    expect(geometry.boundingBox?.max.y).toBeCloseTo(2.5)
+    // With mesh.position.y = 0.6, the wall spans world Y=0.05..3.1.
+    expect((geometry.boundingBox?.min.y ?? 0) + 0.6).toBeCloseTo(0.05)
+    expect((geometry.boundingBox?.max.y ?? 0) + 0.6).toBeCloseTo(3.1)
+
+    geometry.dispose()
+  })
+
+  test('retains the existing negative-slab top constraint', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
+    const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), -0.4, -0.4)
+    geometry.computeBoundingBox()
+
+    expect(geometry.boundingBox?.min.y).toBeCloseTo(0)
+    expect(geometry.boundingBox?.max.y).toBeCloseTo(2.9)
+    expect((geometry.boundingBox?.max.y ?? 0) - 0.4).toBeCloseTo(2.5)
+
+    geometry.dispose()
+  })
+
+  test('raises only the high-supported part of a mixed wall run', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
+    const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 0.6, 0.05, [
+      { start: 0, end: 0.5, elevation: 0.6 },
+      { start: 0.5, end: 1, elevation: 0.05 },
+    ])
+    const position = geometry.getAttribute('position')
+    let highSpanMinY = Number.POSITIVE_INFINITY
+    let lowSpanMinY = Number.POSITIVE_INFINITY
+    for (let index = 0; index < position.count; index++) {
+      const x = position.getX(index)
+      const y = position.getY(index)
+      if (x < 1.9) highSpanMinY = Math.min(highSpanMinY, y)
+      if (x > 2.1) lowSpanMinY = Math.min(lowSpanMinY, y)
+    }
+
+    expect(highSpanMinY).toBeCloseTo(0)
+    expect(lowSpanMinY).toBeCloseTo(-0.55)
+    geometry.dispose()
+  })
+})

@@ -94,6 +94,79 @@ describe('planAutoCeilingsForLevel', () => {
     expect(plan.create).toHaveLength(0)
     expect(plan.update).toHaveLength(0)
   })
+
+  test('demotes an orphaned auto ceiling to manual with its polygon untouched', () => {
+    const ceiling = CeilingNode.parse({
+      polygon: square,
+      height: 2.55,
+      autoFromWalls: true,
+    })
+
+    const plan = planAutoCeilingsForLevel([], [ceiling])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+    expect(plan.update).toHaveLength(1)
+    expect(plan.update[0]?.id).toBe(ceiling.id)
+    // Ceilings render the stored polygon in both modes, so no polygon bake.
+    expect(plan.update[0]?.data).toEqual({ autoFromWalls: false })
+  })
+
+  test('deletes an unmatched auto ceiling absorbed by a room merge', () => {
+    const leftCeiling = CeilingNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const rightCeiling = CeilingNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(1)
+    const survivorId = plan.update[0]?.id
+    expect([leftCeiling.id, rightCeiling.id]).toContain(plan.delete[0]!)
+    expect(plan.delete[0]).not.toBe(survivorId)
+  })
+
+  test('a demoted ceiling suppresses re-creating an auto ceiling when the room re-forms', () => {
+    const ceiling = CeilingNode.parse({
+      polygon: square,
+      height: 2.55,
+      autoFromWalls: true,
+    })
+
+    const demotion = planAutoCeilingsForLevel([], [ceiling]).update[0]
+    const demoted = CeilingNode.parse({ ...ceiling, ...demotion?.data })
+    expect(demoted.autoFromWalls).toBe(false)
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [demoted], {
+      walls: squareWalls(),
+      slabs: [slab(0.05)],
+    })
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+  })
 })
 
 describe('detectSpacesForLevel', () => {
@@ -187,5 +260,77 @@ describe('planAutoSlabsForLevel', () => {
 
     expect(plan.create).toHaveLength(0)
     expect(plan.delete).toHaveLength(1)
+  })
+
+  test('demotes an orphaned auto slab to manual when its room disappears', () => {
+    const painted = SlabNode.parse({
+      polygon: square,
+      elevation: 0.4,
+      autoFromWalls: true,
+    })
+
+    const plan = planAutoSlabsForLevel([], [painted])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+    expect(plan.update).toHaveLength(1)
+
+    const update = plan.update[0]
+    expect(update?.id).toBe(painted.id)
+    // Demotion flips only the flag — the stored polygon stays untouched
+    // (render offsets derive from level context at geometry build time).
+    expect(update?.data).toEqual({ autoFromWalls: false })
+  })
+
+  test('deletes an unmatched auto slab whose area was absorbed by a room merge', () => {
+    const leftSlab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const rightSlab = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(1)
+    expect(plan.update).toHaveLength(1)
+    const survivorId = plan.update[0]?.id
+    expect([leftSlab.id, rightSlab.id]).toContain(plan.delete[0]!)
+    expect(plan.delete[0]).not.toBe(survivorId)
+    // The survivor stays auto — updated to the merged polygon, not demoted.
+    expect(plan.update[0]?.data.autoFromWalls).toBeUndefined()
+  })
+
+  test('a demoted slab suppresses re-creating an auto slab when the room re-forms', () => {
+    const auto = slab(0.05)
+
+    const demotion = planAutoSlabsForLevel([], [auto]).update[0]
+    const demoted = SlabNode.parse({ ...auto, ...demotion?.data })
+    expect(demoted.autoFromWalls).toBe(false)
+
+    const plan = planAutoSlabsForLevel([roomPolygon()], [demoted])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
   })
 })
