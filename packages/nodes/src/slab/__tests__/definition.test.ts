@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { pointInPolygon2D, SlabNode } from '@pascal-app/core'
 import { slabDefinition } from '../definition'
 
-function getHeightHandlePosition(slab: SlabNode) {
+function getHeightHandle(slab: SlabNode) {
   const handles =
     typeof slabDefinition.handles === 'function'
       ? slabDefinition.handles(slab)
@@ -13,7 +13,11 @@ function getHeightHandlePosition(slab: SlabNode) {
   if (!(heightHandle && heightHandle.kind === 'linear-resize')) {
     throw new Error('Missing slab height handle')
   }
-  return heightHandle.placement.position(slab, {} as never)
+  return heightHandle
+}
+
+function getHeightHandlePosition(slab: SlabNode) {
+  return getHeightHandle(slab).placement.position(slab, {} as never)
 }
 
 describe('slabDefinition handles', () => {
@@ -39,5 +43,21 @@ describe('slabDefinition handles', () => {
 
     expect(pointInPolygon2D([x, z], slab.polygon, { includeBoundary: false })).toBe(true)
     expect(pointInPolygon2D([x, z], slab.holes[0]!, { includeBoundary: true })).toBe(false)
+  })
+
+  test('allows the elevation arrow to cross zero into a recessed slab', () => {
+    const slab = SlabNode.parse({
+      elevation: 0.05,
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 2],
+        [0, 2],
+      ],
+    })
+    const heightHandle = getHeightHandle(slab)
+
+    expect(heightHandle.min).toBe(-1)
+    expect(heightHandle.apply(slab, -0.15, {} as never)).toEqual({ elevation: -0.15 })
   })
 })

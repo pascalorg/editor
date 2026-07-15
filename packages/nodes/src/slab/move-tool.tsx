@@ -235,6 +235,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         useScene.getState().updateNode(slabId, {
           polygon: translatePolygon(originalPolygon, deltaX, deltaZ),
           holes: originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ)),
+          autoFromWalls: false,
         })
         useScene.getState().markDirty(slabId as AnyNodeId)
       }

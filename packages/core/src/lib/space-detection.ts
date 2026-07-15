@@ -19,12 +19,24 @@ import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
 
+export type SpaceBoundaryFace = {
+  wallId: string
+  face: 'front' | 'back'
+  points: Array<[number, number]>
+}
+
 export type Space = {
   id: string
   levelId: string
   polygon: Array<[number, number]>
   wallIds: string[]
+  boundaryFaces: SpaceBoundaryFace[]
   isExterior: boolean
+}
+
+type ExtractedRoom = {
+  polygon: Point2D[]
+  boundaryFaces: SpaceBoundaryFace[]
 }
 
 type WallSideUpdate = {
@@ -240,15 +252,15 @@ function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
 }
 
 // Demoted auto surfaces keep their polygon untouched, so a re-closed room
-// usually hits the exact-signature manual check. Mutual footprint coverage
-// still guards the case where the user edited the demoted surface's polygon
-// afterwards — a fresh auto surface must not stack on top of it.
+// usually hits the exact-signature manual check. Coverage also handles a room
+// deliberately split across multiple manual surfaces: their union suppresses
+// a replacement auto surface as long as the pieces substantially belong to
+// and cover the room.
 function matchesManualFootprint(roomPolygon: Point2D[], manualPolygons: Point2D[][]) {
-  return manualPolygons.some(
-    (manual) =>
-      polygonCoverageRatio(roomPolygon, [manual]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD &&
-      polygonCoverageRatio(manual, [roomPolygon]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD,
+  const roomManualPolygons = manualPolygons.filter(
+    (manual) => polygonCoverageRatio(manual, [roomPolygon]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD,
   )
+  return polygonCoverageRatio(roomPolygon, roomManualPolygons) >= ORPHAN_MERGE_COVERAGE_THRESHOLD
 }
 
 function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
@@ -460,7 +472,7 @@ function splitStraightWallAtVertices(start: Point2D, end: Point2D, vertices: Poi
   return ordered
 }
 
-function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
+function extractRooms(walls: WallNode[]): ExtractedRoom[] {
   if (walls.length < 3) return []
 
   type HalfEdge = {
@@ -470,6 +482,8 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
     toKey: string
     angle: number
     points: Point2D[]
+    wallId: string
+    face: 'front' | 'back'
   }
   type Node = { point: Point2D; outgoing: string[] }
 
@@ -535,6 +549,8 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
         toKey,
         angle: Math.atan2(points[1]!.y - from.y, points[1]!.x - from.x),
         points,
+        wallId: wall.id,
+        face: 'front',
       })
       halfEdges.set(reverseId, {
         id: reverseId,
@@ -543,6 +559,8 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
         toKey: fromKey,
         angle: Math.atan2(reversePoints[1]!.y - to.y, reversePoints[1]!.x - to.x),
         points: reversePoints,
+        wallId: wall.id,
+        face: 'back',
       })
 
       graph.get(fromKey)?.outgoing.push(forwardId)
@@ -572,7 +590,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
   }
 
   const visitedDirected = new Set<string>()
-  const faces: Point2D[][] = []
+  const rooms: ExtractedRoom[] = []
   // A single face cannot revisit a half-edge, so the half-edge count bounds the
   // longest possible cycle. Splitting at junctions can multiply edges per wall.
   const maxSteps = Math.min(2000, halfEdges.size + 10)
@@ -620,13 +638,30 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
     if (signedArea < 0.5 || signedArea > 10_000) continue
 
     const signature = polygonSignature(polygon)
-    if (faces.some((face) => polygonSignature(face) === signature)) continue
+    if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue
 
-    faces.push(polygon)
+    rooms.push({
+      polygon,
+      boundaryFaces: cycleEdgeIds.flatMap((id) => {
+        const edge = halfEdges.get(id)
+        if (!edge) return []
+        return [
+          {
+            wallId: edge.wallId,
+            face: edge.face,
+            points: edge.points.map(pointToTuple),
+          },
+        ]
+      }),
+    })
   }
 
-  faces.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)))
-  return faces
+  rooms.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))
+  return rooms
+}
+
+function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
+  return extractRooms(walls).map((room) => room.polygon)
 }
 
 /**
@@ -760,13 +795,14 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
   return snapshots
 }
 
-function buildSpace(levelId: string, polygon: Point2D[]): Space {
-  const signature = polygonSignature(polygon)
+function buildSpace(levelId: string, room: ExtractedRoom): Space {
+  const signature = polygonSignature(room.polygon)
   return {
     id: `space-${levelId}-${signature.slice(0, 12)}`,
     levelId,
-    polygon: polygon.map(pointToTuple),
-    wallIds: [],
+    polygon: room.polygon.map(pointToTuple),
+    wallIds: [...new Set(room.boundaryFaces.map((boundary) => boundary.wallId))],
+    boundaryFaces: room.boundaryFaces,
     isExterior: false,
   }
 }
@@ -1169,7 +1205,8 @@ function syncAutoCeilingsForLevel(
 }
 
 function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
-  const roomPolygons = extractRoomPolygons(walls)
+  const rooms = extractRooms(walls)
+  const roomPolygons = rooms.map((room) => room.polygon)
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
     ...(resolveWallSurfaceSides(wall, roomPolygons) satisfies Pick<
@@ -1180,7 +1217,7 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
 
   return {
     roomPolygons,
-    spaces: roomPolygons.map((polygon) => buildSpace(levelId, polygon)),
+    spaces: rooms.map((room) => buildSpace(levelId, room)),
     wallUpdates,
   }
 }

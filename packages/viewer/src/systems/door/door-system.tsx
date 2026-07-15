@@ -2150,14 +2150,15 @@ function addGarageRollupDoor(
       addBox(curtain, revealMaterial, insideWidth - 0.08, 0.01, 0.012, 0, y, leafDepth / 2 + 0.012)
     }
 
+    const bottomBarHeight = 0.028
     addBox(
       curtain,
       revealMaterial,
       insideWidth - 0.04,
-      0.028,
+      bottomBarHeight,
       leafDepth + 0.018,
       0,
-      -visibleHeight,
+      -visibleHeight + bottomBarHeight / 2,
       leafDepth / 2 + 0.004,
     )
   }

@@ -15,7 +15,7 @@ export const slabParametrics: ParametricDescriptor<SlabNode> = {
   groups: [
     {
       label: 'Elevation',
-      fields: [{ key: 'elevation', kind: 'number', unit: 'm', min: 0.02, max: 1, step: 0.01 }],
+      fields: [{ key: 'elevation', kind: 'number', unit: 'm', min: -1, max: 1, step: 0.01 }],
     },
   ],
   customPanel: () => import('./panel'),
