@@ -19,6 +19,7 @@ import {
 } from './layout-metrics'
 import { DEFAULT_NORM_PROFILE, type NormProfile } from './norms/profile'
 import {
+  kitchenIsCirculation,
   analyzePolygonGrid,
   footprintArea as footprintAreaOf,
   isAxisAligned,
@@ -316,6 +317,14 @@ export function validateLayoutPlan(
       }
     }
     const hasPublic = plan.rooms.some(room => PUBLIC_TYPES.has(room.type))
+    // 1K 豁免（kitchenIsCirculation）：唯一居室且无走廊时，廊下型キッチン
+    // 是合法动线。
+    const kitchenPassable = kitchenIsCirculation({
+      bedrooms: plan.rooms.filter(room => room.type === 'bedroom').length,
+      hallways: plan.rooms.filter(room => room.type === 'hallway').length,
+      livingLike: plan.rooms.filter(room =>
+        room.type === 'living' || room.type === 'living_kitchen' || room.type === 'dining').length,
+    })
     for (const bedroom of plan.rooms.filter(room => room.type === 'bedroom')) {
       if (!hasPublic) {
         pushFatal(`卧室「${label(bedroom)}」无法到达公共空间：户型中没有任何公共房型`)
@@ -325,6 +334,7 @@ export function validateLayoutPlan(
         const room = roomById.get(id)
         if (!room) return false
         if (room.id === bedroom.id) return true
+        if (kitchenPassable && room.type === 'kitchen') return true
         // Public targets are also valid intermediates; forbidden types
         // (kitchen/bathroom/OTHER bedrooms) block the path.
         return !FORBIDDEN_INTERMEDIATE_TYPES.has(room.type)

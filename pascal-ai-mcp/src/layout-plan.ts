@@ -308,8 +308,12 @@ export function sharedBoundaryLength(
       total += collinearOverlapLength(edgeA, edgeB)
     }
   }
-  return total
+  // cm 取整：坐标本身是厘米网格，减法的浮点残差（3.6−2.7=0.8999…）会让
+  // 0.9m 门边在严格比较里冤枉地差 1e-16（TEMPLATES.md 体检 #1）。
+  return roundCm(total)
 }
+
+const roundCm = (value: number): number => Math.round(value * 100) / 100
 
 // Longest single shared straight run between two polygons — where a door can
 // actually go, as opposed to the sum of disjoint slivers.
@@ -328,7 +332,7 @@ export function longestSharedEdge(
       }
     }
   }
-  return { length: best, midpoint }
+  return { length: roundCm(best), midpoint }
 }
 
 function collinearOverlapSegment(a: Segment, b: Segment, epsilon = LINE_EPSILON): {
@@ -409,11 +413,28 @@ export function longestExteriorEdge(
       best = Math.max(best, collinearOverlapLength(boundary, edge))
     }
   }
-  return best
+  return roundCm(best)
 }
 
 // Self-intersection test for a simple polygon: any two non-adjacent edges
 // crossing, or any two edges overlapping collinearly, invalidates it.
+// 1K 豁免（docs/TEMPLATES.md 体检 #2）：日本 1K/1DK 的廊下型キッチン就是
+// 全屋唯一动线（玄関→キッチン→居室）——「卧室不得穿过厨房」对这一市场
+// 标准形态是错判。仅在「唯一居室 + 无走廊」时把厨房视为可通行空间；家庭
+// 户型（≥2 居室或有走廊）规则原样保留。plan-validator #10、completion-gates
+// gate-5、agent findIsolatedBedrooms 三份动线检查共用本判定。
+// livingLike = living / living_kitchen / dining 数量：这些社交空间存在时，
+// 卧室就应该经它们进出——穿厨房仍是坏设计，豁免只给「厨房是唯一动线」的
+// 纯 1K（无客厅无 LDK 无餐厅、单居室、无走廊）。1DK/1LDK 不需要豁免：DK/LDK
+// 本身就是公共空间，卧室直连即可。
+export function kitchenIsCirculation(counts: {
+  bedrooms: number
+  hallways: number
+  livingLike: number
+}): boolean {
+  return counts.bedrooms === 1 && counts.hallways === 0 && counts.livingLike === 0
+}
+
 export function polygonSelfIntersects(polygon: Array<[number, number]>): boolean {
   const edges = polygonEdges(polygon)
   const n = edges.length

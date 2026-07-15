@@ -18,6 +18,7 @@
 import { findMissingFurniture } from './furniture-checklist'
 import { classifyRoomTypeByName } from './lang/room-vocab'
 import {
+  kitchenIsCirculation,
   analyzePolygonGrid,
   collinearOverlapLength,
   pointInPolygon,
@@ -185,6 +186,13 @@ export function evaluateCompletionGates(
   const hasPublic = typed.some(entry => PUBLIC_TYPES.has(entry.type))
   if (bedrooms.length > 0 && zones.length > 1) {
     const typeById = new Map(typed.map(entry => [entry.zone.id, entry.type]))
+    // 1K 豁免（kitchenIsCirculation，与 plan-validator #10 同判定）。
+    const kitchenPassable = kitchenIsCirculation({
+      bedrooms: bedrooms.length,
+      hallways: typed.filter(entry => entry.type === 'hallway').length,
+      livingLike: typed.filter(entry =>
+        entry.type === 'living' || entry.type === 'living_kitchen' || entry.type === 'dining').length,
+    })
     for (const bedroom of bedrooms) {
       if (!hasPublic) {
         failures.push({
@@ -196,7 +204,9 @@ export function evaluateCompletionGates(
         continue
       }
       const reached = bfs([bedroom.zone.id], graph.adjacency, id =>
-        id === bedroom.zone.id || !FORBIDDEN_INTERMEDIATE_TYPES.has(typeById.get(id) ?? 'other'))
+        id === bedroom.zone.id
+        || (kitchenPassable && typeById.get(id) === 'kitchen')
+        || !FORBIDDEN_INTERMEDIATE_TYPES.has(typeById.get(id) ?? 'other'))
       const ok = [...reached].some(id => PUBLIC_TYPES.has(typeById.get(id) ?? 'other'))
       if (!ok) {
         failures.push({

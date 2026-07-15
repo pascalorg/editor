@@ -24,6 +24,7 @@ import {
 import { absorbRoomInPlan, partitionLayout } from './layout-partitioner'
 import { applyModifyOps, parseModifyOps, resolveRoomRef, type FurnitureModifyOp } from './modify-ops'
 import { computeLayoutQuality } from './layout-metrics'
+import { kitchenIsCirculation } from './layout-plan'
 import type { IssueL10n, LayoutIntent, LayoutPlan, RoomType } from './layout-plan'
 import { PascalMcpClient } from './mcp'
 import { OpenAiCompatibleClient, type RequestHooks } from './openai-compatible'
@@ -3838,6 +3839,19 @@ function wallHostZoneIds(
 export function findIsolatedBedrooms(zones: ZoneSummary[], walls: WallWithOpenings[]): string[] {
   const kindById = new Map<string, CirculationRoomKind>()
   for (const zone of zones) kindById.set(zone.id, classifyCirculationRoomKind(zone.name || ''))
+  // 1K 豁免（kitchenIsCirculation，与 validator/gates 同判定）：唯一居室且
+  // 无走廊时，厨房按可通行处理。
+  const zoneTypesForExemption = zones.map(zone => classifyRoomTypeByName(zone.name || ''))
+  if (kitchenIsCirculation({
+    bedrooms: [...kindById.values()].filter(kind => kind === 'bedroom').length,
+    hallways: zoneTypesForExemption.filter(type => type === 'hallway').length,
+    livingLike: zoneTypesForExemption.filter(type =>
+      type === 'living' || type === 'living_kitchen' || type === 'dining').length,
+  })) {
+    for (const zone of zones) {
+      if (classifyRoomTypeByName(zone.name || '') === 'kitchen') kindById.set(zone.id, 'passable')
+    }
+  }
 
   const bounds = overallZoneBounds(zones)
   const adjacency = new Map<string, Set<string>>()
