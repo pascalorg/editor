@@ -1,0 +1,39 @@
+{
+  "id": "tpl-jp-2dk-44",
+  "meta": {
+    "market": "jp",
+    "label": "2DK 44.16㎡ マンション（DK7.5帖 + 洋室6帖×2）",
+    "source": "用户提供间取り图（実物件，価格4000万円，専有面積44.16㎡・バルコニー4.2㎡）",
+    "quality": "good",
+    "badReasons": [],
+    "typology": "standard_band",
+    "notes": "玄関居中偏右，水回り（洗面室→浴室1216、トイレ）集中在玄関右侧成服务核；DK 7.5帖占左上；两间洋室 6帖并排朝南（バルコニー侧采光），中间夹双クローゼット柱。转换简化：洗濯機置場+PS 并入浴室 zone；バルコニー在専有面积外未建模。坐标由帖数反推+图上比例目测，footprint 7.0×6.3=44.1㎡。"
+  },
+  "plan": {
+    "footprint": { "width": 7, "depth": 6.3 },
+    "entry": { "roomId": "entry-1" },
+    "rooms": [
+      { "id": "entry-1", "name": "玄関", "type": "entry", "polygon": [[3.97, 4.84], [5, 4.84], [5, 6.3], [3.97, 6.3]], "requiresExteriorWindow": false },
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[3.97, 3.24], [5, 3.24], [5, 4.84], [3.97, 4.84]], "requiresExteriorWindow": false },
+      { "id": "dk-1", "name": "DK", "type": "living_kitchen", "polygon": [[0, 3.24], [3.97, 3.24], [3.97, 6.3], [0, 6.3]], "requiresExteriorWindow": true },
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[0, 0], [3, 0], [3, 3.24], [0, 3.24]], "requiresExteriorWindow": true },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[4, 0], [7, 0], [7, 3.24], [4, 3.24]], "requiresExteriorWindow": true },
+      { "id": "closet-1", "name": "クローゼット1", "type": "storage", "polygon": [[3, 0], [4, 0], [4, 1.62], [3, 1.62]], "requiresExteriorWindow": false },
+      { "id": "closet-2", "name": "クローゼット2", "type": "storage", "polygon": [[3, 1.62], [4, 1.62], [4, 3.24], [3, 3.24]], "requiresExteriorWindow": false },
+      { "id": "bath-ub", "name": "浴室・洗濯機置場", "type": "bathroom", "polygon": [[5, 3.24], [7, 3.24], [7, 4.84], [5, 4.84]], "requiresExteriorWindow": false },
+      { "id": "bath-lav", "name": "洗面室", "type": "bathroom", "polygon": [[5, 4.84], [6, 4.84], [6, 6.3], [5, 6.3]], "requiresExteriorWindow": false },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[6, 4.84], [7, 4.84], [7, 6.3], [6, 6.3]], "requiresExteriorWindow": false }
+    ],
+    "connections": [
+      { "from": "entry-1", "to": "hall-1", "type": "door" },
+      { "from": "entry-1", "to": "bath-lav", "type": "door" },
+      { "from": "bath-lav", "to": "bath-wc", "type": "door" },
+      { "from": "bath-lav", "to": "bath-ub", "type": "door" },
+      { "from": "hall-1", "to": "dk-1", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-2", "type": "door" },
+      { "from": "dk-1", "to": "bedroom-1", "type": "door" },
+      { "from": "closet-1", "to": "bedroom-2", "type": "door" },
+      { "from": "closet-2", "to": "bedroom-1", "type": "door" }
+    ]
+  }
+}

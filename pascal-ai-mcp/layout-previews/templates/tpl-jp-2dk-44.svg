@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 488" font-family="sans-serif">
+<rect width="500" height="488" fill="white"/>
+<text x="40" y="24" font-size="16" font-weight="bold">2DK 44.16㎡ マンション（DK7.5帖 + 洋室6帖×2） [参照]  （7m × 6.3m）</text>
+<polygon points="278.20000000000005,127.6 340,127.6 340,40 278.20000000000005,40" fill="#e8e2d4" stroke="#444" stroke-width="2"/>
+<text x="309.1" y="79.79999999999997" font-size="12" text-anchor="middle">玄関</text>
+<text x="309.1" y="95.79999999999997" font-size="10" text-anchor="middle" fill="#666">1.5㎡</text>
+<polygon points="278.20000000000005,223.59999999999997 340,223.59999999999997 340,127.6 278.20000000000005,127.6" fill="#eeeeee" stroke="#444" stroke-width="2"/>
+<text x="309.1" y="171.6" font-size="12" text-anchor="middle">廊下</text>
+<text x="309.1" y="187.6" font-size="10" text-anchor="middle" fill="#666">1.6㎡</text>
+<polygon points="40,223.59999999999997 278.20000000000005,223.59999999999997 278.20000000000005,40 40,40" fill="#fde9c8" stroke="#444" stroke-width="2"/>
+<text x="159.10000000000002" y="127.80000000000001" font-size="12" text-anchor="middle">DK ⊞</text>
+<text x="159.10000000000002" y="143.8" font-size="10" text-anchor="middle" fill="#666">12.1㎡</text>
+<polygon points="40,418 220,418 220,223.59999999999997 40,223.59999999999997" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="130" y="316.79999999999995" font-size="12" text-anchor="middle">洋室1 ⊞</text>
+<text x="130" y="332.79999999999995" font-size="10" text-anchor="middle" fill="#666">9.7㎡</text>
+<polygon points="280,418 460,418 460,223.59999999999997 280,223.59999999999997" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="370" y="316.79999999999995" font-size="12" text-anchor="middle">洋室2 ⊞</text>
+<text x="370" y="332.79999999999995" font-size="10" text-anchor="middle" fill="#666">9.7㎡</text>
+<polygon points="220,418 280,418 280,320.79999999999995 220,320.79999999999995" fill="#e5ddee" stroke="#444" stroke-width="2"/>
+<text x="250" y="365.40000000000003" font-size="12" text-anchor="middle">クローゼット1</text>
+<text x="250" y="381.40000000000003" font-size="10" text-anchor="middle" fill="#666">1.6㎡</text>
+<polygon points="220,320.79999999999995 280,320.79999999999995 280,223.59999999999997 220,223.59999999999997" fill="#e5ddee" stroke="#444" stroke-width="2"/>
+<text x="250" y="268.2" font-size="12" text-anchor="middle">クローゼット2</text>
+<text x="250" y="284.2" font-size="10" text-anchor="middle" fill="#666">1.6㎡</text>
+<polygon points="340,223.59999999999997 460,223.59999999999997 460,127.6 340,127.6" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="400" y="171.6" font-size="12" text-anchor="middle">浴室・洗濯機置場</text>
+<text x="400" y="187.6" font-size="10" text-anchor="middle" fill="#666">3.2㎡</text>
+<polygon points="340,127.6 400,127.6 400,40 340,40" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="370" y="79.79999999999997" font-size="12" text-anchor="middle">洗面室</text>
+<text x="370" y="95.79999999999997" font-size="10" text-anchor="middle" fill="#666">1.5㎡</text>
+<polygon points="400,127.6 460,127.6 460,40 400,40" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="430" y="79.79999999999997" font-size="12" text-anchor="middle">トイレ</text>
+<text x="430" y="95.79999999999997" font-size="10" text-anchor="middle" fill="#666">1.5㎡</text>
+<circle cx="309.1" cy="127.6" r="6" fill="#c0392b"/>
+<circle cx="340" cy="83.79999999999997" r="6" fill="#c0392b"/>
+<circle cx="400" cy="83.79999999999997" r="6" fill="#c0392b"/>
+<circle cx="370" cy="127.6" r="6" fill="#c0392b"/>
+<circle cx="278.20000000000005" cy="175.6" r="6" fill="#c0392b"/>
+<circle cx="310" cy="223.59999999999997" r="6" fill="#c0392b"/>
+<circle cx="130" cy="223.59999999999997" r="6" fill="#c0392b"/>
+<circle cx="280" cy="369.40000000000003" r="6" fill="#c0392b"/>
+<circle cx="220" cy="272.2" r="6" fill="#c0392b"/>
+<text x="309.1" y="143.6" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
+<text x="40" y="480" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+</svg>
