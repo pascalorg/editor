@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 830" font-family="sans-serif">
+<rect width="350" height="830" fill="white"/>
+<text x="40" y="24" font-size="16" font-weight="bold">1LDK+納戸 54㎡ うなぎの寝床（町屋型狭长） [参照]  （4.5m × 12m）</text>
+<polygon points="238,760 310,760 310,670 238,670" fill="#e8e2d4" stroke="#444" stroke-width="2"/>
+<text x="274" y="711" font-size="12" text-anchor="middle">玄関</text>
+<text x="274" y="727" font-size="10" text-anchor="middle" fill="#666">1.8㎡</text>
+<polygon points="238,670 310,670 310,310 238,310" fill="#eeeeee" stroke="#444" stroke-width="2"/>
+<text x="274" y="486" font-size="12" text-anchor="middle">廊下</text>
+<text x="274" y="502" font-size="10" text-anchor="middle" fill="#666">7.2㎡</text>
+<polygon points="40,760 238,760 238,556 40,556" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="139" y="654" font-size="12" text-anchor="middle">洋室 ⊞</text>
+<text x="139" y="670" font-size="10" text-anchor="middle" fill="#666">11.2㎡</text>
+<polygon points="136,556 238,556 238,436 136,436" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="187" y="492" font-size="12" text-anchor="middle">洗面脱衣室</text>
+<text x="187" y="508" font-size="10" text-anchor="middle" fill="#666">3.4㎡</text>
+<polygon points="40,556 136,556 136,436 40,436" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="88" y="492" font-size="12" text-anchor="middle">浴室</text>
+<text x="88" y="508" font-size="10" text-anchor="middle" fill="#666">3.2㎡</text>
+<polygon points="172,436 238,436 238,310 172,310" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="205" y="369" font-size="12" text-anchor="middle">トイレ</text>
+<text x="205" y="385" font-size="10" text-anchor="middle" fill="#666">2.3㎡</text>
+<polygon points="40,436 172,436 172,310 40,310" fill="#e5ddee" stroke="#444" stroke-width="2"/>
+<text x="106" y="369" font-size="12" text-anchor="middle">納戸</text>
+<text x="106" y="385" font-size="10" text-anchor="middle" fill="#666">4.6㎡</text>
+<polygon points="40,310 310,310 310,40 40,40" fill="#fde9c8" stroke="#444" stroke-width="2"/>
+<text x="175" y="171" font-size="12" text-anchor="middle">LDK ⊞</text>
+<text x="175" y="187" font-size="10" text-anchor="middle" fill="#666">20.3㎡</text>
+<circle cx="274" cy="670" r="6" fill="#c0392b"/>
+<circle cx="238" cy="613" r="6" fill="#c0392b"/>
+<circle cx="238" cy="496" r="6" fill="#c0392b"/>
+<circle cx="136" cy="496" r="6" fill="#c0392b"/>
+<circle cx="238" cy="373" r="6" fill="#c0392b"/>
+<circle cx="106" cy="310" r="6" fill="#c0392b"/>
+<circle cx="274" cy="310" r="6" fill="#c0392b"/>
+<text x="274" y="776" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
+<text x="40" y="822" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+</svg>

@@ -1,0 +1,38 @@
+{
+  "id": "tpl-bad-corridor-sliver-60",
+  "meta": {
+    "market": "jp",
+    "label": "反例：60㎡ 全长走廊 + 细长 LDK",
+    "source": "手工构造的坏模式集合（用于 scorer 校准）",
+    "quality": "bad",
+    "badReasons": [
+      "走廊贯穿全深，占比 20%（软上限 15%）",
+      "LDK 2×7m，长宽比 3.5:1 细长难布置",
+      "无玄関，入户直接进走廊（违反 J5 惯例）",
+      "トイレ 5㎡ 过大、浪费面积"
+    ],
+    "typology": "standard_band",
+    "notes": "每条 badReason 都应被 scorer/validator 捕获——体检报告显示未捕获的项即惩罚项缺口。"
+  },
+  "plan": {
+    "footprint": { "width": 5, "depth": 12 },
+    "entry": { "roomId": "hall-1" },
+    "rooms": [
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[2, 0], [3, 0], [3, 12], [2, 12]], "requiresExteriorWindow": false },
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[0, 0], [2, 0], [2, 4.5], [0, 4.5]], "requiresExteriorWindow": true },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[0, 4.5], [2, 4.5], [2, 9], [0, 9]], "requiresExteriorWindow": true },
+      { "id": "bath-1", "name": "浴室・洗面", "type": "bathroom", "polygon": [[0, 9], [2, 9], [2, 12], [0, 12]], "requiresExteriorWindow": false },
+      { "id": "ldk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[3, 0], [5, 0], [5, 7], [3, 7]], "requiresExteriorWindow": true },
+      { "id": "kitchen-1", "name": "キッチン", "type": "kitchen", "polygon": [[3, 7], [5, 7], [5, 9.5], [3, 9.5]], "requiresExteriorWindow": false },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[3, 9.5], [5, 9.5], [5, 12], [3, 12]], "requiresExteriorWindow": false }
+    ],
+    "connections": [
+      { "from": "hall-1", "to": "bedroom-1", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-2", "type": "door" },
+      { "from": "hall-1", "to": "bath-1", "type": "door" },
+      { "from": "hall-1", "to": "ldk-1", "type": "door" },
+      { "from": "hall-1", "to": "kitchen-1", "type": "door" },
+      { "from": "hall-1", "to": "bath-wc", "type": "door" }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "tpl-jp-2ldk-60-tanoji",
+  "meta": {
+    "market": "jp",
+    "label": "2LDK 59.9㎡ 田の字マンション（中廊下）",
+    "source": "日本分譲マンション最常见的田の字型（手工整理的市场惯例形态）",
+    "quality": "good",
+    "badReasons": [],
+    "typology": "tanoji",
+    "notes": "玄関居中、中廊下纵贯；两洋室占玄関侧采光面，水回り（洗面脱衣→浴室、トイレ）夹在中段两侧，LDK 全宽占尽头主采光面。浴室经洗面脱衣进入（JP 惯例），収納挂洋室2。"
+  },
+  "plan": {
+    "footprint": { "width": 6.3, "depth": 9.5 },
+    "entry": { "roomId": "entry-1" },
+    "rooms": [
+      { "id": "entry-1", "name": "玄関", "type": "entry", "polygon": [[2.7, 0], [3.6, 0], [3.6, 1.4], [2.7, 1.4]], "requiresExteriorWindow": false },
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[2.7, 1.4], [3.6, 1.4], [3.6, 5.5], [2.7, 5.5]], "requiresExteriorWindow": false },
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[0, 0], [2.7, 0], [2.7, 3.3], [0, 3.3]], "requiresExteriorWindow": true },
+      { "id": "bath-lav", "name": "洗面脱衣室", "type": "bathroom", "polygon": [[1.5, 3.3], [2.7, 3.3], [2.7, 5.5], [1.5, 5.5]], "requiresExteriorWindow": false },
+      { "id": "bath-ub", "name": "浴室", "type": "bathroom", "polygon": [[0, 3.3], [1.5, 3.3], [1.5, 5.5], [0, 5.5]], "requiresExteriorWindow": false },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[3.6, 0], [6.3, 0], [6.3, 3.5], [3.6, 3.5]], "requiresExteriorWindow": true },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[3.6, 3.5], [4.7, 3.5], [4.7, 5.5], [3.6, 5.5]], "requiresExteriorWindow": false },
+      { "id": "storage-1", "name": "収納", "type": "storage", "polygon": [[4.7, 3.5], [6.3, 3.5], [6.3, 5.5], [4.7, 5.5]], "requiresExteriorWindow": false },
+      { "id": "ldk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[0, 5.5], [6.3, 5.5], [6.3, 9.5], [0, 9.5]], "requiresExteriorWindow": true }
+    ],
+    "connections": [
+      { "from": "entry-1", "to": "hall-1", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-1", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-2", "type": "door" },
+      { "from": "hall-1", "to": "bath-lav", "type": "door" },
+      { "from": "bath-lav", "to": "bath-ub", "type": "door" },
+      { "from": "hall-1", "to": "bath-wc", "type": "door" },
+      { "from": "storage-1", "to": "bedroom-2", "type": "door" },
+      { "from": "hall-1", "to": "ldk-1", "type": "door" }
+    ]
+  }
+}

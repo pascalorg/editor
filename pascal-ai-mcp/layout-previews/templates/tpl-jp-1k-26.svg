@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 272 590" font-family="sans-serif">
+<rect width="272" height="590" fill="white"/>
+<text x="40" y="24" font-size="16" font-weight="bold">1K 25.6㎡ 单身公寓（縦长廊下型） [参照]  （3.2m × 8m）</text>
+<polygon points="40,520 112,520 112,436 40,436" fill="#e8e2d4" stroke="#444" stroke-width="2"/>
+<text x="76" y="474" font-size="12" text-anchor="middle">玄関</text>
+<text x="76" y="490" font-size="10" text-anchor="middle" fill="#666">1.7㎡</text>
+<polygon points="112,520 232,520 232,436 112,436" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="172" y="474" font-size="12" text-anchor="middle">浴室・トイレ</text>
+<text x="172" y="490" font-size="10" text-anchor="middle" fill="#666">2.8㎡</text>
+<polygon points="40,436 232,436 232,340 40,340" fill="#f9d9a6" stroke="#444" stroke-width="2"/>
+<text x="136" y="384" font-size="12" text-anchor="middle">キッチン</text>
+<text x="136" y="400" font-size="10" text-anchor="middle" fill="#666">5.1㎡</text>
+<polygon points="40,340 232,340 232,40 40,40" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="136" y="186" font-size="12" text-anchor="middle">洋室 ⊞</text>
+<text x="136" y="202" font-size="10" text-anchor="middle" fill="#666">16.0㎡</text>
+<circle cx="76" cy="436" r="6" fill="#c0392b"/>
+<circle cx="172" cy="436" r="6" fill="#c0392b"/>
+<circle cx="136" cy="340" r="6" fill="#c0392b"/>
+<text x="76" y="536" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
+<text x="40" y="582" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+</svg>

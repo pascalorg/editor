@@ -1,0 +1,125 @@
+// Reference-template health check（户型参照库体检，docs/TEMPLATES.md）。
+//
+//   bun run scripts/check-templates.ts [templatesDir]
+//
+// For every template in templates/:
+//   1. run it through the REAL validator (jp profile) — a "good" reference
+//      that our rules reject means the rules are miscalibrated, not the
+//      market;
+//   2. compute the scorer's view of it (footprint aspect / room aspects /
+//      corridor share / penalty) — a "bad" example scoring better than a
+//      "good" one exposes a missing penalty term;
+//   3. build the SAME room program through our partitioner and put the two
+//      side by side (score + SVG) — the visual gap IS the quality gap the
+//      user perceives.
+// SVGs land in layout-previews/templates/. Zero model calls.
+
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { LayoutIntent, LayoutPlan } from '../src/layout-plan'
+import { polygonArea, polygonBounds } from '../src/layout-plan'
+import { partitionLayout, scoreCandidate } from '../src/layout-partitioner'
+import { resolveNormProfile } from '../src/norms/profile'
+import { validateLayoutPlan } from '../src/plan-validator'
+import { deriveStrategy } from '../src/strategy'
+import { renderPlanSvg } from './render-plan-svg'
+
+type Template = {
+  id: string
+  meta: {
+    market: string
+    label: string
+    source: string
+    quality: 'good' | 'bad'
+    badReasons: string[]
+    typology?: string
+    notes?: string
+  }
+  plan: LayoutPlan
+}
+
+function planMetrics(plan: LayoutPlan, profile: ReturnType<typeof resolveNormProfile>) {
+  const { width, depth } = plan.footprint
+  const roomAspects = plan.rooms
+    .filter(room => room.type !== 'hallway')
+    .map(room => {
+      const b = polygonBounds(room.polygon)
+      const w = b.maxX - b.minX
+      const d = b.maxZ - b.minZ
+      return Math.max(w, d) / Math.min(w, d)
+    })
+  const corridorArea = plan.rooms
+    .filter(room => room.type === 'hallway')
+    .reduce((sum, room) => sum + polygonArea(room.polygon), 0)
+  const corridorRatio = corridorArea / (width * depth)
+  const penalty = scoreCandidate({
+    footprintW: width,
+    footprintD: depth,
+    roomAspects,
+    corridorRatio,
+  }, profile.scoring)
+  return { maxRoomAspect: Math.max(...roomAspects), corridorRatio, penalty }
+}
+
+const templatesDir = process.argv[2] ?? join(import.meta.dir, '..', 'templates')
+const outDir = join(import.meta.dir, '..', 'layout-previews', 'templates')
+mkdirSync(outDir, { recursive: true })
+
+const files = readdirSync(templatesDir).filter(file => file.endsWith('.json')).sort()
+for (const file of files) {
+  const template = JSON.parse(readFileSync(join(templatesDir, file), 'utf8')) as Template
+  const profile = resolveNormProfile(template.meta.market)
+  const plan = template.plan
+  const lotArea = plan.footprint.width * plan.footprint.depth
+
+  console.log(`\n=== ${template.id} · ${template.meta.label} [${template.meta.quality}]`)
+
+  // 1. Our validator's verdict on the reference.
+  const validation = validateLayoutPlan(plan, { totalAreaSqm: Math.round(lotArea * 10) / 10 }, profile)
+  console.log(`validator: fatal=${validation.fatal.length} warnings=${validation.warnings.length} score=${validation.score}`)
+  for (const message of validation.fatal) console.log(`  FATAL  ${message}`)
+  for (const message of validation.warnings) console.log(`  warn   ${message}`)
+
+  // 2. Scorer's view.
+  const metrics = planMetrics(plan, profile)
+  console.log(`scorer: penalty=${metrics.penalty.toFixed(2)} maxRoomAspect=${metrics.maxRoomAspect.toFixed(2)} corridorShare=${(metrics.corridorRatio * 100).toFixed(1)}%`)
+  if (template.meta.quality === 'bad') {
+    console.log(`  badReasons: ${template.meta.badReasons.join('；')}`)
+  }
+
+  writeFileSync(join(outDir, `${template.id}.svg`), renderPlanSvg(`${template.meta.label} [参照]`, plan))
+
+  // 3. Same program through our generator (good references only).
+  if (template.meta.quality !== 'good') continue
+  const intent: LayoutIntent = {
+    targetTotalAreaSqm: Math.round(lotArea * 10) / 10,
+    rooms: plan.rooms
+      .filter(room => room.type !== 'hallway')
+      .map(room => ({
+        id: room.id,
+        name: room.name,
+        type: room.type,
+        targetAreaSqm: Math.round(polygonArea(room.polygon) * 10) / 10,
+      })),
+  }
+  const requiredRooms = [...intent.rooms.reduce((acc, room) => {
+    acc.set(room.type, (acc.get(room.type) ?? 0) + 1)
+    return acc
+  }, new Map<string, number>())].map(([type, count]) => ({ type: type as never, count }))
+  const strategy = deriveStrategy({
+    ...(template.meta.typology === 'narrow_lot'
+      ? { siteHint: { widthM: plan.footprint.width, depthM: plan.footprint.depth } }
+      : {}),
+  }, { totalAreaSqm: intent.targetTotalAreaSqm, requiredRooms }, profile)
+  const generated = partitionLayout(intent, profile, strategy)
+  if (!generated.ok) {
+    console.log(`OURS: 分区失败 —— ${generated.reason}`)
+    continue
+  }
+  const ourValidation = validateLayoutPlan(generated.plan, { totalAreaSqm: intent.targetTotalAreaSqm }, profile)
+  const ourMetrics = planMetrics(generated.plan, profile)
+  console.log(`OURS(${strategy.typology}): validator score=${ourValidation.score} fatal=${ourValidation.fatal.length} penalty=${ourMetrics.penalty.toFixed(2)} maxRoomAspect=${ourMetrics.maxRoomAspect.toFixed(2)} corridorShare=${(ourMetrics.corridorRatio * 100).toFixed(1)}%`)
+  writeFileSync(join(outDir, `${template.id}--ours.svg`), renderPlanSvg(`${template.meta.label} [我们的生成]`, generated.plan))
+}
+
+console.log(`\nSVG 输出目录：${outDir}`)
