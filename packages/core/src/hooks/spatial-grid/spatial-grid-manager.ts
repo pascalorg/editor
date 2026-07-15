@@ -3,11 +3,7 @@ import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import useScene from '../../store/use-scene'
-import {
-  getWallCurveFrameAt,
-  isCurvedWall,
-  sampleWallCenterline,
-} from '../../systems/wall/wall-curve'
+import { getWallCurveFrameAt, isCurvedWall } from '../../systems/wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
@@ -333,23 +329,70 @@ function pointOnPolygonBoundary(px: number, pz: number, polygon: Array<[number, 
   return false
 }
 
+/** Sub-interval along a segment or polyline: [start, end] in length units. */
+type LengthInterval = [number, number]
+
+function mergeIntervals(intervals: LengthInterval[]): LengthInterval[] {
+  if (intervals.length <= 1) return intervals
+  const sorted = [...intervals].sort((a, b) => a[0] - b[0])
+  const merged: LengthInterval[] = [[sorted[0]![0], sorted[0]![1]]]
+  for (let i = 1; i < sorted.length; i++) {
+    const [intervalStart, intervalEnd] = sorted[i]!
+    const last = merged[merged.length - 1]!
+    if (intervalStart <= last[1] + 1e-9) {
+      last[1] = Math.max(last[1], intervalEnd)
+    } else {
+      merged.push([intervalStart, intervalEnd])
+    }
+  }
+  return merged
+}
+
+/** Total length of a merged (sorted, disjoint) interval list. */
+function intervalsLength(intervals: readonly LengthInterval[]): number {
+  let total = 0
+  for (const [intervalStart, intervalEnd] of intervals) total += intervalEnd - intervalStart
+  return total
+}
+
+/** `base` minus `cut`. Both inputs may be unsorted; the result is merged. */
+function subtractIntervals(base: LengthInterval[], cut: LengthInterval[]): LengthInterval[] {
+  if (base.length === 0 || cut.length === 0) return mergeIntervals(base)
+  const cuts = mergeIntervals(cut)
+  const result: LengthInterval[] = []
+  for (const [baseStart, baseEnd] of mergeIntervals(base)) {
+    let cursor = baseStart
+    for (const [cutStart, cutEnd] of cuts) {
+      if (cutEnd <= cursor) continue
+      if (cutStart >= baseEnd) break
+      if (cutStart > cursor) result.push([cursor, cutStart])
+      cursor = cutEnd
+      if (cursor >= baseEnd) break
+    }
+    if (cursor < baseEnd) result.push([cursor, baseEnd])
+  }
+  return result
+}
+
 /**
- * Length of the sub-intervals of segment (ax,az)→(bx,bz) that lie inside the
- * polygon or on its boundary. The segment is split at every crossing with a
- * polygon edge and each sub-interval is classified by its midpoint, so no
- * test point ever sits on a crossing.
+ * Sub-intervals of segment (ax,az)→(bx,bz) that lie inside the polygon (and,
+ * when `includeBoundary`, on its boundary), as [t0, t1] fractions of the
+ * segment. The segment is split at every crossing with a polygon edge and
+ * each sub-interval is classified by its midpoint, so no test point ever
+ * sits on a crossing.
  */
-function segmentInsideLength(
+function segmentInsideIntervals(
   ax: number,
   az: number,
   bx: number,
   bz: number,
   polygon: Array<[number, number]>,
-): number {
+  includeBoundary: boolean,
+): LengthInterval[] {
   const dx = bx - ax
   const dz = bz - az
   const length = Math.hypot(dx, dz)
-  if (length < 1e-9) return 0
+  if (length < 1e-9) return []
 
   const ts = [0, 1]
   const n = polygon.length
@@ -366,7 +409,7 @@ function segmentInsideLength(
   }
   ts.sort((a, b) => a - b)
 
-  let inside = 0
+  const inside: LengthInterval[] = []
   for (let i = 1; i < ts.length; i++) {
     const t0 = ts[i - 1]!
     const t1 = ts[i]!
@@ -374,24 +417,55 @@ function segmentInsideLength(
     const tm = (t0 + t1) / 2
     const mx = ax + dx * tm
     const mz = az + dz * tm
-    if (pointOnPolygonBoundary(mx, mz, polygon) || pointInPolygon(mx, mz, polygon)) {
-      inside += (t1 - t0) * length
-    }
+    const midpointInside = pointOnPolygonBoundary(mx, mz, polygon)
+      ? includeBoundary
+      : pointInPolygon(mx, mz, polygon)
+    if (midpointInside) inside.push([t0, t1])
   }
   return inside
+}
+
+function polylineLength(points: Array<{ x: number; y: number }>): number {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y)
+  }
+  return total
+}
+
+/**
+ * Inside sub-intervals of a polyline against a polygon, in cumulative
+ * arc-length units from the polyline start (merged, disjoint). Boundary
+ * contact counts as inside for slab support (walls sit exactly on slab
+ * edges — see ON_BOUNDARY_EPSILON above); hole callers pass
+ * `includeBoundary: false` so a wall running along a stairwell hole's
+ * rim keeps the rim's support.
+ */
+function polylineInsideIntervals(
+  points: Array<{ x: number; y: number }>,
+  polygon: Array<[number, number]>,
+  includeBoundary = true,
+): LengthInterval[] {
+  const intervals: LengthInterval[] = []
+  let offset = 0
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!
+    const b = points[i]!
+    const segmentLength = Math.hypot(b.x - a.x, b.y - a.y)
+    if (segmentLength < 1e-9) continue
+    for (const [t0, t1] of segmentInsideIntervals(a.x, a.y, b.x, b.y, polygon, includeBoundary)) {
+      intervals.push([offset + t0 * segmentLength, offset + t1 * segmentLength])
+    }
+    offset += segmentLength
+  }
+  return mergeIntervals(intervals)
 }
 
 function polylineInsideLength(
   points: Array<{ x: number; y: number }>,
   polygon: Array<[number, number]>,
 ): number {
-  let total = 0
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1]!
-    const b = points[i]!
-    total += segmentInsideLength(a.x, a.y, b.x, b.y, polygon)
-  }
-  return total
+  return intervalsLength(polylineInsideIntervals(points, polygon))
 }
 
 export type WallOverlapInput = {
@@ -504,11 +578,7 @@ export function wallOverlapsPolygon(
   const halfThickness = Math.max(thickness / 2, 0)
 
   const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
-  const center = polylines[0]!
-  let centerLength = 0
-  for (let i = 1; i < center.length; i++) {
-    centerLength += Math.hypot(center[i]!.x - center[i - 1]!.x, center[i]!.y - center[i - 1]!.y)
-  }
+  const centerLength = polylineLength(polylines[0]!)
   if (centerLength < 1e-9) return false
 
   let overlap = 0
@@ -519,72 +589,116 @@ export function wallOverlapsPolygon(
   return overlap >= threshold
 }
 
+// A slab elevation must support at least this fraction of the wall's
+// length before it can dictate the wall's base. Below majority, a raised
+// slab reaching one endpoint would hoist the whole wall off the floor
+// that actually carries it.
+const WALL_SLAB_SUPPORT_MAJORITY = 0.5
+
+// Slabs whose elevations differ by less than this pool their support:
+// a wall shared between two rooms' slabs is covered roughly half by
+// each, and must still follow their common elevation.
+const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
+
 /**
- * Highest elevation among the slabs a wall stands on, or 0 when it
- * stands on none. Overlap is evaluated against each slab's RENDERED
- * footprint (`getRenderableSlabPolygon` with the level walls +
- * siblings), not the stored polygon — legacy polygons stored at wall
- * faces or with old baked offsets fall short of the wall body, but
- * their band-adopted rendered edge reaches the wall's outer face, so
- * the wall-on-slab decision matches what the user sees. Holes are
- * data (never render-offset), so hole exclusion keeps using stored
- * hole polygons. Pure; exported for tests.
+ * Base elevation for a wall, decided by which slabs actually SUPPORT it.
+ *
+ * Support is measured as covered length: the wall's centerline and face
+ * lines are clipped against each slab's RENDERED footprint
+ * (`getRenderableSlabPolygon` with the level walls + siblings, not the
+ * stored polygon — legacy polygons stored at wall faces or with old
+ * baked offsets fall short of the wall body, but their band-adopted
+ * rendered edge reaches the wall's outer face) minus the slab's stored
+ * holes (holes are data, never render-offset). A slab supporting less
+ * than `WALL_SLAB_MIN_OVERLAP` of the wall is ignored entirely (point
+ * contact, endpoint grazes).
+ *
+ * Same-elevation slabs pool their coverage, then the wall sits on the
+ * highest elevation covering at least `WALL_SLAB_SUPPORT_MAJORITY` of
+ * the wall's length. When no elevation reaches majority (e.g. a wall
+ * half on a platform, half in the air), the best-covered elevation
+ * wins, ties going to the higher slab; with no support at all the wall
+ * stays at 0. A raised slab touching only one endpoint therefore no
+ * longer lifts a wall that mostly stands on a lower floor. Pure;
+ * exported for tests.
  */
 export function computeWallSlabElevation(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
 ): number {
-  const { start, end, curveOffset = 0 } = wallLike
-  const isCurved = curveOffset !== 0 && isCurvedWall(wallLike)
-  const holeSamplePoints: Array<{ x: number; y: number }> = isCurved
-    ? sampleWallCenterline(wallLike, 8)
-    : [0, 0.25, 0.5, 0.75, 1].map((t) => ({
-        x: start[0] + (end[0] - start[0]) * t,
-        y: start[1] + (end[1] - start[1]) * t,
-      }))
+  const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
+  const halfThickness = Math.max(thickness / 2, 0)
+  const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
+  const polylineLengths = polylines.map(polylineLength)
+  const wallLength = polylineLengths[0]!
+  if (wallLength < 1e-9) return 0
 
-  let maxElevation = Number.NEGATIVE_INFINITY
+  const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
+
+  type ElevationGroup = { elevation: number; perPolyline: LengthInterval[][] }
+  const groups: ElevationGroup[] = []
+
   for (const slab of slabs) {
     if (slab.polygon.length < 3) continue
     const renderedPolygon = getRenderableSlabPolygon(slab, {
       walls: levelWalls,
       siblingSlabs: slabs.filter((other) => other.id !== slab.id),
     })
-    if (!wallOverlapsPolygon(wallLike, renderedPolygon)) continue
 
-    const holes = slab.holes || []
-    if (holes.length === 0) {
-      // No holes: wall is on this slab
-      const elevation = slab.elevation ?? 0.05
-      if (elevation > maxElevation) maxElevation = elevation
-      continue
-    }
-
-    // Sample multiple points along the wall to check whether any portion lies on
-    // solid slab (not inside any hole). Checking only the midpoint fails when the
-    // midpoint falls in a staircase hole but the wall's endpoints are on solid slab.
-    let hasValidPoint = false
-    for (const sample of holeSamplePoints) {
-      let inHole = false
-      for (const hole of holes) {
-        if (hole.length >= 3 && pointInPolygon(sample.x, sample.y, hole)) {
-          inHole = true
-          break
-        }
+    let supported = 0
+    const perPolyline = polylines.map((line) => {
+      let intervals = polylineInsideIntervals(line, renderedPolygon)
+      for (const hole of slab.holes || []) {
+        if (intervals.length === 0) break
+        if (hole.length < 3) continue
+        intervals = subtractIntervals(intervals, polylineInsideIntervals(line, hole, false))
       }
-      if (!inHole) {
-        hasValidPoint = true
-        break
-      }
-    }
+      supported = Math.max(supported, intervalsLength(intervals))
+      return intervals
+    })
+    if (supported < minSupport) continue
 
-    if (hasValidPoint) {
-      const elevation = slab.elevation ?? 0.05
-      if (elevation > maxElevation) maxElevation = elevation
+    const elevation = slab.elevation ?? 0.05
+    let group = groups.find(
+      (candidate) => Math.abs(candidate.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
+    )
+    if (!group) {
+      group = { elevation, perPolyline: polylines.map(() => []) }
+      groups.push(group)
+    }
+    for (let i = 0; i < perPolyline.length; i++) {
+      group.perPolyline[i]!.push(...perPolyline[i]!)
     }
   }
-  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+
+  let majorityElevation = Number.NEGATIVE_INFINITY
+  let bestElevation = Number.NEGATIVE_INFINITY
+  let bestCoverage = -1
+  for (const group of groups) {
+    let coverage = 0
+    for (let i = 0; i < group.perPolyline.length; i++) {
+      const lineLength = polylineLengths[i]!
+      if (lineLength < 1e-9) continue
+      coverage = Math.max(
+        coverage,
+        intervalsLength(mergeIntervals(group.perPolyline[i]!)) / lineLength,
+      )
+    }
+    if (coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+      majorityElevation = Math.max(majorityElevation, group.elevation)
+    }
+    if (
+      coverage > bestCoverage + 1e-6 ||
+      (Math.abs(coverage - bestCoverage) <= 1e-6 && group.elevation > bestElevation)
+    ) {
+      bestCoverage = coverage
+      bestElevation = group.elevation
+    }
+  }
+
+  if (majorityElevation !== Number.NEGATIVE_INFINITY) return majorityElevation
+  return bestElevation === Number.NEGATIVE_INFINITY ? 0 : bestElevation
 }
 
 export class SpatialGridManager {

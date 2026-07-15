@@ -158,4 +158,204 @@ describe('computeWallSlabElevation', () => {
       computeWallSlabElevation({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [slab], walls),
     ).toBe(0)
   })
+
+  it('keeps a wall on the lower slab when a higher slab only reaches one endpoint', () => {
+    // The floating-wall bug: a wall standing on the low room whose far
+    // endpoint pokes 0.2m onto a raised platform must NOT lift wholesale.
+    const low = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    const high = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 4],
+        [4, 4],
+      ],
+      elevation: 0.6,
+    })
+
+    expect(
+      computeWallSlabElevation({ start: [0.5, 2], end: [4.2, 2], thickness: 0.1 }, [low, high], []),
+    ).toBeCloseTo(0.05)
+  })
+
+  it('keeps a curved wall on the lower slab when a higher slab only reaches its end', () => {
+    const low = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    const high = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 4],
+        [4, 4],
+      ],
+      elevation: 0.6,
+    })
+
+    expect(
+      computeWallSlabElevation(
+        { start: [0.5, 2], end: [4.2, 2], curveOffset: 0.5, thickness: 0.1 },
+        [low, high],
+        [],
+      ),
+    ).toBeCloseTo(0.05)
+  })
+
+  it('lifts a wall standing fully on a raised platform', () => {
+    const platform = SlabNode.parse({ polygon: SLAB, elevation: 0.6 })
+
+    expect(
+      computeWallSlabElevation({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [platform], []),
+    ).toBeCloseTo(0.6)
+  })
+
+  it('lifts a wall half on a raised platform, half in the air, onto the platform', () => {
+    // No elevation reaches majority (only 39% supported), so the
+    // best-covered slab wins — the only alternative would bury the
+    // supported half inside the platform.
+    const platform = SlabNode.parse({ polygon: SLAB, elevation: 0.6 })
+
+    expect(
+      computeWallSlabElevation({ start: [0.1, 2], end: [10.1, 2], thickness: 0.1 }, [platform], []),
+    ).toBeCloseTo(0.6)
+  })
+
+  it('pools same-elevation slabs so a shared wall follows their common level', () => {
+    // Rooms A and B at the same elevation each cover just under half the
+    // wall (interior edges inset 2cm at x=2); a raised slab covers a bit
+    // more than either alone. Pooled, the common level covers ~99% and
+    // must win — without pooling the raised slab's 0.4975 would.
+    const roomA = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 4],
+        [0, 4],
+      ],
+      elevation: 0.1,
+    })
+    const roomB = SlabNode.parse({
+      polygon: [
+        [2, 0],
+        [4, 0],
+        [4, 4],
+        [2, 4],
+      ],
+      elevation: 0.1,
+    })
+    const raised = SlabNode.parse({
+      polygon: [
+        [1.0, 1],
+        [2.99, 1],
+        [2.99, 3],
+        [1.0, 3],
+      ],
+      elevation: 0.6,
+    })
+
+    expect(
+      computeWallSlabElevation(
+        { start: [0, 2], end: [4, 2], thickness: 0.1 },
+        [roomA, roomB, raised],
+        [],
+      ),
+    ).toBeCloseTo(0.1)
+  })
+
+  it('prefers the higher of two majority-supporting slabs (platform stacked on a floor)', () => {
+    const floor = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 4],
+        [0, 4],
+      ],
+      elevation: 0.05,
+    })
+    const platform = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [5, 0],
+        [5, 4],
+        [0, 4],
+      ],
+      elevation: 0.6,
+    })
+
+    // Wall 6m long: floor covers all of it, platform covers ~2/3 — both
+    // majorities, and the wall physically rests on the platform.
+    expect(
+      computeWallSlabElevation(
+        { start: [1, 2], end: [7, 2], thickness: 0.1 },
+        [floor, platform],
+        [],
+      ),
+    ).toBeCloseTo(0.6)
+  })
+
+  it('lifts a tiny stub wall standing fully on a slab', () => {
+    const slab = SlabNode.parse({ polygon: SLAB, elevation: 0.3 })
+
+    expect(
+      computeWallSlabElevation({ start: [2, 2], end: [2.08, 2], thickness: 0.1 }, [slab], []),
+    ).toBeCloseTo(0.3)
+  })
+
+  it('does not lift a wall whose run over a higher slab is mostly inside a hole', () => {
+    const low = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 4],
+        [0, 4],
+      ],
+      elevation: 0.05,
+    })
+    const high = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 4],
+        [0, 4],
+      ],
+      elevation: 0.6,
+      holes: [
+        [
+          [0.5, 0],
+          [8, 0],
+          [8, 4],
+          [0.5, 4],
+        ],
+      ],
+    })
+
+    // Net high support is only x ∈ [0, 0.5]; the low slab carries the wall.
+    expect(
+      computeWallSlabElevation({ start: [0, 2], end: [8, 2], thickness: 0.1 }, [low, high], []),
+    ).toBeCloseTo(0.05)
+  })
+
+  it('keeps support for a wall running along a hole rim', () => {
+    // Hole boundaries count as solid: the wall ringing a stairwell sits
+    // on the rim, its outer face on solid slab.
+    const slab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 6],
+        [0, 6],
+      ],
+      elevation: 0.4,
+      holes: [
+        [
+          [2, 2],
+          [4, 2],
+          [4, 4],
+          [2, 4],
+        ],
+      ],
+    })
+
+    expect(
+      computeWallSlabElevation({ start: [2, 2], end: [4, 2], thickness: 0.1 }, [slab], []),
+    ).toBeCloseTo(0.4)
+  })
 })
