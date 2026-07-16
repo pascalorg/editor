@@ -753,6 +753,35 @@ describe('getRenderableSlabPolygon', () => {
     ])
     expect(poly).toHaveLength(6)
   })
+
+  test('nearly collinear corners do not create unbounded wall-offset miters', () => {
+    const stored = [
+      [3.1318685080276216, -4.3412497001265],
+      [11.261660174864861, -4.341249992437693],
+      [11.26165987489183, -1.3166851233565569],
+      [3.131868208054532, -1.3166857310453555],
+      [1.7318390128066048, -1.3166857522417288],
+      [1.7318388127796835, -4.341249921322843],
+    ] as Array<[number, number]>
+    const poly = getRenderableSlabPolygon(slabOf(stored, false), {
+      walls: [
+        wallOf([1.7318387751077626, -4.323741654294752], [11.300000049514956, -4.341249931281993]),
+      ],
+      siblingSlabs: [],
+    })
+
+    const storedExtent = Math.max(...stored.flat().map(Math.abs))
+    const renderedExtent = Math.max(...poly.flat().map(Math.abs))
+    const longestEdge = Math.max(
+      ...poly.map((point, index) => {
+        const next = poly[(index + 1) % poly.length]!
+        return Math.hypot(point[0] - next[0], point[1] - next[1])
+      }),
+    )
+
+    expect(renderedExtent - storedExtent).toBeLessThan(0.2)
+    expect(longestEdge).toBeLessThan(8.4)
+  })
 })
 
 describe('snapSlabEdgeToWallBand', () => {

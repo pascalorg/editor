@@ -74,6 +74,8 @@ const WALL_LATERAL_TIE_EPSILON = 0.02
 const CURVED_WALL_SAMPLE_SEGMENTS = 32
 const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
 const DEFAULT_SLAB_ELEVATION = 0.05
+/** Prevent near-parallel offset lines from producing unbounded corner spikes. */
+const MAX_CORNER_MITER_RATIO = 10
 
 export type SlabPolygonContext = {
   /** Walls on the slab's level. */
@@ -748,7 +750,9 @@ function offsetPolygonPerEdge(
     const last = spans[spans.length - 1]!
     const first = subSpans[j]![0]!
     const [ax, az] = pointAt(i, last.start, last.offset)
-    const [bx, bz] = pointAt(j, first.start, first.offset)
+    const endI = pointAt(i, last.end, last.offset)
+    const startJ = pointAt(j, first.start, first.offset)
+    const [bx, bz] = startJ
     const frameI = frames[i]!
     const frameJ = frames[j]!
     const denom = frameI.dx * frameJ.dz - frameI.dz * frameJ.dx
@@ -756,11 +760,25 @@ function offsetPolygonPerEdge(
       // Parallel edges have no unique intersection. Emit both offset
       // endpoints — collinear edges with different offsets need the step
       // between them.
-      push(pointAt(i, last.end, last.offset))
-      push([bx, bz])
+      push(endI)
+      push(startJ)
     } else {
       const t = ((bx - ax) * frameJ.dz - (bz - az) * frameJ.dx) / denom
-      push([ax + t * frameI.dx, az + t * frameI.dz])
+      const intersection: [number, number] = [ax + t * frameI.dx, az + t * frameI.dz]
+      const miterReach = Math.max(
+        Math.hypot(intersection[0] - endI[0], intersection[1] - endI[1]),
+        Math.hypot(intersection[0] - startJ[0], intersection[1] - startJ[1]),
+      )
+      const offsetScale = Math.max(Math.abs(last.offset), Math.abs(first.offset), 1e-9)
+      if (
+        !(Number.isFinite(intersection[0]) && Number.isFinite(intersection[1])) ||
+        miterReach > offsetScale * MAX_CORNER_MITER_RATIO
+      ) {
+        push(endI)
+        push(startJ)
+      } else {
+        push(intersection)
+      }
     }
   }
 
