@@ -1,8 +1,9 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, NodeQuickActionNodeScope } from '@pascal-app/core'
 
-export function collectQuickActionNodeFamily(
+export function collectQuickActionNodeScope(
   nodes: Record<AnyNodeId, AnyNode>,
   selectedId: string,
+  scope: NodeQuickActionNodeScope = 'family',
 ): Record<AnyNodeId, AnyNode> | null {
   const selected = nodes[selectedId as AnyNodeId]
   if (!selected) return null
@@ -22,6 +23,19 @@ export function collectQuickActionNodeFamily(
       for (const childId of (node as { children?: readonly string[] }).children ?? []) {
         pending.push(childId)
       }
+    }
+  }
+
+  if (scope === 'level') {
+    const visited = new Set<AnyNodeId>()
+    let current: AnyNode | undefined = selected
+    while (current && !visited.has(current.id as AnyNodeId)) {
+      visited.add(current.id as AnyNodeId)
+      if (current.type === 'level') {
+        addSubtree(current.id)
+        return collected
+      }
+      current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
     }
   }
 

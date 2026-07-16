@@ -35,6 +35,7 @@ import { moduleSideOpen, sortRunModules } from './run-layout'
 import {
   backAlignedRunDepthOverrides,
   backAlignZ,
+  buildWallCornerDepthIndex,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
   cabinetModulesForRun,
@@ -45,6 +46,7 @@ import {
   runModuleBaseY,
   syncCornerRunsFromRunSources,
   syncCornerRunsFromSourceModule,
+  type WallCornerDepthIndex,
   wallChildOf,
   wallCornerWidthOverridesForDepthTargets,
 } from './run-ops'
@@ -1217,6 +1219,7 @@ function cabinetWallDepthPreview(
   depth: number,
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  cornerIndex?: WallCornerDepthIndex,
 ): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
   const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
   const liveTargets = targets.map(
@@ -1234,6 +1237,7 @@ function cabinetWallDepthPreview(
   }
   if (adjustCornerWidths) {
     for (const [id, patch] of wallCornerWidthOverridesForDepthTargets({
+      cornerIndex,
       depth,
       nodes: sceneApi.nodes(),
       targets: liveTargets,
@@ -1249,8 +1253,9 @@ function commitCabinetWallDepth(
   depth: number,
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  cornerIndex: WallCornerDepthIndex,
 ) {
-  const preview = cabinetWallDepthPreview(targets, depth, sceneApi, adjustCornerWidths)
+  const preview = cabinetWallDepthPreview(targets, depth, sceneApi, adjustCornerWidths, cornerIndex)
   for (const [id, patch] of preview) {
     sceneApi.update(id, patch)
   }
@@ -1278,6 +1283,7 @@ function cabinetWallDepthBounds(
   targets: readonly CabinetEditableNode[],
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  cornerIndex: WallCornerDepthIndex,
 ): { min: number; max: number } {
   const liveTargets = targets.map(
     (target) => sceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target,
@@ -1289,6 +1295,7 @@ function cabinetWallDepthBounds(
   const baselineAdjustments = new Map(
     wallCornerWidthOverridesForDepthTargets({
       clampWidths: false,
+      cornerIndex,
       depth: currentDepth,
       nodes: sceneApi.nodes(),
       targets: liveTargets,
@@ -1296,6 +1303,7 @@ function cabinetWallDepthBounds(
   )
   const unitAdjustments = wallCornerWidthOverridesForDepthTargets({
     clampWidths: false,
+    cornerIndex,
     depth: currentDepth + 1,
     nodes: sceneApi.nodes(),
     targets: liveTargets,
@@ -1334,6 +1342,7 @@ function cabinetWallGroupDepthHandles(
 ): LinearResizeHandle<CabinetEditableNode>[] {
   const targets = cabinetWallTargets(selected, sceneApi)
   if (targets.length < 2) return []
+  const cornerIndex = buildWallCornerDepthIndex(sceneApi.nodes())
 
   const groups: Array<{ rotation: number; targets: CabinetEditableNode[] }> = []
   for (const target of targets) {
@@ -1361,9 +1370,15 @@ function cabinetWallGroupDepthHandles(
     const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
     const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
     const adjustCornerWidths = !(Math.abs(frontX) < 1e-3 && frontZ > 0)
-    const depthBounds = () => cabinetWallDepthBounds(group.targets, sceneApi, adjustCornerWidths)
+    const depthBounds = () =>
+      cabinetWallDepthBounds(group.targets, sceneApi, adjustCornerWidths, cornerIndex)
     const clampedDepth = (requestedDepth: number, liveSceneApi: SceneApi) => {
-      const bounds = cabinetWallDepthBounds(group.targets, liveSceneApi, adjustCornerWidths)
+      const bounds = cabinetWallDepthBounds(
+        group.targets,
+        liveSceneApi,
+        adjustCornerWidths,
+        cornerIndex,
+      )
       return Math.min(bounds.max, Math.max(bounds.min, requestedDepth))
     }
     return {
@@ -1383,6 +1398,7 @@ function cabinetWallGroupDepthHandles(
           clampedDepth(depth, liveSceneApi),
           liveSceneApi,
           adjustCornerWidths,
+          cornerIndex,
         ),
       commit: (_node, patch, liveSceneApi) => {
         if (typeof patch.depth === 'number') {
@@ -1391,6 +1407,7 @@ function cabinetWallGroupDepthHandles(
             clampedDepth(patch.depth, liveSceneApi),
             liveSceneApi,
             adjustCornerWidths,
+            cornerIndex,
           )
         }
       },
@@ -1773,6 +1790,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   floorplan: buildCabinetFloorplan,
   floorplanSiblingOverrides: cabinetFloorplanSiblingOverrides,
   floorplanAffectedIds: cabinetFloorplanAffectedIds,
+  quickActionNodeScope: 'level',
   quickActions: cabinetQuickActions,
   // Corner-derived leg runs hide their own tree rows; their modules are
   // flattened into the source run's hierarchy.
@@ -1951,6 +1969,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
   // 2D ↔ 3D parity: module position is run-local, so the generic overlay's
   // plan-space translate would corrupt it on any rotated / offset run.
   floorplanMoveTarget: cabinetModuleFloorplanMoveTarget,
+  quickActionNodeScope: 'level',
   quickActions: cabinetQuickActions,
   tree: {
     label: cabinetTreeLabel,

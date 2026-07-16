@@ -1,25 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
-import { collectQuickActionNodeFamily } from './quick-action-nodes'
+import { collectQuickActionNodeScope } from './quick-action-nodes'
 
 function fixtureNode({
   id,
   parentId,
   children = [],
+  type = 'item',
 }: {
   id: string
   parentId?: string
   children?: string[]
+  type?: string
 }) {
   return {
     id,
-    type: 'item',
+    type,
     parentId,
     children,
   } as unknown as AnyNode
 }
 
-describe('collectQuickActionNodeFamily', () => {
+describe('collectQuickActionNodeScope', () => {
   test('includes nested children of a selected node sibling', () => {
     const run = fixtureNode({
       id: 'run',
@@ -36,8 +38,46 @@ describe('collectQuickActionNodeFamily', () => {
       [run, leftBase, selectedBase, expandedWall].map((node) => [node.id, node]),
     ) as Record<AnyNodeId, AnyNode>
 
-    const collected = collectQuickActionNodeFamily(nodes, selectedBase.id)
+    const collected = collectQuickActionNodeScope(nodes, selectedBase.id)
 
     expect(collected?.[expandedWall.id as AnyNodeId]).toBe(expandedWall)
+  })
+
+  test('includes other run subtrees when the provider declares level scope', () => {
+    const level = fixtureNode({
+      id: 'level',
+      type: 'level',
+      children: ['selected-run', 'other-run'],
+    })
+    const selectedRun = fixtureNode({
+      id: 'selected-run',
+      parentId: level.id,
+      children: ['selected-base'],
+    })
+    const selectedBase = fixtureNode({ id: 'selected-base', parentId: selectedRun.id })
+    const otherRun = fixtureNode({
+      id: 'other-run',
+      parentId: level.id,
+      children: ['other-base'],
+    })
+    const otherBase = fixtureNode({
+      id: 'other-base',
+      parentId: otherRun.id,
+      children: ['expanded-wall'],
+    })
+    const expandedWall = fixtureNode({ id: 'expanded-wall', parentId: otherBase.id })
+    const nodes = Object.fromEntries(
+      [level, selectedRun, selectedBase, otherRun, otherBase, expandedWall].map((node) => [
+        node.id,
+        node,
+      ]),
+    ) as Record<AnyNodeId, AnyNode>
+
+    expect(
+      collectQuickActionNodeScope(nodes, selectedBase.id)?.[expandedWall.id as AnyNodeId],
+    ).toBeUndefined()
+    expect(
+      collectQuickActionNodeScope(nodes, selectedBase.id, 'level')?.[expandedWall.id as AnyNodeId],
+    ).toBe(expandedWall)
   })
 })

@@ -24,7 +24,7 @@ import {
   duplicatesAsFreshSubtree,
 } from '../../lib/fresh-planar-placement'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
-import { collectQuickActionNodeFamily } from '../../lib/quick-action-nodes'
+import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -84,8 +84,9 @@ function collectQuickActionNodes(
 ): Record<AnyNodeId, AnyNode> | null {
   if (!selectedId) return null
   const selected = nodes[selectedId as AnyNodeId]
-  if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
-  return collectQuickActionNodeFamily(nodes, selectedId)
+  const def = selected ? nodeRegistry.get(selected.type) : undefined
+  if (!def?.quickActions) return null
+  return collectQuickActionNodeScope(nodes, selectedId, def.quickActionNodeScope)
 }
 
 /**

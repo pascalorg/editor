@@ -102,6 +102,7 @@ export type {
   NodePort,
   NodeQuickAction,
   NodeQuickActionIcon,
+  NodeQuickActionNodeScope,
   NodeQuickActionProvider,
   NodeQuickActionResult,
   NodeRegistry,

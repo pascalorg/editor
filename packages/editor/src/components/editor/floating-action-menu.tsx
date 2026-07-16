@@ -50,7 +50,7 @@ import {
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
-import { collectQuickActionNodeFamily } from '../../lib/quick-action-nodes'
+import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
@@ -211,8 +211,9 @@ function collectQuickActionNodes(
 ): Record<AnyNodeId, AnyNode> | null {
   if (!selectedId) return null
   const selected = nodes[selectedId as AnyNodeId]
-  if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
-  return collectQuickActionNodeFamily(nodes, selectedId)
+  const def = selected ? nodeRegistry.get(selected.type) : undefined
+  if (!def?.quickActions) return null
+  return collectQuickActionNodeScope(nodes, selectedId, def.quickActionNodeScope)
 }
 
 // Pooled scratch for the per-frame anchor recompute (see useFrame below) so a

@@ -53,6 +53,7 @@ export function GroupSelectionBox3D() {
   // Re-measure once the meshes settle after a scene change (undo included).
   const meshEpoch = useMeshSettleEpoch(nodes)
   const box = useMemo(() => {
+    void meshEpoch
     if (participantIds.length === 0) return null
     const fullIds = expandToComponent(participantIds, nodes, levelId)
     const world = computeGroupBox(fullIds)
@@ -69,7 +70,6 @@ export function GroupSelectionBox3D() {
       ],
       center,
     }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
   }, [participantIds, nodes, levelId, meshEpoch])
 
   // Dashed wireframe. Built per box size (rare — selection / commit changes)

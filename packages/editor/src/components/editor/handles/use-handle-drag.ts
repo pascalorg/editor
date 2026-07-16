@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type Cursor,
   createSceneApi,
+  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -223,6 +224,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
         commitHandleDragPatch({
           patch: lastPatch,
           resumeHistory,
+          runAsSingleHistoryStep: (run) => runAsSingleSceneHistoryStep(useScene, run),
           commit: session.commit ?? ((patch) => sceneApi.update(overrideId, patch)),
         })
       }

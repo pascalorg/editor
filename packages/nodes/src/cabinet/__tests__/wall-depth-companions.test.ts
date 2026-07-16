@@ -4,7 +4,7 @@ import type {
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
 } from '@pascal-app/core'
-import { wallCornerWidthOverridesForDepthTargets } from '../run-ops'
+import { buildWallCornerDepthIndex, wallCornerWidthOverridesForDepthTargets } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 function derivedMetadata(
@@ -164,6 +164,23 @@ describe('wall depth corner companions', () => {
     expect(patch(bridgeFillerB)?.position?.[0]).toBeCloseTo(0)
     expect(runPatch(bridgeA)?.position?.[0]).toBeCloseTo(0.38)
     expect(runPatch(bridgeB)?.position?.[0]).toBeCloseTo(-0.38)
+
+    const cornerIndex = buildWallCornerDepthIndex(nodes)
+    const indexedNodes = new Proxy(nodes, {
+      ownKeys: () => {
+        throw new Error('live depth preview must not rescan the cabinet graph')
+      },
+    })
+    const indexedOverrides = new Map(
+      wallCornerWidthOverridesForDepthTargets({
+        cornerIndex,
+        depth: 0.42,
+        nodes: indexedNodes,
+        targets: [wallB, wallLegB, bridgeB],
+      }),
+    )
+    expect(indexedOverrides.get(bridgeFillerA.id as AnyNodeId)?.width).toBeCloseTo(0.26)
+    expect(indexedOverrides.get(bridgeFillerB.id as AnyNodeId)?.width).toBeCloseTo(0.26)
 
     const rightSideOverrides = new Map(
       wallCornerWidthOverridesForDepthTargets({

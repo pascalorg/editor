@@ -68,6 +68,16 @@ type CornerDerivedRunLink = {
   sourceRunId: AnyNodeId
 }
 
+export type WallCornerDepthIndex = ReadonlyArray<{
+  baseLegRunId?: AnyNodeId
+  bridgeRunId?: AnyNodeId
+  side: CornerSide
+  sourceModuleId: AnyNodeId
+  sourceRunId: AnyNodeId
+  turnSide: CornerSide
+  wallLegRunId: AnyNodeId
+}>
+
 type CabinetRunStylePatch = Pick<
   Partial<CabinetNode>,
   'frontStyle' | 'frontOverlay' | 'handleStyle' | 'handlePosition'
@@ -132,6 +142,44 @@ function cornerDerivedRunLink(
     sourceModuleId: sourceModuleId as AnyNodeId,
     sourceRunId: sourceRunId as AnyNodeId,
   }
+}
+
+export function buildWallCornerDepthIndex(
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): WallCornerDepthIndex {
+  const groups = new Map<
+    string,
+    {
+      link: CornerDerivedRunLink
+      runIdsByRole: Partial<Record<CornerDerivedRunRole, AnyNodeId>>
+    }
+  >()
+
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'cabinet') continue
+    const link = cornerDerivedRunLink(node.metadata)
+    if (!link) continue
+    const key = [link.sourceRunId, link.sourceModuleId, link.side, link.turnSide].join('\u0000')
+    const group = groups.get(key) ?? { link, runIdsByRole: {} }
+    group.runIdsByRole[link.role] = node.id as AnyNodeId
+    groups.set(key, group)
+  }
+
+  return [...groups.values()].flatMap(({ link, runIdsByRole }) => {
+    const wallLegRunId = runIdsByRole['wall-leg']
+    if (!wallLegRunId) return []
+    return [
+      {
+        baseLegRunId: runIdsByRole['base-leg'],
+        bridgeRunId: runIdsByRole.bridge,
+        side: link.side,
+        sourceModuleId: link.sourceModuleId,
+        sourceRunId: link.sourceRunId,
+        turnSide: link.turnSide,
+        wallLegRunId,
+      },
+    ]
+  })
 }
 
 /**
@@ -346,11 +394,13 @@ export function backAlignedRunDepthOverrides(
 
 export function wallCornerWidthOverridesForDepthTargets({
   clampWidths = true,
+  cornerIndex,
   depth,
   nodes,
   targets,
 }: {
   clampWidths?: boolean
+  cornerIndex?: WallCornerDepthIndex
   depth: number
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
   targets: readonly CabinetEditableNode[]
@@ -360,7 +410,7 @@ export function wallCornerWidthOverridesForDepthTargets({
   const depthDelta = depth - initialDepth
 
   const targetIds = new Set(targets.map((target) => target.id as AnyNodeId))
-  const runs = Object.values(nodes).filter((node): node is CabinetNode => node?.type === 'cabinet')
+  const indexedCorners = cornerIndex ?? buildWallCornerDepthIndex(nodes)
   const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
   const setWidth = (
     node: CabinetModuleNode | null,
@@ -385,33 +435,28 @@ export function wallCornerWidthOverridesForDepthTargets({
     })
   }
 
-  for (const wallLegRun of runs) {
-    const link = cornerDerivedRunLink(wallLegRun.metadata)
-    if (link?.role !== 'wall-leg') continue
-    const sameCorner = (run: CabinetNode, role: CornerDerivedRunRole) => {
-      const candidate = cornerDerivedRunLink(run.metadata)
-      return (
-        candidate?.role === role &&
-        candidate.sourceModuleId === link.sourceModuleId &&
-        candidate.sourceRunId === link.sourceRunId
-      )
-    }
-    const baseLegRun = runs.find((run) => sameCorner(run, 'base-leg'))
-    const bridgeRun = runs.find((run) => sameCorner(run, 'bridge'))
-    const sourceModule = nodes[link.sourceModuleId]
-    const sourceRun = nodes[link.sourceRunId]
+  for (const corner of indexedCorners) {
+    const wallLegRun = nodes[corner.wallLegRunId]
+    if (wallLegRun?.type !== 'cabinet') continue
+    const baseLegRun = corner.baseLegRunId ? nodes[corner.baseLegRunId] : undefined
+    const bridgeRun = corner.bridgeRunId ? nodes[corner.bridgeRunId] : undefined
+    const sourceModule = nodes[corner.sourceModuleId]
+    const sourceRun = nodes[corner.sourceRunId]
     if (sourceModule?.type !== 'cabinet-module') continue
     const sourceWall = wallChildOf(sourceModule, nodes)
     const wallLegModules = cabinetModulesForRun(wallLegRun, nodes)
     const connectedWallInRun =
       wallLegModules.find((module) => module.name === 'Wall Cabinet') ?? null
-    const connectedBase = baseLegRun
-      ? (cabinetModulesForRun(baseLegRun, nodes).find((module) => module.name === 'Base Cabinet') ??
-        null)
-      : null
+    const connectedBase =
+      baseLegRun?.type === 'cabinet'
+        ? (cabinetModulesForRun(baseLegRun, nodes).find(
+            (module) => module.name === 'Base Cabinet',
+          ) ?? null)
+        : null
     const connectedWall =
       connectedWallInRun ?? (connectedBase ? wallChildOf(connectedBase, nodes) : null)
-    const bridgeModules = bridgeRun ? cabinetModulesForRun(bridgeRun, nodes) : []
+    const bridgeModules =
+      bridgeRun?.type === 'cabinet' ? cabinetModulesForRun(bridgeRun, nodes) : []
     const bridgeFiller =
       bridgeModules.find((module) => module.name === 'Wall Bridge Filler') ?? null
     const standaloneBridgeFiller = bridgeModules.length === 1 && bridgeModules[0] === bridgeFiller
@@ -420,19 +465,19 @@ export function wallCornerWidthOverridesForDepthTargets({
         ? 'min'
         : bridgeFiller?.openSide === 'right'
           ? 'max'
-          : link.side === 'right'
+          : corner.side === 'right'
             ? 'min'
             : 'max'
     const sourceDirectionChanged =
       (sourceWall && targetIds.has(sourceWall.id as AnyNodeId)) ||
-      (bridgeRun && targetIds.has(bridgeRun.id as AnyNodeId))
+      (bridgeRun?.type === 'cabinet' && targetIds.has(bridgeRun.id as AnyNodeId))
     const connectedDirectionChanged =
       (connectedWall && targetIds.has(connectedWall.id as AnyNodeId)) ||
       targetIds.has(wallLegRun.id as AnyNodeId)
 
     if (sourceDirectionChanged || connectedDirectionChanged) {
       const depthReferenceRun =
-        connectedDirectionChanged && baseLegRun
+        connectedDirectionChanged && baseLegRun?.type === 'cabinet'
           ? baseLegRun
           : sourceRun?.type === 'cabinet'
             ? sourceRun
@@ -442,7 +487,12 @@ export function wallCornerWidthOverridesForDepthTargets({
           ? depthReferenceRun.depth - depth
           : (bridgeFiller?.width ?? 0) - depthDelta
       setWidth(bridgeFiller, requestedWidth, anchor)
-      if (standaloneBridgeFiller && bridgeRun && bridgeFiller && sourceRun?.type === 'cabinet') {
+      if (
+        standaloneBridgeFiller &&
+        bridgeRun?.type === 'cabinet' &&
+        bridgeFiller &&
+        sourceRun?.type === 'cabinet'
+      ) {
         const fillerPatch = overrides.get(bridgeFiller.id as AnyNodeId) as
           | Partial<CabinetModuleNode>
           | undefined
@@ -459,7 +509,7 @@ export function wallCornerWidthOverridesForDepthTargets({
             ? 'right'
             : bridgeFiller.openSide === 'right'
               ? 'left'
-              : link.side
+              : corner.side
         const bridgeWorldPosition = anchoredBridgeRunWorldPosition({
           sourceWallTop: sourceWall,
           sourceRun,

@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test'
-import { calculateLevelMiters, type WallNode, type WallTrimConfig } from '@pascal-app/core'
+import type { WallNode, WallTrimConfig } from '@pascal-app/core'
+import { buildWallTreatmentLevelData } from './treatment-level-data'
 
 mock.module('@pascal-app/viewer', () => ({
   baseMaterial: () => undefined,
@@ -7,7 +8,7 @@ mock.module('@pascal-app/viewer', () => ({
   resolveMaterialRef: () => undefined,
 }))
 
-const { buildTrimGeometry } = await import('./treatments')
+const { buildTrimGeometry, wallTreatmentProudOffsets } = await import('./treatments')
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
   return {
@@ -35,21 +36,23 @@ const trim: WallTrimConfig = {
   sides: 'both',
 }
 
+function treatmentLevelData(walls: WallNode[]) {
+  const treatedWalls = walls.map((entry) => ({
+    ...entry,
+    skirting: trim,
+    crown: trim,
+    chairRail: trim,
+  }))
+  return buildWallTreatmentLevelData(treatedWalls, treatedWalls.flatMap(wallTreatmentProudOffsets))
+}
+
 function cornerXs(
   side: 'interior' | 'exterior',
   kind: 'skirting' | 'crown' | 'chairRail',
   outerOffset: number,
 ) {
   const walls = [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [0, 3])]
-  const geometry = buildTrimGeometry(
-    walls[0]!,
-    side,
-    trim,
-    kind,
-    [],
-    walls,
-    calculateLevelMiters(walls),
-  )
+  const geometry = buildTrimGeometry(walls[0]!, side, trim, kind, [], treatmentLevelData(walls))
   expect(geometry).not.toBeNull()
   if (!geometry) throw new Error('expected trim geometry')
 
@@ -89,10 +92,10 @@ describe('wall treatment miters', () => {
 
   test('keeps each treatment on one physical side of an isolated wall', () => {
     const node = wall('A', [0, 0], [3, 0])
-    const miters = calculateLevelMiters([node])
+    const levelData = treatmentLevelData([node])
 
     for (const side of ['interior', 'exterior'] as const) {
-      const geometry = buildTrimGeometry(node, side, trim, 'skirting', [], [node], miters)
+      const geometry = buildTrimGeometry(node, side, trim, 'skirting', [], levelData)
       expect(geometry).not.toBeNull()
       if (!geometry) throw new Error('expected trim geometry')
       const positions = allPositions(geometry)
@@ -108,9 +111,9 @@ describe('wall treatment miters', () => {
 
   test('joins the outer profile at an end-to-start room corner', () => {
     const walls = [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])]
-    const miters = calculateLevelMiters(walls)
-    const a = buildTrimGeometry(walls[0]!, 'interior', trim, 'skirting', [], walls, miters)
-    const b = buildTrimGeometry(walls[1]!, 'interior', trim, 'skirting', [], walls, miters)
+    const levelData = treatmentLevelData(walls)
+    const a = buildTrimGeometry(walls[0]!, 'interior', trim, 'skirting', [], levelData)
+    const b = buildTrimGeometry(walls[1]!, 'interior', trim, 'skirting', [], levelData)
     expect(a).not.toBeNull()
     expect(b).not.toBeNull()
     if (!(a && b)) throw new Error('expected trim geometry')
@@ -132,8 +135,7 @@ describe('wall treatment miters', () => {
       trim,
       'skirting',
       [{ type: 'door', width: 1, height: 2, position: [1.5, 1, 0] }],
-      [node],
-      calculateLevelMiters([node]),
+      treatmentLevelData([node]),
     )
     expect(geometry).not.toBeNull()
     if (!geometry) throw new Error('expected trim geometry')
