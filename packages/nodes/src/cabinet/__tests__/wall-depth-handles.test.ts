@@ -166,29 +166,170 @@ function wallDepthFixture() {
 }
 
 describe('wall cabinet depth handles', () => {
-  test('hides all arrows when a single base cabinet is selected', () => {
-    const { baseA, sceneApi } = wallDepthFixture()
+  test('shows only side width arrows when a single cabinet is selected', () => {
+    const { baseA, nodes, root, sceneApi, wallA } = wallDepthFixture()
     const buildModuleHandles = cabinetModuleDefinition.handles as (
       node: CabinetModuleNodeType,
       sceneApi: SceneApi,
     ) => HandleDescriptor<CabinetModuleNodeType>[]
-    const handles = buildModuleHandles(baseA, sceneApi)
 
-    expect(handles).toHaveLength(0)
+    for (const cabinet of [baseA, wallA]) {
+      const handles = buildModuleHandles(cabinet, sceneApi)
+      expect(handles).toHaveLength(2)
+      expect(handles.map((handle) => handle.kind)).toEqual(['linear-resize', 'linear-resize'])
+      expect(handles.map((handle) => handle.axis)).toEqual(['x', 'x'])
+
+      const widthHandles = handles as LinearResizeHandle<CabinetModuleNodeType>[]
+      const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')!
+      const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')!
+      const nextWidth = cabinet.width + 0.2
+      expect(leftHandle.apply(cabinet, nextWidth, sceneApi).position?.[0]).toBeCloseTo(
+        cabinet.position[0] - 0.1,
+      )
+      expect(rightHandle.apply(cabinet, nextWidth, sceneApi).position?.[0]).toBeCloseTo(
+        cabinet.position[0] + 0.1,
+      )
+    }
+
+    const rightCornerRun = sceneApi.get<CabinetNodeType>('cabinet_wall-depth-leg-b' as AnyNodeId)!
+    const rightCornerFiller = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-filler-right',
+      parentId: rightCornerRun.id,
+      moduleKind: 'corner-filler',
+      name: 'Corner Filler',
+    })
+    nodes[rightCornerFiller.id as AnyNodeId] = rightCornerFiller as AnyNode
+    nodes[rightCornerRun.id as AnyNodeId] = {
+      ...rightCornerRun,
+      children: [rightCornerFiller.id, ...(rightCornerRun.children ?? [])],
+    } as AnyNode
+    const besideRightGeneratedCorner = buildModuleHandles(baseA, sceneApi).filter(
+      (handle) => handle.visible?.(baseA, sceneApi) !== false,
+    ) as LinearResizeHandle<CabinetModuleNodeType>[]
+    expect(besideRightGeneratedCorner.map((handle) => handle.anchor)).toEqual(['max'])
+
+    const leftCornerRun = CabinetNode.parse({
+      id: 'cabinet_wall-depth-leg-left',
+      parentId: root.id,
+      children: ['cabinet-module_wall-depth-filler-left'],
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: 'left',
+          turnSide: 'left',
+          sourceModuleId: baseA.id,
+          sourceRunId: root.id,
+        },
+      },
+    })
+    const leftCornerFiller = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-filler-left',
+      parentId: leftCornerRun.id,
+      moduleKind: 'corner-filler',
+      name: 'Corner Filler',
+    })
+    nodes[leftCornerRun.id as AnyNodeId] = leftCornerRun as AnyNode
+    nodes[leftCornerFiller.id as AnyNodeId] = leftCornerFiller as AnyNode
+    nodes[root.id as AnyNodeId] = {
+      ...root,
+      children: [...root.children, leftCornerRun.id],
+    } as AnyNode
+    const betweenGeneratedCorners = buildModuleHandles(baseA, sceneApi).filter(
+      (handle) => handle.visible?.(baseA, sceneApi) !== false,
+    )
+    expect(betweenGeneratedCorners).toHaveLength(0)
+
+    const adjacent = CabinetModuleNode.parse({
+      id: 'cabinet-module_width-adjacent',
+      parentId: root.id,
+      position: [baseA.position[0] + baseA.width, baseA.position[1], baseA.position[2]],
+      width: baseA.width,
+    })
+    nodes[adjacent.id as AnyNodeId] = adjacent as AnyNode
+    nodes[root.id as AnyNodeId] = {
+      ...root,
+      children: [baseA.id, adjacent.id],
+    } as AnyNode
+    const visibleHandles = buildModuleHandles(baseA, sceneApi).filter(
+      (handle) => handle.visible?.(baseA, sceneApi) !== false,
+    )
+
+    expect(visibleHandles).toHaveLength(2)
+
+    nodes[adjacent.id as AnyNodeId] = {
+      ...adjacent,
+      moduleKind: 'corner-filler',
+    } as AnyNode
+    const besideRightFiller = buildModuleHandles(baseA, sceneApi).filter(
+      (handle) => handle.visible?.(baseA, sceneApi) !== false,
+    ) as LinearResizeHandle<CabinetModuleNodeType>[]
+    expect(besideRightFiller.map((handle) => handle.anchor)).toEqual(['max'])
+
+    nodes[adjacent.id as AnyNodeId] = {
+      ...adjacent,
+      moduleKind: 'corner-filler',
+      position: [baseA.position[0] - baseA.width, baseA.position[1], baseA.position[2]],
+    } as AnyNode
+    const besideLeftFiller = buildModuleHandles(baseA, sceneApi).filter(
+      (handle) => handle.visible?.(baseA, sceneApi) !== false,
+    ) as LinearResizeHandle<CabinetModuleNodeType>[]
+    expect(besideLeftFiller.map((handle) => handle.anchor)).toEqual(['min'])
+
+    const filler = sceneApi.get<CabinetModuleNodeType>(adjacent.id as AnyNodeId)!
+    const fillerHandles = buildModuleHandles(filler, sceneApi).filter(
+      (handle) => handle.visible?.(filler, sceneApi) !== false,
+    )
+    expect(fillerHandles).toHaveLength(0)
   })
 
-  test('shows wall arrows only on group selection alongside the base arrows', () => {
-    const { bridge, bridgeModule, root, sceneApi, wallA, wallB, wallC } = wallDepthFixture()
+  test('changes width only on the bottom cabinet and its linked wall cabinet', () => {
+    const { baseA, nodes, sceneApi, wallA } = wallDepthFixture()
     const buildModuleHandles = cabinetModuleDefinition.handles as (
       node: CabinetModuleNodeType,
       sceneApi: SceneApi,
     ) => HandleDescriptor<CabinetModuleNodeType>[]
-    const selectedWallHandles = buildModuleHandles(wallA, sceneApi).filter(
+    const widthHandle = buildModuleHandles(baseA, sceneApi).find(
       (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
-        handle.kind === 'linear-resize',
+        handle.kind === 'linear-resize' && handle.axis === 'x' && handle.anchor === 'min',
+    )!
+    const otherCabinets = Object.values(nodes).filter(
+      (node): node is CabinetNodeType | CabinetModuleNodeType =>
+        (node.type === 'cabinet' || node.type === 'cabinet-module') &&
+        node.id !== baseA.id &&
+        node.id !== wallA.id,
     )
-    expect(selectedWallHandles).toHaveLength(0)
+    const otherCabinetDimensions = new Map(
+      otherCabinets.map((cabinet) => [
+        cabinet.id,
+        { position: [...cabinet.position], width: cabinet.width },
+      ]),
+    )
+    const nextWidth = baseA.width + 0.2
+    const patch = widthHandle.apply(baseA, nextWidth, sceneApi)
+    const previewOverrides = widthHandle.previewOverrides?.(baseA, nextWidth, sceneApi)
 
+    expect(patch.width).toBeCloseTo(nextWidth)
+    expect(previewOverrides).toEqual([[wallA.id, { width: nextWidth }]])
+    expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBe(baseA.width)
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.width).toBe(wallA.width)
+    widthHandle.commit?.(baseA, patch, sceneApi)
+
+    expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.width).toBeCloseTo(nextWidth)
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.position).toEqual(
+      wallA.position,
+    )
+    for (const cabinet of otherCabinets) {
+      const liveCabinet = sceneApi.get<CabinetNodeType | CabinetModuleNodeType>(
+        cabinet.id as AnyNodeId,
+      )!
+      expect(liveCabinet.width).toBe(otherCabinetDimensions.get(cabinet.id)?.width)
+      expect(liveCabinet.position).toEqual(otherCabinetDimensions.get(cabinet.id)?.position)
+    }
+  })
+
+  test('shows wall depth arrows on group selection alongside the base arrows', () => {
+    const { bridge, bridgeModule, root, sceneApi, wallA, wallB, wallC } = wallDepthFixture()
     const buildGroupHandles = cabinetDefinition.handles as (
       node: CabinetNodeType,
       sceneApi: SceneApi,

@@ -2203,7 +2203,7 @@ describe('cabinet handles', () => {
       typeof cabinetModuleDefinition.handles === 'function'
         ? cabinetModuleDefinition.handles(node)
         : (cabinetModuleDefinition.handles ?? [])
-    return handles
+    return { handles, node }
   }
 
   function generatedL(side: 'left' | 'right') {
@@ -2273,8 +2273,20 @@ describe('cabinet handles', () => {
     return { ...fixture, depthHandles, source, thirdRun }
   }
 
-  test('single cabinet selection omits arrow handles', () => {
-    expect(moduleHandles()).toHaveLength(0)
+  test('single cabinet side arrows resize from the dragged side', () => {
+    const { handles, node } = moduleHandles()
+    const widthHandles = handles.filter(
+      (handle): handle is LinearResizeHandle<typeof node> =>
+        handle.kind === 'linear-resize' && handle.axis === 'x',
+    )
+    const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')
+    const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')
+
+    expect(handles).toHaveLength(2)
+    expect(leftHandle).toBeDefined()
+    expect(rightHandle).toBeDefined()
+    expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
+    expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
   })
 
   test.each([

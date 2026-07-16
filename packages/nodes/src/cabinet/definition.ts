@@ -31,7 +31,7 @@ import {
   MIN_CABINET_DEPTH,
   MIN_CABINET_WIDTH,
 } from './resize-limits'
-import { moduleSideOpen } from './run-layout'
+import { moduleSideOpen, sortRunModules } from './run-layout'
 import {
   backAlignedRunDepthOverrides,
   backAlignZ,
@@ -587,6 +587,45 @@ function cabinetModuleSideOpen(
   )
 }
 
+function cabinetModuleSideHasCornerFiller(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(parent)) return false
+  const modules = sortRunModules(cabinetModulesForRun(parent, sceneApi.nodes()))
+  const index = modules.findIndex((entry) => entry.id === module.id)
+  if (index >= 0 && !cabinetModuleSideOpen(module, side, sceneApi)) {
+    const neighbor = side === 'left' ? modules[index - 1] : modules[index + 1]
+    if (neighbor?.moduleKind === 'corner-filler') return true
+  }
+
+  for (const candidate of Object.values(sceneApi.nodes())) {
+    if (candidate?.type !== 'cabinet') continue
+    const derived = cabinetMetadataRecord(candidate.metadata).cabinetCornerDerivedRun
+    if (!derived || typeof derived !== 'object' || Array.isArray(derived)) continue
+    if (
+      candidate.parentId !== parent.id ||
+      !((parent.children ?? []) as readonly AnyNodeId[]).includes(candidate.id as AnyNodeId) ||
+      (derived as { role?: unknown }).role !== 'base-leg' ||
+      (derived as { side?: unknown }).side !== side ||
+      (derived as { sourceModuleId?: unknown }).sourceModuleId !== module.id ||
+      (derived as { sourceRunId?: unknown }).sourceRunId !== parent.id
+    ) {
+      continue
+    }
+    if (
+      cabinetModulesForRun(candidate, sceneApi.nodes()).some(
+        (entry) => entry.moduleKind === 'corner-filler',
+      )
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function commitRunResize(
   run: CabinetNodeType,
   patch: Partial<CabinetNodeType>,
@@ -674,26 +713,13 @@ function commitModuleResize(
 
   if (typeof patch.width === 'number') {
     sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
-    const wallChild = wallChildOf(module, sceneApi.nodes())
-    if (wallChild) {
-      sceneApi.update(
-        wallChild.id as AnyNodeId,
-        {
-          width: patch.width,
-          position: [
-            wallChild.position[0],
-            wallChild.position[1],
-            backAlignZ(patch.depth ?? module.depth, wallChild.depth),
-          ],
-        } as Partial<AnyNode>,
-      )
+    if (resolveCabinetType(module, parentRun) === 'base') {
+      const wallChild = wallChildOf(module, sceneApi.nodes())
+      if (wallChild) {
+        sceneApi.update(wallChild.id as AnyNodeId, { width: patch.width } as Partial<AnyNode>)
+      }
     }
     bumpCabinetRunLayoutRevision(sceneApi, parentRun)
-    syncCornerRunsFromSourceModule({
-      module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
-      run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
-      sceneApi,
-    })
     return
   }
 
@@ -778,6 +804,15 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
         node.position[2],
       ],
     }),
+    previewOverrides: (node, width, sceneApi) => {
+      if (!isCabinetModule(node)) return []
+      const parent = node.parentId
+        ? sceneApi.get<CabinetNodeType>(node.parentId as AnyNodeId)
+        : undefined
+      if (!parent || !isCabinetRun(parent) || resolveCabinetType(node, parent) !== 'base') return []
+      const wallChild = wallChildOf(node, sceneApi.nodes())
+      return wallChild ? [[wallChild.id as AnyNodeId, { width }]] : []
+    },
     commit: commitCabinetResize,
     visible: (node, sceneApi) =>
       !isCabinetModule(node) || cabinetModuleSideOpen(node, side, sceneApi),
@@ -1344,7 +1379,20 @@ function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
 }
 
 function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
-  return []
+  return [
+    {
+      ...cabinetWidthHandle('left'),
+      visible: (node, sceneApi) =>
+        node.moduleKind !== 'corner-filler' &&
+        !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetWidthHandle('right'),
+      visible: (node, sceneApi) =>
+        node.moduleKind !== 'corner-filler' &&
+        !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+  ]
 }
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
