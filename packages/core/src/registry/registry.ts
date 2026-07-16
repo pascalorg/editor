@@ -2,6 +2,9 @@ import type { ZodObject } from 'zod'
 import type { AnyNodeDefinition, BakePolicy, NodeRegistry, Plugin } from './types'
 
 const HOST_API_VERSION = 1 as const
+const BUILTIN_PLUGIN_ID = 'pascal:core'
+
+const pluginIdsByKind = new Map<string, string>()
 
 // True in dev / test builds, false in production. Tries Vite's
 // `import.meta.env.DEV` first (the editor app's bundler) and falls back
@@ -74,6 +77,7 @@ class NodeRegistryImpl implements NodeRegistry {
   // Test-only — clears the registry. Not exported from the package barrel.
   _reset(): void {
     this.defs.clear()
+    pluginIdsByKind.clear()
   }
 }
 
@@ -84,6 +88,23 @@ export const nodeRegistry: NodeRegistry & {
 
 export function registerNode(def: AnyNodeDefinition): void {
   nodeRegistry._register(def)
+}
+
+/** The plugin that registered a node kind, when it came through {@link loadPlugin}. */
+export function getNodePluginId(kind: string): string | undefined {
+  return pluginIdsByKind.get(kind)
+}
+
+/**
+ * Whether a registered kind should participate in a project. Kinds registered
+ * directly by the host and the built-in plugin are always enabled. An omitted
+ * install list means a legacy scene whose plugin state predates persistence, so
+ * loaded plugins remain visible for backward compatibility.
+ */
+export function isNodeKindEnabled(kind: string, installedPlugins?: readonly string[]): boolean {
+  const pluginId = getNodePluginId(kind)
+  if (!pluginId || pluginId === BUILTIN_PLUGIN_ID || installedPlugins === undefined) return true
+  return installedPlugins.includes(pluginId)
 }
 
 /**
@@ -244,6 +265,7 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
   }
   for (const def of plugin.nodes ?? []) {
     registerNode(def)
+    pluginIdsByKind.set(def.kind, plugin.id)
   }
 }
 

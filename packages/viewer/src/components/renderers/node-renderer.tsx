@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, type RendererSource, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  isNodeKindEnabled,
+  nodeRegistry,
+  type RendererSource,
+  useScene,
+} from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense } from 'react'
 import { ParametricNodeRenderer } from './parametric-node-renderer'
 
@@ -23,7 +29,9 @@ export function getRegistryRenderer(
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
+  const installedPlugins = useScene((state) => state.installedPlugins)
   if (!node) return null
+  if (!isNodeKindEnabled(node.type, installedPlugins)) return null
   const def = nodeRegistry.get(node.type)
   if (!def) return null
   // Two-checkbox dispatch (see wiki/architecture/node-definitions.md):

@@ -4,7 +4,7 @@ import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
-import { nodeRegistry } from '../registry/registry'
+import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
@@ -952,6 +952,8 @@ export type SceneState = {
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
   materials: Record<SceneMaterialId, SceneMaterial>
+  installedPlugins: string[]
+  hasExplicitPluginInstallState: boolean
 
   // 5. Read-only lock — when true all create/update/delete operations are no-ops
   readOnly: boolean
@@ -967,8 +969,11 @@ export type SceneState = {
     extra?: {
       collections?: Record<CollectionId, Collection>
       materials?: Record<SceneMaterialId, SceneMaterial>
+      installedPlugins?: string[]
+      hasExplicitPluginInstallState?: boolean
     },
   ) => void
+  setInstalledPlugins: (pluginIds: string[], options?: { explicit?: boolean }) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -1004,7 +1009,9 @@ export type SceneState = {
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<
-    TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials'>>
+    TemporalState<
+      Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'>
+    >
   >
 }
 
@@ -1023,6 +1030,8 @@ const useScene: UseSceneStore = create<SceneState>()(
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
+      installedPlugins: [],
+      hasExplicitPluginInstallState: false,
 
       // 5. Read-only lock
       readOnly: false,
@@ -1035,12 +1044,17 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
           materials: {},
+          installedPlugins: [],
+          hasExplicitPluginInstallState: false,
         })
       },
 
       clearScene: () => {
+        const installedPlugins = get().installedPlugins
+        const hasExplicitPluginInstallState = get().hasExplicitPluginInstallState
         get().unloadScene()
         get().loadScene() // Default scene
+        set({ installedPlugins, hasExplicitPluginInstallState })
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
@@ -1086,10 +1100,32 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
           materials,
+          installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
+          hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(cleanedNodes).forEach((node) => {
           get().markDirty(node.id)
+        })
+      },
+
+      setInstalledPlugins: (pluginIds, options) => {
+        if (get().readOnly) return
+        const nextInstalledPlugins = Array.from(new Set(pluginIds))
+        const previousInstalledPlugins = get().installedPlugins
+        const dirtyNodes = new Set(get().dirtyNodes)
+        for (const node of Object.values(get().nodes)) {
+          if (!getNodePluginId(node.type)) continue
+          if (!isNodeKindEnabled(node.type, nextInstalledPlugins)) {
+            dirtyNodes.delete(node.id)
+          } else if (!isNodeKindEnabled(node.type, previousInstalledPlugins)) {
+            if (nodeRegistry.get(node.type)?.dirtyTracking !== false) dirtyNodes.add(node.id)
+          }
+        }
+        set({
+          installedPlugins: nextInstalledPlugins,
+          hasExplicitPluginInstallState: options?.explicit ?? get().hasExplicitPluginInstallState,
+          dirtyNodes,
         })
       },
 
@@ -1131,6 +1167,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       markDirty: (id) => {
         const node = get().nodes[id]
+        if (node && !isNodeKindEnabled(node.type, get().installedPlugins)) return
         if (node && nodeRegistry.get(node.type)?.dirtyTracking === false) return
         get().dirtyNodes.add(id)
       },
@@ -1275,8 +1312,8 @@ const useScene: UseSceneStore = create<SceneState>()(
     }),
     {
       partialize: (state) => {
-        const { nodes, rootNodeIds, collections, materials } = state
-        return { nodes, rootNodeIds, collections, materials }
+        const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
+        return { nodes, rootNodeIds, collections, materials, installedPlugins }
       },
       limit: 50, // Limit to last 50 actions
     },

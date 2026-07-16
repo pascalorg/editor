@@ -180,6 +180,7 @@ export function SettingsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
+  const installedPlugins = useScene((state) => state.installedPlugins)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -206,7 +207,7 @@ export function SettingsPanel({
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
   const handleSaveBuild = () => {
-    const sceneData = { nodes, rootNodeIds }
+    const sceneData = { nodes, rootNodeIds, installedPlugins }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -262,10 +263,20 @@ export function SettingsPanel({
     e.target.value = ''
   }
 
-  const handleConfirmImport = (parsed: { nodes: Record<string, unknown>; rootNodeIds: string[] }) => {
+  const handleConfirmImport = (parsed: {
+    nodes: Record<string, unknown>
+    rootNodeIds: string[]
+    installedPlugins?: string[]
+  }) => {
+    const currentScene = useScene.getState()
     setScene(
       parsed.nodes as Parameters<typeof setScene>[0],
       parsed.rootNodeIds as Parameters<typeof setScene>[1],
+      {
+        installedPlugins: parsed.installedPlugins ?? currentScene.installedPlugins,
+        hasExplicitPluginInstallState:
+          parsed.installedPlugins !== undefined || currentScene.hasExplicitPluginInstallState,
+      },
     )
     // An import is a scene load: it becomes the undo floor. Without this,
     // undo could step back into the pre-import scene state.

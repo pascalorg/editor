@@ -67,6 +67,7 @@ export function useAutoSave({
     // collection change still triggers a save.
     let lastCollectionsRef = useScene.getState().collections
     let lastMaterialsRef = useScene.getState().materials
+    let lastInstalledPluginsRef = useScene.getState().installedPlugins
 
     async function executeSave() {
       if (isLoadingSceneRef.current || isVersionPreviewModeRef.current) {
@@ -75,8 +76,14 @@ export function useAutoSave({
         return
       }
 
-      const { nodes, rootNodeIds, collections, materials } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
+      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const sceneGraph = {
+        nodes,
+        rootNodeIds,
+        collections,
+        materials,
+        installedPlugins,
+      } as SceneGraph
 
       // Guard: refuse to autosave if the scene went from populated to nearly empty.
       // This catches accidental full deletions before they're persisted.
@@ -126,6 +133,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
+        lastInstalledPluginsRef = state.installedPlugins
         return
       }
 
@@ -134,6 +142,7 @@ export function useAutoSave({
         lastNodesSnapshot = JSON.stringify(state.nodes)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
+        lastInstalledPluginsRef = state.installedPlugins
         return
       }
 
@@ -141,12 +150,14 @@ export function useAutoSave({
       const changed =
         currentNodesSnapshot !== lastNodesSnapshot ||
         state.collections !== lastCollectionsRef ||
-        state.materials !== lastMaterialsRef
+        state.materials !== lastMaterialsRef ||
+        state.installedPlugins !== lastInstalledPluginsRef
       if (!changed) return
 
       lastNodesSnapshot = currentNodesSnapshot
       lastCollectionsRef = state.collections
       lastMaterialsRef = state.materials
+      lastInstalledPluginsRef = state.installedPlugins
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')
@@ -172,8 +183,14 @@ export function useAutoSave({
     function flushOnExit() {
       if (!hasDirtyChangesRef.current) return
       hasDirtyChangesRef.current = false
-      const { nodes, rootNodeIds, collections, materials } = useScene.getState()
-      const sceneGraph = { nodes, rootNodeIds, collections, materials } as SceneGraph
+      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const sceneGraph = {
+        nodes,
+        rootNodeIds,
+        collections,
+        materials,
+        installedPlugins,
+      } as SceneGraph
       if (onSaveRef.current) {
         onSaveRef.current(sceneGraph, { keepalive: true }).catch(() => {})
       } else {

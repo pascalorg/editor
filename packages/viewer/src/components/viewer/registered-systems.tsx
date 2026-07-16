@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNodeDefinition, createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeDefinition,
+  createSceneApi,
+  isNodeKindEnabled,
+  nodeRegistry,
+  useScene,
+} from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 
 const DEFAULT_PRIORITY = 5
@@ -34,6 +40,7 @@ function loadSystem(def: AnyNodeDefinition): ComponentType<RegisteredSystemProps
  */
 export function RegisteredSystems() {
   const sceneApi = useMemo(() => createSceneApi(useScene), [])
+  const installedPlugins = useScene((state) => state.installedPlugins)
   const entries = useMemo(() => {
     return Array.from(nodeRegistry.entries())
       .filter(([, def]) => def.system != null)
@@ -49,6 +56,7 @@ export function RegisteredSystems() {
   return (
     <Suspense fallback={null}>
       {entries.map(([kind, def]) => {
+        if (!isNodeKindEnabled(kind, installedPlugins)) return null
         const Comp = loadSystem(def)
         if (!Comp) return null
         return <Comp key={`registered-system:${kind}`} sceneApi={sceneApi} />
