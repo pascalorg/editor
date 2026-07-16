@@ -19,6 +19,7 @@ import {
   resolveCabinetType,
   switchCabinetToBase,
   switchCabinetToTall,
+  wallChildAdditionOverlaps,
   wallChildOf,
 } from './run-ops'
 
@@ -90,6 +91,10 @@ export function cabinetQuickActions({
   const hasWallCabinet =
     context.module && standardModule && selectedCabinetType === 'base'
       ? Boolean(wallChildOf(context.module, nodes))
+      : false
+  const wallAdditionBlocked =
+    context.module && standardModule && selectedCabinetType === 'base'
+      ? wallChildAdditionOverlaps(context.module, context.run, nodes)
       : false
   const runModules = cabinetModulesForRun(context.run, nodes)
   const leftCornerModule =
@@ -210,9 +215,12 @@ export function cabinetQuickActions({
         label: 'Wall',
         title: hasWallCabinet
           ? 'A wall cabinet already exists above this cabinet'
-          : 'Add wall cabinet above',
+          : wallAdditionBlocked
+            ? 'No space above—overlaps an existing wall cabinet'
+            : 'Add wall cabinet above',
         icon: cabinetWallIcon,
-        disabled: hasWallCabinet,
+        disabled: hasWallCabinet || wallAdditionBlocked,
+        blockedFeedback: !hasWallCabinet && wallAdditionBlocked ? true : undefined,
         run: ({ sceneApi }) => {
           const id = addWallChildAbove({
             kind: 'cabinet',

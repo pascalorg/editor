@@ -587,18 +587,176 @@ function cabinetModuleSideOpen(
   )
 }
 
+function cabinetModuleConnectedNeighbor(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): CabinetModuleNodeType | undefined {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(parent)) return undefined
+  const modules = sortRunModules(cabinetModulesForRun(parent, sceneApi.nodes()))
+  const index = modules.findIndex((entry) => entry.id === module.id)
+  if (index < 0 || cabinetModuleSideOpen(module, side, sceneApi)) return undefined
+  return side === 'left' ? modules[index - 1] : modules[index + 1]
+}
+
+function cabinetWidthConnectedNeighbor(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): CabinetModuleNodeType | undefined {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) return cabinetModuleConnectedNeighbor(module, side, sceneApi)
+  if (!isCabinetModule(parent)) return undefined
+  if (wallChildOf(parent, sceneApi.nodes())?.id !== module.id) return undefined
+
+  const connectedHost = cabinetModuleConnectedNeighbor(parent, side, sceneApi)
+  if (!connectedHost || isCabinetWidthFiller(connectedHost)) return undefined
+  return wallChildOf(connectedHost, sceneApi.nodes()) ?? undefined
+}
+
+function cabinetModuleRunLocalCenterX(
+  module: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): number | null {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) return module.position[0]
+  if (!isCabinetModule(parent)) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  return isCabinetRun(run) ? parent.position[0] + module.position[0] : null
+}
+
+function cabinetWallWidthGap(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  const isWallModule =
+    (isCabinetRun(parent) && parent.runTier === 'wall') ||
+    (isCabinetModule(parent) && wallChildOf(parent, sceneApi.nodes())?.id === module.id)
+  if (!isWallModule) return 0
+
+  const connected = cabinetWidthConnectedNeighbor(module, side, sceneApi)
+  if (!connected || isCabinetWidthFiller(connected)) return 0
+  const moduleCenter = cabinetModuleRunLocalCenterX(module, sceneApi)
+  const connectedCenter = cabinetModuleRunLocalCenterX(connected, sceneApi)
+  if (moduleCenter === null || connectedCenter === null) return 0
+
+  const direction = side === 'right' ? 1 : -1
+  return Math.max(
+    0,
+    direction * (connectedCenter - moduleCenter) - (module.width + connected.width) / 2,
+  )
+}
+
+function isCabinetWidthFiller(module: CabinetModuleNodeType) {
+  return (
+    module.moduleKind === 'corner-filler' ||
+    module.name === 'Corner Filler' ||
+    module.name === 'Wall Bridge Filler' ||
+    module.name === 'Corner Wall Filler'
+  )
+}
+
+function cabinetNodeAttachedToAncestor(
+  node: CabinetNodeType,
+  ancestorId: AnyNodeId,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+) {
+  let current: CabinetNodeType | CabinetModuleNodeType = node
+  const visited = new Set<AnyNodeId>()
+  while (current.parentId) {
+    const currentId = current.id as AnyNodeId
+    if (visited.has(currentId)) return false
+    visited.add(currentId)
+    const parent: AnyNode | undefined = nodes[current.parentId as AnyNodeId]
+    if (parent?.type !== 'cabinet' && parent?.type !== 'cabinet-module') return false
+    if (!((parent.children ?? []) as readonly AnyNodeId[]).includes(currentId)) return false
+    if (parent.id === ancestorId) return true
+    current = parent
+  }
+  return false
+}
+
+function cabinetSubtreeHasNamedFiller(
+  root: CabinetModuleNodeType,
+  name: 'Corner Wall Filler',
+  sceneApi: SceneApi,
+) {
+  const pending = [...(root.children ?? [])] as AnyNodeId[]
+  const visited = new Set<AnyNodeId>()
+  while (pending.length > 0) {
+    const id = pending.pop()!
+    if (visited.has(id)) continue
+    visited.add(id)
+    const node = sceneApi.get(id)
+    if (!node) continue
+    if (node.type === 'cabinet-module' && isCabinetWidthFiller(node) && node.name === name) {
+      return true
+    }
+    if (node.type === 'cabinet' || node.type === 'cabinet-module') {
+      pending.push(...((node.children ?? []) as AnyNodeId[]))
+    }
+  }
+  return false
+}
+
+function wallCabinetSideHasFiller(
+  hostModule: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const hostRun = hostModule.parentId
+    ? sceneApi.get<CabinetNodeType>(hostModule.parentId as AnyNodeId)
+    : undefined
+  if (!hostRun || !isCabinetRun(hostRun)) return false
+
+  const connected = cabinetModuleConnectedNeighbor(hostModule, side, sceneApi)
+  if (
+    connected &&
+    isCabinetWidthFiller(connected) &&
+    cabinetSubtreeHasNamedFiller(connected, 'Corner Wall Filler', sceneApi)
+  ) {
+    return true
+  }
+
+  const nodes = sceneApi.nodes()
+  for (const candidate of Object.values(nodes)) {
+    if (candidate?.type !== 'cabinet') continue
+    const derived = cabinetMetadataRecord(candidate.metadata).cabinetCornerDerivedRun
+    if (!derived || typeof derived !== 'object' || Array.isArray(derived)) continue
+    if (
+      (derived as { role?: unknown }).role !== 'bridge' ||
+      (derived as { side?: unknown }).side !== side ||
+      (derived as { sourceModuleId?: unknown }).sourceModuleId !== hostModule.id ||
+      (derived as { sourceRunId?: unknown }).sourceRunId !== hostRun.id ||
+      !cabinetNodeAttachedToAncestor(candidate, hostRun.id as AnyNodeId, nodes)
+    ) {
+      continue
+    }
+    if (
+      cabinetModulesForRun(candidate, nodes).some((entry) => entry.name === 'Wall Bridge Filler')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
 function cabinetModuleSideHasCornerFiller(
   module: CabinetModuleNodeType,
   side: 'left' | 'right',
   sceneApi: SceneApi,
 ) {
   const parent = module.parentId ? sceneApi.get(module.parentId as AnyNodeId) : undefined
+  if (isCabinetModule(parent)) {
+    return wallCabinetSideHasFiller(parent, side, sceneApi)
+  }
   if (!isCabinetRun(parent)) return false
-  const modules = sortRunModules(cabinetModulesForRun(parent, sceneApi.nodes()))
-  const index = modules.findIndex((entry) => entry.id === module.id)
-  if (index >= 0 && !cabinetModuleSideOpen(module, side, sceneApi)) {
-    const neighbor = side === 'left' ? modules[index - 1] : modules[index + 1]
-    if (neighbor?.moduleKind === 'corner-filler') return true
+  const connected = cabinetModuleConnectedNeighbor(module, side, sceneApi)
+  if (connected && isCabinetWidthFiller(connected)) {
+    return true
   }
 
   for (const candidate of Object.values(sceneApi.nodes())) {
@@ -624,6 +782,44 @@ function cabinetModuleSideHasCornerFiller(
     }
   }
   return false
+}
+
+function connectedCabinetWidthResize(
+  module: CabinetModuleNodeType,
+  side: 'left' | 'right',
+  delta: number,
+  sceneApi: SceneApi,
+): {
+  module: CabinetModuleNodeType
+  patch: Pick<CabinetModuleNodeType, 'position' | 'width'>
+} | null {
+  const connected = cabinetWidthConnectedNeighbor(module, side, sceneApi)
+  if (!connected || isCabinetWidthFiller(connected)) return null
+  const direction = side === 'right' ? 1 : -1
+  return {
+    module: connected,
+    patch: {
+      width: connected.width - delta,
+      position: [
+        connected.position[0] + (direction * delta) / 2,
+        connected.position[1],
+        connected.position[2],
+      ],
+    },
+  }
+}
+
+function wallCabinetWidthOverride(
+  module: CabinetModuleNodeType,
+  width: number,
+  sceneApi: SceneApi,
+): readonly [AnyNodeId, Partial<AnyNode>] | null {
+  const parent = module.parentId
+    ? sceneApi.get<CabinetNodeType>(module.parentId as AnyNodeId)
+    : undefined
+  if (!parent || !isCabinetRun(parent) || resolveCabinetType(module, parent) !== 'base') return null
+  const wallChild = wallChildOf(module, sceneApi.nodes())
+  return wallChild ? [wallChild.id as AnyNodeId, { width }] : null
 }
 
 function commitRunResize(
@@ -793,27 +989,71 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     kind: 'linear-resize',
     axis: 'x',
     anchor: side === 'right' ? 'min' : 'max',
-    min: MIN_CABINET_WIDTH,
-    max: (node) => cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH),
+    min: (node, sceneApi) => {
+      if (!isCabinetModule(node)) return MIN_CABINET_WIDTH
+      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
+      if (!connected || isCabinetWidthFiller(connected)) return MIN_CABINET_WIDTH - gap
+      const connectedMax = cabinetResizeUpperBound(connected.width, MAX_CABINET_WIDTH)
+      return Math.max(MIN_CABINET_WIDTH - gap, node.width - (connectedMax - connected.width))
+    },
+    max: (node, sceneApi) => {
+      const ownMax = cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH)
+      if (!isCabinetModule(node)) return ownMax
+      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
+      if (!connected || isCabinetWidthFiller(connected)) return ownMax - gap
+      return Math.min(ownMax - gap, node.width + connected.width - MIN_CABINET_WIDTH)
+    },
     currentValue: (node) => node.width,
-    apply: (node, width) => ({
-      width,
-      position: [
-        node.position[0] + (sign * (width - node.width)) / 2,
-        node.position[1],
-        node.position[2],
-      ],
-    }),
+    apply: (node, width, sceneApi) => {
+      const gap = isCabinetModule(node) ? cabinetWallWidthGap(node, side, sceneApi) : 0
+      const effectiveWidth = width + gap
+      return {
+        width: effectiveWidth,
+        position: [
+          node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+          node.position[1],
+          node.position[2],
+        ],
+      }
+    },
     previewOverrides: (node, width, sceneApi) => {
       if (!isCabinetModule(node)) return []
-      const parent = node.parentId
-        ? sceneApi.get<CabinetNodeType>(node.parentId as AnyNodeId)
-        : undefined
-      if (!parent || !isCabinetRun(parent) || resolveCabinetType(node, parent) !== 'base') return []
-      const wallChild = wallChildOf(node, sceneApi.nodes())
-      return wallChild ? [[wallChild.id as AnyNodeId, { width }]] : []
+      const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
+      if (selectedWallOverride) overrides.push(selectedWallOverride)
+      const connectedResize = connectedCabinetWidthResize(node, side, width - node.width, sceneApi)
+      if (connectedResize) {
+        overrides.push([
+          connectedResize.module.id as AnyNodeId,
+          connectedResize.patch as Partial<AnyNode>,
+        ])
+        const connectedWallOverride = wallCabinetWidthOverride(
+          connectedResize.module,
+          connectedResize.patch.width,
+          sceneApi,
+        )
+        if (connectedWallOverride) overrides.push(connectedWallOverride)
+      }
+      return overrides
     },
-    commit: commitCabinetResize,
+    commit: (node, patch, sceneApi) => {
+      const connectedResize =
+        isCabinetModule(node) && typeof patch.width === 'number'
+          ? connectedCabinetWidthResize(
+              node,
+              side,
+              patch.width - node.width - cabinetWallWidthGap(node, side, sceneApi),
+              sceneApi,
+            )
+          : null
+      commitCabinetResize(node, patch, sceneApi)
+      if (connectedResize) {
+        commitCabinetResize(connectedResize.module, connectedResize.patch, sceneApi)
+      }
+    },
     visible: (node, sceneApi) =>
       !isCabinetModule(node) || cabinetModuleSideOpen(node, side, sceneApi),
     placement: {
@@ -1383,14 +1623,12 @@ function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
     {
       ...cabinetWidthHandle('left'),
       visible: (node, sceneApi) =>
-        node.moduleKind !== 'corner-filler' &&
-        !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
+        !isCabinetWidthFiller(node) && !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
     } as HandleDescriptor<CabinetModuleNodeType>,
     {
       ...cabinetWidthHandle('right'),
       visible: (node, sceneApi) =>
-        node.moduleKind !== 'corner-filler' &&
-        !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
+        !isCabinetWidthFiller(node) && !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
     } as HandleDescriptor<CabinetModuleNodeType>,
   ]
 }

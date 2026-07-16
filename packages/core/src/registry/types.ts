@@ -1574,6 +1574,8 @@ export type NodeQuickAction = {
    */
   icon?: NodeQuickActionIcon | IconRef
   disabled?: boolean
+  /** Whether pressing a disabled action should acknowledge its blocked state. */
+  blockedFeedback?: boolean
   history?: 'single'
   run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
 }

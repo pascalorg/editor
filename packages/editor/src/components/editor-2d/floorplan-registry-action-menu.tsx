@@ -15,14 +15,18 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useState } from 'react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
+import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
 } from '../../lib/fresh-planar-placement'
+import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
+import { collectQuickActionNodeFamily } from '../../lib/quick-action-nodes'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import { useMovingNode } from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
@@ -81,25 +85,7 @@ function collectQuickActionNodes(
   if (!selectedId) return null
   const selected = nodes[selectedId as AnyNodeId]
   if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
-
-  const collected: Record<AnyNodeId, AnyNode> = { [selected.id as AnyNodeId]: selected }
-  const add = (id: string | null | undefined) => {
-    if (!id) return
-    const node = nodes[id as AnyNodeId]
-    if (node) collected[node.id as AnyNodeId] = node
-  }
-  const addChildren = (node: AnyNode | undefined) => {
-    for (const childId of (node as { children?: readonly string[] } | undefined)?.children ?? []) {
-      add(childId)
-    }
-  }
-
-  add(selected.parentId ?? null)
-  addChildren(selected)
-  const parent = selected.parentId ? nodes[selected.parentId as AnyNodeId] : undefined
-  addChildren(parent)
-
-  return collected
+  return collectQuickActionNodeFamily(nodes, selectedId)
 }
 
 /**
@@ -129,6 +115,7 @@ function collectQuickActionNodes(
  * Hidden while in a move state (so we don't show buttons over a ghost).
  */
 export function FloorplanRegistryActionMenu() {
+  const reducedMotion = useReducedMotion()
   // Sole selection only — a multi-selection gets the group menu
   // (`FloorplanGroupActionMenu`), whose actions target the whole selection.
   const selectedId = useViewer((s) =>
@@ -333,8 +320,13 @@ export function FloorplanRegistryActionMenu() {
     useViewer.getState().setSelection({ selectedIds: [] })
   }
 
-  const handleQuickAction = (action: NodeQuickAction) => {
-    if (action.disabled) return
+  const handleQuickAction = (action: NodeQuickAction, event: MouseEvent<HTMLButtonElement>) => {
+    if (action.disabled) {
+      if (action.blockedFeedback) {
+        playBlockedQuickActionFeedback(event.currentTarget, reducedMotion)
+      }
+      return
+    }
     const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
     const result = action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
     if (result?.selectedIds) useViewer.getState().setSelection({ selectedIds: result.selectedIds })
@@ -369,18 +361,27 @@ export function FloorplanRegistryActionMenu() {
         >
           {quickActions.map((action) => (
             <button
+              aria-disabled={action.disabled || undefined}
               aria-label={action.title ?? action.label}
-              className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              disabled={action.disabled}
+              className={cn(
+                'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+                action.disabled &&
+                  'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
+              )}
+              disabled={action.disabled && !action.blockedFeedback}
               key={action.id}
-              onClick={() => handleQuickAction(action)}
+              onClick={(event) => handleQuickAction(action, event)}
               title={action.title ?? action.label}
               type="button"
             >
-              <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
-                <QuickActionIcon action={action} />
+              <span className="flex items-center gap-1.5" data-quick-action-feedback>
+                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                  <QuickActionIcon action={action} />
+                </span>
+                <span className="whitespace-nowrap leading-none" data-quick-action-label>
+                  {action.label}
+                </span>
               </span>
-              <span className="whitespace-nowrap leading-none">{action.label}</span>
             </button>
           ))}
         </div>

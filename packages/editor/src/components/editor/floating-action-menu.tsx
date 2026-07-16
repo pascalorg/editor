@@ -42,15 +42,19 @@ import { useFrame } from '@react-three/fiber'
 import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
 } from '../../lib/fresh-planar-placement'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
+import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
+import { collectQuickActionNodeFamily } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { duplicateStairSubtree } from '../../lib/stair-duplication'
+import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
@@ -208,25 +212,7 @@ function collectQuickActionNodes(
   if (!selectedId) return null
   const selected = nodes[selectedId as AnyNodeId]
   if (!selected || !nodeRegistry.get(selected.type)?.quickActions) return null
-
-  const collected: Record<AnyNodeId, AnyNode> = { [selected.id as AnyNodeId]: selected }
-  const add = (id: string | null | undefined) => {
-    if (!id) return
-    const node = nodes[id as AnyNodeId]
-    if (node) collected[node.id as AnyNodeId] = node
-  }
-  const addChildren = (node: AnyNode | undefined) => {
-    for (const childId of (node as { children?: readonly string[] } | undefined)?.children ?? []) {
-      add(childId)
-    }
-  }
-
-  add(selected.parentId ?? null)
-  addChildren(selected)
-  const parent = selected.parentId ? nodes[selected.parentId as AnyNodeId] : undefined
-  addChildren(parent)
-
-  return collected
+  return collectQuickActionNodeFamily(nodes, selectedId)
 }
 
 // Pooled scratch for the per-frame anchor recompute (see useFrame below) so a
@@ -296,6 +282,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 }
 
 export function FloatingActionMenu() {
+  const reducedMotion = useReducedMotion()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
@@ -775,9 +762,15 @@ export function FloatingActionMenu() {
   )
 
   const handleQuickAction = useCallback(
-    (action: NodeQuickAction) => (e: React.MouseEvent) => {
+    (action: NodeQuickAction) => (e: React.MouseEvent<HTMLButtonElement>) => {
       e.stopPropagation()
-      if (!node || action.disabled) return
+      if (!node) return
+      if (action.disabled) {
+        if (action.blockedFeedback) {
+          playBlockedQuickActionFeedback(e.currentTarget, reducedMotion)
+        }
+        return
+      }
       const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
       const result =
         action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
@@ -787,7 +780,7 @@ export function FloatingActionMenu() {
         sfxEmitter.emit(selectedDifferentNode ? 'sfx:item-place' : 'sfx:item-pick')
       }
     },
-    [node, setSelection],
+    [node, reducedMotion, setSelection],
   )
 
   if (
@@ -850,18 +843,27 @@ export function FloatingActionMenu() {
               >
                 {quickActions.map((action) => (
                   <button
+                    aria-disabled={action.disabled || undefined}
                     aria-label={action.title ?? action.label}
-                    className="tooltip-trigger flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                    disabled={action.disabled}
+                    className={cn(
+                      'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+                      action.disabled &&
+                        'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
+                    )}
+                    disabled={action.disabled && !action.blockedFeedback}
                     key={action.id}
                     onClick={handleQuickAction(action)}
                     title={action.title ?? action.label}
                     type="button"
                   >
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
-                      <QuickActionIcon action={action} />
+                    <span className="flex items-center gap-1.5" data-quick-action-feedback>
+                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                        <QuickActionIcon action={action} />
+                      </span>
+                      <span className="whitespace-nowrap leading-none" data-quick-action-label>
+                        {action.label}
+                      </span>
                     </span>
-                    <span className="whitespace-nowrap leading-none">{action.label}</span>
                   </button>
                 ))}
               </div>

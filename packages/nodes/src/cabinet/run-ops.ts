@@ -2386,6 +2386,90 @@ export function addCornerRun({
   return connectedBaseModule?.id ?? null
 }
 
+type CabinetWorldBox = {
+  center: readonly [number, number, number]
+  depth: number
+  height: number
+  rotation: number
+  width: number
+}
+
+function cabinetWorldBoxesOverlap(a: CabinetWorldBox, b: CabinetWorldBox) {
+  const aTop = a.center[1] + a.height
+  const bTop = b.center[1] + b.height
+  if (Math.min(aTop, bTop) - Math.max(a.center[1], b.center[1]) <= CABINET_EDGE_EPSILON) {
+    return false
+  }
+
+  const axes = [
+    [Math.cos(a.rotation), -Math.sin(a.rotation)],
+    [Math.sin(a.rotation), Math.cos(a.rotation)],
+    [Math.cos(b.rotation), -Math.sin(b.rotation)],
+    [Math.sin(b.rotation), Math.cos(b.rotation)],
+  ] as const
+  const aXAxis = axes[0]
+  const aZAxis = axes[1]
+  const bXAxis = axes[2]
+  const bZAxis = axes[3]
+  const dx = b.center[0] - a.center[0]
+  const dz = b.center[2] - a.center[2]
+
+  for (const axis of axes) {
+    const centerDistance = Math.abs(dx * axis[0] + dz * axis[1])
+    const aRadius =
+      (a.width / 2) * Math.abs(aXAxis[0] * axis[0] + aXAxis[1] * axis[1]) +
+      (a.depth / 2) * Math.abs(aZAxis[0] * axis[0] + aZAxis[1] * axis[1])
+    const bRadius =
+      (b.width / 2) * Math.abs(bXAxis[0] * axis[0] + bXAxis[1] * axis[1]) +
+      (b.depth / 2) * Math.abs(bZAxis[0] * axis[0] + bZAxis[1] * axis[1])
+    if (centerDistance >= aRadius + bRadius - CABINET_EDGE_EPSILON) return false
+  }
+  return true
+}
+
+function isWallTierModule(
+  module: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+) {
+  const parent = module.parentId ? nodes[module.parentId as AnyNodeId] : undefined
+  if (parent?.type === 'cabinet') return parent.runTier === 'wall'
+  return parent?.type === 'cabinet-module' && wallChildOf(parent, nodes)?.id === module.id
+}
+
+export function wallChildAdditionOverlaps(
+  module: CabinetModuleNode,
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+) {
+  const hostLevelId = resolveCabinetHostLevelId(run, nodes)
+  const moduleWorld = resolveCabinetWorldTransform(module, nodes)
+  const candidatePose = composePose(moduleWorld.position, moduleWorld.rotation, [
+    0,
+    wallBottomHeightForTallAlignment() - module.position[1],
+    backAlignZ(module.depth, CABINET_WALL_DEPTH),
+  ])
+  const candidate: CabinetWorldBox = {
+    center: candidatePose.position,
+    depth: CABINET_WALL_DEPTH,
+    height: CABINET_WALL_CARCASS_HEIGHT,
+    rotation: candidatePose.rotation,
+    width: module.width,
+  }
+
+  return Object.values(nodes).some((node) => {
+    if (node?.type !== 'cabinet-module' || !isWallTierModule(node, nodes)) return false
+    if (hostLevelId && resolveCabinetHostLevelId(node, nodes) !== hostLevelId) return false
+    const pose = resolveCabinetWorldTransform(node, nodes)
+    return cabinetWorldBoxesOverlap(candidate, {
+      center: pose.position,
+      depth: node.depth,
+      height: node.carcassHeight,
+      rotation: pose.rotation,
+      width: node.width,
+    })
+  })
+}
+
 /**
  * Nest a wall cabinet (or chimney hood) above a base module. Returns the new
  * node id, or null when the module already carries one / isn't a base unit.
@@ -2405,8 +2489,11 @@ export function addWallChildAbove({
   openSide?: CabinetModuleNode['openSide']
   frontOverlay?: CabinetModuleNode['frontOverlay']
 }): AnyNodeId | null {
-  if (resolveCabinetType(module, run) !== 'base') return null
-  if (wallChildOf(module, sceneApi.nodes())) return null
+  const liveModule = sceneApi.get<CabinetModuleNode>(module.id as AnyNodeId) ?? module
+  const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId) ?? run
+  if (resolveCabinetType(liveModule, liveRun) !== 'base') return null
+  if (wallChildOf(liveModule, sceneApi.nodes())) return null
+  if (wallChildAdditionOverlaps(liveModule, liveRun, sceneApi.nodes())) return null
 
   const isHood = kind === 'hood'
   const carcassHeight = isHood
@@ -2418,10 +2505,10 @@ export function addWallChildAbove({
     // Wall cabinet top aligns with the default tall cabinet top.
     position: [
       0,
-      wallBottomHeightForTallAlignment() - module.position[1],
-      backAlignZ(module.depth, CABINET_WALL_DEPTH),
+      wallBottomHeightForTallAlignment() - liveModule.position[1],
+      backAlignZ(liveModule.depth, CABINET_WALL_DEPTH),
     ],
-    width: module.width,
+    width: liveModule.width,
     depth: CABINET_WALL_DEPTH,
     carcassHeight,
     plinthHeight: 0,
@@ -2431,14 +2518,14 @@ export function addWallChildAbove({
     showPlinth: false,
     withCountertop: false,
     stack: isHood ? [newCabinetCompartment('hood-pyramid')] : doorStack(1),
-    frontStyle: module.frontStyle,
+    frontStyle: liveModule.frontStyle,
     frontOverlay,
-    handleStyle: module.handleStyle,
-    handlePosition: module.handlePosition,
+    handleStyle: liveModule.handleStyle,
+    handlePosition: liveModule.handlePosition,
     ...(openSide ? { openSide } : {}),
   })
-  sceneApi.upsert(wall as AnyNode, module.id as AnyNodeId)
-  sceneApi.markDirty(module.id as AnyNodeId)
+  sceneApi.upsert(wall as AnyNode, liveModule.id as AnyNodeId)
+  sceneApi.markDirty(liveModule.id as AnyNodeId)
   return wall.id
 }
 
