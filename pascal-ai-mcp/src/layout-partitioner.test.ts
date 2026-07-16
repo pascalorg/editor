@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { absorbRoomInPlan, partitionLayout, planDeviation, planRoomAreas } from './layout-partitioner'
 import { validateLayoutPlan, type PlanTargets } from './plan-validator'
-import { polygonArea, type LayoutIntent } from './layout-plan'
+import { polygonArea, polygonBounds, type LayoutIntent } from './layout-plan'
 
 // Batch-A acceptance (GENERATION_REDESIGN.md §8): every typical intent must
 // come out of the partitioner with ZERO validator fatals.
@@ -203,6 +203,49 @@ describe('partitionLayout: narrow_lot topology (S3)', () => {
   test('standard_band strategy reproduces the no-strategy result', () => {
     expect(partitionLayout(两居, undefined, { typology: 'standard_band' })).toEqual(partitionLayout(两居))
   })
+})
+
+test('wet clustering: bathroom picks the corner nearest the kitchen instead of the opposite one', () => {
+  // Preview case 03 replica — pre-clustering this produced a diagonal plan
+  // (bathroom top-left, kitchen bottom-right, plumbing on opposite walls).
+  const 一居: LayoutIntent = {
+    targetTotalAreaSqm: 50,
+    rooms: [
+      { id: 'bedroom-1', name: '卧室', type: 'bedroom', targetAreaSqm: 13 },
+      { id: 'living-1', name: '客厅', type: 'living', targetAreaSqm: 22 },
+      { id: 'kitchen-1', name: '厨房', type: 'kitchen', targetAreaSqm: 6 },
+      { id: 'bath-1', name: '卫生间', type: 'bathroom', targetAreaSqm: 4 },
+    ],
+  }
+  const result = partitionLayout(一居)
+  if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+  const bounds = (id: string) => polygonBounds(result.plan.rooms.find(r => r.id === id)!.polygon)
+  const kitchen = bounds('kitchen-1')
+  const bath = bounds('bath-1')
+  // Single-band wet stack: same column (identical x-range), cells touching,
+  // kitchen on the entry (z0) side, and both doors open into the living hub.
+  expect(bath.minX).toBe(kitchen.minX)
+  expect(bath.maxX).toBe(kitchen.maxX)
+  expect(bath.minZ).toBe(kitchen.maxZ)
+  const doors = result.plan.connections.map(c => [c.from, c.to].sort().join('↔'))
+  expect(doors).toContain('bath-1↔living-1')
+  expect(doors).toContain('kitchen-1↔living-1')
+})
+
+test('wet stack also applies to the corridor band: bathroom stacks on the kitchen column, corridor side', () => {
+  const result = partitionLayout(两居)
+  if (!result.ok) throw new Error(`partition failed: ${result.reason}`)
+  const bounds = (id: string) => polygonBounds(result.plan.rooms.find(r => r.id === id)!.polygon)
+  const kitchen = bounds('kitchen-1')
+  const bath = bounds('bath-1')
+  expect(bath.minX).toBe(kitchen.minX)
+  expect(bath.maxX).toBe(kitchen.maxX)
+  // Kitchen keeps the exterior (z0) corner, bathroom sits against the
+  // corridor strip above the band.
+  expect(bath.minZ).toBe(kitchen.maxZ)
+  const doors = result.plan.connections.map(c => [c.from, c.to].sort().join('↔'))
+  expect(doors).toContain('bath-1↔living-1')
+  expect(doors).toContain('kitchen-1↔living-1')
 })
 
 describe('partitionLayout: modify-path stability (M2)', () => {

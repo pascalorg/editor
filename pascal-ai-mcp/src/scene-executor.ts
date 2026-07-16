@@ -16,6 +16,7 @@ import {
   longestSharedEdge,
   polygonArea,
   polygonBounds,
+  roundCm,
   type LayoutPlan,
   type LayoutPlanRoom,
   type Segment,
@@ -223,6 +224,40 @@ export function exteriorSegments(
     .sort((a, b) => segmentLength(b) - segmentLength(a))
 }
 
+function isAxisAlignedRect(polygon: Array<[number, number]>): boolean {
+  if (polygon.length !== 4) return false
+  const { minX, maxX, minZ, maxZ } = polygonBounds(polygon)
+  return polygon.every(([x, z]) =>
+    (Math.abs(x - minX) < 1e-6 || Math.abs(x - maxX) < 1e-6)
+    && (Math.abs(z - minZ) < 1e-6 || Math.abs(z - maxZ) < 1e-6))
+}
+
+// Exterior segment hosting the entry door. Default: longest edge that fits
+// the door — length compared through the validator's cm rounding, so a
+// float-noise 0.8999… edge the validator accepts as 0.9m is never rejected
+// here (TEMPLATES.md 体检 #1). Rectangular hallway entry rooms prefer an end
+// cap (segment perpendicular to the corridor's long axis) — a longitudinal
+// corridor's street door belongs at its end, not the middle of its long
+// side. Non-rectangular hallways keep the longest-edge default: on an L/凹
+// shape a bounding-box axis says nothing about which segment is a real end.
+// Shared with the SVG preview renderer so the ▲ marker and the built door
+// never disagree.
+export function entryDoorSegment(
+  room: LayoutPlanRoom,
+  footprint: { width: number; depth: number; polygon?: Array<[number, number]> },
+): Segment | undefined {
+  const fits = exteriorSegments(room, footprint).filter(seg => roundCm(segmentLength(seg)) >= DOOR_WIDTH_M)
+  if (room.type === 'hallway' && isAxisAlignedRect(room.polygon)) {
+    const { minX, maxX, minZ, maxZ } = polygonBounds(room.polygon)
+    const longAxisZ = maxZ - minZ >= maxX - minX
+    const cap = fits.find(seg => longAxisZ
+      ? Math.abs(seg.start[1] - seg.end[1]) < 1e-6
+      : Math.abs(seg.start[0] - seg.end[0]) < 1e-6)
+    if (cap) return cap
+  }
+  return fits[0]
+}
+
 function pointNearSegment(point: [number, number], seg: Segment, radius: number): boolean {
   const asWall: WallSegment = { id: '', start: seg.start, end: seg.end }
   const { distance, t, length } = projectOntoWall(asWall, point)
@@ -316,8 +351,7 @@ export async function executeLayoutPlan(options: {
   if (!entryRoom) {
     issues.push(`入户房间 ${plan.entry.roomId} 不在房间清单里，未开入户门`)
   } else {
-    const exterior = exteriorSegments(entryRoom, plan.footprint)
-    const host = exterior.find(seg => segmentLength(seg) >= DOOR_WIDTH_M)
+    const host = entryDoorSegment(entryRoom, plan.footprint)
     if (!host) {
       issues.push(`入户房间「${entryRoom.name}」没有 ≥${DOOR_WIDTH_M}m 的外墙边，未开入户门`)
     } else {

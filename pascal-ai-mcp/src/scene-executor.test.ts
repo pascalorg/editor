@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { LayoutPlan } from './layout-plan'
 import {
+  entryDoorSegment,
   executeLayoutPlan,
   exteriorSegments,
   findHostWall,
@@ -231,5 +232,53 @@ describe('geometry helpers', () => {
     const lengths = segments.map(seg => Math.hypot(seg.end[0] - seg.start[0], seg.end[1] - seg.start[1]))
     expect(lengths[0]).toBeCloseTo(5) // right footprint edge
     expect(lengths[1]).toBeCloseTo(3)
+  })
+
+  test('entryDoorSegment: rectangular hallway prefers its end cap over the long side', () => {
+    const corridor = {
+      id: 'corridor-auto',
+      name: '走廊',
+      type: 'hallway' as const,
+      polygon: [[3.85, 7], [5, 7], [5, 18], [3.85, 18]] as Array<[number, number]>,
+      requiresExteriorWindow: false,
+    }
+    const seg = entryDoorSegment(corridor, { width: 5, depth: 18 })!
+    // The z=18 cap, not the 11m-long x=5 side.
+    expect(seg.start[1]).toBeCloseTo(18)
+    expect(seg.end[1]).toBeCloseTo(18)
+  })
+
+  test('entryDoorSegment: non-rectangular hallway falls back to the longest edge', () => {
+    // L-shaped corridor whose bounding-box long axis would misidentify the
+    // concave notch edge as an "end cap".
+    const corridor = {
+      id: 'corridor-auto',
+      name: '走廊',
+      type: 'hallway' as const,
+      polygon: [[3, 0], [6, 0], [6, 3], [5, 3], [5, 10], [3, 10]] as Array<[number, number]>,
+      requiresExteriorWindow: false,
+    }
+    const seg = entryDoorSegment(corridor, { width: 6, depth: 10 })!
+    const length = Math.hypot(seg.end[0] - seg.start[0], seg.end[1] - seg.start[1])
+    // Longest exterior run (3m, bottom or right side) — never the concave
+    // notch edge [6,3]→[5,3] a bounding-box "end cap" heuristic would pick.
+    expect(length).toBeCloseTo(3)
+    expect(seg.start[1] === 3 && seg.end[1] === 3).toBe(false)
+  })
+
+  test('entryDoorSegment: cm rounding accepts a float-noise 0.9m edge (体检 #1)', () => {
+    // 3.6 − 2.7 = 0.8999999999999999 raw; the validator rounds it to 0.9 and
+    // accepts, so the executor must too.
+    const room = {
+      id: 'entry-1',
+      name: '玄关',
+      type: 'entry' as const,
+      polygon: [[2.7, 0], [3.6, 0], [3.6, 1.2], [2.7, 1.2]] as Array<[number, number]>,
+      requiresExteriorWindow: false,
+    }
+    expect(3.6 - 2.7).not.toBe(0.9)
+    const seg = entryDoorSegment(room, { width: 6, depth: 10 })
+    expect(seg).toBeDefined()
+    expect(seg!.start[1]).toBeCloseTo(0)
   })
 })

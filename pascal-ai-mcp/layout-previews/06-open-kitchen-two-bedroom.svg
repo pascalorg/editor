@@ -1,25 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 536 741.8" font-family="sans-serif">
-<rect width="536" height="741.8" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 536 765.8" font-family="sans-serif">
+<rect width="536" height="765.8" fill="white"/>
 <text x="40" y="24" font-size="16" font-weight="bold">开放厨房两居 80㎡  （7.6m × 10.53m）</text>
-<polygon points="40,671.8 496,671.8 496,337.59999999999997 155.8,337.59999999999997 155.8,476.2 40,476.2" fill="#fde9c8" stroke="#444" stroke-width="2"/>
-<text x="268" y="500.69999999999993" font-size="12" text-anchor="middle">客厅/开放式厨房 ⊞</text>
-<text x="268" y="516.6999999999999" font-size="10" text-anchor="middle" fill="#666">37.9㎡</text>
-<polygon points="40,476.2 155.8,476.2 155.8,337.59999999999997 40,337.59999999999997" fill="#d4ecec" stroke="#444" stroke-width="2"/>
-<text x="97.9" y="402.9" font-size="12" text-anchor="middle">卫生间</text>
-<text x="97.9" y="418.9" font-size="10" text-anchor="middle" fill="#666">4.5㎡</text>
-<polygon points="40,268.59999999999997 302.8,268.59999999999997 302.8,40 40,40" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
-<text x="171.4" y="150.29999999999995" font-size="12" text-anchor="middle">主卧 ⊞</text>
-<text x="171.4" y="166.29999999999995" font-size="10" text-anchor="middle" fill="#666">16.7㎡</text>
-<polygon points="302.8,268.59999999999997 496,268.59999999999997 496,40 302.8,40" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
-<text x="399.40000000000003" y="150.29999999999995" font-size="12" text-anchor="middle">次卧 ⊞</text>
-<text x="399.40000000000003" y="166.29999999999995" font-size="10" text-anchor="middle" fill="#666">12.3㎡</text>
-<polygon points="40,337.59999999999997 496,337.59999999999997 496,268.59999999999997 40,268.59999999999997" fill="#eeeeee" stroke="#444" stroke-width="2"/>
-<text x="268" y="299.09999999999997" font-size="12" text-anchor="middle">走廊</text>
-<text x="268" y="315.09999999999997" font-size="10" text-anchor="middle" fill="#666">8.7㎡</text>
-<circle cx="325.9" cy="337.59999999999997" r="6" fill="#c0392b"/>
-<circle cx="171.4" cy="268.59999999999997" r="6" fill="#c0392b"/>
-<circle cx="399.40000000000003" cy="268.59999999999997" r="6" fill="#c0392b"/>
-<circle cx="97.9" cy="337.59999999999997" r="6" fill="#c0392b"/>
-<text x="268" y="353.59999999999997" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
-<text x="40" y="733.8" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+<polygon points="40,695.8 496,695.8 496,361.59999999999997 155.8,361.59999999999997 155.8,500.2 40,500.2" fill="#fde9c8" stroke="#444" stroke-width="2"/>
+<text x="268" y="524.6999999999999" font-size="12" text-anchor="middle">客厅/开放式厨房 ⊞</text>
+<text x="268" y="540.6999999999999" font-size="10" text-anchor="middle" fill="#666">37.9㎡</text>
+<polygon points="40,500.2 155.8,500.2 155.8,361.59999999999997 40,361.59999999999997" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="97.9" y="426.9" font-size="12" text-anchor="middle">卫生间</text>
+<text x="97.9" y="442.9" font-size="10" text-anchor="middle" fill="#666">4.5㎡</text>
+<polygon points="40,292.59999999999997 302.8,292.59999999999997 302.8,64 40,64" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="171.4" y="174.29999999999995" font-size="12" text-anchor="middle">主卧 ⊞</text>
+<text x="171.4" y="190.29999999999995" font-size="10" text-anchor="middle" fill="#666">16.7㎡</text>
+<polygon points="302.8,292.59999999999997 496,292.59999999999997 496,64 302.8,64" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="399.40000000000003" y="174.29999999999995" font-size="12" text-anchor="middle">次卧 ⊞</text>
+<text x="399.40000000000003" y="190.29999999999995" font-size="10" text-anchor="middle" fill="#666">12.3㎡</text>
+<polygon points="40,361.59999999999997 496,361.59999999999997 496,292.59999999999997 40,292.59999999999997" fill="#eeeeee" stroke="#444" stroke-width="2"/>
+<text x="268" y="323.09999999999997" font-size="12" text-anchor="middle">走廊</text>
+<text x="268" y="339.09999999999997" font-size="10" text-anchor="middle" fill="#666">8.7㎡</text>
+<circle cx="325.9" cy="361.59999999999997" r="6" fill="#c0392b"/>
+<circle cx="171.4" cy="292.59999999999997" r="6" fill="#c0392b"/>
+<circle cx="399.40000000000003" cy="292.59999999999997" r="6" fill="#c0392b"/>
+<circle cx="97.9" cy="361.59999999999997" r="6" fill="#c0392b"/>
+<polygon points="510,321.09999999999997 510,333.09999999999997 500,327.09999999999997" fill="#c0392b"/>
+<text x="518" y="327.09999999999997" transform="rotate(90 518 327.09999999999997)" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">入户</text>
+<text x="40" y="757.8" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
 </svg>

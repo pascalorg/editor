@@ -1,9 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 389.6 342.79999999999995" font-family="sans-serif">
-<rect width="389.6" height="342.79999999999995" fill="white"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 389.6 366.79999999999995" font-family="sans-serif">
+<rect width="389.6" height="366.79999999999995" fill="white"/>
 <text x="40" y="24" font-size="16" font-weight="bold">单间 20㎡  （5.16m × 3.88m）</text>
-<polygon points="40,272.79999999999995 349.6,272.79999999999995 349.6,40 40,40" fill="#f0f0f0" stroke="#444" stroke-width="2"/>
-<text x="194.8" y="152.39999999999998" font-size="12" text-anchor="middle">单间</text>
-<text x="194.8" y="168.39999999999998" font-size="10" text-anchor="middle" fill="#666">20.0㎡</text>
-<text x="194.8" y="288.79999999999995" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">▲ 入户</text>
-<text x="40" y="334.79999999999995" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+<polygon points="40,296.79999999999995 349.6,296.79999999999995 349.6,64 40,64" fill="#f0f0f0" stroke="#444" stroke-width="2"/>
+<text x="194.8" y="176.39999999999998" font-size="12" text-anchor="middle">单间</text>
+<text x="194.8" y="192.39999999999998" font-size="10" text-anchor="middle" fill="#666">20.0㎡</text>
+<polygon points="188.8,310.79999999999995 200.8,310.79999999999995 194.8,300.79999999999995" fill="#c0392b"/>
+<text x="194.8" y="324.79999999999995" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">入户</text>
+<text x="40" y="358.79999999999995" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
 </svg>

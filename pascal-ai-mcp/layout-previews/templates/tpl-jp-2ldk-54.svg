@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 398 746" font-family="sans-serif">
+<rect width="398" height="746" fill="white"/>
+<text x="40" y="24" font-size="16" font-weight="bold">2LDK 54.12㎡ マンション（LDK12.2帖 + 洋室4.4/5.3帖） [参照]  （5.3m × 10.2m）</text>
+<polygon points="40,676 124,676 124,574 40,574" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="82" y="621" font-size="12" text-anchor="middle">浴室</text>
+<text x="82" y="637" font-size="10" text-anchor="middle" fill="#666">2.4㎡</text>
+<polygon points="124,676 226,676 226,574 124,574" fill="#e8e2d4" stroke="#444" stroke-width="2"/>
+<text x="175" y="621" font-size="12" text-anchor="middle">玄関</text>
+<text x="175" y="637" font-size="10" text-anchor="middle" fill="#666">2.9㎡</text>
+<polygon points="226,676 358,676 358,483.99999999999994 226,483.99999999999994" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="292" y="576" font-size="12" text-anchor="middle">洋室1 ⊞</text>
+<text x="292" y="592" font-size="10" text-anchor="middle" fill="#666">7.0㎡</text>
+<polygon points="40,574 124,574 124,514 40,514" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="82" y="540" font-size="12" text-anchor="middle">洗面室</text>
+<text x="82" y="556" font-size="10" text-anchor="middle" fill="#666">1.4㎡</text>
+<polygon points="40,514 124,514 124,423.99999999999994 40,423.99999999999994" fill="#d4ecec" stroke="#444" stroke-width="2"/>
+<text x="82" y="464.99999999999994" font-size="12" text-anchor="middle">トイレ</text>
+<text x="82" y="480.99999999999994" font-size="10" text-anchor="middle" fill="#666">2.1㎡</text>
+<polygon points="124,574 226,574 226,460 124,460" fill="#eeeeee" stroke="#444" stroke-width="2"/>
+<text x="175" y="513" font-size="12" text-anchor="middle">廊下</text>
+<text x="175" y="529" font-size="10" text-anchor="middle" fill="#666">3.2㎡</text>
+<polygon points="40,423.99999999999994 124,423.99999999999994 124,363.99999999999994 40,363.99999999999994" fill="#e5ddee" stroke="#444" stroke-width="2"/>
+<text x="82" y="389.99999999999994" font-size="12" text-anchor="middle">物入</text>
+<text x="82" y="405.99999999999994" font-size="10" text-anchor="middle" fill="#666">1.4㎡</text>
+<polygon points="124,460 226,460 226,483.99999999999994 358,483.99999999999994 358,64 172,64 172,273.99999999999994 40,273.99999999999994 40,363.99999999999994 124,363.99999999999994" fill="#fde9c8" stroke="#444" stroke-width="2"/>
+<text x="199" y="270" font-size="12" text-anchor="middle">LDK ⊞</text>
+<text x="199" y="286" font-size="10" text-anchor="middle" fill="#666">25.9㎡</text>
+<polygon points="40,273.99999999999994 172,273.99999999999994 172,64 40,64" fill="#cfe3f5" stroke="#444" stroke-width="2"/>
+<text x="106" y="165" font-size="12" text-anchor="middle">洋室2 ⊞</text>
+<text x="106" y="181" font-size="10" text-anchor="middle" fill="#666">7.7㎡</text>
+<circle cx="175" cy="574" r="6" fill="#c0392b"/>
+<circle cx="124" cy="544" r="6" fill="#c0392b"/>
+<circle cx="82" cy="574" r="6" fill="#c0392b"/>
+<circle cx="124" cy="486.99999999999994" r="6" fill="#c0392b"/>
+<circle cx="175" cy="460" r="6" fill="#c0392b"/>
+<circle cx="292" cy="483.99999999999994" r="6" fill="#c0392b"/>
+<circle cx="172" cy="169" r="6" fill="#c0392b"/>
+<circle cx="82" cy="363.99999999999994" r="6" fill="#c0392b"/>
+<polygon points="169,690 181,690 175,680" fill="#c0392b"/>
+<text x="175" y="704" font-size="12" text-anchor="middle" fill="#c0392b" font-weight="bold">入户</text>
+<text x="40" y="738" font-size="10" fill="#888">红点=门（位置由执行器按共享墙段中点计算） ⊞=需外窗</text>
+</svg>

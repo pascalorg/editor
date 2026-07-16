@@ -1,0 +1,37 @@
+{
+  "id": "tpl-jp-2ldk-54",
+  "meta": {
+    "market": "jp",
+    "label": "2LDK 54.12㎡ マンション（LDK12.2帖 + 洋室4.4/5.3帖）",
+    "source": "用户提供间取り图（実物件，専有面積54.12㎡・南側大バルコニー）",
+    "quality": "good",
+    "badReasons": [],
+    "typology": "standard_band",
+    "notes": "玄関居顶边中部（Clo 并入），西侧水回り纵排（浴室1116→洗面室（洗濯機置場含む）→トイレ→物入），短廊下作 hub，洋室1 占东北角，LDK 大 L 形占中部与东南（I 型厨房沿西侧），洋室2 占西南，两室与 LDK 均接南侧大バルコニー。用户评价——优点：公共空间宽敞，有大阳台；缺点：大门玄关稍微狭窄。转换简化：バルコニー未建模；DS/Clo 并入物入，洋室1 的 Clo 与洗濯機位并入邻室；LDK 建模 25.9㎡（16.0帖）明显大于标称 12.2帖（帖数为地毯面口径，墙体与动线余量全部落入 LDK）；洋室2 建模 7.7㎡（4.7帖）略小于标称 5.3帖。坐标由帖数反推+图上比例目测，footprint 5.3×10.2=54.06㎡。"
+  },
+  "plan": {
+    "footprint": { "width": 5.3, "depth": 10.2 },
+    "entry": { "roomId": "entry-1" },
+    "rooms": [
+      { "id": "bath-ub", "name": "浴室", "type": "bathroom", "polygon": [[0, 0], [1.4, 0], [1.4, 1.7], [0, 1.7]], "requiresExteriorWindow": false },
+      { "id": "entry-1", "name": "玄関", "type": "entry", "polygon": [[1.4, 0], [3.1, 0], [3.1, 1.7], [1.4, 1.7]], "requiresExteriorWindow": false },
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[3.1, 0], [5.3, 0], [5.3, 3.2], [3.1, 3.2]], "requiresExteriorWindow": true },
+      { "id": "bath-lav", "name": "洗面室", "type": "bathroom", "polygon": [[0, 1.7], [1.4, 1.7], [1.4, 2.7], [0, 2.7]], "requiresExteriorWindow": false },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[0, 2.7], [1.4, 2.7], [1.4, 4.2], [0, 4.2]], "requiresExteriorWindow": false },
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[1.4, 1.7], [3.1, 1.7], [3.1, 3.6], [1.4, 3.6]], "requiresExteriorWindow": false },
+      { "id": "closet-1", "name": "物入", "type": "storage", "polygon": [[0, 4.2], [1.4, 4.2], [1.4, 5.2], [0, 5.2]], "requiresExteriorWindow": false },
+      { "id": "ldk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[1.4, 3.6], [3.1, 3.6], [3.1, 3.2], [5.3, 3.2], [5.3, 10.2], [2.2, 10.2], [2.2, 6.7], [0, 6.7], [0, 5.2], [1.4, 5.2]], "requiresExteriorWindow": true },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[0, 6.7], [2.2, 6.7], [2.2, 10.2], [0, 10.2]], "requiresExteriorWindow": true }
+    ],
+    "connections": [
+      { "from": "entry-1", "to": "hall-1", "type": "door" },
+      { "from": "hall-1", "to": "bath-lav", "type": "door" },
+      { "from": "bath-lav", "to": "bath-ub", "type": "door" },
+      { "from": "hall-1", "to": "bath-wc", "type": "door" },
+      { "from": "hall-1", "to": "ldk-1", "type": "door" },
+      { "from": "ldk-1", "to": "bedroom-1", "type": "door" },
+      { "from": "ldk-1", "to": "bedroom-2", "type": "door" },
+      { "from": "ldk-1", "to": "closet-1", "type": "door" }
+    ]
+  }
+}

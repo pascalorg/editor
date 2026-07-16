@@ -313,7 +313,7 @@ export function sharedBoundaryLength(
   return roundCm(total)
 }
 
-const roundCm = (value: number): number => Math.round(value * 100) / 100
+export const roundCm = (value: number): number => Math.round(value * 100) / 100
 
 // Longest single shared straight run between two polygons — where a door can
 // actually go, as opposed to the sum of disjoint slivers.

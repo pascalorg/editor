@@ -167,6 +167,8 @@ function normalizeRooms(intent: LayoutIntent, profile: NormProfile): NormRoom[] 
 
 // --- candidate layout construction ------------------------------------------
 
+const WET_STACK_NOTE = '卫生间与厨房叠为同一湿区列（水回り聚拢）'
+
 type Candidate = { plan: LayoutPlan; penalty: number; notes: string[] }
 type Reject = { reject: string; l10n?: IssueL10n }
 type Attempt = Candidate | Reject
@@ -179,12 +181,23 @@ function placeCarves(
   hostRect: Rect,
   carves: Array<{ room: NormRoom; area: number }>,
   p: PartitionParams,
+  wet?: { anchor?: { x: number; z: number } },
 ): { notches: Notch[]; rects: Map<string, { rect: Rect; corner: Corner }> } | Reject {
   const hostW = hostRect.x1 - hostRect.x0
   const hostD = hostRect.z1 - hostRect.z0
   const used = new Map<Corner, Notch>()
   const rects = new Map<string, { rect: Rect; corner: Corner }>()
-  for (const { room, area } of carves) {
+  // Wet-core clustering: kitchen carves place first so bathrooms can anchor
+  // to them; a bathroom then tries the corners of its OWN allowed set in
+  // nearest-to-kitchen order (kitchen carve here, or the kitchen column via
+  // `wetAnchor`). Only the order changes — never the allowed set, so the
+  // "bathroom door opens onto circulation" corner rules stay intact.
+  const ordered = [
+    ...carves.filter(c => c.room.type === 'kitchen'),
+    ...carves.filter(c => c.room.type !== 'kitchen'),
+  ]
+  let anchor = wet?.anchor
+  for (const { room, area } of ordered) {
     const minW = minWidthFor(room.type, p)
     // Aim for a slightly-deeper-than-square carve, capped by the host.
     let d = Math.min(Math.max(Math.sqrt(area * 1.2), 1.4), Math.min(2.4, hostD - p.minDoorEdgeM))
@@ -213,8 +226,18 @@ function placeCarves(
     }
     w = round2(w)
     d = round2(d)
-    const preferences = CARVE_CORNER_PREFERENCE[room.type]
-      ?? ['top-right', 'top-left', 'bottom-right', 'bottom-left'] satisfies Corner[]
+    let preferences: readonly Corner[] = CARVE_CORNER_PREFERENCE[room.type]
+      ?? (['top-right', 'top-left', 'bottom-right', 'bottom-left'] satisfies Corner[])
+    if (room.type === 'bathroom' && anchor) {
+      const target = anchor
+      const distTo = (corner: Corner) => {
+        const rect = notchRect(hostRect, { corner, w, d })
+        const cx = (rect.x0 + rect.x1) / 2
+        const cz = (rect.z0 + rect.z1) / 2
+        return (cx - target.x) ** 2 + (cz - target.z) ** 2
+      }
+      preferences = [...preferences].sort((a, b) => distTo(a) - distTo(b))
+    }
     const allCorners: Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
     let placed = false
     for (const corner of [...preferences, ...allCorners]) {
@@ -222,7 +245,11 @@ function placeCarves(
       const candidate: Notch = { corner, w, d }
       if (!cornerFits(candidate, used, hostW, hostD, p.minDoorEdgeM)) continue
       used.set(corner, candidate)
-      rects.set(room.id, { rect: notchRect(hostRect, candidate), corner })
+      const rect = notchRect(hostRect, candidate)
+      rects.set(room.id, { rect, corner })
+      if (room.type === 'kitchen' && wet) {
+        anchor = { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 }
+      }
       placed = true
       break
     }
@@ -234,6 +261,18 @@ function placeCarves(
     }
   }
   return { notches: [...used.values()], rects }
+}
+
+// Center of the kitchen COLUMN among placed band/stack rooms, if any — the
+// wet anchor bathrooms cluster toward when the kitchen isn't itself a carve.
+function kitchenColumnAnchor(
+  rooms: NormRoom[],
+  rectById: Map<string, Rect>,
+): { x: number; z: number } | undefined {
+  const kitchen = rooms.find(r => r.type === 'kitchen')
+  const rect = kitchen ? rectById.get(kitchen.id) : undefined
+  if (!rect) return undefined
+  return { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 }
 }
 
 function cornerFits(notch: Notch, used: Map<Corner, Notch>, hostW: number, hostD: number, minDoorEdgeM: number): boolean {
@@ -402,7 +441,7 @@ export function partitionLayout(
     }
     for (const geo of geometries) {
       for (const carveSmallPublic of carveOptions) {
-        attempts.push(tryNarrowLotLayout(intent, rooms, hub, geo.W, geo.D, carveSmallPublic, p, s))
+        attempts.push(tryNarrowLotLayout(intent, rooms, hub, geo.W, geo.D, carveSmallPublic, p, s, !stability))
       }
     }
   } else if (strategy?.typology === 'l_shape') {
@@ -421,7 +460,7 @@ export function partitionLayout(
     for (const W of widthCandidates(0.9, 1.5, 8)) {
       for (const wingFrac of [0.35, 0.45, 0.55]) {
         for (const carveSmallPublic of carveOptions) {
-          attempts.push(tryLShapeLayout(intent, rooms, hub, W, wingFrac, carveSmallPublic, p, s))
+          attempts.push(tryLShapeLayout(intent, rooms, hub, W, wingFrac, carveSmallPublic, p, s, !stability))
         }
       }
     }
@@ -438,11 +477,13 @@ export function partitionLayout(
     if (!attempts.some(attempt => !('reject' in attempt))) {
       for (const W of widthCandidates(0.7, 1.5, 32)) {
         for (const carveSmallPublic of carveOptions) {
-          attempts.push(
-            hub
-              ? tryBandLayout(intent, rooms, hub, W, carveSmallPublic, p, s)
-              : tryCorridorHubLayout(intent, rooms, W, p, s),
-          )
+          if (hub) {
+            for (const wetStackEnabled of [true, false]) {
+              attempts.push(tryBandLayout(intent, rooms, hub, W, carveSmallPublic, p, s, !stability, wetStackEnabled))
+            }
+          } else {
+            attempts.push(tryCorridorHubLayout(intent, rooms, W, p, s))
+          }
         }
       }
     }
@@ -450,6 +491,7 @@ export function partitionLayout(
 
   let best: Candidate | null = null
   let bestPenalty = Infinity
+  let bestTier = Infinity
   const rejectCounts = new Map<string, { count: number; l10n?: IssueL10n }>()
   for (const attempt of attempts) {
     if ('reject' in attempt) {
@@ -458,11 +500,19 @@ export function partitionLayout(
       else rejectCounts.set(attempt.reject, { count: 1, l10n: attempt.l10n })
       continue
     }
+    // Wet-stack candidates are a preferred FORM, not a score competitor —
+    // same rationale as the tanoji preference: pure score competition would
+    // let the kitchen-carve variant's marginally better aspect numbers beat
+    // the realistic plumbing-column shape every time. In the modify path the
+    // preference is OFF: both forms compete and the deviation term keeps
+    // whichever one the previous plan already had (M2 minimal-change).
+    const tier = !stability && attempt.notes.includes(WET_STACK_NOTE) ? 0 : 1
     // §4 mechanism 2: the candidate that moves existing rooms least wins.
     const penalty = attempt.penalty
       + (stability ? planDeviation(attempt.plan, stability.previousPlan) * s.deviationWeight : 0)
-    if (penalty < bestPenalty) {
+    if (tier < bestTier || (tier === bestTier && penalty < bestPenalty)) {
       best = attempt
+      bestTier = tier
       bestPenalty = penalty
     }
   }
@@ -591,6 +641,14 @@ function tryBandLayout(
   carveSmallPublic: boolean,
   p: PartitionParams,
   s: ScoringParams,
+  // Modify path (previousPlan) keeps the old corner order so an untouched
+  // bathroom never relocates just to hug the kitchen (M2 minimal-change).
+  wetCluster: boolean,
+  // Build the wet-stack variant (bathroom stacked on the kitchen column)
+  // instead of carving the bathroom into the hub. Enumerated as a SEPARATE
+  // candidate: fresh generation prefers it by tier, the modify path lets the
+  // deviation term keep whichever form the previous plan already had.
+  wetStackEnabled: boolean,
 ): Attempt {
   const others = rooms.filter(r => r.id !== hub.id)
   const privates = others.filter(r => PRIVATE_TYPES.has(r.type))
@@ -598,10 +656,29 @@ function tryBandLayout(
   const corridorNeeded = privates.length >= 2
 
   const { carveSpecs, notes } = assignCarves(others, hub, carveSmallPublic, p)
+
+  // Wet stack（草图驱动，2026-07-16）: the hub-carved bathroom instead stacks
+  // onto the kitchen column so both wet rooms share one plumbing column —
+  // single band: bathroom takes the far (z1) end, kitchen the entry edge;
+  // corridor band: z1 IS the corridor side, so the bathroom sits next to the
+  // corridor and the kitchen keeps the exterior corner. Doors open toward the
+  // hub in both forms.
+  let wetStack: { bath: NormRoom; kitchenId: string } | null = null
+  if (wetStackEnabled) {
+    const kitchenCol = others.find(r =>
+      r.type === 'kitchen' && !carveSpecs.some(c => c.room.id === r.id))
+    const hubBaths = carveSpecs.filter(c => c.room.type === 'bathroom' && c.hostId === hub.id)
+    if (kitchenCol && hubBaths.length === 1) {
+      wetStack = { bath: hubBaths[0]!.room, kitchenId: kitchenCol.id }
+      carveSpecs.splice(carveSpecs.indexOf(hubBaths[0]!), 1)
+      notes.push(WET_STACK_NOTE)
+    }
+  }
   const carvedIds = new Set(carveSpecs.map(c => c.room.id))
 
   const publicColumns = others.filter(r =>
-    !carvedIds.has(r.id) && !PRIVATE_TYPES.has(r.type) && r.id !== corridorRoom?.id,
+    !carvedIds.has(r.id) && !PRIVATE_TYPES.has(r.type) && r.id !== corridorRoom?.id
+    && r.id !== wetStack?.bath.id,
   )
   const privateColumns = privates.filter(r => !carvedIds.has(r.id))
 
@@ -629,6 +706,18 @@ function tryBandLayout(
   }
   const columnArea = (room: NormRoom) =>
     scaled(room) + (carvesByHost.get(room.id) ?? []).reduce((sum, c) => sum + c.area, 0)
+    + (wetStack && room.id === wetStack.kitchenId ? scaled(wetStack.bath) : 0)
+
+  // Splits the wet column into its two cells: kitchen keeps the entry-side
+  // (z0) end, bathroom takes the far end.
+  const wetStackCells = (columnRect: Rect): { kitchen: Rect; bath: Rect } => {
+    const bathD = round2(scaled(wetStack!.bath) / (columnRect.x1 - columnRect.x0))
+    const zSplit = round2(columnRect.z1 - bathD)
+    return {
+      kitchen: { ...columnRect, z1: zSplit },
+      bath: { ...columnRect, z0: zSplit },
+    }
+  }
 
   // --- band geometry ---
   // Public band column order: kitchen (wet corner) far left, then dining and
@@ -674,17 +763,30 @@ function tryBandLayout(
   // --- per-column constraint checks ---
   for (const room of [...lowerBand, ...upperBand]) {
     const rect = rectById.get(room.id)!
-    const width = rect.x1 - rect.x0
-    if (width < minWidthFor(room.type, p)) {
-      return {
-        reject: `房间「${room.name}」按比例分宽后过窄`,
-        l10n: { id: 'planRoomTooNarrow', params: { room: room.name } },
+    // The wet column is two stacked cells — constrain the cells, not the
+    // combined column (whose aspect is meaningless).
+    const cells: Array<{ name: string; type: RoomType; rect: Rect }> =
+      wetStack && room.id === wetStack.kitchenId
+        ? (({ kitchen, bath }) => [
+            { name: room.name, type: room.type, rect: kitchen },
+            { name: wetStack!.bath.name, type: wetStack!.bath.type, rect: bath },
+          ])(wetStackCells(rect))
+        : [{ name: room.name, type: room.type, rect }]
+    for (const cell of cells) {
+      const minSide = cells.length > 1
+        ? Math.min(cell.rect.x1 - cell.rect.x0, cell.rect.z1 - cell.rect.z0)
+        : cell.rect.x1 - cell.rect.x0
+      if (minSide < minWidthFor(cell.type, p)) {
+        return {
+          reject: `房间「${cell.name}」按比例分宽后过窄`,
+          l10n: { id: 'planRoomTooNarrow', params: { room: cell.name } },
+        }
       }
-    }
-    if (aspectOf(rect) > p.maxRoomAspect) {
-      return {
-        reject: `房间「${room.name}」长宽比超限`,
-        l10n: { id: 'planRoomAspectExceeded', params: { room: room.name } },
+      if (aspectOf(cell.rect) > p.maxRoomAspect) {
+        return {
+          reject: `房间「${cell.name}」长宽比超限`,
+          l10n: { id: 'planRoomAspectExceeded', params: { room: cell.name } },
+        }
       }
     }
   }
@@ -693,15 +795,22 @@ function tryBandLayout(
   const planRooms: LayoutPlanRoom[] = []
   const connections: Array<{ from: string; to: string }> = []
   const carveCorners = new Map<string, Corner>()
+  const wet = wetCluster ? { anchor: kitchenColumnAnchor([...lowerBand, ...upperBand], rectById) } : undefined
 
   for (const room of [...lowerBand, ...upperBand]) {
     const rect = rectById.get(room.id)!
+    if (wetStack && room.id === wetStack.kitchenId) {
+      const cells = wetStackCells(rect)
+      planRooms.push(planRoom(room, rectPolygon(cells.kitchen)))
+      planRooms.push(planRoom(wetStack.bath, rectPolygon(cells.bath)))
+      continue
+    }
     const carves = carvesByHost.get(room.id) ?? []
     if (carves.length === 0) {
       planRooms.push(planRoom(room, rectPolygon(rect)))
       continue
     }
-    const placed = placeCarves(rect, carves, p)
+    const placed = placeCarves(rect, carves, p, wet)
     if ('reject' in placed) return placed
     planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
     for (const { room: carve } of carves) {
@@ -741,6 +850,14 @@ function tryBandLayout(
     for (const room of publicSorted) {
       const rect = rectById.get(room.id)!
       const touchesHub = Math.abs(rect.x1 - hubRect.x0) < 0.01 || Math.abs(rect.x0 - hubRect.x1) < 0.01
+      if (!touchesHub && wetStack && room.id === wetStack.kitchenId) {
+        // The bathroom cell owns the wet column's corridor-side (z1) end, so
+        // the kitchen cell shares no wall with the corridor — chain it toward
+        // the hub through its neighboring column instead.
+        const i = lowerBand.findIndex(r => r.id === room.id)
+        connections.push({ from: room.id, to: lowerBand[i + 1]!.id })
+        continue
+      }
       connections.push({ from: room.id, to: touchesHub ? hub.id : corridorId })
     }
     for (const spec of carveSpecs) {
@@ -751,6 +868,14 @@ function tryBandLayout(
       const opensToCorridor = spec.hostId === hub.id && corner?.startsWith('top')
       connections.push({ from: spec.room.id, to: opensToCorridor ? corridorId : spec.hostId })
     }
+    if (wetStack) {
+      // Sketch rule: the stacked bathroom opens into the hub when its column
+      // touches the hub; a wet column further down the chain (dining between)
+      // falls back to its corridor edge.
+      const kRect = rectById.get(wetStack.kitchenId)!
+      const touchesHub = Math.abs(kRect.x1 - hubRect.x0) < 0.01 || Math.abs(kRect.x0 - hubRect.x1) < 0.01
+      connections.push({ from: wetStack.bath.id, to: touchesHub ? hub.id : corridorId })
+    }
   } else {
     // Single band: chain each column toward the hub.
     const order = lowerBand
@@ -759,6 +884,13 @@ function tryBandLayout(
       if (i === hubIndex) continue
       const next = i < hubIndex ? order[i + 1]! : order[i - 1]!
       connections.push({ from: order[i]!.id, to: next.id })
+    }
+    if (wetStack) {
+      // The bathroom cell spans the same column as the kitchen, so it shares
+      // the kitchen's hub-ward neighbor along its full depth.
+      const i = order.findIndex(r => r.id === wetStack!.kitchenId)
+      const next = i < hubIndex ? order[i + 1]! : order[i - 1]!
+      connections.push({ from: wetStack.bath.id, to: next.id })
     }
     for (const spec of carveSpecs) connections.push({ from: spec.room.id, to: spec.hostId })
   }
@@ -787,10 +919,18 @@ function tryBandLayout(
   }
 
   // --- score ---
+  const roomAspects = [...lowerBand, ...upperBand].flatMap(room => {
+    const rect = rectById.get(room.id)!
+    if (wetStack && room.id === wetStack.kitchenId) {
+      const cells = wetStackCells(rect)
+      return [aspectOf(cells.kitchen), aspectOf(cells.bath)]
+    }
+    return [aspectOf(rect)]
+  })
   const penalty = scoreCandidate({
     footprintW: W,
     footprintD: D,
-    roomAspects: [...lowerBand, ...upperBand].map(room => aspectOf(rectById.get(room.id)!)),
+    roomAspects,
     corridorRatio: corridorNeeded ? (corridorD * W) / (W * D) : 0,
   }, s)
   return { plan, penalty, notes }
@@ -813,6 +953,7 @@ function tryNarrowLotLayout(
   carveSmallPublic: boolean,
   p: PartitionParams,
   s: ScoringParams,
+  wetCluster: boolean,
 ): Attempt {
   if (Math.max(W, D) / Math.min(W, D) > p.maxFootprintAspectNarrowLot) {
     return { reject: '外轮廓过于狭长', l10n: { id: 'planFootprintTooSlender', params: {} } }
@@ -899,6 +1040,7 @@ function tryNarrowLotLayout(
   // --- carve placement & polygon assembly ---
   const planRooms: LayoutPlanRoom[] = []
   const connections: Array<{ from: string; to: string }> = []
+  const wet = wetCluster ? { anchor: kitchenColumnAnchor([hub, ...stacked], rectById) } : undefined
   for (const room of [hub, ...stacked]) {
     const rect = rectById.get(room.id)!
     const carves = (carvesByHost.get(room.id) ?? []).map(r => ({ room: r, area: scale * r.area }))
@@ -906,7 +1048,7 @@ function tryNarrowLotLayout(
       planRooms.push(planRoom(room, rectPolygon(rect)))
       continue
     }
-    const placed = placeCarves(rect, carves, p)
+    const placed = placeCarves(rect, carves, p, wet)
     if ('reject' in placed) return placed
     planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
     for (const { room: carve } of carves) {
@@ -1181,6 +1323,7 @@ function tryLShapeLayout(
   carveSmallPublic: boolean,
   p: PartitionParams,
   s: ScoringParams,
+  wetCluster: boolean,
 ): Attempt {
   const others = rooms.filter(r => r.id !== hub.id)
   const corridorRoom = others.find(r => r.type === 'hallway') ?? null
@@ -1276,6 +1419,7 @@ function tryLShapeLayout(
   // --- carve placement & polygon assembly ---
   const planRooms: LayoutPlanRoom[] = []
   const connections: Array<{ from: string; to: string }> = []
+  const wet = wetCluster ? { anchor: kitchenColumnAnchor([hub, ...mainColumns, ...wingRooms], rectById) } : undefined
   for (const room of [hub, ...mainColumns, ...wingRooms]) {
     const rect = rectById.get(room.id)!
     const carves = (carvesByHost.get(room.id) ?? []).map(r => ({ room: r, area: scale * r.area }))
@@ -1283,7 +1427,7 @@ function tryLShapeLayout(
       planRooms.push(planRoom(room, rectPolygon(rect)))
       continue
     }
-    const placed = placeCarves(rect, carves, p)
+    const placed = placeCarves(rect, carves, p, wet)
     if ('reject' in placed) return placed
     planRooms.push(planRoom(room, rectWithNotches(rect, placed.notches)))
     for (const { room: carve } of carves) {
