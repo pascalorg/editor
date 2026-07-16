@@ -17,6 +17,7 @@ export const apiGraphSchema = z
     nodes: z.record(z.string(), z.unknown()),
     rootNodeIds: z.array(z.string()),
     collections: z.unknown().optional(),
+    installedPlugins: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {
     for (const [nodeId, node] of Object.entries(value.nodes)) {

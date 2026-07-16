@@ -9,6 +9,7 @@ import {
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
+  isNodeKindEnabled,
   isRegistryMovable,
   kindsWithFloorplanScope,
   type LiveNodeOverrides,
@@ -292,6 +293,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
+  const installedPlugins = useScene((s) => s.installedPlugins)
   const movingNode = useMovingNode()
   // When a building is being moved, its explicit selection may be
   // cleared as part of the move handoff. Fall back to the
@@ -761,6 +763,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const collectLevelDataKind = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
+      if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const def = nodeRegistry.get(node.type)
       if (def?.computeFloorplanLevelData) {
         const ids = levelNodeIdsByType.get(node.type)
@@ -776,6 +779,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     collectLevelDataKind(levelId as AnyNodeId)
 
     const pushEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
+      if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
       const dependsOnSiblingInputs = !!(
@@ -844,7 +848,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [levelId, nodes])
+  }, [installedPlugins, levelId, nodes])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //

@@ -88,6 +88,7 @@ function sceneGraphSignature(graph: SceneGraphWithCollections): string {
     nodes: graph.nodes,
     rootNodeIds: graph.rootNodeIds,
     collections: graph.collections,
+    installedPlugins: graph.installedPlugins,
   })
 }
 

@@ -339,8 +339,8 @@ Clears dirty flag
 
 The editor is extensible: a plugin ships node kinds (schema, 3D/2D rendering, placement tools, inspector parametrics) and left-rail panels through the same `Plugin` manifest the built-ins use — there is no separate internal API.
 
-- **Contract reference** — [`wiki/architecture/plugin-authoring.md`](wiki/architecture/plugin-authoring.md): the `Plugin` shape, panel contributions, discovery (`setPluginDiscovery`), lifecycle, and what's in/out of v1.
-- **Worked example** — [`packages/plugin-trees`](packages/plugin-trees): a first-party plugin (procedural trees, flowers, grass + a presets panel) structurally identical to a third-party pack. Copy it as a starting point.
+- **Developer guide** — [Create a plugin](https://editor.pascal.app/docs/developers/plugins): the `Plugin` shape, panel contributions, discovery, lifecycle, and what's in/out of v1.
+- **Worked example** — [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees): a standalone plugin with procedural trees, flowers, grass, and a presets panel. Clone it as a starting point.
 
 ---
 

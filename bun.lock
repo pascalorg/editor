@@ -33,7 +33,7 @@
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
-        "@pascal-app/plugin-trees": "*",
+        "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/drei": "^10.7.7",
@@ -257,38 +257,6 @@
         "lucide-react": "^1",
         "react": "^18 || ^19",
         "three": "^0.185",
-        "zustand": "^5",
-      },
-    },
-    "packages/plugin-trees": {
-      "name": "@pascal-app/plugin-trees",
-      "version": "0.1.0",
-      "dependencies": {
-        "@dgreenheck/ez-tree": "^1.1.0",
-      },
-      "devDependencies": {
-        "@pascal-app/core": "*",
-        "@pascal-app/editor": "*",
-        "@pascal-app/viewer": "*",
-        "@pascal/typescript-config": "*",
-        "@react-three/fiber": "^9",
-        "@types/node": "^22.19.12",
-        "@types/react": "^19.2.2",
-        "@types/three": "^0.184.0",
-        "react": "^19",
-        "three": "^0.185",
-        "typescript": "6.0.3",
-        "zod": "^4",
-        "zustand": "^5",
-      },
-      "peerDependencies": {
-        "@pascal-app/core": "*",
-        "@pascal-app/editor": "*",
-        "@pascal-app/viewer": "*",
-        "@react-three/fiber": "^9",
-        "react": "^18 || ^19",
-        "three": "^0.185",
-        "zod": "^4",
         "zustand": "^5",
       },
     },
@@ -722,7 +690,7 @@
 
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
-    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@workspace:packages/plugin-trees"],
+    "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],
 
     "@pascal-app/viewer": ["@pascal-app/viewer@workspace:packages/viewer"],
 
