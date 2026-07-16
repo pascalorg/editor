@@ -162,10 +162,21 @@ function wallDepthFixture() {
     },
     markDirty: () => {},
   } as SceneApi
-  return { bridge, bridgeModule, nodes, root, sceneApi, wallA, wallB, wallC }
+  return { baseA, bridge, bridgeModule, nodes, root, sceneApi, wallA, wallB, wallC }
 }
 
 describe('wall cabinet depth handles', () => {
+  test('hides all arrows when a single base cabinet is selected', () => {
+    const { baseA, sceneApi } = wallDepthFixture()
+    const buildModuleHandles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetModuleNodeType>[]
+    const handles = buildModuleHandles(baseA, sceneApi)
+
+    expect(handles).toHaveLength(0)
+  })
+
   test('shows wall arrows only on group selection alongside the base arrows', () => {
     const { bridge, bridgeModule, root, sceneApi, wallA, wallB, wallC } = wallDepthFixture()
     const buildModuleHandles = cabinetModuleDefinition.handles as (

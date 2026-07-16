@@ -1343,30 +1343,8 @@ function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
   return stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
 }
 
-function cabinetModuleHandles(
-  node: CabinetModuleNodeType,
-  sceneApi?: SceneApi,
-): HandleDescriptor<CabinetModuleNodeType>[] {
-  const parent = node.parentId && sceneApi ? sceneApi.get(node.parentId as AnyNodeId) : undefined
-  const isWallCabinet =
-    isCabinetModule(parent) || (isCabinetRun(parent) && parent.runTier === 'wall')
-  if (isWallCabinet) {
-    return [cabinetRotateHandle() as HandleDescriptor<CabinetModuleNodeType>]
-  }
-  const handles: HandleDescriptor<CabinetModuleNodeType>[] = [
-    cabinetWidthHandle('left') as HandleDescriptor<CabinetModuleNodeType>,
-    cabinetWidthHandle('right') as HandleDescriptor<CabinetModuleNodeType>,
-    cabinetRotateHandle() as HandleDescriptor<CabinetModuleNodeType>,
-  ]
-  if (!isHoodOnlyCabinet(node)) {
-    handles.splice(
-      1,
-      0,
-      cabinetDepthHandle() as LinearResizeHandle<CabinetModuleNodeType>,
-      cabinetHeightHandle() as HandleDescriptor<CabinetModuleNodeType>,
-    )
-  }
-  return handles
+function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
+  return []
 }
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {

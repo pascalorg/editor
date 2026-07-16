@@ -44,7 +44,6 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
-import { resolveDirectManipulationNode } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
@@ -212,8 +211,7 @@ export function NodeArrowHandles() {
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) => {
     if (!selectedId) return null
-    const selectedNode = state.nodes[selectedId as AnyNodeId]
-    return selectedNode ? resolveDirectManipulationNode(selectedNode, state.nodes) : null
+    return state.nodes[selectedId as AnyNodeId] ?? null
   })
 
   // Merge any live drag override so the arrows themselves (positions,

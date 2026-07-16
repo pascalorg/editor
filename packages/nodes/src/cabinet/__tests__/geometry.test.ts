@@ -2193,7 +2193,7 @@ describe('cabinet handles', () => {
     ] as const
   }
 
-  function linearHandles() {
+  function moduleHandles() {
     const node = CabinetModuleNode.parse({
       position: [0, 0.1, 0],
       width: 0.6,
@@ -2203,12 +2203,7 @@ describe('cabinet handles', () => {
       typeof cabinetModuleDefinition.handles === 'function'
         ? cabinetModuleDefinition.handles(node)
         : (cabinetModuleDefinition.handles ?? [])
-    return {
-      node,
-      handles: handles.filter(
-        (handle): handle is LinearResizeHandle<typeof node> => handle.kind === 'linear-resize',
-      ),
-    }
+    return handles
   }
 
   function generatedL(side: 'left' | 'right') {
@@ -2278,24 +2273,8 @@ describe('cabinet handles', () => {
     return { ...fixture, depthHandles, source, thirdRun }
   }
 
-  test('width arrows resize from the chosen side instead of around center', () => {
-    const { node, handles } = linearHandles()
-    const leftHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'max')
-    const rightHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'min')
-
-    expect(leftHandle).toBeDefined()
-    expect(rightHandle).toBeDefined()
-    expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
-    expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
-  })
-
-  test('depth arrow keeps the back aligned and grows toward the front', () => {
-    const { node, handles } = linearHandles()
-    const depthHandle = handles.find((handle) => handle.axis === 'z')
-
-    expect(depthHandle).toBeDefined()
-    expect(depthHandle!.anchor).toBe('min')
-    expect(depthHandle!.apply(node, 0.78, null as never).position?.[2]).toBeCloseTo(0.1)
+  test('single cabinet selection omits arrow handles', () => {
+    expect(moduleHandles()).toHaveLength(0)
   })
 
   test.each([
