@@ -252,15 +252,14 @@ function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
 }
 
 // Demoted auto surfaces keep their polygon untouched, so a re-closed room
-// usually hits the exact-signature manual check. Coverage also handles a room
-// deliberately split across multiple manual surfaces: their union suppresses
-// a replacement auto surface as long as the pieces substantially belong to
-// and cover the room.
+// usually hits the exact-signature manual check. Coverage handles the rest:
+// a room split across multiple manual surfaces AND a single manual surface
+// spanning multiple rooms both suppress a replacement auto surface — what
+// matters is that the ROOM is already substantially covered, not that any
+// one manual surface belongs to it (a per-surface "mostly inside the room"
+// filter dropped multi-room slabs and resurrected deleted auto slabs).
 function matchesManualFootprint(roomPolygon: Point2D[], manualPolygons: Point2D[][]) {
-  const roomManualPolygons = manualPolygons.filter(
-    (manual) => polygonCoverageRatio(manual, [roomPolygon]) >= ORPHAN_MERGE_COVERAGE_THRESHOLD,
-  )
-  return polygonCoverageRatio(roomPolygon, roomManualPolygons) >= ORPHAN_MERGE_COVERAGE_THRESHOLD
+  return polygonCoverageRatio(roomPolygon, manualPolygons) >= ORPHAN_MERGE_COVERAGE_THRESHOLD
 }
 
 function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
@@ -1357,7 +1356,11 @@ export function isSpaceDetectionPaused(): boolean {
 }
 
 export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () => void {
-  const previousSnapshots = new Map<string, string>()
+  // Baseline from whatever is already in the store. Detection reacts to wall
+  // edits made IN-SESSION (create / move / delete); it must not re-litigate a
+  // scene that merely loaded — rerunning on hydration resurrected auto slabs
+  // the user had deleted in an earlier session.
+  const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
   let isProcessing = false
 
   const unsubscribe = sceneStore.subscribe((state: any) => {
@@ -1380,7 +1383,13 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
 
     const levelsToUpdate = new Set<string>()
     for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
-      if ((previousSnapshots.get(levelId) ?? '') !== (currentSnapshots.get(levelId) ?? '')) {
+      // First sight of a level is a hydration baseline, not a wall edit —
+      // `setScene` delivers a loaded scene as one atomic update, and a level's
+      // first wall can't close a room anyway. Record it (below) and only
+      // react to subsequent changes.
+      const previous = previousSnapshots.get(levelId)
+      if (previous === undefined) continue
+      if (previous !== (currentSnapshots.get(levelId) ?? '')) {
         levelsToUpdate.add(levelId)
       }
     }

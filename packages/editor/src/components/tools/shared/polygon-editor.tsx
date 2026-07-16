@@ -1,6 +1,6 @@
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent } from '@react-three/fiber'
+import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BoxGeometry,
@@ -13,6 +13,7 @@ import {
   type Line,
   type Object3D,
   Shape,
+  Vector3,
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
@@ -40,6 +41,19 @@ const EDGE_ARROW_OFFSET = 0.34
 // events that belong to the vertex/midpoint handles overlapping them. Mirrors
 // the `NO_RAYCAST` sentinel in node-arrow-handles.tsx.
 const NO_RAYCAST = () => null
+
+// Maps the screen-space direction of an edge's outward normal to the closest
+// directional resize cursor, so an edge arrow advertises the axis it will
+// actually drag along regardless of camera orbit. Input is an NDC delta
+// (y up); the angle is folded to [0°, 180°) since resize cursors are
+// bidirectional.
+function resizeCursorForScreenDirection(dx: number, dy: number): string {
+  const angle = ((((Math.atan2(dy, dx) * 180) / Math.PI) % 180) + 180) % 180
+  if (angle < 22.5 || angle >= 157.5) return 'ew-resize'
+  if (angle < 67.5) return 'nesw-resize'
+  if (angle < 112.5) return 'ns-resize'
+  return 'nwse-resize'
+}
 
 function createEdgeArrowGeometry() {
   const shape = new Shape()
@@ -201,7 +215,11 @@ export type PolygonMidpointHandleRenderer = (
   props: PolygonMidpointHandleRenderProps,
 ) => React.ReactNode
 
-function usePolygonNodeMaterial(color: string, opacity = 1): MeshBasicNodeMaterial {
+function usePolygonNodeMaterial(
+  color: string,
+  opacity = 1,
+  depthTest = true,
+): MeshBasicNodeMaterial {
   const material = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -217,7 +235,8 @@ function usePolygonNodeMaterial(color: string, opacity = 1): MeshBasicNodeMateri
   useEffect(() => {
     material.color.set(color)
     material.opacity = opacity
-  }, [color, material, opacity])
+    material.depthTest = depthTest
+  }, [color, depthTest, material, opacity])
   useEffect(() => () => material.dispose(), [material])
 
   return material
@@ -239,7 +258,8 @@ function usePolygonArrowMaterial(): MeshBasicNodeMaterial {
 }
 
 // One mesh per handle: lives on SCENE_LAYER with a node material so the
-// post-processing ink-edge pass outlines it.
+// post-processing ink-edge pass outlines it. Ignores scene depth like the
+// edge arrows so the handle stays visible through walls and slabs.
 function OutlinedCylinderHandle({
   radius,
   height,
@@ -255,7 +275,7 @@ function OutlinedCylinderHandle({
   position: [number, number, number]
 } & PolygonHandleHandlers) {
   const geometry = useMemo(() => new CylinderGeometry(radius, radius, height, 16), [height, radius])
-  const material = usePolygonNodeMaterial(color, opacity)
+  const material = usePolygonNodeMaterial(color, opacity, false)
   useEffect(() => () => geometry.dispose(), [geometry])
 
   return (
@@ -451,6 +471,39 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   // When using portal, edit at Y_OFFSET (local to level)
   // When not using portal, edit at world origin
   const editY = levelNode ? Y_OFFSET : 0
+
+  const camera = useThree((state) => state.camera)
+
+  // Handle-hover cursor, applied to document.body like the registry arrow
+  // handles (see handle-arrow.tsx). Tracked in a ref so we only ever clear a
+  // cursor we set ourselves.
+  const activeBodyCursorRef = useRef<string | null>(null)
+  const setBodyCursor = useCallback((cursor: string) => {
+    activeBodyCursorRef.current = cursor
+    document.body.style.cursor = cursor
+  }, [])
+  const clearBodyCursor = useCallback(() => {
+    if (activeBodyCursorRef.current && document.body.style.cursor === activeBodyCursorRef.current) {
+      document.body.style.cursor = ''
+    }
+    activeBodyCursorRef.current = null
+  }, [])
+  useEffect(() => () => clearBodyCursor(), [clearBodyCursor])
+
+  const edgeResizeCursor = useCallback(
+    (midpoint: [number, number], outwardNormal: [number, number]) => {
+      const from = new Vector3(midpoint[0], editY, midpoint[1])
+      const to = new Vector3(midpoint[0] + outwardNormal[0], editY, midpoint[1] + outwardNormal[1])
+      if (levelNode) {
+        levelNode.localToWorld(from)
+        levelNode.localToWorld(to)
+      }
+      from.project(camera)
+      to.project(camera)
+      return resizeCursorForScreenDirection(to.x - from.x, to.y - from.y)
+    },
+    [camera, editY, levelNode],
+  )
 
   // Local state for dragging
   const [dragState, setDragState] = useState<DragState | null>(null)
@@ -706,7 +759,8 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
     onDragCommitRef.current?.()
     updatePreviewPolygon(null)
     setDragState(null)
-  }, [onPolygonChange, updatePreviewPolygon])
+    clearBodyCursor()
+  }, [clearBodyCursor, onPolygonChange, updatePreviewPolygon])
 
   // Handle adding a new vertex at midpoint
   const handleAddVertex = useCallback(
@@ -930,13 +984,16 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           )
         })}
 
-      {/* Vertex handles - blue cylinders that match surface height */}
+      {/* Vertex handles - blue cylinders that match surface height. During a
+          drag only the active handle stays mounted so the gesture reads
+          clearly (same rule for the cross / edge handles below). */}
       {displayPolygon.map(([x, z], index) => {
         const isHovered = hoveredVertex === index
         const isDragging = dragState?.mode === 'vertex' && dragState.vertexIndex === index
+        if (dragState && !isDragging) return null
         const isLinkedHighlighted = isVertexLinkedHighlighted(index)
         const isHighlighted = isDragging || isHovered || isLinkedHighlighted
-        const radius = 0.1
+        const radius = 0.08
         const height = handleHeight
         const point: [number, number] = [x!, z!]
         const position: [number, number, number] = [x!, editY + height / 2, z!]
@@ -969,10 +1026,14 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           onPointerEnter: (e) => {
             e.stopPropagation()
             setHoveredVertex(index)
+            setBodyCursor('move')
           },
           onPointerLeave: (e) => {
             e.stopPropagation()
             setHoveredVertex(null)
+            // Keep the cursor for the whole gesture when the pointer slips
+            // off the handle mid-drag; commit clears it.
+            if (!dragState?.isDragging) clearBodyCursor()
           },
         }
 
@@ -1006,7 +1067,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         )
       })}
 
-      {allowPolygonMove && (
+      {allowPolygonMove && (!dragState || dragState.mode === 'polygon') && (
         <OutlinedCrossHandle
           color={dragState?.mode === 'polygon' ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
           onClick={(e) => {
@@ -1026,14 +1087,22 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
               pointerId: e.pointerId,
             })
           }}
+          onPointerEnter={(e) => {
+            e.stopPropagation()
+            setBodyCursor('move')
+          }}
+          onPointerLeave={(e) => {
+            e.stopPropagation()
+            if (!dragState?.isDragging) clearBodyCursor()
+          }}
           position={[polygonCenter[0], editY + handleHeight + 0.08, polygonCenter[1]]}
         />
       )}
-
       {allowEdgeMove &&
         edgeHandles.map(({ index, length, midpoint, rotationY, outwardNormal, outwardAngle }) => {
           const isHovered = hoveredEdge === index
           const isDragging = dragState?.mode === 'edge' && dragState.edgeIndex === index
+          if (dragState && !isDragging) return null
           const isLinkedHighlighted = highlightedEdgeIndices.has(index)
           const isHighlighted = isDragging || isHovered || isLinkedHighlighted
           const arrowX = midpoint[0] + outwardNormal[0] * EDGE_ARROW_OFFSET
@@ -1100,10 +1169,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
                 onPointerEnter={(e) => {
                   e.stopPropagation()
                   setHoveredEdge(index)
+                  setBodyCursor(edgeResizeCursor(midpoint, outwardNormal))
                 }}
                 onPointerLeave={(e) => {
                   e.stopPropagation()
                   setHoveredEdge(null)
+                  if (!dragState?.isDragging) clearBodyCursor()
                 }}
                 position={[arrowX, edgeHandleY, arrowZ]}
                 rotationY={outwardAngle}
@@ -1120,7 +1191,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           const isHovered = hoveredMidpoint === index
           const isLinkedHighlighted = highlightedEdgeIndices.has(index)
           const isHighlighted = isHovered || isLinkedHighlighted
-          const radius = 0.06
+          const radius = 0.05
           const height = handleHeight
           const point: [number, number] = [x!, z!]
           const position: [number, number, number] = [x!, editY + height / 2, z!]
@@ -1149,10 +1220,12 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
             onPointerEnter: (e) => {
               e.stopPropagation()
               setHoveredMidpoint(index)
+              setBodyCursor('move')
             },
             onPointerLeave: (e) => {
               e.stopPropagation()
               setHoveredMidpoint(null)
+              clearBodyCursor()
             },
           }
 
@@ -1174,7 +1247,9 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
 
           return (
             <OutlinedCylinderHandle
-              color={isHighlighted ? EDGE_ARROW_HOVER_COLOR : EDGE_ARROW_COLOR}
+              // Midpoints read as secondary add-points: the brighter hover
+              // shade at rest distinguishes them from the vertex handles.
+              color={EDGE_ARROW_HOVER_COLOR}
               height={height}
               key={`midpoint-${index}`}
               {...handleProps}
