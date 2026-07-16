@@ -764,10 +764,7 @@ function offsetPolygonPerEdge(
       push(startJ)
     } else {
       const t = ((bx - ax) * frameJ.dz - (bz - az) * frameJ.dx) / denom
-      const intersection: [number, number] = [
-        ax + t * frameI.dx,
-        az + t * frameI.dz,
-      ]
+      const intersection: [number, number] = [ax + t * frameI.dx, az + t * frameI.dz]
       const miterReach = Math.max(
         Math.hypot(intersection[0] - endI[0], intersection[1] - endI[1]),
         Math.hypot(intersection[0] - startJ[0], intersection[1] - startJ[1]),

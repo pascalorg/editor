@@ -765,10 +765,7 @@ describe('getRenderableSlabPolygon', () => {
     ] as Array<[number, number]>
     const poly = getRenderableSlabPolygon(slabOf(stored, false), {
       walls: [
-        wallOf(
-          [1.7318387751077626, -4.323741654294752],
-          [11.300000049514956, -4.341249931281993],
-        ),
+        wallOf([1.7318387751077626, -4.323741654294752], [11.300000049514956, -4.341249931281993]),
       ],
       siblingSlabs: [],
     })
