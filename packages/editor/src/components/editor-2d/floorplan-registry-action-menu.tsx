@@ -19,6 +19,7 @@ import { type MouseEvent, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
+import { resolveMoveActionNode } from '../../lib/direct-manipulation'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
@@ -228,7 +229,8 @@ export function FloorplanRegistryActionMenu() {
 
   const handleMove = () => {
     sfxEmitter.emit('sfx:item-pick')
-    setMovingNode(node as never)
+    const sceneNodes = useScene.getState().nodes
+    setMovingNode(resolveMoveActionNode(node, sceneNodes) as never)
     // 2D-owned move: `FloorplanRegistryMoveOverlay` runs the whole gesture.
     // Mark the origin (after `setMovingNode`, which resets it to null) so
     // `ToolManager` keeps the 3D affordance mover from also adopting the node

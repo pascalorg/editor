@@ -43,6 +43,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
+import { resolveMoveActionNode } from '../../lib/direct-manipulation'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
@@ -501,7 +502,8 @@ export function FloatingActionMenu() {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      setMovingNode(node as any)
+      const sceneNodes = useScene.getState().nodes
+      setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
       setSelection({ selectedIds: [] })
     },
     [node, setMovingNode, setSelection],

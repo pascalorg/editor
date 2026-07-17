@@ -74,6 +74,15 @@ export function resolveDirectManipulationNode(
   return parent && canDirectRotateNode(parent) ? parent : target
 }
 
+export function resolveMoveActionNode(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode | undefined>>,
+): AnyNode {
+  const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
+  const parent = parentFrame?.resolveParent(node, nodes as Readonly<Record<string, AnyNode>>)
+  return parent?.type === node.type ? parent : node
+}
+
 export function snapDirectRotationDelta(delta: number, free: boolean): number {
   return free ? delta : Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 }

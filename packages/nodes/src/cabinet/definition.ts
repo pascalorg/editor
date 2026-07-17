@@ -531,6 +531,17 @@ function cabinetLocalBounds(
     }
   }
 
+  if (isCabinetModule(node) && nodes) {
+    for (const childId of node.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (isCabinetModule(child)) {
+        includeCabinetModuleBounds(child, nodes, [0, 0, 0], bounds)
+      } else if (isCabinetRun(child)) {
+        includeChildRunBounds(child, nodes, bounds)
+      }
+    }
+  }
+
   const width = Math.max(0.01, bounds.maxX - bounds.minX)
   const height = Math.max(0.01, bounds.maxY - bounds.minY)
   const depth = Math.max(0.01, bounds.maxZ - bounds.minZ)
@@ -1647,6 +1658,10 @@ function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
       visible: (node, sceneApi) =>
         !isCabinetWidthFiller(node) && !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
     } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetDepthHandle(),
+      visible: (node) => !isCabinetWidthFiller(node),
+    } as HandleDescriptor<CabinetModuleNodeType>,
   ]
 }
 
@@ -1916,13 +1931,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       },
       collides: true,
     },
-    dragBounds: (node) => {
-      const n = node as CabinetModuleNodeType
-      const height = cabinetTotalHeight(n)
-      return {
-        size: [n.width, height, n.depth] as [number, number, number],
-        center: [0, height / 2, 0] as [number, number, number],
-      }
+    dragBounds: (node, nodes) => {
+      const bounds = cabinetLocalBounds(node as CabinetModuleNodeType, nodes)
+      return { size: bounds.size, center: bounds.center }
     },
     paint: cabinetPaint,
     sceneAction: cabinetSceneAction,

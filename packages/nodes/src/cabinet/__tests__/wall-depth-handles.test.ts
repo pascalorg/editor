@@ -166,7 +166,7 @@ function wallDepthFixture() {
 }
 
 describe('wall cabinet depth handles', () => {
-  test('shows only side width arrows when a single cabinet is selected', () => {
+  test('shows side width arrows and one depth arrow when a single cabinet is selected', () => {
     const { baseA, nodes, root, sceneApi, wallA } = wallDepthFixture()
     const buildModuleHandles = cabinetModuleDefinition.handles as (
       node: CabinetModuleNodeType,
@@ -175,13 +175,24 @@ describe('wall cabinet depth handles', () => {
 
     for (const cabinet of [baseA, wallA]) {
       const handles = buildModuleHandles(cabinet, sceneApi)
-      expect(handles).toHaveLength(2)
-      expect(handles.map((handle) => handle.kind)).toEqual(['linear-resize', 'linear-resize'])
-      expect(handles.map((handle) => handle.axis)).toEqual(['x', 'x'])
+      expect(handles).toHaveLength(3)
+      expect(handles.map((handle) => handle.kind)).toEqual([
+        'linear-resize',
+        'linear-resize',
+        'linear-resize',
+      ])
+      expect(handles.map((handle) => handle.axis)).toEqual(['x', 'x', 'z'])
 
-      const widthHandles = handles as LinearResizeHandle<CabinetModuleNodeType>[]
+      const widthHandles = handles.filter(
+        (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
+          handle.kind === 'linear-resize' && handle.axis === 'x',
+      )
       const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')!
       const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')!
+      const depthHandle = handles.find(
+        (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
+          handle.kind === 'linear-resize' && handle.axis === 'z',
+      )!
       const nextWidth = cabinet.width + 0.2
       expect(leftHandle.apply(cabinet, nextWidth, sceneApi).position?.[0]).toBeCloseTo(
         cabinet.position[0] - 0.1,
@@ -189,6 +200,10 @@ describe('wall cabinet depth handles', () => {
       expect(rightHandle.apply(cabinet, nextWidth, sceneApi).position?.[0]).toBeCloseTo(
         cabinet.position[0] + 0.1,
       )
+      const nextDepth = cabinet.depth + 0.1
+      const depthPatch = depthHandle.apply(cabinet, nextDepth, sceneApi)
+      expect(depthPatch.depth).toBeCloseTo(nextDepth)
+      expect(depthPatch.position?.[2]).toBeCloseTo(cabinet.position[2] + 0.05)
     }
 
     const rightCornerRun = sceneApi.get<CabinetNodeType>('cabinet_wall-depth-leg-b' as AnyNodeId)!
@@ -206,7 +221,12 @@ describe('wall cabinet depth handles', () => {
     const besideRightGeneratedCorner = buildModuleHandles(baseA, sceneApi).filter(
       (handle) => handle.visible?.(baseA, sceneApi) !== false,
     ) as LinearResizeHandle<CabinetModuleNodeType>[]
-    expect(besideRightGeneratedCorner.map((handle) => handle.anchor)).toEqual(['max'])
+    expect(besideRightGeneratedCorner.map((handle) => handle.axis)).toEqual(['x', 'z'])
+    expect(
+      besideRightGeneratedCorner
+        .filter((handle) => handle.axis === 'x')
+        .map((handle) => handle.anchor),
+    ).toEqual(['max'])
 
     const leftCornerRun = CabinetNode.parse({
       id: 'cabinet_wall-depth-leg-left',
@@ -237,7 +257,7 @@ describe('wall cabinet depth handles', () => {
     const betweenGeneratedCorners = buildModuleHandles(baseA, sceneApi).filter(
       (handle) => handle.visible?.(baseA, sceneApi) !== false,
     )
-    expect(betweenGeneratedCorners).toHaveLength(0)
+    expect(betweenGeneratedCorners.map((handle) => handle.axis)).toEqual(['z'])
 
     const adjacent = CabinetModuleNode.parse({
       id: 'cabinet-module_width-adjacent',
@@ -254,7 +274,7 @@ describe('wall cabinet depth handles', () => {
       (handle) => handle.visible?.(baseA, sceneApi) !== false,
     )
 
-    expect(visibleHandles).toHaveLength(2)
+    expect(visibleHandles.map((handle) => handle.axis)).toEqual(['x', 'x', 'z'])
 
     nodes[adjacent.id as AnyNodeId] = {
       ...adjacent,
@@ -263,7 +283,9 @@ describe('wall cabinet depth handles', () => {
     const besideRightFiller = buildModuleHandles(baseA, sceneApi).filter(
       (handle) => handle.visible?.(baseA, sceneApi) !== false,
     ) as LinearResizeHandle<CabinetModuleNodeType>[]
-    expect(besideRightFiller.map((handle) => handle.anchor)).toEqual(['max'])
+    expect(
+      besideRightFiller.filter((handle) => handle.axis === 'x').map((handle) => handle.anchor),
+    ).toEqual(['max'])
 
     nodes[adjacent.id as AnyNodeId] = {
       ...adjacent,
@@ -273,7 +295,9 @@ describe('wall cabinet depth handles', () => {
     const besideLeftFiller = buildModuleHandles(baseA, sceneApi).filter(
       (handle) => handle.visible?.(baseA, sceneApi) !== false,
     ) as LinearResizeHandle<CabinetModuleNodeType>[]
-    expect(besideLeftFiller.map((handle) => handle.anchor)).toEqual(['min'])
+    expect(
+      besideLeftFiller.filter((handle) => handle.axis === 'x').map((handle) => handle.anchor),
+    ).toEqual(['min'])
 
     const filler = sceneApi.get<CabinetModuleNodeType>(adjacent.id as AnyNodeId)!
     const fillerHandles = buildModuleHandles(filler, sceneApi).filter(
@@ -338,7 +362,9 @@ describe('wall cabinet depth handles', () => {
       (handle) => handle.visible?.(wallA, sceneApi) !== false,
     ) as LinearResizeHandle<CabinetModuleNodeType>[]
 
-    expect(besideBridge.map((handle) => handle.anchor)).toEqual(['max'])
+    expect(
+      besideBridge.filter((handle) => handle.axis === 'x').map((handle) => handle.anchor),
+    ).toEqual(['max'])
 
     const baseB = sceneApi.get<CabinetModuleNodeType>(wallB.parentId as AnyNodeId)!
     const legB = sceneApi.get<CabinetNodeType>(baseB.parentId as AnyNodeId)!
@@ -373,7 +399,9 @@ describe('wall cabinet depth handles', () => {
       (handle) => handle.visible?.(wallB, sceneApi) !== false,
     ) as LinearResizeHandle<CabinetModuleNodeType>[]
 
-    expect(besideCornerWallFiller.map((handle) => handle.anchor)).toEqual(['min'])
+    expect(
+      besideCornerWallFiller.filter((handle) => handle.axis === 'x').map((handle) => handle.anchor),
+    ).toEqual(['min'])
   })
 
   test.each([
