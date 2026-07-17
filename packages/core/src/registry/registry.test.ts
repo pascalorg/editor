@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import {
   getHostRefFields,
+  getNodePluginId,
   isDrawnViaTool,
   isDrawnViaToolKind,
+  isNodeKindEnabled,
   isPresettable,
   isPresettableKind,
   loadPlugin,
@@ -188,6 +190,23 @@ describe('loadPlugin', () => {
     expect(nodeRegistry.size).toBe(2)
     expect(nodeRegistry.has('a')).toBe(true)
     expect(nodeRegistry.has('b')).toBe(true)
+    expect(getNodePluginId('a')).toBe('test:plugin')
+    expect(getNodePluginId('b')).toBe('test:plugin')
+  })
+
+  test('enables plugin kinds only when the project has the plugin installed', async () => {
+    await loadPlugin({ id: 'test:plugin', apiVersion: 1, nodes: [makeDefinition('plugin:node')] })
+
+    expect(isNodeKindEnabled('plugin:node', [])).toBe(false)
+    expect(isNodeKindEnabled('plugin:node', ['test:plugin'])).toBe(true)
+    expect(isNodeKindEnabled('plugin:node')).toBe(true)
+    expect(isNodeKindEnabled('host:node', [])).toBe(true)
+  })
+
+  test('keeps built-in plugin kinds enabled independently of project installs', async () => {
+    await loadPlugin({ id: 'pascal:core', apiVersion: 1, nodes: [makeDefinition('wall')] })
+
+    expect(isNodeKindEnabled('wall', [])).toBe(true)
   })
 
   test('handles plugin with no nodes', async () => {

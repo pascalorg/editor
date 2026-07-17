@@ -15,6 +15,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -380,7 +381,8 @@ export function armGroupMove3d(args: {
       cancel()
       return
     }
-    if (e.key !== 'Escape') return
+    // ⌘Z mid-move cancels like Escape — never a history jump under a live pointer.
+    if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
     e.preventDefault()
     e.stopPropagation()
     swallowNextClick()

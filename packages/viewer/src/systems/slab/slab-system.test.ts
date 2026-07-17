@@ -1,9 +1,11 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { SlabNode } from '@pascal-app/core'
+import { SlabNode, type SlabPolygonContext } from '@pascal-app/core'
 import type * as THREE from 'three'
 import { generateSlabGeometry } from './slab-system'
+
+const EMPTY_CONTEXT: SlabPolygonContext = { walls: [], siblingSlabs: [] }
 
 function hasVertexAt(geometry: THREE.BufferGeometry, x: number, z: number) {
   const positions = geometry.getAttribute('position')
@@ -35,7 +37,7 @@ describe('generateSlabGeometry', () => {
       ],
     })
 
-    const geometry = generateSlabGeometry(slab)
+    const geometry = generateSlabGeometry(slab, EMPTY_CONTEXT)
 
     expect((geometry.index?.count ?? 0) / 3).toBeGreaterThan(0)
     expect(hasVertexAt(geometry, 1, 1)).toBe(true)
@@ -61,7 +63,7 @@ describe('generateSlabGeometry', () => {
       ],
     })
 
-    const geometry = generateSlabGeometry(slab)
+    const geometry = generateSlabGeometry(slab, EMPTY_CONTEXT)
 
     expect((geometry.index?.count ?? 0) / 3).toBeGreaterThan(0)
     expect(hasVertexAt(geometry, 1, 1)).toBe(true)

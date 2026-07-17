@@ -1,3 +1,4 @@
+import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
 import useScene from '../../store/use-scene'
@@ -189,6 +190,25 @@ function markNodesOverlappingSlab(
   if (slab.polygon.length < 3) return
   const slabLevelId = resolveLevelId(slab, nodes)
 
+  // Walls follow the slab's RENDERED footprint (band-adopted edges reach
+  // the wall's outer face), so the dirty gate must test the same polygon
+  // `getSlabElevationForWall` will re-evaluate — a stored polygon that
+  // stops short of the wall body would otherwise never re-elevate it.
+  const levelWalls: WallNode[] = []
+  const siblingSlabs: SlabNode[] = []
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'wall' && resolveLevelId(node, nodes) === slabLevelId) {
+      levelWalls.push(node as WallNode)
+    } else if (
+      node.type === 'slab' &&
+      node.id !== slab.id &&
+      resolveLevelId(node, nodes) === slabLevelId
+    ) {
+      siblingSlabs.push(node as SlabNode)
+    }
+  }
+  const renderedPolygon = getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+
   for (const node of Object.values(nodes)) {
     if (node.type === 'wall') {
       const wall = node as WallNode
@@ -201,7 +221,7 @@ function markNodesOverlappingSlab(
             curveOffset: wall.curveOffset ?? 0,
             thickness: wall.thickness,
           },
-          slab.polygon,
+          renderedPolygon,
         )
       ) {
         markDirty(node.id)

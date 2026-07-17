@@ -56,6 +56,7 @@ import {
   type PaintHoverInfo,
   resolvePaintScopeTargets,
   slotDisplayLabel,
+  type WallPaintHit,
 } from '../../lib/paint-scope'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import {
@@ -288,6 +289,29 @@ function meshSlotRoles(node: AnyNode): string[] {
 }
 
 const roofSelectionWorldPoint = new Vector3()
+const wallPaintWorldPoint = new Vector3()
+
+function resolveWallPaintHit(event: NodeEvent): WallPaintHit | undefined {
+  const wall = event.node
+  if (wall.type !== 'wall') return undefined
+  const root = getRegisteredNodeObject(wall.id)
+  if (!root) return undefined
+
+  root.updateWorldMatrix(true, false)
+  wallPaintWorldPoint.set(...event.position)
+  const local = root.worldToLocal(wallPaintWorldPoint)
+  const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+
+  return {
+    face: local.z >= 0 ? 'front' : 'back',
+    point: [
+      wall.start[0] + local.x * cos - local.z * sin,
+      wall.start[1] + local.x * sin + local.z * cos,
+    ],
+  }
+}
 
 function resolveRoofSegmentSelectionTarget(event: NodeEvent): RoofSegmentNode | null {
   const roof = event.node
@@ -841,6 +865,7 @@ export const SelectionManager = () => {
         // (Shift) re-keys the interaction → the preview re-applies for the new
         // spread instead of being deduped to the single-surface preview.
         const scope = useEditor.getState().paintScope
+        const wallHit = resolveWallPaintHit(event)
         const scopeTargets =
           compatible && role
             ? resolvePaintScopeTargets({
@@ -850,10 +875,15 @@ export const SelectionManager = () => {
                 nodes: useScene.getState().nodes,
                 spaces: useEditor.getState().spaces,
                 slotRolesOf: () => slotRoles,
+                wallHit,
               })
             : []
+        const scopeTargetKey = scopeTargets
+          .map((target) => `${target.nodeId}:${target.role}`)
+          .sort()
+          .join(',')
         return {
-          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}:${scope}`,
+          key: `${node.type}:${node.id}:${role ?? 'unsupported'}:${eraser ? 'erase' : 'paint'}:${scope}:${scopeTargetKey}`,
           hoveredId: node.id as AnyNodeId,
           hoverMode: compatible ? 'paint-ready' : 'paint-disabled',
           paintHover:

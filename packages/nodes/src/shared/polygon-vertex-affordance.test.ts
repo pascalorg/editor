@@ -35,16 +35,18 @@ function polygonNode(
 function startDelete(
   node: PolygonTestNode,
   payload: unknown,
-  extraCommitData?: Partial<PolygonTestNode>,
+  boundaryCommitData?: Partial<PolygonTestNode>,
 ) {
   useScene.setState({ nodes: { [node.id]: node } } as never)
-  return createPolygonDeleteVertexAffordance<PolygonTestNode>('slab', { extraCommitData }).start({
-    node,
-    payload,
-    nodes: useScene.getState().nodes,
-    initialPlanPoint: [0, 0],
-    gridSnapStep: 0.5,
-  })
+  return createPolygonDeleteVertexAffordance<PolygonTestNode>('slab', { boundaryCommitData }).start(
+    {
+      node,
+      payload,
+      nodes: useScene.getState().nodes,
+      initialPlanPoint: [0, 0],
+      gridSnapStep: 0.5,
+    },
+  )
 }
 
 describe('polygon delete-vertex floorplan affordance', () => {

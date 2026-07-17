@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import type { AnyNode, ItemNode, SlabNode, Space } from '@pascal-app/core'
+import {
+  type AnyNode,
+  detectSpacesForLevel,
+  type ItemNode,
+  type SlabNode,
+  type Space,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   availablePaintScopes,
   cyclePaintScope,
@@ -7,6 +14,7 @@ import {
   type PaintScope,
   paintScopeLabel,
   resolvePaintScopeTargets,
+  type WallPaintHit,
 } from './paint-scope'
 
 describe('availablePaintScopes', () => {
@@ -76,8 +84,22 @@ function item(id: string, assetId: string): ItemNode {
 function slab(id: string, polygon: Array<[number, number]>): SlabNode {
   return { id, type: 'slab', polygon } as unknown as SlabNode
 }
-function wall(id: string, start: [number, number], end: [number, number]): AnyNode {
-  return { id, type: 'wall', start, end } as unknown as AnyNode
+function wall(
+  id: string,
+  start: [number, number],
+  end: [number, number],
+  levelId = 'l1',
+): WallNode {
+  return {
+    id,
+    type: 'wall',
+    parentId: levelId,
+    start,
+    end,
+    thickness: 0.2,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+  } as unknown as WallNode
 }
 function roof(): AnyNode {
   return { id: 'r', type: 'roof' } as unknown as AnyNode
@@ -99,6 +121,7 @@ function resolve(args: {
   nodes: AnyNode[]
   spaces?: Space[]
   slotRolesOf?: (node: AnyNode) => string[]
+  wallHit?: WallPaintHit
 }) {
   return resolvePaintScopeTargets({
     node: args.node,
@@ -107,7 +130,21 @@ function resolve(args: {
     nodes: asMap(args.nodes),
     spaces: Object.fromEntries((args.spaces ?? []).map((s) => [s.id, s])),
     slotRolesOf: args.slotRolesOf ?? noSlotRoles,
+    wallHit: args.wallHit,
   })
+}
+
+function adjacentRooms(levelId = 'l1') {
+  const walls = [
+    wall('bottom-left', [0, 0], [4, 0], levelId),
+    wall('bottom-right', [4, 0], [8, 0], levelId),
+    wall('right', [8, 0], [8, 4], levelId),
+    wall('top-right', [8, 4], [4, 4], levelId),
+    wall('top-left', [4, 4], [0, 4], levelId),
+    wall('left', [0, 4], [0, 0], levelId),
+    wall('shared', [4, 0], [4, 4], levelId),
+  ]
+  return { walls, spaces: detectSpacesForLevel(levelId, walls).spaces }
 }
 
 describe('resolvePaintScopeTargets', () => {
@@ -145,38 +182,134 @@ describe('resolvePaintScopeTargets', () => {
     ])
   })
 
-  it('wall room fans the same side across the walls bounding the room polygon', () => {
-    // A 4×4 room: each wall's endpoints are exact polygon vertices.
-    const w1 = wall('w1', [0, 0], [4, 0])
-    const w2 = wall('w2', [4, 0], [4, 4])
-    const w3 = wall('w3', [4, 4], [0, 4])
-    const w4 = wall('w4', [0, 4], [0, 0])
-    const wOut = wall('wOut', [10, 10], [14, 10]) // not on the room boundary
-    const space: Space = {
-      id: 's1',
-      levelId: 'l1',
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 4],
-        [0, 4],
-      ],
-      wallIds: [], // always empty in practice — membership is geometric
-      isExterior: false,
-    }
-    const result = resolve({
-      node: w1,
+  it('wall room selects the enclosed space on the clicked face of a shared wall', () => {
+    const { walls, spaces } = adjacentRooms()
+    const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
+
+    const leftRoom = resolve({
+      node: shared,
       role: 'interior',
       scope: 'room',
-      nodes: [w1, w2, w3, w4, wOut],
-      spaces: [space],
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'front', point: [3.9, 2] },
+    })
+    expect(keys(leftRoom).sort()).toEqual([
+      'bottom-left:interior',
+      'left:interior',
+      'shared:interior',
+      'top-left:interior',
+    ])
+
+    const rightRoom = resolve({
+      node: shared,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [4.1, 2] },
+    })
+    expect(keys(rightRoom).sort()).toEqual([
+      'bottom-right:interior',
+      'right:interior',
+      'shared:exterior',
+      'top-right:interior',
+    ])
+  })
+
+  it('wall room preserves the vertical band while mapping each boundary face side', () => {
+    const { walls, spaces } = adjacentRooms()
+    const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
+    const result = resolve({
+      node: shared,
+      role: 'lowerExterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [4.1, 2] },
     })
     expect(keys(result).sort()).toEqual([
-      'w1:interior',
-      'w2:interior',
-      'w3:interior',
-      'w4:interior',
+      'bottom-right:lowerInterior',
+      'right:lowerInterior',
+      'shared:lowerExterior',
+      'top-right:lowerInterior',
     ])
+  })
+
+  it('wall room maps a reversed boundary wall to its rendered side', () => {
+    const { walls } = adjacentRooms()
+    const topRight = walls.find((candidate) => String(candidate.id) === 'top-right')!
+    topRight.start = [4, 4]
+    topRight.end = [8, 4]
+    const spaces = detectSpacesForLevel('l1', walls).spaces
+    const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
+    const result = resolve({
+      node: shared,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [4.1, 2] },
+    })
+
+    expect(keys(result)).toContain('top-right:exterior')
+    expect(keys(result)).not.toContain('top-right:interior')
+  })
+
+  it('wall room excludes duplicate geometry and spaces from another level', () => {
+    const levelA = adjacentRooms('l1')
+    const levelB = adjacentRooms('l2')
+    const levelBWalls = levelB.walls.map((candidate) => ({
+      ...candidate,
+      id: `other-${candidate.id}`,
+    })) as unknown as WallNode[]
+    const otherSpaces = detectSpacesForLevel('l2', levelBWalls).spaces
+    const shared = levelA.walls.find((candidate) => String(candidate.id) === 'shared')!
+    const result = resolve({
+      node: shared,
+      role: 'interior',
+      scope: 'room',
+      nodes: [...levelA.walls, ...levelBWalls],
+      spaces: [...levelA.spaces, ...otherSpaces],
+      wallHit: { face: 'front', point: [3.9, 2] },
+    })
+    expect(keys(result).every((key) => !key.startsWith('other-'))).toBe(true)
+    expect(result).toHaveLength(4)
+  })
+
+  it('wall room uses the hit subsegment when one long wall bounds adjacent bays', () => {
+    const long = wall('long', [0, 0], [8, 0])
+    const walls = [
+      long,
+      wall('left', [0, 0], [0, -3]),
+      wall('left-bottom', [0, -3], [4, -3]),
+      wall('divider', [4, -3], [4, 0]),
+      wall('right-bottom', [4, -3], [8, -3]),
+      wall('right', [8, -3], [8, 0]),
+    ]
+    const spaces = detectSpacesForLevel('l1', walls).spaces
+
+    const leftBay = resolve({
+      node: long,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [2, -0.1] },
+    })
+    const rightBay = resolve({
+      node: long,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [6, -0.1] },
+    })
+
+    expect(keys(leftBay).some((key) => key.startsWith('left-bottom:'))).toBe(true)
+    expect(keys(leftBay).some((key) => key.startsWith('right-bottom:'))).toBe(false)
+    expect(keys(rightBay).some((key) => key.startsWith('right-bottom:'))).toBe(true)
+    expect(keys(rightBay).some((key) => key.startsWith('left-bottom:'))).toBe(false)
   })
 
   it('wall room with no enclosing space falls back to single', () => {
@@ -184,6 +317,97 @@ describe('resolvePaintScopeTargets', () => {
     expect(
       keys(resolve({ node: w1, role: 'interior', scope: 'room', nodes: [w1], spaces: [] })),
     ).toEqual(['w1:interior'])
+  })
+
+  it('wall room paints the connected exterior envelope from an exterior face', () => {
+    const walls = [
+      wall('bottom', [0, 0], [4, 0]),
+      wall('right', [4, 0], [4, 4]),
+      wall('top', [4, 4], [0, 4]),
+      wall('left', [0, 4], [0, 0]),
+    ]
+    const spaces = detectSpacesForLevel('l1', walls).spaces
+    expect(
+      keys(
+        resolve({
+          node: walls[0]!,
+          role: 'exterior',
+          scope: 'room',
+          nodes: walls,
+          spaces,
+          wallHit: { face: 'back', point: [2, -0.1] },
+        }),
+      ).sort(),
+    ).toEqual(['bottom:exterior', 'left:exterior', 'right:exterior', 'top:exterior'])
+  })
+
+  it('wall room does not cross to a disconnected exterior envelope', () => {
+    const first = [
+      wall('a-bottom', [0, 0], [4, 0]),
+      wall('a-right', [4, 0], [4, 4]),
+      wall('a-top', [4, 4], [0, 4]),
+      wall('a-left', [0, 4], [0, 0]),
+    ]
+    const second = [
+      wall('b-bottom', [10, 0], [14, 0]),
+      wall('b-right', [14, 0], [14, 4]),
+      wall('b-top', [14, 4], [10, 4]),
+      wall('b-left', [10, 4], [10, 0]),
+    ]
+    const walls = [...first, ...second]
+    const spaces = detectSpacesForLevel('l1', walls).spaces
+    const result = resolve({
+      node: first[0]!,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [2, -0.1] },
+    })
+
+    expect(result).toHaveLength(4)
+    expect(keys(result).every((key) => key.startsWith('a-'))).toBe(true)
+  })
+
+  it('wall room excludes shared interior walls from the exterior envelope', () => {
+    const { walls, spaces } = adjacentRooms()
+    const bottomLeft = walls.find((candidate) => String(candidate.id) === 'bottom-left')!
+    const result = resolve({
+      node: bottomLeft,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [2, -0.1] },
+    })
+
+    expect(result).toHaveLength(6)
+    expect(keys(result).some((key) => key.startsWith('shared:'))).toBe(false)
+  })
+
+  it('wall room follows an exterior wall that is logically split across rooms', () => {
+    const long = wall('long', [0, 0], [8, 0])
+    const walls = [
+      long,
+      wall('right', [8, 0], [8, 4]),
+      wall('top-right', [8, 4], [4, 4]),
+      wall('top-left', [4, 4], [0, 4]),
+      wall('left', [0, 4], [0, 0]),
+      wall('divider', [4, 0], [4, 4]),
+    ]
+    const spaces = detectSpacesForLevel('l1', walls).spaces
+    const result = resolve({
+      node: long,
+      role: 'exterior',
+      scope: 'room',
+      nodes: walls,
+      spaces,
+      wallHit: { face: 'back', point: [2, -0.1] },
+    })
+
+    expect(keys(result).filter((key) => key === 'long:exterior')).toHaveLength(1)
+    expect(keys(result).some((key) => key.startsWith('divider:'))).toBe(false)
+    expect(result).toHaveLength(5)
   })
 
   it('slab room fans across slabs whose centroid sits in the same space', () => {
@@ -215,6 +439,7 @@ describe('resolvePaintScopeTargets', () => {
         [0, 10],
       ],
       wallIds: [],
+      boundaryFaces: [],
       isExterior: false,
     }
     const result = resolve({

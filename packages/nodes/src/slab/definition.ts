@@ -21,7 +21,7 @@ import { SlabNode } from './schema'
 import { slabSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
-const MIN_SLAB_ELEVATION = 0.02
+const MIN_SLAB_ELEVATION = -1
 
 function polygonVertexAverage(polygon: SlabNodeType['polygon']): [number, number] {
   if (polygon.length === 0) return [0, 0]
@@ -92,10 +92,10 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
 }
 
 // Slab height arrow — vertical chevron on solid slab surface near the
-// polygon center. Drags elevation (the extrusion thickness) with
-// `anchor: 'min'` so the bottom stays at world Y=0 and the top follows
-// the pointer. Same registry-handle pipeline as the column height arrow,
-// so live override + commit-on-release come for free.
+// polygon center. Drags elevation through zero: positive values extrude
+// upward from ground while negative values create a recessed floor whose
+// depth follows the pointer. Same registry-handle pipeline as the column
+// height arrow, so live override + commit-on-release come for free.
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
@@ -201,6 +201,15 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   // Stage B: pure geometry function.
   geometry: buildSlabGeometry,
+  // Dependency tracker only — dirties level slabs when walls / sibling
+  // slabs change, since the renderable polygon derives from level context.
+  system: {
+    module: () => import('./system'),
+    priority: 4,
+  },
+  // The fill reads walls + sibling slabs via ctx (per-edge render offsets),
+  // so committed sibling edits must invalidate the cached floor-plan entry.
+  floorplanDependsOnSiblings: true,
   // Stage C: floor-plan rendering. Legacy `slabPolygons` short-circuits
   // to [] when slab is registered (see floorplan-panel.tsx).
   floorplan: buildSlabFloorplan,

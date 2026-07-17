@@ -46,7 +46,7 @@ A key rule: **`packages/viewer` must never import from `apps/editor`**. The view
 
 ### Building a plugin
 
-New node kinds and sidebar panels can ship as a plugin instead of editing the built-ins. Read [`wiki/architecture/plugin-authoring.md`](wiki/architecture/plugin-authoring.md) for the contract, and copy [`packages/plugin-trees`](packages/plugin-trees) as a worked example.
+New node kinds and sidebar panels can ship as a plugin instead of editing the built-ins. Read [Create a plugin](https://editor.pascal.app/docs/developers/plugins) for the contract, and clone [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees) as a worked example.
 
 ## Submitting a PR
 

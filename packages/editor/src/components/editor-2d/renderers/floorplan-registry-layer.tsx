@@ -11,6 +11,7 @@ import {
   type FloorplanPalette,
   type FloorplanPoint,
   type GeometryContext,
+  isNodeKindEnabled,
   isRegistryMovable,
   kindsWithFloorplanScope,
   type LiveNodeOverrides,
@@ -132,6 +133,12 @@ type ActiveDrag = {
   session: FloorplanAffordanceSession
   snapshots: NodeSnapshot[]
   historyPaused: boolean
+  /**
+   * Last plan point handed to `session.apply` (the grab point until the first
+   * move). Lets the modifier-key listeners re-run the session immediately on
+   * an Alt/Shift flip instead of waiting for the next pointer move.
+   */
+  lastPlanPoint: FloorplanPoint
   /**
    * Set only for rotate-arrow drags (handles that carry a `pivot`). Drives
    * the live angle wedge + degree readout — the 2D twin of the 3D rotate
@@ -344,6 +351,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
+  const installedPlugins = useScene((s) => s.installedPlugins)
   const movingNode = useMovingNode()
   // When a building is being moved, its explicit selection may be
   // cleared as part of the move handoff. Fall back to the
@@ -813,6 +821,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     const collectLevelDataKind = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
+      if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const def = nodeRegistry.get(node.type)
       if (def?.computeFloorplanLevelData) {
         const ids = levelNodeIdsByType.get(node.type)
@@ -828,6 +837,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     collectLevelDataKind(levelId as AnyNodeId)
 
     const pushEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
+      if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
       if (node.type === 'measurement' && !showMeasurements) return
@@ -897,7 +907,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [levelId, nodes, showMeasurements])
+  }, [installedPlugins, levelId, nodes, showMeasurements])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //
@@ -1014,6 +1024,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         session,
         snapshots,
         historyPaused: true,
+        lastPlanPoint: initialPlanPoint,
         rotation,
         reshapeScopeNodeId: reshapeScope ? nodeId : undefined,
       }
@@ -1070,6 +1081,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const planPoint = clientToPlan(event.clientX, event.clientY)
       if (!planPoint) return
 
+      drag.lastPlanPoint = planPoint
       drag.session.apply({
         planPoint,
         modifiers: {
@@ -1194,9 +1206,37 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       cancelActiveDrag(event.pointerId)
     }
 
+    // Re-run the active session the moment a modifier key flips so behaviors
+    // like the wall endpoint's Alt-detach / re-attach take effect immediately
+    // instead of waiting for the next pointer move. `event.altKey` & co
+    // already reflect the post-transition state on both keydown and keyup.
+    const onModifierKeyChange = (event: KeyboardEvent) => {
+      const drag = dragRef.current
+      if (!drag || event.repeat) return
+      if (
+        event.key !== 'Alt' &&
+        event.key !== 'Shift' &&
+        event.key !== 'Control' &&
+        event.key !== 'Meta'
+      ) {
+        return
+      }
+      drag.session.apply({
+        planPoint: drag.lastPlanPoint,
+        modifiers: {
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+        },
+      })
+    }
+
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerCancel)
+    window.addEventListener('keydown', onModifierKeyChange)
+    window.addEventListener('keyup', onModifierKeyChange)
     const unsubscribeToolCancel = subscribeFloorplanAffordanceToolCancel(
       () => cancelActiveDrag(),
       markToolCancelConsumed,
@@ -1205,6 +1245,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
+      window.removeEventListener('keydown', onModifierKeyChange)
+      window.removeEventListener('keyup', onModifierKeyChange)
       unsubscribeToolCancel()
       if (!cancelActiveDrag(undefined, false)) {
         clearSurfacePlanSnapFeedback()
@@ -3178,14 +3220,17 @@ const ROTATION_WEDGE_SEGMENTS = 48
  * is in plan coords; the chip counter-rotates `sceneRotationDeg` so it reads
  * horizontally regardless of the building's on-screen orientation.
  */
-function RotationAngleOverlay({
+export function RotationAngleOverlay({
   overlay,
   palette,
   unitsPerPixel,
   sceneRotationDeg,
 }: {
   overlay: RotationOverlayState
-  palette: FloorplanPalette
+  palette: Pick<
+    FloorplanPalette,
+    'measurementLabelBackground' | 'measurementLabelText' | 'measurementStroke'
+  >
   unitsPerPixel: number
   sceneRotationDeg: number
 }): React.ReactElement {

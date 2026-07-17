@@ -1,11 +1,12 @@
 import { type AnyNode, resolveLevelId, type SlabNode } from '@pascal-app/core'
-import { resolveSlabPlanPointSnap } from '@pascal-app/editor'
+import { resolveSlabEdgeBandSnap, resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
   createPolygonDeleteVertexAffordance,
   createPolygonMoveEdgeAffordance,
   createPolygonVertexAffordance,
   type PolygonAffordanceSnapContext,
+  type PolygonEdgeSnapContext,
 } from '../shared/polygon-vertex-affordance'
 
 /**
@@ -24,13 +25,19 @@ import {
  * Simpler model, no UX downside in practice.
  */
 const slabSnapOptions = {
-  extraCommitData: { autoFromWalls: false },
+  boundaryCommitData: { autoFromWalls: false },
   resolvePlanPoint({
     node,
     nodes,
     rawPoint,
     fallbackPoint,
+    mode,
   }: PolygonAffordanceSnapContext<SlabNode>) {
+    // Edge drags snap the EDGE, not the cursor (`snapEdge` below): a
+    // cursor-based wall snap here would bake the pointer's grab offset
+    // from the edge line into the commit — the beacon shows a snap on
+    // the wall while the released edge stops short by that offset.
+    if (mode === 'move-edge') return fallbackPoint
     const sceneNodes = nodes as Record<string, AnyNode>
     return resolveSlabPlanPointSnap({
       rawPoint,
@@ -41,6 +48,17 @@ const slabSnapOptions = {
       // Magnetic wall-snap/alignment gates on `isMagneticSnapActive()` (the
       // `lines` mode), so no Shift or Alt snap bypass.
     }).point
+  },
+  snapEdge({ node, nodes, edge, rawPoint }: PolygonEdgeSnapContext<SlabNode>) {
+    const sceneNodes = nodes as Record<string, AnyNode>
+    return (
+      resolveSlabEdgeBandSnap({
+        edge,
+        levelId: resolveLevelId(node, sceneNodes),
+        nodes: sceneNodes,
+        referencePoint: rawPoint,
+      })?.edge ?? null
+    )
   },
 }
 

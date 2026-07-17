@@ -22,12 +22,24 @@ import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
 
+export type SpaceBoundaryFace = {
+  wallId: WallNode['id']
+  face: 'front' | 'back'
+  points: Array<[number, number]>
+}
+
 export type Space = {
   id: string
   levelId: string
   polygon: Array<[number, number]>
   wallIds: Array<WallNode['id']>
+  boundaryFaces: SpaceBoundaryFace[]
   isExterior: boolean
+}
+
+type ExtractedRoom = {
+  polygon: Point2D[]
+  boundaryFaces: SpaceBoundaryFace[]
 }
 
 type WallSideUpdate = {
@@ -74,6 +86,13 @@ const WALL_ROOM_BOUNDARY_TOLERANCE = 0.08
 // A wall endpoint within this distance of another wall's interior is treated as a
 // T-junction and splits that wall (see `splitStraightWallAtVertices`).
 const WALL_JUNCTION_TOLERANCE = 0.08
+// An unmatched auto slab/ceiling whose polygon is still substantially covered
+// by a detected room was absorbed by a room merge — the surviving auto surface
+// owns that area, so keeping it would z-fight and it is deleted. Below this
+// coverage the room genuinely ceased to exist (e.g. an enclosing wall was
+// deleted) and the node is demoted to manual so user data survives.
+const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
+const COVERAGE_SAMPLE_STEPS = 12
 
 export type AutoCeilingPlanningContext = {
   walls?: WallNode[]
@@ -205,6 +224,49 @@ function bboxOverlapArea(a: ReturnType<typeof bboxOf>, b: ReturnType<typeof bbox
   const ix = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX))
   const iy = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY))
   return ix * iy
+}
+
+// Fraction of `subject`'s area lying inside any of `covers`, estimated by
+// sampling a grid of cell centers over the subject's bbox. Cheap and robust
+// enough for the merge-vs-demote decision; exact polygon clipping would be a
+// heavy dependency for a 60% threshold.
+function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
+  if (subject.length < 3 || covers.length === 0) return 0
+
+  const bbox = bboxOf(subject)
+  const width = bbox.maxX - bbox.minX
+  const height = bbox.maxY - bbox.minY
+
+  let inside = 0
+  let covered = 0
+  for (let i = 0; i < COVERAGE_SAMPLE_STEPS; i += 1) {
+    for (let j = 0; j < COVERAGE_SAMPLE_STEPS; j += 1) {
+      const point = {
+        x: bbox.minX + ((i + 0.5) / COVERAGE_SAMPLE_STEPS) * width,
+        y: bbox.minY + ((j + 0.5) / COVERAGE_SAMPLE_STEPS) * height,
+      }
+      if (!pointInPolygon(point, subject)) continue
+      inside += 1
+      if (pointInAnyPolygon(point, covers)) covered += 1
+    }
+  }
+
+  if (inside === 0) {
+    return pointInAnyPolygon(polygonCentroid(subject), covers) ? 1 : 0
+  }
+
+  return covered / inside
+}
+
+// Demoted auto surfaces keep their polygon untouched, so a re-closed room
+// usually hits the exact-signature manual check. Coverage handles the rest:
+// a room split across multiple manual surfaces AND a single manual surface
+// spanning multiple rooms both suppress a replacement auto surface — what
+// matters is that the ROOM is already substantially covered, not that any
+// one manual surface belongs to it (a per-surface "mostly inside the room"
+// filter dropped multi-room slabs and resurrected deleted auto slabs).
+function matchesManualFootprint(roomPolygon: Point2D[], manualPolygons: Point2D[][]) {
+  return polygonCoverageRatio(roomPolygon, manualPolygons) >= ORPHAN_MERGE_COVERAGE_THRESHOLD
 }
 
 function pointDistanceToPolygonBoundary(point: Point2D, polygon: Point2D[]) {
@@ -416,12 +478,7 @@ function splitStraightWallAtVertices(start: Point2D, end: Point2D, vertices: Poi
   return ordered
 }
 
-type RoomFace = {
-  polygon: Point2D[]
-  wallIds: Array<WallNode['id']>
-}
-
-function extractRoomFaces(walls: WallNode[]): RoomFace[] {
+function extractRooms(walls: WallNode[]): ExtractedRoom[] {
   if (walls.length < 3) return []
 
   type HalfEdge = {
@@ -432,6 +489,7 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
     angle: number
     points: Point2D[]
     wallId: WallNode['id']
+    face: 'front' | 'back'
   }
   type Node = { point: Point2D; outgoing: string[] }
 
@@ -498,6 +556,7 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
         angle: Math.atan2(points[1]!.y - from.y, points[1]!.x - from.x),
         points,
         wallId: wall.id,
+        face: 'front',
       })
       halfEdges.set(reverseId, {
         id: reverseId,
@@ -507,6 +566,7 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
         angle: Math.atan2(reversePoints[1]!.y - to.y, reversePoints[1]!.x - to.x),
         points: reversePoints,
         wallId: wall.id,
+        face: 'back',
       })
 
       graph.get(fromKey)?.outgoing.push(forwardId)
@@ -535,10 +595,45 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
     return outgoing[nextIdx] ?? null
   }
 
+  const splitIntoSimpleCycles = (walkEdgeIds: string[]) => {
+    const cycles: string[][] = []
+    const firstEdge = halfEdges.get(walkEdgeIds[0] ?? '')
+    if (!firstEdge) return cycles
+
+    const pathEdges: string[] = []
+    const pathVertices = [firstEdge.fromKey]
+    const vertexIndex = new Map([[firstEdge.fromKey, 0]])
+
+    for (const edgeId of walkEdgeIds) {
+      const edge = halfEdges.get(edgeId)
+      if (!edge || edge.fromKey !== pathVertices[pathVertices.length - 1]) return []
+
+      pathEdges.push(edgeId)
+      const repeatedIndex = vertexIndex.get(edge.toKey)
+      if (repeatedIndex === undefined) {
+        pathVertices.push(edge.toKey)
+        vertexIndex.set(edge.toKey, pathVertices.length - 1)
+        continue
+      }
+
+      const cycle = pathEdges.slice(repeatedIndex)
+      if (cycle.length >= 3) cycles.push(cycle)
+
+      for (let index = repeatedIndex + 1; index < pathVertices.length; index += 1) {
+        vertexIndex.delete(pathVertices[index]!)
+      }
+      pathVertices.length = repeatedIndex + 1
+      pathEdges.length = repeatedIndex
+    }
+
+    return pathEdges.length === 0 && pathVertices.length === 1 ? cycles : []
+  }
+
   const visitedDirected = new Set<string>()
-  const faces: RoomFace[] = []
-  // A single face cannot revisit a half-edge, so the half-edge count bounds the
-  // longest possible cycle. Splitting at junctions can multiply edges per wall.
+  const rooms: ExtractedRoom[] = []
+  // A face walk cannot revisit a half-edge, so the half-edge count bounds its
+  // length. It can revisit a vertex when dangling walls or other graph bridges
+  // are traced out and back; those excursions are removed below.
   const maxSteps = Math.min(2000, halfEdges.size + 10)
 
   for (const edgeId of halfEdges.keys()) {
@@ -547,6 +642,7 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
     const cycleEdgeIds: string[] = []
     let currentEdgeId = edgeId
     let valid = true
+    let closed = false
 
     for (let step = 0; step < maxSteps; step += 1) {
       const currentEdge = halfEdges.get(currentEdgeId)
@@ -565,39 +661,54 @@ function extractRoomFaces(walls: WallNode[]): RoomFace[] {
       }
 
       currentEdgeId = next
-      if (currentEdgeId === edgeId) break
+      if (currentEdgeId === edgeId) {
+        closed = true
+        break
+      }
     }
 
-    if (!valid || cycleEdgeIds.length < 3) continue
+    if (!(valid && closed) || cycleEdgeIds.length < 3) continue
 
-    const polygon = dedupeSequentialPoints(
-      cycleEdgeIds.flatMap((id, index) => {
-        const points = halfEdges.get(id)?.points ?? []
-        return index === cycleEdgeIds.length - 1 ? points : points.slice(0, -1)
-      }),
-    )
+    for (const simpleCycleEdgeIds of splitIntoSimpleCycles(cycleEdgeIds)) {
+      const polygon = dedupeSequentialPoints(
+        simpleCycleEdgeIds.flatMap((id, index) => {
+          const points = halfEdges.get(id)?.points ?? []
+          return index === simpleCycleEdgeIds.length - 1 ? points : points.slice(0, -1)
+        }),
+      )
 
-    if (polygon.length < 3) continue
+      if (polygon.length < 3) continue
 
-    const signedArea = polygonArea(polygon)
-    if (signedArea <= 0) continue
-    if (signedArea < 0.5 || signedArea > 10_000) continue
+      const signedArea = polygonArea(polygon)
+      if (signedArea <= 0) continue
+      if (signedArea < 0.5 || signedArea > 10_000) continue
 
-    const signature = polygonSignature(polygon)
-    if (faces.some((face) => polygonSignature(face.polygon) === signature)) continue
+      const signature = polygonSignature(polygon)
+      if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue
 
-    faces.push({
-      polygon,
-      wallIds: [...new Set(cycleEdgeIds.flatMap((id) => halfEdges.get(id)?.wallId ?? []))],
-    })
+      rooms.push({
+        polygon,
+        boundaryFaces: simpleCycleEdgeIds.flatMap((id) => {
+          const edge = halfEdges.get(id)
+          if (!edge) return []
+          return [
+            {
+              wallId: edge.wallId,
+              face: edge.face,
+              points: edge.points.map(pointToTuple),
+            },
+          ]
+        }),
+      })
+    }
   }
 
-  faces.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))
-  return faces
+  rooms.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))
+  return rooms
 }
 
 function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
-  return extractRoomFaces(walls).map((face) => face.polygon)
+  return extractRooms(walls).map((room) => room.polygon)
 }
 
 /**
@@ -752,13 +863,14 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
   return snapshots
 }
 
-function buildSpace(levelId: string, face: RoomFace): Space {
-  const signature = polygonSignature(face.polygon)
+function buildSpace(levelId: string, room: ExtractedRoom): Space {
+  const signature = polygonSignature(room.polygon)
   return {
     id: `space-${levelId}-${signature.slice(0, 12)}`,
     levelId,
-    polygon: face.polygon.map(pointToTuple),
-    wallIds: face.wallIds,
+    polygon: room.polygon.map(pointToTuple),
+    wallIds: [...new Set(room.boundaryFaces.map((boundary) => boundary.wallId))],
+    boundaryFaces: room.boundaryFaces,
     isExterior: false,
   }
 }
@@ -811,10 +923,13 @@ export function resolveAutoZonePolygon(
       : []
   })
   if (walls.length !== zone.boundaryWallIds.length) return zone.polygon
-  const face = extractRoomFaces(walls).find((candidate) =>
-    sameStringSet(candidate.wallIds, zone.boundaryWallIds),
+  const room = extractRooms(walls).find((candidate) =>
+    sameStringSet(
+      [...new Set(candidate.boundaryFaces.map((boundary) => boundary.wallId))],
+      zone.boundaryWallIds,
+    ),
   )
-  return face ? face.polygon.map(pointToTuple) : zone.polygon
+  return room ? room.polygon.map(pointToTuple) : zone.polygon
 }
 
 export function planAutoSlabsForLevel(
@@ -825,8 +940,9 @@ export function planAutoSlabsForLevel(
   const manualSignatures = new Set(
     manualSlabs.map((slab) => polygonSignature(slab.polygon.map(pointFromTuple))),
   )
+  const manualPolygons = manualSlabs.map((slab) => slab.polygon.map(pointFromTuple))
 
-  const detected: DetectedRoom[] = roomPolygons
+  const detectedAll: DetectedRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -843,7 +959,10 @@ export function planAutoSlabsForLevel(
       area: Math.abs(polygonArea(room.poly)),
       bbox: bboxOf(room.poly),
     }))
-    .filter(({ sig }) => !manualSignatures.has(sig))
+
+  const detected = detectedAll.filter(
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+  )
 
   const existingAuto = existingSlabs.filter((slab) => slab.autoFromWalls)
   const existingAutoMeta = existingAuto.map((slab) => {
@@ -912,18 +1031,33 @@ export function planAutoSlabsForLevel(
     updatesById.set(bestMatch.entry.slab.id, room.poly.map(pointToTuple))
   }
 
-  const slabsToDelete = existingAuto
-    .filter((slab) => !updatesById.has(slab.id))
-    .map((slab) => slab.id)
+  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
+  const slabsToDelete: Array<SlabNodeType['id']> = []
+  const slabDemotions: AutoSlabSyncPlan['update'] = []
+  for (const slab of existingAuto) {
+    if (updatesById.has(slab.id)) continue
 
-  const slabsToUpdate = existingAuto
-    .filter((slab) => updatesById.has(slab.id))
-    .flatMap((slab) => {
-      const polygon = updatesById.get(slab.id)
-      if (!polygon) return []
+    const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
+    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
+      slabsToDelete.push(slab.id)
+    } else {
+      // Render offsets derive from level context at geometry build time, so
+      // demotion leaves the stored polygon untouched (same as ceilings).
+      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
+    }
+  }
 
-      return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
-    })
+  const slabsToUpdate = [
+    ...existingAuto
+      .filter((slab) => updatesById.has(slab.id))
+      .flatMap((slab) => {
+        const polygon = updatesById.get(slab.id)
+        if (!polygon) return []
+
+        return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
+      }),
+    ...slabDemotions,
+  ]
 
   const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
   const slabsToCreate: SlabNodeType[] = []
@@ -1009,8 +1143,9 @@ export function planAutoCeilingsForLevel(
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
   )
+  const manualPolygons = manualCeilings.map((ceiling) => ceiling.polygon.map(pointFromTuple))
 
-  const detected: DetectedCeilingRoom[] = roomPolygons
+  const detectedAll: DetectedCeilingRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -1028,7 +1163,10 @@ export function planAutoCeilingsForLevel(
       bbox: bboxOf(room.poly),
       ceilingHeight: resolveAutoCeilingHeight(room.poly, context),
     }))
-    .filter(({ sig }) => !manualSignatures.has(sig))
+
+  const detected = detectedAll.filter(
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+  )
 
   const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
   const existingAutoMeta = existingAuto.map((ceiling) => {
@@ -1103,29 +1241,42 @@ export function planAutoCeilingsForLevel(
     })
   }
 
-  const ceilingsToDelete = existingAuto
-    .filter((ceiling) => !updatesById.has(ceiling.id))
-    .map((ceiling) => ceiling.id)
+  const detectedRoomPolygons = detectedAll.map((room) => room.poly)
+  const ceilingsToDelete: Array<CeilingNodeType['id']> = []
+  const ceilingDemotions: AutoCeilingSyncPlan['update'] = []
+  for (const ceiling of existingAuto) {
+    if (updatesById.has(ceiling.id)) continue
 
-  const ceilingsToUpdate = existingAuto
-    .filter((ceiling) => updatesById.has(ceiling.id))
-    .flatMap((ceiling) => {
-      const update = updatesById.get(ceiling.id)
-      if (!update) return []
+    const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
+    if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
+      ceilingsToDelete.push(ceiling.id)
+    } else {
+      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
+    }
+  }
 
-      const data: Partial<CeilingNodeType> = {}
-      if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
-        data.polygon = update.polygon
-      }
-      if (
-        Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
-        CEILING_HEIGHT_EPSILON
-      ) {
-        data.height = update.height
-      }
+  const ceilingsToUpdate = [
+    ...existingAuto
+      .filter((ceiling) => updatesById.has(ceiling.id))
+      .flatMap((ceiling) => {
+        const update = updatesById.get(ceiling.id)
+        if (!update) return []
 
-      return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
-    })
+        const data: Partial<CeilingNodeType> = {}
+        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
+          data.polygon = update.polygon
+        }
+        if (
+          Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
+          CEILING_HEIGHT_EPSILON
+        ) {
+          data.height = update.height
+        }
+
+        return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
+      }),
+    ...ceilingDemotions,
+  ]
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
   const ceilingsToCreate: CeilingNodeType[] = []
@@ -1179,8 +1330,8 @@ function syncAutoCeilingsForLevel(
 }
 
 function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
-  const roomFaces = extractRoomFaces(walls)
-  const roomPolygons = roomFaces.map((face) => face.polygon)
+  const rooms = extractRooms(walls)
+  const roomPolygons = rooms.map((room) => room.polygon)
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
     ...(resolveWallSurfaceSides(wall, roomPolygons) satisfies Pick<
@@ -1191,7 +1342,7 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
 
   return {
     roomPolygons,
-    spaces: roomFaces.map((face) => buildSpace(levelId, face)),
+    spaces: rooms.map((room) => buildSpace(levelId, room)),
     wallUpdates,
   }
 }
@@ -1298,7 +1449,11 @@ export function isSpaceDetectionPaused(): boolean {
 }
 
 export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () => void {
-  const previousSnapshots = new Map<string, string>()
+  // Baseline from whatever is already in the store. Detection reacts to wall
+  // edits made IN-SESSION (create / move / delete); it must not re-litigate a
+  // scene that merely loaded — rerunning on hydration resurrected auto slabs
+  // the user had deleted in an earlier session.
+  const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
   let isProcessing = false
 
   const unsubscribe = sceneStore.subscribe((state: any) => {
@@ -1321,7 +1476,13 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
 
     const levelsToUpdate = new Set<string>()
     for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
-      if ((previousSnapshots.get(levelId) ?? '') !== (currentSnapshots.get(levelId) ?? '')) {
+      // First sight of a level is a hydration baseline, not a wall edit —
+      // `setScene` delivers a loaded scene as one atomic update, and a level's
+      // first wall can't close a room anyway. Record it (below) and only
+      // react to subsequent changes.
+      const previous = previousSnapshots.get(levelId)
+      if (previous === undefined) continue
+      if (previous !== (currentSnapshots.get(levelId) ?? '')) {
         levelsToUpdate.add(levelId)
       }
     }

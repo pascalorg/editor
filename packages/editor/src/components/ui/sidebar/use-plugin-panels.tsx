@@ -1,12 +1,28 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { type IconRef } from '@pascal-app/core'
-import { type ComponentType, lazy, type ReactNode, Suspense, useSyncExternalStore } from 'react'
+import { type IconRef, useScene } from '@pascal-app/core'
+import { Plus } from 'lucide-react'
+import {
+  type ComponentType,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useSyncExternalStore,
+} from 'react'
 import useEditor from '../../../store/use-editor'
 import { editorHostPanelRegistry, type EditorHostPanel } from '../../../lib/plugin-panels'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
+import { PluginsPanel } from './panels/plugins-panel'
+
+const pluginsManagerPanel: ExtraPanel = {
+  id: 'plugins',
+  label: 'Plugins',
+  icon: <Plus className="h-5 w-5" />,
+  component: PluginsPanel,
+}
 
 /** Resolve a plugin's {@link IconRef} into a rail-sized React node. Mirrors the
  * inspector's `renderIcon`, sized for the 24px icon-rail button. */
@@ -83,16 +99,34 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
     editorHostPanelRegistry.getSnapshot,
   )
   const workspaceMode = useEditor((s) => s.workspaceMode)
+  const installedPlugins = useScene((s) => s.installedPlugins)
   const hostIds = new Set(hostPanels?.map((p) => p.id))
+
+  useEffect(() => {
+    const scene = useScene.getState()
+    if (scene.hasExplicitPluginInstallState) return
+    const defaults = editorHostPanelRegistry.getDefaultInstalledPluginIds()
+    if (defaults.every((pluginId) => scene.installedPlugins.includes(pluginId))) return
+    scene.setInstalledPlugins([...scene.installedPlugins, ...defaults], { explicit: false })
+  }, [registered])
+
   const fromRegistry = registered
-    .filter((p) => !hostIds.has(p.id) && (p.workspaces ?? ['edit']).includes(workspaceMode))
+    .filter(
+      (p) =>
+        !hostIds.has(p.id) &&
+        (p.workspaces ?? ['edit']).includes(workspaceMode) &&
+        (!p.pluginId || installedPlugins.includes(p.pluginId)),
+    )
     .map(
       (p): ExtraPanel => ({
         id: p.id,
         label: p.label,
         icon: renderIconRef(p.icon),
         component: resolvePanelComponent(p),
+        pluginId: p.pluginId,
       }),
     )
-  return [...(hostPanels ?? []), ...fromRegistry]
+  const manager =
+    workspaceMode === 'edit' && !hostIds.has(pluginsManagerPanel.id) ? [pluginsManagerPanel] : []
+  return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }

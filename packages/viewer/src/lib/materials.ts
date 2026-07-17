@@ -15,7 +15,7 @@ import { float, mix, positionViewDirection, transformedNormalView } from 'three/
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
-import { isKtx2Url, ktx2Loader } from './ktx2-loader'
+import { isKtx2Url, ktx2Loader, whenKtx2Ready } from './ktx2-loader'
 import { getSceneTheme } from './scene-themes'
 
 export type RenderShading = 'solid' | 'rendered'
@@ -308,8 +308,17 @@ async function loadPresetTexture(
   const existingPromise = textureLoadPromises.get(cacheKey)
   if (existingPromise) return existingPromise
 
-  const promise = pickTextureLoader(resolvedPath)
-    .loadAsync(resolvedPath)
+  // `.ktx2` loads wait for `detectSupport` (KTX2Loader.load throws before it) —
+  // materials can be created while a capture canvas's renderer is still
+  // initializing, and failing here would cache the material permanently
+  // texture-less (white).
+  const load = isKtx2Url(resolvedPath)
+    ? whenKtx2Ready().then(() =>
+        (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(resolvedPath),
+      )
+    : textureLoader.loadAsync(resolvedPath)
+
+  const promise = load
     .then((texture) => {
       applyTextureProperties(texture, props, slot)
       setTextureCacheKey(texture, cacheKey)

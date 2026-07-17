@@ -259,6 +259,53 @@ function nearestCandidate(
   return best
 }
 
+// Tolerance for "the committed endpoint actually lies on existing wall
+// geometry". Commit-time resolution (corner join, connect snap, split) puts
+// the endpoint exactly on the geometry, so this only needs to absorb float
+// drift — it is NOT a snap radius.
+export const WALL_CHAIN_JOIN_TOLERANCE = 1e-3
+
+/**
+ * True when a committed chain segment's resolved `end` lies on wall geometry
+ * (an endpoint, or a straight wall's interior) of a wall outside the current
+ * draft chain. The wall tools stop chaining there: a segment that tees into
+ * the existing network is a termination — continuing would draft the next
+ * segment on top of existing walls. `chainWallIds` excludes the chain's own
+ * segments (including the just-committed one) so edge/midpoint snaps onto a
+ * previous own segment don't read as a join. Curved wall interiors are
+ * skipped (their endpoints still count) — resolving an end onto a curve body
+ * is rare and continuing there matches the previous behaviour.
+ */
+export function chainEndJoinsExistingWall(
+  end: WallPlanPoint,
+  walls: WallNode[],
+  chainWallIds: string[],
+  tolerance = WALL_CHAIN_JOIN_TOLERANCE,
+): boolean {
+  const ignored = new Set(chainWallIds)
+  const toleranceSquared = tolerance * tolerance
+
+  for (const wall of walls) {
+    if (ignored.has(wall.id)) continue
+
+    if (
+      distanceSquared(end, wall.start) <= toleranceSquared ||
+      distanceSquared(end, wall.end) <= toleranceSquared
+    ) {
+      return true
+    }
+
+    if (isCurvedWall(wall)) continue
+
+    const projected = projectPointOntoWall(end, wall)
+    if (projected && distanceSquared(end, projected) <= toleranceSquared) {
+      return true
+    }
+  }
+
+  return false
+}
+
 /**
  * Discrete "special point" snap from the raw cursor, in priority order:
  *   1. corners (endpoints) — strongest intent, largest radius

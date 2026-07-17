@@ -135,6 +135,7 @@ describe('floorplan affordance cancellation', () => {
       session,
       snapshots,
       historyPaused: true,
+      lastPlanPoint: [0, 0] as [number, number],
     }
     const dragRef = { current: drag }
     const restoreSnapshots = mock(() => {})

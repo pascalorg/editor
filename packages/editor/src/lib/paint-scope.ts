@@ -6,7 +6,7 @@ import {
   type MaterialSchema,
   nodeRegistry,
   pointInPolygon2D,
-  pointOnSegment,
+  resolveLevelId,
   type SceneMaterial,
   type SceneMaterialId,
   type SlabNode,
@@ -104,47 +104,185 @@ export function slotDisplayLabel(node: AnyNode, role: string): string {
 
 type SlotsNode = AnyNode & { slots?: Record<string, string> }
 
-// Room polygons are built from wall *centerline* endpoints (see
-// `extractRoomPolygons`), so a wall's `start`/`end` are exact polygon vertices —
-// a small tolerance only absorbs float round-trips. `Space.wallIds` is always
-// empty, so room membership is resolved geometrically here instead.
-const WALL_ON_BOUNDARY_TOLERANCE = 0.05
-
-function pointOnPolygonBoundary(
-  point: readonly [number, number],
-  polygon: ReadonlyArray<readonly [number, number]>,
-  tolerance: number,
-): boolean {
-  for (let i = 0; i < polygon.length; i += 1) {
-    const a = polygon[i]
-    const b = polygon[(i + 1) % polygon.length]
-    if (
-      a &&
-      b &&
-      pointOnSegment(
-        point as [number, number],
-        a as [number, number],
-        b as [number, number],
-        tolerance,
-      )
-    ) {
-      return true
-    }
-  }
-  return false
+export type WallPaintHit = {
+  face: 'front' | 'back'
+  point: [number, number]
 }
 
-// A wall bounds a room when both its endpoints lie on the room polygon's
-// boundary (a shared wall lies on two rooms' boundaries; a wall radiating out of
-// a corner has only one endpoint on it and is correctly excluded).
-function wallBoundsRoom(
-  wall: WallNode,
-  polygon: ReadonlyArray<readonly [number, number]>,
-): boolean {
-  return (
-    pointOnPolygonBoundary(wall.start, polygon, WALL_ON_BOUNDARY_TOLERANCE) &&
-    pointOnPolygonBoundary(wall.end, polygon, WALL_ON_BOUNDARY_TOLERANCE)
+type WallBoundaryFace = Space['boundaryFaces'][number]
+
+function distanceToSegment(
+  point: readonly [number, number],
+  start: readonly [number, number],
+  end: readonly [number, number],
+): number {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared < 1e-12) return Math.hypot(point[0] - start[0], point[1] - start[1])
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSquared),
   )
+  return Math.hypot(point[0] - (start[0] + dx * t), point[1] - (start[1] + dz * t))
+}
+
+function distanceToPolyline(
+  point: readonly [number, number],
+  points: ReadonlyArray<readonly [number, number]>,
+): number {
+  let distance = Number.POSITIVE_INFINITY
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const start = points[index]
+    const end = points[index + 1]
+    if (!(start && end)) continue
+    distance = Math.min(distance, distanceToSegment(point, start, end))
+  }
+  return distance
+}
+
+function wallRoleForRoomFace(role: string, wall: WallNode, face: 'front' | 'back'): string | null {
+  const semantic = face === 'front' ? wall.frontSide : wall.backSide
+  const fallback = face === 'front' ? 'interior' : 'exterior'
+  const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
+
+  if (role === 'interior' || role === 'exterior') return side
+  if (role.endsWith('Interior'))
+    return `${role.slice(0, -'Interior'.length)}${side === 'interior' ? 'Interior' : 'Exterior'}`
+  if (role.endsWith('Exterior'))
+    return `${role.slice(0, -'Exterior'.length)}${side === 'interior' ? 'Interior' : 'Exterior'}`
+  return null
+}
+
+function resolveWallPaintSpace(args: {
+  wall: WallNode
+  wallHit: WallPaintHit
+  nodes: Record<string, AnyNode>
+  spaces: Record<string, Space>
+}): Space | null {
+  const { wall, wallHit, nodes, spaces } = args
+  const levelId = wall.parentId ?? resolveLevelId(wall, nodes)
+  const tolerance = (wall.thickness ?? 0.2) / 2 + 0.08
+  let best: { space: Space; distance: number } | null = null
+
+  for (const space of Object.values(spaces)) {
+    if (space.levelId !== levelId) continue
+    for (const boundary of space.boundaryFaces) {
+      if (boundary.wallId !== wall.id || boundary.face !== wallHit.face) continue
+      const distance = distanceToPolyline(wallHit.point, boundary.points)
+      if (distance > tolerance || (best && distance >= best.distance)) continue
+      best = { space, distance }
+    }
+  }
+
+  return best?.space ?? null
+}
+
+function boundaryPointKey(point: readonly [number, number]): string {
+  return `${point[0].toFixed(3)},${point[1].toFixed(3)}`
+}
+
+function boundarySegmentKey(boundary: WallBoundaryFace): string {
+  const forward = boundary.points.map(boundaryPointKey).join('|')
+  const reverse = [...boundary.points].reverse().map(boundaryPointKey).join('|')
+  return `${boundary.wallId}:${forward < reverse ? forward : reverse}`
+}
+
+function oppositeWallFace(face: 'front' | 'back'): 'front' | 'back' {
+  return face === 'front' ? 'back' : 'front'
+}
+
+function connectedExteriorBoundaries(args: {
+  wall: WallNode
+  wallHit: WallPaintHit
+  levelId: string
+  spaces: Record<string, Space>
+}): WallBoundaryFace[] {
+  const { wall, wallHit, levelId, spaces } = args
+  const occurrences = new Map<string, WallBoundaryFace[]>()
+
+  for (const space of Object.values(spaces)) {
+    if (space.levelId !== levelId) continue
+    for (const boundary of space.boundaryFaces) {
+      const key = boundarySegmentKey(boundary)
+      const entries = occurrences.get(key) ?? []
+      entries.push(boundary)
+      occurrences.set(key, entries)
+    }
+  }
+
+  const exterior = [...occurrences.values()].flatMap((entries) => {
+    const boundary = entries.length === 1 ? entries[0] : undefined
+    if (!boundary) return []
+    return [{ ...boundary, face: oppositeWallFace(boundary.face) }]
+  })
+  const tolerance = (wall.thickness ?? 0.2) / 2 + 0.08
+  const seed = exterior
+    .filter((boundary) => boundary.wallId === wall.id && boundary.face === wallHit.face)
+    .map((boundary) => ({ boundary, distance: distanceToPolyline(wallHit.point, boundary.points) }))
+    .filter((candidate) => candidate.distance <= tolerance)
+    .sort((a, b) => a.distance - b.distance)[0]?.boundary
+  if (!seed) return []
+
+  const boundariesByEndpoint = new Map<string, WallBoundaryFace[]>()
+  for (const boundary of exterior) {
+    const first = boundary.points[0]
+    const last = boundary.points[boundary.points.length - 1]
+    for (const point of [first, last]) {
+      if (!point) continue
+      const key = boundaryPointKey(point)
+      const entries = boundariesByEndpoint.get(key) ?? []
+      entries.push(boundary)
+      boundariesByEndpoint.set(key, entries)
+    }
+  }
+
+  const connected: WallBoundaryFace[] = []
+  const visited = new Set<string>()
+  const queue = [seed]
+  while (queue.length > 0) {
+    const boundary = queue.shift()
+    if (!boundary) continue
+    const key = `${boundarySegmentKey(boundary)}:${boundary.face}`
+    if (visited.has(key)) continue
+    visited.add(key)
+    connected.push(boundary)
+
+    const first = boundary.points[0]
+    const last = boundary.points[boundary.points.length - 1]
+    for (const point of [first, last]) {
+      if (!point) continue
+      for (const neighbour of boundariesByEndpoint.get(boundaryPointKey(point)) ?? []) {
+        queue.push(neighbour)
+      }
+    }
+  }
+
+  return connected
+}
+
+function wallTargetsForBoundaries(args: {
+  boundaries: WallBoundaryFace[]
+  role: string
+  levelId: string
+  nodes: Record<string, AnyNode>
+}): Array<{ nodeId: AnyNodeId; role: string }> {
+  const { boundaries, role, levelId, nodes } = args
+  const targets = new Map<string, { nodeId: AnyNodeId; role: string }>()
+  for (const boundary of boundaries) {
+    const targetWall = nodes[boundary.wallId]
+    if (
+      targetWall?.type !== 'wall' ||
+      (targetWall.parentId ?? resolveLevelId(targetWall, nodes)) !== levelId
+    ) {
+      continue
+    }
+    const targetRole = wallRoleForRoomFace(role, targetWall, boundary.face)
+    if (!targetRole) continue
+    const key = `${targetWall.id}:${targetRole}`
+    targets.set(key, { nodeId: targetWall.id as AnyNodeId, role: targetRole })
+  }
+  return [...targets.values()]
 }
 
 function polygonCentroid(
@@ -178,8 +316,9 @@ export function resolvePaintScopeTargets(args: {
   nodes: Record<string, AnyNode>
   spaces: Record<string, Space>
   slotRolesOf: (node: AnyNode) => string[]
+  wallHit?: WallPaintHit
 }): Array<{ nodeId: AnyNodeId; role: string }> {
-  const { node, role, scope, nodes, spaces, slotRolesOf } = args
+  const { node, role, scope, nodes, spaces, slotRolesOf, wallHit } = args
   const single = [{ nodeId: node.id as AnyNodeId, role }]
   if (scope === 'single') return single
 
@@ -202,11 +341,15 @@ export function resolvePaintScopeTargets(args: {
 
   if (node.type === 'wall' && scope === 'room') {
     const wall = node as WallNode
-    const space = Object.values(spaces).find((candidate) => wallBoundsRoom(wall, candidate.polygon))
-    if (!space) return single
-    return Object.values(nodes)
-      .filter((other) => other.type === 'wall' && wallBoundsRoom(other as WallNode, space.polygon))
-      .map((other) => ({ nodeId: other.id as AnyNodeId, role }))
+    if (!wallHit) return single
+    const levelId = wall.parentId ?? resolveLevelId(wall, nodes)
+    if (!levelId) return single
+    const space = resolveWallPaintSpace({ wall, wallHit, nodes, spaces })
+    const boundaries = space
+      ? space.boundaryFaces
+      : connectedExteriorBoundaries({ wall, wallHit, levelId, spaces })
+    const targets = wallTargetsForBoundaries({ boundaries, role, levelId, nodes })
+    return targets.length > 0 ? targets : single
   }
 
   if (node.type === 'slab' && scope === 'room') {

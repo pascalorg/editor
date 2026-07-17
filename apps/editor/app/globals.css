@@ -3,6 +3,7 @@
 @import "../../../styles/elevation.css";
 @source "../../../packages/editor/src";
 @source "../../../packages/nodes/src";
+@source "../../../node_modules/@pascal-app/plugin-trees/src";
 
 @custom-variant dark (&:is(.dark *));
 

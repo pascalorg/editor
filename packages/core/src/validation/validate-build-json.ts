@@ -20,6 +20,7 @@ export type BuildStats = {
 export type ParsedBuildJson = {
   nodes: Record<string, unknown>
   rootNodeIds: string[]
+  installedPlugins?: string[]
 }
 
 export type SchemaIssue = {
@@ -100,6 +101,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
 
   const nodesRaw = input.nodes
   const rootNodeIdsRaw = input.rootNodeIds
+  const installedPluginsRaw = input.installedPlugins
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -135,6 +137,19 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     nodesRaw as Record<string, unknown>,
   )
   const rootNodeIds = rootNodeIdsRaw as string[]
+  const installedPlugins =
+    Array.isArray(installedPluginsRaw) &&
+    installedPluginsRaw.every((pluginId) => typeof pluginId === 'string')
+      ? Array.from(new Set(installedPluginsRaw))
+      : undefined
+
+  if (installedPluginsRaw !== undefined && installedPlugins === undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_installed_plugins',
+      message: 'Ignored invalid "installedPlugins" — expected an array of plugin IDs.',
+    })
+  }
 
   if (strippedChildRefs > 0 || droppedWallIds.length > 0) {
     warnings.push({
@@ -296,7 +311,13 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const ok = errors.length === 0
   return {
     ok,
-    parsed: ok ? { nodes, rootNodeIds } : null,
+    parsed: ok
+      ? {
+          nodes,
+          rootNodeIds,
+          ...(installedPlugins ? { installedPlugins } : {}),
+        }
+      : null,
     stats,
     errors,
     warnings,

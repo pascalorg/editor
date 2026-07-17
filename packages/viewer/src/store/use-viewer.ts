@@ -79,6 +79,10 @@ type ViewerState = {
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
+  /** True once the user explicitly picked a unit. Until then `unit` is a
+   * locale-derived default and is not persisted, so the default can keep
+   * tracking the browser locale across sessions. */
+  unitExplicit: boolean
 
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
@@ -173,6 +177,7 @@ type PersistedViewerState = Partial<
     | 'edges'
     | 'shadows'
     | 'unit'
+    | 'unitExplicit'
     | 'levelMode'
     | 'wallMode'
     | 'projectPreferences'
@@ -186,6 +191,63 @@ const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const
 const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
 const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
+
+// Countries still on imperial/US customary units: United States, Liberia, Myanmar.
+const IMPERIAL_REGIONS = ['US', 'LR', 'MM']
+
+// IANA zones for those countries. The timezone tracks the OS clock (actual
+// location), unlike navigator.language where en-US is a common default for
+// users far outside the US.
+const IMPERIAL_TIMEZONES = new Set([
+  'America/New_York',
+  'America/Detroit',
+  'America/Kentucky/Louisville',
+  'America/Kentucky/Monticello',
+  'America/Indiana/Indianapolis',
+  'America/Indiana/Vincennes',
+  'America/Indiana/Winamac',
+  'America/Indiana/Marengo',
+  'America/Indiana/Petersburg',
+  'America/Indiana/Vevay',
+  'America/Indiana/Tell_City',
+  'America/Indiana/Knox',
+  'America/Chicago',
+  'America/Menominee',
+  'America/North_Dakota/Center',
+  'America/North_Dakota/New_Salem',
+  'America/North_Dakota/Beulah',
+  'America/Denver',
+  'America/Boise',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'America/Juneau',
+  'America/Sitka',
+  'America/Metlakatla',
+  'America/Yakutat',
+  'America/Nome',
+  'America/Adak',
+  'Pacific/Honolulu',
+  'America/Puerto_Rico',
+  'Pacific/Guam',
+  'Africa/Monrovia', // Liberia
+  'Asia/Yangon', // Myanmar
+  'Asia/Rangoon', // Myanmar (legacy alias)
+])
+
+function detectDefaultUnit(): ViewerState['unit'] {
+  if (typeof navigator === 'undefined') return 'metric'
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (timeZone) return IMPERIAL_TIMEZONES.has(timeZone) ? 'imperial' : 'metric'
+    // No timezone available: fall back to an explicit locale region subtag
+    // only (never maximize() — it turns a bare "en" into region US).
+    const region = new Intl.Locale(navigator.language).region
+    return region && IMPERIAL_REGIONS.includes(region) ? 'imperial' : 'metric'
+  } catch {
+    return 'metric'
+  }
+}
 
 function pickString<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback
@@ -237,7 +299,9 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
     edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
-    unit: pickString<ViewerState['unit']>(state.unit, UNITS, 'metric'),
+    unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
+    unitExplicit:
+      typeof state.unit === 'string' && UNITS.includes(state.unit as ViewerState['unit']),
     levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
     wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
     projectPreferences: normalizeProjectPreferences(state.projectPreferences),
@@ -306,8 +370,9 @@ const useViewer = create<ViewerState>()(
       shadows: true,
       setShadows: (shadows) => set({ shadows }),
 
-      unit: 'metric',
-      setUnit: (unit) => set({ unit }),
+      unit: detectDefaultUnit(),
+      unitExplicit: false,
+      setUnit: (unit) => set({ unit, unitExplicit: true }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -456,7 +521,7 @@ const useViewer = create<ViewerState>()(
         colorPreset: state.colorPreset,
         edges: state.edges,
         shadows: state.shadows,
-        unit: state.unit,
+        ...(state.unitExplicit ? { unit: state.unit } : {}),
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,
@@ -464,5 +529,18 @@ const useViewer = create<ViewerState>()(
     },
   ),
 )
+
+/** Apply an authoritative country code (e.g. IP-derived by the host app) as
+ * the unit default. Stronger signal than the timezone heuristic used at store
+ * creation, but still a default: it never overrides an explicit user choice
+ * and is not persisted (the unit only sticks once the user touches the
+ * toggle). */
+export function applyCountryUnitDefault(country: string | null | undefined) {
+  if (!country) return
+  const state = useViewer.getState()
+  if (state.unitExplicit) return
+  const unit = IMPERIAL_REGIONS.includes(country.toUpperCase()) ? 'imperial' : 'metric'
+  if (state.unit !== unit) useViewer.setState({ unit })
+}
 
 export default useViewer

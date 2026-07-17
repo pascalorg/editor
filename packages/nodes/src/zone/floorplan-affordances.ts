@@ -18,7 +18,7 @@ import {
  *   - `delete-vertex` — remove a double-clicked vertex down to three.
  */
 const zoneManualEditOptions = {
-  extraCommitData: { autoFromWalls: false, boundaryWallIds: [] },
+  boundaryCommitData: { autoFromWalls: false, boundaryWallIds: [] },
 }
 
 export const zoneMoveVertexAffordance = createPolygonVertexAffordance<ZoneNode>(

@@ -15,7 +15,7 @@ import {
  * full contract.
  */
 const ceilingSnapOptions = {
-  extraCommitData: { autoFromWalls: false },
+  boundaryCommitData: { autoFromWalls: false },
   resolvePlanPoint({
     node,
     nodes,

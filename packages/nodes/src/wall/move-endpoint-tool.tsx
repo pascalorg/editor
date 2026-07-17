@@ -11,6 +11,7 @@ import {
   pauseSceneHistory,
   resolveAlignment,
   resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -26,6 +27,7 @@ import {
   isSegmentLongEnough,
   MeasurementPill,
   markToolCancelConsumed,
+  resolveEndpointWallSplit,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -207,6 +209,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   const [altPressed, setAltPressed] = useState(false)
   const unit = useViewer((s) => s.unit)
 
+  // Alt-detach only affects walls sharing the moving endpoint; walls linked
+  // solely to the fixed endpoint never move, so the hint would be noise.
+  const movingOriginal =
+    target.endpoint === 'start' ? originalStartRef.current : originalEndRef.current
+  const canDetachCorner = linkedOriginalsRef.current.some(
+    (wall) => samePoint(wall.start, movingOriginal) || samePoint(wall.end, movingOriginal),
+  )
+
   const exitMoveMode = useCallback(() => {
     useInteractionScope
       .getState()
@@ -231,6 +241,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
+    // Last point handed to `applyPreview` — lets the Alt keydown/keyup
+    // handlers re-run the preview immediately on a modifier change instead of
+    // waiting for the next mousemove.
+    let lastMovedPoint: WallPlanPoint | null = null
+    // The first pointer-up is the *grab* of a click-to-move; later ones are
+    // drops. See the `!hasChanged` branch in `onPointerUp`.
+    let hasReleasedOnce = false
 
     // Wall ids carrying a live position override during the drag. Mirrors the
     // 3D/2D wall MOVE tools: preview via `useLiveNodeOverrides` (the wall
@@ -271,6 +288,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
+      lastMovedPoint = movingPoint
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
       const linkedUpdates = detachLinkedWalls
@@ -282,6 +300,20 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             nextStart,
             nextEnd,
           )
+      if (detachLinkedWalls) {
+        // Attach→detach transition: `setMany` only writes the ids it is
+        // handed, so linked walls dragged on earlier attached ticks would keep
+        // their stale overrides. Drop them so their corners snap back to the
+        // scene originals (untouched during the drag).
+        const overrides = useLiveNodeOverrides.getState()
+        const sceneState = useScene.getState()
+        for (const linked of linkedOriginalsRef.current) {
+          if (touchedWallIds.delete(linked.id as AnyNodeId)) {
+            overrides.clear(linked.id)
+            sceneState.markDirty(linked.id as AnyNodeId)
+          }
+        }
+      }
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
       setAngleLabel(
@@ -395,7 +427,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             : null,
         )
 
-      applyPreview(alignedPoint, event.nativeEvent.altKey)
+      // The keydown listener can't observe an Alt press that predates the
+      // tool mounting; the pointer event can. Sync the shared ref (single Alt
+      // source for preview, HUD badge, and commit) before applying.
+      if (event.nativeEvent.altKey !== altPressedRef.current) {
+        altPressedRef.current = event.nativeEvent.altKey
+        setAltPressed(event.nativeEvent.altKey)
+      }
+      applyPreview(alignedPoint, altPressedRef.current)
     }
 
     const onPointerUp = () => {
@@ -413,14 +452,23 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      // Endpoint still at its original spot: this release is the *grab* of a
-      // click-to-move (a tap on the handle, or a press that never dragged). Stay
-      // armed so the endpoint keeps following the cursor — the next release after
-      // an actual move commits. A press-drag and a click thus engage identically;
-      // previously the no-drag branch dismissed the tool, and whether it even ran
-      // raced the window pointer-up listener mounting (hence "works once, then
-      // needs a long press").
-      if (!hasChanged) return
+      // Endpoint still at its original spot. The FIRST release is the *grab*
+      // of a click-to-move (a tap on the handle, or a press that never
+      // dragged): stay armed so the endpoint keeps following the cursor — a
+      // press-drag and a click thus engage identically. Any LATER release at
+      // an unchanged position is a deliberate drop: end the interaction
+      // cleanly (previews restored, scope ended, no history entry) instead of
+      // leaving the user stuck until they move the mouse.
+      if (!hasChanged) {
+        if (!hasReleasedOnce) {
+          hasReleasedOnce = true
+          return
+        }
+        restoreOriginal()
+        useViewer.getState().setSelection({ selectedIds: [nodeId] })
+        exitMoveMode()
+        return
+      }
 
       if (isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
@@ -438,20 +486,46 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         // Drop the live overrides; the store write below is the source of truth.
         // The store sat at the pre-drag (original) values the whole drag — only
         // overrides moved — so one resume+write records original→final as a
-        // single tracked change (one Ctrl-Z reverts to original).
+        // single tracked change (one Ctrl-Z reverts to original). The split
+        // ops (create halves, migrate attachments, delete host) would each
+        // push their own entry, so the whole commit runs as one history step.
         clearPreviewOverrides()
         resumeSceneHistory(useScene)
-        useScene.getState().updateNodes([
-          { id: nodeId as AnyNodeId, data: { start: preview.start, end: preview.end } },
-          ...linkedUpdates.map((u) => ({
-            id: u.id as AnyNodeId,
-            data: { start: u.start, end: u.end },
-          })),
-        ])
-        useScene.getState().markDirty(nodeId as AnyNodeId)
-        for (const u of linkedUpdates) {
-          useScene.getState().markDirty(u.id as AnyNodeId)
-        }
+        runAsSingleSceneHistoryStep(useScene, () => {
+          // Dropping the endpoint on another wall's interior splits that host
+          // like the draw path does. Linked walls updated in this commit share
+          // the drop point as an endpoint (a corner join, not a split), so
+          // they're excluded along with the moved wall — in Alt-detach mode
+          // `linkedUpdates` is empty and a stationary former sibling can be
+          // split like any other host.
+          const movingPoint = target.endpoint === 'start' ? preview.start : preview.end
+          const resolved = resolveEndpointWallSplit({
+            point: movingPoint,
+            levelId: target.wall.parentId ?? null,
+            ignoreWallIds: [nodeId, ...linkedUpdates.map((u) => String(u.id))],
+          })
+          const finalPoint = resolved ?? movingPoint
+          useScene.getState().updateNodes([
+            {
+              id: nodeId as AnyNodeId,
+              data: {
+                start: target.endpoint === 'start' ? finalPoint : preview.start,
+                end: target.endpoint === 'end' ? finalPoint : preview.end,
+              },
+            },
+            ...linkedUpdates.map((u) => ({
+              id: u.id as AnyNodeId,
+              data: {
+                start: samePoint(u.start, movingPoint) ? finalPoint : u.start,
+                end: samePoint(u.end, movingPoint) ? finalPoint : u.end,
+              },
+            })),
+          ])
+          useScene.getState().markDirty(nodeId as AnyNodeId)
+          for (const u of linkedUpdates) {
+            useScene.getState().markDirty(u.id as AnyNodeId)
+          }
+        })
         pauseSceneHistory(useScene)
         triggerSFX('sfx:item-place')
       }
@@ -472,26 +546,36 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       exitMoveMode()
     }
 
+    // Single Alt writer for keyboard transitions. Re-running the preview on
+    // the flip keeps geometry and the HUD badge in lockstep — detach reverts
+    // the linked walls instantly, re-attach snaps them onto the dragged point
+    // — without waiting for the next mousemove.
+    const setAltState = (pressed: boolean) => {
+      if (altPressedRef.current === pressed) return
+      altPressedRef.current = pressed
+      setAltPressed(pressed)
+      if (lastMovedPoint) {
+        applyPreview(lastMovedPoint, pressed)
+      }
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
       if (event.key === 'Alt') {
-        altPressedRef.current = true
-        setAltPressed(true)
+        setAltState(true)
       }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.key === 'Alt') {
-        altPressedRef.current = false
-        setAltPressed(false)
+        setAltState(false)
       }
     }
 
     const onWindowBlur = () => {
-      altPressedRef.current = false
-      setAltPressed(false)
+      setAltState(false)
     }
 
     emitter.on('grid:move', onGridMove)
@@ -550,23 +634,25 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           unit={unit}
         />
       </Html>
-      <Html
-        position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
-        style={{ pointerEvents: 'none', touchAction: 'none' }}
-        zIndexRange={[100, 0]}
-      >
-        <div className="translate-y-10">
-          <div
-            className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
-              altPressed
-                ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
-                : 'border-border bg-background/95 text-muted-foreground'
-            }`}
-          >
-            {altPressed ? 'Detaching corner' : 'Alt to detach'}
+      {canDetachCorner && (
+        <Html
+          position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+          style={{ pointerEvents: 'none', touchAction: 'none' }}
+          zIndexRange={[100, 0]}
+        >
+          <div className="translate-y-10">
+            <div
+              className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
+                altPressed
+                  ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                  : 'border-border bg-background/95 text-muted-foreground'
+              }`}
+            >
+              {altPressed ? 'Detaching corner' : 'Alt to detach'}
+            </div>
           </div>
-        </div>
-      </Html>
+        </Html>
+      )}
       {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
     </group>
   )

@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -529,6 +530,10 @@ export const WallTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const chainFirstVertex = useRef<Vector3 | null>(null)
+  // Ids of the walls committed by the current chain — the exclusion set for
+  // the "segment tees into an existing wall" chain-termination test, so
+  // snapping onto the chain's own segments never reads as a join.
+  const chainWallIds = useRef<string[]>([])
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -588,6 +593,7 @@ export const WallTool: React.FC = () => {
     const stopDrafting = () => {
       buildingState.current = 0
       chainFirstVertex.current = null
+      chainWallIds.current = []
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -735,6 +741,7 @@ export const WallTool: React.FC = () => {
           snappedEnd,
         )
         if (!createdWall) return
+        chainWallIds.current.push(createdWall.id)
 
         // The new segment is now a real node — make it an alignment target
         // for the next segment, and drop the just-shown guide.
@@ -755,7 +762,16 @@ export const WallTool: React.FC = () => {
         // existing wall network (e.g. a bay closed onto the middle of another
         // wall), not just when the chain loops back to its own start. Shares the
         // room graph with auto slab/ceiling detection so the two never disagree.
-        if (closedToChainStart || wallClosesRoom(getCurrentLevelWalls(), createdWall)) {
+        // A resolved end that tees into wall geometry outside the chain also
+        // terminates even without an enclosed room — nobody continues drawing
+        // from a T-junction into an existing wall; a dead end in free space
+        // keeps the chain going.
+        const levelWalls = getCurrentLevelWalls()
+        if (
+          closedToChainStart ||
+          chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
+          wallClosesRoom(levelWalls, createdWall)
+        ) {
           stopDrafting()
           return
         }

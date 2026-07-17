@@ -5,9 +5,7 @@ import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
-  colorToDirection,
   diffuseColor,
-  directionToColor,
   float,
   mix,
   mrt,
@@ -34,6 +32,7 @@ import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
 
 // Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
@@ -423,7 +422,7 @@ const PostProcessingPasses = ({
           mrt({
             output,
             diffuseColor,
-            normal: directionToColor(normalView),
+            normal: packNormalToRGB(normalView),
           }),
         )
         scenePassDepth = scenePass.getTextureNode('depth')
@@ -431,7 +430,7 @@ const PostProcessingPasses = ({
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
         // Extract normal from color-encoded texture (SSGI consumes the node form)
-        sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+        sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
       }
 
       if (ssgiEnabled) {
@@ -452,14 +451,16 @@ const PostProcessingPasses = ({
         giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
         giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-        const giTexture = (giPass as any).getTextureNode()
+        // r185: SSGI renders AO and GI into two separate textures (R8 + RG11B10)
+        // exposed via getAONode()/getGINode() instead of one rgba texture.
+        const aoTexture = (giPass as any).getAONode()
 
-        const gi = giPass.rgb
+        const gi = (giPass as any).getGINode().rgb
         let ao: any
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
-          // SSGI packs AO into alpha, so we remap it into RGB before denoising.
-          const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+          // SSGI's AO is a single red channel, so we remap it into RGB before denoising.
+          const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, float(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
           denoisePass.radius.value = 4
@@ -467,7 +468,7 @@ const PostProcessingPasses = ({
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
-          ao = giTexture.a
+          ao = aoTexture.r
         }
 
         // AO is a near/mid-field cue like the ink: fade it out with raw depth

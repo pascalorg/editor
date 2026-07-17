@@ -21,6 +21,7 @@ import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
+import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -363,7 +364,8 @@ export function startFloorplanGroupMove(
       cancel()
       return
     }
-    if (e.key !== 'Escape') return
+    // ⌘Z mid-gesture cancels like Escape — never a history jump under a live pointer.
+    if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
     e.preventDefault()
     e.stopPropagation()
     swallowNextClick()
@@ -536,7 +538,8 @@ export function startFloorplanGroupRotate(event: {
       cancel()
       return
     }
-    if (e.key !== 'Escape') return
+    // ⌘Z mid-gesture cancels like Escape — never a history jump under a live pointer.
+    if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
     e.preventDefault()
     e.stopPropagation()
     swallowNextClick()

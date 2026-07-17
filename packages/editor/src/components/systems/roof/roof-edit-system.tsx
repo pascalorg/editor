@@ -31,6 +31,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { isHistoryShortcut } from '../../../lib/history'
 import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
 import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/handles/use-handle-drag'
@@ -1250,6 +1251,7 @@ function RoofTrimHandles() {
   }
 
   const startDrag = (side: RoofTrimSide, event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
     const source = sceneRegistry.nodes.get(segment.id)
     if (!source) return
@@ -1340,6 +1342,7 @@ function RoofTrimHandles() {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (
         document.body.style.cursor === 'ew-resize' ||
         document.body.style.cursor === 'ns-resize' ||
@@ -1378,10 +1381,21 @@ function RoofTrimHandles() {
       cleanup()
     }
 
+    // Escape / ⌘Z abort the trim drag — capture phase so they win over the
+    // global use-keyboard arms (⌘Z must never history-jump mid-gesture).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 
   const renderTrimPlane = (

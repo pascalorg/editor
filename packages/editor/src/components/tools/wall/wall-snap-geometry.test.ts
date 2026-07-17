@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { WallNode } from '@pascal-app/core'
 import {
+  chainEndJoinsExistingWall,
   findWallSnapTarget,
   findWallSpecialPointSnap,
   type WallPlanPoint,
@@ -68,6 +69,36 @@ describe('findWallSpecialPointSnap', () => {
 
     expect(findWallSpecialPointSnap([0.34, 0], walls)?.snap).toBe('endpoint')
     expect(findWallSpecialPointSnap([0.34, 0], walls, undefined, { endpoint: 0.3 })).toBeNull()
+  })
+})
+
+describe('chainEndJoinsExistingWall (chain termination)', () => {
+  test('true when the end lies on a non-chain wall interior (T junction)', () => {
+    const walls = [makeWall([0, 0], [4, 0], 'host'), makeWall([2, 2], [2, 0], 'chain_1')]
+    expect(chainEndJoinsExistingWall([2, 0], walls, ['chain_1'])).toBe(true)
+  })
+
+  test('true when the end lands on a non-chain wall endpoint', () => {
+    const walls = [makeWall([0, 0], [4, 0], 'host'), makeWall([6, 2], [4, 0], 'chain_1')]
+    expect(chainEndJoinsExistingWall([4, 0], walls, ['chain_1'])).toBe(true)
+  })
+
+  test('false when the end only touches the chain walls themselves', () => {
+    // Second segment doubles back onto the first one's midpoint — own-chain
+    // geometry is excluded, so the chain keeps going.
+    const walls = [makeWall([0, 0], [4, 0], 'chain_1'), makeWall([4, 0], [2, 0], 'chain_2')]
+    expect(chainEndJoinsExistingWall([2, 0], walls, ['chain_1', 'chain_2'])).toBe(false)
+  })
+
+  test('false for a dead end in free space', () => {
+    const walls = [makeWall([0, 0], [4, 0], 'host'), makeWall([0, 2], [2, 2], 'chain_1')]
+    expect(chainEndJoinsExistingWall([2, 2], walls, ['chain_1'])).toBe(false)
+  })
+
+  test('a near miss beyond the tolerance is not a join', () => {
+    const walls = [makeWall([0, 0], [4, 0], 'host')]
+    expect(chainEndJoinsExistingWall([2, 0.01], walls, [])).toBe(false)
+    expect(chainEndJoinsExistingWall([2, 0.0005], walls, [])).toBe(true)
   })
 })
 
