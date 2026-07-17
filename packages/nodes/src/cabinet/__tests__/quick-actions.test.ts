@@ -268,7 +268,7 @@ describe('cabinet quick actions', () => {
     const result = cornerAction!.run({ sceneApi })
 
     expect(result?.selectedIds?.length).toBe(1)
-    expect(sceneApi.get<CabinetModuleNode>(source.id)?.width).toBeCloseTo(0.67)
+    expect(sceneApi.get<CabinetModuleNode>(source.id)?.width).toBeCloseTo(0.59)
   })
 
   test('disables blocked side and corner actions instead of hiding them', () => {
@@ -580,6 +580,6 @@ describe('cabinet quick actions', () => {
     const result = cornerLeftAction!.run({ sceneApi })
 
     expect(result?.selectedIds?.length).toBe(1)
-    expect(sceneApi.get<CabinetModuleNode>(left.id)?.width).toBeCloseTo(0.25)
+    expect(sceneApi.get<CabinetModuleNode>(left.id)?.width).toBeCloseTo(0.17)
   })
 })

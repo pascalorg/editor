@@ -8,6 +8,7 @@ import type {
   LinearResizeHandle,
   SceneApi,
 } from '@pascal-app/core'
+import { addCornerRun } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 mock.module('../floorplan-move', () => ({ cabinetModuleFloorplanMoveTarget: () => null }))
@@ -536,6 +537,219 @@ describe('wall cabinet depth handles', () => {
     expect(resizedSibling.depth - resizedBase.depth).toBeCloseTo(0.2)
     expect(resizedBase.position[2] - resizedBase.depth / 2).toBeCloseTo(0)
     expect(resizedSibling.position[2] - resizedSibling.depth / 2).toBeCloseTo(0)
+  })
+
+  test('preserves the outer L cabinet width on group depth resize', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_group-depth-corner-run',
+      depth: 0.58,
+      children: ['cabinet-module_group-depth-corner-source'],
+    })
+    const source = CabinetModuleNode.parse({
+      id: 'cabinet-module_group-depth-corner-source',
+      parentId: run.id,
+      position: [0, 0.1, 0.29],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const nodes = {
+      [run.id as AnyNodeId]: run as AnyNode,
+      [source.id as AnyNodeId]: source as AnyNode,
+    } as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+      update: (id: AnyNodeId, patch: Partial<AnyNode>) => {
+        nodes[id] = { ...nodes[id], ...patch } as AnyNode
+      },
+      upsert: (node: AnyNode, parentId?: AnyNodeId) => {
+        nodes[node.id as AnyNodeId] = node
+        const parent = parentId ? nodes[parentId] : undefined
+        if (parent && Array.isArray((parent as { children?: unknown }).children)) {
+          nodes[parentId!] = {
+            ...parent,
+            children: [...new Set([...(parent.children ?? []), node.id])],
+          } as AnyNode
+        }
+        return node.id as AnyNodeId
+      },
+      markDirty: () => {},
+    } as SceneApi
+
+    const connectedId = addCornerRun({ module: source, run, sceneApi, side: 'right' })!
+    const connectedBefore = sceneApi.get<CabinetModuleNodeType>(connectedId)!
+    const originalWidth = connectedBefore.width
+    const liveRun = sceneApi.get<CabinetNodeType>(run.id as AnyNodeId)!
+    const buildGroupHandles = cabinetDefinition.handles as (
+      node: CabinetNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetNodeType>[]
+    const depthHandle = buildGroupHandles(liveRun, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'z' &&
+        handle.overrideTarget?.(liveRun, sceneApi) === liveRun.id,
+    )!
+    const nextDepth = liveRun.depth + 0.1
+    const preview = new Map(depthHandle.previewOverrides?.(liveRun, nextDepth, sceneApi) ?? [])
+
+    expect(preview.get(connectedId)?.width ?? originalWidth).toBeCloseTo(originalWidth)
+
+    depthHandle.commit?.(liveRun, depthHandle.apply(liveRun, nextDepth, sceneApi), sceneApi)
+
+    expect(sceneApi.get<CabinetModuleNodeType>(connectedId)?.width).toBeCloseTo(originalWidth)
+  })
+
+  test('exchanges corner wall filler width with the outer wall cabinet on center wall depth resize', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_wall-group-depth-corner-run',
+      depth: 0.58,
+      children: ['cabinet-module_wall-group-depth-corner-source'],
+    })
+    const source = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-group-depth-corner-source',
+      parentId: run.id,
+      children: ['cabinet-module_wall-group-depth-corner-source-wall'],
+      position: [0, 0.1, 0.29],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const sourceWall = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-group-depth-corner-source-wall',
+      parentId: source.id,
+      name: 'Wall Cabinet',
+      position: [0, 1.35, -0.13],
+      width: source.width,
+      depth: 0.32,
+    })
+    const nodes = {
+      [run.id as AnyNodeId]: run as AnyNode,
+      [source.id as AnyNodeId]: source as AnyNode,
+      [sourceWall.id as AnyNodeId]: sourceWall as AnyNode,
+    } as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+      update: (id: AnyNodeId, patch: Partial<AnyNode>) => {
+        nodes[id] = { ...nodes[id], ...patch } as AnyNode
+      },
+      upsert: (node: AnyNode, parentId?: AnyNodeId) => {
+        nodes[node.id as AnyNodeId] = node
+        const parent = parentId ? nodes[parentId] : undefined
+        if (parent && Array.isArray((parent as { children?: unknown }).children)) {
+          nodes[parentId!] = {
+            ...parent,
+            children: [...new Set([...(parent.children ?? []), node.id])],
+          } as AnyNode
+        }
+        return node.id as AnyNodeId
+      },
+      markDirty: () => {},
+    } as SceneApi
+
+    const connectedId = addCornerRun({ module: source, run, sceneApi, side: 'right' })!
+    const connectedBase = sceneApi.get<CabinetModuleNodeType>(connectedId)!
+    const connectedWall = (connectedBase.children ?? [])
+      .map((id) => sceneApi.get<CabinetModuleNodeType>(id as AnyNodeId))
+      .find((node) => node?.name === 'Wall Cabinet')!
+    const cornerWallFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNodeType =>
+        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+    )!
+    const bridgeFiller = Object.values(nodes).find(
+      (node): node is CabinetModuleNodeType =>
+        node.type === 'cabinet-module' && node.name === 'Wall Bridge Filler',
+    )!
+    const originalFillerWidth = cornerWallFiller.width
+    const originalConnectedWidth = connectedWall.width
+    const originalBridgeWidth = bridgeFiller.width
+    const liveRun = sceneApi.get<CabinetNodeType>(run.id as AnyNodeId)!
+    const buildGroupHandles = cabinetDefinition.handles as (
+      node: CabinetNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetNodeType>[]
+    const depthHandle = buildGroupHandles(liveRun, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' &&
+        handle.overrideTarget?.(liveRun, sceneApi) === sourceWall.id,
+    )!
+    const depthDelta = 0.1
+    const nextDepth = sourceWall.depth + depthDelta
+    const preview = new Map(depthHandle.previewOverrides?.(liveRun, nextDepth, sceneApi) ?? [])
+
+    expect(preview.get(cornerWallFiller.id as AnyNodeId)?.width).toBeCloseTo(
+      originalFillerWidth + depthDelta,
+    )
+    expect(preview.get(connectedWall.id as AnyNodeId)?.width).toBeCloseTo(
+      originalConnectedWidth - depthDelta,
+    )
+    expect(preview.get(bridgeFiller.id as AnyNodeId)?.width ?? originalBridgeWidth).toBeCloseTo(
+      originalBridgeWidth,
+    )
+
+    depthHandle.commit?.(liveRun, depthHandle.apply(liveRun, nextDepth, sceneApi), sceneApi)
+
+    expect(sceneApi.get<CabinetModuleNodeType>(cornerWallFiller.id)?.width).toBeCloseTo(
+      originalFillerWidth + depthDelta,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(connectedWall.id)?.width).toBeCloseTo(
+      originalConnectedWidth - depthDelta,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(bridgeFiller.id)?.width).toBeCloseTo(
+      originalBridgeWidth,
+    )
+
+    const resizedCornerWallFiller = sceneApi.get<CabinetModuleNodeType>(cornerWallFiller.id)!
+    const resizedConnectedWall = sceneApi.get<CabinetModuleNodeType>(connectedWall.id)!
+    const wallLeg = sceneApi.get<CabinetNodeType>(resizedCornerWallFiller.parentId as AnyNodeId)!
+    const sideDepthHandle = buildGroupHandles(liveRun, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' &&
+        handle.overrideTarget?.(liveRun, sceneApi) === wallLeg.id,
+    )!
+    const sideDepthDelta = 0.1
+    const nextSideDepth = wallLeg.depth + sideDepthDelta
+    const sidePreview = new Map(
+      sideDepthHandle.previewOverrides?.(liveRun, nextSideDepth, sceneApi) ?? [],
+    )
+
+    expect(sidePreview.get(cornerWallFiller.id as AnyNodeId)?.depth).toBeCloseTo(
+      resizedCornerWallFiller.depth + sideDepthDelta,
+    )
+    expect(sidePreview.get(connectedWall.id as AnyNodeId)?.depth).toBeCloseTo(
+      resizedConnectedWall.depth + sideDepthDelta,
+    )
+    expect(
+      sidePreview.get(cornerWallFiller.id as AnyNodeId)?.width ?? resizedCornerWallFiller.width,
+    ).toBeCloseTo(resizedCornerWallFiller.width)
+    expect(
+      sidePreview.get(connectedWall.id as AnyNodeId)?.width ?? resizedConnectedWall.width,
+    ).toBeCloseTo(resizedConnectedWall.width)
+    expect(sidePreview.get(bridgeFiller.id as AnyNodeId)?.width).toBeCloseTo(
+      originalBridgeWidth - sideDepthDelta,
+    )
+
+    sideDepthHandle.commit?.(
+      liveRun,
+      sideDepthHandle.apply(liveRun, nextSideDepth, sceneApi),
+      sceneApi,
+    )
+
+    expect(sceneApi.get<CabinetModuleNodeType>(cornerWallFiller.id)?.depth).toBeCloseTo(
+      resizedCornerWallFiller.depth + sideDepthDelta,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(connectedWall.id)?.depth).toBeCloseTo(
+      resizedConnectedWall.depth + sideDepthDelta,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(cornerWallFiller.id)?.width).toBeCloseTo(
+      resizedCornerWallFiller.width,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(connectedWall.id)?.width).toBeCloseTo(
+      resizedConnectedWall.width,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(bridgeFiller.id)?.width).toBeCloseTo(
+      originalBridgeWidth - sideDepthDelta,
+    )
   })
 
   test('preserves wall cabinet depth differences on group resize', () => {

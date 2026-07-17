@@ -1353,6 +1353,7 @@ function cabinetWallDepthPreview(
   depth: number,
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
   cornerIndex?: WallCornerDepthIndex,
 ): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
   const overrides = new Map<AnyNodeId, Partial<AnyNode>>()
@@ -1380,8 +1381,15 @@ function cabinetWallDepthPreview(
       depth,
       nodes: sceneApi.nodes(),
       targets: liveTargets,
+      widthMode,
     })) {
-      overrides.set(id, { ...(overrides.get(id) ?? {}), ...patch } as Partial<AnyNode>)
+      const existing = overrides.get(id) as Partial<CabinetEditableNode> | undefined
+      const cornerPatch = patch as Partial<CabinetEditableNode>
+      const merged = { ...(existing ?? {}), ...cornerPatch } as Partial<CabinetEditableNode>
+      if (existing?.position && cornerPatch.position) {
+        merged.position = [cornerPatch.position[0], cornerPatch.position[1], existing.position[2]]
+      }
+      overrides.set(id, merged as Partial<AnyNode>)
     }
   }
   return [...overrides]
@@ -1392,9 +1400,17 @@ function commitCabinetWallDepth(
   depth: number,
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
   cornerIndex: WallCornerDepthIndex,
 ) {
-  const preview = cabinetWallDepthPreview(targets, depth, sceneApi, adjustCornerWidths, cornerIndex)
+  const preview = cabinetWallDepthPreview(
+    targets,
+    depth,
+    sceneApi,
+    adjustCornerWidths,
+    widthMode,
+    cornerIndex,
+  )
   for (const [id, patch] of preview) {
     sceneApi.update(id, patch)
   }
@@ -1422,6 +1438,7 @@ function cabinetWallDepthBounds(
   targets: readonly CabinetEditableNode[],
   sceneApi: SceneApi,
   adjustCornerWidths: boolean,
+  widthMode: 'bridge' | 'corner-pair',
   cornerIndex: WallCornerDepthIndex,
 ): { min: number; max: number } {
   const liveTargets = targets.map(
@@ -1439,6 +1456,7 @@ function cabinetWallDepthBounds(
       depth: currentDepth,
       nodes: sceneApi.nodes(),
       targets: liveTargets,
+      widthMode,
     }),
   )
   const unitAdjustments = wallCornerWidthOverridesForDepthTargets({
@@ -1447,6 +1465,7 @@ function cabinetWallDepthBounds(
     depth: currentDepth + 1,
     nodes: sceneApi.nodes(),
     targets: liveTargets,
+    widthMode,
   })
   for (const [id, patch] of unitAdjustments) {
     const cabinetPatch = patch as Partial<CabinetModuleNodeType>
@@ -1509,14 +1528,16 @@ function cabinetWallGroupDepthHandles(
     const frontZ = Math.cos(relativeRotation)
     const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
     const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
-    const adjustCornerWidths = !(Math.abs(frontX) < 1e-3 && frontZ > 0)
+    const adjustCornerWidths = true
+    const widthMode = Math.abs(frontX) < 1e-3 && frontZ > 0 ? 'corner-pair' : 'bridge'
     const depthBounds = () =>
-      cabinetWallDepthBounds(group.targets, sceneApi, adjustCornerWidths, cornerIndex)
+      cabinetWallDepthBounds(group.targets, sceneApi, adjustCornerWidths, widthMode, cornerIndex)
     const clampedDepth = (requestedDepth: number, liveSceneApi: SceneApi) => {
       const bounds = cabinetWallDepthBounds(
         group.targets,
         liveSceneApi,
         adjustCornerWidths,
+        widthMode,
         cornerIndex,
       )
       return Math.min(bounds.max, Math.max(bounds.min, requestedDepth))
@@ -1538,6 +1559,7 @@ function cabinetWallGroupDepthHandles(
           clampedDepth(depth, liveSceneApi),
           liveSceneApi,
           adjustCornerWidths,
+          widthMode,
           cornerIndex,
         ),
       commit: (_node, patch, liveSceneApi) => {
@@ -1547,6 +1569,7 @@ function cabinetWallGroupDepthHandles(
             clampedDepth(patch.depth, liveSceneApi),
             liveSceneApi,
             adjustCornerWidths,
+            widthMode,
             cornerIndex,
           )
         }

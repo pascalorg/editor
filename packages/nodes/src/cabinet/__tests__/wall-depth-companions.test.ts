@@ -19,7 +19,7 @@ function derivedMetadata(
 }
 
 describe('wall depth corner companions', () => {
-  test('inversely resizes only bridge fillers for side depth changes', () => {
+  test('resizes bridge fillers without exchanging corner wall widths', () => {
     const sourceRunA = CabinetNode.parse({ id: 'cabinet_wall-depth-source-a', depth: 0.58 })
     const sourceA = CabinetModuleNode.parse({
       id: 'cabinet-module_wall-depth-source-a',
@@ -181,6 +181,8 @@ describe('wall depth corner companions', () => {
     )
     expect(indexedOverrides.get(bridgeFillerA.id as AnyNodeId)?.width).toBeCloseTo(0.26)
     expect(indexedOverrides.get(bridgeFillerB.id as AnyNodeId)?.width).toBeCloseTo(0.26)
+    expect(indexedOverrides.get(cornerFillerB.id as AnyNodeId)).toBeUndefined()
+    expect(indexedOverrides.get(wallB.id as AnyNodeId)).toBeUndefined()
 
     const rightSideOverrides = new Map(
       wallCornerWidthOverridesForDepthTargets({
