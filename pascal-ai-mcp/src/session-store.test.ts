@@ -45,6 +45,27 @@ describe('SessionStore.flushAll', () => {
     }
   })
 
+  // Regression from review: a set() issued while flushAll is already
+  // awaiting must still be flushed before flushAll resolves — a single await
+  // of the queue tail captured at call time would miss it.
+  test('covers writes issued while flushing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'session-store-'))
+    const filePath = join(dir, 'sessions.json')
+    try {
+      const store = new SessionStore(filePath)
+      store.set('s1', sessionFixture('s1'))
+      const flushing = store.flushAll()
+      store.set('s2', sessionFixture('s2'))
+      await flushing
+      const persisted = JSON.parse(readFileSync(filePath, 'utf8')) as {
+        sessions: Record<string, unknown>
+      }
+      expect(Object.keys(persisted.sessions).sort()).toEqual(['s1', 's2'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test('a later successful write clears the failure', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'session-store-'))
     const filePath = join(dir, 'sessions.json')

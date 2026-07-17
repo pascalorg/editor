@@ -88,7 +88,9 @@ The service starts even when no model key is configured; chat requests then retu
 
 The service has **no authentication** and is intended for local/private-network use only. It binds to `127.0.0.1` by default; set `AI_MCP_HOST` explicitly only if you understand the exposure. Do not put it on a public interface before the identity work in `docs/ARCHITECTURE_TASKS.md` (TX.1) is done.
 
-`/chat` bodies are capped at `AI_MCP_MAX_BODY_MB` (default 28MB — sized for the editor's 20MB image limit after base64 inflation). Oversized requests get `413`, malformed JSON or non-png/jpeg data URLs get `400`.
+`/chat` bodies are capped at `AI_MCP_MAX_BODY_MB` (default 28MB — sized for the editor's 20MB image limit after base64 inflation); the cap is enforced by counting the stream, so chunked requests without a Content-Length are covered too. Oversized requests get `413`; malformed JSON or invalid image data URLs (non-png/jpeg, empty or undecodable base64, wrong magic bytes) get `400`.
+
+On SIGTERM/SIGINT the server stops accepting requests, waits up to `AI_MCP_DRAIN_TIMEOUT_MS` (default 5000) for in-flight requests and queued session writes, then exits — non-zero if anything could not be drained.
 
 ## Endpoints
 

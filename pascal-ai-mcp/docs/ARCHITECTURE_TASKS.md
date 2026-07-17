@@ -32,16 +32,19 @@
 - 依赖：T0.1（共用 workflow）。
 - 依据：§6.6、§7.4。
 - 进展 2026-07-17：`check-templates.ts` 增加 `--no-artifacts` CI 模式（跳过 SVG）+ 失败收集与非零退出（坏 JSON/缺 meta.quality/plan.rooms、good 参照带 validator fatal 均判失败；分区器对照失败是已知差距不判失败）；`package.json` 加 `templates:check`；ai-ci.yml 增加体检步骤（触发路径 `pascal-ai-mcp/**` 已覆盖模板/loader/脚本/依赖）。本地验证：15 份模板通过 exit 0；注入坏 JSON 与 good 带 fatal 两种场景均 exit 1；完整 SVG 模式输出与既有预览零 diff。完成于 2026-07-17，commit 874f4ad7，随 T0.1 在 PR #1 的 ai-ci run #1 验证通过（Template health check 步骤绿）。
+- 复审修复 2026-07-17（Codex 审阅中优先级 #4）：空模板目录不再静默通过（exit 1）；`meta.quality` 必须 ∈ {good,bad}，枚举外值（会被 seed matcher 静默禁用）判失败；新增 `scripts/check-templates.test.ts` 4 个脚本级回归用例（空目录/枚举外 quality/坏 JSON/真实库通过）。完整 Zod schema 仍归 T1.4。
 
 ### [x] T0.3 部署边界收口（local-only 加固）
-- 完成于 2026-07-17。实现：`AI_MCP_HOST` 默认改 `127.0.0.1`；`/health` 只返回 `{ok}`（配置摘要移到启动日志，正式 readiness 留给 T2.5）；新增 `AI_MCP_MAX_BODY_MB`（默认 28，与前端 20MB 原图 Base64 后 26.7MB 联动），Bun `maxRequestBodySize` + content-length 预检双保险；`/chat` 畸形 JSON 返回 400 `invalid_json`、非 png/jpeg data URL 返回 400 `invalid_image`（对齐前端上传过滤）；README 新增 Deployment boundary 节。验证：真实启动冒烟测试四个场景（health 最小化、坏 JSON 400、坏图 400、超大 413）全过，监听地址确认 127.0.0.1；check-types 干净、494 测试全过。
+- 完成于 2026-07-17。实现：`AI_MCP_HOST` 默认改 `127.0.0.1`；`/health` 只返回 `{ok}`（配置摘要移到启动日志，正式 readiness 留给 T2.5）；新增 `AI_MCP_MAX_BODY_MB`（默认 28，与前端 20MB 原图 Base64 后 26.7MB 联动）；README 新增 Deployment boundary 节。验证：真实启动冒烟测试四个场景（health 最小化、坏 JSON 400、坏图 400、超大 413）全过，监听地址确认 127.0.0.1。
+- 复审修复 2026-07-17（Codex 审阅高优先级 #1 + 中优先级 #3）：①**chunked 绕过**——原实现仅 content-length 预检 + Bun `maxRequestBodySize`，实测 chunked 请求两者都拦不住（2MB 过 1MB 限返回 200）；改为 `src/http-guards.ts#readJsonBody` 流式逐块计数，超限即取消流返 413（真实服务器复验 chunked 2MB → 413）。②**图片校验只看前缀**——`isValidImageDataUrl` 现在校验 base64 结构（非空、长度 %4、合法字符）+ 解码后 PNG/JPEG magic bytes，空 payload 与垃圾 payload 均 400（复验通过）。新增 `http-guards.test.ts` 10 个用例（含 chunked 超限流式用例）；`AI_MCP_MAX_BODY_MB`/`AI_MCP_DRAIN_TIMEOUT_MS` 补进 `.env.example` 与 README。
 - 内容：① `AI_MCP_HOST` 默认值 `0.0.0.0` → `127.0.0.1`（需要局域网访问时显式设置）；②未鉴权的 liveness 只返回 `{ok}`，provider/model/mcpMode 等诊断信息仅放内部 readiness/受保护端点；③ `/chat` 增加可配置的请求体大小上限、合法 JSON/data URL/MIME 校验与解析失败的 400/413 处理；④ README/部署说明明确"当前仅限本机/内网"。当前前端允许 20MB 原图，Base64 后约为 26.7MB，再加 JSON 开销，因此服务端上限必须与前端原图限制联动（可先设约 28MB，或同步下调前端限制），不能直接设 15–20MB 导致合法上传被拒。
 - 涉及：`src/config.ts`、`src/server.ts`、`pascal-ai-mcp/README.md`。
 - 完成标准：默认启动只监听回环地址；超过统一限制的请求返回 413，畸形 JSON/data URL 返回 400，合法的当前最大图片仍可提交；公开健康响应不暴露部署配置。
 - 依据：§5.1、§14-3、§14-4。
 
 ### [x] T0.4 优雅退出：SIGTERM + session flush
-- 完成于 2026-07-17。实现：SessionStore 新增 `flushAll()`（等待 write queue 落定；日常写入仍吞错误但记录 `lastFlushError`，flushAll 时上抛，后续成功写入会清除）；agent 暴露 `flushSessions()`；server 统一 `shutdown()` 处理 SIGTERM/SIGINT——`server.stop()` 停接新请求 → 在 `AI_MCP_DRAIN_TIMEOUT_MS`（默认 5s）内 drain session 写入 → 关 MCP；flush 失败或超时以非零码退出；重复信号幂等（第二次信号立即 exit 1）。验证：新增 `session-store.test.ts` 3 个用例（正常落盘、最终写失败上抛、后续成功写清除失败），仅覆盖协作式退出路径不涉 SIGKILL；真实进程 SIGTERM 冒烟测试 exit 0 + 日志正确；497 测试全过、check-types 干净。
+- 完成于 2026-07-17。实现：SessionStore 新增 `flushAll()`（等待 write queue 落定；日常写入仍吞错误但记录 `lastFlushError`，flushAll 时上抛，后续成功写入会清除）；agent 暴露 `flushSessions()`；server 统一 `shutdown()` 处理 SIGTERM/SIGINT，flush 失败或超时以非零码退出；重复信号幂等（第二次信号立即 exit 1）。验证：`session-store.test.ts` 用例 + 真实进程 SIGTERM 冒烟 exit 0。仅覆盖协作式退出路径，不涉 SIGKILL。
+- 复审修复 2026-07-17（Codex 审阅高优先级 #2）：①原实现没等 `server.stop()` 的 Promise，在途 `/chat` 完成前就可能 flush + exit 0 丢写入；现在 shutdown 顺序为 `await server.stop()`（drain 预算内等在途请求）→ 超时则 `stop(true)` 强关并记 exitCode=1 → `flushAll()` → 关 MCP。②`flushAll` 原来只等调用瞬间的队列尾，等待期间新入队的写会漏；改为循环等待直到队列稳定，并加回归用例"flush 期间插入的 set 也被落盘"。已知边界：数分钟的 `/chat` 超过 drain 预算时以非零码退出（该请求的状态确实没保住），这类长任务的真正解法是 T2.1 异步化；"慢 /chat + SIGTERM"的进程级自动化测试因需要可控慢模型调用暂未实现，等 T1.1 的 telemetry 注入点就绪后补。
 - 内容：server.ts 同时处理 SIGTERM/SIGINT；停止接收新请求后，在配置的 drain timeout 内等待 SessionStore write queue flush 完成再关闭 MCP。SessionStore 暴露 `async flushAll()`（等待 writeQueue 落定，并把最终写入失败向调用方抛出，而不是吞掉）。重复信号要幂等；超时后以非零状态退出并留下明确脱敏日志。
 - 涉及：`src/server.ts`、`src/session-store.ts`。
 - 完成标准：收到 SIGTERM/SIGINT 的正常优雅退出路径中，最后一次已接受的 `set` 要么持久化成功，要么进程以非零状态明确失败；测试不把 SIGKILL 等不可拦截退出误算为可保证场景。

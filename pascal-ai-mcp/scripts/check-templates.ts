@@ -90,12 +90,23 @@ if (!noArtifacts) {
 }
 
 const files = templateFilePaths(templatesDir)
+// An empty library passing the health check would mask a broken path or a
+// botched restructure — the repo always ships reference templates.
+if (files.length === 0) {
+  problems.push(`模板目录为空或不存在：${templatesDir}`)
+}
 for (const file of files) {
   let template: Template
   try {
     template = JSON.parse(readFileSync(file, 'utf8')) as Template
-    if (!template?.meta?.quality || !Array.isArray(template?.plan?.rooms)) {
-      throw new Error('缺少 meta.quality 或 plan.rooms')
+    if (!Array.isArray(template?.plan?.rooms)) {
+      throw new Error('缺少 plan.rooms')
+    }
+    // Anything outside the enum would be silently ignored by the seed
+    // matcher (treated as neither good nor bad) — a disabled template must
+    // be a loud failure, not a quiet one. Full Zod schema lands with T1.4.
+    if (template.meta?.quality !== 'good' && template.meta?.quality !== 'bad') {
+      throw new Error(`meta.quality 必须是 good 或 bad，实际为 ${JSON.stringify(template.meta?.quality)}`)
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

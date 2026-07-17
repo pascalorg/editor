@@ -1,6 +1,7 @@
 import type { Server } from 'bun'
 import { PascalAiAgent } from './agent'
 import { loadConfig } from './config'
+import { isValidImageDataUrl, readJsonBody } from './http-guards'
 import { PascalMcpClient } from './mcp'
 
 const config = loadConfig()
@@ -62,30 +63,21 @@ async function handle(request: Request, bunServer: Server<undefined>): Promise<R
     // for this endpoint specifically (0 = no timeout); the fast endpoints
     // above keep the default.
     bunServer.timeout(request, 0)
-    const contentLength = Number(request.headers.get('content-length') ?? 0)
-    if (contentLength > config.maxRequestBodyBytes) {
-      return json({ error: 'payload_too_large', maxBytes: config.maxRequestBodyBytes }, 413)
-    }
-    let body: {
+    const read = await readJsonBody(request, config.maxRequestBodyBytes)
+    if (!read.ok) return json({ error: read.error, maxBytes: config.maxRequestBodyBytes }, read.status)
+    const body = read.body as {
       sessionId?: string
       message?: string
       imageDataUrl?: string
       sceneId?: string
       action?: 'confirm' | 'cancel'
     }
-    try {
-      body = (await request.json()) as typeof body
-    } catch {
-      return json({ error: 'invalid_json' }, 400)
-    }
 
     if (!body.sessionId || (!body.message && !body.imageDataUrl && !body.action)) {
       return json({ error: 'sessionId and message, imageDataUrl, or action are required' }, 400)
     }
 
-    // Mirrors the editor upload filter (png/jpeg only); anything else never
-    // reaches the model provider.
-    if (body.imageDataUrl && !/^data:image\/(png|jpeg);base64,/.test(body.imageDataUrl)) {
+    if (body.imageDataUrl && !isValidImageDataUrl(body.imageDataUrl)) {
       return json({ error: 'invalid_image', message: 'imageDataUrl must be a base64 data URL of type image/png or image/jpeg' }, 400)
     }
 
@@ -131,18 +123,20 @@ async function shutdown(signal: string): Promise<void> {
   }
   shuttingDown = true
   console.log(`received ${signal}, shutting down`)
-  server.stop()
   let exitCode = 0
+  // server.stop() resolves once in-flight requests finish — exiting before
+  // that would drop the session writes those requests are about to make. A
+  // multi-minute /chat can exceed the drain budget; that path exits non-zero
+  // because its state genuinely was not persisted.
   try {
-    await Promise.race([
-      agent.flushSessions(),
-      new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`session flush timed out after ${config.shutdownDrainTimeoutMs}ms`)),
-          config.shutdownDrainTimeoutMs,
-        ),
-      ),
-    ])
+    await withTimeout(server.stop(), config.shutdownDrainTimeoutMs, 'in-flight requests')
+  } catch (error) {
+    console.error('shutdown: gave up waiting for in-flight requests:', errorMessage(error))
+    server.stop(true)
+    exitCode = 1
+  }
+  try {
+    await withTimeout(agent.flushSessions(), config.shutdownDrainTimeoutMs, 'session flush')
   } catch (error) {
     console.error('shutdown: failed to persist session store:', errorMessage(error))
     exitCode = 1
@@ -153,6 +147,15 @@ async function shutdown(signal: string): Promise<void> {
     console.error('shutdown: failed to close MCP client:', errorMessage(error))
   }
   process.exit(exitCode)
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ])
 }
 
 process.on('SIGINT', () => void shutdown('SIGINT'))

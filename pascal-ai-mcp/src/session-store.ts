@@ -70,9 +70,15 @@ export class SessionStore {
 
   // Waits for every queued write to hit disk. Throws if the final state is
   // not persisted, so shutdown can exit non-zero instead of losing data
-  // silently (ARCHITECTURE_TASKS.md T0.4).
+  // silently (ARCHITECTURE_TASKS.md T0.4). Loops until the queue is stable:
+  // a set() issued while we were awaiting appends a new tail that a single
+  // await would miss.
   async flushAll(): Promise<void> {
-    await this.writeQueue
+    let tail: Promise<void>
+    do {
+      tail = this.writeQueue
+      await tail
+    } while (tail !== this.writeQueue)
     if (this.lastFlushError !== null) {
       throw this.lastFlushError instanceof Error
         ? this.lastFlushError
