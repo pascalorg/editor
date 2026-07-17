@@ -183,7 +183,9 @@ function getCacheKey(props: MaterialProperties, shading: RenderShading): string 
 function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
-  const repeat = texture.repeat?.join('x') ?? 'default'
+  const repeat = Array.isArray(texture.repeat)
+    ? texture.repeat.join('x')
+    : (texture.repeat ?? 'default')
   const scale = texture.scale ?? 'default'
   return `${texture.url}-${repeat}-${scale}`
 }
