@@ -9,6 +9,7 @@
     "chat": "bun src/cli.ts",
     "test": "bun test",
     "check-types": "tsc --noEmit",
+    "templates:check": "bun scripts/check-templates.ts",
     "eval": "bun run eval/run-eval.ts",
     "eval:review": "bun run eval/review.ts"
   },

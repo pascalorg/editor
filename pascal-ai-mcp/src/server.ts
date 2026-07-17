@@ -12,6 +12,7 @@ const agent = new PascalAiAgent(config, mcp)
 const server = Bun.serve({
   hostname: config.host,
   port: config.port,
+  maxRequestBodySize: config.maxRequestBodyBytes,
   async fetch(request, bunServer: Server<undefined>): Promise<Response> {
     try {
       return await handle(request, bunServer)
@@ -36,14 +37,12 @@ async function handle(request: Request, bunServer: Server<undefined>): Promise<R
     })
   }
 
+  // Liveness only. Provider/model/mcpMode details are deliberately not
+  // exposed here: the endpoint is unauthenticated (ARCHITECTURE_TASKS.md
+  // T0.3); the startup log carries the config summary instead. A proper
+  // internal readiness endpoint lands with T2.5.
   if (request.method === 'GET' && url.pathname === '/health') {
-    return json({
-      ok: true,
-      configured: Boolean(config.aiApiKey),
-      provider: config.aiProvider,
-      mcpMode: config.mcpMode,
-      model: config.aiModel,
-    })
+    return json({ ok: true })
   }
 
   if (request.method === 'GET' && url.pathname === '/tools') {
@@ -63,16 +62,31 @@ async function handle(request: Request, bunServer: Server<undefined>): Promise<R
     // for this endpoint specifically (0 = no timeout); the fast endpoints
     // above keep the default.
     bunServer.timeout(request, 0)
-    const body = (await request.json()) as {
+    const contentLength = Number(request.headers.get('content-length') ?? 0)
+    if (contentLength > config.maxRequestBodyBytes) {
+      return json({ error: 'payload_too_large', maxBytes: config.maxRequestBodyBytes }, 413)
+    }
+    let body: {
       sessionId?: string
       message?: string
       imageDataUrl?: string
       sceneId?: string
       action?: 'confirm' | 'cancel'
     }
+    try {
+      body = (await request.json()) as typeof body
+    } catch {
+      return json({ error: 'invalid_json' }, 400)
+    }
 
     if (!body.sessionId || (!body.message && !body.imageDataUrl && !body.action)) {
       return json({ error: 'sessionId and message, imageDataUrl, or action are required' }, 400)
+    }
+
+    // Mirrors the editor upload filter (png/jpeg only); anything else never
+    // reaches the model provider.
+    if (body.imageDataUrl && !/^data:image\/(png|jpeg);base64,/.test(body.imageDataUrl)) {
+      return json({ error: 'invalid_image', message: 'imageDataUrl must be a base64 data URL of type image/png or image/jpeg' }, 400)
     }
 
     const result = await agent.chat({
@@ -99,11 +113,50 @@ async function handle(request: Request, bunServer: Server<undefined>): Promise<R
 }
 
 console.log(`pascal-ai-mcp listening on http://${server.hostname}:${server.port}`)
+console.log(
+  `config: provider=${config.aiProvider} model=${config.aiModel} mcpMode=${config.mcpMode} configured=${Boolean(config.aiApiKey)} maxBodyMB=${Math.round(config.maxRequestBodyBytes / 1024 / 1024)}`,
+)
 
-process.on('SIGINT', async () => {
-  await mcp.close()
-  process.exit(0)
-})
+// Graceful shutdown (ARCHITECTURE_TASKS.md T0.4): stop accepting new
+// requests, drain queued session writes within the configured budget, then
+// close MCP. A flush failure or timeout exits non-zero so supervisors don't
+// mistake dropped state for a clean stop. SIGKILL obviously bypasses all of
+// this — only the cooperative path is covered.
+let shuttingDown = false
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) {
+    // Second signal: the operator wants out now.
+    console.error(`received ${signal} during shutdown, exiting immediately`)
+    process.exit(1)
+  }
+  shuttingDown = true
+  console.log(`received ${signal}, shutting down`)
+  server.stop()
+  let exitCode = 0
+  try {
+    await Promise.race([
+      agent.flushSessions(),
+      new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`session flush timed out after ${config.shutdownDrainTimeoutMs}ms`)),
+          config.shutdownDrainTimeoutMs,
+        ),
+      ),
+    ])
+  } catch (error) {
+    console.error('shutdown: failed to persist session store:', errorMessage(error))
+    exitCode = 1
+  }
+  try {
+    await mcp.close()
+  } catch (error) {
+    console.error('shutdown: failed to close MCP client:', errorMessage(error))
+  }
+  process.exit(exitCode)
+}
+
+process.on('SIGINT', () => void shutdown('SIGINT'))
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
 
 function json(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload, null, 2), {

@@ -1,6 +1,11 @@
 // Reference-template health check（户型参照库体检，docs/TEMPLATES.md）。
 //
-//   bun run scripts/check-templates.ts [templatesDir]
+//   bun run scripts/check-templates.ts [templatesDir] [--no-artifacts]
+//
+// --no-artifacts (CI mode): skip SVG output. Exit code is non-zero when a
+// template fails to parse or a "good" reference has validator fatals; the
+// partitioner-comparison failing is a known quality gap (TEMPLATES.md #4),
+// not a check failure.
 //
 // For every template in templates/:
 //   1. run it through the REAL validator (jp profile) — a "good" reference
@@ -62,26 +67,42 @@ function planMetrics(plan: LayoutPlan, profile: ReturnType<typeof resolveNormPro
   return { maxRoomAspect: Math.max(...roomAspects), corridorRatio, penalty }
 }
 
-const templatesDir = process.argv[2] ?? join(import.meta.dir, '..', 'templates')
+const args = process.argv.slice(2)
+const noArtifacts = args.includes('--no-artifacts')
+const templatesDir = args.filter(arg => !arg.startsWith('--'))[0] ?? join(import.meta.dir, '..', 'templates')
+const problems: string[] = []
 // Previews mirror the library layout: good/ and bad/ hold the reference
 // renders, ours/ holds the partitioner-comparison renders — mixing 参照 and
 // --ours in one flat folder kept getting the comparison mistaken for a
 // template (2026-07-17 用户反馈).
 const outDir = join(import.meta.dir, '..', 'layout-previews', 'templates')
-for (const sub of ['good', 'bad', 'ours']) {
-  const subDir = join(outDir, sub)
-  mkdirSync(subDir, { recursive: true })
-  // Stale-output guard: a template whose partitioner comparison succeeded
-  // last run but fails now would otherwise keep its old ours/ SVG around and
-  // pass for a fresh result.
-  for (const file of readdirSync(subDir)) {
-    if (file.endsWith('.svg')) rmSync(join(subDir, file))
+if (!noArtifacts) {
+  for (const sub of ['good', 'bad', 'ours']) {
+    const subDir = join(outDir, sub)
+    mkdirSync(subDir, { recursive: true })
+    // Stale-output guard: a template whose partitioner comparison succeeded
+    // last run but fails now would otherwise keep its old ours/ SVG around and
+    // pass for a fresh result.
+    for (const file of readdirSync(subDir)) {
+      if (file.endsWith('.svg')) rmSync(join(subDir, file))
+    }
   }
 }
 
 const files = templateFilePaths(templatesDir)
 for (const file of files) {
-  const template = JSON.parse(readFileSync(file, 'utf8')) as Template
+  let template: Template
+  try {
+    template = JSON.parse(readFileSync(file, 'utf8')) as Template
+    if (!template?.meta?.quality || !Array.isArray(template?.plan?.rooms)) {
+      throw new Error('缺少 meta.quality 或 plan.rooms')
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    problems.push(`${file}: 模板加载失败 —— ${message}`)
+    console.log(`\n=== ${file}\n  LOAD FAIL  ${message}`)
+    continue
+  }
   const profile = resolveNormProfile(template.meta.market)
   const plan = template.plan
   const lotArea = plan.footprint.width * plan.footprint.depth
@@ -93,6 +114,9 @@ for (const file of files) {
   console.log(`validator: fatal=${validation.fatal.length} warnings=${validation.warnings.length} score=${validation.score}`)
   for (const message of validation.fatal) console.log(`  FATAL  ${message}`)
   for (const message of validation.warnings) console.log(`  warn   ${message}`)
+  if (template.meta.quality === 'good' && validation.fatal.length > 0) {
+    problems.push(`${template.id}: good 参照存在 ${validation.fatal.length} 个 validator fatal`)
+  }
 
   // 2. Scorer's view.
   const metrics = planMetrics(plan, profile)
@@ -101,10 +125,12 @@ for (const file of files) {
     console.log(`  badReasons: ${template.meta.badReasons.join('；')}`)
   }
 
-  writeFileSync(
-    join(outDir, template.meta.quality === 'bad' ? 'bad' : 'good', `${template.id}.svg`),
-    renderPlanSvg(`${template.meta.label} [参照]`, plan),
-  )
+  if (!noArtifacts) {
+    writeFileSync(
+      join(outDir, template.meta.quality === 'bad' ? 'bad' : 'good', `${template.id}.svg`),
+      renderPlanSvg(`${template.meta.label} [参照]`, plan),
+    )
+  }
 
   // 3. Same program through our generator (good references only).
   if (template.meta.quality !== 'good') continue
@@ -136,7 +162,16 @@ for (const file of files) {
   const ourValidation = validateLayoutPlan(generated.plan, { totalAreaSqm: intent.targetTotalAreaSqm }, profile)
   const ourMetrics = planMetrics(generated.plan, profile)
   console.log(`OURS(${strategy.typology}): validator score=${ourValidation.score} fatal=${ourValidation.fatal.length} penalty=${ourMetrics.penalty.toFixed(2)} maxRoomAspect=${ourMetrics.maxRoomAspect.toFixed(2)} corridorShare=${(ourMetrics.corridorRatio * 100).toFixed(1)}%`)
-  writeFileSync(join(outDir, 'ours', `${template.id}.svg`), renderPlanSvg(`${template.meta.label} [我们的生成]`, generated.plan))
+  if (!noArtifacts) {
+    writeFileSync(join(outDir, 'ours', `${template.id}.svg`), renderPlanSvg(`${template.meta.label} [我们的生成]`, generated.plan))
+  }
 }
 
-console.log(`\nSVG 输出目录：${outDir}`)
+if (!noArtifacts) console.log(`\nSVG 输出目录：${outDir}`)
+
+if (problems.length > 0) {
+  console.error(`\n体检未通过（${problems.length} 项）：`)
+  for (const problem of problems) console.error(`  - ${problem}`)
+  process.exit(1)
+}
+console.log(`\n体检通过：${files.length} 份模板。`)

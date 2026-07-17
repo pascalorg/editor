@@ -1,0 +1,39 @@
+name: ai-ci
+
+on:
+  push:
+    # This fork's remote default branch is develop; keep main for upstream.
+    branches: [main, develop]
+    paths:
+      - 'pascal-ai-mcp/**'
+      - 'bun.lock'
+      - '.github/workflows/ai-ci.yml'
+  pull_request:
+    paths:
+      - 'pascal-ai-mcp/**'
+      - 'bun.lock'
+      - '.github/workflows/ai-ci.yml'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Type check
+        run: bun run --cwd pascal-ai-mcp check-types
+
+      - name: Test
+        run: bun test --cwd pascal-ai-mcp
+
+      - name: Template health check
+        run: bun run --cwd pascal-ai-mcp templates:check --no-artifacts

@@ -25,6 +25,13 @@ export type AppConfig = {
   azureApiVersion: string
   host: string
   port: number
+  // Upper bound for a /chat body. The editor allows 20MB source images;
+  // base64 inflates that to ~26.7MB plus JSON overhead, so the two limits
+  // must move together (ARCHITECTURE_TASKS.md T0.3).
+  maxRequestBodyBytes: number
+  // Graceful-shutdown budget: how long to wait for queued session writes
+  // before giving up and exiting non-zero.
+  shutdownDrainTimeoutMs: number
   sessionFile: string
   mcpMode: McpMode
   mcpUrl: string
@@ -96,8 +103,12 @@ export function loadConfig(): AppConfig {
     aiRequestTimeoutMs: parseIntWithDefault(process.env.AI_REQUEST_TIMEOUT_MS, 60_000),
     azureDeployment,
     azureApiVersion: process.env.AZURE_OPENAI_API_VERSION || '2024-10-21',
-    host: process.env.AI_MCP_HOST || '0.0.0.0',
+    // Loopback by default: the service has no authentication, so exposing it
+    // beyond the local machine must be an explicit operator decision.
+    host: process.env.AI_MCP_HOST || '127.0.0.1',
     port: parsePort(process.env.AI_MCP_PORT, 8788),
+    maxRequestBodyBytes: parseIntWithDefault(process.env.AI_MCP_MAX_BODY_MB, 28) * 1024 * 1024,
+    shutdownDrainTimeoutMs: parseIntWithDefault(process.env.AI_MCP_DRAIN_TIMEOUT_MS, 5_000),
     sessionFile,
     mcpMode,
     mcpUrl: process.env.PASCAL_MCP_URL || 'http://127.0.0.1:3917/mcp',

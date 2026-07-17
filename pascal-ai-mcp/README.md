@@ -82,11 +82,17 @@ cd pascal-ai-mcp
 bun run start
 ```
 
-The service starts even when no model key is configured. `/health` then reports `configured: false`, and chat requests return a recoverable configuration error.
+The service starts even when no model key is configured; chat requests then return a recoverable configuration error. The startup log prints a config summary (provider, model, mcpMode, configured, body limit).
+
+## Deployment boundary
+
+The service has **no authentication** and is intended for local/private-network use only. It binds to `127.0.0.1` by default; set `AI_MCP_HOST` explicitly only if you understand the exposure. Do not put it on a public interface before the identity work in `docs/ARCHITECTURE_TASKS.md` (TX.1) is done.
+
+`/chat` bodies are capped at `AI_MCP_MAX_BODY_MB` (default 28MB — sized for the editor's 20MB image limit after base64 inflation). Oversized requests get `413`, malformed JSON or non-png/jpeg data URLs get `400`.
 
 ## Endpoints
 
-- `GET /health`
+- `GET /health` — liveness only, returns `{ "ok": true }`
 - `GET /tools`
 - `POST /chat`
 - `GET /sessions/:id`

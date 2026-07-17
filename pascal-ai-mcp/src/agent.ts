@@ -345,6 +345,12 @@ export class PascalAiAgent {
     return this.sessions.delete(sessionId)
   }
 
+  // Shutdown path: waits for queued session writes to hit disk; rejects if
+  // the final state could not be persisted.
+  flushSessions(): Promise<void> {
+    return this.sessions.flushAll()
+  }
+
   private async runChat(input: ChatInput): Promise<ChatResult> {
     const now = new Date().toISOString()
     let session = this.sessions.get(input.sessionId) ?? createSession(input, now)
