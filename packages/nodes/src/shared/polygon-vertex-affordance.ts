@@ -23,13 +23,15 @@ import {
  * targets the outer `node.polygon`. The same factory wires both
  * boundary and hole interactions without duplicating the math.
  *
- * Three affordances available:
+ * Four affordances available:
  *
  * - `move-vertex` — drag an existing vertex.
  * - `add-vertex` — insert a new vertex at an edge midpoint, then drag
  *   it (click-without-drag reverts to the snapshot).
  * - `move-edge` — drag a whole edge perpendicular to itself (both
  *   endpoints translate by `normal * projection`).
+ * - `delete-vertex` — remove a double-clicked vertex while preserving
+ *   the minimum three-vertex ring.
  */
 
 export type PolygonVertexPayload = {
@@ -70,7 +72,7 @@ export type PolygonEdgeSnapContext<N extends PolygonShape & { id: AnyNodeId }> =
   holeIndex?: number
 }
 
-type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+export type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
   /** Data committed only when the outer boundary (not a hole) is edited. */
   boundaryCommitData?: Partial<N>
   resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
@@ -264,6 +266,54 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
+        },
+      }
+    },
+  }
+}
+
+export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
+  kind: string,
+  options?: PolygonAffordanceOptions<N>,
+): FloorplanAffordance<N> {
+  return {
+    start({ node, payload }): FloorplanAffordanceSession {
+      const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
+      const canDeleteCurrentVertex = () => {
+        const current = useScene.getState().nodes[node.id] as N | undefined
+        if (!current || (current as unknown as { type: string }).type !== kind) return false
+        const ring = getRing(current, holeIndex)
+        return Boolean(
+          ring &&
+            ring.length > 3 &&
+            Number.isInteger(vertexIndex) &&
+            vertexIndex >= 0 &&
+            vertexIndex < ring.length,
+        )
+      }
+
+      return {
+        affectedIds: [node.id],
+        apply() {},
+        canCommit: canDeleteCurrentVertex,
+        commit() {
+          const current = useScene.getState().nodes[node.id] as N | undefined
+          if (!current || (current as unknown as { type: string }).type !== kind) return
+          const ring = getRing(current, holeIndex)
+          if (
+            !ring ||
+            ring.length <= 3 ||
+            !Number.isInteger(vertexIndex) ||
+            vertexIndex < 0 ||
+            vertexIndex >= ring.length
+          ) {
+            return
+          }
+          const nextRing = ring.filter((_, index) => index !== vertexIndex)
+          const patch = buildRingPatch(current, holeIndex, nextRing, options?.boundaryCommitData)
+          useScene
+            .getState()
+            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
         },
       }
     },

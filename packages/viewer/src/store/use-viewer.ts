@@ -99,6 +99,9 @@ type ViewerState = {
   showGrid: boolean
   setShowGrid: (show: boolean) => void
 
+  showMeasurements: boolean
+  setShowMeasurements: (show: boolean) => void
+
   // Presentation flag for parametric zones. When false the zone renderer
   // unmounts its meshes AND its drei <Html> label (an <Html> costs per-frame
   // matrix work + live DOM even at opacity 0, so hiding is not enough). The
@@ -118,7 +121,12 @@ type ViewerState = {
   setProjectId: (id: string | null) => void
   projectPreferences: Record<
     string,
-    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean }
+    {
+      showScans?: boolean
+      showGuides?: boolean
+      showGrid?: boolean
+      showMeasurements?: boolean
+    }
   >
 
   // Smart selection update
@@ -267,6 +275,9 @@ function normalizeProjectPreferences(value: unknown): ViewerState['projectPrefer
       ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
       ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
       ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
+      ...(typeof record.showMeasurements === 'boolean'
+        ? { showMeasurements: record.showMeasurements }
+        : {}),
     }
   }
   return next
@@ -408,6 +419,19 @@ const useViewer = create<ViewerState>()(
           return { showGrid: show, projectPreferences }
         }),
 
+      showMeasurements: true,
+      setShowMeasurements: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) }
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showMeasurements: show,
+            }
+          }
+          return { showMeasurements: show, projectPreferences }
+        }),
+
       showZones: true,
       setShowZones: (show) => set({ showZones: show }),
 
@@ -427,6 +451,7 @@ const useViewer = create<ViewerState>()(
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
+            showMeasurements: prefs.showMeasurements ?? true,
           }
         }),
       projectPreferences: {},

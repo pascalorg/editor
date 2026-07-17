@@ -4,9 +4,11 @@ import {
   pointInPolygon2D,
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
+  slabDeleteVertexAffordance,
   slabMoveEdgeAffordance,
   slabMoveVertexAffordance,
 } from './floorplan-affordances'
@@ -14,6 +16,7 @@ import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabPaint } from './paint'
 import { slabParametrics } from './parametrics'
+import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
 import { slabSlots } from './slots'
 
@@ -171,6 +174,16 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   parametrics: slabParametrics,
   handles: slabHandles,
+  measurement: {
+    features: (node) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'slab',
+        height: node.elevation,
+        label: 'Slab',
+        polygon: node.polygon,
+      }),
+    quickMeasure: (node) => slabQuickMeasurement(node),
+  },
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
   // with 15° angle snap (Shift to defeat).
@@ -212,6 +225,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     'move-vertex': slabMoveVertexAffordance,
     'add-vertex': slabAddVertexAffordance,
     'move-edge': slabMoveEdgeAffordance,
+    'delete-vertex': slabDeleteVertexAffordance,
   },
 
   toolHints: [

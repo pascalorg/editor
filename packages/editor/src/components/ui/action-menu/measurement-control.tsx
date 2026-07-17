@@ -1,0 +1,188 @@
+'use client'
+
+import { useViewer } from '@pascal-app/viewer'
+import {
+  Box,
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Ruler,
+  ScanSearch,
+  Square,
+  Triangle,
+  Waypoints,
+} from 'lucide-react'
+import { useState } from 'react'
+import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
+import { cn } from '../../../lib/utils'
+import useEditor from '../../../store/use-editor'
+import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
+import { ActionButton } from './action-button'
+
+const measurementOptions = [
+  { kind: 'distance', label: 'Distance', icon: Ruler },
+  { kind: 'angle', label: 'Angle', icon: Triangle },
+  { kind: 'area', label: 'Area', icon: Square },
+  { kind: 'perimeter', label: 'Perimeter', icon: Waypoints },
+  { kind: 'volume', label: 'Volume', icon: Box },
+] as const satisfies readonly {
+  kind: CreatableMeasurementKind
+  label: string
+  icon: typeof Ruler
+}[]
+
+const measurementMenuOptions = [
+  { kind: 'smart', label: 'Smart', icon: ScanSearch },
+  ...measurementOptions,
+] as const
+
+export function MeasurementControl() {
+  const [isOpen, setIsOpen] = useState(false)
+  const mode = useEditor((state) => state.mode)
+  const tool = useEditor((state) => state.tool)
+  const selectedKind = useEditor((state) => state.lastMeasurementKind)
+  const activeToolKind = useEditor((state) => state.toolDefaults.measurement?.kind)
+  const setMode = useEditor((state) => state.setMode)
+  const setPhase = useEditor((state) => state.setPhase)
+  const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
+  const setStructureLayer = useEditor((state) => state.setStructureLayer)
+  const setTool = useEditor((state) => state.setTool)
+  const setToolDefaults = useEditor((state) => state.setToolDefaults)
+  const showMeasurements = useViewer((state) => state.showMeasurements)
+  const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
+
+  const selectedOption =
+    measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
+  const isActive = mode === 'build' && tool === 'measurement'
+  const isSmartActive = isActive && activeToolKind === 'smart'
+  const SelectedIcon = isSmartActive ? ScanSearch : selectedOption.icon
+  const selectedLabel = isSmartActive ? 'Smart' : selectedOption.label
+
+  const activateMeasurement = (kind: CreatableMeasurementKind) => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setLastMeasurementKind(kind)
+    setToolDefaults('measurement', { kind })
+    setMode('build')
+    setTool('measurement')
+  }
+
+  const handlePrimaryClick = () => {
+    if (isActive) {
+      setMode('select')
+      return
+    }
+    activateMeasurement(selectedKind)
+  }
+
+  const activateSmartMeasurement = () => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setToolDefaults('measurement', { kind: 'smart' })
+    setMode('build')
+    setTool('measurement')
+  }
+
+  return (
+    <Popover onOpenChange={setIsOpen} open={isOpen}>
+      <div className="flex items-center">
+        <ActionButton
+          aria-label={`Measure: ${selectedLabel}`}
+          aria-pressed={isActive}
+          className={cn(
+            'rounded-r-none p-0 text-muted-foreground',
+            isActive
+              ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
+              : 'hover:bg-cyan-500/15 hover:text-cyan-400',
+          )}
+          label={`Measure: ${selectedLabel}`}
+          onClick={handlePrimaryClick}
+          shortcut="M"
+          size="icon"
+          variant="ghost"
+        >
+          <SelectedIcon aria-hidden="true" className="h-5 w-5" />
+        </ActionButton>
+
+        <PopoverTrigger asChild>
+          <button
+            aria-expanded={isOpen}
+            aria-haspopup="menu"
+            aria-label="Measurement options"
+            className={cn(
+              'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
+              isOpen
+                ? 'bg-cyan-500/15 text-cyan-400'
+                : 'hover:bg-cyan-500/10 hover:text-cyan-400',
+            )}
+            type="button"
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')}
+            />
+          </button>
+        </PopoverTrigger>
+      </div>
+
+      <PopoverContent
+        align="center"
+        className="w-56 rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
+        side="top"
+        sideOffset={14}
+      >
+        <div aria-label="Measurement type" className="space-y-1" role="menu">
+          {measurementMenuOptions.map((option) => {
+            const OptionIcon = option.icon
+            const isSmart = option.kind === 'smart'
+            const isSelected = isSmart
+              ? isSmartActive
+              : !isSmartActive && option.kind === selectedKind
+            return (
+              <button
+                aria-checked={isSelected}
+                className={cn(
+                  'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
+                  isSelected
+                    ? 'bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                )}
+                key={option.kind}
+                onClick={() => {
+                  if (isSmart) activateSmartMeasurement()
+                  else activateMeasurement(option.kind)
+                  setIsOpen(false)
+                }}
+                role="menuitemradio"
+                type="button"
+              >
+                <OptionIcon aria-hidden="true" className="h-4 w-4" />
+                <span>{option.label}</span>
+                {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
+              </button>
+            )
+          })}
+
+          <div className="my-1.5 h-px bg-border/60" />
+
+          <button
+            aria-checked={showMeasurements}
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-muted-foreground text-sm transition-colors hover:bg-white/8 hover:text-foreground"
+            onClick={() => setShowMeasurements(!showMeasurements)}
+            role="menuitemcheckbox"
+            type="button"
+          >
+            {showMeasurements ? (
+              <Eye aria-hidden="true" className="h-4 w-4" />
+            ) : (
+              <EyeOff aria-hidden="true" className="h-4 w-4" />
+            )}
+            <span>Show measurements</span>
+            <span className="ml-auto text-xs">{showMeasurements ? 'On' : 'Off'}</span>
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}

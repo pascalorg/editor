@@ -1,3 +1,4 @@
+import { remapMeasurementReferences } from '../lib/measurement-geometry'
 import { generateId } from '../schema/base'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
@@ -163,6 +164,10 @@ export function cloneNodesInto(
       ).children
         .map((cid) => idMap.get(cid))
         .filter((cid): cid is AnyNodeId => cid !== undefined)
+    }
+
+    if (cloned.type === 'measurement') {
+      cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
 
     if (original.id === opts.rootId) {

@@ -1,4 +1,10 @@
-import type { FloorplanGeometry, FloorplanPoint, GeometryContext, ZoneNode } from '@pascal-app/core'
+import {
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  resolveAutoZonePolygon,
+  type ZoneNode,
+} from '@pascal-app/core'
 
 /**
  * Stage C floor-plan builder for zone. Zones are colored polygons —
@@ -11,7 +17,7 @@ import type { FloorplanGeometry, FloorplanPoint, GeometryContext, ZoneNode } fro
  * furniture in the SVG document order (= z-order).
  */
 export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const ring = node.polygon
+  const ring = resolveAutoZonePolygon(node, ctx.resolve)
   if (!ring || ring.length < 3) return null
 
   const view = ctx.viewState

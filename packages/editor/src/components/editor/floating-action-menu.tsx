@@ -363,7 +363,8 @@ export function FloatingActionMenu() {
   // NodeDefinition with `capabilities.selectable`) get the floating menu
   // by default too. Phase 4 collapses these into a single registry check.
   const isValidType = node
-    ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
+    ? nodeRegistry.get(node.type)?.presentation?.actionMenu !== false &&
+      (ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type))
     : false
 
   // Height-drag pill: shown just above the menu only while the selected

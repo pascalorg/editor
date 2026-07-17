@@ -1,3 +1,4 @@
+import { Icon as IconifyIcon } from '@iconify/react'
 import { type AnyNodeId, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -47,6 +48,18 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
   const tree = node ? nodeRegistry.get(node.type)?.tree : undefined
   const icon = presentation?.icon
   const iconSrc = icon?.kind === 'url' ? icon.src : '/icons/roof.webp'
+  const iconElement =
+    icon?.kind === 'iconify' ? (
+      <IconifyIcon className="opacity-60" height={14} icon={icon.name} width={14} />
+    ) : (
+      <Image
+        alt=""
+        className="object-contain opacity-60"
+        height={14}
+        src={iconSrc}
+        width={14}
+      />
+    )
   const snapTarget = resolveNodeSnapTarget(node)
   const defaultName =
     node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node'
@@ -88,23 +101,9 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
       hasChildren={hasChildren}
       icon={
         snapTarget ? (
-          <SnapTargetIcon target={snapTarget}>
-            <Image
-              alt=""
-              className="object-contain opacity-60"
-              height={14}
-              src={iconSrc}
-              width={14}
-            />
-          </SnapTargetIcon>
+          <SnapTargetIcon target={snapTarget}>{iconElement}</SnapTargetIcon>
         ) : (
-          <Image
-            alt=""
-            className="object-contain opacity-60"
-            height={14}
-            src={iconSrc}
-            width={14}
-          />
+          iconElement
         )
       }
       isHovered={isHovered}

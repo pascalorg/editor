@@ -88,6 +88,8 @@ describe('createWallOnCurrentLevel', () => {
       .getState()
       .begin({ kind: 'reshaping', nodeId: 'wall_a', reshape: 'endpoint' })
     seedLevel([makeWall([0, 0], [4, 0], 'wall_a')])
+    useScene.temporal.getState().clear()
+    useScene.temporal.getState().resume()
   })
 
   test('endpoint near an existing corner attaches to the corner instead of splitting', () => {
@@ -180,6 +182,8 @@ describe('createWallOnCurrentLevel', () => {
 describe('resolveEndpointWallSplit', () => {
   beforeEach(() => {
     seedLevel([makeWall([0, 0], [4, 0], 'wall_host'), makeWall([2, 2], [2, 1], 'wall_moved')])
+    useScene.temporal.getState().clear()
+    useScene.temporal.getState().resume()
   })
 
   test('endpoint dropped mid-span splits the host and returns the projection', () => {

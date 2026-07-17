@@ -61,6 +61,7 @@ export {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './components/editor/node-arrow-handles'
+export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -302,12 +303,36 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  CREATABLE_MEASUREMENT_KINDS,
+  type CreatableMeasurementKind,
+  DEFAULT_CREATABLE_MEASUREMENT_KIND,
+  isCreatableMeasurementKind,
+  normalizeCreatableMeasurementKind,
+} from './lib/measurement-kind'
+export {
+  measurementPolygonLabelAnchor,
+  triangulateMeasurementPolygon,
+} from './lib/measurement-label'
+export {
+  buildMeasurementAngleArcPoints,
+  cubicMetersToVolumeUnit,
+  formatAreaLabel,
   formatLinearMeasurement,
+  formatVolumeLabel,
+  getAreaUnitLabel,
   getLinearUnitLabel,
+  getVolumeUnitLabel,
   type LinearUnit,
   linearControlValueToMeters,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
+  measurementPresentationColor,
   metersToLinearUnit,
+  squareMetersToAreaUnit,
 } from './lib/measurements'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
@@ -327,6 +352,11 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export {
+  createQuickMeasurementPointerScheduler,
+  quickMeasurementContext,
+  resolveQuickMeasurementReport,
+} from './lib/quick-measurement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
@@ -412,6 +442,21 @@ export {
   useReshapingNode,
 } from './store/use-interaction-scope'
 export {
+  commitMeasurementDraft,
+  finishMeasurementDraft,
+  handleMeasurementDraftEscape,
+  type MeasurementAxis,
+  type MeasurementAxisGuide,
+  type MeasurementDraftOwner,
+  type MeasurementDraftPayload,
+  type MeasurementDraftStage,
+  type MeasurementKind,
+  type MeasurementPoint,
+  type MeasurementSurfacePoint,
+  measurementPolygonMidpoints,
+  useMeasurementDraft,
+} from './store/use-measurement-draft'
+export {
   default as useOpeningGuides,
   type OpeningGuide3D,
   type OpeningGuideVec3,
@@ -422,6 +467,15 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { default as usePlacementPreview } from './store/use-placement-preview'
+export {
+  activateQuickMeasurementHudSource,
+  clearQuickMeasurementHudSource,
+  publishQuickMeasurementHudSource,
+  type QuickMeasurementHudEntry,
+  type QuickMeasurementHudSource,
+  selectQuickMeasurementHudEntry,
+  useQuickMeasurementHud,
+} from './store/use-quick-measurement-hud'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'

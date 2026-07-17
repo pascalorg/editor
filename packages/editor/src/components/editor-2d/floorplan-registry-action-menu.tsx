@@ -152,7 +152,8 @@ export function FloorplanRegistryActionMenu() {
   const selectedKind = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
   const def = selectedKind ? nodeRegistry.get(selectedKind) : null
   const isRegistryKind = !!def
-  const isVisible = isRegistryKind && !movingNode && isFloorplanHovered
+  const isVisible =
+    isRegistryKind && def?.presentation?.actionMenu !== false && !movingNode && isFloorplanHovered
   const isWall = selectedKind === 'wall'
   const quickActionNodes = useScene(
     useShallow((s) => collectQuickActionNodes(s.nodes, selectedId ?? null)),

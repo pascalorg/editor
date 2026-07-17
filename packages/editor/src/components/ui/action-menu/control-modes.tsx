@@ -3,9 +3,11 @@
 import { Icon } from '@iconify/react'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
+import { Fragment } from 'react'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
+import { MeasurementControl } from './measurement-control'
 
 type ControlId = 'select' | 'box-select' | 'zone' | 'delete'
 
@@ -103,40 +105,42 @@ export function ControlModes() {
         const isActive = getIsActive(c.id)
 
         return (
-          <ActionButton
-            className={cn(
-              'group text-muted-foreground',
-              !(isImageMode || isActive) && c.color,
-              !isImageMode && isActive && c.activeColor,
-              isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
-              isImageMode && !isActive && 'hover:bg-white/5',
-            )}
-            key={c.id}
-            label={c.label}
-            onClick={() => handleClick(c.id)}
-            shortcut={c.shortcut}
-            size="icon"
-            variant="ghost"
-          >
-            {c.imageSrc ? (
-              <Image
-                alt={c.label}
-                className={cn(
-                  'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
-                  isActive
-                    ? 'opacity-100 grayscale-0'
-                    : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0',
-                )}
-                height={28}
-                src={c.imageSrc}
-                width={28}
-              />
-            ) : c.iconifyIcon ? (
-              <Icon color="currentColor" height={18} icon={c.iconifyIcon} width={18} />
-            ) : (
-              ModeIcon && <ModeIcon className="h-5 w-5" />
-            )}
-          </ActionButton>
+          <Fragment key={c.id}>
+            {c.id === 'delete' ? <MeasurementControl /> : null}
+            <ActionButton
+              className={cn(
+                'group text-muted-foreground',
+                !(isImageMode || isActive) && c.color,
+                !isImageMode && isActive && c.activeColor,
+                isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
+                isImageMode && !isActive && 'hover:bg-white/5',
+              )}
+              label={c.label}
+              onClick={() => handleClick(c.id)}
+              shortcut={c.shortcut}
+              size="icon"
+              variant="ghost"
+            >
+              {c.imageSrc ? (
+                <Image
+                  alt={c.label}
+                  className={cn(
+                    'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
+                    isActive
+                      ? 'opacity-100 grayscale-0'
+                      : 'opacity-60 grayscale group-hover:opacity-100 group-hover:grayscale-0',
+                  )}
+                  height={28}
+                  src={c.imageSrc}
+                  width={28}
+                />
+              ) : c.iconifyIcon ? (
+                <Icon color="currentColor" height={18} icon={c.iconifyIcon} width={18} />
+              ) : (
+                ModeIcon && <ModeIcon className="h-5 w-5" />
+              )}
+            </ActionButton>
+          </Fragment>
         )
       })}
     </div>

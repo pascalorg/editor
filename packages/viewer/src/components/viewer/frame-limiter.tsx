@@ -21,8 +21,10 @@ const DRAW_DISABLED =
   ).has('draw')
 
 const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
-  const { advance, set, frameloop: initFrameloop, scene, clock } = useThree()
+  const { advance, set, frameloop: initFrameloop } = useThree()
   const renderer = useThree((state) => state.gl)
+  const size = useThree((state) => state.size)
+  const dpr = useThree((state) => state.viewport.dpr)
   // Fully covered canvas (e.g. studio gallery) → stop advancing frames
   const renderPaused = useViewer((s) => s.renderPaused)
 
@@ -33,9 +35,15 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     let i = 0
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
+    let sizeSynced = false
     const interval = 1000 / fps
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
+      if (!sizeSynced) {
+        renderer.setPixelRatio(dpr)
+        renderer.setSize(size.width, size.height, false)
+        sizeSynced = true
+      }
       elapsed = t - then
       if (elapsed > interval) {
         advance(i)
@@ -64,7 +72,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       }
       set({ frameloop: initFrameloop })
     }
-  }, [fps, advance, set, initFrameloop, renderPaused])
+  }, [advance, dpr, fps, initFrameloop, renderPaused, renderer, set, size.height, size.width])
 
   return null
 }

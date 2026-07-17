@@ -1,12 +1,20 @@
 'use client'
 
-import { useLiveNodeOverrides, useRegistry, type ZoneNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  resolveAutoZonePolygon,
+  useLiveNodeOverrides,
+  useRegistry,
+  useScene,
+  type ZoneNode,
+} from '@pascal-app/core'
 import { useNodeEvents, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useShallow } from 'zustand/react/shallow'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -123,7 +131,25 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   const livePolygon = useLiveNodeOverrides((s) => s.overrides.get(node.id)?.polygon) as
     | Array<[number, number]>
     | undefined
-  const polygon = livePolygon ?? node?.polygon
+  const dependencyIds = node.autoFromWalls ? node.boundaryWallIds : []
+  const dependencyNodes = useScene(
+    useShallow((state) => dependencyIds.map((id) => state.nodes[id])),
+  )
+  const dependencyOverrides = useLiveNodeOverrides(
+    useShallow((state) => dependencyIds.map((id) => state.overrides.get(id))),
+  )
+  const proceduralPolygon = useMemo(
+    () =>
+      resolveAutoZonePolygon(node, (id) => {
+        const index = dependencyIds.indexOf(id as (typeof dependencyIds)[number])
+        const dependency = dependencyNodes[index]
+        if (!dependency) return undefined
+        const override = dependencyOverrides[index]
+        return override ? ({ ...dependency, ...override } as AnyNode) : dependency
+      }),
+    [dependencyIds, dependencyNodes, dependencyOverrides, node],
+  )
+  const polygon = livePolygon ?? proceduralPolygon
 
   // Create floor shape from polygon
   const floorShape = useMemo(() => {

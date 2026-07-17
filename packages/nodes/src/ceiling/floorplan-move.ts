@@ -11,4 +11,9 @@ import { createPolygonCentroidMoveTarget } from '../shared/polygon-centroid-move
  * split view.
  */
 export const ceilingFloorplanMoveTarget: FloorplanMoveTarget<CeilingNode> = ({ node, nodes }) =>
-  createPolygonCentroidMoveTarget({ node, nodes, meshY: (node.height ?? 2.5) - 0.01 })
+  createPolygonCentroidMoveTarget({
+    node,
+    nodes,
+    meshY: (node.height ?? 2.5) - 0.01,
+    extraCommitData: node.autoFromWalls ? { autoFromWalls: false } : undefined,
+  })

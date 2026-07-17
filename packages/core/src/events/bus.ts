@@ -26,6 +26,7 @@ import type {
   LevelNode,
   LinesetNode,
   LiquidLineNode,
+  MeasurementNode,
   PipeFittingNode,
   PipeSegmentNode,
   PipeTrapNode,
@@ -129,6 +130,7 @@ export type PipeFittingEvent = NodeEvent<PipeFittingNode>
 export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 export type LiquidLineEvent = NodeEvent<LiquidLineNode>
+export type MeasurementEvent = NodeEvent<MeasurementNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -308,6 +310,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'pipe-trap', PipeTrapEvent> &
   NodeEvents<'lineset', LinesetEvent> &
   NodeEvents<'liquid-line', LiquidLineEvent> &
+  NodeEvents<'measurement', MeasurementEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

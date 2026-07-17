@@ -7,7 +7,9 @@ import {
   CabinetNode,
   type CabinetNode as CabinetNodeType,
   type LevelNode,
+  MeasurementNode,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
@@ -134,5 +136,61 @@ describe('scene clipboard', () => {
     const result = pasteEditorClipboardToLevel(targetLevelId)
     expect(result?.pastedIds).toHaveLength(1)
     expect(pastedCabinetRun()?.children).toHaveLength(2)
+  })
+
+  test('remaps a measurement association when its host is copied with it', () => {
+    const wall = WallNode.parse({
+      id: 'wall_clipboard-host',
+      type: 'wall',
+      parentId: sourceLevelId,
+      start: [0, 0],
+      end: [3, 0],
+    })
+    const measurement = MeasurementNode.parse({
+      id: 'measurement_clipboard-associated',
+      type: 'measurement',
+      parentId: sourceLevelId,
+      measurement: {
+        kind: 'distance',
+        points: [
+          {
+            kind: 'feature',
+            reference: { nodeId: wall.id, featureId: 'wall:face:left', parameters: { t: 0 } },
+            fallback: [0, 0, 0],
+          },
+          [3, 0, 0],
+        ],
+      },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [wall.id, measurement.id]),
+        [wall.id]: wall,
+        [measurement.id]: measurement,
+      },
+    }))
+
+    expect(copySelectedNodesToEditorClipboard([wall.id, measurement.id])).toBe(true)
+    expect(pasteEditorClipboardToLevel(targetLevelId)?.pastedIds).toHaveLength(2)
+
+    const pastedWall = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'wall' && node.id !== wall.id,
+    )
+    const pastedMeasurement = Object.values(useScene.getState().nodes).find(
+      (node) => node.type === 'measurement' && node.id !== measurement.id,
+    )
+    expect(pastedWall?.type).toBe('wall')
+    expect(pastedMeasurement?.type).toBe('measurement')
+    if (
+      pastedWall?.type !== 'wall' ||
+      pastedMeasurement?.type !== 'measurement' ||
+      pastedMeasurement.measurement.kind !== 'distance'
+    ) {
+      return
+    }
+    const anchor = pastedMeasurement.measurement.points[0]
+    expect(Array.isArray(anchor)).toBe(false)
+    if (!Array.isArray(anchor)) expect(anchor.reference.nodeId).toBe(pastedWall.id)
   })
 })

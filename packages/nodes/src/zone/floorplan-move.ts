@@ -12,4 +12,9 @@ import { createPolygonCentroidMoveTarget } from '../shared/polygon-centroid-move
  * polygon mover translates the actual vertices. `meshY = 0`.
  */
 export const zoneFloorplanMoveTarget: FloorplanMoveTarget<ZoneNode> = ({ node, nodes }) =>
-  createPolygonCentroidMoveTarget({ node, nodes, meshY: 0 })
+  createPolygonCentroidMoveTarget({
+    node,
+    nodes,
+    meshY: 0,
+    extraCommitData: node.autoFromWalls ? { autoFromWalls: false, boundaryWallIds: [] } : undefined,
+  })

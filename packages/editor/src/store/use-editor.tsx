@@ -51,6 +51,11 @@ import {
   type SingleSurfaceMaterialRole,
 } from '../lib/material-paint'
 import {
+  type CreatableMeasurementKind,
+  DEFAULT_CREATABLE_MEASUREMENT_KIND,
+  normalizeCreatableMeasurementKind,
+} from '../lib/measurement-kind'
+import {
   cyclePaintScope as cyclePaintScopeValue,
   type PaintHoverInfo,
   type PaintScope,
@@ -266,6 +271,8 @@ type EditorState = {
    */
   toolDefaults: Partial<Record<Tool, ToolDefaults>>
   setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
+  lastMeasurementKind: CreatableMeasurementKind
+  setLastMeasurementKind: (kind: CreatableMeasurementKind) => void
   structureLayer: StructureLayer
   setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
@@ -487,6 +494,7 @@ type PersistedEditorLayoutState = Pick<
   | 'floorplanSelectionTool'
   | 'gridSnapStep'
   | 'magneticSnap'
+  | 'lastMeasurementKind'
   | 'snappingModeByContext'
   | 'continuationByContext'
   | 'showReferenceFloor'
@@ -512,6 +520,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
   floorplanSelectionTool: 'click',
   gridSnapStep: 0.5,
   magneticSnap: true,
+  lastMeasurementKind: DEFAULT_CREATABLE_MEASUREMENT_KIND,
   snappingModeByContext: {
     wall: defaultSnappingModeFor('wall'),
     item: defaultSnappingModeFor('item'),
@@ -684,6 +693,7 @@ function normalizePersistedEditorLayoutState(
       : DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,
     // Default on: only an explicit persisted `false` disables it.
     magneticSnap: state?.magneticSnap !== false,
+    lastMeasurementKind: normalizeCreatableMeasurementKind(state?.lastMeasurementKind),
     snappingModeByContext: {
       wall: migrateSnappingMode(state?.snappingModeByContext?.wall, 'wall'),
       item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
@@ -900,6 +910,8 @@ const useEditor = create<EditorState>()(
           }
           return { toolDefaults: next }
         }),
+      lastMeasurementKind: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.lastMeasurementKind,
+      setLastMeasurementKind: (kind) => set({ lastMeasurementKind: kind }),
       structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
       setStructureLayer: (layer) => {
         const { mode } = get()
@@ -1262,11 +1274,28 @@ const useEditor = create<EditorState>()(
     }),
     {
       name: 'pascal-editor-ui-preferences',
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...normalizePersistedEditorUiState(persistedState as Partial<PersistedEditorState>),
-        ...normalizePersistedEditorLayoutState(persistedState as Partial<PersistedEditorState>),
-      }),
+      merge: (persistedState, currentState) => {
+        const uiState = normalizePersistedEditorUiState(
+          persistedState as Partial<PersistedEditorState>,
+        )
+        const layoutState = normalizePersistedEditorLayoutState(
+          persistedState as Partial<PersistedEditorState>,
+        )
+
+        return {
+          ...currentState,
+          ...uiState,
+          ...layoutState,
+          ...(uiState.mode === 'build' && uiState.tool === 'measurement'
+            ? {
+                toolDefaults: {
+                  ...currentState.toolDefaults,
+                  measurement: { kind: layoutState.lastMeasurementKind },
+                },
+              }
+            : {}),
+        }
+      },
       partialize: (state) => ({
         phase: state.phase,
         mode: state.mode,
@@ -1281,6 +1310,7 @@ const useEditor = create<EditorState>()(
         floorplanSelectionTool: state.floorplanSelectionTool,
         gridSnapStep: state.gridSnapStep,
         magneticSnap: state.magneticSnap,
+        lastMeasurementKind: state.lastMeasurementKind,
         snappingModeByContext: state.snappingModeByContext,
         continuationByContext: state.continuationByContext,
         showReferenceFloor: state.showReferenceFloor,

@@ -18,6 +18,7 @@ export type {
   GutterEvent,
   ItemEvent,
   LevelEvent,
+  MeasurementEvent,
   NodeEvent,
   RidgeVentEvent,
   RoofEvent,
@@ -70,6 +71,23 @@ export {
 } from './lib/door-operation'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
+  areMeasurementPointsCoplanar,
+  closestMeasurementFeatureBinding,
+  MEASUREMENT_PLANAR_TOLERANCE,
+  measurementAnchorFallback,
+  measurementAngle,
+  measurementArea,
+  measurementAreaVector,
+  measurementCentroid,
+  measurementDistance,
+  measurementFeatureLength,
+  measurementNormal,
+  measurementPerimeter,
+  measurementPrismVolume,
+  measurementReferenceNodeIds,
+  remapMeasurementReferences,
+} from './lib/measurement-geometry'
+export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,
   pointOnSegment,
@@ -96,13 +114,16 @@ export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
+  type AutoZoneSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   isSpaceDetectionPaused,
   pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  planAutoZonesForLevel,
   projectAutoSlabsForPlan,
+  resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
   type SpaceBoundaryFace,
@@ -117,6 +138,11 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export {
+  deriveZoneQuantityReport,
+  type ZoneQuantityReport,
+  type ZoneQuantityValue,
+} from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
