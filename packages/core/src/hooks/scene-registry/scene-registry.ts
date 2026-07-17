@@ -16,6 +16,31 @@ import type * as THREE from 'three'
 type ByTypeMap = { [kind: string]: Set<string> }
 const byTypeStore = new Map<string, Set<string>>()
 
+class RevisionedMap<K, V> extends Map<K, V> {
+  revision = 0
+
+  override set(key: K, value: V) {
+    if (this.has(key) && this.get(key) === value) return this
+    super.set(key, value)
+    this.revision += 1
+    return this
+  }
+
+  override delete(key: K) {
+    const deleted = super.delete(key)
+    if (deleted) this.revision += 1
+    return deleted
+  }
+
+  override clear() {
+    if (this.size === 0) return
+    super.clear()
+    this.revision += 1
+  }
+}
+
+const registeredNodes = new RevisionedMap<string, THREE.Object3D>()
+
 const byTypeProxy = new Proxy({} as ByTypeMap, {
   get(_target, key) {
     if (typeof key !== 'string') return undefined
@@ -42,7 +67,11 @@ const byTypeProxy = new Proxy({} as ByTypeMap, {
 
 export const sceneRegistry = {
   // Master lookup: ID -> Object3D
-  nodes: new Map<string, THREE.Object3D>(),
+  nodes: registeredNodes,
+
+  get revision() {
+    return registeredNodes.revision
+  },
 
   // Categorized lookups: Kind -> Set of IDs. Backed by a Proxy so any kind
   // gets a Set on first touch — no hardcoded list.

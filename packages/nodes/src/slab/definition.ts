@@ -8,6 +8,7 @@ import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
+  slabDeleteVertexAffordance,
   slabMoveEdgeAffordance,
   slabMoveVertexAffordance,
 } from './floorplan-affordances'
@@ -15,6 +16,7 @@ import { slabFloorplanMoveTarget } from './floorplan-move'
 import { buildSlabGeometry } from './geometry'
 import { slabPaint } from './paint'
 import { slabParametrics } from './parametrics'
+import { slabQuickMeasurement } from './quick-measurement'
 import { SlabNode } from './schema'
 import { slabSlots } from './slots'
 
@@ -180,6 +182,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
         label: 'Slab',
         polygon: node.polygon,
       }),
+    quickMeasure: (node) => slabQuickMeasurement(node),
   },
 
   // Stage D: kind-owned placement tool. Multi-click polygon drawing
@@ -213,6 +216,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     'move-vertex': slabMoveVertexAffordance,
     'add-vertex': slabAddVertexAffordance,
     'move-edge': slabMoveEdgeAffordance,
+    'delete-vertex': slabDeleteVertexAffordance,
   },
 
   toolHints: [

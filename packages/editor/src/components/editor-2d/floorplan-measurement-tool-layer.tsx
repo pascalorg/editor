@@ -22,6 +22,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { measurementPolygonLabelAnchor } from '../../lib/measurement-label'
 import {
+  buildMeasurementAngleArcPoints,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
@@ -30,6 +31,10 @@ import {
   MEASUREMENT_ACTIVE_COLOR,
   metersToLinearUnit,
 } from '../../lib/measurements'
+import {
+  clearSurfacePlanSnapFeedback,
+  resolveSurfacePlanPointSnap,
+} from '../../lib/surface-plan-snap'
 import useEditor from '../../store/use-editor'
 import {
   commitMeasurementDraft,
@@ -39,6 +44,7 @@ import {
   useMeasurementDraft,
 } from '../../store/use-measurement-draft'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
+import { FloorplanQuickMeasureLayer } from './floorplan-quick-measure-layer'
 import { useFloorplanRender } from './floorplan-render-context'
 import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
 
@@ -46,9 +52,9 @@ const DRAFT_COLOR = MEASUREMENT_ACTIVE_COLOR
 const X_AXIS_COLOR = '#ef4444'
 const Z_AXIS_COLOR = '#3b82f6'
 const RETICLE_COLOR = MEASUREMENT_ACTIVE_COLOR
-const AXIS_SNAP_DISTANCE_PX = 12
-const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
-const PROXIMITY_GUIDE_DISTANCE_PX = 32
+const AXIS_SNAP_DISTANCE_PX = 16
+const AXIS_SNAP_RELEASE_DISTANCE_PX = 24
+const PROXIMITY_GUIDE_DISTANCE_PX = 40
 const VERTEX_HANDLE_DISTANCE_PX = 12
 const MIDPOINT_HANDLE_DISTANCE_PX = 10
 const VERTEX_DRAG_ACTIVATION_PX = 4
@@ -71,8 +77,8 @@ export type ProjectedFloorplanSnap = {
 const MAX_REGISTERED_SNAP_ELEMENTS = 512
 const MAX_REGISTERED_SNAP_SEGMENTS = 4096
 const MAX_SAMPLED_PATH_SEGMENTS = 48
-const VERTEX_SNAP_DISTANCE_PX = 10
-const EDGE_SNAP_DISTANCE_PX = 8
+const VERTEX_SNAP_DISTANCE_PX = 16
+const EDGE_SNAP_DISTANCE_PX = 10
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
 
 function measurementGeometryContext(
@@ -760,7 +766,8 @@ export function FloorplanMeasurementToolLayer() {
   const tool = useEditor((state) => state.tool)
   const storedKind = useEditor((state) => state.toolDefaults.measurement?.kind)
   const kind = isMeasurementKind(storedKind) ? storedKind : 'distance'
-  const active = mode === 'build' && tool === 'measurement'
+  const smartActive = mode === 'build' && tool === 'measurement' && storedKind === 'smart'
+  const active = mode === 'build' && tool === 'measurement' && isMeasurementKind(storedKind)
   const renderContext = useFloorplanRender()
   const points = useMeasurementDraft((state) => state.points)
   const hover = useMeasurementDraft((state) => state.hover)
@@ -874,9 +881,14 @@ export function FloorplanMeasurementToolLayer() {
       const projectedPlan = projectedSnap
         ? clientToPlanPoint(group, projectedSnap.point.x, projectedSnap.point.z)
         : null
-      const raw: MeasurementPoint = projectedPlan
-        ? [projectedPlan.x, 0, projectedPlan.z]
-        : [plan.x, 0, plan.z]
+      const surfaceSnap = resolveSurfacePlanPointSnap({
+        rawPoint: [plan.x, plan.z],
+        fallbackPoint: projectedPlan ? [projectedPlan.x, projectedPlan.z] : [plan.x, plan.z],
+        levelId: activeLevelId,
+        align: false,
+      })
+      const raw: MeasurementPoint = [surfaceSnap.point[0], 0, surfaceSnap.point[1]]
+      const targetNodeId = surfaceSnap.wallIds[0] ?? projectedSnap?.nodeId ?? null
       const lastPoint = draft.points.at(-1)
       const resolved = snapPlanPoint(
         group,
@@ -888,13 +900,13 @@ export function FloorplanMeasurementToolLayer() {
         draft.axisGuide?.snapped && draft.axisGuide.axis !== 'y' ? draft.axisGuide : null,
         projectedGeometry.proximityAnchors,
       )
-      if (projectedSnap && resolved.guide?.snapped) {
+      if (targetNodeId && resolved.guide?.snapped) {
         const candidate = planPointToClient(group, resolved.point)
         if (
           !candidate ||
           !isProjectedFloorplanAxisPointVerified(
             { x: candidate.x, z: candidate.y },
-            projectedSnap.nodeId,
+            targetNodeId,
             projectedGeometry.vertices,
             projectedGeometry.segments,
           )
@@ -909,10 +921,10 @@ export function FloorplanMeasurementToolLayer() {
             null,
             projectedGeometry.proximityAnchors,
           )
-          return { ...surfaceOnly, targetNodeId: projectedSnap.nodeId }
+          return { ...surfaceOnly, targetNodeId }
         }
       }
-      return { ...resolved, targetNodeId: projectedSnap?.nodeId ?? null }
+      return { ...resolved, targetNodeId }
     }
 
     const clearVertexGesture = (finish: boolean) => {
@@ -1036,6 +1048,7 @@ export function FloorplanMeasurementToolLayer() {
 
     const onPointerLeave = () => {
       if (vertexGesture.current) return
+      clearSurfacePlanSnapFeedback()
       const draft = useMeasurementDraft.getState()
       if (!draft.owner || draft.owner === '2d') draft.setHover('2d', null)
     }
@@ -1065,6 +1078,7 @@ export function FloorplanMeasurementToolLayer() {
       if (!gesture || gesture.pointerId !== event.pointerId) return
       consume(event)
       clearVertexGesture(false)
+      clearSurfacePlanSnapFeedback()
     }
 
     const onClick = (event: MouseEvent) => {
@@ -1105,8 +1119,14 @@ export function FloorplanMeasurementToolLayer() {
       closeBaseAndMaybeCommit()
     }
 
-    const onBlur = () => clearVertexGesture(false)
-    const onToolCancel = () => clearVertexGesture(false)
+    const onBlur = () => {
+      clearVertexGesture(false)
+      clearSurfacePlanSnapFeedback()
+    }
+    const onToolCancel = () => {
+      clearVertexGesture(false)
+      clearSurfacePlanSnapFeedback()
+    }
 
     emitter.on('tool:cancel', onToolCancel)
     svg.addEventListener('pointerdown', onPointerDown, true)
@@ -1120,6 +1140,7 @@ export function FloorplanMeasurementToolLayer() {
     return () => {
       cancelVertexGesture.current = () => {}
       clearVertexGesture(false)
+      clearSurfacePlanSnapFeedback()
       emitter.off('tool:cancel', onToolCancel)
       svg.removeEventListener('pointerdown', onPointerDown, true)
       svg.removeEventListener('pointermove', onPointerMove, true)
@@ -1137,6 +1158,11 @@ export function FloorplanMeasurementToolLayer() {
       stage === 'collecting' && hover && !vertexDrag ? [...points, hover.point] : points
     const planPoints = livePoints.map((point) => ({ x: point[0], y: point[2] }))
     const polygonPoints = planPoints.map((point) => `${point.x},${point.y}`).join(' ')
+    const angleArc =
+      kind === 'angle' && livePoints.length >= 3
+        ? buildMeasurementAngleArcPoints(livePoints[0]!, livePoints[1]!, livePoints[2]!)
+        : []
+    const angleArcPoints = angleArc.map((point) => `${point[0]},${point[2]}`).join(' ')
     const first = planPoints[0]
     const last = planPoints[planPoints.length - 1]
     const center = measurementPolygonLabelAnchor(points)
@@ -1174,7 +1200,7 @@ export function FloorplanMeasurementToolLayer() {
       ]
       label = {
         angle: 0,
-        point: anglePoints[1],
+        point: angleArc[Math.floor(angleArc.length / 2)] ?? anglePoints[1],
         screenUpright: true,
         text: formatAngleRadians(measurementAngle(...anglePoints)),
       }
@@ -1227,6 +1253,7 @@ export function FloorplanMeasurementToolLayer() {
 
     return {
       activeEdges,
+      angleArcPoints,
       center,
       first,
       label,
@@ -1239,6 +1266,7 @@ export function FloorplanMeasurementToolLayer() {
     }
   }, [axisGuide, baseNormal, extrusionHeight, hover, kind, points, stage, unit, vertexDrag])
 
+  if (smartActive) return <FloorplanQuickMeasureLayer />
   if (!active || (draftLevelId && draftLevelId !== activeLevelId)) return null
   const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
   const sceneRotationDeg = renderContext?.sceneRotationDeg ?? 0
@@ -1246,15 +1274,22 @@ export function FloorplanMeasurementToolLayer() {
   const labelFontSize = 12 * unitsPerPixel
   const reticleRadius = 16 * unitsPerPixel
   const reticleInnerRadius = 9 * unitsPerPixel
-  const reticleColor = hover?.semantic
-    ? '#22c55e'
-    : axisGuide?.snapped
+  const cornerSnap = hover?.semantic?.snapKind === 'endpoint'
+  const reticleColor = axisGuide?.snapped
+    ? axisGuide.axis === 'x'
+      ? X_AXIS_COLOR
+      : axisGuide.axis === 'z'
+        ? Z_AXIS_COLOR
+        : RETICLE_COLOR
+    : hover?.semantic
+      ? '#22c55e'
+      : RETICLE_COLOR
+  const distanceStrokeColor =
+    kind === 'distance' && axisGuide?.snapped
       ? axisGuide.axis === 'x'
         ? X_AXIS_COLOR
-        : axisGuide.axis === 'z'
-          ? Z_AXIS_COLOR
-          : RETICLE_COLOR
-      : RETICLE_COLOR
+        : Z_AXIS_COLOR
+      : DRAFT_COLOR
   const guideAnchor = vertexDrag && axisGuide ? axisGuide.from : points.at(-1)
   const guideHalfLength = AXIS_GUIDE_HALF_LENGTH_PX * unitsPerPixel
   const labelBackground = renderContext?.palette.measurementLabelBackground ?? '#0f172a'
@@ -1266,9 +1301,9 @@ export function FloorplanMeasurementToolLayer() {
         <g pointerEvents="none">
           <line
             stroke={X_AXIS_COLOR}
-            strokeDasharray="6 5"
+            strokeDasharray={axisGuide?.axis === 'x' && axisGuide.snapped ? undefined : '6 5'}
             strokeOpacity={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 1 : 0.8) : 0.28}
-            strokeWidth={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 3 : 2) : 1}
+            strokeWidth={axisGuide?.axis === 'x' ? (axisGuide.snapped ? 3.5 : 2) : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0] - guideHalfLength}
             x2={guideAnchor[0] + guideHalfLength}
@@ -1277,9 +1312,9 @@ export function FloorplanMeasurementToolLayer() {
           />
           <line
             stroke={Z_AXIS_COLOR}
-            strokeDasharray="6 5"
+            strokeDasharray={axisGuide?.axis === 'z' && axisGuide.snapped ? undefined : '6 5'}
             strokeOpacity={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 1 : 0.8) : 0.28}
-            strokeWidth={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 3 : 2) : 1}
+            strokeWidth={axisGuide?.axis === 'z' ? (axisGuide.snapped ? 3.5 : 2) : 1}
             vectorEffect="non-scaling-stroke"
             x1={guideAnchor[0]}
             x2={guideAnchor[0]}
@@ -1290,7 +1325,7 @@ export function FloorplanMeasurementToolLayer() {
       ) : null}
       {kind === 'distance' && preview.planPoints.length >= 2 ? (
         <line
-          stroke={DRAFT_COLOR}
+          stroke={distanceStrokeColor}
           strokeLinecap="round"
           strokeWidth={2}
           vectorEffect="non-scaling-stroke"
@@ -1301,15 +1336,28 @@ export function FloorplanMeasurementToolLayer() {
         />
       ) : null}
       {kind === 'angle' && preview.planPoints.length >= 2 ? (
-        <polyline
-          fill="none"
-          points={preview.polygonPoints}
-          stroke={DRAFT_COLOR}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          vectorEffect="non-scaling-stroke"
-        />
+        <>
+          <polyline
+            fill="none"
+            points={preview.polygonPoints}
+            stroke={DRAFT_COLOR}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+          />
+          {preview.angleArcPoints ? (
+            <polyline
+              fill="none"
+              points={preview.angleArcPoints}
+              stroke={DRAFT_COLOR}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
+        </>
       ) : null}
       {(kind === 'area' || kind === 'perimeter' || kind === 'volume') &&
       preview.planPoints.length >= 2 ? (
@@ -1391,6 +1439,25 @@ export function FloorplanMeasurementToolLayer() {
             {axisGuide.proximity ? 'ALIGN ' : ''}
             {axisGuide.axis.toUpperCase()}
           </text>
+          {axisGuide.snapped ? (
+            <>
+              <circle
+                cx={axisGuide.to[0]}
+                cy={axisGuide.to[2]}
+                fill={labelBackground}
+                r={6 * unitsPerPixel}
+                stroke={axisGuide.axis === 'x' ? X_AXIS_COLOR : Z_AXIS_COLOR}
+                strokeWidth={3}
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={axisGuide.to[0]}
+                cy={axisGuide.to[2]}
+                fill={axisGuide.axis === 'x' ? X_AXIS_COLOR : Z_AXIS_COLOR}
+                r={2 * unitsPerPixel}
+              />
+            </>
+          ) : null}
           {axisGuide.proximity && axisGuide.snapped ? (
             <circle
               cx={axisGuide.from[0]}
@@ -1432,6 +1499,18 @@ export function FloorplanMeasurementToolLayer() {
       ))}
       {hover && hoverOwner === '2d' ? (
         <g pointerEvents="none">
+          {cornerSnap ? (
+            <circle
+              cx={hover.point[0]}
+              cy={hover.point[2]}
+              fill="none"
+              r={reticleRadius + 6 * unitsPerPixel}
+              stroke="#a3e635"
+              strokeOpacity={0.9}
+              strokeWidth={3}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
           <circle
             cx={hover.point[0]}
             cy={hover.point[2]}

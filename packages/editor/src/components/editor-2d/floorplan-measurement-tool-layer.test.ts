@@ -17,6 +17,13 @@ describe('resolveFloorplanMeasurementAxisSnap', () => {
     })
   })
 
+  test('uses the stronger default magnetic acquisition envelope', () => {
+    expect(resolveFloorplanMeasurementAxisSnap([3, 0, 2], [1, 0, 1], 15, 20)).toEqual({
+      point: [3, 0, 1],
+      guide: { axis: 'x', from: [1, 0, 1], to: [3, 0, 1], snapped: true },
+    })
+  })
+
   test('keeps the surface point when neither axis is close enough', () => {
     expect(resolveFloorplanMeasurementAxisSnap([3, 0, 2], [1, 0, 1], 20, 18)).toEqual({
       point: [3, 0, 2],
@@ -66,6 +73,14 @@ describe('resolveProjectedFloorplanSnap', () => {
 
   test('prefers a registered vertex before a nearby edge', () => {
     expect(resolveProjectedFloorplanSnap({ x: 13, z: 14 }, vertices, segments)).toEqual({
+      kind: 'vertex',
+      nodeId: 'wall_1',
+      point: { x: 10, z: 10 },
+    })
+  })
+
+  test('acquires structural corners inside the stronger screen-space envelope', () => {
+    expect(resolveProjectedFloorplanSnap({ x: 25, z: 10 }, vertices, segments)).toEqual({
       kind: 'vertex',
       nodeId: 'wall_1',
       point: { x: 10, z: 10 },

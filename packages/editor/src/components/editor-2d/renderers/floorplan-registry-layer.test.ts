@@ -1,10 +1,18 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId, LiveNodeOverrides } from '@pascal-app/core'
-import { type AnyNodeDefinition, nodeRegistry, registerNode } from '@pascal-app/core'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import type {
+  AnyNode,
+  AnyNodeId,
+  FloorplanAffordanceSession,
+  LiveNodeOverrides,
+} from '@pascal-app/core'
+import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
 import { z } from 'zod'
 import {
+  cancelFloorplanAffordanceDrag,
   collectFloorplanDependencyNodes,
   computeAffectedSiblingIds,
+  floorplanHandleDoubleClickAffordance,
+  subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
 
 function cabinetRun(id: string, children: string[] = [], parentId: string | null = 'level_test') {
@@ -105,6 +113,100 @@ function registerCabinetFloorplanDefinition(kind: 'cabinet' | 'cabinet-module') 
     floorplanAffectedIds: cabinetAffectedIds,
   } as unknown as AnyNodeDefinition)
 }
+
+describe('floorplan affordance cancellation', () => {
+  test('tool:cancel reverts the drag and makes a later pointerup inert', () => {
+    const releasePointerCapture = mock(() => {})
+    const commit = mock(() => {})
+    const session: FloorplanAffordanceSession = {
+      affectedIds: ['wall_a', 'wall_b'],
+      apply: () => {},
+      canCommit: () => true,
+      commit,
+    }
+    const snapshots = [{ id: 'wall_a' as AnyNodeId, data: { width: 1 } }]
+    const drag = {
+      pointerId: 7,
+      captureTarget: {
+        hasPointerCapture: mock(() => true),
+        releasePointerCapture,
+      } as unknown as Element,
+      handleId: 'wall_a:endpoint',
+      session,
+      snapshots,
+      historyPaused: true,
+    }
+    const dragRef = { current: drag }
+    const restoreSnapshots = mock(() => {})
+    const resumeHistory = mock(() => {})
+    const clearPreview = mock(() => {})
+    const clearSnapFeedback = mock(() => {})
+    const endReshapeScope = mock(() => {})
+    const clearDragFeedback = mock(() => {})
+    const consumeToolCancel = mock(() => {})
+
+    const unsubscribe = subscribeFloorplanAffordanceToolCancel(
+      () =>
+        cancelFloorplanAffordanceDrag(dragRef, {
+          restoreSnapshots,
+          resumeHistory,
+          clearPreview,
+          clearSnapFeedback,
+          endReshapeScope,
+          clearDragFeedback,
+        }),
+      consumeToolCancel,
+    )
+
+    try {
+      emitter.emit('tool:cancel')
+      emitter.emit('tool:cancel')
+    } finally {
+      unsubscribe()
+    }
+
+    expect(dragRef.current).toBeNull()
+    expect(releasePointerCapture).toHaveBeenCalledWith(7)
+    expect(restoreSnapshots).toHaveBeenCalledWith(snapshots)
+    expect(resumeHistory).toHaveBeenCalledTimes(1)
+    expect(clearPreview).toHaveBeenCalledTimes(2)
+    expect(clearPreview).toHaveBeenNthCalledWith(1, 'wall_a')
+    expect(clearPreview).toHaveBeenNthCalledWith(2, 'wall_b')
+    expect(clearSnapFeedback).toHaveBeenCalledTimes(1)
+    expect(endReshapeScope).toHaveBeenCalledWith(drag)
+    expect(clearDragFeedback).toHaveBeenCalledTimes(1)
+    expect(consumeToolCancel).toHaveBeenCalledTimes(1)
+    expect(drag.historyPaused).toBe(false)
+
+    const activeDrag = dragRef.current
+    if (activeDrag?.pointerId === 7) activeDrag.session.commit?.()
+    expect(commit).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('floorplan vertex double-click routing', () => {
+  test('routes polygon vertex handles to the kind-owned delete affordance', () => {
+    expect(
+      floorplanHandleDoubleClickAffordance({
+        kind: 'endpoint-handle',
+        point: [1, 2],
+        state: 'idle',
+        affordance: 'move-vertex',
+        payload: { vertexIndex: 2 },
+      }),
+    ).toBe('delete-vertex')
+
+    expect(
+      floorplanHandleDoubleClickAffordance({
+        kind: 'endpoint-handle',
+        point: [1, 2],
+        state: 'idle',
+        affordance: 'move-endpoint',
+        payload: { endpoint: 'end' },
+      }),
+    ).toBeNull()
+  })
+})
 
 describe('computeAffectedSiblingIds', () => {
   beforeEach(() => {

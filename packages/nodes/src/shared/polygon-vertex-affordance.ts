@@ -23,13 +23,15 @@ import {
  * targets the outer `node.polygon`. The same factory wires both
  * boundary and hole interactions without duplicating the math.
  *
- * Three affordances available:
+ * Four affordances available:
  *
  * - `move-vertex` — drag an existing vertex.
  * - `add-vertex` — insert a new vertex at an edge midpoint, then drag
  *   it (click-without-drag reverts to the snapshot).
  * - `move-edge` — drag a whole edge perpendicular to itself (both
  *   endpoints translate by `normal * projection`).
+ * - `delete-vertex` — remove a double-clicked vertex while preserving
+ *   the minimum three-vertex ring.
  */
 
 export type PolygonVertexPayload = {
@@ -60,8 +62,10 @@ export type PolygonAffordanceSnapContext<N extends PolygonShape & { id: AnyNodeI
   mode: PolygonAffordanceMode
 }
 
-type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+export type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
   resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
+  /** Fields applied with a manual ring edit, such as detaching an auto surface. */
+  extraCommitData?: Partial<N>
 }
 
 type PolygonShape = {
@@ -89,14 +93,15 @@ function buildRingPatch(
   node: PolygonShape,
   holeIndex: number | undefined,
   nextRing: ReadonlyArray<[number, number]>,
+  extraCommitData?: Record<string, unknown>,
 ): unknown {
   if (holeIndex === undefined) {
-    return { polygon: nextRing }
+    return { ...extraCommitData, polygon: nextRing }
   }
   const nextHoles = (node.holes ?? []).map((hole, i) =>
     i === holeIndex ? nextRing : hole.map(([x, y]) => [x, y] as [number, number]),
   )
-  return { holes: nextHoles }
+  return { ...extraCommitData, holes: nextHoles }
 }
 
 function resolveAffordancePlanPoint<N extends PolygonShape & { id: AnyNodeId }>(
@@ -145,7 +150,12 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
           const nextRing: [number, number][] = originalRing.map((p, i) =>
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(
+            node,
+            holeIndex,
+            nextRing,
+            options?.extraCommitData as Record<string, unknown> | undefined,
+          )
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
@@ -207,7 +217,12 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
 
       // Apply the insert immediately so the user sees the new vertex
       // before they even move.
-      const initialPatch = buildRingPatch(node, holeIndex, initialRing)
+      const initialPatch = buildRingPatch(
+        node,
+        holeIndex,
+        initialRing,
+        options?.extraCommitData as Record<string, unknown> | undefined,
+      )
       useScene
         .getState()
         .updateNodes([{ id: node.id, data: initialPatch as Partial<unknown> as never }])
@@ -233,7 +248,12 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           const nextRing: [number, number][] = initialRing.map((p, i) =>
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(
+            node,
+            holeIndex,
+            nextRing,
+            options?.extraCommitData as Record<string, unknown> | undefined,
+          )
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
@@ -243,6 +263,59 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
+        },
+      }
+    },
+  }
+}
+
+export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
+  kind: string,
+  options?: PolygonAffordanceOptions<N>,
+): FloorplanAffordance<N> {
+  return {
+    start({ node, payload }): FloorplanAffordanceSession {
+      const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
+      const canDeleteCurrentVertex = () => {
+        const current = useScene.getState().nodes[node.id] as N | undefined
+        if (!current || (current as unknown as { type: string }).type !== kind) return false
+        const ring = getRing(current, holeIndex)
+        return Boolean(
+          ring &&
+            ring.length > 3 &&
+            Number.isInteger(vertexIndex) &&
+            vertexIndex >= 0 &&
+            vertexIndex < ring.length,
+        )
+      }
+
+      return {
+        affectedIds: [node.id],
+        apply() {},
+        canCommit: canDeleteCurrentVertex,
+        commit() {
+          const current = useScene.getState().nodes[node.id] as N | undefined
+          if (!current || (current as unknown as { type: string }).type !== kind) return
+          const ring = getRing(current, holeIndex)
+          if (
+            !ring ||
+            ring.length <= 3 ||
+            !Number.isInteger(vertexIndex) ||
+            vertexIndex < 0 ||
+            vertexIndex >= ring.length
+          ) {
+            return
+          }
+          const nextRing = ring.filter((_, index) => index !== vertexIndex)
+          const patch = buildRingPatch(
+            current,
+            holeIndex,
+            nextRing,
+            options?.extraCommitData as Record<string, unknown> | undefined,
+          )
+          useScene
+            .getState()
+            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
         },
       }
     },
@@ -342,7 +415,12 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
             }
             return [p[0], p[1]] as [number, number]
           })
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(
+            node,
+            holeIndex,
+            nextRing,
+            options?.extraCommitData as Record<string, unknown> | undefined,
+          )
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])

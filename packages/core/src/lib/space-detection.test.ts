@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { CeilingNode, SlabNode, WallNode } from '../schema'
+import { CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import {
   detectSpacesForLevel,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  planAutoZonesForLevel,
+  resolveAutoZonePolygon,
   wallClosesRoom,
 } from './space-detection'
 
@@ -108,8 +110,10 @@ describe('detectSpacesForLevel', () => {
   }
 
   test('detects an isolated four-wall room', () => {
-    const { roomPolygons } = detectSpacesForLevel('level-1', squareWalls())
+    const walls = squareWalls()
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', walls)
     expect(roomPolygons).toHaveLength(1)
+    expect(new Set(spaces[0]?.wallIds)).toEqual(new Set(walls.map((wall) => wall.id)))
   })
 
   test('detects a room closed against the middle of an existing wall (T-junction)', () => {
@@ -127,12 +131,74 @@ describe('detectSpacesForLevel', () => {
       WallNode.parse({ start: [3, -2], end: [3, 0] }),
     ]
 
-    const { roomPolygons } = detectSpacesForLevel('level-1', walls)
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', walls)
     const areas = roomPolygons.map((poly) => areaOf(poly)).sort((a, b) => a - b)
+    const smallRoom = spaces.find((space) => areaOf(space.polygon.map(([x, y]) => ({ x, y }))) < 5)
 
     expect(roomPolygons).toHaveLength(2)
     expect(areas[0]).toBeCloseTo(4, 1) // small room: 2×2
     expect(areas[1]).toBeCloseTo(30, 1) // big room: 6×5
+    expect(new Set(smallRoom?.wallIds)).toEqual(
+      new Set([walls[0]!.id, walls[4]!.id, walls[5]!.id, walls[6]!.id]),
+    )
+  })
+})
+
+describe('procedural zones', () => {
+  test('adopts an exact room footprint and records its enclosing walls', () => {
+    const walls = squareWalls()
+    const { spaces } = detectSpacesForLevel('level-1', walls)
+    const zone = ZoneNode.parse({ name: 'Kitchen', polygon: square })
+
+    const plan = planAutoZonesForLevel(spaces, [zone])
+
+    expect(plan.update).toHaveLength(1)
+    expect(plan.update[0]?.data.autoFromWalls).toBe(true)
+    expect(new Set(plan.update[0]?.data.boundaryWallIds)).toEqual(
+      new Set(walls.map((wall) => wall.id)),
+    )
+  })
+
+  test('derives the live polygon from effective wall endpoints', () => {
+    const walls = squareWalls()
+    const zone = ZoneNode.parse({
+      name: 'Kitchen',
+      polygon: square,
+      autoFromWalls: true,
+      boundaryWallIds: walls.map((wall) => wall.id),
+    })
+    const movedWalls = [
+      { ...walls[0]!, end: [5, 0] as [number, number] },
+      { ...walls[1]!, start: [5, 0] as [number, number], end: [5, 3] as [number, number] },
+      { ...walls[2]!, start: [5, 3] as [number, number] },
+      walls[3]!,
+    ]
+    const byId = new Map(movedWalls.map((wall) => [wall.id, wall]))
+
+    const polygon = resolveAutoZonePolygon(zone, (id) =>
+      byId.get(id as (typeof walls)[number]['id']),
+    )
+    const plan = planAutoZonesForLevel(detectSpacesForLevel('level-1', movedWalls).spaces, [zone])
+
+    expect(polygon).toContainEqual([5, 0])
+    expect(polygon).toContainEqual([5, 3])
+    expect(polygon).not.toContainEqual([4, 0])
+    expect(plan.update[0]?.data.polygon).toContainEqual([5, 0])
+  })
+
+  test('leaves an unrelated site zone manual', () => {
+    const { spaces } = detectSpacesForLevel('level-1', squareWalls())
+    const zone = ZoneNode.parse({
+      name: 'Lawn',
+      polygon: [
+        [10, 10],
+        [12, 10],
+        [12, 12],
+        [10, 12],
+      ],
+    })
+
+    expect(planAutoZonesForLevel(spaces, [zone]).update).toHaveLength(0)
   })
 })
 

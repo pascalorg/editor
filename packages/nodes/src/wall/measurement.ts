@@ -105,6 +105,35 @@ export function matchWallMeasurementFeature(
   hit: [number, number, number],
   maxDistance: number,
 ): MeasurementFeatureBinding | null {
+  // Plan drafting deliberately snaps to structural wall endpoints. Preserve
+  // that semantic corner before the face matcher below expands its threshold
+  // by half the wall thickness and turns an exact endpoint into a face anchor.
+  if (Math.abs(hit[1]) <= maxDistance) {
+    const endpointCandidates = [
+      { featureId: 'wall:start', point: point(wall.start[0], 0, wall.start[1]) },
+      { featureId: 'wall:end', point: point(wall.end[0], 0, wall.end[1]) },
+    ]
+      .map((candidate) => ({
+        ...candidate,
+        distance: Math.hypot(
+          hit[0] - candidate.point[0],
+          hit[1] - candidate.point[1],
+          hit[2] - candidate.point[2],
+        ),
+      }))
+      .filter((candidate) => candidate.distance <= maxDistance)
+      .sort((a, b) => a.distance - b.distance)
+    const endpoint = endpointCandidates[0]
+    if (endpoint) {
+      return {
+        featureId: endpoint.featureId,
+        point: endpoint.point,
+        parameters: { t: 0 },
+        distance: endpoint.distance,
+      }
+    }
+  }
+
   const points = sampleWallCenterline(wall)
   let best: MeasurementFeatureBinding | null = null
   let before = 0
@@ -160,11 +189,25 @@ export function resolveWallMeasurementFeature(
     (candidate) => candidate.id === reference.featureId,
   )
   if (!feature) return null
+  const tValue = reference.parameters?.t
+  const t = typeof tValue === 'number' ? Math.max(0, Math.min(1, tValue)) : 0.5
+  const frame = getWallCurveFrameAt(wall, t)
+  const normal =
+    feature.id === 'wall:face:left'
+      ? point(frame.normal.x, 0, frame.normal.y)
+      : feature.id === 'wall:face:right'
+        ? point(-frame.normal.x, 0, -frame.normal.y)
+        : feature.id === 'wall:top-centerline'
+          ? point(0, 1, 0)
+          : undefined
   const heightValue = reference.parameters?.height
-  if (typeof heightValue !== 'number' || feature.geometry.kind !== 'path') return feature
+  if (typeof heightValue !== 'number' || feature.geometry.kind !== 'path') {
+    return normal ? { ...feature, normal } : feature
+  }
   const height = Math.max(0, Math.min(wall.height ?? DEFAULT_WALL_HEIGHT, heightValue))
   return {
     ...feature,
+    ...(normal ? { normal } : {}),
     geometry: {
       ...feature.geometry,
       points: feature.geometry.points.map(([x, , z]) => point(x, height, z)),

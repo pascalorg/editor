@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  measurementArea,
   measurementDistance,
   nodeRegistry,
   type RoofNode,
@@ -67,6 +68,84 @@ describe('associative measurement resolution', () => {
     expect(measurementDistance(...first.payload.points)).toBe(3)
     expect(measurementDistance(...edited.payload.points)).toBeCloseTo(5)
     expect(measurement.measurement.points[1].fallback).toEqual([3, 0, 0])
+  })
+
+  test('expands an area whose corners are bound to moved wall endpoints', () => {
+    const makeWall = (id: WallNode['id'], start: [number, number], end: [number, number]) => ({
+      ...wall(end),
+      id,
+      start,
+    })
+    const before = [
+      makeWall('wall_south', [0, 0], [4, 0]),
+      makeWall('wall_east', [4, 0], [4, 3]),
+      makeWall('wall_north', [4, 3], [0, 3]),
+      makeWall('wall_west', [0, 3], [0, 0]),
+    ]
+    const after = [
+      makeWall('wall_south', [0, 0], [5, 0]),
+      makeWall('wall_east', [5, 0], [5, 3]),
+      makeWall('wall_north', [5, 3], [0, 3]),
+      before[3]!,
+    ]
+    const measurement = {
+      measurement: {
+        kind: 'area' as const,
+        base: before.map((host) => ({
+          kind: 'feature' as const,
+          reference: { nodeId: host.id, featureId: 'wall:start' },
+          fallback: [host.start[0], 0, host.start[1]] as [number, number, number],
+        })),
+      },
+    }
+
+    const original = resolveMeasurementNode(measurement, resolveFrom(before))
+    const expanded = resolveMeasurementNode(measurement, resolveFrom(after))
+
+    expect(original.payload.kind).toBe('area')
+    expect(expanded.payload.kind).toBe('area')
+    if (original.payload.kind === 'area' && expanded.payload.kind === 'area') {
+      expect(measurementArea(original.payload.base)).toBeCloseTo(12)
+      expect(measurementArea(expanded.payload.base)).toBeCloseTo(15)
+    }
+  })
+
+  test('resolves live wall-face normals for surface-aligned endpoint markers', () => {
+    const host = wall([3, 0])
+    const measurement = {
+      measurement: {
+        kind: 'distance' as const,
+        points: [
+          {
+            kind: 'feature' as const,
+            reference: {
+              nodeId: host.id,
+              featureId: 'wall:face:left',
+              parameters: { t: 0.25, height: 1 },
+            },
+            fallback: [0.75, 1, 0.05] as [number, number, number],
+          },
+          {
+            kind: 'feature' as const,
+            reference: {
+              nodeId: host.id,
+              featureId: 'wall:face:right',
+              parameters: { t: 0.75, height: 1 },
+            },
+            fallback: [2.25, 1, -0.05] as [number, number, number],
+          },
+        ] as const,
+      },
+    }
+
+    const resolved = resolveMeasurementNode(measurement, resolveFrom([host]))
+
+    expect(resolved.anchorNormals[0]?.[0]).toBeCloseTo(0)
+    expect(resolved.anchorNormals[0]?.[1]).toBeCloseTo(0)
+    expect(resolved.anchorNormals[0]?.[2]).toBeCloseTo(1)
+    expect(resolved.anchorNormals[1]?.[0]).toBeCloseTo(0)
+    expect(resolved.anchorNormals[1]?.[1]).toBeCloseTo(0)
+    expect(resolved.anchorNormals[1]?.[2]).toBeCloseTo(-1)
   })
 
   test('resolves roof ridge endpoints through segment and parent transforms', () => {

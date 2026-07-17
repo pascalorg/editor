@@ -25,6 +25,7 @@ export type ResolvedMeasurement = {
   payload: ResolvedMeasurementPayload
   dangling: MeasurementFeatureReference[]
   dependencies: AnyNodeId[]
+  anchorNormals: Array<MeasurementPoint | null>
 }
 
 type NodeResolver = (id: AnyNodeId) => AnyNode | undefined
@@ -172,15 +173,19 @@ export function measurementFeaturePoint(
 function resolveAnchor(
   anchor: MeasurementAnchor,
   resolve: NodeResolver,
-): { point: MeasurementPoint; dangling: MeasurementFeatureReference | null } {
-  if (Array.isArray(anchor)) return { point: anchor, dangling: null }
+): {
+  point: MeasurementPoint
+  normal: MeasurementPoint | null
+  dangling: MeasurementFeatureReference | null
+} {
+  if (Array.isArray(anchor)) return { point: anchor, normal: null, dangling: null }
 
   const referencedNode = resolve(anchor.reference.nodeId as AnyNodeId)
   const contribution = referencedNode
     ? nodeRegistry.get(referencedNode.type)?.measurement
     : undefined
   if (!referencedNode || !contribution) {
-    return { point: anchor.fallback, dangling: anchor.reference }
+    return { point: anchor.fallback, normal: null, dangling: anchor.reference }
   }
 
   const context = geometryContext(referencedNode, resolve)
@@ -191,7 +196,9 @@ function resolveAnchor(
       .find((candidate) => candidate.id === anchor.reference.featureId) ??
     null
   const point = feature ? measurementFeaturePoint(feature, anchor.reference) : null
-  return point ? { point, dangling: null } : { point: anchor.fallback, dangling: anchor.reference }
+  return point
+    ? { point, normal: feature?.normal ?? null, dangling: null }
+    : { point: anchor.fallback, normal: null, dangling: anchor.reference }
 }
 
 function anchorsFor(payload: MeasurementPayload): readonly MeasurementAnchor[] {
@@ -218,9 +225,11 @@ export function resolveMeasurementNode(
   resolve: NodeResolver,
 ): ResolvedMeasurement {
   const dangling: MeasurementFeatureReference[] = []
+  const anchorNormals: Array<MeasurementPoint | null> = []
   const point = (anchor: MeasurementAnchor) => {
     const result = resolveAnchor(anchor, resolve)
     if (result.dangling) dangling.push(result.dangling)
+    anchorNormals.push(result.normal)
     return result.point
   }
   const measurement = node.measurement
@@ -262,6 +271,7 @@ export function resolveMeasurementNode(
     payload,
     dangling,
     dependencies: measurementDependencyIds(measurement, resolve),
+    anchorNormals,
   }
 }
 

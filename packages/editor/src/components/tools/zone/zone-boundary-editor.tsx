@@ -18,7 +18,11 @@ export const ZoneBoundaryEditor: React.FC<ZoneBoundaryEditorProps> = ({ zoneId }
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
-      updateNode(zoneId, { polygon: newPolygon })
+      updateNode(zoneId, {
+        polygon: newPolygon,
+        autoFromWalls: false,
+        boundaryWallIds: [],
+      })
     },
     [zoneId, updateNode],
   )

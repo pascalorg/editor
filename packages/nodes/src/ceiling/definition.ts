@@ -7,6 +7,7 @@ import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
+  ceilingDeleteVertexAffordance,
   ceilingMoveEdgeAffordance,
   ceilingMoveVertexAffordance,
 } from './floorplan-affordances'
@@ -162,6 +163,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     'move-vertex': ceilingMoveVertexAffordance,
     'add-vertex': ceilingAddVertexAffordance,
     'move-edge': ceilingMoveEdgeAffordance,
+    'delete-vertex': ceilingDeleteVertexAffordance,
   },
 
   toolHints: [

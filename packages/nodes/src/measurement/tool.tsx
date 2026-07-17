@@ -18,6 +18,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  buildMeasurementAngleArcPoints,
   commitMeasurementDraft,
   EDITOR_LAYER,
   finishMeasurementDraft,
@@ -26,7 +27,9 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   getLinearUnitLabel,
+  isAlignmentGuideActive,
   isGridSnapActive,
+  isMagneticSnapActive,
   type LinearUnit,
   linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
@@ -67,14 +70,20 @@ import {
 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { matchMeasurementFeatureForNode } from './resolve'
+import {
+  createMeasurementSurfaceQuerySession,
+  type MeasurementSurfaceQuerySession,
+  type MeasurementAxisSurfaceIntersection as QueriedAxisSurfaceIntersection,
+} from './surface-query'
 
-const AXIS_SNAP_DISTANCE_PX = 12
-const AXIS_SNAP_RELEASE_DISTANCE_PX = 18
-const PROXIMITY_GUIDE_DISTANCE_PX = 32
+const AXIS_SNAP_DISTANCE_PX = 16
+const AXIS_SNAP_RELEASE_DISTANCE_PX = 24
+const PROXIMITY_GUIDE_DISTANCE_PX = 40
 const VERTEX_HANDLE_DISTANCE_PX = 12
 const MIDPOINT_HANDLE_DISTANCE_PX = 10
 const VERTEX_DRAG_ACTIVATION_PX = 4
 const AXIS_GUIDE_HALF_LENGTH = 20
+const AXIS_INTERSECTION_MARKER_RADIUS_PX = 8
 const SURFACE_RETICLE_RADIUS_PX = 16
 const MAX_DRAFT_DASH_SEGMENTS = 512
 const SURFACE_VERIFY_HALF_SPAN = 0.08
@@ -535,7 +544,13 @@ function axisGuideToPoint(
   const to: MeasurementPoint = [...from]
   const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
   to[index] = point[index]
-  return { axis, from: [...from], to, snapped, ...(proximity ? { proximity: true } : {}) }
+  return {
+    axis,
+    from: [...from],
+    to,
+    snapped,
+    ...(proximity ? { proximity: true } : {}),
+  }
 }
 
 function verifyProjectedSurfacePoint(
@@ -634,7 +649,10 @@ export function resolveSurfacePoint(
       candidateToVerify.candidateWorld,
       rawNormalWorld,
       raycaster,
-      { ownerByObject: context.ownerByObject, roots: [rawWorldHit.intersection.object] },
+      {
+        ownerByObject: context.ownerByObject,
+        roots: [rawWorldHit.intersection.object],
+      },
     )
     candidateToVerify.verified = verifiedHit !== null
     candidateToVerify.verifiedHit = verifiedHit
@@ -679,7 +697,10 @@ export function resolveSurfacePoint(
   }
 }
 
-function associateSurfaceHit(hit: LocalSurfaceHit): LocalSurfaceHit & {
+export function associateSurfaceHit(
+  hit: LocalSurfaceHit,
+  maxDistance = SEMANTIC_FEATURE_SNAP_DISTANCE,
+): LocalSurfaceHit & {
   anchor?: MeasurementFeatureAnchor
   semantic?: {
     label: string
@@ -691,12 +712,7 @@ function associateSurfaceHit(hit: LocalSurfaceHit): LocalSurfaceHit & {
   const nodes = useScene.getState().nodes
   const node = nodes[hit.targetNodeId as AnyNodeId]
   if (!node) return hit
-  const match = matchMeasurementFeatureForNode(
-    node,
-    (id) => nodes[id],
-    hit.point,
-    SEMANTIC_FEATURE_SNAP_DISTANCE,
-  )
+  const match = matchMeasurementFeatureForNode(node, (id) => nodes[id], hit.point, maxDistance)
   if (!match) return hit
   return {
     ...hit,
@@ -921,31 +937,81 @@ function DraftLine({
   )
 }
 
+function useScreenSizedGroup(radiusPx: number, maxScale: number) {
+  const ref = useRef<Group>(null)
+  const worldPosition = useMemo(() => new Vector3(), [])
+  const cameraSpacePosition = useMemo(() => new Vector3(), [])
+
+  useFrame(({ camera, size }) => {
+    const group = ref.current
+    if (!group) return
+    group.getWorldPosition(worldPosition)
+    let worldUnitsPerPixel = 0.01
+    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
+      const perspective = camera as PerspectiveCamera
+      const cameraDepth = Math.abs(
+        cameraSpacePosition.copy(worldPosition).applyMatrix4(perspective.matrixWorldInverse).z,
+      )
+      worldUnitsPerPixel =
+        (2 * cameraDepth * Math.tan(MathUtils.degToRad(perspective.getEffectiveFOV() * 0.5))) /
+        Math.max(size.height, 1)
+    } else if ((camera as OrthographicCamera).isOrthographicCamera) {
+      const orthographic = camera as OrthographicCamera
+      worldUnitsPerPixel =
+        (orthographic.top - orthographic.bottom) / Math.max(orthographic.zoom * size.height, 1)
+    }
+    const scale = worldUnitsPerPixel * radiusPx
+    if (Number.isFinite(scale)) group.scale.setScalar(MathUtils.clamp(scale, 0.002, maxScale))
+  })
+
+  return ref
+}
+
 function AxisSurfaceIntersectionMarker({
   active,
   axis,
   locked,
+  normal,
   position,
 }: {
   active: boolean
   axis: MeasurementAxis
   locked: boolean
+  normal: Vector3
   position: Vector3
 }) {
+  const emphasis = locked ? 1.35 : active ? 1.16 : 1
+  const ref = useScreenSizedGroup(AXIS_INTERSECTION_MARKER_RADIUS_PX * emphasis, 0.32)
+  const rotation = useMemo(
+    () =>
+      new Quaternion().setFromUnitVectors(
+        RETICLE_PLANE_NORMAL,
+        normal.lengthSq() > 1e-12 ? normal.clone().normalize() : RETICLE_PLANE_NORMAL,
+      ),
+    [normal],
+  )
   const materials = useMemo(
     () => ({
       halo: new MeshBasicNodeMaterial({
         color: '#f8fafc',
-        depthTest: false,
+        depthTest: true,
         depthWrite: false,
-        opacity: active ? 0.95 : 0.68,
+        opacity: active ? 0.95 : 0.78,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+        side: DoubleSide,
         transparent: true,
       }),
       target: new MeshBasicNodeMaterial({
         color: GUIDE_COLORS[axis],
-        depthTest: false,
+        depthTest: true,
         depthWrite: false,
-        opacity: active ? 1 : 0.72,
+        opacity: active ? 1 : 0.86,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -3,
+        side: DoubleSide,
         transparent: true,
       }),
     }),
@@ -960,11 +1026,15 @@ function AxisSurfaceIntersectionMarker({
     [materials],
   )
 
-  const scale = locked ? 1.45 : active ? 1.2 : 1
   return (
-    <group position={position} scale={scale} userData={{ measurementSurface: false }}>
+    <group
+      position={position}
+      quaternion={rotation}
+      ref={ref}
+      userData={{ measurementSurface: false }}
+    >
       <mesh layers={EDITOR_LAYER} material={materials.halo} raycast={NO_RAYCAST} renderOrder={1002}>
-        <sphereGeometry args={[0.065, 16, 12]} />
+        <ringGeometry args={[0.48, 1, 40]} />
       </mesh>
       <mesh
         layers={EDITOR_LAYER}
@@ -972,7 +1042,7 @@ function AxisSurfaceIntersectionMarker({
         raycast={NO_RAYCAST}
         renderOrder={1003}
       >
-        <sphereGeometry args={[0.038, 16, 12]} />
+        <ringGeometry args={[0.62, 0.86, 40]} />
       </mesh>
     </group>
   )
@@ -991,9 +1061,7 @@ function SurfaceReticle({
   position: Vector3
   snappedAxis: MeasurementAxis | null
 }) {
-  const ref = useRef<Group>(null)
-  const worldPosition = useMemo(() => new Vector3(), [])
-  const cameraSpacePosition = useMemo(() => new Vector3(), [])
+  const ref = useScreenSizedGroup(SURFACE_RETICLE_RADIUS_PX, 0.5)
   const rotation = useMemo(
     () =>
       new Quaternion().setFromUnitVectors(
@@ -1013,7 +1081,7 @@ function SurfaceReticle({
       ) as Record<MeasurementAxis, Vector3[]>,
     [axisDirections],
   )
-  const color = snappedAxis ? DRAFT_COLOR : RETICLE_COLOR
+  const color = snappedAxis ? GUIDE_COLORS[snappedAxis] : RETICLE_COLOR
   const materials = useMemo(
     () => ({
       center: new MeshBasicNodeMaterial({
@@ -1050,28 +1118,6 @@ function SurfaceReticle({
     },
     [materials],
   )
-
-  useFrame(({ camera, size }) => {
-    const group = ref.current
-    if (!group) return
-    group.getWorldPosition(worldPosition)
-    let worldUnitsPerPixel = 0.01
-    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
-      const perspective = camera as PerspectiveCamera
-      const cameraDepth = Math.abs(
-        cameraSpacePosition.copy(worldPosition).applyMatrix4(perspective.matrixWorldInverse).z,
-      )
-      worldUnitsPerPixel =
-        (2 * cameraDepth * Math.tan(MathUtils.degToRad(perspective.getEffectiveFOV() * 0.5))) /
-        Math.max(size.height, 1)
-    } else if ((camera as OrthographicCamera).isOrthographicCamera) {
-      const orthographic = camera as OrthographicCamera
-      worldUnitsPerPixel =
-        (orthographic.top - orthographic.bottom) / Math.max(orthographic.zoom * size.height, 1)
-    }
-    const scale = worldUnitsPerPixel * SURFACE_RETICLE_RADIUS_PX
-    if (Number.isFinite(scale)) group.scale.setScalar(MathUtils.clamp(scale, 0.002, 0.5))
-  })
 
   return (
     <group
@@ -1275,11 +1321,11 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
   )
 }
 
-const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string | null }> = ({
-  buildingId,
-  levelId,
-}) => {
-  const { scene } = useThree()
+const MeasurementDraftPreview: FC<{
+  buildingId: string | null
+  levelId: string | null
+  surfaceQuery: MeasurementSurfaceQuerySession
+}> = ({ buildingId, levelId, surfaceQuery }) => {
   const capturedLevelId = useMeasurementDraft((state) => state.levelId)
   const points = useMeasurementDraft((state) => state.points)
   const hover = useMeasurementDraft((state) => state.hover)
@@ -1293,7 +1339,7 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
   const error = useMeasurementDraft((state) => state.error)
   const unit = useViewer((state) => state.unit)
   const axisIntersectionCache = useRef<{
-    intersections: MeasurementAxisSurfaceIntersection[]
+    intersections: QueriedAxisSurfaceIntersection[]
     key: string
     timestamp: number
   } | null>(null)
@@ -1350,6 +1396,12 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
     const worldPoints = livePoints.map((point) =>
       localToPreviewFrame(levelObject, buildingObject, point),
     )
+    const angleArc =
+      kind === 'angle' && livePoints.length >= 3
+        ? buildMeasurementAngleArcPoints(livePoints[0]!, livePoints[1]!, livePoints[2]!).map(
+            (point) => localToPreviewFrame(levelObject, buildingObject, point),
+          )
+        : []
     const worldBase = points.map((point) => localToPreviewFrame(levelObject, buildingObject, point))
     const polygon = kind === 'area' || kind === 'perimeter' || kind === 'volume'
     const midpointHandles =
@@ -1386,8 +1438,15 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
           toWorld: localToPreviewFrame(levelObject, buildingObject, axisGuide.to),
         }
       : null
-    const guideAnchor = vertexDrag && axisGuide ? axisGuide.from : points.at(-1)
-    let axisSurfaceIntersections: Array<{ axis: MeasurementAxis; position: Vector3 }> = []
+    const guideAnchor =
+      vertexDrag && axisGuide
+        ? axisGuide.from
+        : (points.at(-1) ?? (hoverOwner === '3d' ? hover?.point : undefined))
+    let axisSurfaceIntersections: Array<{
+      axis: MeasurementAxis
+      normal: Vector3
+      position: Vector3
+    }> = []
     if (guideAnchor) {
       const cacheKey = `${previewLevelId}:${guideAnchor.join(':')}:${levelObject.matrixWorld.elements
         .map((value) => value.toFixed(5))
@@ -1399,18 +1458,19 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         now - axisIntersectionCache.current.timestamp > 250
       ) {
         axisIntersectionCache.current = {
-          intersections: collectMeasurementAxisSurfaceIntersections(
-            scene,
+          intersections: surfaceQuery.collectAxisIntersections({
             levelObject,
-            guideAnchor,
-          ),
+            anchor: guideAnchor,
+            maxDistance: AXIS_GUIDE_HALF_LENGTH,
+          }),
           key: cacheKey,
           timestamp: now,
         }
       }
       axisSurfaceIntersections = axisIntersectionCache.current.intersections.map(
-        ({ axis, point }) => ({
+        ({ axis, normal: intersectionNormal, point }) => ({
           axis,
+          normal: localNormalToPreviewFrame(levelObject, buildingObject, intersectionNormal),
           position: localToPreviewFrame(levelObject, buildingObject, point),
         }),
       )
@@ -1439,13 +1499,11 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
             },
             normal: localNormalToPreviewFrame(levelObject, buildingObject, hover.normal),
             position: localToPreviewFrame(levelObject, buildingObject, hover.point),
-            semantic: hover.semantic,
             snappedAxis: axisGuide?.snapped ? axisGuide.axis : null,
           }
         : null
 
     let label: { position: Vector3; text: string } | null = null
-    let segmentLabel: { position: Vector3; text: string } | null = null
     let extrusionControlPosition: Vector3 | null = null
     if (kind === 'distance' && livePoints.length >= 2) {
       const start = livePoints[0]!
@@ -1461,7 +1519,9 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         MeasurementPoint,
       ]
       label = {
-        position: localToPreviewFrame(levelObject, buildingObject, anglePoints[1]),
+        position:
+          angleArc[Math.floor(angleArc.length / 2)] ??
+          localToPreviewFrame(levelObject, buildingObject, anglePoints[1]),
         text: formatAngleRadians(measurementAngle(...anglePoints)),
       }
     } else if ((kind === 'area' || kind === 'perimeter') && livePoints.length >= 3) {
@@ -1499,25 +1559,9 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       }
     }
 
-    if (kind !== 'distance' && stage === 'collecting') {
-      const segmentEnd = vertexDrag ? points[vertexDrag.index] : hover?.point
-      const segmentStart = vertexDrag
-        ? (axisGuide?.from ?? points[(vertexDrag.index - 1 + points.length) % points.length])
-        : points.at(-1)
-      if (segmentStart && segmentEnd && measurementDistance(segmentStart, segmentEnd) > 1e-6) {
-        segmentLabel = {
-          position: localToPreviewFrame(
-            levelObject,
-            buildingObject,
-            midpoint(segmentStart, segmentEnd),
-          ),
-          text: formatLinearMeasurement(measurementDistance(segmentStart, segmentEnd), unit),
-        }
-      }
-    }
-
     const errorPosition = worldPoints[worldPoints.length - 1] ?? worldBase[worldBase.length - 1]
     return {
+      angleArc,
       closedBase,
       closedTop,
       errorPosition,
@@ -1530,7 +1574,6 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
       activeEdges,
       midpointHandles,
       reticle,
-      segmentLabel,
       verticals,
       worldBase,
       worldPoints,
@@ -1546,8 +1589,8 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
     kind,
     levelId,
     points,
-    scene,
     stage,
+    surfaceQuery,
     unit,
     vertexDrag,
   ])
@@ -1558,6 +1601,8 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
     isPolygon && preview.worldPoints.length >= 3
       ? [...preview.worldPoints, preview.worldPoints[0]!]
       : preview.worldPoints
+  const distanceStrokeColor =
+    kind === 'distance' && axisGuide?.snapped ? GUIDE_COLORS[axisGuide.axis] : DRAFT_COLOR
 
   return (
     <group>
@@ -1567,26 +1612,30 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         return (
           <DraftLine
             color={GUIDE_COLORS[guide.axis]}
-            dashSize={0.12}
-            gapSize={0.08}
+            dashSize={locked ? 0 : 0.16}
+            gapSize={locked ? 0 : 0.07}
             key={`measurement-axis-${guide.axis}`}
-            lineWidth={active ? (locked ? 3 : 2) : 1}
-            opacity={active ? (locked ? 1 : 0.8) : 0.28}
+            lineWidth={active ? (locked ? 4 : 2.75) : 1.5}
+            opacity={active ? (locked ? 1 : 0.92) : 0.48}
             points={[guide.fromWorld, guide.toWorld]}
           />
         )
       })}
-      {preview.axisSurfaceIntersections.map(({ axis, position }) => (
+      {preview.axisSurfaceIntersections.map(({ axis, normal, position }) => (
         <AxisSurfaceIntersectionMarker
           active={axisGuide?.axis === axis}
           axis={axis}
           key={`measurement-axis-surface-${axis}-${position.toArray().join(':')}`}
           locked={axisGuide?.axis === axis && Boolean(axisGuide.snapped)}
+          normal={normal}
           position={position}
         />
       ))}
       {liveClosed.length >= 2 && stage === 'collecting' ? (
-        <DraftLine color={DRAFT_COLOR} lineWidth={2} opacity={0.95} points={liveClosed} />
+        <DraftLine color={distanceStrokeColor} lineWidth={2} opacity={0.95} points={liveClosed} />
+      ) : null}
+      {preview.angleArc.length >= 2 ? (
+        <DraftLine color={DRAFT_COLOR} lineWidth={3} points={preview.angleArc} />
       ) : null}
       {stage !== 'collecting' && preview.closedBase.length >= 2 ? (
         <DraftLine color={DRAFT_COLOR} lineWidth={2} points={preview.closedBase} />
@@ -1618,22 +1667,18 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         <>
           <DraftLine
             color="#f8fafc"
-            lineWidth={4}
-            opacity={preview.guide.snapped ? 0.72 : 0.28}
+            lineWidth={4.5}
+            opacity={preview.guide.snapped ? 0.78 : 0.38}
             points={[preview.guide.fromWorld, preview.guide.toWorld]}
           />
           <DraftLine
             color={GUIDE_COLORS[preview.guide.axis]}
             dashSize={preview.guide.snapped ? 0 : 0.08}
             gapSize={preview.guide.snapped ? 0 : 0.05}
-            lineWidth={preview.guide.snapped ? 2.5 : 1.75}
-            opacity={preview.guide.snapped ? 1 : 0.72}
+            lineWidth={preview.guide.snapped ? 3 : 2}
+            opacity={preview.guide.snapped ? 1 : 0.84}
             points={[preview.guide.fromWorld, preview.guide.toWorld]}
           />
-          <DraftLabel offset position={preview.guide.toWorld}>
-            {preview.guide.proximity ? 'Align ' : ''}
-            {preview.guide.axis.toUpperCase()}
-          </DraftLabel>
         </>
       ) : null}
       {preview.worldBase.map((point, index) => (
@@ -1657,23 +1702,13 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
         </mesh>
       ))}
       {preview.reticle ? (
-        <>
-          <SurfaceReticle
-            activeAxis={axisGuide?.axis ?? null}
-            axisDirections={preview.reticle.axisDirections}
-            normal={preview.reticle.normal}
-            position={preview.reticle.position}
-            snappedAxis={preview.reticle.snappedAxis}
-          />
-          {preview.reticle.semantic ? (
-            <DraftLabel offset position={preview.reticle.position} tone="secondary">
-              {preview.reticle.semantic.label}
-              {preview.reticle.semantic.length === null
-                ? ''
-                : ` · ${formatLinearMeasurement(preview.reticle.semantic.length, unit)}`}
-            </DraftLabel>
-          ) : null}
-        </>
+        <SurfaceReticle
+          activeAxis={axisGuide?.axis ?? null}
+          axisDirections={preview.reticle.axisDirections}
+          normal={preview.reticle.normal}
+          position={preview.reticle.position}
+          snappedAxis={preview.reticle.snappedAxis}
+        />
       ) : null}
       {preview.label ? (
         <DraftLabel
@@ -1682,11 +1717,6 @@ const MeasurementDraftPreview: FC<{ buildingId: string | null; levelId: string |
           position={preview.label.position}
         >
           {preview.label.text}
-        </DraftLabel>
-      ) : null}
-      {preview.segmentLabel ? (
-        <DraftLabel offset position={preview.segmentLabel.position} tone="secondary">
-          {preview.segmentLabel.text}
         </DraftLabel>
       ) : null}
       {preview.extrusionControlPosition ? (
@@ -1721,10 +1751,13 @@ export const MeasurementTool: FC = () => {
   } | null>(null)
   const suppressNextClick = useRef(false)
   const cancelVertexGesture = useRef<() => void>(() => {})
+  const surfaceQuery = useMemo(() => createMeasurementSurfaceQuerySession(scene), [scene])
 
   useEffect(() => {
     raycaster.current.layers.set(SCENE_LAYER)
   }, [])
+
+  useEffect(() => () => surfaceQuery.dispose(), [surfaceQuery])
 
   useEffect(() => {
     cancelVertexGesture.current()
@@ -1900,20 +1933,24 @@ export const MeasurementTool: FC = () => {
             activeDraft.kind === 'perimeter' ||
             activeDraft.kind === 'volume',
         )
-        const resolved = resolveSurfacePoint(
+        const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+        const resolved = surfaceQuery.resolvePointer({
           event,
           camera,
           canvas,
-          raycaster.current,
-          pointer.current,
-          scene,
           levelObject,
-          anchors,
-          activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
-          getPlanarProximityAnchors(),
-        )
+          anchorOrAnchors: anchors,
+          lockedGuide:
+            applyMagneticSnap && activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
+          planarProximityAnchors: getPlanarProximityAnchors(),
+          applyMagneticSnap,
+          showAlignmentGuides: isAlignmentGuideActive(),
+        })
         if (resolved) {
-          const hit = associateSurfaceHit(resolved.hit)
+          const hit = associateSurfaceHit(
+            resolved.hit,
+            applyMagneticSnap ? SEMANTIC_FEATURE_SNAP_DISTANCE : SURFACE_VERIFY_TOLERANCE,
+          )
           activeDraft.updateDraggedVertex(
             '3d',
             {
@@ -1945,21 +1982,26 @@ export const MeasurementTool: FC = () => {
       }
 
       if (draft.stage !== 'collecting') return
-      const resolved = resolveSurfacePoint(
+      const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+      const resolved = surfaceQuery.resolvePointer({
         event,
         camera,
         canvas,
-        raycaster.current,
-        pointer.current,
-        scene,
         levelObject,
-        draft.points[draft.points.length - 1] ?? null,
-        draft.axisGuide?.snapped ? draft.axisGuide : null,
-        getPlanarProximityAnchors(),
-      )
+        anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
+        lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
+        planarProximityAnchors: getPlanarProximityAnchors(),
+        applyMagneticSnap,
+        showAlignmentGuides: isAlignmentGuideActive(),
+      })
       draft.setHover(
         '3d',
-        resolved ? associateSurfaceHit(resolved.hit) : null,
+        resolved
+          ? associateSurfaceHit(
+              resolved.hit,
+              applyMagneticSnap ? SEMANTIC_FEATURE_SNAP_DISTANCE : SURFACE_VERIFY_TOLERANCE,
+            )
+          : null,
         resolved?.guide ?? null,
       )
     }
@@ -2023,20 +2065,23 @@ export const MeasurementTool: FC = () => {
         }
         return
       }
-      const resolved = resolveSurfacePoint(
+      const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+      const resolved = surfaceQuery.resolvePointer({
         event,
         camera,
         canvas,
-        raycaster.current,
-        pointer.current,
-        scene,
         levelObject,
-        draft.points[draft.points.length - 1] ?? null,
-        draft.axisGuide?.snapped ? draft.axisGuide : null,
-        getPlanarProximityAnchors(),
-      )
+        anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
+        lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
+        planarProximityAnchors: getPlanarProximityAnchors(),
+        applyMagneticSnap,
+        showAlignmentGuides: isAlignmentGuideActive(),
+      })
       if (!resolved) return
-      const hit = associateSurfaceHit(resolved.hit)
+      const hit = associateSurfaceHit(
+        resolved.hit,
+        applyMagneticSnap ? SEMANTIC_FEATURE_SNAP_DISTANCE : SURFACE_VERIFY_TOLERANCE,
+      )
       if (!draft.addPoint('3d', hit.point, hit.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('3d')
     }
@@ -2093,9 +2138,15 @@ export const MeasurementTool: FC = () => {
       document.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [camera, currentLevelId, gl, scene])
+  }, [camera, currentLevelId, gl, surfaceQuery])
 
-  return <MeasurementDraftPreview buildingId={currentBuildingId} levelId={currentLevelId} />
+  return (
+    <MeasurementDraftPreview
+      buildingId={currentBuildingId}
+      levelId={currentLevelId}
+      surfaceQuery={surfaceQuery}
+    />
+  )
 }
 
 export default MeasurementTool

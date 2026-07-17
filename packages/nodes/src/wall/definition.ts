@@ -10,6 +10,7 @@ import {
 } from './measurement'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
+import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
 import { wallSlots } from './slots'
 
@@ -111,6 +112,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   floorplan: buildWallFloorplan,
   measurement: {
     features: (node) => wallMeasurementFeatures(node),
+    quickMeasure: (node) => wallQuickMeasurement(node),
     match: (node, _ctx, point, maxDistance) =>
       matchWallMeasurementFeature(node, point, maxDistance),
     resolve: (node, _ctx, reference) => resolveWallMeasurementFeature(node, reference),

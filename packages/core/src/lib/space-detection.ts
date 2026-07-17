@@ -1,9 +1,12 @@
 import {
+  type AnyNodeId,
   CeilingNode,
   type CeilingNode as CeilingNodeType,
   SlabNode,
   type SlabNode as SlabNodeType,
   type WallNode,
+  ZoneNode,
+  type ZoneNode as ZoneNodeType,
 } from '../schema'
 import {
   getSceneHistoryPauseDepth,
@@ -23,7 +26,7 @@ export type Space = {
   id: string
   levelId: string
   polygon: Array<[number, number]>
-  wallIds: string[]
+  wallIds: Array<WallNode['id']>
   isExterior: boolean
 }
 
@@ -55,6 +58,10 @@ export type AutoCeilingSyncPlan = {
   create: CeilingNodeType[]
   update: Array<{ id: CeilingNodeType['id']; data: Partial<CeilingNodeType> }>
   delete: Array<CeilingNodeType['id']>
+}
+
+export type AutoZoneSyncPlan = {
+  update: Array<{ id: ZoneNodeType['id']; data: Partial<ZoneNodeType> }>
 }
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
@@ -409,7 +416,12 @@ function splitStraightWallAtVertices(start: Point2D, end: Point2D, vertices: Poi
   return ordered
 }
 
-function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
+type RoomFace = {
+  polygon: Point2D[]
+  wallIds: Array<WallNode['id']>
+}
+
+function extractRoomFaces(walls: WallNode[]): RoomFace[] {
   if (walls.length < 3) return []
 
   type HalfEdge = {
@@ -419,6 +431,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
     toKey: string
     angle: number
     points: Point2D[]
+    wallId: WallNode['id']
   }
   type Node = { point: Point2D; outgoing: string[] }
 
@@ -484,6 +497,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
         toKey,
         angle: Math.atan2(points[1]!.y - from.y, points[1]!.x - from.x),
         points,
+        wallId: wall.id,
       })
       halfEdges.set(reverseId, {
         id: reverseId,
@@ -492,6 +506,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
         toKey: fromKey,
         angle: Math.atan2(reversePoints[1]!.y - to.y, reversePoints[1]!.x - to.x),
         points: reversePoints,
+        wallId: wall.id,
       })
 
       graph.get(fromKey)?.outgoing.push(forwardId)
@@ -521,7 +536,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
   }
 
   const visitedDirected = new Set<string>()
-  const faces: Point2D[][] = []
+  const faces: RoomFace[] = []
   // A single face cannot revisit a half-edge, so the half-edge count bounds the
   // longest possible cycle. Splitting at junctions can multiply edges per wall.
   const maxSteps = Math.min(2000, halfEdges.size + 10)
@@ -569,13 +584,20 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
     if (signedArea < 0.5 || signedArea > 10_000) continue
 
     const signature = polygonSignature(polygon)
-    if (faces.some((face) => polygonSignature(face) === signature)) continue
+    if (faces.some((face) => polygonSignature(face.polygon) === signature)) continue
 
-    faces.push(polygon)
+    faces.push({
+      polygon,
+      wallIds: [...new Set(cycleEdgeIds.flatMap((id) => halfEdges.get(id)?.wallId ?? []))],
+    })
   }
 
-  faces.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)))
+  faces.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))
   return faces
+}
+
+function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
+  return extractRoomFaces(walls).map((face) => face.polygon)
 }
 
 /**
@@ -685,39 +707,114 @@ function levelWallSnapshot(walls: WallNode[]) {
   return walls.map(wallGeometrySignature).sort().join('||')
 }
 
-// Trigger signature is wall-only on purpose: re-detection should fire on a
-// genuine remodel (wall geometry change), never when an auto-slab is edited or
-// deleted. Hashing slabs here created a feedback loop where deleting an
-// auto-slab re-fired detection and recreated it.
+function zoneGeometrySignature(zone: ZoneNodeType) {
+  return [
+    zone.id,
+    zone.autoFromWalls ? 'auto' : 'manual',
+    zone.boundaryWallIds.slice().sort().join(','),
+    zone.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(';'),
+  ].join('|')
+}
+
+// Slabs and ceilings stay out of the trigger signature: including generated
+// surfaces caused delete/recreate feedback. Zones are included only so a newly
+// traced room footprint can adopt its enclosing walls without waiting for the
+// next remodel.
 function levelStructureSnapshots(nodes: Record<string, any>) {
-  const byLevel = new Map<string, WallNode[]>()
+  const wallsByLevel = new Map<string, WallNode[]>()
+  const zonesByLevel = new Map<string, ZoneNodeType[]>()
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
-    if ((node as any).type !== 'wall') continue
     const levelId = (node as any).parentId as string
-    const walls = byLevel.get(levelId) ?? []
-    walls.push(node as WallNode)
-    byLevel.set(levelId, walls)
+    if ((node as any).type === 'wall') {
+      const walls = wallsByLevel.get(levelId) ?? []
+      walls.push(node as WallNode)
+      wallsByLevel.set(levelId, walls)
+    } else if ((node as any).type === 'zone') {
+      const zones = zonesByLevel.get(levelId) ?? []
+      zones.push(ZoneNode.parse(node))
+      zonesByLevel.set(levelId, zones)
+    }
   }
 
   const snapshots = new Map<string, string>()
-  for (const [levelId, walls] of byLevel.entries()) {
-    snapshots.set(levelId, levelWallSnapshot(walls))
+  const levelIds = new Set([...wallsByLevel.keys(), ...zonesByLevel.keys()])
+  for (const levelId of levelIds) {
+    const walls = wallsByLevel.get(levelId) ?? []
+    const zones = zonesByLevel.get(levelId) ?? []
+    snapshots.set(
+      levelId,
+      `${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}`,
+    )
   }
 
   return snapshots
 }
 
-function buildSpace(levelId: string, polygon: Point2D[]): Space {
-  const signature = polygonSignature(polygon)
+function buildSpace(levelId: string, face: RoomFace): Space {
+  const signature = polygonSignature(face.polygon)
   return {
     id: `space-${levelId}-${signature.slice(0, 12)}`,
     levelId,
-    polygon: polygon.map(pointToTuple),
-    wallIds: [],
+    polygon: face.polygon.map(pointToTuple),
+    wallIds: face.wallIds,
     isExterior: false,
   }
+}
+
+function sameStringSet(a: readonly string[], b: readonly string[]) {
+  if (a.length !== b.length) return false
+  const right = new Set(b)
+  return a.every((value) => right.has(value))
+}
+
+export function planAutoZonesForLevel(
+  spaces: readonly Space[],
+  existingZones: readonly ZoneNodeType[],
+): AutoZoneSyncPlan {
+  const update: AutoZoneSyncPlan['update'] = []
+
+  for (const zone of existingZones) {
+    const storedSignature = polygonSignature(zone.polygon.map(pointFromTuple))
+    const matchingSpace =
+      zone.autoFromWalls && zone.boundaryWallIds.length >= 3
+        ? spaces.find((space) => sameStringSet(space.wallIds, zone.boundaryWallIds))
+        : spaces.find(
+            (space) => polygonSignature(space.polygon.map(pointFromTuple)) === storedSignature,
+          )
+    if (!matchingSpace) continue
+
+    const data: Partial<ZoneNodeType> = {}
+    if (!zone.autoFromWalls) data.autoFromWalls = true
+    if (!sameStringSet(zone.boundaryWallIds, matchingSpace.wallIds)) {
+      data.boundaryWallIds = matchingSpace.wallIds
+    }
+    if (!sameTuplePolygon(zone.polygon, matchingSpace.polygon)) {
+      data.polygon = matchingSpace.polygon
+    }
+    if (Object.keys(data).length > 0) update.push({ id: zone.id, data })
+  }
+
+  return { update }
+}
+
+export function resolveAutoZonePolygon(
+  zone: Pick<ZoneNodeType, 'autoFromWalls' | 'boundaryWallIds' | 'polygon'>,
+  resolve: (id: AnyNodeId) => unknown,
+): ZoneNodeType['polygon'] {
+  if (!zone.autoFromWalls || zone.boundaryWallIds.length < 3) return zone.polygon
+  const walls = zone.boundaryWallIds.flatMap((id) => {
+    const node = resolve(id)
+    return node && typeof node === 'object' && 'type' in node && node.type === 'wall'
+      ? [node as WallNode]
+      : []
+  })
+  if (walls.length !== zone.boundaryWallIds.length) return zone.polygon
+  const face = extractRoomFaces(walls).find((candidate) =>
+    sameStringSet(candidate.wallIds, zone.boundaryWallIds),
+  )
+  return face ? face.polygon.map(pointToTuple) : zone.polygon
 }
 
 export function planAutoSlabsForLevel(
@@ -1082,7 +1179,8 @@ function syncAutoCeilingsForLevel(
 }
 
 function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
-  const roomPolygons = extractRoomPolygons(walls)
+  const roomFaces = extractRoomFaces(walls)
+  const roomPolygons = roomFaces.map((face) => face.polygon)
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
     ...(resolveWallSurfaceSides(wall, roomPolygons) satisfies Pick<
@@ -1093,7 +1191,7 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
 
   return {
     roomPolygons,
-    spaces: roomPolygons.map((polygon) => buildSpace(levelId, polygon)),
+    spaces: roomFaces.map((face) => buildSpace(levelId, face)),
     wallUpdates,
   }
 }
@@ -1129,6 +1227,9 @@ function runSpaceDetection(
     const ceilings = Object.values(nodes).filter(
       (node: any) => node?.type === 'ceiling' && node.parentId === levelId,
     )
+    const zones = Object.values(nodes).filter(
+      (node: any) => node?.type === 'zone' && node.parentId === levelId,
+    )
 
     const { wallUpdates, spaces, roomPolygons } = detectSpacesFromWalls(levelId, walls)
 
@@ -1159,6 +1260,11 @@ function runSpaceDetection(
       sceneStore,
       { walls, slabs: projectedSlabs },
     )
+    const zonePlan = planAutoZonesForLevel(
+      spaces,
+      zones.map((zone: any) => ZoneNode.parse(zone)),
+    )
+    if (zonePlan.update.length > 0) updateNodes(zonePlan.update)
 
     for (const space of spaces) {
       nextSpaces[space.id] = space

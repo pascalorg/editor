@@ -21,11 +21,23 @@ export function polygonMeasurementFeatures({
 }): MeasurementFeature[] {
   const points = polygon.map(([x, z]) => [x, height, z] satisfies MeasurementPoint)
   return [
+    ...points.map(
+      (point, index) =>
+        ({
+          id: `${featurePrefix}:vertex:${index}`,
+          label: `${label} corner`,
+          snapKind: 'endpoint',
+          priority: 110,
+          normal: [0, 1, 0],
+          geometry: { kind: 'point', point },
+        }) satisfies MeasurementFeature,
+    ),
     {
       id: `${featurePrefix}:boundary`,
       label: `${label} boundary`,
       snapKind: 'edge',
       priority: 90,
+      normal: [0, 1, 0],
       geometry: { kind: 'polygon', points },
     },
     {
@@ -33,6 +45,7 @@ export function polygonMeasurementFeatures({
       label: `${label} center`,
       snapKind: 'center',
       priority: 70,
+      normal: [0, 1, 0],
       geometry: { kind: 'point', point: polygonCenter(polygon, height) },
     },
   ]

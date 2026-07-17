@@ -8,6 +8,10 @@ export const ZoneNode = BaseNode.extend({
   name: z.string(),
   // Polygon boundary - array of [x, z] coordinates defining the zone
   polygon: z.array(z.tuple([z.number(), z.number()])),
+  // Procedural room zones retain the walls that prove their enclosure. The
+  // stored polygon remains a fallback for missing or temporarily open walls.
+  autoFromWalls: z.boolean().default(false),
+  boundaryWallIds: z.array(objectId('wall')).default([]),
   // Visual styling
   color: z.string().default('#3b82f6'), // Default blue
   metadata: z.json().optional().default({}),
@@ -19,6 +23,8 @@ export const ZoneNode = BaseNode.extend({
   - levelId: level this zone is attached to
   - name: zone name
   - polygon: array of [x, z] points defining the zone boundary
+  - autoFromWalls: whether the boundary follows an enclosed wall loop
+  - boundaryWallIds: wall ids that prove the procedural enclosure
   - color: hex color for visual styling
   - metadata: zone metadata (optional)
   `,

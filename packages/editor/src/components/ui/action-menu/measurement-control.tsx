@@ -1,14 +1,24 @@
 'use client'
 
 import { useViewer } from '@pascal-app/viewer'
-import { Box, Check, ChevronDown, Eye, EyeOff, Ruler, Square, Triangle, Waypoints } from 'lucide-react'
+import {
+  Box,
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Ruler,
+  ScanSearch,
+  Square,
+  Triangle,
+  Waypoints,
+} from 'lucide-react'
 import { useState } from 'react'
+import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
-
-type MeasurementKind = 'distance' | 'angle' | 'area' | 'perimeter' | 'volume'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -17,41 +27,42 @@ const measurementOptions = [
   { kind: 'perimeter', label: 'Perimeter', icon: Waypoints },
   { kind: 'volume', label: 'Volume', icon: Box },
 ] as const satisfies readonly {
-  kind: MeasurementKind
+  kind: CreatableMeasurementKind
   label: string
   icon: typeof Ruler
 }[]
 
-function isMeasurementKind(value: unknown): value is MeasurementKind {
-  return (
-    value === 'distance' ||
-    value === 'angle' ||
-    value === 'area' ||
-    value === 'perimeter' ||
-    value === 'volume'
-  )
-}
+const measurementMenuOptions = [
+  { kind: 'smart', label: 'Smart', icon: ScanSearch },
+  ...measurementOptions,
+] as const
 
 export function MeasurementControl() {
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
-  const storedKind = useEditor((state) => state.toolDefaults.measurement?.kind)
+  const selectedKind = useEditor((state) => state.lastMeasurementKind)
+  const activeToolKind = useEditor((state) => state.toolDefaults.measurement?.kind)
   const setMode = useEditor((state) => state.setMode)
   const setPhase = useEditor((state) => state.setPhase)
+  const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
 
-  const selectedKind = isMeasurementKind(storedKind) ? storedKind : 'distance'
-  const selectedOption = measurementOptions.find((option) => option.kind === selectedKind)!
+  const selectedOption =
+    measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
   const isActive = mode === 'build' && tool === 'measurement'
+  const isSmartActive = isActive && activeToolKind === 'smart'
+  const SelectedIcon = isSmartActive ? ScanSearch : selectedOption.icon
+  const selectedLabel = isSmartActive ? 'Smart' : selectedOption.label
 
-  const activateMeasurement = (kind: MeasurementKind) => {
+  const activateMeasurement = (kind: CreatableMeasurementKind) => {
     setPhase('structure')
     setStructureLayer('elements')
+    setLastMeasurementKind(kind)
     setToolDefaults('measurement', { kind })
     setMode('build')
     setTool('measurement')
@@ -65,11 +76,19 @@ export function MeasurementControl() {
     activateMeasurement(selectedKind)
   }
 
+  const activateSmartMeasurement = () => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setToolDefaults('measurement', { kind: 'smart' })
+    setMode('build')
+    setTool('measurement')
+  }
+
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <div className="flex items-center">
         <ActionButton
-          aria-label={`Measure: ${selectedOption.label}`}
+          aria-label={`Measure: ${selectedLabel}`}
           aria-pressed={isActive}
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
@@ -77,13 +96,13 @@ export function MeasurementControl() {
               ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
               : 'hover:bg-cyan-500/15 hover:text-cyan-400',
           )}
-          label={`Measure: ${selectedOption.label}`}
+          label={`Measure: ${selectedLabel}`}
           onClick={handlePrimaryClick}
           shortcut="M"
           size="icon"
           variant="ghost"
         >
-          <Ruler aria-hidden="true" className="h-5 w-5" />
+          <SelectedIcon aria-hidden="true" className="h-5 w-5" />
         </ActionButton>
 
         <PopoverTrigger asChild>
@@ -114,9 +133,12 @@ export function MeasurementControl() {
         sideOffset={14}
       >
         <div aria-label="Measurement type" className="space-y-1" role="menu">
-          {measurementOptions.map((option) => {
+          {measurementMenuOptions.map((option) => {
             const OptionIcon = option.icon
-            const isSelected = option.kind === selectedKind
+            const isSmart = option.kind === 'smart'
+            const isSelected = isSmart
+              ? isSmartActive
+              : !isSmartActive && option.kind === selectedKind
             return (
               <button
                 aria-checked={isSelected}
@@ -128,7 +150,8 @@ export function MeasurementControl() {
                 )}
                 key={option.kind}
                 onClick={() => {
-                  activateMeasurement(option.kind)
+                  if (isSmart) activateSmartMeasurement()
+                  else activateMeasurement(option.kind)
                   setIsOpen(false)
                 }}
                 role="menuitemradio"

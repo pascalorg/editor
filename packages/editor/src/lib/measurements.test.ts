@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
   formatAreaLabel,
   formatLinearMeasurement,
@@ -11,7 +12,9 @@ import {
   linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
   MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
   MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
   squareMetersToAreaUnit,
@@ -23,6 +26,43 @@ describe('measurement presentation', () => {
     expect(measurementPresentationColor(false, true)).toBe(MEASUREMENT_ACTIVE_COLOR)
     expect(measurementPresentationColor(true, false)).toBe(MEASUREMENT_DANGLING_COLOR)
     expect(measurementPresentationColor(true, true)).toBe(MEASUREMENT_DANGLING_COLOR)
+  })
+
+  test('uses an indigo analysis color for resting 2D measurements', () => {
+    expect(measurementFloorplanPresentationColor(false, false)).toBe(MEASUREMENT_FLOORPLAN_COLOR)
+    expect(measurementFloorplanPresentationColor(false, true)).toBe(MEASUREMENT_ACTIVE_COLOR)
+    expect(measurementFloorplanPresentationColor(true, false)).toBe(MEASUREMENT_DANGLING_COLOR)
+  })
+})
+
+describe('angle arc presentation', () => {
+  test('samples the smaller angle from the first ray to the second', () => {
+    const arc = buildMeasurementAngleArcPoints([1, 0, 0], [0, 0, 0], [0, 0, 1], {
+      radius: 0.25,
+      sampleCount: 8,
+    })
+
+    expect(arc).toHaveLength(9)
+    expect(arc[0]?.[0]).toBeCloseTo(0.25)
+    expect(arc[0]?.[2]).toBeCloseTo(0)
+    expect(arc.at(-1)?.[0]).toBeCloseTo(0)
+    expect(arc.at(-1)?.[2]).toBeCloseTo(0.25)
+    expect(arc[4]?.[0]).toBeGreaterThan(0)
+    expect(arc[4]?.[2]).toBeGreaterThan(0)
+  })
+
+  test('keeps a constant radius on an arbitrary 3D angle plane', () => {
+    const arc = buildMeasurementAngleArcPoints([1, 0, 0], [0, 0, 0], [0, 1, 0], {
+      radius: 0.3,
+    })
+
+    expect(arc.length).toBeGreaterThan(4)
+    for (const point of arc) expect(Math.hypot(...point)).toBeCloseTo(0.3)
+    expect(arc.at(-1)?.[1]).toBeCloseTo(0.3)
+  })
+
+  test('omits an arc when either ray is degenerate', () => {
+    expect(buildMeasurementAngleArcPoints([0, 0, 0], [0, 0, 0], [1, 0, 0])).toEqual([])
   })
 })
 

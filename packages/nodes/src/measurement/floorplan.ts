@@ -12,13 +12,15 @@ import {
   measurementPrismVolume,
 } from '@pascal-app/core'
 import {
+  buildMeasurementAngleArcPoints,
   formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
+  measurementFloorplanPresentationColor,
   measurementPolygonLabelAnchor,
-  measurementPresentationColor,
 } from '@pascal-app/editor'
+import { measurementResolvedEditPoints } from './edit'
 import { resolveMeasurementNode } from './resolve'
 
 const projectPoint = (point: MeasurementPoint): FloorplanPoint => [point[0], point[2]]
@@ -47,9 +49,22 @@ export function buildMeasurementFloorplan(
   const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
   const measurement = resolved.payload
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
-  const stroke = measurementPresentationColor(resolved.dangling.length > 0, Boolean(selected))
+  const editable = ctx.viewState?.selected === true
+  const stroke = measurementFloorplanPresentationColor(
+    resolved.dangling.length > 0,
+    Boolean(selected),
+  )
   const style = lineStyle(stroke)
   const statusPrefix = resolved.dangling.length > 0 ? 'Unlinked · ' : ''
+  const editHandles: FloorplanGeometry[] = editable
+    ? measurementResolvedEditPoints(measurement).map((point, vertexIndex) => ({
+        kind: 'endpoint-handle',
+        point: projectPoint(point),
+        state: 'idle',
+        affordance: 'move-measurement-vertex',
+        payload: { vertexIndex },
+      }))
+    : []
 
   if (measurement.kind === 'distance') {
     const [start, end] = measurement.points
@@ -101,12 +116,15 @@ export function buildMeasurementFloorplan(
           angle: Math.atan2(y2 - y1, x2 - x1),
           offsetPx: 14,
         },
+        ...editHandles,
       ],
     }
   }
 
   if (measurement.kind === 'angle') {
     const [start, vertex, end] = measurement.points
+    const angleArc = buildMeasurementAngleArcPoints(start, vertex, end)
+    const labelPoint = angleArc[Math.floor(angleArc.length / 2)] ?? vertex
     return {
       kind: 'group',
       children: [
@@ -115,16 +133,27 @@ export function buildMeasurementFloorplan(
           points: [projectPoint(start), projectPoint(vertex), projectPoint(end)],
           ...style,
         },
+        ...(angleArc.length >= 2
+          ? [
+              {
+                kind: 'polyline' as const,
+                points: angleArc.map(projectPoint),
+                ...style,
+                strokeWidth: 3,
+              },
+            ]
+          : []),
         {
           kind: 'dimension-label',
           appearance: 'outlined',
-          cx: vertex[0],
-          cy: vertex[2],
+          cx: labelPoint[0],
+          cy: labelPoint[2],
           text: `${statusPrefix}${formatAngleRadians(measurementAngle(start, vertex, end))}`,
           angle: 0,
-          offsetPx: 16,
+          offsetPx: 10,
           screenUpright: true,
         },
+        ...editHandles,
       ],
     }
   }
@@ -156,6 +185,7 @@ export function buildMeasurementFloorplan(
           angle: 0,
           screenUpright: true,
         },
+        ...editHandles,
       ],
     }
   }
@@ -200,6 +230,7 @@ export function buildMeasurementFloorplan(
     angle: 0,
     screenUpright: true,
   })
+  children.push(...editHandles)
 
   return { kind: 'group', children }
 }

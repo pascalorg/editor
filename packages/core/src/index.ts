@@ -104,13 +104,16 @@ export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
+  type AutoZoneSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   isSpaceDetectionPaused,
   pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  planAutoZonesForLevel,
   projectAutoSlabsForPlan,
+  resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
   wallClosesRoom,
@@ -124,6 +127,11 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export {
+  deriveZoneQuantityReport,
+  type ZoneQuantityReport,
+  type ZoneQuantityValue,
+} from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,

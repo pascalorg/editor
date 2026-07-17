@@ -61,6 +61,7 @@ export {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './components/editor/node-arrow-handles'
+export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
@@ -300,10 +301,18 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  CREATABLE_MEASUREMENT_KINDS,
+  type CreatableMeasurementKind,
+  DEFAULT_CREATABLE_MEASUREMENT_KIND,
+  isCreatableMeasurementKind,
+  normalizeCreatableMeasurementKind,
+} from './lib/measurement-kind'
+export {
   measurementPolygonLabelAnchor,
   triangulateMeasurementPolygon,
 } from './lib/measurement-label'
 export {
+  buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
   formatAreaLabel,
   formatLinearMeasurement,
@@ -316,7 +325,9 @@ export {
   linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
   MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
   MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
   measurementPresentationColor,
   metersToLinearUnit,
   squareMetersToAreaUnit,
@@ -339,6 +350,11 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export {
+  createQuickMeasurementPointerScheduler,
+  quickMeasurementContext,
+  resolveQuickMeasurementReport,
+} from './lib/quick-measurement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
@@ -445,6 +461,15 @@ export {
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
 export { default as usePlacementPreview } from './store/use-placement-preview'
+export {
+  activateQuickMeasurementHudSource,
+  clearQuickMeasurementHudSource,
+  publishQuickMeasurementHudSource,
+  type QuickMeasurementHudEntry,
+  type QuickMeasurementHudSource,
+  selectQuickMeasurementHudEntry,
+  useQuickMeasurementHud,
+} from './store/use-quick-measurement-hud'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'

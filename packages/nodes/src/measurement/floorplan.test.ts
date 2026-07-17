@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, MeasurementNode } from '@pascal-app/core'
-import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_PERSISTENT_COLOR } from '@pascal-app/editor'
+import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_FLOORPLAN_COLOR } from '@pascal-app/editor'
 import { buildMeasurementFloorplan } from './floorplan'
 
 const palette = {
@@ -69,7 +69,7 @@ describe('buildMeasurementFloorplan', () => {
     ).toMatchObject({ appearance: 'outlined' })
   })
 
-  test('uses black persistently and indigo while active', () => {
+  test('uses indigo analysis colors in plan view', () => {
     const node = MeasurementNode.parse({
       id: 'measurement_appearance',
       type: 'measurement',
@@ -86,10 +86,16 @@ describe('buildMeasurementFloorplan', () => {
     const active = buildMeasurementFloorplan(node, context('metric', true))
     expect(
       persistent && flattenGeometry(persistent).find((entry) => entry.kind === 'line'),
-    ).toMatchObject({ stroke: MEASUREMENT_PERSISTENT_COLOR })
+    ).toMatchObject({ stroke: MEASUREMENT_FLOORPLAN_COLOR })
     expect(active && flattenGeometry(active).find((entry) => entry.kind === 'line')).toMatchObject({
       stroke: MEASUREMENT_ACTIVE_COLOR,
     })
+    expect(
+      persistent && flattenGeometry(persistent).filter((entry) => entry.kind === 'endpoint-handle'),
+    ).toHaveLength(0)
+    expect(
+      active && flattenGeometry(active).filter((entry) => entry.kind === 'endpoint-handle'),
+    ).toHaveLength(2)
   })
 
   test('emits semantic polygon geometry and derived area and volume labels', () => {
@@ -161,6 +167,14 @@ describe('buildMeasurementFloorplan', () => {
     const angleGeometry = buildMeasurementFloorplan(angle, context('metric'))
     const perimeterGeometry = buildMeasurementFloorplan(perimeter, context('metric'))
     expect(angleGeometry && labels(angleGeometry)).toEqual(['90°'])
+    const anglePolylines = angleGeometry
+      ? flattenGeometry(angleGeometry).filter((entry) => entry.kind === 'polyline')
+      : []
+    expect(anglePolylines).toHaveLength(2)
+    expect(anglePolylines[1]).toMatchObject({ strokeWidth: 3 })
+    if (anglePolylines[1]?.kind === 'polyline') {
+      expect(anglePolylines[1].points.length).toBeGreaterThan(4)
+    }
     expect(perimeterGeometry && labels(perimeterGeometry)).toEqual(['P 12m'])
   })
 

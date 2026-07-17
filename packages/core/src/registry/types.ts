@@ -104,6 +104,11 @@ export type MeasurementFeature = {
   label: string
   snapKind: MeasurementSnapKind
   geometry: MeasurementFeatureGeometry
+  /**
+   * Level-local surface normal for contact markers. Continuous features may
+   * provide the normal from `resolve(...)` after applying reference parameters.
+   */
+  normal?: MeasurementPoint
   /** Higher values win when multiple candidates occupy the same screen-space radius. */
   priority?: number
 }
@@ -113,6 +118,26 @@ export type MeasurementFeatureBinding = {
   point: MeasurementPoint
   parameters?: Record<string, string | number | boolean>
   distance: number
+}
+
+export type QuickMeasurementQuantity = 'length' | 'area' | 'volume'
+
+export type QuickMeasurementMetric = {
+  key: string
+  label: string
+  abbreviation: string
+  quantity: QuickMeasurementQuantity
+  /** Canonical metres, square metres, or cubic metres according to `quantity`. */
+  value: number
+}
+
+export type QuickMeasurementReport = {
+  title: string
+  kindLabel: string
+  /** Stable level-local label anchor chosen by the node kind. */
+  anchor: MeasurementPoint
+  metrics: QuickMeasurementMetric[]
+  note?: string
 }
 
 export type MeasurementContribution<N = AnyNode> = {
@@ -131,6 +156,8 @@ export type MeasurementContribution<N = AnyNode> = {
     point: MeasurementPoint,
     maxDistance: number,
   ) => MeasurementFeatureBinding | null
+  /** Live, non-persistent quantities shown by the smart measurement tool. */
+  quickMeasure?: (node: N, ctx: GeometryContext) => QuickMeasurementReport | null
 }
 
 // ─── FloorplanPalette ────────────────────────────────────────────────
@@ -1295,6 +1322,9 @@ export type Presentation = {
   /** Set true for kinds that exist but should NOT appear in the palette
    * (containers like `site`/`building`/`level`, internal nodes). */
   hidden?: boolean
+  /** Set false when selection is edited directly through in-scene affordances
+   * and the generic floating action menu would duplicate or conflict with them. */
+  actionMenu?: boolean
 }
 
 export type IconRef =

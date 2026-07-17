@@ -290,9 +290,7 @@ export const useKeyboard = ({
         const editor = useEditor.getState()
         editor.setPhase('structure')
         editor.setStructureLayer('elements')
-        if (!editor.toolDefaults.measurement?.kind) {
-          editor.setToolDefaults('measurement', { kind: 'distance' })
-        }
+        editor.setToolDefaults('measurement', { kind: editor.lastMeasurementKind })
         editor.setMode('build')
         editor.setTool('measurement')
       }

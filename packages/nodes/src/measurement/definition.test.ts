@@ -6,6 +6,7 @@ describe('measurementDefinition', () => {
     expect(measurementDefinition.kind).toBe('measurement')
     expect(measurementDefinition.category).toBe('analysis')
     expect(measurementDefinition.bake).toBe('strip')
+    expect(measurementDefinition.snapProfile).toBe('structural')
     expect(measurementDefinition.dirtyTracking).toBe(false)
     expect(measurementDefinition.capabilities).toMatchObject({
       selectable: { hitVolume: 'bbox' },
@@ -14,6 +15,12 @@ describe('measurementDefinition', () => {
       presettable: false,
     })
     expect(typeof measurementDefinition.tool).toBe('function')
+    expect(typeof measurementDefinition.affordanceTools?.selection).toBe('function')
+    expect(typeof measurementDefinition.floorplanAffordances?.['move-measurement-vertex']).toBe(
+      'object',
+    )
+    expect(measurementDefinition.presentation?.actionMenu).toBe(false)
+    expect(measurementDefinition.parametrics).toBeUndefined()
     expect(measurementDefinition.toolHints?.map((hint) => hint.key)).toEqual([
       'Left click',
       'Enter',

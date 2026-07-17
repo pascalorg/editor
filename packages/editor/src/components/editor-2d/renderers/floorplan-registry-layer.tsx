@@ -5,6 +5,7 @@ import {
   type AnyNodeDefinition,
   type AnyNodeId,
   createSceneApi,
+  emitter,
   type FloorplanAffordanceSession,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -27,6 +28,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import {
   memo,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -34,6 +36,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { ROTATE_HANDLE_DRAG_LABEL } from '../../../lib/contextual-help'
 import {
   canDirectRotateNode,
@@ -123,6 +126,7 @@ type NodeSnapshot = { id: AnyNodeId; data: Record<string, unknown> }
 
 type ActiveDrag = {
   pointerId: number
+  captureTarget: Element
   /** Key for the visual `active` flag — e.g. `${nodeId}:${endpoint}`. */
   handleId: string
   session: FloorplanAffordanceSession
@@ -141,6 +145,54 @@ type ActiveDrag = {
    * scope. Unset for affordances that drive no snapping scope (resize / rotate).
    */
   reshapeScopeNodeId?: string
+}
+
+type FloorplanAffordanceCancelEffects = {
+  restoreSnapshots: (snapshots: NodeSnapshot[]) => void
+  resumeHistory: () => void
+  clearPreview: (id: AnyNodeId) => void
+  clearSnapFeedback: () => void
+  endReshapeScope: (drag: ActiveDrag) => void
+  clearDragFeedback?: () => void
+}
+
+export function cancelFloorplanAffordanceDrag(
+  dragRef: { current: ActiveDrag | null },
+  effects: FloorplanAffordanceCancelEffects,
+  pointerId?: number,
+): boolean {
+  const drag = dragRef.current
+  if (!drag || (pointerId !== undefined && pointerId !== drag.pointerId)) return false
+
+  // Clear ownership before cleanup so a queued pointer-up cannot commit the
+  // session while cancellation side effects are still running.
+  dragRef.current = null
+
+  if (drag.captureTarget.hasPointerCapture?.(drag.pointerId)) {
+    drag.captureTarget.releasePointerCapture?.(drag.pointerId)
+  }
+
+  effects.restoreSnapshots(drag.snapshots)
+  if (drag.historyPaused) {
+    effects.resumeHistory()
+    drag.historyPaused = false
+  }
+  effects.clearSnapFeedback()
+  for (const id of drag.session.affectedIds) effects.clearPreview(id)
+  effects.endReshapeScope(drag)
+  effects.clearDragFeedback?.()
+  return true
+}
+
+export function subscribeFloorplanAffordanceToolCancel(
+  cancelActiveDrag: () => boolean,
+  consumeToolCancel: () => void,
+): () => void {
+  const onToolCancel = () => {
+    if (cancelActiveDrag()) consumeToolCancel()
+  }
+  emitter.on('tool:cancel', onToolCancel)
+  return () => emitter.off('tool:cancel', onToolCancel)
 }
 
 // Map a floor-plan affordance to the reshaping scope it represents, so the
@@ -854,6 +906,37 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // dispatcher then owns: history pause/resume, snapshot capture,
   // pointer-move/up/cancel routing, and the single-undo dance on
   // commit. Each kind owns the actual mutation logic inside `apply`.
+  const commitAffordanceAction = useCallback(
+    (
+      nodeId: AnyNodeId,
+      affordance: string,
+      payload: unknown,
+      event: ReactMouseEvent<SVGElement>,
+    ) => {
+      if (event.button !== 0 || movingNode || dragRef.current) return
+
+      const sceneNodes = useScene.getState().nodes
+      const node = sceneNodes[nodeId]
+      if (!node) return
+      const handler = nodeRegistry.get(node.type)?.floorplanAffordances?.[affordance]
+      if (!handler) return
+      const initialPlanPoint = clientToPlan(event.clientX, event.clientY)
+      if (!initialPlanPoint) return
+
+      const session = handler.start({
+        node,
+        payload,
+        nodes: sceneNodes,
+        initialPlanPoint,
+        gridSnapStep: useEditor.getState().gridSnapStep,
+      })
+      if (!(session.commit && session.canCommit())) return
+      session.commit()
+      sfxEmitter.emit('sfx:structure-build')
+    },
+    [movingNode],
+  )
+
   const startAffordanceDrag = useCallback(
     (
       nodeId: AnyNodeId,
@@ -923,8 +1006,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         useInteractionScope.getState().begin(reshapeScope)
       }
 
+      const captureTarget = event.currentTarget as Element
       dragRef.current = {
         pointerId: event.pointerId,
+        captureTarget,
         handleId,
         session,
         snapshots,
@@ -934,7 +1019,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
       setActiveDragId(handleId)
       setSelection({ selectedIds: [nodeId] })
-      ;(event.currentTarget as Element).setPointerCapture?.(event.pointerId)
+      captureTarget.setPointerCapture?.(event.pointerId)
     },
     [movingNode, setSelection],
   )
@@ -954,6 +1039,29 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           )
       }
     }
+
+    const cancelActiveDrag = (pointerId?: number, clearDragFeedback = true) =>
+      cancelFloorplanAffordanceDrag(
+        dragRef,
+        {
+          restoreSnapshots: (snapshots) =>
+            useScene.getState().updateNodes(snapshotsToUpdates(snapshots)),
+          resumeHistory: () => resumeSceneHistory(useScene),
+          clearPreview: (id) => {
+            useLiveNodeOverrides.getState().clear(id)
+            useLiveTransforms.getState().clear(id)
+          },
+          clearSnapFeedback: clearSurfacePlanSnapFeedback,
+          endReshapeScope,
+          clearDragFeedback: clearDragFeedback
+            ? () => {
+                setActiveDragId(null)
+                setRotationOverlay(null)
+              }
+            : undefined,
+        },
+        pointerId,
+      )
 
     const onPointerMove = (event: PointerEvent) => {
       const drag = dragRef.current
@@ -1083,56 +1191,24 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     }
 
     const onPointerCancel = (event: PointerEvent) => {
-      const drag = dragRef.current
-      if (!drag || event.pointerId !== drag.pointerId) return
-
-      // Revert untracked, then resume — no history entry is recorded.
-      useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
-      if (drag.historyPaused) {
-        resumeSceneHistory(useScene)
-        drag.historyPaused = false
-      }
-      // Affordances that publish Figma alignment guides during `apply`
-      // (fence endpoint) leave them in the store on cancel — `canCommit`
-      // (the pointer-up clear) never runs on a cancel.
-      clearSurfacePlanSnapFeedback()
-      // Drop any live overrides the session may have published. No-op
-      // for affordances whose `apply()` writes straight to scene; the
-      // override-routed sessions (wall endpoint, wall curve) rely on
-      // this to revert cleanly.
-      const overrides = useLiveNodeOverrides.getState()
-      for (const id of drag.session.affectedIds) overrides.clear(id)
-
-      endReshapeScope(drag)
-      dragRef.current = null
-      setActiveDragId(null)
-      setRotationOverlay(null)
+      cancelActiveDrag(event.pointerId)
     }
 
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerCancel)
+    const unsubscribeToolCancel = subscribeFloorplanAffordanceToolCancel(
+      () => cancelActiveDrag(),
+      markToolCancelConsumed,
+    )
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
-      // Component unmounted mid-drag — restore the baseline and unpause
-      // history so we don't leak a paused store across mounts. Also
-      // drop any live overrides the session published so the next
-      // mount doesn't render at the cancelled position.
-      const drag = dragRef.current
-      if (drag) {
-        useScene.getState().updateNodes(snapshotsToUpdates(drag.snapshots))
-        if (drag.historyPaused) {
-          resumeSceneHistory(useScene)
-        }
-        const overrides = useLiveNodeOverrides.getState()
-        for (const id of drag.session.affectedIds) overrides.clear(id)
-        endReshapeScope(drag)
-        dragRef.current = null
+      unsubscribeToolCancel()
+      if (!cancelActiveDrag(undefined, false)) {
+        clearSurfacePlanSnapFeedback()
       }
-      // Clear any alignment guide a session left behind on mid-drag unmount.
-      clearSurfacePlanSnapFeedback()
     }
   }, [])
 
@@ -1192,6 +1268,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onEntryPointerDown={handleEntryPointerDown}
             onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
+            onHandleDoubleClick={commitAffordanceAction}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
             palette={palette}
@@ -1242,6 +1319,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onEntryPointerDown={handleEntryPointerDown}
             onGroupMovePointerDown={handleGroupMoveHandlePointerDown}
             onHandleHoverChange={setHoveredHandleId}
+            onHandleDoubleClick={commitAffordanceAction}
             onHandlePointerDown={startAffordanceDrag}
             onHoveredIdChange={setHoveredId}
             palette={palette}
@@ -1310,6 +1388,12 @@ type FloorplanRegistryEntryProps = {
   onEntryPointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => void
   onGroupMovePointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => boolean
   onHandleHoverChange: (id: string | null) => void
+  onHandleDoubleClick: (
+    nodeId: AnyNodeId,
+    affordance: string,
+    payload: unknown,
+    event: ReactMouseEvent<SVGElement>,
+  ) => void
   onHandlePointerDown: (
     nodeId: AnyNodeId,
     handleId: string,
@@ -1356,6 +1440,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   onEntryPointerDown,
   onGroupMovePointerDown,
   onHandleHoverChange,
+  onHandleDoubleClick,
   onHandlePointerDown,
   onHoveredIdChange,
   palette,
@@ -1424,6 +1509,13 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       )
     },
     [nodeId, onHandlePointerDown],
+  )
+
+  const handleHandleDoubleClick = useCallback(
+    (affordance: string, payload: unknown, event: ReactMouseEvent<SVGElement>) => {
+      onHandleDoubleClick(nodeId, affordance, payload, event)
+    },
+    [nodeId, onHandleDoubleClick],
   )
 
   const handleMoveHandlePointerDown = useCallback(
@@ -1499,6 +1591,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
         hoveredHandleId={hoveredHandleId}
         isMarqueeSelectionActive={isMarqueeSelectionActive}
         nodeId={nodeId}
+        onHandleDoubleClick={handleHandleDoubleClick}
         onHandleHoverChange={onHandleHoverChange}
         onHandlePointerDown={handleHandlePointerDown}
         onMoveHandlePointerDown={handleMoveHandlePointerDown}
@@ -1774,6 +1867,11 @@ type InteractiveGeometryProps = {
   nodeId: AnyNodeId
   sceneRotationDeg: number
   onHandleHoverChange: (id: string | null) => void
+  onHandleDoubleClick: (
+    affordance: string,
+    payload: unknown,
+    event: ReactMouseEvent<SVGElement>,
+  ) => void
   onHandlePointerDown: (
     affordance: string,
     payload: unknown,
@@ -1796,6 +1894,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
   isMarqueeSelectionActive,
   nodeId,
   sceneRotationDeg,
+  onHandleDoubleClick,
   onHandleHoverChange,
   onHandlePointerDown,
   onMoveHandlePointerDown,
@@ -1844,6 +1943,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
       case 'endpoint-handle': {
         if (!palette) return <></>
         const handleId = makeHandleId(nodeId, g.payload)
+        const doubleClickAffordance = floorplanHandleDoubleClickAffordance(g)
         const isHovered = hoveredHandleId === handleId
         const isActive = activeDragId === handleId
         // Variant picks the colour-set. Endpoint dots use the orange
@@ -1925,6 +2025,15 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
               cx={g.point[0]}
               cy={g.point[1]}
               fill="transparent"
+              onDoubleClick={
+                doubleClickAffordance
+                  ? (event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      onHandleDoubleClick(doubleClickAffordance, g.payload, event)
+                    }
+                  : undefined
+              }
               onPointerDown={(e) =>
                 onHandlePointerDown(g.affordance, g.payload, e as ReactPointerEvent<SVGGElement>)
               }
@@ -2772,6 +2881,14 @@ function makeHandleId(nodeId: AnyNodeId, payload: unknown): string {
     }
   }
   return `${nodeId}:${String(payload)}`
+}
+
+export function floorplanHandleDoubleClickAffordance(
+  geometry: FloorplanGeometry,
+): 'delete-vertex' | null {
+  return geometry.kind === 'endpoint-handle' && geometry.affordance === 'move-vertex'
+    ? 'delete-vertex'
+    : null
 }
 
 /**

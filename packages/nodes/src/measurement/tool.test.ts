@@ -417,6 +417,19 @@ describe('measurement axis projection', () => {
     ).toBeNull()
   })
 
+  test('uses the stronger default magnetic acquisition envelope', () => {
+    expect(
+      selectClosestVerifiedAxisProjection([
+        {
+          axis: 'x',
+          point: [4, 0, 2],
+          screenDistance: 15,
+          verified: true,
+        },
+      ]),
+    ).toEqual({ axis: 'x', point: [4, 0, 2] })
+  })
+
   test('keeps a locked axis through a wider magnetic release threshold', () => {
     const candidates = [
       {

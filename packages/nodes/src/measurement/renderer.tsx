@@ -7,6 +7,7 @@ import {
   measurementAngle,
   measurementArea,
   measurementDistance,
+  measurementNormal,
   measurementPerimeter,
   measurementPrismVolume,
   useLiveNodeOverrides,
@@ -14,6 +15,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  buildMeasurementAngleArcPoints,
   formatAngleRadians,
   formatAreaLabel,
   formatLinearMeasurement,
@@ -31,8 +33,12 @@ import {
   DoubleSide,
   Float32BufferAttribute,
   type Group,
+  MathUtils,
   type Object3D,
-  SphereGeometry,
+  type OrthographicCamera,
+  type PerspectiveCamera,
+  Quaternion,
+  Vector3,
 } from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
@@ -47,6 +53,124 @@ type MeasurementRenderData = {
   labelPosition: MeasurementPoint
   lineGeometry: BufferGeometry
   markerPoints: MeasurementPoint[]
+}
+
+const MARKER_PLANE_NORMAL = new Vector3(0, 0, 1)
+
+function fallbackMarkerNormal(
+  measurement: ResolvedMeasurementPayload,
+  index: number,
+): MeasurementPoint {
+  if (
+    measurement.kind === 'area' ||
+    measurement.kind === 'perimeter' ||
+    measurement.kind === 'volume'
+  ) {
+    return measurementNormal(measurement.base) ?? [0, 1, 0]
+  }
+  if (measurement.kind === 'angle') {
+    const [start, vertex, end] = measurement.points
+    const normal = new Vector3(...start)
+      .sub(new Vector3(...vertex))
+      .cross(new Vector3(...end).sub(new Vector3(...vertex)))
+    return normal.lengthSq() > 1e-12 ? normal.normalize().toArray() : [0, 1, 0]
+  }
+
+  const [start, end] = measurement.points
+  if (Math.abs(start[1]) < 0.05 && Math.abs(end[1]) < 0.05) return [0, 1, 0]
+  const direction = new Vector3(...end).sub(new Vector3(...start)).normalize()
+  const horizontalNormal = direction.cross(new Vector3(0, 1, 0))
+  if (horizontalNormal.lengthSq() > 1e-12) {
+    const normal = horizontalNormal.normalize()
+    if (index > 0) normal.negate()
+    return normal.toArray()
+  }
+  return [0, 0, 1]
+}
+
+function SurfaceContactMarker({
+  color,
+  normal,
+  point,
+}: {
+  color: string
+  normal: MeasurementPoint
+  point: MeasurementPoint
+}) {
+  const ref = useRef<Group>(null)
+  const worldPosition = useMemo(() => new Vector3(), [])
+  const cameraSpacePosition = useMemo(() => new Vector3(), [])
+  const rotation = useMemo(() => {
+    const resolvedNormal = new Vector3(...normal)
+    if (resolvedNormal.lengthSq() <= 1e-12) resolvedNormal.copy(MARKER_PLANE_NORMAL)
+    return new Quaternion().setFromUnitVectors(MARKER_PLANE_NORMAL, resolvedNormal.normalize())
+  }, [normal])
+  const materials = useMemo(
+    () => ({
+      halo: new MeshBasicNodeMaterial({
+        color: '#f8fafc',
+        depthTest: true,
+        depthWrite: false,
+        opacity: 0.92,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
+        side: DoubleSide,
+        transparent: true,
+      }),
+      target: new MeshBasicNodeMaterial({
+        color,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -3,
+        side: DoubleSide,
+      }),
+    }),
+    [color],
+  )
+
+  useEffect(
+    () => () => {
+      materials.halo.dispose()
+      materials.target.dispose()
+    },
+    [materials],
+  )
+
+  useFrame(({ camera, size }) => {
+    const group = ref.current
+    if (!group) return
+    group.getWorldPosition(worldPosition)
+    let worldUnitsPerPixel = 0.01
+    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
+      const perspective = camera as PerspectiveCamera
+      const depth = Math.abs(
+        cameraSpacePosition.copy(worldPosition).applyMatrix4(perspective.matrixWorldInverse).z,
+      )
+      worldUnitsPerPixel =
+        (2 * depth * Math.tan(MathUtils.degToRad(perspective.getEffectiveFOV() * 0.5))) /
+        Math.max(size.height, 1)
+    } else if ((camera as OrthographicCamera).isOrthographicCamera) {
+      const orthographic = camera as OrthographicCamera
+      worldUnitsPerPixel =
+        (orthographic.top - orthographic.bottom) / Math.max(orthographic.zoom * size.height, 1)
+    }
+    const scale = worldUnitsPerPixel * 7
+    if (Number.isFinite(scale)) group.scale.setScalar(MathUtils.clamp(scale, 0.002, 0.24))
+  })
+
+  return (
+    <group position={point} quaternion={rotation} ref={ref}>
+      <mesh layers={OVERLAY_LAYER} material={materials.halo} renderOrder={1002}>
+        <ringGeometry args={[0.48, 1, 40]} />
+      </mesh>
+      <mesh layers={OVERLAY_LAYER} material={materials.target} renderOrder={1003}>
+        <ringGeometry args={[0.62, 0.86, 40]} />
+      </mesh>
+    </group>
+  )
 }
 
 const add = (point: MeasurementPoint, offset: MeasurementPoint): MeasurementPoint => [
@@ -121,8 +245,12 @@ function buildRenderData(measurement: ResolvedMeasurementPayload): MeasurementRe
     const [start, vertex, end] = measurement.points
     pushSegment(start, vertex)
     pushSegment(vertex, end)
+    const angleArc = buildMeasurementAngleArcPoints(start, vertex, end)
+    for (let index = 1; index < angleArc.length; index++) {
+      pushSegment(angleArc[index - 1]!, angleArc[index]!)
+    }
     markerPoints = [start, vertex, end]
-    labelPosition = vertex
+    labelPosition = angleArc[Math.floor(angleArc.length / 2)] ?? vertex
   } else if (measurement.kind === 'area' || measurement.kind === 'perimeter') {
     for (let index = 0; index < measurement.base.length; index++) {
       pushSegment(
@@ -201,13 +329,20 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
     (state) =>
       state.hoveredId === node.id || state.selection.selectedIds.some((id) => id === node.id),
   )
+  const ownOverride = useLiveNodeOverrides((state) => state.overrides.get(node.id)) as
+    | Partial<MeasurementNode>
+    | undefined
+  const effectiveNode = useMemo(
+    () => (ownOverride ? ({ ...node, ...ownOverride } as MeasurementNode) : node),
+    [node, ownOverride],
+  )
   const dependencyIds = measurementDependencyIds(
-    node.measurement,
+    effectiveNode.measurement,
     (id) => useScene.getState().nodes[id],
   )
   useScene(useShallow((state) => dependencyIds.map((id) => state.nodes[id])))
   useLiveNodeOverrides(useShallow((state) => dependencyIds.map((id) => state.overrides.get(id))))
-  const resolved = resolveMeasurementNode(node, (id) => {
+  const resolved = resolveMeasurementNode(effectiveNode, (id) => {
     const referencedNode = useScene.getState().nodes[id]
     if (!referencedNode) return undefined
     const liveOverride = useLiveNodeOverrides.getState().overrides.get(id)
@@ -219,7 +354,6 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
     return resolved.dangling.length > 0 ? `Unlinked · ${value}` : value
   }, [resolved, unit])
   const color = measurementPresentationColor(resolved.dangling.length > 0, active)
-  const markerGeometry = useMemo(() => new SphereGeometry(0.035, 12, 8), [])
   const lineMaterial = useMemo(
     () =>
       new LineBasicNodeMaterial({
@@ -242,15 +376,6 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
       }),
     [color],
   )
-  const markerMaterial = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color,
-        depthTest: false,
-        depthWrite: false,
-      }),
-    [color],
-  )
 
   useEffect(
     () => () => {
@@ -261,12 +386,10 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
   )
   useEffect(
     () => () => {
-      markerGeometry.dispose()
       lineMaterial.dispose()
       fillMaterial.dispose()
-      markerMaterial.dispose()
     },
-    [fillMaterial, lineMaterial, markerGeometry, markerMaterial],
+    [fillMaterial, lineMaterial],
   )
 
   useFrame(() => {
@@ -276,7 +399,7 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
     setAncestorsVisible(visible)
   })
 
-  const shouldShow = showMeasurements && node.visible !== false && ancestorsVisible
+  const shouldShow = showMeasurements && effectiveNode.visible !== false && ancestorsVisible
 
   return (
     <group ref={ref} {...handlers} userData={{ labelPosition: data.labelPosition }}>
@@ -300,14 +423,13 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
             renderOrder={1001}
           />
           {data.markerPoints.map((point, index) => (
-            <mesh
-              geometry={markerGeometry}
+            <SurfaceContactMarker
+              color={color}
               key={`${point.join(':')}:${index}`}
-              layers={OVERLAY_LAYER}
-              material={markerMaterial}
-              position={point}
-              renderOrder={1002}
-              userData={{ excludeFromBvh: true }}
+              normal={
+                resolved.anchorNormals[index] ?? fallbackMarkerNormal(resolved.payload, index)
+              }
+              point={point}
             />
           ))}
           <Html
@@ -318,7 +440,7 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
           >
             <div
               className={`whitespace-nowrap font-medium text-base text-white ${
-                node.measurement.kind === 'distance' ? '-translate-y-3' : ''
+                effectiveNode.measurement.kind === 'distance' ? '-translate-y-3' : ''
               }`}
               style={{
                 textShadow: `-1px -1px 0 ${color}, 1px -1px 0 ${color}, -1px 1px 0 ${color}, 1px 1px 0 ${color}`,

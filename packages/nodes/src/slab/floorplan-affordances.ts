@@ -2,19 +2,21 @@ import { type AnyNode, resolveLevelId, type SlabNode } from '@pascal-app/core'
 import { resolveSlabPlanPointSnap } from '@pascal-app/editor'
 import {
   createPolygonAddVertexAffordance,
+  createPolygonDeleteVertexAffordance,
   createPolygonMoveEdgeAffordance,
   createPolygonVertexAffordance,
   type PolygonAffordanceSnapContext,
 } from '../shared/polygon-vertex-affordance'
 
 /**
- * 2D drag affordances for slab. Three operations, each accepting an
+ * 2D affordances for slab. Four operations, each accepting an
  * optional `holeIndex` in the payload so they target the boundary
  * polygon or a specific hole:
  *
  *   - `move-vertex` — drag an existing vertex.
  *   - `add-vertex` — insert a new vertex at a midpoint then drag.
  *   - `move-edge` — drag a whole edge perpendicular to itself.
+ *   - `delete-vertex` — remove a double-clicked vertex down to three.
  *
  * Holes are surfaced inline alongside the boundary in `def.floorplan`
  * (no separate "hole edit mode" state machine like the legacy) — when
@@ -22,6 +24,7 @@ import {
  * Simpler model, no UX downside in practice.
  */
 const slabSnapOptions = {
+  extraCommitData: { autoFromWalls: false },
   resolvePlanPoint({
     node,
     nodes,
@@ -50,6 +53,10 @@ export const slabAddVertexAffordance = createPolygonAddVertexAffordance<SlabNode
   slabSnapOptions,
 )
 export const slabMoveEdgeAffordance = createPolygonMoveEdgeAffordance<SlabNode>(
+  'slab',
+  slabSnapOptions,
+)
+export const slabDeleteVertexAffordance = createPolygonDeleteVertexAffordance<SlabNode>(
   'slab',
   slabSnapOptions,
 )

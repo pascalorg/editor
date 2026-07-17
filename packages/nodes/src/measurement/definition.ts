@@ -1,11 +1,12 @@
 import { measurementReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
 import { buildMeasurementFloorplan } from './floorplan'
-import { measurementParametrics } from './parametrics'
+import { measurementMoveVertexAffordance } from './floorplan-affordance'
 import { MeasurementNode } from './schema'
 
 export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   kind: 'measurement',
   bake: 'strip',
+  snapProfile: 'structural',
   schemaVersion: 2,
   schema: MeasurementNode,
   category: 'analysis',
@@ -31,7 +32,6 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
     presettable: false,
   },
 
-  parametrics: measurementParametrics,
   dirtyTracking: false,
 
   renderer: {
@@ -40,7 +40,13 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   },
   floorplan: buildMeasurementFloorplan,
   floorplanDependencies: (node) => measurementReferenceNodeIds(node.measurement),
-  tool: () => import('./tool'),
+  floorplanAffordances: {
+    'move-measurement-vertex': measurementMoveVertexAffordance,
+  },
+  affordanceTools: {
+    selection: () => import('./selection'),
+  },
+  tool: () => import('./tool-router'),
   toolHints: [
     { key: 'Left click', label: 'Place measurement point' },
     { key: 'Enter', label: 'Finish measurement' },
@@ -53,6 +59,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
     description: 'A persistent distance, angle, area, perimeter, or volume annotation.',
     icon: { kind: 'iconify', name: 'lucide:ruler' },
     hidden: true,
+    actionMenu: false,
   },
 
   mcp: {
