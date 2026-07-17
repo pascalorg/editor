@@ -14,7 +14,7 @@
 //      user perceives.
 // SVGs land in layout-previews/templates/. Zero model calls.
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { LayoutIntent, LayoutPlan } from '../src/layout-plan'
 import { polygonArea, polygonBounds } from '../src/layout-plan'
@@ -22,6 +22,7 @@ import { partitionLayout, scoreCandidate } from '../src/layout-partitioner'
 import { resolveNormProfile } from '../src/norms/profile'
 import { validateLayoutPlan } from '../src/plan-validator'
 import { deriveStrategy } from '../src/strategy'
+import { templateFilePaths } from '../src/template-seed'
 import { renderPlanSvg } from './render-plan-svg'
 
 type Template = {
@@ -41,7 +42,7 @@ type Template = {
 function planMetrics(plan: LayoutPlan, profile: ReturnType<typeof resolveNormProfile>) {
   const { width, depth } = plan.footprint
   const roomAspects = plan.rooms
-    .filter(room => room.type !== 'hallway')
+    .filter(room => room.type !== 'hallway' && room.type !== 'storage')
     .map(room => {
       const b = polygonBounds(room.polygon)
       const w = b.maxX - b.minX
@@ -62,12 +63,25 @@ function planMetrics(plan: LayoutPlan, profile: ReturnType<typeof resolveNormPro
 }
 
 const templatesDir = process.argv[2] ?? join(import.meta.dir, '..', 'templates')
+// Previews mirror the library layout: good/ and bad/ hold the reference
+// renders, ours/ holds the partitioner-comparison renders — mixing 参照 and
+// --ours in one flat folder kept getting the comparison mistaken for a
+// template (2026-07-17 用户反馈).
 const outDir = join(import.meta.dir, '..', 'layout-previews', 'templates')
-mkdirSync(outDir, { recursive: true })
+for (const sub of ['good', 'bad', 'ours']) {
+  const subDir = join(outDir, sub)
+  mkdirSync(subDir, { recursive: true })
+  // Stale-output guard: a template whose partitioner comparison succeeded
+  // last run but fails now would otherwise keep its old ours/ SVG around and
+  // pass for a fresh result.
+  for (const file of readdirSync(subDir)) {
+    if (file.endsWith('.svg')) rmSync(join(subDir, file))
+  }
+}
 
-const files = readdirSync(templatesDir).filter(file => file.endsWith('.json')).sort()
+const files = templateFilePaths(templatesDir)
 for (const file of files) {
-  const template = JSON.parse(readFileSync(join(templatesDir, file), 'utf8')) as Template
+  const template = JSON.parse(readFileSync(file, 'utf8')) as Template
   const profile = resolveNormProfile(template.meta.market)
   const plan = template.plan
   const lotArea = plan.footprint.width * plan.footprint.depth
@@ -87,7 +101,10 @@ for (const file of files) {
     console.log(`  badReasons: ${template.meta.badReasons.join('；')}`)
   }
 
-  writeFileSync(join(outDir, `${template.id}.svg`), renderPlanSvg(`${template.meta.label} [参照]`, plan))
+  writeFileSync(
+    join(outDir, template.meta.quality === 'bad' ? 'bad' : 'good', `${template.id}.svg`),
+    renderPlanSvg(`${template.meta.label} [参照]`, plan),
+  )
 
   // 3. Same program through our generator (good references only).
   if (template.meta.quality !== 'good') continue
@@ -119,7 +136,7 @@ for (const file of files) {
   const ourValidation = validateLayoutPlan(generated.plan, { totalAreaSqm: intent.targetTotalAreaSqm }, profile)
   const ourMetrics = planMetrics(generated.plan, profile)
   console.log(`OURS(${strategy.typology}): validator score=${ourValidation.score} fatal=${ourValidation.fatal.length} penalty=${ourMetrics.penalty.toFixed(2)} maxRoomAspect=${ourMetrics.maxRoomAspect.toFixed(2)} corridorShare=${(ourMetrics.corridorRatio * 100).toFixed(1)}%`)
-  writeFileSync(join(outDir, `${template.id}--ours.svg`), renderPlanSvg(`${template.meta.label} [我们的生成]`, generated.plan))
+  writeFileSync(join(outDir, 'ours', `${template.id}.svg`), renderPlanSvg(`${template.meta.label} [我们的生成]`, generated.plan))
 }
 
 console.log(`\nSVG 输出目录：${outDir}`)

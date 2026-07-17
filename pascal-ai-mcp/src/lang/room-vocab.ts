@@ -46,6 +46,18 @@ export const ROOM_NAME_PATTERNS: Record<Exclude<RoomType, 'other' | 'living_kitc
   balcony: /阳台|balcony|バルコニー|ベランダ/i,
 }
 
+// DK（ダイニングキッチン）vs LDK: a living_kitchen room NAMED as a DK gets
+// the smaller DK area tier (NORMS_PROFILE_DESIGN.md §2.3) — real 2DK listings
+// run 6–8帖 where the LDK ladder starts at 8–10帖. LDK-ish names are excluded
+// first so リビングダイニングキッチン / "LDK" never downgrade.
+export function isDiningKitchenName(name: string): boolean {
+  // NFKC 先行：全角「１ＤＫ/ＬＤＫ」归一成半角再匹配；中点/空格分隔的
+  // 「ダイニング・キッチン」也是同一个词。
+  const normalized = name.normalize('NFKC')
+  if (LIVING_KITCHEN_PATTERN.test(normalized)) return false
+  return /ダイニング[・･\s]*キッチン|(?<![a-z])dk\b/i.test(normalized)
+}
+
 export function roomNamePattern(type: RoomType): RegExp | null {
   if (type === 'living_kitchen') return LIVING_KITCHEN_PATTERN
   if (type === 'other') return null

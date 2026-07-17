@@ -275,8 +275,11 @@ export async function executeFurniturePlan(options: {
   levelId: string
   callMcp: McpCaller
   beforeCall?: () => void
+  // NormProfile id — gates the ambiguous zh bathroom sub-kind tokens in the
+  // furniture checklist (see furniture-checklist.ts BATHROOM_SUBKINDS).
+  market?: string
 }): Promise<FurnitureExecutionReport> {
-  const { rooms, levelId, callMcp, beforeCall } = options
+  const { rooms, levelId, callMcp, beforeCall, market } = options
   const issues: string[] = []
   const placed: PlacedFurniture[] = []
   const missing: MissingFurniture[] = []
@@ -323,7 +326,7 @@ export async function executeFurniturePlan(options: {
   const candidateCache = new Map<string, Array<{ optionLabel: string; candidate: CatalogCandidate }>>()
 
   for (const room of roomsBySize) {
-    const requirements = findMissingFurniture(room.type, existingByRoom.get(room.id) ?? [])
+    const requirements = findMissingFurniture(room.type, existingByRoom.get(room.id) ?? [], room.name, market)
     // Resolve every requirement's candidates before placing anything, then
     // pack hardest-first: the requirement whose SMALLEST candidate is largest
     // has the fewest valid spots, so it picks walls first.
@@ -352,6 +355,18 @@ export async function executeFurniturePlan(options: {
           occupied,
           keepClear,
         })
+          // UB 现实（2026-07-16）：1216/1616 浴室里门净空盒会挡死每一个贴墙
+          // 位，而日本 UB 的门本就是折戸/外开、浴缸贴着门摆是市场常态。
+          // 豁免收得很窄：仅 jp 市场 + bathroom + 淋浴/浴缸这一项重扫——
+          // 马桶/洗手台和非 jp 市场照常尊重门净空，与已放家具的碰撞照查。
+          ?? (market === 'jp' && room.type === 'bathroom' && requirement.key === 'shower_or_bathtub'
+            ? findWallPlacement({
+                polygon: room.polygon,
+                itemDims: candidate.dimensions,
+                occupied,
+                keepClear: [],
+              })
+            : null)
         if (!spot) continue
         const payload = await callWithRetry(
           callMcp,

@@ -67,6 +67,12 @@ PASCAL_MCP_URL=http://127.0.0.1:3917/mcp
 
 Use the same `PASCAL_DATA_DIR` or `PASCAL_DB_PATH` as the editor so generated scenes and live events share storage.
 
+**Template seeding requires the matching norm profile.** The reference library (`templates/`, all `market: "jp"` today) is matched against the runtime profile — with the default profile no template can ever hit and every request falls back to the from-scratch partitioner. For the template-first experience, start the service with:
+
+```env
+PASCAL_NORM_PROFILE=jp
+```
+
 ## Run
 
 From the repository root, `bun dev` includes this workspace. To run only the AI service:

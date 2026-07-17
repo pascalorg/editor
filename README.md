@@ -352,23 +352,25 @@ Clears dirty flag
 
 ### Development
 
-Run the development server from the **root directory** to enable hot reload for all packages:
+The current local application uses three runtime layers: the editor on port 3002, the AI service (which starts MCP as a child) on port 8788, and the browser-facing reverse proxy on port 8000.
+
+For the daily fast path, use three terminals:
 
 ```bash
-# Install dependencies
-bun install
+# Terminal 1, repository root
+bun run dev --filter=editor
 
-# Run development server (builds packages + starts editor with watch mode)
-bun dev
+# Terminal 2
+cd pascal-ai-mcp
+bun run dev
 
-# This will:
-# 1. Build @pascal-app/core and @pascal-app/viewer
-# 2. Start watching both packages for changes
-# 3. Start the Next.js editor dev server
-# Open http://localhost:3000
+# Terminal 3, repository root
+dotnet run --project pascal-reverse-proxy --no-restore
 ```
 
-**Important:** Always run `bun dev` from the root directory to ensure the package watchers are running. This enables hot reload when you edit files in `packages/core/src/` or `packages/viewer/src/`.
+Open http://localhost:8000. Use root `bun dev` only when editing shared packages or the optional IFC converter; it starts every workspace watcher and is intentionally slower. It does not start the .NET reverse proxy.
+
+See [SETUP.md](./SETUP.md) for prerequisites, first-time setup, health checks, warm-start shortcuts, and troubleshooting.
 
 ### Building for Production
 
@@ -417,4 +419,3 @@ npm publish --workspace=@pascal-app/viewer --access public
 ---
 
 <a href="https://trendshift.io/repositories/23831" target="_blank"><img src="https://trendshift.io/api/badge/repositories/23831" alt="pascalorg/editor | Trendshift" width="250" height="55"/></a>
-

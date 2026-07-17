@@ -15,7 +15,7 @@
 import { classifyRoomTypeByName } from './lang/room-vocab'
 import { ROOM_TYPES, type LayoutIntent, type LayoutIntentRoom, type RoomType } from './layout-plan'
 import type { NormProfile } from './norms/profile'
-import { TYPE_TO_KIND } from './plan-validator'
+import { areaBoundFor } from './plan-validator'
 
 export type StructuralModifyOp =
   | { op: 'add_room'; room: { name: string; type: RoomType; targetAreaSqm?: number }; near?: string }
@@ -185,8 +185,13 @@ function checkAreaBounds(
   profile: NormProfile,
 ): { error?: string; warning?: string } {
   const bedroomCount = intent.rooms.filter(room => room.type === 'bedroom').length
-  const bounds = profile.roomAreaBounds({ totalAreaSqm: intent.targetTotalAreaSqm, bedroomCount })
-  const bound = bounds[TYPE_TO_KIND[type]]
+  const bound = areaBoundFor(
+    profile,
+    { totalAreaSqm: intent.targetTotalAreaSqm, bedroomCount },
+    type,
+    label,
+    intent.rooms.some(room => room.type === 'kitchen'),
+  )
   if (!bound) return {}
   if (area < bound.fatalMin || area > bound.fatalMax) {
     return {

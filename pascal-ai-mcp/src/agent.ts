@@ -3,7 +3,7 @@ import { evaluateCompletionGates, type GateFailure, type GateReport, type GateWa
 import type { AppConfig } from './config'
 import { detectLanguage, issueText, t, type Lang } from './lang/i18n'
 import { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
-import { detectSiteHint } from './lang/strategy-vocab'
+import { detectKitchenPreference, detectSiteHint, parseRoomProgram } from './lang/strategy-vocab'
 import { resolveNormProfile } from './norms/profile'
 import { deriveBriefFacts, deriveStrategy, type BriefFacts, type StrategyDecision } from './strategy'
 import {
@@ -154,6 +154,53 @@ type Evaluation = {
 }
 
 export { classifySceneIntentFallback, isSceneQuestion, type SceneIntent } from './lang/intent-vocab'
+
+// Best-effort delete of every child of `levelId`, then a leftover re-check —
+// clearing must be IDEMPOTENT: the children snapshot is taken once, but wall
+// dedupe or an earlier sibling's cascade may have already removed ids still
+// on the list (2026-07-16 线上事故：重规划第二次清场因重复删除旧 wall id
+// 整轮失败). Only nodes that survive the re-check are an error. Exported for
+// tests; PascalAiAgent.clearLevelForRebuild delegates here.
+export async function clearLevelChildren(
+  callMcp: (name: string, args: Record<string, unknown>) => Promise<unknown>,
+  levelId: string,
+): Promise<void> {
+  const scene = toolPayload(await callMcp('get_scene', {}))
+  const nodes = isRecord(scene.nodes) ? scene.nodes : {}
+  const level = nodes[levelId]
+  if (!isRecord(level) || !Array.isArray(level.children)) {
+    throw new Error(`Target level ${levelId} is unavailable`)
+  }
+  // 只有「Node not found」是预期内的幂等噪音（id 已被前一个 cascade 或墙体
+  // 去重删掉）；权限/参数/连接类异常原样留存，按 leftover 复查裁决——节点
+  // 确实消失了才作罢，还在场就带着原始错误一起抛。
+  const unexpectedErrors = new Map<string, unknown>()
+  for (const childId of level.children) {
+    if (typeof childId !== 'string') continue
+    try {
+      await callMcp('delete_node', { id: childId, cascade: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!/node not found/i.test(message)) unexpectedErrors.set(childId, error)
+    }
+  }
+  const after = toolPayload(await callMcp('get_scene', {}))
+  const afterNodes = isRecord(after.nodes) ? after.nodes : {}
+  const afterLevel = afterNodes[levelId]
+  const leftover = isRecord(afterLevel) && Array.isArray(afterLevel.children)
+    ? afterLevel.children.filter((id): id is string => typeof id === 'string' && isRecord(afterNodes[id]))
+    : []
+  if (leftover.length > 0) {
+    const causes = leftover
+      .map(id => unexpectedErrors.get(id))
+      .filter((error): error is Error => error instanceof Error)
+      .map(error => error.message)
+    throw new Error(
+      `清空层级失败：${leftover.length} 个节点未能删除（如 ${String(leftover[0])}）`
+      + (causes.length > 0 ? `，原始错误：${causes[0]}` : ''),
+    )
+  }
+}
 
 export class PascalAiAgent {
   private readonly model?: OpenAiCompatibleClient
@@ -1354,6 +1401,7 @@ export class PascalAiAgent {
       levelId,
       callMcp: traceMcp,
       beforeCall,
+      market: resolveNormProfile(this.config.normProfile).id,
     })
     // Deferred furniture ops run against the rebuilt rooms.
     let furnReport: FurnitureModifyReport | null = null
@@ -1809,17 +1857,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
   private async clearLevelForRebuild(session: WorkflowSession, levelId: string | null): Promise<void> {
     if (!levelId) throw new Error('Target level is missing')
     try {
-      const scene = toolPayload(await this.callMcp(session.sessionId, 'get_scene', {}))
-      const nodes = isRecord(scene.nodes) ? scene.nodes : {}
-      const level = nodes[levelId]
-      if (!isRecord(level) || !Array.isArray(level.children)) {
-        throw new Error(`Target level ${levelId} is unavailable`)
-      }
-      for (const childId of level.children) {
-        if (typeof childId === 'string') {
-          await this.callMcp(session.sessionId, 'delete_node', { id: childId, cascade: true })
-        }
-      }
+      await clearLevelChildren((name, args) => this.callMcp(session.sessionId, name, args), levelId)
     } catch (error) {
       session.executionSteps?.push({ phase: 'structure', status: 'failed', label: '清空模板占位内容' })
       throw error
@@ -2022,6 +2060,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
       },
     )
     trace.converged = result.ok
+    if (result.seedTrace?.length) trace.notes = result.seedTrace
     return result
   }
 
@@ -2056,6 +2095,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
       ...(planTargets.requiredRooms ? { requiredRooms: planTargets.requiredRooms } : {}),
       ...(requiredWindowRoomTypes.length > 0 ? { requiredWindowRoomTypes } : {}),
       ...(session.zoneRoomTypes ? { zoneTypes: session.zoneRoomTypes } : {}),
+      market: resolveNormProfile(this.config.normProfile).id,
     })
     const layoutQuality = computeLayoutQuality(zones, walls, {
       ...(planTargets.totalAreaSqm !== undefined ? { targetTotalAreaSqm: planTargets.totalAreaSqm } : {}),
@@ -2149,6 +2189,7 @@ questions 每次最多 3 个，只问会改变空间结构的问题；questions 
           return result
         },
         beforeCall: () => this.throwIfCancelled(session.sessionId),
+        market: resolveNormProfile(this.config.normProfile).id,
       })
       furnitureTrace.converged = true
       if (furnished.placed.length > 0) toolNamesUsed.add('place_item')
@@ -2725,17 +2766,74 @@ export function ensureSiteDimensionFact(brief: DesignBrief, userMessage: string,
 
 export function briefFactsFor(brief: DesignBrief, briefSummary: string): BriefFacts {
   const facts = deriveBriefFacts(briefSummary)
+  const pools = [brief.hardConstraints, brief.existingCondition, brief.designGoals, brief.assumptions]
   if (!facts.siteHint) {
-    const pools = [brief.hardConstraints, brief.existingCondition, brief.designGoals, brief.assumptions]
-    for (const pool of pools) {
+    outer: for (const pool of pools) {
       for (const fact of pool) {
         const hint = detectSiteHint(`${fact.key} ${fact.label} ${formatValue(fact.value)}`)
         if (hint) {
           facts.siteHint = hint
-          return facts
+          break outer
         }
       }
     }
+  }
+  // Room program: the GOAL pools (designGoals/hardConstraints) outrank
+  // everything — a renovation brief reads "现状户型：2DK / 目标户型：2LDK"
+  // and both the summary regex (first match wins) and a flat pool scan would
+  // pick up the CURRENT program instead of the requested one. Only when no
+  // goal fact carries a program does the summary-derived value stand, with
+  // assumptions/existingCondition as the last resort.
+  const programFromPools = (scan: RequirementFact[][]) => {
+    for (const pool of scan) {
+      for (const fact of pool) {
+        const parsed = parseRoomProgram(`${fact.key} ${fact.label} ${formatValue(fact.value)}`)
+        if (parsed) return parsed
+      }
+    }
+    return undefined
+  }
+  const applyProgram = (parsed: NonNullable<ReturnType<typeof parseRoomProgram>>) => {
+    facts.roomProgram = parsed.program
+    if (parsed.serviceRoomCount > 0) facts.serviceRoomCount = parsed.serviceRoomCount
+    else delete facts.serviceRoomCount
+  }
+  const goalProgram = programFromPools([brief.designGoals, brief.hardConstraints])
+  if (goalProgram) {
+    applyProgram(goalProgram)
+  } else if (!facts.roomProgram) {
+    const fallback = programFromPools([brief.assumptions, brief.existingCondition])
+    if (fallback) applyProgram(fallback)
+  }
+  // Kitchen preference is a GOAL statement too: only explicit wording in the
+  // goal pools may override the summary-derived value, and existingCondition
+  // never contributes — a renovation brief's 现状 2LDK must not read as an
+  // open-kitchen demand for the 1K target (Codex 复审 #2).
+  const preferenceFromPools = (scan: RequirementFact[][]) => {
+    for (const pool of scan) {
+      for (const fact of pool) {
+        const preference = detectKitchenPreference(`${fact.key} ${fact.label} ${formatValue(fact.value)}`)
+        if (preference) return preference
+      }
+    }
+    return undefined
+  }
+  // Goal-source priority: designGoals/hardConstraints > confirmed
+  // assumptions（用户确认 brief 后 assumptions 就是生成输入，不是现状）>
+  // summary free text. Only existingCondition identifies pollution.
+  const preferenceFromGoals = preferenceFromPools([brief.designGoals, brief.hardConstraints])
+    ?? preferenceFromPools([brief.assumptions])
+  if (preferenceFromGoals) {
+    facts.kitchenPreference = preferenceFromGoals
+  } else if (
+    facts.kitchenPreference !== undefined
+    && preferenceFromPools([brief.existingCondition]) === facts.kitchenPreference
+  ) {
+    // The summary concatenates 现状+目标 and this preference matches wording
+    // that lives only in the CURRENT-state pool（复现：现状「独立厨房」＋
+    // 目标 1LDK 曾把目标错锁成 closed/user）——treat it as 现状 pollution,
+    // not a goal, and let the program / band default decide.
+    delete facts.kitchenPreference
   }
   return facts
 }

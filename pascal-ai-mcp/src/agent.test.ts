@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   bedroomCountFromBriefText,
+  clearLevelChildren,
   briefFactsFor,
   effectiveGateFailures,
   ensureSiteDimensionFact,
@@ -923,6 +924,72 @@ describe('briefFactsFor（P0：结构化 brief 尺寸优先于摘要正则）', 
     ensureSiteDimensionFact(brief as never, '想要一个三居室，采光好一点', 'zh')
     expect(brief.hardConstraints).toHaveLength(0)
   })
+
+  test('现状「独立厨房」不污染目标厨房策略（Codex 审阅 Blocker，2026-07-17）', () => {
+    const brief = {
+      ...structuredClone(emptyBrief),
+      existingCondition: [{
+        key: 'current_kitchen', label: '现状厨房', value: '独立厨房',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+      designGoals: [{
+        key: 'room_program', label: '目标户型', value: '1LDK',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+    }
+    const facts = briefFactsFor(brief as never, '现状：独立厨房。目标：改成 1LDK。')
+    // 摘要里的「独立厨房」来自现状池 → 清除，让房型编号决定厨房形态。
+    expect(facts.kitchenPreference).toBeUndefined()
+    expect(facts.roomProgram).toBe('1ldk')
+  })
+
+  test('目标池明确写厨房偏好时照常生效；仅摘要有目标措辞（无现状同源）也保留', () => {
+    const withGoalFact = {
+      ...structuredClone(emptyBrief),
+      existingCondition: [{
+        key: 'current_kitchen', label: '现状厨房', value: '开放式厨房',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+      designGoals: [{
+        key: 'kitchen', label: '厨房要求', value: '独立厨房',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+    }
+    expect(briefFactsFor(withGoalFact as never, '现状开放式厨房，目标独立厨房').kitchenPreference).toBe('closed')
+    // 摘要出现偏好、现状池没有同源措辞 → 视为目标自由文本，保留。
+    const summaryOnly = briefFactsFor(structuredClone(emptyBrief) as never, '两居 60㎡，要开放式厨房')
+    expect(summaryOnly.kitchenPreference).toBe('open')
+  })
+
+  test('已确认的 assumptions 是目标偏好的次级来源，不算现状污染（Codex 审阅二修，2026-07-17）', () => {
+    // 复现：「系统假设：采用开放式厨房」60㎡ 曾被当污染删除，跌回 closed/band_default。
+    const assumed = {
+      ...structuredClone(emptyBrief),
+      assumptions: [{
+        key: 'kitchen_mode', label: '系统假设', value: '采用开放式厨房',
+        source: 'system_recognition', confidence: 0.9, confirmationStatus: 'confirmed',
+      }],
+    }
+    expect(briefFactsFor(assumed as never, '两居 60㎡。系统假设：采用开放式厨房。').kitchenPreference).toBe('open')
+    // 优先级仍低于目标池：designGoals 写独立厨房时 assumptions 的开放式让位。
+    const withGoal = {
+      ...structuredClone(assumed),
+      designGoals: [{
+        key: 'kitchen', label: '厨房要求', value: '独立厨房',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+    }
+    expect(briefFactsFor(withGoal as never, '两居 60㎡，独立厨房。系统假设：采用开放式厨房。').kitchenPreference).toBe('closed')
+    // 现状池单独仍触发污染清除。
+    const pollution = {
+      ...structuredClone(emptyBrief),
+      existingCondition: [{
+        key: 'current_kitchen', label: '现状厨房', value: '独立厨房',
+        source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+      }],
+    }
+    expect(briefFactsFor(pollution as never, '现状：独立厨房。目标：1LDK。').kitchenPreference).toBeUndefined()
+  })
 })
 
 describe('effectiveGateFailures（§6 三修：修改路径 gates 只追责本次新引入的失败）', () => {
@@ -1049,5 +1116,154 @@ describe('staleSessionRecovery（stuck 状态守卫）', () => {
     for (const phase of ['clarifying', 'awaiting_confirmation', 'awaiting_modification_confirmation', 'completed', 'completed_with_issues', 'failed', 'cancelled', 'intake'] as const) {
       expect(staleSessionRecovery({ ...base, phase })).toBeNull()
     }
+  })
+})
+
+describe('clearLevelChildren（清场幂等，2026-07-16 线上事故回归）', () => {
+  function fakeSceneMcp(
+    initial: Record<string, { type: string; children?: string[] }>,
+    opts: { failDelete?: Set<string>; cascadeMap?: Record<string, string[]> } = {},
+  ) {
+    const nodes = new Map(Object.entries(initial))
+    const deletes: string[] = []
+    const callMcp = async (name: string, args: Record<string, unknown>) => {
+      if (name === 'get_scene') {
+        return { structuredContent: { nodes: Object.fromEntries(nodes) } }
+      }
+      if (name === 'delete_node') {
+        const id = String(args.id)
+        deletes.push(id)
+        if (opts.failDelete?.has(id)) throw new Error('injected persistent delete failure')
+        if (!nodes.has(id)) throw new Error(`MCP error -32602: Node not found: ${id}`)
+        nodes.delete(id)
+        for (const extra of opts.cascadeMap?.[id] ?? []) nodes.delete(extra)
+        return { structuredContent: { ok: true } }
+      }
+      throw new Error(`unexpected tool ${name}`)
+    }
+    return { callMcp, nodes, deletes }
+  }
+
+  test('children 里已不存在的 id 只是跳过，整轮不失败', async () => {
+    const { callMcp, nodes, deletes } = fakeSceneMcp({
+      'level-1': { type: 'level', children: ['wall-a', 'wall-ghost'] },
+      'wall-a': { type: 'wall' },
+    })
+    await clearLevelChildren(callMcp, 'level-1')
+    expect(deletes).toEqual(['wall-a', 'wall-ghost'])
+    expect(nodes.has('wall-a')).toBe(false)
+  })
+
+  test('cascade 连带删掉后续待删节点后，重复删除不炸', async () => {
+    const { callMcp, nodes } = fakeSceneMcp(
+      {
+        'level-1': { type: 'level', children: ['zone-1', 'wall-1'] },
+        'zone-1': { type: 'zone' },
+        'wall-1': { type: 'wall' },
+      },
+      { cascadeMap: { 'zone-1': ['wall-1'] } },
+    )
+    await clearLevelChildren(callMcp, 'level-1')
+    expect(nodes.has('zone-1')).toBe(false)
+    expect(nodes.has('wall-1')).toBe(false)
+  })
+
+  test('真正删不掉且复查仍在场的节点必须报错', async () => {
+    const { callMcp } = fakeSceneMcp(
+      {
+        'level-1': { type: 'level', children: ['wall-stuck'] },
+        'wall-stuck': { type: 'wall' },
+      },
+      { failDelete: new Set(['wall-stuck']) },
+    )
+    // 非 Node not found 的异常不能被笼统吞掉——原始错误要出现在最终报错里。
+    await expect(clearLevelChildren(callMcp, 'level-1'))
+      .rejects.toThrow(/未能删除.*injected persistent delete failure/)
+  })
+
+  test('非 not-found 异常但复查确认节点已消失（前序 cascade 删掉）则放行', async () => {
+    const { callMcp, nodes } = fakeSceneMcp(
+      {
+        'level-1': { type: 'level', children: ['zone-1', 'wall-1'] },
+        'zone-1': { type: 'zone' },
+        'wall-1': { type: 'wall' },
+      },
+      // wall-1 的 delete 抛的是连接类错误而非 Node not found，但 zone-1 的
+      // cascade 已经把它删掉了——复查为准，不报错。
+      { cascadeMap: { 'zone-1': ['wall-1'] }, failDelete: new Set(['wall-1']) },
+    )
+    await clearLevelChildren(callMcp, 'level-1')
+    expect(nodes.has('wall-1')).toBe(false)
+  })
+
+  test('level 不存在时立即报错，不做静默', async () => {
+    const { callMcp } = fakeSceneMcp({})
+    await expect(clearLevelChildren(callMcp, 'level-x')).rejects.toThrow(/unavailable/)
+  })
+})
+
+describe('briefFactsFor 房型编号：目标优先于现状（Codex review #2）', () => {
+  const base = {
+    existingCondition: [],
+    designGoals: [],
+    hardConstraints: [],
+    assumptions: [],
+    uncertainties: [],
+    conflicts: [],
+    questions: [],
+    overallConfidence: 1,
+  }
+  const fact = (key: string, label: string, value: string) => ({
+    key, label, value, source: 'user', confidence: 1, confirmationStatus: 'confirmed',
+  })
+
+  test('现状 2DK、目标 2LDK：summary 先出现现状编号也必须取目标 2LDK', () => {
+    const brief = {
+      ...base,
+      existingCondition: [fact('current_layout', '现状户型', '2DK')],
+      designGoals: [fact('room_program', '目标户型', '2LDK')],
+    }
+    // formatSummary 现状在前——summary 正则首个命中是 2DK。
+    const facts = briefFactsFor(brief as never, '现状户型：2DK。设计目标：改造为 2LDK，60 平米。')
+    expect(facts.roomProgram).toBe('2ldk')
+  })
+
+  test('目标池无编号时才回退 summary，再回退现状池', () => {
+    const summaryOnly = briefFactsFor(base as never, '给我一个 2DK，45 平米')
+    expect(summaryOnly.roomProgram).toBe('2dk')
+    const currentOnly = {
+      ...base,
+      existingCondition: [fact('current_layout', '现状户型', '3DK')],
+    }
+    expect(briefFactsFor(currentOnly as never, '按现状改造一下').roomProgram).toBe('3dk')
+  })
+
+  test('hardConstraints 里的编号同属目标池', () => {
+    const brief = {
+      ...base,
+      existingCondition: [fact('current_layout', '现状户型', '2DK')],
+      hardConstraints: [fact('room_program', '房型', '1LDK')],
+    }
+    expect(briefFactsFor(brief as never, '现状 2DK 改 1LDK').roomProgram).toBe('1ldk')
+  })
+
+  test('目标编号覆盖现状时同步设置或清除 S 服务间约束', () => {
+    const toPlainLdk = {
+      ...base,
+      existingCondition: [fact('current_layout', '现状户型', '2SLDK')],
+      designGoals: [fact('room_program', '目标户型', '2LDK')],
+    }
+    const plainFacts = briefFactsFor(toPlainLdk as never, '现状 2SLDK 改造为 2LDK')
+    expect(plainFacts.roomProgram).toBe('2ldk')
+    expect(plainFacts.serviceRoomCount).toBeUndefined()
+
+    const toServiceLdk = {
+      ...base,
+      existingCondition: [fact('current_layout', '现状户型', '2LDK')],
+      designGoals: [fact('room_program', '目标户型', '2SLDK')],
+    }
+    const serviceFacts = briefFactsFor(toServiceLdk as never, '现状 2LDK 改造为 2SLDK')
+    expect(serviceFacts.roomProgram).toBe('2ldk')
+    expect(serviceFacts.serviceRoomCount).toBe(1)
   })
 })

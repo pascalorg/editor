@@ -49,15 +49,24 @@ const KITCHEN: FurnitureRequirement[] = [
   single('fridge', '冰箱', ['fridge', '冰箱'], /冰箱|fridge|refrigerator|冷蔵庫/i),
 ]
 
+// 洁具主体 matcher 必须挡住同名配件（2026-07-16 线上事故：search_assets
+// 按 tag/子串命中 toilet-paper / shower-rug，rank 又偏爱小件，厕纸和地垫
+// 被当成马桶和淋浴放进场景且 gate 判过）。负向前瞻只列配件词——真正的
+// 洁具主体（wall-hung-toilet、shower cabin、walk-in shower）不受影响。
+const TOILET_MATCH =
+  /马桶|坐便|toilet(?![-_ ]?(?:paper|roll|brush|holder|seat|lid))|\bwc\b|トイレ(?!ット|ブラシ|ペーパー|カバー)|便器/i
+const SHOWER_MATCH =
+  /淋浴(?!垫|帘|头|喷)|shower(?![-_ ]?(?:rug|mat|curtain|caddy|head|hose|shelf|holder))|シャワー(?!マット|カーテン|ヘッド|ホース|ラック)/i
+
 const BATHROOM: FurnitureRequirement[] = [
-  single('toilet', '马桶', ['toilet', '马桶'], /马桶|坐便|toilet|\bwc\b|トイレ|便器/i),
+  single('toilet', '马桶', ['toilet', '马桶'], TOILET_MATCH),
   single('washbasin', '洗手台', ['bathroom vanity', 'basin', '洗手台', '浴室柜'], /洗手台|洗手盆|台盆|浴室柜|basin|vanity|洗面台/i),
   {
     key: 'shower_or_bathtub',
     label: '淋浴或浴缸',
     options: [
-      { label: '淋浴', searchTerms: ['shower', '淋浴房', '淋浴'], match: /淋浴|shower|シャワー/i },
-      { label: '浴缸', searchTerms: ['bathtub', '浴缸'], match: /浴缸|bathtub|\btub\b|浴槽|バスタブ/i },
+      { label: '淋浴', searchTerms: ['shower', '淋浴房', '淋浴'], match: SHOWER_MATCH },
+      { label: '浴缸', searchTerms: ['bathtub', '浴缸'], match: /浴缸|bathtub(?![-_ ]?(?:mat|tray))|\btub\b|浴槽|バスタブ/i },
     ],
   },
 ]
@@ -76,7 +85,35 @@ const CHECKLISTS: Partial<Record<RoomType, FurnitureRequirement[]>> = {
   living_kitchen: [...LIVING, ...KITCHEN],
 }
 
-export function requiredFurnitureFor(type: RoomType): FurnitureRequirement[] {
+// J6-lite（方案 B，2026-07-16 模板种子接入需要）：卫浴分离的房间按名字拆
+// 清单——トイレ只要马桶、洗面(脱衣)室只要洗手台、浴室只要淋浴/浴缸；泛称
+// 卫生间保持全套。仅凭房名分不清中文泛称和日式卫浴分离（zh 老场景把完整
+// 卫生间叫「浴室/厕所」很常见），所以含糊的中文词条只在 jp 市场档下生效
+// （jpOnlyPattern）；假名/明确英文词条不受市场限制。
+const BATHROOM_SUBKINDS: Array<{ pattern: RegExp; jpOnlyPattern?: RegExp; keys: string[] }> = [
+  { pattern: /トイレ|便所|\bwc\b/i, jpOnlyPattern: /厕所|廁所/i, keys: ['toilet'] },
+  { pattern: /洗面|脱衣|washroom|powder/i, keys: ['washbasin'] },
+  { pattern: /風呂|バス(?!ケ)|浴槽/i, jpOnlyPattern: /浴室|\bbath\b/i, keys: ['shower_or_bathtub'] },
+]
+
+function bathroomRequirements(roomName: string, market?: string): FurnitureRequirement[] {
+  // 组合式卫浴名（「浴室・トイレ」「浴室・洗面」等 unit bath 标注）命中多个
+  // 子类型——取全部命中的并集，绝不能按第一个词缩成单项（否则组合间只放
+  // 马桶、淋浴静默丢失，且 gate 与 executor 共用此判断会双双漏过）。
+  const keys = new Set<string>()
+  for (const subKind of BATHROOM_SUBKINDS) {
+    const hit = subKind.pattern.test(roomName)
+      || (market === 'jp' && subKind.jpOnlyPattern?.test(roomName))
+    if (hit) for (const key of subKind.keys) keys.add(key)
+  }
+  if (keys.size === 0) return BATHROOM
+  return BATHROOM.filter(requirement => keys.has(requirement.key))
+}
+
+// `market` is the NormProfile id ('jp'/'default') of the session that built
+// the scene — it gates the ambiguous zh sub-kind tokens above.
+export function requiredFurnitureFor(type: RoomType, roomName?: string, market?: string): FurnitureRequirement[] {
+  if (type === 'bathroom' && roomName) return bathroomRequirements(roomName, market)
   return CHECKLISTS[type] ?? []
 }
 
@@ -116,12 +153,15 @@ export function requirementLabelsSatisfiedBy(itemName: string): string[] {
   return [...labels]
 }
 
-// Which requirements are NOT satisfied by the given item names.
+// Which requirements are NOT satisfied by the given item names. `roomName`
+// activates the J6-lite bathroom sub-kind split above.
 export function findMissingFurniture(
   type: RoomType,
   itemNames: string[],
+  roomName?: string,
+  market?: string,
 ): FurnitureRequirement[] {
-  return requiredFurnitureFor(type).filter(requirement =>
+  return requiredFurnitureFor(type, roomName, market).filter(requirement =>
     !itemNames.some(name => requirement.options.some(option => option.match.test(name))),
   )
 }

@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { validateLayoutPlan } from './plan-validator'
+import { areaBoundFor, validateLayoutPlan } from './plan-validator'
+import { isDiningKitchenName } from './lang/room-vocab'
+import { JP_NORM_PROFILE } from './norms/profile'
 import type { LayoutPlan } from './layout-plan'
 
 function rect(x: number, z: number, w: number, d: number): Array<[number, number]> {
@@ -224,5 +226,37 @@ describe('the 11 checks each catch their illegal plan', () => {
     plan.connections.push({ from: 'inner-1', to: 'bedroom-1', type: 'door' })
     const result = validateLayoutPlan(plan)
     expect(result.fatal.some(f => f.includes('入户房间') && f.includes('外墙边'))).toBe(true)
+  })
+})
+
+describe('areaBoundFor: DK 档位在 validator/modify/strategy 三处共用的选档函数', () => {
+  const ctx = { totalAreaSqm: 45, bedroomCount: 2 }
+
+  test('DK 名的 living_kitchen 走 DK 档，LDK 名走 living 档', () => {
+    const dk = areaBoundFor(JP_NORM_PROFILE, ctx, 'living_kitchen', 'DK')!
+    const ldk = areaBoundFor(JP_NORM_PROFILE, ctx, 'living_kitchen', 'LDK')!
+    // 真实 2DK 的 6–8帖 DK（≈10–13㎡）必须落在 DK 档内、又低于 LDK 档下限
+    // ——两档不同才说明按名选档真正生效。
+    expect(dk.fatalMin).toBeLessThan(ldk.fatalMin)
+    expect(10.5).toBeGreaterThanOrEqual(dk.fatalMin)
+    expect(10.5).toBeLessThan(ldk.fatalMin)
+  })
+
+  test('LD（客餐分离）在含独立厨房的户型里走 LD 档，不被 LDK 阶梯误伤', () => {
+    const ld = areaBoundFor(JP_NORM_PROFILE, ctx, 'living', 'リビング・ダイニング', true)!
+    const ldk = areaBoundFor(JP_NORM_PROFILE, ctx, 'living', 'リビング・ダイニング', false)!
+    // 真实 9.6帖 LD（15.6㎡）在 LD 档内、又低于 LDK 阶梯下限。
+    expect(15.6).toBeGreaterThanOrEqual(ld.fatalMin)
+    expect(15.6).toBeGreaterThanOrEqual(ld.softMin)
+    expect(15.6).toBeLessThan(ldk.fatalMin)
+  })
+
+  test('DK 名识别做 NFKC 归一化并接受中点分隔', () => {
+    expect(isDiningKitchenName('1DK')).toBe(true)
+    expect(isDiningKitchenName('１ＤＫ')).toBe(true)
+    expect(isDiningKitchenName('ダイニング・キッチン')).toBe(true)
+    expect(isDiningKitchenName('LDK')).toBe(false)
+    expect(isDiningKitchenName('ＬＤＫ')).toBe(false)
+    expect(isDiningKitchenName('リビング・ダイニング・キッチン')).toBe(false)
   })
 })

@@ -17,14 +17,17 @@ import {
   polygonAspectRatio,
   type RoomKind,
 } from './layout-metrics'
+import { isDiningKitchenName } from './lang/room-vocab'
 import { DEFAULT_NORM_PROFILE, type NormProfile } from './norms/profile'
 import {
   kitchenIsCirculation,
   analyzePolygonGrid,
   footprintArea as footprintAreaOf,
   isAxisAligned,
+  isMiniCloset,
   longestExteriorEdge,
   longestSharedEdge,
+  MINI_CLOSET_MIN_OPENING_M,
   polygonArea,
   polygonIntersectionArea,
   polygonSelfIntersects,
@@ -76,6 +79,29 @@ export const TYPE_TO_KIND: Record<RoomType, RoomKind> = {
   storage: 'other',
   balcony: 'other',
   other: 'other',
+}
+
+// 按房型+名称选择面积档位（TEMPLATES.md #5）：DK 名的 living_kitchen 走
+// profile 的 DK 档，其余按 TYPE_TO_KIND 查常规档位表。validator #7、
+// modify-ops 的 add/resize 判定、strategy 的 fatal 界夹取三处共用——同一个
+// 房间必须在三处得到同一个档位，否则 validator 放行的 DK 会被 modify 拒绝
+// 或被 strategy 夹到 LDK 下限。
+export function areaBoundFor(
+  profile: NormProfile,
+  context: Parameters<NormProfile['roomAreaBounds']>[0],
+  type: RoomType,
+  name: string,
+  // Plan/intent carries a standalone kitchen — a bare `living` room is then
+  // an LD (客餐分离) and takes the LD tier instead of the LDK ladder.
+  hasStandaloneKitchen = false,
+): ReturnType<NormProfile['roomAreaBounds']>[RoomKind] {
+  if (type === 'living_kitchen' && profile.dkAreaBounds && isDiningKitchenName(name)) {
+    return profile.dkAreaBounds(context)
+  }
+  if (type === 'living' && hasStandaloneKitchen && profile.ldAreaBounds) {
+    return profile.ldAreaBounds(context)
+  }
+  return profile.roomAreaBounds(context)[TYPE_TO_KIND[type]]
 }
 
 const PUBLIC_TYPES: ReadonlySet<RoomType> = new Set([
@@ -227,9 +253,10 @@ export function validateLayoutPlan(
   }))
   const totalRoomArea = areas.reduce((sum, entry) => sum + entry.area, 0)
   const bedroomCount = plan.rooms.filter(room => room.type === 'bedroom').length
-  const bounds = profile.roomAreaBounds({ totalAreaSqm: totalRoomArea, bedroomCount })
+  const boundsContext = { totalAreaSqm: totalRoomArea, bedroomCount }
+  const hasStandaloneKitchen = plan.rooms.some(room => room.type === 'kitchen')
   for (const entry of areas) {
-    const bound = bounds[entry.kind]
+    const bound = areaBoundFor(profile, boundsContext, entry.room.type, label(entry.room), hasStandaloneKitchen)
     if (!bound) continue
     if (entry.area >= bound.softMin && entry.area <= bound.softMax) continue
     const hard = entry.area < bound.fatalMin || entry.area > bound.fatalMax
@@ -248,6 +275,9 @@ export function validateLayoutPlan(
   }
   for (const entry of areas) {
     if (entry.kind === 'circulation') continue
+    // 壁橱形态豁免（TEMPLATES.md #7）：0.5m 进深 × 1m+ 宽是 storage 的标准
+    // 形态，不是狭长缺陷。
+    if (entry.room.type === 'storage') continue
     const ratio = polygonAspectRatio(entry.room.polygon)
     if (ratio <= ASPECT_RATIO_SOFT) continue
     const message = `房间「${label(entry.room)}」长宽比约 ${ratio.toFixed(1)}:1`
@@ -295,9 +325,14 @@ export function validateLayoutPlan(
     const a = roomById.get(conn.from)!
     const b = roomById.get(conn.to)!
     const shared = longestSharedEdge(a.polygon, b.polygon)
-    if (shared.length < MIN_DOOR_EDGE_M) {
+    // 嵌入式壁橱连接与 scene-executor 用同一套下限（layout-plan）：执行器
+    // 能施工 0.5m 的无扇门洞，validator 再卡 0.9m 就把这条放宽变成死代码。
+    const minEdge = isMiniCloset(a) || isMiniCloset(b)
+      ? MINI_CLOSET_MIN_OPENING_M
+      : MIN_DOOR_EDGE_M
+    if (shared.length < minEdge) {
       pushFatal(
-        `connection ${label(a)}→${label(b)} 的共享墙段仅 ${shared.length.toFixed(2)}m（需 ≥${MIN_DOOR_EDGE_M}m）`,
+        `connection ${label(a)}→${label(b)} 的共享墙段仅 ${shared.length.toFixed(2)}m（需 ≥${minEdge}m）`,
       )
     }
   }

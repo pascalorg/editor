@@ -53,6 +53,7 @@ function makeMockMcp(options: {
   walls?: WallSegment[]
   zoneAreas?: Record<string, number>
   failures?: Record<string, number>
+  strictLength?: boolean
 } = {}) {
   const calls: RecordedCall[] = []
   const failures = { ...(options.failures ?? {}) }
@@ -74,9 +75,22 @@ function makeMockMcp(options: {
       }
       case 'get_walls':
         return wrap({ walls: options.walls ?? twoRoomWalls })
-      case 'add_door':
+      case 'add_door': {
+        // Real MCP behavior: raw-float length check, no cm rounding — a
+        // 3.6−2.7 = 0.8999… wall rejects a 0.9m door.
+        if (options.strictLength) {
+          const wall = (options.walls ?? twoRoomWalls).find(w => w.id === args.wallId)
+          const width = args.width as number
+          if (wall) {
+            const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+            if (length < width) {
+              throw new Error(`Wall ${wall.id} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m door`)
+            }
+          }
+        }
         counter++
         return wrap({ doorId: `door-${counter}` })
+      }
       case 'add_window':
         counter++
         return wrap({ windowId: `window-${counter}` })
@@ -206,6 +220,57 @@ describe('executeLayoutPlan', () => {
     expect(report.executionIssues.some(issue => issue.includes('偏差超过'))).toBe(true)
     const bedroom = report.rooms.find(room => room.planRoomId === 'bedroom-1')
     expect(bedroom?.builtAreaSqm).toBeCloseTo(9)
+  })
+
+  // tpl-jp-2ldk-60-tanoji 复刻（2026-07-16 线上事故）：玄関/廊下宽 3.6−2.7 =
+  // 0.8999…，MCP 按原始浮点判"0.90m 墙放不下 0.90m 门"，三扇 0.9m 边上的门
+  // （玄関→廊下、廊下→LDK、入户门）全部失败。修复后宽度按宿主墙原始长度
+  // 向下取厘米（0.89m），水平/垂直共享墙上的门必须全部落成。
+  test('tanoji float-width walls: every connection still gets its door (horizontal + vertical)', async () => {
+    const plan: LayoutPlan = {
+      footprint: { width: 6.31, depth: 9.51 },
+      entry: { roomId: 'entry-1' },
+      rooms: [
+        { id: 'entry-1', name: '玄関', type: 'entry', polygon: [[2.7, 0], [3.6, 0], [3.6, 1.4], [2.7, 1.4]], requiresExteriorWindow: false },
+        { id: 'hall-1', name: '廊下', type: 'hallway', polygon: [[2.7, 1.4], [3.6, 1.4], [3.6, 5.51], [2.7, 5.51]], requiresExteriorWindow: false },
+        { id: 'bedroom-1', name: '洋室1', type: 'bedroom', polygon: [[0, 0], [2.7, 0], [2.7, 3.3], [0, 3.3]], requiresExteriorWindow: true },
+        { id: 'living-kitchen-1', name: 'LDK', type: 'living_kitchen', polygon: [[0, 5.51], [6.31, 5.51], [6.31, 9.51], [0, 9.51]], requiresExteriorWindow: true },
+      ],
+      connections: [
+        { from: 'entry-1', to: 'hall-1', type: 'door' },      // horizontal 0.9m edge
+        { from: 'hall-1', to: 'bedroom-1', type: 'door' },    // vertical 1.9m edge
+        { from: 'hall-1', to: 'living-kitchen-1', type: 'door' }, // horizontal 0.9m edge
+      ],
+    }
+    const walls: WallSegment[] = [
+      { id: 'w-entry-bottom', start: [2.7, 0], end: [3.6, 0] },
+      { id: 'w-entry-hall', start: [2.7, 1.4], end: [3.6, 1.4] },
+      { id: 'w-hall-bedroom', start: [2.7, 1.4], end: [2.7, 3.3] },
+      { id: 'w-hall-ldk', start: [2.7, 5.51], end: [3.6, 5.51] },
+      { id: 'w-bedroom-bottom', start: [0, 0], end: [2.7, 0] },
+      { id: 'w-bedroom-left', start: [0, 0], end: [0, 3.3] },
+      { id: 'w-ldk-top', start: [0, 9.51], end: [6.31, 9.51] },
+    ]
+    expect(3.6 - 2.7).toBeLessThan(0.9) // the float trap this test guards
+    const { callMcp, calls } = makeMockMcp({ walls, strictLength: true })
+    const report = await executeLayoutPlan({
+      plan,
+      levelId: 'level-1',
+      callMcp,
+      dedupeSharedWalls: async () => {},
+    })
+    expect(report.executionIssues).toEqual([])
+    const doorOpenings = report.openings.filter(o => o.kind === 'door')
+    expect(doorOpenings).toHaveLength(3)
+    for (const opening of doorOpenings) expect(opening.nodeId).not.toBeNull()
+    expect(doorOpenings.some(o => o.roomIds.includes('hall-1') && o.roomIds.includes('living-kitchen-1'))).toBe(true)
+    expect(report.openings.filter(o => o.kind === 'entry_door' && o.nodeId)).toHaveLength(1)
+    // Float-trapped hosts got a cm-floored width; the roomy vertical wall
+    // keeps the full 0.9m door.
+    const widths = new Map(callsNamed(calls, 'add_door').map(call => [call.args.wallId, call.args.width]))
+    expect(widths.get('w-entry-hall')).toBeCloseTo(0.89)
+    expect(widths.get('w-hall-ldk')).toBeCloseTo(0.89)
+    expect(widths.get('w-hall-bedroom')).toBeCloseTo(0.9)
   })
 })
 

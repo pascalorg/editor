@@ -26,16 +26,25 @@ YARP handles streaming responses, so the Pascal scene-events SSE endpoint can co
 
 ## Run
 
-Start the Pascal editor first:
+For the complete three-layer local stack, see [`../SETUP.md`](../SETUP.md). The daily fast path is:
 
-```powershell
-npm.cmd run dev --workspace=editor
+Start the Pascal editor from the repository root:
+
+```bash
+bun run dev --filter=editor
 ```
 
-Then start the proxy:
+Start the AI service in a second terminal (it starts MCP automatically):
 
-```powershell
-dotnet run --project pascal-reverse-proxy
+```bash
+cd pascal-ai-mcp
+bun run dev
+```
+
+Then start the proxy without repeating package restore:
+
+```bash
+dotnet run --project pascal-reverse-proxy --no-restore
 ```
 
 Open:

@@ -241,6 +241,22 @@ export function polygonBounds(polygon: Array<[number, number]>): {
   return { minX, maxX, minZ, maxZ }
 }
 
+// 嵌入式壁橱判定（docs/TEMPLATES.md #9）：这么小/浅的 storage 是壁橱，开平
+// 开门既摆不开也不真实——开口用无扇门洞表达，柜门属视觉层。判定与开口下限
+// 由 scene-executor（施工）和 plan-validator（#9 门边下限放宽）共享，两侧
+// 必须用同一套阈值，否则 validator 会把 executor 能施工的 0.5m 壁橱开口
+// 判成 fatal，放宽在正常生成链路中不可达。
+export const MINI_CLOSET_MAX_AREA_SQM = 1.5
+export const MINI_CLOSET_MAX_DEPTH_M = 0.8
+export const MINI_CLOSET_MIN_OPENING_M = 0.5
+
+export function isMiniCloset(room: Pick<LayoutPlanRoom, 'type' | 'polygon'>): boolean {
+  if (room.type !== 'storage') return false
+  const { minX, maxX, minZ, maxZ } = polygonBounds(room.polygon)
+  const minSide = Math.min(maxX - minX, maxZ - minZ)
+  return polygonArea(room.polygon) < MINI_CLOSET_MAX_AREA_SQM || minSide < MINI_CLOSET_MAX_DEPTH_M
+}
+
 export function pointInPolygon(x: number, z: number, polygon: Array<[number, number]>): boolean {
   let inside = false
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {

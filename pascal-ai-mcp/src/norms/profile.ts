@@ -72,6 +72,16 @@ export type NormProfile = {
   // Area tiers for plan-validator #7; default profile reproduces the
   // pre-profile band tables exactly.
   roomAreaBounds(context: AreaBoundsContext): Partial<Record<RoomKind, AreaBounds>>
+  // DK（ダイニングキッチン）tier for living_kitchen rooms NAMED as a DK
+  // (room-vocab isDiningKitchenName) — real DK listings run well below the
+  // LDK ladder (NORMS_PROFILE_DESIGN.md §2.3 DK row). Absent = no special
+  // casing, the room takes the living tier.
+  dkAreaBounds?(context: AreaBoundsContext): AreaBounds
+  // LD（客餐分离，厨房独立）tier for `living` rooms in plans that carry a
+  // standalone kitchen — a real 9–10帖 LD sits below the LDK ladder because
+  // the K moved out (NORMS_PROFILE_DESIGN.md §2.3 LD row, tpl-jp-2ldk-58).
+  // Absent = no special casing, the room takes the living tier.
+  ldAreaBounds?(context: AreaBoundsContext): AreaBounds
   // J7 帖 grid: room target areas snap to stepUnits × unitSqm. null = off.
   areaQuantization: { unitSqm: number; stepUnits: number } | null
 }

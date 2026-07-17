@@ -13,7 +13,9 @@
 // ---------------------------------------------------------------------------
 
 import {
+  isMiniCloset,
   longestSharedEdge,
+  MINI_CLOSET_MIN_OPENING_M,
   polygonArea,
   polygonBounds,
   roundCm,
@@ -67,6 +69,7 @@ export type SceneExecutionReport = {
 }
 
 const DOOR_WIDTH_M = 0.9
+const DOOR_HEIGHT_M = 2.1
 const WINDOW_MAX_WIDTH_M = 1.5
 const WINDOW_MIN_WIDTH_M = 0.6
 // Wall-matching tolerance: how far a target point may sit off a wall's line
@@ -190,6 +193,20 @@ export function findHostWall(walls: WallSegment[], point: [number, number]): Wal
     }
   }
   return best
+}
+
+// Width the host wall can actually hold, in RAW floats. The MCP's
+// add_door/add_window/cut_opening reject with `length < width` on raw
+// coordinates, so a 3.6−2.7 = 0.8999… wall is "too short" for a 0.9m door
+// even though both are 0.9m at cm precision (and the MCP package is
+// off-limits). When the raw wall is shorter than the request, shave the
+// request down to the nearest whole cm that provably fits — a ≤1cm trim,
+// never a real narrowing (real undersized walls are rejected by the shared-
+// edge pre-checks before this point).
+function openingWidthFor(wall: WallSegment, requested: number): number {
+  const raw = segmentLength(wall)
+  if (raw >= requested) return requested
+  return Math.floor(raw * 100) / 100
 }
 
 // 0..1 position on `wall` for an opening of `width` centered as close to
@@ -325,8 +342,10 @@ export async function executeLayoutPlan(options: {
       continue
     }
     const shared = longestSharedEdge(from.polygon, to.polygon)
-    if (shared.length < DOOR_WIDTH_M) {
-      issues.push(`「${from.name}」和「${to.name}」的共享墙段只有 ${shared.length.toFixed(2)}m，放不下 ${DOOR_WIDTH_M}m 的门`)
+    const closet = [from, to].find(isMiniCloset)
+    const minOpening = closet ? MINI_CLOSET_MIN_OPENING_M : DOOR_WIDTH_M
+    if (shared.length < minOpening) {
+      issues.push(`「${from.name}」和「${to.name}」的共享墙段只有 ${shared.length.toFixed(2)}m，放不下 ${minOpening}m 的门`)
       continue
     }
     const wall = findHostWall(walls, shared.midpoint)
@@ -334,11 +353,35 @@ export async function executeLayoutPlan(options: {
       issues.push(`找不到承载「${from.name}」↔「${to.name}」连接门的墙（中点 ${shared.midpoint[0].toFixed(2)},${shared.midpoint[1].toFixed(2)}）`)
       continue
     }
+    if (closet) {
+      const width = openingWidthFor(wall,
+        Math.max(MINI_CLOSET_MIN_OPENING_M, Math.min(DOOR_WIDTH_M, roundCm(shared.length - 0.1))))
+      const payload = await call('cut_opening', {
+          wallId: wall.id,
+          type: 'door',
+          position: openingPosition(wall, shared.midpoint, width),
+          width,
+          height: DOOR_HEIGHT_M,
+        }, `为壁橱「${closet.name}」开门洞`)
+      const openingId = typeof payload?.openingId === 'string' ? payload.openingId : null
+      if (openingId) {
+        // cut_opening(type:'door') 落成的是带默认铰链的平开门节点（DoorNode
+        // 默认 openingKind:'door'/doorType:'hinged'），而它的输入 schema 不
+        // 透传 openingKind——补一刀 update 才是真正的无扇门洞。
+        await call('apply_patch', {
+          patches: [{ op: 'update', id: openingId, data: { openingKind: 'opening' } }],
+        }, `把壁橱「${closet.name}」的开口改为无扇门洞`)
+        doorPoints.push(shared.midpoint)
+      }
+      openings.push({ kind: 'door', roomIds: [from.id, to.id], wallId: wall.id, nodeId: openingId })
+      continue
+    }
     const larger = polygonArea(from.polygon) >= polygonArea(to.polygon) ? from : to
+    const doorWidth = openingWidthFor(wall, DOOR_WIDTH_M)
     const payload = await call('add_door', {
         wallId: wall.id,
-        position: openingPosition(wall, shared.midpoint, DOOR_WIDTH_M),
-        width: DOOR_WIDTH_M,
+        position: openingPosition(wall, shared.midpoint, doorWidth),
+        width: doorWidth,
         swingDirection: swingToward(wall, boundsCenter(larger.polygon)),
       }, `在「${from.name}」和「${to.name}」之间开门`)
     const doorId = typeof payload?.doorId === 'string' ? payload.doorId : null
@@ -360,10 +403,11 @@ export async function executeLayoutPlan(options: {
       if (!wall) {
         issues.push(`找不到承载入户门的外墙（中点 ${midpoint[0].toFixed(2)},${midpoint[1].toFixed(2)}）`)
       } else {
+        const entryWidth = openingWidthFor(wall, DOOR_WIDTH_M)
         const payload = await call('add_door', {
             wallId: wall.id,
-            position: openingPosition(wall, midpoint, DOOR_WIDTH_M),
-            width: DOOR_WIDTH_M,
+            position: openingPosition(wall, midpoint, entryWidth),
+            width: entryWidth,
             swingDirection: swingToward(wall, boundsCenter(entryRoom.polygon)),
           }, `为「${entryRoom.name}」开入户门`)
         const doorId = typeof payload?.doorId === 'string' ? payload.doorId : null
@@ -395,10 +439,10 @@ export async function executeLayoutPlan(options: {
       issues.push(`找不到承载「${room.name}」外窗的墙（中点 ${midpoint[0].toFixed(2)},${midpoint[1].toFixed(2)}）`)
       continue
     }
-    const width = Math.max(
+    const width = openingWidthFor(wall, Math.max(
       WINDOW_MIN_WIDTH_M,
       Math.min(WINDOW_MAX_WIDTH_M, segmentLength(host) - 0.2),
-    )
+    ))
     const payload = await call('add_window', { wallId: wall.id, position: openingPosition(wall, midpoint, width), width }, `为「${room.name}」开外窗`)
     openings.push({
       kind: 'window',

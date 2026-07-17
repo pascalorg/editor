@@ -66,3 +66,7 @@ apps/editor/env.download
 .claude/launch.json
 .claude/settings.local.json
 .vscode/launch.json
+
+# Claude worktrees (session-local, never commit)
+.claude/worktrees/
+**/.claude/worktrees/

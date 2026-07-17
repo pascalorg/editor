@@ -1,0 +1,36 @@
+{
+  "id": "tpl-jp-2ldk-57",
+  "meta": {
+    "market": "jp",
+    "label": "2LDK 56.5㎡ マンション（LDK13.4帖 + 洋室4.8/3.6帖・西側バルコニー）",
+    "source": "用户提供间取り图（実物件，専有面積56.5㎡・西側大バルコニー）",
+    "quality": "good",
+    "roomProgram": "2ldk",
+    "badReasons": [],
+    "typology": "standard_band",
+    "notes": "玄関在东端，横向廊下沿水回り带（トイレ→洗面室（洗濯機置場含む）→浴室）把上带串到西侧洋室1，下带 LDK 13.4帖 占西南大面（对西侧大バルコニー采光），洋室2 在东南角。用户评价——优点：公共空间大，配置大阳台；缺点：房间之间比例偏小（3.6帖 洋室是刻意压缩）。转换简化：西侧バルコニー与斜切角未建模；玄関土間格栅并入玄関；洋室2 的 R 冷蔵庫位与东侧収納并入邻室，故洋室2 建模 8.4㎡（5.2帖）大于标称 3.6帖、LDK 建模 25.1㎡（15.5帖）大于标称 13.4帖（墙体与収納余量摊入）。坐标由帖数反推+图上比例目测，footprint 8.8×6.4=56.32㎡。"
+  },
+  "plan": {
+    "footprint": { "width": 8.8, "depth": 6.4 },
+    "entry": { "roomId": "entry-1" },
+    "rooms": [
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[0, 0], [3, 0], [3, 2.6], [0, 2.6]], "requiresExteriorWindow": true },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[3, 0], [4, 0], [4, 1.4], [3, 1.4]], "requiresExteriorWindow": false },
+      { "id": "bath-lav", "name": "洗面室", "type": "bathroom", "polygon": [[4, 0], [5.6, 0], [5.6, 1.4], [4, 1.4]], "requiresExteriorWindow": false },
+      { "id": "bath-ub", "name": "浴室", "type": "bathroom", "polygon": [[5.6, 0], [7, 0], [7, 1.4], [5.6, 1.4]], "requiresExteriorWindow": false },
+      { "id": "entry-1", "name": "玄関", "type": "entry", "polygon": [[7, 0], [8.8, 0], [8.8, 1.4], [7, 1.4]], "requiresExteriorWindow": false },
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[3, 1.4], [8.8, 1.4], [8.8, 2.6], [3, 2.6]], "requiresExteriorWindow": false },
+      { "id": "ldk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[0, 2.6], [6.6, 2.6], [6.6, 6.4], [0, 6.4]], "requiresExteriorWindow": true },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[6.6, 2.6], [8.8, 2.6], [8.8, 6.4], [6.6, 6.4]], "requiresExteriorWindow": true }
+    ],
+    "connections": [
+      { "from": "entry-1", "to": "hall-1", "type": "door" },
+      { "from": "hall-1", "to": "bath-wc", "type": "door" },
+      { "from": "hall-1", "to": "bath-lav", "type": "door" },
+      { "from": "hall-1", "to": "bath-ub", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-1", "type": "door" },
+      { "from": "hall-1", "to": "ldk-1", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-2", "type": "door" }
+    ]
+  }
+}

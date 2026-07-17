@@ -161,6 +161,9 @@ export type PhaseToolTrace = {
   toolCounts: Record<string, number>
   converged: boolean
   continuationAttempts: number
+  // Debug diagnostics (e.g. template-seed rejection reasons). Kept for eval
+  // reports and troubleshooting; never rendered to users.
+  notes?: string[]
 }
 
 export type WorkflowSession = {

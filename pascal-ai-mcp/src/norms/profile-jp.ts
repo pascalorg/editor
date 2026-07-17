@@ -58,18 +58,42 @@ export const JP_NORM_PROFILE: NormProfile = {
     Object.entries(JP_ROOM_AREAS_JO).map(([type, jo]) => [type, Math.round(jo * JO * 100) / 100]),
   ) as Record<RoomType, number>,
   // §2.3 tiers. fatalMin is the 下限 column; soft range is the 舒适区间.
+  // 2026-07-16 校准（11 份在售参照体检驱动，TEMPLATES.md #3/#6/#8）：真实
+  // 紧凑户型反复出现 4.3–4.5帖 洋室、0.8–0.9帖 洗面/トイレ、2–3帖 的 1K/1R
+  // 廊下型キッチン——档位以参照库为准回调。
   roomAreaBounds(context) {
     // LDK ladder（不動産表示規約の目安）: LDK ≥8帖 with ≤1 bedroom, ≥10帖
     // with 2+.
     const ldkFatalMinJo = context.bedroomCount >= 2 ? 10 : 8
+    // 单居室（1K/1R/1LDK）：唯一居室兼起居，上限放到 14.5帖；厨房是动线
+    // 兼用带，2帖 起步。
+    const single = context.bedroomCount <= 1
     return {
-      bedroom: { fatalMin: 4.5 * JO, softMin: 6 * JO, softMax: 8 * JO, fatalMax: 20 * JO },
+      bedroom: {
+        fatalMin: 4 * JO,
+        softMin: 4.5 * JO,
+        softMax: (single ? 14.5 : 8) * JO,
+        fatalMax: 20 * JO,
+      },
       living: { fatalMin: ldkFatalMinJo * JO, softMin: 12 * JO, softMax: 20 * JO, fatalMax: 32 * JO },
-      kitchen: { fatalMin: 3 * JO, softMin: 3 * JO, softMax: 4.5 * JO, fatalMax: 7.5 * JO },
+      kitchen: single
+        ? { fatalMin: 2 * JO, softMin: 2.5 * JO, softMax: 4.5 * JO, fatalMax: 7.5 * JO }
+        : { fatalMin: 3 * JO, softMin: 3 * JO, softMax: 4.5 * JO, fatalMax: 7.5 * JO },
       // 方案 B：トイレ（0.75帖起）/ 洗面脱衣（1帖）/ 浴室（UB 1216≈1.2帖）
       // 共用 bathroom 类型，取并集下限，J6 拆分后收紧。
-      bathroom: { fatalMin: 0.7 * JO, softMin: 1 * JO, softMax: 3 * JO, fatalMax: 5 * JO },
+      bathroom: { fatalMin: 0.7 * JO, softMin: 0.8 * JO, softMax: 3 * JO, fatalMax: 5 * JO },
     }
+  },
+  // DK 档（§2.3 DK 行）：下限随卧室数 4.5/6帖，舒适 6–10帖。
+  dkAreaBounds(context) {
+    const fatalMinJo = context.bedroomCount >= 2 ? 6 : 4.5
+    return { fatalMin: fatalMinJo * JO, softMin: 6 * JO, softMax: 10 * JO, fatalMax: 13 * JO }
+  },
+  // LD 档（§2.3 LD 行，2026-07-16）：厨房独立时客餐厅比 LDK 阶梯低约 2帖，
+  // 下限随卧室数 6/8帖，舒适 8–16帖。
+  ldAreaBounds(context) {
+    const fatalMinJo = context.bedroomCount >= 2 ? 8 : 6
+    return { fatalMin: fatalMinJo * JO, softMin: 8 * JO, softMax: 16 * JO, fatalMax: 26 * JO }
   },
   // J7: room target areas snap to 0.25帖.
   areaQuantization: { unitSqm: JO, stepUnits: 0.25 },

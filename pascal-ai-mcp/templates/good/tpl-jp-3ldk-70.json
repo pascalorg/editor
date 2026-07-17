@@ -1,0 +1,40 @@
+{
+  "id": "tpl-jp-3ldk-70",
+  "meta": {
+    "market": "jp",
+    "label": "3LDK 70.4㎡ マンション（LDK13.8帖 + 洋室4.3/4.4/5.1帖・北側水回り）",
+    "source": "用户提供间取り图（実物件，図注面積70.4㎡；图内帖数合计约44.7㎡，与标注面积差约10㎡，按标注铺满收录（2026-07-16 拍板），各房间比帖数标称大约10–15%）",
+    "quality": "good",
+    "roomProgram": "3ldk",
+    "badReasons": [],
+    "typology": "standard_band",
+    "notes": "玄関左上，中央縦廊下贯穿上半区把户型分成左（洗面室→洋室2）右（トイレ/浴室→洋室1）两列，水回り全部贴顶边（北侧），LDK 大 L 形占下半区（厨房台+冷蔵庫位并入），洋室3 占西南角从 LDK 进入，収納夹在洋室2/3 之间从洋室3 开门。用户评价——优点：房间工整，各房间比例大小刚好；缺点：卫浴位在最上方，动线上可能会有问题。转换简化：バルコニー未建模；洗面室含洗濯機位；トイレ/浴室与走廊的相对位置微调以满足 ≥0.9m 门边（三点分離改为均从廊下进入）；坐标由帖数比例+图上目测按 70.4㎡ 铺满反推，footprint 6.4×11.0=70.4㎡。2026-07-17 用户修订：①洋室3 直抵北外墙（原 LDK 在其上方绕出 0.4m 狭长回廊，已并入洋室3）；②洋室1 顶边与廊下顶边拉平（5.8→6.0，消除 LDK 底边台阶），LDK 收敛为矩形。"
+  },
+  "plan": {
+    "footprint": { "width": 6.4, "depth": 11 },
+    "entry": { "roomId": "entry-1" },
+    "rooms": [
+      { "id": "entry-1", "name": "玄関", "type": "entry", "polygon": [[0, 0], [2.5, 0], [2.5, 1.4], [0, 1.4]], "requiresExteriorWindow": false },
+      { "id": "hall-1", "name": "廊下", "type": "hallway", "polygon": [[2.5, 0], [4, 0], [4, 6], [2.5, 6]], "requiresExteriorWindow": false },
+      { "id": "bath-lav", "name": "洗面室", "type": "bathroom", "polygon": [[0, 1.4], [2.5, 1.4], [2.5, 3], [0, 3]], "requiresExteriorWindow": false },
+      { "id": "bedroom-2", "name": "洋室2", "type": "bedroom", "polygon": [[0, 3], [2.5, 3], [2.5, 6.1], [0, 6.1]], "requiresExteriorWindow": true },
+      { "id": "bath-wc", "name": "トイレ", "type": "bathroom", "polygon": [[4, 0], [6.4, 0], [6.4, 1], [4, 1]], "requiresExteriorWindow": false },
+      { "id": "bath-ub", "name": "浴室", "type": "bathroom", "polygon": [[4, 1], [6.4, 1], [6.4, 2.6], [4, 2.6]], "requiresExteriorWindow": false },
+      { "id": "bedroom-1", "name": "洋室1", "type": "bedroom", "polygon": [[4, 2.6], [6.4, 2.6], [6.4, 6], [4, 6]], "requiresExteriorWindow": true },
+      { "id": "closet-1", "name": "収納", "type": "storage", "polygon": [[0, 6.1], [2.5, 6.1], [2.5, 7.1], [0, 7.1]], "requiresExteriorWindow": false },
+      { "id": "bedroom-3", "name": "洋室3", "type": "bedroom", "polygon": [[0, 7.1], [2.5, 7.1], [2.5, 11], [0, 11]], "requiresExteriorWindow": true },
+      { "id": "ldk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[2.5, 6], [6.4, 6], [6.4, 11], [2.5, 11]], "requiresExteriorWindow": true }
+    ],
+    "connections": [
+      { "from": "entry-1", "to": "hall-1", "type": "door" },
+      { "from": "hall-1", "to": "bath-lav", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-2", "type": "door" },
+      { "from": "hall-1", "to": "bath-wc", "type": "door" },
+      { "from": "hall-1", "to": "bath-ub", "type": "door" },
+      { "from": "hall-1", "to": "bedroom-1", "type": "door" },
+      { "from": "hall-1", "to": "ldk-1", "type": "door" },
+      { "from": "closet-1", "to": "bedroom-3", "type": "door" },
+      { "from": "ldk-1", "to": "bedroom-3", "type": "door" }
+    ]
+  }
+}

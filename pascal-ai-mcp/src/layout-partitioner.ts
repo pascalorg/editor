@@ -665,12 +665,17 @@ function tryBandLayout(
   // hub in both forms.
   let wetStack: { bath: NormRoom; kitchenId: string } | null = null
   if (wetStackEnabled) {
-    const kitchenCol = others.find(r =>
-      r.type === 'kitchen' && !carveSpecs.some(c => c.room.id === r.id))
+    // The kitchen may itself be carve-assigned (carveSmallPublic) — the wet
+    // stack pulls it back out to a column so the pair can share one plumbing
+    // column while other small publics (dining/study) stay hub carves.
+    const kitchen = others.find(r => r.type === 'kitchen')
     const hubBaths = carveSpecs.filter(c => c.room.type === 'bathroom' && c.hostId === hub.id)
-    if (kitchenCol && hubBaths.length === 1) {
-      wetStack = { bath: hubBaths[0]!.room, kitchenId: kitchenCol.id }
-      carveSpecs.splice(carveSpecs.indexOf(hubBaths[0]!), 1)
+    if (kitchen && hubBaths.length === 1) {
+      wetStack = { bath: hubBaths[0]!.room, kitchenId: kitchen.id }
+      const drop = new Set([hubBaths[0]!.room.id, kitchen.id])
+      for (let i = carveSpecs.length - 1; i >= 0; i--) {
+        if (drop.has(carveSpecs[i]!.room.id)) carveSpecs.splice(i, 1)
+      }
       notes.push(WET_STACK_NOTE)
     }
   }

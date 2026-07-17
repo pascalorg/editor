@@ -24,6 +24,7 @@ import {
   type RoomType,
 } from './layout-plan'
 import { partitionLayout } from './layout-partitioner'
+import { findTemplateSeed } from './template-seed'
 import { DEFAULT_NORM_PROFILE, type NormProfile } from './norms/profile'
 import { validateLayoutPlan, type PlanTargets, type PlanValidation } from './plan-validator'
 import { applyStrategy, strategyPromptLines, type StrategyDecision } from './strategy'
@@ -54,6 +55,9 @@ export type PlanBuildSuccess = {
   plan: LayoutPlan
   validation: PlanValidation
   modelCalls: number
+  // Template-seed rejection reasons (docs/TEMPLATES.md) — debug data for the
+  // request trace, never rendered to users.
+  seedTrace?: string[]
 }
 
 export type PlanBuildFailure = {
@@ -65,6 +69,8 @@ export type PlanBuildFailure = {
   // re-render each line in the user's language; null = zh passthrough.
   failuresL10n: Array<IssueL10n | null>
   modelCalls: number
+  // Template-seed rejection reasons from the last round (debug trace only).
+  seedTrace?: string[]
 }
 
 export type PlanBuildResult = PlanBuildSuccess | PlanBuildFailure
@@ -233,6 +239,7 @@ export async function buildLayoutPlan(
   let modelCalls = 0
   let lastFailures: string[] = []
   let lastFailuresL10n: Array<IssueL10n | null> = []
+  let lastSeedTrace: string[] | undefined
   for (let round = 0; round < maxRounds; round++) {
     modelCalls++
     const reply = await complete(messages, `plan:${llmGeometry ? 'geometry' : 'intent'}:${round}`)
@@ -245,14 +252,21 @@ export async function buildLayoutPlan(
 
     lastFailures = attempt.failures
     lastFailuresL10n = attempt.failuresL10n
+    lastSeedTrace = attempt.seedTrace
     messages.push({ role: 'user', content: correctionPrompt(attempt.failures) })
   }
-  return { ok: false, failures: lastFailures, failuresL10n: lastFailuresL10n, modelCalls }
+  return {
+    ok: false,
+    failures: lastFailures,
+    failuresL10n: lastFailuresL10n,
+    modelCalls,
+    ...(lastSeedTrace?.length ? { seedTrace: lastSeedTrace } : {}),
+  }
 }
 
 type Attempt =
   | { ok: true; result: Omit<PlanBuildSuccess, 'modelCalls'> }
-  | { ok: false; failures: string[]; failuresL10n: Array<IssueL10n | null> }
+  | { ok: false; failures: string[]; failuresL10n: Array<IssueL10n | null>; seedTrace?: string[] }
 
 const noL10n = (failures: string[]): Array<IssueL10n | null> => failures.map(() => null)
 
@@ -273,6 +287,18 @@ function evaluateIntentReply(
   // applied intent is what gets partitioned AND what the caller persists.
   const applied = strategy ? applyStrategy(parsed.intent, strategy, profile) : { intent: parsed.intent, notes: [] }
   const intent = applied.intent
+  // Template seeding (docs/TEMPLATES.md): a good reference with the same
+  // core program beats the solver — real listed plans carry idioms the
+  // partitioner hasn't learned. No hit (or a post-scale fatal) falls through
+  // to partitionLayout below.
+  const seedTrace: string[] = []
+  const seed = findTemplateSeed(intent, profile, strategy, { targets, trace: seedTrace })
+  const seedTraceField = seedTrace.length > 0 ? { seedTrace } : {}
+  if (seed) {
+    const extraNotes = [...seed.notes, ...(strategy?.notes ?? []), ...applied.notes]
+    const plan = { ...seed.plan, notes: [...(seed.plan.notes ?? []), ...extraNotes] }
+    return { ok: true, result: { ok: true, intent, plan, validation: seed.validation, ...seedTraceField } }
+  }
   // Recoverable parse defects (dropped fields, renamed ids) don't block on
   // their own — the partitioned plan is judged on its merits below.
   const partition = partitionLayout(intent, profile, strategy)
@@ -290,6 +316,7 @@ function evaluateIntentReply(
         partition.l10n ?? null,
         ...details.map(detail => detail.l10n ?? null),
       ],
+      ...seedTraceField,
     }
   }
   const validation = validateLayoutPlan(partition.plan, targets, profile)
@@ -298,6 +325,7 @@ function evaluateIntentReply(
       ok: false,
       failures: [...errors, ...validation.fatal],
       failuresL10n: [...noL10n(errors), ...validation.fatalL10n],
+      ...seedTraceField,
     }
   }
   // Strategy decision rationale rides the plan notes — without this the
@@ -306,7 +334,7 @@ function evaluateIntentReply(
   const plan = extraNotes.length > 0
     ? { ...partition.plan, notes: [...(partition.plan.notes ?? []), ...extraNotes] }
     : partition.plan
-  return { ok: true, result: { ok: true, intent, plan, validation } }
+  return { ok: true, result: { ok: true, intent, plan, validation, ...seedTraceField } }
 }
 
 function evaluateGeometryReply(reply: string, targets: PlanTargets, profile: NormProfile): Attempt {

@@ -5,9 +5,10 @@
     "label": "1LDK 31.4㎡ マンション（DK8.4帖 + 洋室4.8帖）",
     "source": "用户提供间取り图（実物件，専有面積31.4㎡・南側全幅バルコニー）",
     "quality": "good",
+    "roomProgram": "1ldk",
     "badReasons": [],
     "typology": "standard_band",
-    "notes": "近方形 footprint：玄関居上偏左（シューズクローゼット付），右上水回りコア（トイレ/洗面室为 hub/浴室），DK 沿西墙布 I 型厨房台占左半，洋室占右下，两室并排朝南（バルコニー侧采光），洋室的クローゼット横挂在水回り下方。用户评价——优点：房间配置宽敞，固定家具贴墙放置让空间运用更多样；缺点：厨房餐厅空间稍大。转换简化：バルコニー在専有面积外未建模；洗面室与浴室留 0.9m 共享边以放门（浴室加深至 2.3m，クローゼット压成 0.5m 进深）；DK 建模 13.7㎡（8.5帖）≈标称 8.4帖。坐标由帖数反推+图上比例目测，footprint 5.4×5.8=31.32㎡。"
+    "notes": "近方形 footprint：玄関居上偏左（シューズクローゼット付），右上水回りコア（トイレ/洗面室为 hub/浴室），DK 沿西墙布 I 型厨房台占左半，洋室占右下，两室并排朝南（バルコニー侧采光），洋室的クローゼット横挂在水回り下方。用户评价——优点：房间配置宽敞，固定家具贴墙放置让空间运用更多样；缺点：厨房餐厅空间稍大。转换简化：バルコニー在専有面积外未建模；洗面室与浴室留 0.9m 共享边以放门（浴室加深至 2.3m，クローゼット压成 0.5m 进深）；DK 建模 13.7㎡（8.5帖）≈标称 8.4帖。坐标由帖数反推+图上比例目测，footprint 5.4×5.8=31.32㎡。房型核对（2026-07-17）：图面标 DK8.4帖，但按不動産公正取引協議会表示規約（居室 1 间时 LDK≥8帖）该房达到 LDK 档，房源以 1LDK 出售成立——hub 房间名建模为 LDK、roomProgram=1ldk，使 hubForm 与出售房型一致（1DK 请求不再误命中本模板）。"
   },
   "plan": {
     "footprint": { "width": 5.4, "depth": 5.8 },
@@ -18,7 +19,7 @@
       { "id": "bath-ub", "name": "浴室", "type": "bathroom", "polygon": [[4, 0], [5.4, 0], [5.4, 2.3], [4, 2.3]], "requiresExteriorWindow": false },
       { "id": "bath-lav", "name": "洗面室", "type": "bathroom", "polygon": [[2.8, 1.4], [4, 1.4], [4, 2.8], [2.8, 2.8]], "requiresExteriorWindow": false },
       { "id": "closet-1", "name": "クローゼット", "type": "storage", "polygon": [[4, 2.3], [5.4, 2.3], [5.4, 2.8], [4, 2.8]], "requiresExteriorWindow": false },
-      { "id": "dk-1", "name": "DK", "type": "living_kitchen", "polygon": [[0, 0], [1, 0], [1, 1.4], [2.8, 1.4], [2.8, 5.8], [0, 5.8]], "requiresExteriorWindow": true },
+      { "id": "dk-1", "name": "LDK", "type": "living_kitchen", "polygon": [[0, 0], [1, 0], [1, 1.4], [2.8, 1.4], [2.8, 5.8], [0, 5.8]], "requiresExteriorWindow": true },
       { "id": "bedroom-1", "name": "洋室", "type": "bedroom", "polygon": [[2.8, 2.8], [5.4, 2.8], [5.4, 5.8], [2.8, 5.8]], "requiresExteriorWindow": true }
     ],
     "connections": [

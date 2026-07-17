@@ -49,6 +49,10 @@ export type GateTargets = {
   // builds). When a zone appears here its type is taken verbatim and the
   // name-based guess is skipped — room names can then be in any language.
   zoneTypes?: Record<string, RoomType>
+  // NormProfile id ('jp'/'default') — gates the ambiguous zh bathroom
+  // sub-kind tokens in the furniture checklist (zh「浴室」= full bathroom,
+  // jp「浴室」= bath-only).
+  market?: string
 }
 
 // `l10n` carries the message's template id + params so agent.ts can re-render
@@ -233,7 +237,7 @@ export function evaluateCompletionGates(
     const names = itemNamesByZone.get(entry.zone.id) ?? []
     if (entry.type === 'kitchen' || entry.type === 'bathroom' || entry.type === 'living_kitchen') {
       const checkType = entry.type === 'living_kitchen' ? 'kitchen' : entry.type
-      for (const missing of findMissingFurniture(checkType, names)) {
+      for (const missing of findMissingFurniture(checkType, names, label(entry.zone), targets.market)) {
         failures.push({
           gate: 6,
           id: 'missing-equipment',

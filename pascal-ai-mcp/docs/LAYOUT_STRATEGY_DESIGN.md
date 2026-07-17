@@ -88,14 +88,16 @@ buildLayoutPlan:
 
 | 条件（按序判定） | 结果 |
 |---|---|
+| 房型编号是 1K / 1R | closed（本系统用独立 kitchen zone 表达；若同时明示开放式，编号优先并记冲突 note） |
 | 用户明示开放式（BriefFacts.kitchenPreference = open） | open |
 | 用户明示独立厨房 | closed |
+| 未明示厨房偏好，房型编号是 NDK / NLDK | open（按编号归一为 DK / LDK） |
 | 未明示，areaBand ∈ {tiny, compact} | open（合并为 living_kitchen） |
 | 未明示，areaBand ∈ {standard, large} | closed |
 
-**用户显式意愿永远压过档位默认**；档位默认与用户意愿冲突时（如 30㎡ 要独立厨房）不硬改，转为 validator warning 进 notes。
+**用户显式意愿压过面积段默认**；NDK/NLDK 也允许用户明确要求独立厨房。唯一更高优先级是 1K/1R 的业务建模约定：它们必须保留独立 kitchen zone，显式“开放式厨房”不会让 prompt 与归一化走向相反，而是按编号执行并把冲突写进 notes，提示改用 1LDK/Studio。裸 `2LDK` 只是房型编号，不算用户明确提出“开放式厨房”；只有“开放式厨房 / オープンキッチン / open kitchen / リビングダイニングキッチン”等完整措辞才进入 `kitchenPreference`。
 
-**范围守卫（kitchenInScope，2026-07-10 补）**：厨房模式指令只在厨房确在需求范围内时注入 prompt——需求没有明确房间清单（默认全屋）、清单含厨房/LDK、或用户明示了厨房偏好，三者满足其一。只要求卧室的 brief（eval case-12 场景）不注入，否则"保留独立的厨房房间"这类措辞会诱导模型加建范围外房间。`kitchenMode` 字段照常判定（schema 稳定），仅 prompt 注入受门控；`applyStrategy` 的合并规则不受影响（它只处理 intent 里已存在的房间，不加建）。
+**范围守卫（kitchenInScope，2026-07-10 补）**：厨房模式指令只在厨房确在需求范围内时注入 prompt——需求没有明确房间清单（默认全屋）、清单含厨房/LDK、带日本房型编号、或用户明示了厨房偏好，四者满足其一。只要求卧室的 brief（eval case-12 场景）不注入，否则"保留独立的厨房房间"这类措辞会诱导模型加建范围外房间。`kitchenMode` 字段照常判定（schema 稳定），仅 prompt 注入受门控；`applyStrategy` 的合并规则不受影响（它只处理 intent 里已存在的房间，不加建）。
 
 ### 3.4 roomAreaTargets（面积分配）
 
@@ -118,7 +120,7 @@ buildLayoutPlan:
 
 | 档 | 内容 | 机制 |
 |---|---|---|
-| 规则直接执行 | open 厨房→合并 living_kitchen；面积缺省/越界→夹到档位区间；补窗标记；补玄关（J5） | `applyStrategy()` 静默修正，**不消耗修正轮**，修正记入 notes |
+| 规则直接执行 | open 厨房→合并 living_kitchen；日本房型编号→归一 DK/LDK/1K/1R；SLDK 缺納戸→补服务间；面积缺省/越界→夹到档位区间；补窗标记；补玄关（J5） | `applyStrategy()` 静默修正，**不消耗修正轮**，修正记入 notes |
 | 需模型配合 | 房间清单覆盖 brief 要求、名称跟随用户语言 | prompt 注入 strategy 摘要 + validator 一致性检查 → correction loop |
 | 布局质量偏好 | 少走廊、忌碎空间、忌狭长 | scorerWeights 进分区器打分 |
 
@@ -126,20 +128,24 @@ buildLayoutPlan:
 
 ```ts
 type BriefFacts = {                       // 从 briefSummary 确定性关键词抽取（零模型调用）
-  kitchenPreference?: 'open' | 'closed'   // 词表 src/lang/strategy-vocab.ts；"2LDK" 记为 open
+  kitchenPreference?: 'open' | 'closed'   // 仅完整偏好措辞；裸 "2LDK" 不算 open 偏好
   siteHint?: { widthM: number; depthM: number }  // S3：地块尺寸（"宽5米长18米"/"5m×18m"三语）
   narrowLot?: boolean                     // S3：明示长条地块但未给尺寸
   lShape?: boolean                        // S5：明示 L 形地块/户型（detectLShape）
+  roomProgram?: JapaneseRoomProgram       // 2026-07-17：日本房型编号 1r/1k/Ndk/Nldk（detectRoomProgram，NFKC 全角归一）
+  serviceRoomCount?: number               // SLDK/SDK 中 S 的数量；与 base roomProgram 分开承载
 }
 
 type StrategyDecision = {
   typology: 'studio' | 'standard_band' | 'narrow_lot' | 'tanoji' | 'l_shape'  // 五值全部落地
   areaBand: 'tiny' | 'compact' | 'standard' | 'large'
   kitchenMode: 'open' | 'closed'
-  kitchenModeSource: 'user' | 'band_default'  // 冲突规则（§3.3）需要知道谁定的
+  kitchenModeSource: 'user' | 'band_default' | 'program'  // program=DK/LDK 编号隐含合并，或 1K/1R 编号要求独立 kitchen zone
   kitchenInScope: boolean                 // §3.3 范围守卫：false 时厨房模式指令不进 prompt
   entryRequired: boolean                  // J5：jp 档案下必须有玄関
   footprintHint?: { widthM: number; depthM: number }  // S3：仅 narrow_lot 时设置，消费者=分区器
+  roomProgram?: JapaneseRoomProgram       // 消费者=applyStrategy 归一化 + findTemplateSeed 编号门（docs/TEMPLATES.md「房型编号匹配」）
+  serviceRoomCount?: number               // 消费者=prompt/applyStrategy 服务间保障 + 模板服务间数量门
   notes: string[]                         // 决策依据，进 plan.notes 和 eval 报告
 }
 ```
@@ -167,5 +173,6 @@ type StrategyDecision = {
 
 | 日期 | 决策 |
 |---|---|
+| 2026-07-17 | 裸 DK/LDK 编号与显式厨房偏好分离；1K/1R 冲突按编号优先并留 note；SLDK 解析为 base program + serviceRoomCount，普通衣柜不能抵扣納戸 |
 | 2026-07-10 | areaBand 断点 25/45/70；拓扑顺序 narrow_lot → 田の字 → l_shape；用户显式指定户型暂不做；LDK/DK 下限随卧室数阶梯；UB 规格绑定 areaBand；洗面脱衣 1帖 fatal / 2帖 comfortable |
 | 更早 | 帖=1.62㎡；卫浴分离方案 B；窗地比 executor 直接开够 + gate 兜底；LDK 语汇不进 Intent 规则（由策略层消化） |
