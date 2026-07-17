@@ -14,7 +14,6 @@ import {
   nodeRegistry,
   type RadialResizeHandle,
   sceneRegistry,
-  snapScalar,
   type TapActionHandle,
   useLiveNodeOverrides,
   useScene,
@@ -47,7 +46,7 @@ import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/co
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
-import useEditor from '../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
@@ -63,6 +62,7 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
+import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
@@ -715,10 +715,6 @@ function LinearArrow({
       const initialValue = descriptor.currentValue(initialNode)
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
-      const gridSnapStep =
-        descriptor.kind === 'linear-resize' && descriptor.gridSnap
-          ? useEditor.getState().gridSnapStep
-          : null
       const factor =
         descriptor.kind === 'radial-resize'
           ? 1
@@ -768,15 +764,18 @@ function LinearArrow({
             ) / localToWorldScale
           const delta = currentPointer - initialPointer
           const rawNext = initialValue + delta * factor
-          const snappedNext =
-            !moveEvent.shiftKey && gridSnapStep && gridSnapStep > 0
-              ? snapScalar(rawNext, gridSnapStep)
-              : rawNext
-          const magneticNext =
-            !moveEvent.shiftKey && descriptor.kind === 'linear-resize' && descriptor.magneticSnap
-              ? descriptor.magneticSnap(initialNode, snappedNext, sceneApi)
-              : snappedNext
-          const next = Math.min(maxBound, Math.max(minBound, magneticNext))
+          const linearDescriptor = descriptor.kind === 'linear-resize' ? descriptor : null
+          const snappedNext = resolveResizeSnapValue({
+            rawValue: rawNext,
+            gridSnapEnabled: linearDescriptor?.gridSnap === true,
+            gridSnapActive: isGridSnapActive(),
+            gridSnapStep: useEditor.getState().gridSnapStep,
+            magneticSnapActive: isMagneticSnapActive(),
+            magneticSnap: linearDescriptor?.magneticSnap
+              ? (value) => linearDescriptor.magneticSnap?.(initialNode, value, sceneApi) ?? value
+              : undefined,
+          })
+          const next = Math.min(maxBound, Math.max(minBound, snappedNext))
           if (next !== lastTickValue) {
             lastTickValue = next
             sfxEmitter.emit('sfx:resize')

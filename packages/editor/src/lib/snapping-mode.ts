@@ -1,5 +1,5 @@
 import type { SnapProfile } from '@pascal-app/core'
-import { GROUP_MOVE_DRAG_LABEL } from './contextual-help'
+import { GROUP_MOVE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
 
 /**
  * Snapping mode is a single global, user-cyclable control that maps onto the
@@ -145,12 +145,13 @@ export function snapContextOf(args: {
   mode: string
   tool: string | null
   profileOf: (typeOrTool: string) => SnapProfile | undefined
+  profileOfNode?: (nodeId: string) => SnapProfile | undefined
   // Whether drafting a kind sets a direction (angle-lock meaningful). Injected
   // like `profileOf` so `snapping-mode` need not import the registry; defaults
   // to `true` (the structural draw default) when not supplied.
   draftDirectionalOf?: (typeOrTool: string) => boolean
 }): SnapContext | null {
-  const { scope, mode, tool, profileOf, draftDirectionalOf } = args
+  const { scope, mode, tool, profileOf, profileOfNode, draftDirectionalOf } = args
   // The group-move gizmo translates the whole selection — same no-angle
   // treatment as a single-node move, so Shift cycles the 'item' modes and the
   // HUD shows the item snapping chips for the drag.
@@ -158,6 +159,9 @@ export function snapContextOf(args: {
     return 'item'
   }
   switch (scope.kind) {
+    case 'handle-drag':
+      if (scope.handle === ROTATE_HANDLE_DRAG_LABEL) return null
+      return scope.nodeId ? contextForProfile(profileOfNode?.(scope.nodeId), false) : null
     case 'placing':
     case 'moving':
       // A whole-node translate never sets direction → no angle.
