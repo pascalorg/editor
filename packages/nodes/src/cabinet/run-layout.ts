@@ -77,7 +77,8 @@ export type RunSpan = {
 /**
  * Contiguous same-height module groups along the run — the units the
  * countertop, plinth, and appliance-gap logic operate on. A gap, a
- * base↔tall transition, or a top-height change starts a new span.
+ * base↔tall transition, a top-height change, or a depth-footprint change
+ * starts a new span.
  */
 export function getRunSpans(
   modules: readonly Pick<
@@ -104,7 +105,9 @@ export function getRunSpans(
       !current ||
       minX - current.maxX > RUN_ADJACENCY_EPSILON ||
       current.hasCountertop !== hasCountertop ||
-      Math.abs(current.topY - topY) > RUN_ADJACENCY_EPSILON
+      Math.abs(current.topY - topY) > RUN_ADJACENCY_EPSILON ||
+      Math.abs(current.minZ - minZ) > RUN_ADJACENCY_EPSILON ||
+      Math.abs(current.maxZ - maxZ) > RUN_ADJACENCY_EPSILON
     ) {
       spans.push({
         minX,
@@ -269,12 +272,26 @@ export function getRunSpanEnds(
   return spans.map((span, spanIndex) => {
     const previousSpan = spans[spanIndex - 1]
     const nextSpan = spans[spanIndex + 1]
+    const hasFlushCountertopLeftNeighbor =
+      !!previousSpan &&
+      previousSpan.hasCountertop &&
+      span.hasCountertop &&
+      Math.abs(previousSpan.topY - span.topY) <= RUN_ADJACENCY_EPSILON &&
+      span.minX - previousSpan.maxX <= RUN_ADJACENCY_EPSILON
+    const hasFlushCountertopRightNeighbor =
+      !!nextSpan &&
+      nextSpan.hasCountertop &&
+      span.hasCountertop &&
+      Math.abs(nextSpan.topY - span.topY) <= RUN_ADJACENCY_EPSILON &&
+      nextSpan.minX - span.maxX <= RUN_ADJACENCY_EPSILON
     const hasInternalLeftNeighbor =
       !!previousSpan &&
-      !previousSpan.hasCountertop &&
+      (!previousSpan.hasCountertop || hasFlushCountertopLeftNeighbor) &&
       span.minX - previousSpan.maxX <= RUN_ADJACENCY_EPSILON
     const hasInternalRightNeighbor =
-      !!nextSpan && !nextSpan.hasCountertop && nextSpan.minX - span.maxX <= RUN_ADJACENCY_EPSILON
+      !!nextSpan &&
+      (!nextSpan.hasCountertop || hasFlushCountertopRightNeighbor) &&
+      nextSpan.minX - span.maxX <= RUN_ADJACENCY_EPSILON
     const hasExternalLeftNeighbor = hasAdjacentCabinetSpan({
       depth: span.depth,
       edgeX: span.minX,

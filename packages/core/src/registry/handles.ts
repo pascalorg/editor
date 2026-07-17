@@ -174,6 +174,8 @@ export type LinearResizeHandle<N> = {
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   /** Snap the resized scalar to the editor's active grid step before apply. */
   gridSnap?: boolean
+  /** Kind-owned magnetic snap for the resized scalar. Shift bypasses it. */
+  magneticSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
   placement: HandlePlacement<N>
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor

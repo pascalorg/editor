@@ -1322,10 +1322,15 @@ describe('buildCabinetGeometry — run countertops', () => {
       'rendered',
       false,
     )
-    const plinth = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+    const plinths = findMeshesBySlot(group, 'plinth')
+      .map(worldBounds)
+      .sort((a, b) => a.min.x - b.min.x)
 
-    expect(plinth.min.z).toBeCloseTo(-standardDepth / 2)
-    expect(plinth.max.z).toBeCloseTo(fridgeZ + FRIDGE_STANDARD_DEPTH / 2 - run.toeKickDepth)
+    expect(plinths).toHaveLength(2)
+    expect(plinths[0]!.min.z).toBeCloseTo(-standardDepth / 2)
+    expect(plinths[0]!.max.z).toBeCloseTo(standardDepth / 2 - run.toeKickDepth)
+    expect(plinths[1]!.min.z).toBeCloseTo(-standardDepth / 2)
+    expect(plinths[1]!.max.z).toBeCloseTo(fridgeZ + FRIDGE_STANDARD_DEPTH / 2 - run.toeKickDepth)
   })
 
   test('run countertop follows shifted module depth extents instead of staying centered', () => {
@@ -1359,6 +1364,54 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertop).toBeDefined()
     expect(countertop!.minZ).toBeCloseTo(-standardDepth / 2)
     expect(countertop!.maxZ).toBeCloseTo(shiftedZ + nextDepth / 2 + run.countertopOverhang)
+  })
+
+  test('run countertop and plinth split at cabinet depth changes', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_individual-depth-surfaces',
+      showPlinth: true,
+      withCountertop: true,
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_shallow-surface',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [-0.3, run.plinthHeight, 0.25],
+        width: 0.6,
+        depth: 0.5,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_deep-surface',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [0.3, run.plinthHeight, 0.35],
+        width: 0.6,
+        depth: 0.7,
+      }),
+    ]
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+    const countertops = countertopBounds(group)
+    const plinths = findMeshesBySlot(group, 'plinth')
+      .map(worldBounds)
+      .sort((a, b) => a.min.x - b.min.x)
+
+    expect(countertops).toHaveLength(2)
+    expect(countertops[0]!.minZ).toBeCloseTo(0)
+    expect(countertops[0]!.maxZ).toBeCloseTo(0.5 + run.countertopOverhang)
+    expect(countertops[1]!.minZ).toBeCloseTo(0)
+    expect(countertops[1]!.maxZ).toBeCloseTo(0.7 + run.countertopOverhang)
+    expect(plinths).toHaveLength(2)
+    expect(plinths[0]!.min.z).toBeCloseTo(0)
+    expect(plinths[0]!.max.z).toBeCloseTo(0.5 - run.toeKickDepth)
+    expect(plinths[1]!.min.z).toBeCloseTo(0)
+    expect(plinths[1]!.max.z).toBeCloseTo(0.7 - run.toeKickDepth)
   })
 
   test('island back overhang extends the slab backward and adds a finished back panel', () => {
@@ -2282,7 +2335,7 @@ describe('cabinet handles', () => {
     const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')
     const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')
 
-    expect(handles).toHaveLength(2)
+    expect(handles).toHaveLength(3)
     expect(leftHandle).toBeDefined()
     expect(rightHandle).toBeDefined()
     expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
@@ -2372,7 +2425,7 @@ describe('cabinet handles', () => {
     expect(nodes[legModule.id]?.position[2]).toBeCloseTo(0)
   })
 
-  test('plain grouped runs keep the rotate-only affordance', () => {
+  test('plain grouped runs expose bottom depth and rotate affordances', () => {
     const module = CabinetModuleNode.parse({
       id: 'cabinet-module_plain-group',
       parentId: 'cabinet_plain-group',
@@ -2395,8 +2448,14 @@ describe('cabinet handles', () => {
         handle.kind !== 'linear-resize' || handle.visible?.(run, sceneApi as never) !== false,
     )
 
-    expect(visibleHandles).toHaveLength(1)
-    expect(visibleHandles[0]?.kind).toBe('arc-resize')
+    expect(visibleHandles).toHaveLength(2)
+    const depthHandle = visibleHandles.find(
+      (handle): handle is LinearResizeHandle<typeof run> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )
+    expect(depthHandle).toBeDefined()
+    expect(depthHandle?.overrideTarget?.(run, sceneApi as never)).toBe(run.id)
+    expect(visibleHandles.some((handle) => handle.kind === 'arc-resize')).toBe(true)
   })
 
   test.each([

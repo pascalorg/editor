@@ -306,8 +306,270 @@ describe('wall cabinet depth handles', () => {
     expect(fillerHandles).toHaveLength(0)
   })
 
+  test('changes only the selected module depth and keeps its back edge fixed', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_local-depth-run',
+      depth: 0.58,
+      children: ['cabinet-module_local-depth-a', 'cabinet-module_local-depth-b'],
+    })
+    const selected = CabinetModuleNode.parse({
+      id: 'cabinet-module_local-depth-a',
+      parentId: run.id,
+      depth: 0.5,
+      position: [-0.25, 0.1, 0.25],
+    })
+    const sibling = CabinetModuleNode.parse({
+      id: 'cabinet-module_local-depth-b',
+      parentId: run.id,
+      depth: 0.7,
+      position: [0.25, 0.1, 0.35],
+    })
+    const nodes = Object.fromEntries(
+      [run, selected, sibling].map((node) => [node.id as AnyNodeId, node as AnyNode]),
+    ) as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+      update: (id: AnyNodeId, patch: Partial<AnyNode>) => {
+        nodes[id] = { ...nodes[id], ...patch } as AnyNode
+      },
+      markDirty: () => {},
+    } as SceneApi
+    const buildModuleHandles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetModuleNodeType>[]
+    const depthHandle = buildModuleHandles(selected, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )!
+    const selectedBack = selected.position[2] - selected.depth / 2
+    const nextDepth = selected.depth + 0.1
+    const preview = new Map(depthHandle.previewOverrides?.(selected, nextDepth, sceneApi) ?? [])
+    const nextPreview = new Map(
+      depthHandle.previewOverrides?.(selected, nextDepth + 0.05, sceneApi) ?? [],
+    )
+
+    expect(preview.get(run.id as AnyNodeId)).toEqual({})
+    expect(nextPreview.get(run.id as AnyNodeId)).toEqual({})
+
+    depthHandle.commit?.(selected, depthHandle.apply(selected, nextDepth, sceneApi), sceneApi)
+
+    const resized = sceneApi.get<CabinetModuleNodeType>(selected.id as AnyNodeId)!
+    expect(resized.depth).toBeCloseTo(nextDepth)
+    expect(resized.position[2] - resized.depth / 2).toBeCloseTo(selectedBack)
+    expect(sceneApi.get<CabinetModuleNodeType>(sibling.id as AnyNodeId)?.depth).toBeCloseTo(
+      sibling.depth,
+    )
+    expect(sceneApi.get<CabinetModuleNodeType>(sibling.id as AnyNodeId)?.position).toEqual(
+      sibling.position,
+    )
+    expect(sceneApi.get<CabinetNodeType>(run.id as AnyNodeId)?.depth).toBeCloseTo(run.depth)
+  })
+
+  test('magnetically snaps an individual base cabinet depth to a connected neighbor', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_depth-snap-run',
+      children: ['cabinet-module_depth-snap-a', 'cabinet-module_depth-snap-b'],
+    })
+    const selected = CabinetModuleNode.parse({
+      id: 'cabinet-module_depth-snap-a',
+      parentId: run.id,
+      depth: 0.3,
+      position: [-0.25, 0.1, 0.15],
+    })
+    const sibling = CabinetModuleNode.parse({
+      id: 'cabinet-module_depth-snap-b',
+      parentId: run.id,
+      depth: 0.6,
+      position: [0.25, 0.1, 0.3],
+    })
+    const nodes = Object.fromEntries(
+      [run, selected, sibling].map((node) => [node.id as AnyNodeId, node as AnyNode]),
+    ) as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+    } as SceneApi
+    const buildModuleHandles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetModuleNodeType>[]
+    const depthHandle = buildModuleHandles(selected, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )!
+
+    expect(depthHandle.magneticSnap?.(selected, 0.585, sceneApi)).toBeCloseTo(0.6)
+    expect(depthHandle.magneticSnap?.(selected, 0.57, sceneApi)).toBeCloseTo(0.57)
+    const patch = depthHandle.apply(
+      selected,
+      depthHandle.magneticSnap?.(selected, 0.585, sceneApi) ?? 0.585,
+      sceneApi,
+    )
+    expect(patch.depth).toBeCloseTo(0.6)
+    expect(patch.position?.[2]).toBeCloseTo(0.3)
+  })
+
+  test('magnetically snaps an individual wall cabinet depth to a connected neighbor', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_wall-depth-snap-run',
+      children: ['cabinet-module_wall-depth-host-a', 'cabinet-module_wall-depth-host-b'],
+    })
+    const leftHost = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-host-a',
+      parentId: run.id,
+      children: ['cabinet-module_wall-depth-snap-a'],
+      position: [-0.25, 0.1, 0.25],
+    })
+    const rightHost = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-host-b',
+      parentId: run.id,
+      children: ['cabinet-module_wall-depth-snap-b'],
+      position: [0.25, 0.1, 0.25],
+    })
+    const selected = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-snap-a',
+      parentId: leftHost.id,
+      depth: 0.3,
+      position: [0, 1.25, -0.1],
+    })
+    const sibling = CabinetModuleNode.parse({
+      id: 'cabinet-module_wall-depth-snap-b',
+      parentId: rightHost.id,
+      depth: 0.6,
+      position: [0, 1.25, 0.05],
+    })
+    const nodes = Object.fromEntries(
+      [run, leftHost, rightHost, selected, sibling].map((node) => [
+        node.id as AnyNodeId,
+        node as AnyNode,
+      ]),
+    ) as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+    } as SceneApi
+    const buildModuleHandles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetModuleNodeType>[]
+    const depthHandle = buildModuleHandles(selected, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetModuleNodeType> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )!
+
+    expect(depthHandle.magneticSnap?.(selected, 0.59, sceneApi)).toBeCloseTo(0.6)
+  })
+
+  test('shows a bottom depth arrow when a plain cabinet group is selected', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_plain-depth-group',
+      children: ['cabinet-module_plain-depth-group'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_plain-depth-group',
+      parentId: run.id,
+    })
+    const nodes = {
+      [run.id as AnyNodeId]: run as AnyNode,
+      [module.id as AnyNodeId]: module as AnyNode,
+    } as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: <N extends AnyNode = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
+      nodes: () => nodes,
+    } as SceneApi
+    const buildGroupHandles = cabinetDefinition.handles as (
+      node: CabinetNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetNodeType>[]
+    const handles = buildGroupHandles(run, sceneApi)
+    const depthHandles = handles.filter(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )
+
+    expect(depthHandles).toHaveLength(1)
+    expect(depthHandles[0]?.overrideTarget?.(run, sceneApi)).toBe(run.id)
+  })
+
+  test('adds one shared depth delta to differently sized modules on group resize', () => {
+    const { baseA, nodes, root, sceneApi } = wallDepthFixture()
+    const sibling = CabinetModuleNode.parse({
+      id: 'cabinet-module_group-depth-sibling',
+      parentId: root.id,
+      depth: 0.7,
+      position: [baseA.width, baseA.position[1], 0.35],
+    })
+    nodes[baseA.id as AnyNodeId] = {
+      ...baseA,
+      depth: 0.5,
+      position: [baseA.position[0], baseA.position[1], 0.25],
+    } as AnyNode
+    nodes[sibling.id as AnyNodeId] = sibling as AnyNode
+    nodes[root.id as AnyNodeId] = {
+      ...root,
+      children: [baseA.id, sibling.id, ...root.children.filter((id) => id !== baseA.id)],
+    } as AnyNode
+    const buildGroupHandles = cabinetDefinition.handles as (
+      node: CabinetNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetNodeType>[]
+    const depthHandle = buildGroupHandles(root, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' && handle.overrideTarget?.(root, sceneApi) === root.id,
+    )!
+    const nextReferenceDepth = root.depth + 0.1
+    const preview = new Map(
+      depthHandle.previewOverrides?.(root, nextReferenceDepth, sceneApi) ?? [],
+    )
+
+    expect(preview.get(baseA.id as AnyNodeId)?.depth).toBeCloseTo(0.6)
+    expect(preview.get(sibling.id as AnyNodeId)?.depth).toBeCloseTo(0.8)
+
+    depthHandle.commit?.(root, depthHandle.apply(root, nextReferenceDepth, sceneApi), sceneApi)
+
+    const resizedBase = sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)!
+    const resizedSibling = sceneApi.get<CabinetModuleNodeType>(sibling.id as AnyNodeId)!
+    expect(resizedBase.depth).toBeCloseTo(0.6)
+    expect(resizedSibling.depth).toBeCloseTo(0.8)
+    expect(resizedSibling.depth - resizedBase.depth).toBeCloseTo(0.2)
+    expect(resizedBase.position[2] - resizedBase.depth / 2).toBeCloseTo(0)
+    expect(resizedSibling.position[2] - resizedSibling.depth / 2).toBeCloseTo(0)
+  })
+
+  test('preserves wall cabinet depth differences on group resize', () => {
+    const { bridge, bridgeModule, nodes, root, sceneApi, wallA } = wallDepthFixture()
+    nodes[bridge.id as AnyNodeId] = { ...bridge, depth: 0.42 } as AnyNode
+    nodes[bridgeModule.id as AnyNodeId] = { ...bridgeModule, depth: 0.42 } as AnyNode
+    const buildGroupHandles = cabinetDefinition.handles as (
+      node: CabinetNodeType,
+      sceneApi: SceneApi,
+    ) => HandleDescriptor<CabinetNodeType>[]
+    const depthHandle = buildGroupHandles(root, sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetNodeType> =>
+        handle.kind === 'linear-resize' && handle.overrideTarget?.(root, sceneApi) === wallA.id,
+    )!
+    const nextReferenceDepth = wallA.depth + 0.1
+    const preview = new Map(
+      depthHandle.previewOverrides?.(root, nextReferenceDepth, sceneApi) ?? [],
+    )
+
+    expect(preview.get(wallA.id as AnyNodeId)?.depth).toBeCloseTo(0.42)
+    expect(preview.get(bridge.id as AnyNodeId)?.depth).toBeCloseTo(0.52)
+    expect(preview.get(bridgeModule.id as AnyNodeId)?.depth).toBeCloseTo(0.52)
+
+    depthHandle.commit?.(root, depthHandle.apply(root, nextReferenceDepth, sceneApi), sceneApi)
+
+    expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.depth).toBeCloseTo(0.42)
+    expect(sceneApi.get<CabinetNodeType>(bridge.id as AnyNodeId)?.depth).toBeCloseTo(0.52)
+    expect(sceneApi.get<CabinetModuleNodeType>(bridgeModule.id as AnyNodeId)?.depth).toBeCloseTo(
+      0.52,
+    )
+  })
+
   test('changes width only on the bottom cabinet and its linked wall cabinet', () => {
-    const { baseA, nodes, sceneApi, wallA } = wallDepthFixture()
+    const { baseA, nodes, root, sceneApi, wallA } = wallDepthFixture()
     const buildModuleHandles = cabinetModuleDefinition.handles as (
       node: CabinetModuleNodeType,
       sceneApi: SceneApi,
@@ -330,10 +592,13 @@ describe('wall cabinet depth handles', () => {
     )
     const nextWidth = baseA.width + 0.2
     const patch = widthHandle.apply(baseA, nextWidth, sceneApi)
-    const previewOverrides = widthHandle.previewOverrides?.(baseA, nextWidth, sceneApi)
+    const previewOverrides = new Map(
+      widthHandle.previewOverrides?.(baseA, nextWidth, sceneApi) ?? [],
+    )
 
     expect(patch.width).toBeCloseTo(nextWidth)
-    expect(previewOverrides).toEqual([[wallA.id, { width: nextWidth }]])
+    expect(previewOverrides.get(root.id as AnyNodeId)).toEqual({})
+    expect(previewOverrides.get(wallA.id as AnyNodeId)).toEqual({ width: nextWidth })
     expect(sceneApi.get<CabinetModuleNodeType>(baseA.id as AnyNodeId)?.width).toBe(baseA.width)
     expect(sceneApi.get<CabinetModuleNodeType>(wallA.id as AnyNodeId)?.width).toBe(wallA.width)
     widthHandle.commit?.(baseA, patch, sceneApi)

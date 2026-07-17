@@ -772,7 +772,11 @@ function LinearArrow({
             !moveEvent.shiftKey && gridSnapStep && gridSnapStep > 0
               ? snapScalar(rawNext, gridSnapStep)
               : rawNext
-          const next = Math.min(maxBound, Math.max(minBound, snappedNext))
+          const magneticNext =
+            !moveEvent.shiftKey && descriptor.kind === 'linear-resize' && descriptor.magneticSnap
+              ? descriptor.magneticSnap(initialNode, snappedNext, sceneApi)
+              : snappedNext
+          const next = Math.min(maxBound, Math.max(minBound, magneticNext))
           if (next !== lastTickValue) {
             lastTickValue = next
             sfxEmitter.emit('sfx:resize')

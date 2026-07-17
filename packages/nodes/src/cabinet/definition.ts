@@ -237,6 +237,7 @@ const ROTATE_CORNER_OFFSET = 0.32
 const ROTATE_RING_OFFSET = 0.04
 const MIN_CABINET_CARCASS_HEIGHT = 0.4
 const CABINET_ADJACENCY_EPSILON = 1e-4
+const CABINET_DEPTH_SNAP_THRESHOLD = 0.02
 
 function isCabinetModule(node: AnyNode | undefined): node is CabinetModuleNodeType {
   return node?.type === 'cabinet-module'
@@ -835,6 +836,81 @@ function wallCabinetWidthOverride(
   return wallChild ? [wallChild.id as AnyNodeId, { width }] : null
 }
 
+function parentRunGeometryPreviewOverride(
+  node: CabinetEditableNode,
+  sceneApi: SceneApi,
+): readonly [AnyNodeId, Partial<AnyNode>] | null {
+  if (!isCabinetModule(node) || !node.parentId) return null
+  const parent = sceneApi.get(node.parentId as AnyNodeId)
+  return isCabinetRun(parent) ? [parent.id as AnyNodeId, {}] : null
+}
+
+function sharedDepthBounds(
+  referenceDepth: number,
+  targets: readonly CabinetEditableNode[],
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): { min: number; max: number } {
+  const depthOwners = targets.flatMap((target) => {
+    if (!isCabinetRun(target)) return [target]
+    const modules = cabinetModulesForRun(target, nodes)
+    return modules.length > 0 ? [target, ...modules] : [target]
+  })
+  const minDelta = Math.max(...depthOwners.map((target) => MIN_CABINET_DEPTH - target.depth))
+  const maxDelta = Math.min(
+    ...depthOwners.map(
+      (target) => cabinetResizeUpperBound(target.depth, MAX_CABINET_DEPTH) - target.depth,
+    ),
+  )
+  return {
+    min: referenceDepth + minDelta,
+    max: referenceDepth + maxDelta,
+  }
+}
+
+function depthDeltaRunOverrides(
+  run: CabinetNodeType,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  depthDelta: number,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+  for (const module of cabinetModulesForRun(run, nodes)) {
+    const depth = module.depth + depthDelta
+    const positionZ = backAnchoredModuleZ(module.position[2], module.depth, depth)
+    const parentShiftZ = positionZ - module.position[2]
+    overrides.push([
+      module.id as AnyNodeId,
+      {
+        depth,
+        position: [module.position[0], module.position[1], positionZ],
+      } as Partial<AnyNode>,
+    ])
+    for (const childId of module.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type !== 'cabinet') continue
+      overrides.push([
+        child.id as AnyNodeId,
+        {
+          position: [child.position[0], child.position[1], child.position[2] - parentShiftZ],
+        } as Partial<AnyNode>,
+      ])
+    }
+    const wallChild = wallChildOf(module, nodes)
+    if (wallChild) {
+      overrides.push([
+        wallChild.id as AnyNodeId,
+        {
+          position: [
+            wallChild.position[0],
+            wallChild.position[1],
+            backAlignZ(depth, wallChild.depth),
+          ],
+        } as Partial<AnyNode>,
+      ])
+    }
+  }
+  return overrides
+}
+
 function commitRunResize(
   run: CabinetNodeType,
   patch: Partial<CabinetNodeType>,
@@ -904,6 +980,26 @@ function commitRunResize(
   }
 }
 
+function commitRunDepthDelta(
+  run: CabinetNodeType,
+  depth: number,
+  sceneApi: SceneApi,
+  options: { cornerSync?: 'full' | 'width-only' } = {},
+) {
+  const depthDelta = depth - run.depth
+  for (const [id, patch] of depthDeltaRunOverrides(run, sceneApi.nodes(), depthDelta)) {
+    sceneApi.update(id, patch)
+  }
+  sceneApi.update(run.id as AnyNodeId, { depth } as Partial<AnyNode>)
+  const nextRun = { ...run, depth }
+  bumpCabinetRunLayoutRevision(sceneApi, nextRun)
+  syncCornerRunsFromRunSources({
+    baseLayout: options.cornerSync ?? 'full',
+    run: nextRun,
+    sceneApi,
+  })
+}
+
 function commitModuleResize(
   module: CabinetModuleNodeType,
   patch: Partial<CabinetModuleNodeType>,
@@ -945,7 +1041,6 @@ function commitModuleResize(
 
   if (resolveCabinetType(module, parentRun) === 'base') {
     const runPatch: Partial<CabinetNodeType> = {}
-    if (typeof patch.depth === 'number') runPatch.depth = patch.depth
     if (typeof patch.carcassHeight === 'number') {
       runPatch.carcassHeight = patch.carcassHeight
     }
@@ -1034,6 +1129,8 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     previewOverrides: (node, width, sceneApi) => {
       if (!isCabinetModule(node)) return []
       const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+      const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+      if (parentRunOverride) overrides.push(parentRunOverride)
       const gap = cabinetWallWidthGap(node, side, sceneApi)
       const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
       if (selectedWallOverride) overrides.push(selectedWallOverride)
@@ -1090,6 +1187,27 @@ function cabinetDepthResizePatch<N extends CabinetEditableNode>(
   } as Partial<N>
 }
 
+function snapCabinetDepth(
+  node: CabinetEditableNode,
+  requestedDepth: number,
+  sceneApi: SceneApi,
+): number {
+  if (!isCabinetModule(node)) return requestedDepth
+
+  let snappedDepth = requestedDepth
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (const side of ['left', 'right'] as const) {
+    const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
+    if (!connected || isCabinetWidthFiller(connected)) continue
+    const distance = Math.abs(requestedDepth - connected.depth)
+    if (distance <= CABINET_DEPTH_SNAP_THRESHOLD && distance < closestDistance) {
+      snappedDepth = connected.depth
+      closestDistance = distance
+    }
+  }
+  return snappedDepth
+}
+
 function cabinetDepthHandle(): LinearResizeHandle<CabinetEditableNode> {
   return {
     kind: 'linear-resize',
@@ -1099,6 +1217,11 @@ function cabinetDepthHandle(): LinearResizeHandle<CabinetEditableNode> {
     max: (node) => cabinetResizeUpperBound(node.depth, MAX_CABINET_DEPTH),
     currentValue: (node) => node.depth,
     apply: cabinetDepthResizePatch,
+    magneticSnap: snapCabinetDepth,
+    previewOverrides: (node, _depth, sceneApi) => {
+      const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+      return parentRunOverride ? [parentRunOverride] : []
+    },
     commit: commitCabinetResize,
     placement: {
       position: (node) => [0, cabinetTotalHeight(node) / 2, node.depth / 2 + SIDE_HANDLE_OFFSET],
@@ -1236,15 +1359,20 @@ function cabinetWallDepthPreview(
   const liveTargets = targets.map(
     (target) => sceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target,
   )
+  const depthDelta = depth - (liveTargets[0]?.depth ?? depth)
   for (const live of liveTargets) {
+    const nextDepth = live.depth + depthDelta
     if (isCabinetRun(live)) {
-      overrides.set(live.id as AnyNodeId, { depth } as Partial<AnyNode>)
-      for (const [id, patch] of backAlignedRunDepthOverrides(live, sceneApi.nodes(), depth)) {
+      overrides.set(live.id as AnyNodeId, { depth: nextDepth } as Partial<AnyNode>)
+      for (const [id, patch] of depthDeltaRunOverrides(live, sceneApi.nodes(), depthDelta)) {
         overrides.set(id, { ...(overrides.get(id) ?? {}), ...patch } as Partial<AnyNode>)
       }
       continue
     }
-    overrides.set(live.id as AnyNodeId, cabinetDepthResizePatch(live, depth) as Partial<AnyNode>)
+    overrides.set(
+      live.id as AnyNodeId,
+      cabinetDepthResizePatch(live, nextDepth) as Partial<AnyNode>,
+    )
   }
   if (adjustCornerWidths) {
     for (const [id, patch] of wallCornerWidthOverridesForDepthTargets({
@@ -1300,8 +1428,9 @@ function cabinetWallDepthBounds(
     (target) => sceneApi.get<CabinetEditableNode>(target.id as AnyNodeId) ?? target,
   )
   const currentDepth = liveTargets[0]?.depth ?? MIN_CABINET_DEPTH
-  let min = MIN_CABINET_DEPTH
-  let max = cabinetResizeUpperBound(currentDepth, MAX_CABINET_DEPTH)
+  const sharedBounds = sharedDepthBounds(currentDepth, liveTargets, sceneApi.nodes())
+  let min = sharedBounds.min
+  let max = sharedBounds.max
   if (!adjustCornerWidths) return { min, max }
   const baselineAdjustments = new Map(
     wallCornerWidthOverridesForDepthTargets({
@@ -1461,9 +1590,10 @@ function cabinetConnectedRunDepthHandle(
   const frontZ = Math.cos(relativeRotation)
   const axis = Math.abs(frontX) > Math.abs(frontZ) ? 'x' : 'z'
   const positive = axis === 'x' ? frontX >= 0 : frontZ >= 0
-  const targetDepthBounds = () => {
+  const targetDepthBounds = (liveSceneApi: SceneApi) => {
+    const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
     const compensatedWidths: number[] = []
-    const derived = cabinetMetadataRecord(target.metadata).cabinetCornerDerivedRun
+    const derived = cabinetMetadataRecord(liveTarget.metadata).cabinetCornerDerivedRun
     if (derived && typeof derived === 'object' && !Array.isArray(derived)) {
       const role = (derived as { role?: unknown }).role
       const side = (derived as { side?: unknown }).side
@@ -1473,14 +1603,14 @@ function cabinetConnectedRunDepthHandle(
         role === 'base-leg' &&
         (turnSide === side || (turnSide !== 'left' && turnSide !== 'right')) &&
         typeof sourceModuleId === 'string'
-          ? sceneApi.get<CabinetModuleNodeType>(sourceModuleId as AnyNodeId)
+          ? liveSceneApi.get<CabinetModuleNodeType>(sourceModuleId as AnyNodeId)
           : undefined
       if (sourceModule?.type === 'cabinet-module') {
         compensatedWidths.push(sourceModule.width)
       }
     }
-    for (const childId of target.children ?? []) {
-      const child = sceneApi.get<CabinetNodeType>(childId as AnyNodeId)
+    for (const childId of liveTarget.children ?? []) {
+      const child = liveSceneApi.get<CabinetNodeType>(childId as AnyNodeId)
       if (child?.type !== 'cabinet') continue
       const childDerived = cabinetMetadataRecord(child.metadata).cabinetCornerDerivedRun
       if (!childDerived || typeof childDerived !== 'object' || Array.isArray(childDerived)) continue
@@ -1490,19 +1620,28 @@ function cabinetConnectedRunDepthHandle(
       ) {
         continue
       }
-      const connectedModule = cabinetModulesForRun(child, sceneApi.nodes()).find(
+      const connectedModule = cabinetModulesForRun(child, liveSceneApi.nodes()).find(
         (module) => module.name === 'Base Cabinet',
       )
       if (connectedModule) compensatedWidths.push(connectedModule.width)
     }
-    return cabinetConnectedDepthBounds(target.depth, compensatedWidths)
+    const connectedBounds = cabinetConnectedDepthBounds(liveTarget.depth, compensatedWidths)
+    const deltaBounds = sharedDepthBounds(liveTarget.depth, [liveTarget], liveSceneApi.nodes())
+    return {
+      min: Math.max(connectedBounds.min, deltaBounds.min),
+      max: Math.min(connectedBounds.max, deltaBounds.max),
+    }
+  }
+  const clampedDepth = (depth: number, liveSceneApi: SceneApi) => {
+    const bounds = targetDepthBounds(liveSceneApi)
+    return Math.min(bounds.max, Math.max(bounds.min, depth))
   }
   return {
     kind: 'linear-resize',
     axis,
     anchor: positive ? 'min' : 'max',
-    min: () => targetDepthBounds().min,
-    max: () => targetDepthBounds().max,
+    min: (_node, liveSceneApi) => targetDepthBounds(liveSceneApi).min,
+    max: (_node, liveSceneApi) => targetDepthBounds(liveSceneApi).max,
     currentValue: (node) =>
       node.id === target.id
         ? node.depth
@@ -1511,30 +1650,36 @@ function cabinetConnectedRunDepthHandle(
     apply: (_node, depth) => ({ depth }),
     previewOverrides: (_node, depth, liveSceneApi) => {
       const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
-      const moduleOverrides = backAlignedRunDepthOverrides(liveTarget, liveSceneApi.nodes(), depth)
+      const nextDepth = clampedDepth(depth, liveSceneApi)
+      const moduleOverrides = depthDeltaRunOverrides(
+        liveTarget,
+        liveSceneApi.nodes(),
+        nextDepth - liveTarget.depth,
+      )
       const sourceOverrides = cornerSourceWidthOverridesForDerivedDepth(
         liveTarget,
         liveSceneApi.nodes(),
-        depth,
+        nextDepth,
       )
       return previewCornerRunsFromRunSources({
         baseLayout: 'width-only',
         initialOverrides: [...moduleOverrides, ...sourceOverrides],
-        run: { ...liveTarget, depth },
+        run: { ...liveTarget, depth: nextDepth },
         sceneApi: liveSceneApi,
       })
     },
     commit: (_node, patch, liveSceneApi) => {
       if (typeof patch.depth !== 'number') return
       const liveTarget = liveSceneApi.get<CabinetNodeType>(target.id as AnyNodeId) ?? target
+      const nextDepth = clampedDepth(patch.depth, liveSceneApi)
       for (const [id, sourcePatch] of cornerSourceWidthOverridesForDerivedDepth(
         liveTarget,
         liveSceneApi.nodes(),
-        patch.depth,
+        nextDepth,
       )) {
         liveSceneApi.update(id, sourcePatch)
       }
-      commitRunResize(liveTarget, { depth: patch.depth }, liveSceneApi, {
+      commitRunDepthDelta(liveTarget, nextDepth, liveSceneApi, {
         cornerSync: 'width-only',
       })
     },
@@ -1618,11 +1763,11 @@ function cabinetHandles(
   sceneApi?: SceneApi,
 ): HandleDescriptor<CabinetNodeType>[] {
   if ((node.children ?? []).length > 0) {
-    const connectedRuns = sceneApi ? connectedBaseRuns(node, sceneApi) : [node]
-    const depthHandles =
-      sceneApi && connectedRuns.length > 1
-        ? connectedRuns.map((run) => cabinetConnectedRunDepthHandle(node, run, sceneApi))
-        : []
+    const connectedRuns =
+      sceneApi && node.runTier === 'base' ? connectedBaseRuns(node, sceneApi) : []
+    const depthHandles = sceneApi
+      ? connectedRuns.map((run) => cabinetConnectedRunDepthHandle(node, run, sceneApi))
+      : []
     const wallDepthHandles = sceneApi ? cabinetWallGroupDepthHandles(node, sceneApi) : []
     return [
       ...depthHandles,
