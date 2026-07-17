@@ -27,6 +27,7 @@ import {
   formatLinearMeasurement,
   formatVolumeLabel,
   getLinearUnitLabel,
+  handleMeasurementDraftEscape,
   isAlignmentGuideActive,
   isGridSnapActive,
   type LinearUnit,
@@ -34,6 +35,7 @@ import {
   MEASUREMENT_ACTIVE_COLOR,
   type MeasurementAxis,
   type MeasurementAxisGuide,
+  type MeasurementKind,
   type MeasurementPoint,
   markToolCancelConsumed,
   measurementPolygonLabelAnchor,
@@ -71,6 +73,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { matchMeasurementFeatureForNode } from './resolve'
 import {
   createMeasurementSurfaceQuerySession,
+  type MeasurementSurfacePreference,
   type MeasurementSurfaceQuerySession,
   type MeasurementAxisSurfaceIntersection as QueriedAxisSurfaceIntersection,
 } from './surface-query'
@@ -283,6 +286,16 @@ function isMeasurementKind(
     value === 'perimeter' ||
     value === 'volume'
   )
+}
+
+function polygonSurfacePreference(
+  kind: MeasurementKind,
+  plane: { point: MeasurementPoint; normal: MeasurementPoint } | null,
+): MeasurementSurfacePreference | null {
+  if (kind !== 'area' && kind !== 'perimeter' && kind !== 'volume') return null
+  return plane
+    ? { kind: 'plane', point: plane.point, normal: plane.normal }
+    : { kind: 'horizontal' }
 }
 
 function isEffectivelyVisible(object: Object3D): boolean {
@@ -1790,10 +1803,7 @@ export const MeasurementTool: FC = () => {
       if (!owner) return
       markToolCancelConsumed()
       cancelVertexGesture.current()
-      const preferredNormal: MeasurementPoint | undefined = owner === '2d' ? [0, 1, 0] : undefined
-      if (!finishMeasurementDraft(owner, preferredNormal)) {
-        useMeasurementDraft.getState().reset()
-      }
+      handleMeasurementDraftEscape(owner, owner === '2d' ? [0, 1, 0] : undefined)
     }
     emitter.on('tool:cancel', onCancel)
     return () => emitter.off('tool:cancel', onCancel)
@@ -1942,6 +1952,9 @@ export const MeasurementTool: FC = () => {
           lockedGuide:
             applyMagneticSnap && activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
           planarProximityAnchors: getPlanarProximityAnchors(),
+          surfacePreference: applyMagneticSnap
+            ? polygonSurfacePreference(activeDraft.kind, activeDraft.collectionPlane)
+            : null,
           applyMagneticSnap,
           showAlignmentGuides: isAlignmentGuideActive(),
         })
@@ -1990,6 +2003,9 @@ export const MeasurementTool: FC = () => {
         anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
         lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
         planarProximityAnchors: getPlanarProximityAnchors(),
+        surfacePreference: applyMagneticSnap
+          ? polygonSurfacePreference(draft.kind, draft.collectionPlane)
+          : null,
         applyMagneticSnap,
         showAlignmentGuides: isAlignmentGuideActive(),
       })
@@ -2073,6 +2089,9 @@ export const MeasurementTool: FC = () => {
         anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
         lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
         planarProximityAnchors: getPlanarProximityAnchors(),
+        surfacePreference: applyMagneticSnap
+          ? polygonSurfacePreference(draft.kind, draft.collectionPlane)
+          : null,
         applyMagneticSnap,
         showAlignmentGuides: isAlignmentGuideActive(),
       })
@@ -2081,7 +2100,7 @@ export const MeasurementTool: FC = () => {
         resolved.hit,
         applyMagneticSnap ? SEMANTIC_FEATURE_SNAP_DISTANCE : SURFACE_VERIFY_TOLERANCE,
       )
-      if (!draft.addPoint('3d', hit.point, hit.anchor)) return
+      if (!draft.addPoint('3d', hit.point, hit.anchor, hit.normal)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('3d')
     }
 

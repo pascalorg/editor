@@ -439,6 +439,7 @@ export {
 export {
   commitMeasurementDraft,
   finishMeasurementDraft,
+  handleMeasurementDraftEscape,
   type MeasurementAxis,
   type MeasurementAxisGuide,
   type MeasurementDraftOwner,

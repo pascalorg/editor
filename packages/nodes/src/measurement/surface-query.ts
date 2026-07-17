@@ -36,6 +36,12 @@ const AXIS_INTERSECTION_MIN_DISTANCE = 0.05
 const MAX_AXIS_INTERSECTIONS_PER_DIRECTION = 4
 const UNREGISTERED_ROOT_REFRESH_MS = 500
 const ZONE_SURFACE_PRIORITY_DISTANCE = 0.08
+const SURFACE_INTENT_MAX_OCCLUSION_DISTANCE = 0.45
+const SURFACE_INTENT_MIN_NORMAL_ALIGNMENT = 0.94
+const SURFACE_INTENT_PLANE_TOLERANCE = 0.05
+const HORIZONTAL_SURFACE_MIN_NORMAL_Y = 0.85
+const HORIZONTAL_SURFACE_MAX_OCCLUDER_NORMAL_Y = 0.5
+const HORIZONTAL_SURFACE_TYPES = new Set(['slab', 'ceiling', 'site'])
 
 export type MeasurementRaycastContext = {
   ownerByObject: Map<Object3D, string>
@@ -53,6 +59,10 @@ export type LocalSurfaceHit = {
   normal: MeasurementPoint
   targetNodeId: string | null
 }
+
+export type MeasurementSurfacePreference =
+  | { kind: 'horizontal' }
+  | { kind: 'plane'; point: MeasurementPoint; normal: MeasurementPoint }
 
 export type MeasurementAxisProjection = {
   axis: MeasurementAxis
@@ -81,6 +91,7 @@ export type MeasurementSurfaceQuerySession = {
     anchorOrAnchors: MeasurementPoint | readonly MeasurementPoint[] | null
     lockedGuide?: MeasurementAxisGuide | null
     planarProximityAnchors?: readonly AlignmentAnchor[]
+    surfacePreference?: MeasurementSurfacePreference | null
     applyMagneticSnap: boolean
     showAlignmentGuides: boolean
   }): { hit: LocalSurfaceHit; guide: MeasurementAxisGuide | null } | null
@@ -411,6 +422,57 @@ function toLocalSurfaceHit(hit: WorldSurfaceHit, levelObject: Object3D): LocalSu
   }
 }
 
+export function selectMeasurementSurfaceHit(
+  hits: readonly WorldSurfaceHit[],
+  levelObject: Object3D,
+  preference: MeasurementSurfacePreference | null,
+): WorldSurfaceHit | null {
+  const nearest = hits[0] ?? null
+  if (!(nearest && preference)) return nearest
+
+  const nearby = hits.filter(
+    (hit) =>
+      hit.intersection.distance <=
+      nearest.intersection.distance + SURFACE_INTENT_MAX_OCCLUSION_DISTANCE,
+  )
+  if (preference.kind === 'horizontal') {
+    if (
+      Math.abs(toLocalSurfaceHit(nearest, levelObject).normal[1]) >=
+      HORIZONTAL_SURFACE_MAX_OCCLUDER_NORMAL_Y
+    ) {
+      return nearest
+    }
+    const nodes = useScene.getState().nodes as Record<string, { type: string } | undefined>
+    return (
+      nearby.find((hit) => {
+        const type = hit.targetNodeId ? nodes[hit.targetNodeId]?.type : undefined
+        return (
+          Boolean(type && HORIZONTAL_SURFACE_TYPES.has(type)) &&
+          Math.abs(toLocalSurfaceHit(hit, levelObject).normal[1]) >= HORIZONTAL_SURFACE_MIN_NORMAL_Y
+        )
+      }) ?? nearest
+    )
+  }
+
+  const preferredNormal = new Vector3(...preference.normal)
+  if (preferredNormal.lengthSq() <= 1e-12) return nearest
+  preferredNormal.normalize()
+  const preferredPoint = new Vector3(...preference.point)
+  return (
+    nearby.find((hit) => {
+      const localHit = toLocalSurfaceHit(hit, levelObject)
+      const normalAlignment = Math.abs(preferredNormal.dot(new Vector3(...localHit.normal)))
+      const planeDistance = Math.abs(
+        new Vector3(...localHit.point).sub(preferredPoint).dot(preferredNormal),
+      )
+      return (
+        normalAlignment >= SURFACE_INTENT_MIN_NORMAL_ALIGNMENT &&
+        planeDistance <= SURFACE_INTENT_PLANE_TOLERANCE
+      )
+    }) ?? nearest
+  )
+}
+
 function setRayFromPointer(
   raycaster: Raycaster,
   pointer: Vector2,
@@ -486,6 +548,7 @@ function resolveSurfacePoint(
     anchorOrAnchors: MeasurementPoint | readonly MeasurementPoint[] | null
     lockedGuide: MeasurementAxisGuide | null
     planarProximityAnchors: readonly AlignmentAnchor[]
+    surfacePreference: MeasurementSurfacePreference | null
     applyMagneticSnap: boolean
     showAlignmentGuides: boolean
   },
@@ -499,7 +562,13 @@ function resolveSurfacePoint(
   pointerRaycaster.near = 0
   pointerRaycaster.far = Number.POSITIVE_INFINITY
   setRayFromPointer(pointerRaycaster, pointer, args.event, args.camera, args.canvas)
-  const rawWorldHit = castVisibleMeasurementSurface(pointerRaycaster, context)
+  const rawWorldHit = args.surfacePreference
+    ? selectMeasurementSurfaceHit(
+        collectVisibleMeasurementSurfaceHits(pointerRaycaster, context),
+        args.levelObject,
+        args.surfacePreference,
+      )
+    : castVisibleMeasurementSurface(pointerRaycaster, context)
   if (!rawWorldHit) return null
   const rawHit = toLocalSurfaceHit(rawWorldHit, args.levelObject)
   const anchors: readonly MeasurementPoint[] = !args.anchorOrAnchors
@@ -728,6 +797,7 @@ export function createMeasurementSurfaceQuerySession(
           ...args,
           lockedGuide: args.lockedGuide ?? null,
           planarProximityAnchors: args.planarProximityAnchors ?? [],
+          surfacePreference: args.surfacePreference ?? null,
         },
         getContext(),
         pointerRaycaster,

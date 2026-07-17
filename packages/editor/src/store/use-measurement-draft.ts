@@ -65,6 +65,7 @@ type MeasurementDraftState = {
   hoverOwner: MeasurementDraftOwner | null
   axisGuide: MeasurementAxisGuide | null
   vertexDrag: MeasurementVertexDrag | null
+  collectionPlane: { point: MeasurementPoint; normal: MeasurementPoint } | null
   baseNormal: MeasurementPoint | null
   extrusionHeight: number
   error: string | null
@@ -87,6 +88,7 @@ type MeasurementDraftState = {
     owner: MeasurementDraftOwner,
     point: MeasurementPoint,
     anchor?: MeasurementFeatureAnchor,
+    surfaceNormal?: MeasurementPoint,
   ): boolean
   closeBase(owner: MeasurementDraftOwner, preferredNormal?: MeasurementPoint): boolean
   setExtrusionHeight(owner: MeasurementDraftOwner, height: number): boolean
@@ -99,6 +101,12 @@ type MeasurementDraftState = {
 const MIN_EXTRUSION = 0.001
 
 const clonePoint = (point: MeasurementPoint): MeasurementPoint => [...point]
+
+function normalizePoint(point: MeasurementPoint | undefined): MeasurementPoint | null {
+  if (!point?.every(Number.isFinite)) return null
+  const length = Math.hypot(...point)
+  return length > 1e-9 ? [point[0] / length, point[1] / length, point[2] / length] : null
+}
 
 export function measurementPolygonMidpoints(
   points: readonly MeasurementPoint[],
@@ -125,6 +133,7 @@ function idleState(kind: MeasurementKind) {
     hoverOwner: null,
     axisGuide: null,
     vertexDrag: null,
+    collectionPlane: null,
     baseNormal: null,
     extrusionHeight: 0,
     error: null,
@@ -330,7 +339,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     return true
   },
 
-  addPoint: (owner, point, anchor) => {
+  addPoint: (owner, point, anchor, surfaceNormal) => {
     const state = get()
     const activeLevelId = useViewer.getState().selection.levelId
     if (!activeLevelId) return false
@@ -345,6 +354,8 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
 
     const points = [...state.points, clonePoint(point)]
     const anchors = [...state.anchors, anchor ?? null]
+    const polygon = state.kind === 'area' || state.kind === 'perimeter' || state.kind === 'volume'
+    const planeNormal = polygon && state.points.length === 0 ? normalizePoint(surfaceNormal) : null
     const ready =
       (state.kind === 'distance' && points.length === 2) ||
       (state.kind === 'angle' && points.length === 3)
@@ -353,6 +364,9 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       levelId: state.levelId ?? activeLevelId,
       points,
       anchors,
+      collectionPlane: planeNormal
+        ? { point: clonePoint(point), normal: planeNormal }
+        : state.collectionPlane,
       stage: ready ? 'ready' : 'collecting',
       hover: null,
       hoverOwner: null,
@@ -461,6 +475,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       hover: null,
       hoverOwner: null,
       axisGuide: null,
+      collectionPlane: points.length > 0 ? state.collectionPlane : null,
       baseNormal: null,
       extrusionHeight: 0,
       error: null,
@@ -513,4 +528,16 @@ export function finishMeasurementDraft(
     if (!draft.finishExtrusion(owner)) return false
   }
   return commitMeasurementDraft(owner) !== null
+}
+
+export function handleMeasurementDraftEscape(
+  owner: MeasurementDraftOwner,
+  preferredNormal?: MeasurementPoint,
+): boolean {
+  const draft = useMeasurementDraft.getState()
+  if (draft.owner !== owner) return false
+
+  const preserveArea = draft.kind === 'area' && draft.points.length >= 3
+  if (!finishMeasurementDraft(owner, preferredNormal) && !preserveArea) draft.reset()
+  return true
 }

@@ -9,7 +9,11 @@ import {
   Raycaster,
   Vector3,
 } from 'three'
-import { castVisibleMeasurementSurface, selectClosestVerifiedAxisProjection } from './surface-query'
+import {
+  castVisibleMeasurementSurface,
+  selectClosestVerifiedAxisProjection,
+  selectMeasurementSurfaceHit,
+} from './surface-query'
 
 afterEach(() => {
   useScene.setState({ nodes: {} } as never)
@@ -99,5 +103,86 @@ describe('measurement axis acquisition', () => {
         },
       ]),
     ).toEqual({ axis: 'z', point: [1, 0, 7] })
+  })
+})
+
+describe('polygon measurement surface intent', () => {
+  test('prefers a nearby floor at a wall corner but keeps a deliberate wall-face pick', () => {
+    const level = new Group()
+    const material = new MeshBasicMaterial({ side: DoubleSide })
+    const wall = new Mesh(new PlaneGeometry(4, 4), material)
+    const slab = new Mesh(new PlaneGeometry(16, 16), material)
+    wall.position.z = 0.1
+    slab.rotation.x = -Math.PI / 2
+    level.add(wall, slab)
+    level.updateMatrixWorld(true)
+    useScene.setState({
+      nodes: {
+        wall_1: { type: 'wall' },
+        slab_1: { type: 'slab' },
+      },
+    } as never)
+
+    const hitsFor = (target: Vector3) =>
+      new Raycaster(
+        new Vector3(0, 1, 2),
+        target
+          .clone()
+          .sub(new Vector3(0, 1, 2))
+          .normalize(),
+      )
+        .intersectObjects([wall, slab])
+        .map((intersection) => ({
+          intersection,
+          targetNodeId: intersection.object === wall ? 'wall_1' : 'slab_1',
+        }))
+
+    const cornerHits = hitsFor(new Vector3(0, 0, 0))
+    expect(cornerHits[0]?.targetNodeId).toBe('wall_1')
+    expect(
+      selectMeasurementSurfaceHit(cornerHits, level, { kind: 'horizontal' })?.targetNodeId,
+    ).toBe('slab_1')
+    expect(
+      selectMeasurementSurfaceHit(cornerHits, level, {
+        kind: 'plane',
+        point: [0, 0, 0],
+        normal: [0, 1, 0],
+      })?.targetNodeId,
+    ).toBe('slab_1')
+
+    const wallFaceHits = hitsFor(new Vector3(0, 0.7, 0))
+    expect(
+      selectMeasurementSurfaceHit(wallFaceHits, level, { kind: 'horizontal' })?.targetNodeId,
+    ).toBe('wall_1')
+    const tableTop = new Mesh(new PlaneGeometry(4, 4), material)
+    tableTop.position.y = 0.3
+    tableTop.rotation.x = -Math.PI / 2
+    level.add(tableTop)
+    level.updateMatrixWorld(true)
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, item_1: { type: 'item' } },
+    } as never)
+    const horizontalOccluderHits = new Raycaster(
+      new Vector3(0, 1, 2),
+      new Vector3(0, -1, -2).normalize(),
+    )
+      .intersectObjects([wall, slab, tableTop])
+      .map((intersection) => ({
+        intersection,
+        targetNodeId:
+          intersection.object === wall
+            ? 'wall_1'
+            : intersection.object === slab
+              ? 'slab_1'
+              : 'item_1',
+      }))
+    expect(
+      selectMeasurementSurfaceHit(horizontalOccluderHits, level, { kind: 'horizontal' })
+        ?.targetNodeId,
+    ).toBe('item_1')
+    wall.geometry.dispose()
+    slab.geometry.dispose()
+    tableTop.geometry.dispose()
+    material.dispose()
   })
 })

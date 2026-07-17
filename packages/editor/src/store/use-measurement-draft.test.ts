@@ -11,6 +11,7 @@ import { useViewer } from '@pascal-app/viewer'
 import {
   commitMeasurementDraft,
   finishMeasurementDraft,
+  handleMeasurementDraftEscape,
   useMeasurementDraft,
 } from './use-measurement-draft'
 
@@ -175,6 +176,38 @@ describe('measurement draft transitions', () => {
     })
   })
 
+  test('retains the first polygon plane through vertex edits until the draft is emptied', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('area')
+    draft.addPoint('3d', point(0, 0, 0), undefined, point(0, 2, 0))
+    draft.addPoint('3d', point(2, 0, 0), undefined, point(0, 0, 1))
+
+    expect(useMeasurementDraft.getState().collectionPlane).toEqual({
+      point: point(0, 0, 0),
+      normal: point(0, 1, 0),
+    })
+    expect(draft.beginVertexDrag('3d', 0)).toBe(true)
+    expect(
+      draft.updateDraggedVertex('3d', {
+        point: point(0, 0.2, 0),
+        normal: point(0, 1, 0),
+        targetNodeId: 'slab_1',
+      }),
+    ).toBe(true)
+    expect(draft.finishVertexDrag('3d')).toBe(true)
+    expect(useMeasurementDraft.getState().collectionPlane).toEqual({
+      point: point(0, 0, 0),
+      normal: point(0, 1, 0),
+    })
+    expect(draft.removeLast('3d')).toBe(true)
+    expect(useMeasurementDraft.getState().collectionPlane).toEqual({
+      point: point(0, 0, 0),
+      normal: point(0, 1, 0),
+    })
+    expect(draft.removeLast('3d')).toBe(true)
+    expect(useMeasurementDraft.getState().collectionPlane).toBeNull()
+  })
+
   test('closes a volume base before accepting explicit extrusion', () => {
     const draft = useMeasurementDraft.getState()
     draft.setKind('volume')
@@ -246,6 +279,58 @@ describe('measurement draft transitions', () => {
       points: [],
     })
     expect(useMeasurementDraft.getState().addPoint('2d', point(4, 0, 4))).toBe(true)
+  })
+
+  test('Escape commits an area once three points have been placed', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('area')
+    draft.addPoint('3d', point(0, 0, 0))
+    draft.addPoint('3d', point(2, 0, 0))
+    draft.addPoint('3d', point(2, 0, 2))
+
+    expect(handleMeasurementDraftEscape('3d')).toBe(true)
+    expect(
+      Object.values(useScene.getState().nodes).filter((node) => node.type === 'measurement'),
+    ).toHaveLength(1)
+    expect(useMeasurementDraft.getState()).toMatchObject({
+      kind: 'area',
+      owner: null,
+      points: [],
+    })
+  })
+
+  test('Escape preserves a three-point area when validation cannot finish it', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('area')
+    draft.addPoint('3d', point(0, 0, 0))
+    draft.addPoint('3d', point(1, 0, 0))
+    draft.addPoint('3d', point(2, 0, 0))
+
+    expect(handleMeasurementDraftEscape('3d')).toBe(true)
+    expect(useMeasurementDraft.getState()).toMatchObject({
+      kind: 'area',
+      owner: '3d',
+      points: [point(0, 0, 0), point(1, 0, 0), point(2, 0, 0)],
+    })
+    expect(useMeasurementDraft.getState().error).not.toBeNull()
+    expect(
+      Object.values(useScene.getState().nodes).some((node) => node.type === 'measurement'),
+    ).toBe(false)
+  })
+
+  test('Escape cancels an area with fewer than three placed points', () => {
+    const draft = useMeasurementDraft.getState()
+    draft.setKind('area')
+    draft.addPoint('2d', point(0, 0, 0))
+    draft.addPoint('2d', point(2, 0, 0))
+
+    expect(handleMeasurementDraftEscape('2d', point(0, 1, 0))).toBe(true)
+    expect(useMeasurementDraft.getState()).toMatchObject({
+      kind: 'area',
+      owner: null,
+      points: [],
+      error: null,
+    })
   })
 
   test('commits one parseable level child in one undoable scene write', () => {
