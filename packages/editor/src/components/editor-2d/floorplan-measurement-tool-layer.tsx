@@ -80,6 +80,9 @@ const MAX_SAMPLED_PATH_SEGMENTS = 48
 const VERTEX_SNAP_DISTANCE_PX = 16
 const EDGE_SNAP_DISTANCE_PX = 10
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
+// Alt-bypass association mirrors the 3D tool's surface-verify tolerance: a
+// feature binds only when the point already sits on it, never by attraction.
+const SEMANTIC_FEATURE_BYPASS_DISTANCE = 0.012
 
 function measurementGeometryContext(
   node: AnyNode,
@@ -107,6 +110,7 @@ function measurementGeometryContext(
 function associatePlanPoint(
   point: MeasurementPoint,
   targetNodeId: string | null,
+  maxDistance = SEMANTIC_FEATURE_SNAP_DISTANCE,
 ): {
   point: MeasurementPoint
   anchor?: MeasurementFeatureAnchor
@@ -120,8 +124,8 @@ function associatePlanPoint(
   const context = measurementGeometryContext(node, nodes)
   const features = contribution.features(node, context)
   const match =
-    contribution.match?.(node, context, point, SEMANTIC_FEATURE_SNAP_DISTANCE) ??
-    closestMeasurementFeatureBinding(features, point, SEMANTIC_FEATURE_SNAP_DISTANCE)
+    contribution.match?.(node, context, point, maxDistance) ??
+    closestMeasurementFeatureBinding(features, point, maxDistance)
   if (!match) return { point }
   const reference = {
     nodeId: node.id,
@@ -881,12 +885,23 @@ export function FloorplanMeasurementToolLayer() {
       const projectedPlan = projectedSnap
         ? clientToPlanPoint(group, projectedSnap.point.x, projectedSnap.point.z)
         : null
+      // Measurement anchors always bind to real geometry — the construction
+      // snapping-mode chip doesn't govern this analysis tool. Alt bypasses,
+      // including the projected registry-geometry pull.
       const surfaceSnap = resolveSurfacePlanPointSnap({
         rawPoint: [plan.x, plan.z],
-        fallbackPoint: projectedPlan ? [projectedPlan.x, projectedPlan.z] : [plan.x, plan.z],
+        fallbackPoint:
+          projectedPlan && !event.altKey ? [projectedPlan.x, projectedPlan.z] : [plan.x, plan.z],
         levelId: activeLevelId,
         align: false,
+        magnetic: !event.altKey,
       })
+      // A discrete wall snap (corner / midpoint / crossing) is the strongest
+      // signal; a locked axis must not pull the point off it.
+      const discreteWallSnap =
+        surfaceSnap.wallSnap === 'endpoint' ||
+        surfaceSnap.wallSnap === 'midpoint' ||
+        surfaceSnap.wallSnap === 'intersection'
       const raw: MeasurementPoint = [surfaceSnap.point[0], 0, surfaceSnap.point[1]]
       const targetNodeId = surfaceSnap.wallIds[0] ?? projectedSnap?.nodeId ?? null
       const lastPoint = draft.points.at(-1)
@@ -896,8 +911,13 @@ export function FloorplanMeasurementToolLayer() {
         anchorsOverride ?? (lastPoint ? [lastPoint] : []),
         event.clientX,
         event.clientY,
-        true,
-        draft.axisGuide?.snapped && draft.axisGuide.axis !== 'y' ? draft.axisGuide : null,
+        !discreteWallSnap && !event.altKey,
+        !event.altKey &&
+          !discreteWallSnap &&
+          draft.axisGuide?.snapped &&
+          draft.axisGuide.axis !== 'y'
+          ? draft.axisGuide
+          : null,
         projectedGeometry.proximityAnchors,
       )
       if (targetNodeId && resolved.guide?.snapped) {
@@ -1012,7 +1032,11 @@ export function FloorplanMeasurementToolLayer() {
         )
         const resolved = resolveEventPoint(event, anchors)
         if (resolved) {
-          const associated = associatePlanPoint(resolved.point, resolved.targetNodeId)
+          const associated = associatePlanPoint(
+            resolved.point,
+            resolved.targetNodeId,
+            event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
+          )
           activeDraft.updateDraggedVertex(
             '2d',
             {
@@ -1030,7 +1054,13 @@ export function FloorplanMeasurementToolLayer() {
 
       if (draft.stage !== 'collecting') return
       const resolved = resolveEventPoint(event)
-      const associated = resolved ? associatePlanPoint(resolved.point, resolved.targetNodeId) : null
+      const associated = resolved
+        ? associatePlanPoint(
+            resolved.point,
+            resolved.targetNodeId,
+            event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
+          )
+        : null
       draft.setHover(
         '2d',
         resolved && associated
@@ -1101,7 +1131,11 @@ export function FloorplanMeasurementToolLayer() {
       }
       const resolved = resolveEventPoint(event)
       if (!resolved) return
-      const associated = associatePlanPoint(resolved.point, resolved.targetNodeId)
+      const associated = associatePlanPoint(
+        resolved.point,
+        resolved.targetNodeId,
+        event.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
+      )
       if (!draft.addPoint('2d', associated.point, associated.anchor)) return
       if (useMeasurementDraft.getState().stage === 'ready') commitMeasurementDraft('2d')
     }

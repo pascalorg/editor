@@ -19,11 +19,15 @@ import {
 import { matchMeasurementFeatureForNode, resolveMeasurementNode } from './resolve'
 
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
+// Alt-bypass association mirrors the 3D tool's surface-verify tolerance: a
+// feature binds only when the point already sits on it, never by attraction.
+const SEMANTIC_FEATURE_BYPASS_DISTANCE = 0.012
 
 function semanticWallAnchor(
   point: MeasurementPoint,
   wallIds: readonly string[],
   nodes: Parameters<typeof resolveLevelId>[1],
+  maxDistance: number,
 ): { anchor?: MeasurementAnchor; point: MeasurementPoint } {
   const matches = wallIds.flatMap((id) => {
     const node = nodes[id]
@@ -32,7 +36,7 @@ function semanticWallAnchor(
       node,
       (nodeId) => nodes[nodeId],
       point,
-      SEMANTIC_FEATURE_SNAP_DISTANCE,
+      maxDistance,
     )
     return match ? [{ match, node }] : []
   })
@@ -70,20 +74,33 @@ export const measurementMoveVertexAffordance: FloorplanAffordance<MeasurementNod
 
     return {
       affectedIds: [node.id],
-      apply({ planPoint }) {
+      apply({ planPoint, modifiers }) {
+        // Measurement anchors always bind to real geometry — the construction
+        // snapping-mode chip doesn't govern this analysis tool. Alt bypasses.
+        // The raw fallback keeps free drags free: measurement geometry follows
+        // the pointer, never the construction grid lattice.
         const snapped = resolveSurfacePlanPointSnap({
           rawPoint: [planPoint[0], planPoint[1]],
+          fallbackPoint: [planPoint[0], planPoint[1]],
           excludeId: node.id,
           levelId,
           movingId: node.id,
           nodes,
+          magnetic: !modifiers.altKey,
         })
         const point = constrainMeasurementPlanEditPoint(
           resolved.payload,
           vertexIndex as number,
           snapped.point,
         )
-        const associated = point ? semanticWallAnchor(point, snapped.wallIds, nodes) : null
+        const associated = point
+          ? semanticWallAnchor(
+              point,
+              snapped.wallIds,
+              nodes,
+              modifiers.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
+            )
+          : null
         const anchor =
           point && associated
             ? measurementEditAnchor(resolved.payload, associated.point, associated.anchor)

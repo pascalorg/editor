@@ -29,7 +29,6 @@ import {
   getLinearUnitLabel,
   isAlignmentGuideActive,
   isGridSnapActive,
-  isMagneticSnapActive,
   type LinearUnit,
   linearUnitToMeters,
   MEASUREMENT_ACTIVE_COLOR,
@@ -1933,7 +1932,7 @@ export const MeasurementTool: FC = () => {
             activeDraft.kind === 'perimeter' ||
             activeDraft.kind === 'volume',
         )
-        const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+        const applyMagneticSnap = !event.altKey
         const resolved = surfaceQuery.resolvePointer({
           event,
           camera,
@@ -1982,7 +1981,7 @@ export const MeasurementTool: FC = () => {
       }
 
       if (draft.stage !== 'collecting') return
-      const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+      const applyMagneticSnap = !event.altKey
       const resolved = surfaceQuery.resolvePointer({
         event,
         camera,
@@ -2065,7 +2064,7 @@ export const MeasurementTool: FC = () => {
         }
         return
       }
-      const applyMagneticSnap = isMagneticSnapActive() && !event.altKey
+      const applyMagneticSnap = !event.altKey
       const resolved = surfaceQuery.resolvePointer({
         event,
         camera,

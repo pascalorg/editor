@@ -18,7 +18,6 @@ import {
   boundaryReshapeScope,
   EDITOR_LAYER,
   isAlignmentGuideActive,
-  isMagneticSnapActive,
   MEASUREMENT_ACTIVE_COLOR,
   type MeasurementAxis,
   type MeasurementAxisGuide,
@@ -290,7 +289,9 @@ function MeasurementEditHandles({
         pointerEvent.preventDefault()
         pointerEvent.stopPropagation()
         const anchors = measurementVertexSnapAnchors(basePoints, index, polygon)
-        const applyMagneticSnap = isMagneticSnapActive() && !pointerEvent.altKey
+        // Measurement anchors always bind to real geometry — the construction
+        // snapping-mode chip doesn't govern this analysis tool. Alt bypasses.
+        const applyMagneticSnap = !pointerEvent.altKey
         const surface = surfaceQuery.resolvePointer({
           event: pointerEvent,
           camera,
