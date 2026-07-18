@@ -195,6 +195,7 @@ describe('measurement draft transitions', () => {
       }),
     ).toBe(true)
     expect(draft.finishVertexDrag('3d')).toBe(true)
+    expect(useMeasurementDraft.getState().points[0]).toEqual(point(0, 0, 0))
     expect(useMeasurementDraft.getState().collectionPlane).toEqual({
       point: point(0, 0, 0),
       normal: point(0, 1, 0),
@@ -206,6 +207,34 @@ describe('measurement draft transitions', () => {
     })
     expect(draft.removeLast('3d')).toBe(true)
     expect(useMeasurementDraft.getState().collectionPlane).toBeNull()
+  })
+
+  test('projects every later polygon point and feature fallback onto the first surface plane', () => {
+    const draft = useMeasurementDraft.getState()
+    const anchor = {
+      kind: 'feature' as const,
+      reference: {
+        nodeId: 'slab_host',
+        featureId: 'slab:boundary',
+        parameters: { t: 0.25 },
+      },
+      fallback: point(2, 0.4, 0),
+    }
+    draft.setKind('area')
+    draft.addPoint('3d', point(0, 0, 0), undefined, point(0, 1, 0))
+    draft.addPoint('3d', anchor.fallback, anchor, point(1, 0, 0))
+    draft.addPoint('3d', point(2, -0.7, 2), undefined, point(0, -1, 0))
+
+    expect(useMeasurementDraft.getState().points).toEqual([
+      point(0, 0, 0),
+      point(2, 0, 0),
+      point(2, 0, 2),
+    ])
+    expect(useMeasurementDraft.getState().anchors[1]).toMatchObject({
+      fallback: point(2, 0, 0),
+    })
+    expect(draft.closeBase('3d')).toBe(true)
+    expect(useMeasurementDraft.getState().error).toBeNull()
   })
 
   test('closes a volume base before accepting explicit extrusion', () => {

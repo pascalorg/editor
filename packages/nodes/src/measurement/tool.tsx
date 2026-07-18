@@ -288,14 +288,17 @@ function isMeasurementKind(
   )
 }
 
-function polygonSurfacePreference(
+export function measurementPolygonSurfacePreference(
   kind: MeasurementKind,
   plane: { point: MeasurementPoint; normal: MeasurementPoint } | null,
+  applyMagneticSnap: boolean,
 ): MeasurementSurfacePreference | null {
   if (kind !== 'area' && kind !== 'perimeter' && kind !== 'volume') return null
   return plane
     ? { kind: 'plane', point: plane.point, normal: plane.normal }
-    : { kind: 'horizontal' }
+    : applyMagneticSnap
+      ? { kind: 'horizontal' }
+      : null
 }
 
 function isEffectivelyVisible(object: Object3D): boolean {
@@ -1952,9 +1955,11 @@ export const MeasurementTool: FC = () => {
           lockedGuide:
             applyMagneticSnap && activeDraft.axisGuide?.snapped ? activeDraft.axisGuide : null,
           planarProximityAnchors: getPlanarProximityAnchors(),
-          surfacePreference: applyMagneticSnap
-            ? polygonSurfacePreference(activeDraft.kind, activeDraft.collectionPlane)
-            : null,
+          surfacePreference: measurementPolygonSurfacePreference(
+            activeDraft.kind,
+            activeDraft.collectionPlane,
+            applyMagneticSnap,
+          ),
           applyMagneticSnap,
           showAlignmentGuides: isAlignmentGuideActive(),
         })
@@ -2003,9 +2008,11 @@ export const MeasurementTool: FC = () => {
         anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
         lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
         planarProximityAnchors: getPlanarProximityAnchors(),
-        surfacePreference: applyMagneticSnap
-          ? polygonSurfacePreference(draft.kind, draft.collectionPlane)
-          : null,
+        surfacePreference: measurementPolygonSurfacePreference(
+          draft.kind,
+          draft.collectionPlane,
+          applyMagneticSnap,
+        ),
         applyMagneticSnap,
         showAlignmentGuides: isAlignmentGuideActive(),
       })
@@ -2089,9 +2096,11 @@ export const MeasurementTool: FC = () => {
         anchorOrAnchors: draft.points[draft.points.length - 1] ?? null,
         lockedGuide: applyMagneticSnap && draft.axisGuide?.snapped ? draft.axisGuide : null,
         planarProximityAnchors: getPlanarProximityAnchors(),
-        surfacePreference: applyMagneticSnap
-          ? polygonSurfacePreference(draft.kind, draft.collectionPlane)
-          : null,
+        surfacePreference: measurementPolygonSurfacePreference(
+          draft.kind,
+          draft.collectionPlane,
+          applyMagneticSnap,
+        ),
         applyMagneticSnap,
         showAlignmentGuides: isAlignmentGuideActive(),
       })
