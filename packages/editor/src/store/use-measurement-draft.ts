@@ -108,6 +108,29 @@ function normalizePoint(point: MeasurementPoint | undefined): MeasurementPoint |
   return length > 1e-9 ? [point[0] / length, point[1] / length, point[2] / length] : null
 }
 
+function projectPointToPlane(
+  point: MeasurementPoint,
+  plane: { point: MeasurementPoint; normal: MeasurementPoint } | null,
+): MeasurementPoint {
+  if (!plane) return clonePoint(point)
+  const distance =
+    (point[0] - plane.point[0]) * plane.normal[0] +
+    (point[1] - plane.point[1]) * plane.normal[1] +
+    (point[2] - plane.point[2]) * plane.normal[2]
+  return [
+    point[0] - plane.normal[0] * distance,
+    point[1] - plane.normal[1] * distance,
+    point[2] - plane.normal[2] * distance,
+  ]
+}
+
+function anchorWithFallback(
+  anchor: MeasurementFeatureAnchor | undefined,
+  fallback: MeasurementPoint,
+): MeasurementFeatureAnchor | null {
+  return anchor ? { ...anchor, fallback: clonePoint(fallback) } : null
+}
+
 export function measurementPolygonMidpoints(
   points: readonly MeasurementPoint[],
 ): Array<{ edgeIndex: number; point: MeasurementPoint }> {
@@ -277,17 +300,18 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       return false
     }
 
+    const projectedPoint = projectPointToPlane(hover.point, state.collectionPlane)
     const points = state.points.map((point, index) =>
-      index === drag.index ? clonePoint(hover.point) : point,
+      index === drag.index ? projectedPoint : point,
     )
     const anchors = state.anchors.map((anchor, index) =>
-      index === drag.index ? (hover.anchor ?? null) : anchor,
+      index === drag.index ? anchorWithFallback(hover.anchor, projectedPoint) : anchor,
     )
     set({
       points,
       anchors,
       hover: {
-        point: clonePoint(hover.point),
+        point: clonePoint(projectedPoint),
         normal: clonePoint(hover.normal),
         targetNodeId: hover.targetNodeId,
         anchor: hover.anchor,
@@ -352,9 +376,12 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
     if (state.kind === 'distance' && state.points.length >= 2) return false
     if (state.kind === 'angle' && state.points.length >= 3) return false
 
-    const points = [...state.points, clonePoint(point)]
-    const anchors = [...state.anchors, anchor ?? null]
     const polygon = state.kind === 'area' || state.kind === 'perimeter' || state.kind === 'volume'
+    const projectedPoint = polygon
+      ? projectPointToPlane(point, state.collectionPlane)
+      : clonePoint(point)
+    const points = [...state.points, projectedPoint]
+    const anchors = [...state.anchors, anchorWithFallback(anchor, projectedPoint)]
     const planeNormal = polygon && state.points.length === 0 ? normalizePoint(surfaceNormal) : null
     const ready =
       (state.kind === 'distance' && points.length === 2) ||
@@ -365,7 +392,7 @@ export const useMeasurementDraft = create<MeasurementDraftState>((set, get) => (
       points,
       anchors,
       collectionPlane: planeNormal
-        ? { point: clonePoint(point), normal: planeNormal }
+        ? { point: clonePoint(projectedPoint), normal: planeNormal }
         : state.collectionPlane,
       stage: ready ? 'ready' : 'collecting',
       hover: null,

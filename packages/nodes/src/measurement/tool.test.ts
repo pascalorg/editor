@@ -24,6 +24,7 @@ import {
   isMeasurementSurfaceMaterialVisible,
   localNormalToPreviewFrame,
   measurementIntersectionWorldNormal,
+  measurementPolygonSurfacePreference,
   measurementVertexSnapAnchors,
   parseMeasurementExtrusionHeight,
   projectMeasurementPointToAxes,
@@ -523,6 +524,23 @@ describe('measurement axis projection', () => {
     expect(selectAxisCandidateForSurfaceVerification(candidates, 12, 'x', 18, firstAnchor)).toBe(
       candidates[0],
     )
+  })
+})
+
+describe('polygon measurement plane locking', () => {
+  test('keeps the captured plane when magnetic snapping is bypassed', () => {
+    const plane = { point: [0, 1, 0], normal: [0, 1, 0] } as const
+
+    expect(measurementPolygonSurfacePreference('area', plane, false)).toEqual({
+      kind: 'plane',
+      point: plane.point,
+      normal: plane.normal,
+    })
+    expect(measurementPolygonSurfacePreference('area', null, false)).toBeNull()
+    expect(measurementPolygonSurfacePreference('area', null, true)).toEqual({
+      kind: 'horizontal',
+    })
+    expect(measurementPolygonSurfacePreference('distance', plane, true)).toBeNull()
   })
 })
 

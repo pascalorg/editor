@@ -430,11 +430,6 @@ export function selectMeasurementSurfaceHit(
   const nearest = hits[0] ?? null
   if (!(nearest && preference)) return nearest
 
-  const nearby = hits.filter(
-    (hit) =>
-      hit.intersection.distance <=
-      nearest.intersection.distance + SURFACE_INTENT_MAX_OCCLUSION_DISTANCE,
-  )
   if (preference.kind === 'horizontal') {
     if (
       Math.abs(toLocalSurfaceHit(nearest, levelObject).normal[1]) >=
@@ -443,6 +438,11 @@ export function selectMeasurementSurfaceHit(
       return nearest
     }
     const nodes = useScene.getState().nodes as Record<string, { type: string } | undefined>
+    const nearby = hits.filter(
+      (hit) =>
+        hit.intersection.distance <=
+        nearest.intersection.distance + SURFACE_INTENT_MAX_OCCLUSION_DISTANCE,
+    )
     return (
       nearby.find((hit) => {
         const type = hit.targetNodeId ? nodes[hit.targetNodeId]?.type : undefined
@@ -455,11 +455,11 @@ export function selectMeasurementSurfaceHit(
   }
 
   const preferredNormal = new Vector3(...preference.normal)
-  if (preferredNormal.lengthSq() <= 1e-12) return nearest
+  if (preferredNormal.lengthSq() <= 1e-12) return null
   preferredNormal.normalize()
   const preferredPoint = new Vector3(...preference.point)
   return (
-    nearby.find((hit) => {
+    hits.find((hit) => {
       const localHit = toLocalSurfaceHit(hit, levelObject)
       const normalAlignment = Math.abs(preferredNormal.dot(new Vector3(...localHit.normal)))
       const planeDistance = Math.abs(
@@ -469,7 +469,7 @@ export function selectMeasurementSurfaceHit(
         normalAlignment >= SURFACE_INTENT_MIN_NORMAL_ALIGNMENT &&
         planeDistance <= SURFACE_INTENT_PLANE_TOLERANCE
       )
-    }) ?? nearest
+    }) ?? null
   )
 }
 

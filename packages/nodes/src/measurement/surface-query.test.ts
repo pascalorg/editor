@@ -185,4 +185,61 @@ describe('polygon measurement surface intent', () => {
     tableTop.geometry.dispose()
     material.dispose()
   })
+
+  test('keeps later polygon points on the first plane through a distant occluder', () => {
+    const level = new Group()
+    const material = new MeshBasicMaterial({ side: DoubleSide })
+    const floor = new Mesh(new PlaneGeometry(8, 8), material)
+    const table = new Mesh(new PlaneGeometry(8, 8), material)
+    floor.rotation.x = -Math.PI / 2
+    table.rotation.x = -Math.PI / 2
+    table.position.y = 0.8
+    level.add(floor, table)
+    level.updateMatrixWorld(true)
+
+    const hits = new Raycaster(new Vector3(0, 2, 0), new Vector3(0, -1, 0))
+      .intersectObjects([floor, table])
+      .map((intersection) => ({
+        intersection,
+        targetNodeId: intersection.object === floor ? 'slab_1' : 'item_1',
+      }))
+
+    expect(hits[0]?.targetNodeId).toBe('item_1')
+    expect(
+      selectMeasurementSurfaceHit(hits, level, {
+        kind: 'plane',
+        point: [0, 0, 0],
+        normal: [0, 1, 0],
+      })?.targetNodeId,
+    ).toBe('slab_1')
+
+    floor.geometry.dispose()
+    table.geometry.dispose()
+    material.dispose()
+  })
+
+  test('returns no candidate instead of falling through to a different plane', () => {
+    const level = new Group()
+    const material = new MeshBasicMaterial({ side: DoubleSide })
+    const table = new Mesh(new PlaneGeometry(8, 8), material)
+    table.rotation.x = -Math.PI / 2
+    table.position.y = 0.8
+    level.add(table)
+    level.updateMatrixWorld(true)
+
+    const hits = new Raycaster(new Vector3(0, 2, 0), new Vector3(0, -1, 0))
+      .intersectObject(table)
+      .map((intersection) => ({ intersection, targetNodeId: 'item_1' }))
+
+    expect(
+      selectMeasurementSurfaceHit(hits, level, {
+        kind: 'plane',
+        point: [0, 0, 0],
+        normal: [0, 1, 0],
+      }),
+    ).toBeNull()
+
+    table.geometry.dispose()
+    material.dispose()
+  })
 })
