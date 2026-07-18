@@ -45,12 +45,12 @@ describe('deriveZoneQuantityReport', () => {
     expect(report.wallSurface).toEqual({
       status: 'available',
       value: 35,
-      note: "Gross interior wall face using each boundary wall's height.",
+      note: 'Gross indoor-facing wall surface within this zone, including both sides of interior partitions.',
     })
     expect(report.floorSurface).toEqual({
       status: 'available',
       value: 12,
-      note: 'Zone floor surface covered by one slab, after openings.',
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
     })
     expect(report.volume.status).toBe('available')
     if (report.volume.status === 'available') expect(report.volume.value).toBeCloseTo(29.4)
@@ -90,7 +90,7 @@ describe('deriveZoneQuantityReport', () => {
     expect(report.floorSurface).toEqual({
       status: 'available',
       value: 11,
-      note: 'Zone floor surface covered by one slab, after openings.',
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
     })
   })
 
@@ -149,17 +149,17 @@ describe('deriveZoneQuantityReport', () => {
     expect(report.wallSurface).toEqual({
       status: 'available',
       value: 79,
-      note: "Gross interior wall face using each boundary wall's height.",
+      note: 'Gross indoor-facing wall surface within this zone, including both sides of interior partitions.',
     })
     expect(report.floorSurface).toEqual({
       status: 'available',
       value: 49,
-      note: 'Zone floor surface covered by one slab, after openings.',
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
     })
     expect(report.volume).toEqual({
       status: 'available',
       value: 147,
-      note: 'Covered zone floor area multiplied by clear ceiling height.',
+      note: 'Proven zone floor area multiplied by clear ceiling height.',
     })
   })
 
@@ -209,7 +209,7 @@ describe('deriveZoneQuantityReport', () => {
     expect(report.floorSurface).toEqual({
       status: 'available',
       value: 11,
-      note: 'Zone floor surface covered by one slab, after openings.',
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
     })
   })
 
@@ -282,5 +282,295 @@ describe('deriveZoneQuantityReport', () => {
     if (report.wallSurface.status === 'available') {
       expect(report.wallSurface.value).toBeCloseTo(19.6)
     }
+  })
+
+  test('does not mistake an adjacent notched slab for a second covering slab', () => {
+    const zonePolygon: Array<[number, number]> = [
+      [-1, 0],
+      [0, 0],
+      [0, 1],
+      [-1, 1],
+    ]
+    const zone = ZoneNode.parse({
+      id: 'zone_notch',
+      name: 'Laundry',
+      parentId: 'level_main',
+      polygon: zonePolygon,
+    })
+    const exactSlab = SlabNode.parse({
+      id: 'slab_laundry',
+      parentId: 'level_main',
+      polygon: zonePolygon,
+    })
+    const adjacentSlab = SlabNode.parse({
+      id: 'slab_adjacent',
+      parentId: 'level_main',
+      polygon: [
+        [-1, -1],
+        [2, -1],
+        [2, 2],
+        [-1, 2],
+        [-1, 1],
+        [0, 1],
+        [0, 0],
+        [-1, 0],
+      ],
+    })
+
+    const report = deriveZoneQuantityReport(zone, sceneRecord([zone, exactSlab, adjacentSlab]))
+
+    expect(report.floorSurface).toEqual({
+      status: 'available',
+      value: 1,
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
+    })
+  })
+
+  test('combines compatible slabs while rejecting conflicting floor elevations', () => {
+    const zone = ZoneNode.parse({
+      id: 'zone_tiled',
+      name: 'Combined room',
+      parentId: 'level_main',
+      polygon,
+    })
+    const left = SlabNode.parse({
+      id: 'slab_left',
+      parentId: 'level_main',
+      polygon: [
+        [0, 0],
+        [2, 0],
+        [2, 3],
+        [0, 3],
+      ],
+      elevation: 0.05,
+    })
+    const right = SlabNode.parse({
+      id: 'slab_right',
+      parentId: 'level_main',
+      polygon: [
+        [2, 0],
+        [4, 0],
+        [4, 3],
+        [2, 3],
+      ],
+      elevation: 0.05,
+    })
+
+    const compatible = deriveZoneQuantityReport(zone, sceneRecord([zone, left, right]))
+    expect(compatible.floorSurface).toEqual({
+      status: 'available',
+      value: 12,
+      note: 'Zone floor surface proven by compatible slab coverage, after openings.',
+    })
+
+    const raisedRight = SlabNode.parse({ ...right, elevation: 0.25 })
+    const conflicting = deriveZoneQuantityReport(zone, sceneRecord([zone, left, raisedRight]))
+    expect(conflicting.floorSurface).toEqual({
+      status: 'unavailable',
+      reason: 'Slabs covering this zone have different elevations.',
+    })
+  })
+
+  test('counts both indoor-facing sides of a separator inside a multi-room zone', () => {
+    const widePolygon: Array<[number, number]> = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const zone = ZoneNode.parse({
+      id: 'zone_multi_room',
+      name: 'Bedroom suite',
+      parentId: 'level_main',
+      polygon: widePolygon,
+    })
+    const outerWalls = widePolygon.map((start, index) =>
+      WallNode.parse({
+        id: `wall_suite_${index}`,
+        parentId: 'level_main',
+        start,
+        end: widePolygon[(index + 1) % widePolygon.length],
+        height: 2.5,
+      }),
+    )
+    const separator = WallNode.parse({
+      id: 'wall_suite_separator',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [4, 4],
+      height: 2.5,
+    })
+
+    const report = deriveZoneQuantityReport(
+      zone,
+      sceneRecord([zone, ...outerWalls, separator] as AnyNode[]),
+    )
+
+    expect(report.classification).toBe('enclosed-room')
+    expect(new Set(report.boundaryWallIds)).toEqual(
+      new Set([...outerWalls.map((wall) => wall.id), separator.id]),
+    )
+    expect(report.wallSurface.status).toBe('available')
+    if (report.wallSurface.status === 'available') {
+      expect(report.wallSurface.value).toBeCloseTo(80)
+    }
+  })
+
+  test('reports only real indoor wall faces for a semantic sub-zone of a larger room', () => {
+    const roomPolygon: Array<[number, number]> = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const subZonePolygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ]
+    const zone = ZoneNode.parse({
+      id: 'zone_open_half',
+      name: 'Living area',
+      parentId: 'level_main',
+      polygon: subZonePolygon,
+    })
+    const slab = SlabNode.parse({
+      id: 'slab_open_room',
+      parentId: 'level_main',
+      polygon: roomPolygon,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_open_room',
+      parentId: 'level_main',
+      polygon: roomPolygon,
+      height: 2.55,
+    })
+    const walls = roomPolygon.map((start, index) =>
+      WallNode.parse({
+        id: `wall_open_${index}`,
+        parentId: 'level_main',
+        start,
+        end: roomPolygon[(index + 1) % roomPolygon.length],
+        height: 2.5,
+      }),
+    )
+
+    const report = deriveZoneQuantityReport(
+      zone,
+      sceneRecord([zone, slab, ceiling, ...walls] as AnyNode[]),
+    )
+
+    expect(report.classification).toBe('footprint')
+    expect(report.wallSurface.status).toBe('available')
+    if (report.wallSurface.status === 'available') {
+      expect(report.wallSurface.value).toBeCloseTo(30)
+    }
+    expect(report.floorSurface.status).toBe('available')
+    if (report.floorSurface.status === 'available') {
+      expect(report.floorSurface.value).toBeCloseTo(16)
+    }
+    expect(report.volume.status).toBe('available')
+    if (report.volume.status === 'available') expect(report.volume.value).toBeCloseTo(40)
+  })
+
+  test('supports legacy manual zones offset from detected room boundaries', () => {
+    const roomPolygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    const legacyZonePolygon: Array<[number, number]> = [
+      [0.1, 0],
+      [4, 0],
+      [4, 3],
+      [0.1, 3],
+    ]
+    const zone = ZoneNode.parse({
+      id: 'zone_legacy_offset',
+      name: 'Legacy room',
+      parentId: 'level_main',
+      polygon: legacyZonePolygon,
+    })
+    const slab = SlabNode.parse({
+      id: 'slab_legacy_offset',
+      parentId: 'level_main',
+      polygon: roomPolygon,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_legacy_offset',
+      parentId: 'level_main',
+      polygon: roomPolygon,
+      height: 2.55,
+    })
+    const walls = roomPolygon.map((start, index) =>
+      WallNode.parse({
+        id: `wall_legacy_offset_${index}`,
+        parentId: 'level_main',
+        start,
+        end: roomPolygon[(index + 1) % roomPolygon.length],
+        height: 2.5,
+      }),
+    )
+
+    const report = deriveZoneQuantityReport(
+      zone,
+      sceneRecord([zone, slab, ceiling, ...walls] as AnyNode[]),
+    )
+
+    expect(report.classification).toBe('enclosed-room')
+    expect(report.wallSurface.status).toBe('available')
+    if (report.wallSurface.status === 'available') {
+      expect(report.wallSurface.value).toBeCloseTo(35)
+    }
+    expect(report.floorSurface.status).toBe('available')
+    if (report.floorSurface.status === 'available') {
+      expect(report.floorSurface.value).toBeCloseTo(11.7)
+    }
+    expect(report.volume.status).toBe('available')
+    if (report.volume.status === 'available') expect(report.volume.value).toBeCloseTo(29.25)
+  })
+
+  test('accepts legacy face-aligned surfaces with small perimeter drift', () => {
+    const zonePolygon: Array<[number, number]> = [
+      [0, 0],
+      [7, 0],
+      [7, 6.5],
+      [0, 6.5],
+    ]
+    const legacySurfacePolygon: Array<[number, number]> = [
+      [0, 0],
+      [6.75, 0],
+      [6.75, 6.5],
+      [0, 6.5],
+    ]
+    const zone = ZoneNode.parse({
+      id: 'zone_legacy_surface',
+      name: 'Legacy open room',
+      parentId: 'level_main',
+      polygon: zonePolygon,
+    })
+    const slab = SlabNode.parse({
+      id: 'slab_legacy_surface',
+      parentId: 'level_main',
+      polygon: legacySurfacePolygon,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_legacy_surface',
+      parentId: 'level_main',
+      polygon: legacySurfacePolygon,
+      height: 2.55,
+    })
+
+    const report = deriveZoneQuantityReport(zone, sceneRecord([zone, slab, ceiling]))
+
+    expect(report.classification).toBe('footprint')
+    expect(report.floorSurface.status).toBe('available')
+    if (report.floorSurface.status === 'available') {
+      expect(report.floorSurface.value).toBeCloseTo(45.5)
+    }
+    expect(report.volume.status).toBe('available')
+    if (report.volume.status === 'available') expect(report.volume.value).toBeCloseTo(113.75)
   })
 })
