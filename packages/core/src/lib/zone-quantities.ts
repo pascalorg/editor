@@ -1,6 +1,6 @@
 import type { AnyNode, CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import { sampleWallCenterline } from '../systems/wall/wall-curve'
-import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
+import { DEFAULT_WALL_HEIGHT, DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
 import { detectSpacesForLevel, type Space } from './space-detection'
 
 type Point2D = readonly [number, number]
@@ -21,6 +21,10 @@ export type ZoneQuantityReport = {
 }
 
 const BOUNDARY_TOLERANCE = 0.08
+const SURFACE_COVERAGE_THRESHOLD = 0.95
+const SPACE_CONTAINMENT_THRESHOLD = 0.95
+const COVERAGE_SAMPLE_STEPS = 24
+const SURFACE_DATUM_EPSILON = 1e-4
 
 function pointDistance(a: Point2D, b: Point2D): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1])
@@ -112,6 +116,7 @@ function segmentsCrossProperly(a: Point2D, b: Point2D, c: Point2D, d: Point2D) {
 
 function polygonContainsRegion(outer: readonly Point2D[], inner: readonly Point2D[]): boolean {
   if (outer.length < 3 || inner.length < 3) return false
+  if (polygonsDescribeSameRegion(outer, inner)) return true
   if (
     !inner.every(
       (point) =>
@@ -138,13 +143,38 @@ function polygonContainsRegion(outer: readonly Point2D[], inner: readonly Point2
       }
     }
   }
-  return true
+
+  return inner.some((start, index) => {
+    const end = inner[(index + 1) % inner.length]!
+    const midpoint: Point2D = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+    return pointInPolygon(start, outer, false) || pointInPolygon(midpoint, outer, false)
+  })
 }
 
 function polygonsHaveInteriorOverlap(a: readonly Point2D[], b: readonly Point2D[]): boolean {
   if (polygonsDescribeSameRegion(a, b)) return true
-  if (a.some((point) => pointInPolygon(point, b, false))) return true
-  if (b.some((point) => pointInPolygon(point, a, false))) return true
+  if (
+    a.some((point, index) => {
+      const end = a[(index + 1) % a.length]!
+      return (
+        pointInPolygon(point, b, false) ||
+        pointInPolygon([(point[0] + end[0]) / 2, (point[1] + end[1]) / 2], b, false)
+      )
+    })
+  ) {
+    return true
+  }
+  if (
+    b.some((point, index) => {
+      const end = b[(index + 1) % b.length]!
+      return (
+        pointInPolygon(point, a, false) ||
+        pointInPolygon([(point[0] + end[0]) / 2, (point[1] + end[1]) / 2], a, false)
+      )
+    })
+  ) {
+    return true
+  }
   for (let aIndex = 0; aIndex < a.length; aIndex += 1) {
     for (let bIndex = 0; bIndex < b.length; bIndex += 1) {
       if (
@@ -160,6 +190,34 @@ function polygonsHaveInteriorOverlap(a: readonly Point2D[], b: readonly Point2D[
     }
   }
   return false
+}
+
+function polygonCoverageRatio(subject: readonly Point2D[], covers: readonly Point2D[][]): number {
+  if (subject.length < 3 || covers.length === 0) return 0
+
+  const xs = subject.map((point) => point[0])
+  const ys = subject.map((point) => point[1])
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  if (maxX - minX <= 1e-9 || maxY - minY <= 1e-9) return 0
+
+  let inside = 0
+  let covered = 0
+  for (let xIndex = 0; xIndex < COVERAGE_SAMPLE_STEPS; xIndex += 1) {
+    for (let yIndex = 0; yIndex < COVERAGE_SAMPLE_STEPS; yIndex += 1) {
+      const point: Point2D = [
+        minX + ((xIndex + 0.5) / COVERAGE_SAMPLE_STEPS) * (maxX - minX),
+        minY + ((yIndex + 0.5) / COVERAGE_SAMPLE_STEPS) * (maxY - minY),
+      ]
+      if (!pointInPolygon(point, subject)) continue
+      inside += 1
+      if (covers.some((cover) => pointInPolygon(point, cover))) covered += 1
+    }
+  }
+
+  return inside > 0 ? covered / inside : 0
 }
 
 function pointToPolylineDistance(point: Point2D, polyline: readonly Point2D[]): number {
@@ -215,17 +273,91 @@ function segmentParameter(point: Point2D, start: Point2D, end: Point2D): number 
     : ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / lengthSquared
 }
 
-function spansFromSpace(space: Space, wallsById: ReadonlyMap<string, WallNode>) {
-  const spans: BoundaryWallSpan[] = []
-  for (const boundary of space.boundaryFaces) {
-    const wall = wallsById.get(boundary.wallId)
-    if (!wall) return null
-    let length = 0
-    for (let index = 0; index < boundary.points.length - 1; index += 1) {
-      length += pointDistance(boundary.points[index]!, boundary.points[index + 1]!)
+function segmentLengthInsideOrNearPolygon(
+  start: Point2D,
+  end: Point2D,
+  polygon: readonly Point2D[],
+  tolerance: number,
+): number {
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const length = Math.hypot(dx, dy)
+  if (length <= 1e-9) return 0
+
+  const breaks = [0, 1]
+  for (let index = 0; index < polygon.length; index += 1) {
+    const polygonStart = polygon[index]!
+    const polygonEnd = polygon[(index + 1) % polygon.length]!
+    const edgeX = polygonEnd[0] - polygonStart[0]
+    const edgeY = polygonEnd[1] - polygonStart[1]
+    const denominator = dx * edgeY - dy * edgeX
+    if (Math.abs(denominator) > 1e-12) {
+      const t =
+        ((polygonStart[0] - start[0]) * edgeY - (polygonStart[1] - start[1]) * edgeX) / denominator
+      const edgeT =
+        ((polygonStart[0] - start[0]) * dy - (polygonStart[1] - start[1]) * dx) / denominator
+      if (t > 0 && t < 1 && edgeT >= -1e-9 && edgeT <= 1 + 1e-9) breaks.push(t)
     }
-    if (length <= 1e-6) return null
-    spans.push({ wall, length })
+
+    if (pointToSegmentDistance(polygonStart, start, end) <= tolerance) {
+      const projected = segmentParameter(polygonStart, start, end)
+      if (projected > 0 && projected < 1) breaks.push(projected)
+    }
+  }
+
+  breaks.sort((a, b) => a - b)
+  const uniqueBreaks = breaks.filter(
+    (value, index) => index === 0 || value - breaks[index - 1]! > 1e-7,
+  )
+  let insideLength = 0
+  for (let index = 0; index < uniqueBreaks.length - 1; index += 1) {
+    const t0 = uniqueBreaks[index]!
+    const t1 = uniqueBreaks[index + 1]!
+    const midpoint = pointAlongSegment(start, end, (t0 + t1) / 2)
+    if (
+      pointInPolygon(midpoint, polygon) ||
+      pointToPolygonBoundaryDistance(midpoint, polygon) <= tolerance
+    ) {
+      insideLength += length * (t1 - t0)
+    }
+  }
+  return insideLength
+}
+
+function boundaryFaceKey(boundary: Space['boundaryFaces'][number]): string {
+  const pointKey = (point: Point2D) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`
+  const forward = boundary.points.map(pointKey).join('|')
+  const reverse = [...boundary.points].reverse().map(pointKey).join('|')
+  return `${boundary.wallId}:${boundary.face}:${forward < reverse ? forward : reverse}`
+}
+
+function spansFromSpaces(
+  spaces: readonly Space[],
+  zone: ZoneNode,
+  wallsById: ReadonlyMap<string, WallNode>,
+) {
+  const spans: BoundaryWallSpan[] = []
+  const seen = new Set<string>()
+  for (const space of spaces) {
+    for (const boundary of space.boundaryFaces) {
+      const key = boundaryFaceKey(boundary)
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      const wall = wallsById.get(boundary.wallId)
+      if (!wall) return null
+      const tolerance = (wall.thickness ?? DEFAULT_WALL_THICKNESS) / 2 + BOUNDARY_TOLERANCE
+      let length = 0
+      for (let index = 0; index < boundary.points.length - 1; index += 1) {
+        length += segmentLengthInsideOrNearPolygon(
+          boundary.points[index]!,
+          boundary.points[index + 1]!,
+          zone.polygon,
+          tolerance,
+        )
+      }
+      if (length > 1e-6) spans.push({ wall, length })
+    }
   }
   return spans.length > 0 ? spans : null
 }
@@ -265,35 +397,67 @@ function spansFromZoneBoundary(zone: ZoneNode, wallPaths: readonly WallPath[]) {
   return spans.length > 0 ? spans : null
 }
 
-type SurfaceCoverage<T extends SlabNode | CeilingNode> = {
-  node: T
-  area: number | null
-  issue?: string
-}
+type SurfaceCoverage<T extends SlabNode | CeilingNode> =
+  | { status: 'available'; area: number; datum: number }
+  | { status: 'unavailable'; reason: string }
 
-function coveringSurfaceNodes<T extends SlabNode | CeilingNode>(
+function proveSurfaceCoverage<T extends SlabNode | CeilingNode>(
   zone: ZoneNode,
   nodes: readonly T[],
-): SurfaceCoverage<T>[] {
-  const surfaces: SurfaceCoverage<T>[] = []
-  for (const node of nodes) {
-    if (!polygonContainsRegion(node.polygon, zone.polygon)) continue
-    let area = polygonArea(zone.polygon)
-    let issue: string | undefined
+  getDatum: (node: T) => number,
+  labels: { singular: string; plural: string; datum: string },
+): SurfaceCoverage<T> {
+  const candidates = nodes.filter(
+    (node) =>
+      polygonsHaveInteriorOverlap(zone.polygon, node.polygon) &&
+      polygonCoverageRatio(zone.polygon, [node.polygon]) > 0,
+  )
+  if (
+    candidates.length === 0 ||
+    polygonCoverageRatio(
+      zone.polygon,
+      candidates.map((node) => node.polygon),
+    ) < SURFACE_COVERAGE_THRESHOLD
+  ) {
+    return { status: 'unavailable', reason: `No ${labels.singular} coverage proves this zone.` }
+  }
+
+  const datum = getDatum(candidates[0]!)
+  if (
+    !Number.isFinite(datum) ||
+    candidates.some((node) => Math.abs(getDatum(node) - datum) > SURFACE_DATUM_EPSILON)
+  ) {
+    return {
+      status: 'unavailable',
+      reason: `${labels.plural} covering this zone have different ${labels.datum}.`,
+    }
+  }
+
+  let area = polygonArea(zone.polygon)
+  const seenHoles = new Set<string>()
+  for (const node of candidates) {
     for (const hole of node.holes) {
+      const forward = hole.map((point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`).join('|')
+      const reverse = [...hole]
+        .reverse()
+        .map((point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`)
+        .join('|')
+      const key = forward < reverse ? forward : reverse
+      if (seenHoles.has(key)) continue
+      seenHoles.add(key)
+
       if (polygonContainsRegion(hole, zone.polygon)) {
-        issue = 'A surface opening removes this zone.'
-        break
-      } else if (polygonContainsRegion(zone.polygon, hole)) {
+        return { status: 'unavailable', reason: 'A surface opening removes this zone.' }
+      }
+      if (polygonContainsRegion(zone.polygon, hole)) {
         area -= polygonArea(hole)
       } else if (polygonsHaveInteriorOverlap(zone.polygon, hole)) {
-        issue = 'A surface opening crosses the zone boundary.'
-        break
+        return { status: 'unavailable', reason: 'A surface opening crosses the zone boundary.' }
       }
     }
-    surfaces.push(issue ? { node, area: null, issue } : { node, area: Math.max(0, area) })
   }
-  return surfaces
+
+  return { status: 'available', area: Math.max(0, area), datum }
 }
 
 function unavailable(reason: string): ZoneQuantityValue {
@@ -315,24 +479,37 @@ export function deriveZoneQuantityReport(
   })
   const footprintArea = polygonArea(zone.polygon)
   const perimeter = edgeLengths.reduce((sum, length) => sum + length, 0)
-  const slabs = coveringSurfaceNodes(
+  const slabCoverage = proveSurfaceCoverage(
     zone,
     levelNodes.filter((node): node is SlabNode => node.type === 'slab'),
+    (node) => node.elevation,
+    { singular: 'slab', plural: 'Slabs', datum: 'elevations' },
   )
-  const ceilings = coveringSurfaceNodes(
+  const ceilingCoverage = proveSurfaceCoverage(
     zone,
     levelNodes.filter((node): node is CeilingNode => node.type === 'ceiling'),
+    (node) => node.height,
+    { singular: 'ceiling', plural: 'Ceilings', datum: 'heights' },
   )
 
   const spaces = levelId ? detectSpacesForLevel(levelId, walls).spaces : []
-  const matchingSpace = spaces.find((space) =>
-    polygonsDescribeSameRegion(zone.polygon, space.polygon),
+  const overlappingSpaces = spaces.filter((space) =>
+    polygonsHaveInteriorOverlap(zone.polygon, space.polygon),
   )
+  const topologyEnclosesZone =
+    overlappingSpaces.length > 0 &&
+    polygonCoverageRatio(
+      zone.polygon,
+      overlappingSpaces.map((space) => space.polygon),
+    ) >= SPACE_CONTAINMENT_THRESHOLD &&
+    overlappingSpaces.every(
+      (space) => polygonCoverageRatio(space.polygon, [zone.polygon]) >= SPACE_CONTAINMENT_THRESHOLD,
+    )
   const wallsById = new Map(walls.map((wall) => [wall.id, wall]))
   const wallPaths = wallPathsFor(walls)
-  const wallSpans =
-    (matchingSpace ? spansFromSpace(matchingSpace, wallsById) : null) ??
-    spansFromZoneBoundary(zone, wallPaths)
+  const topologyWallSpans = spansFromSpaces(overlappingSpaces, zone, wallsById)
+  const boundaryWallSpans = spansFromZoneBoundary(zone, wallPaths)
+  const wallSpans = topologyWallSpans ?? boundaryWallSpans
   const allWallsProven = Boolean(wallSpans)
   const boundaryWallIds = wallSpans ? [...new Set(wallSpans.map((span) => span.wall.id))] : []
 
@@ -343,50 +520,38 @@ export function deriveZoneQuantityReport(
           (sum, span) => sum + span.length * (span.wall.height ?? DEFAULT_WALL_HEIGHT),
           0,
         ),
-        note: "Gross interior wall face using each boundary wall's height.",
+        note: 'Gross indoor-facing wall surface within this zone, including both sides of interior partitions.',
       }
-    : unavailable('The zone boundary is not fully backed by walls.')
+    : unavailable('No indoor-facing wall surface is proven within this zone.')
 
-  const matchingSlab = slabs.length === 1 ? slabs[0] : undefined
   const floorSurface =
-    matchingSlab && matchingSlab.area !== null
+    slabCoverage.status === 'available'
       ? {
           status: 'available' as const,
-          value: matchingSlab.area,
-          note: 'Zone floor surface covered by one slab, after openings.',
+          value: slabCoverage.area,
+          note: 'Zone floor surface proven by compatible slab coverage, after openings.',
         }
-      : unavailable(
-          slabs.length > 1
-            ? 'More than one slab covers this zone.'
-            : (matchingSlab?.issue ?? 'No slab covers this zone.'),
-        )
+      : unavailable(slabCoverage.reason)
 
-  const matchingCeiling = ceilings.length === 1 ? ceilings[0] : undefined
   let volume: ZoneQuantityValue
-  if (!wallSpans) {
-    volume = unavailable('The zone boundary is not fully backed by walls.')
-  } else if (!matchingSlab || matchingSlab.area === null) {
-    volume = unavailable(floorSurface.status === 'unavailable' ? floorSurface.reason : 'No floor.')
-  } else if (!matchingCeiling || matchingCeiling.area === null) {
-    volume = unavailable(
-      ceilings.length > 1
-        ? 'More than one ceiling covers this zone.'
-        : (matchingCeiling?.issue ?? 'No ceiling covers this zone.'),
-    )
+  if (slabCoverage.status === 'unavailable') {
+    volume = unavailable(slabCoverage.reason)
+  } else if (ceilingCoverage.status === 'unavailable') {
+    volume = unavailable(ceilingCoverage.reason)
   } else {
-    const clearHeight = matchingCeiling.node.height - matchingSlab.node.elevation
+    const clearHeight = ceilingCoverage.datum - slabCoverage.datum
     volume =
       Number.isFinite(clearHeight) && clearHeight > 0
         ? {
             status: 'available',
-            value: matchingSlab.area * clearHeight,
-            note: 'Covered zone floor area multiplied by clear ceiling height.',
+            value: slabCoverage.area * clearHeight,
+            note: 'Proven zone floor area multiplied by clear ceiling height.',
           }
         : unavailable('The matching ceiling is not above the slab surface.')
   }
 
   return {
-    classification: wallSpans ? 'enclosed-room' : 'footprint',
+    classification: topologyEnclosesZone || boundaryWallSpans ? 'enclosed-room' : 'footprint',
     footprintArea,
     perimeter,
     edgeLengths,
