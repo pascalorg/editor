@@ -32,6 +32,7 @@ describe('SceneOperationsFacade scene events', () => {
   })
 
   afterEach(async () => {
+    store.close()
     await fs.rm(rootDir, { recursive: true, force: true })
   })
 
