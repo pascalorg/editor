@@ -1332,25 +1332,49 @@ export function acquireSceneReadOnlyLease(): () => void {
 export type AcceptedSceneNodeUpdate = {
   id: AnyNodeId
   data: Partial<AnyNode>
+  removeFields: string[]
 }
 
-export type ApplyAcceptedSceneNodeUpdatesOptions = {
+export type AcceptedSceneMaterialChange = {
+  id: SceneMaterialId
+  material: SceneMaterial | null
+}
+
+export type AcceptedSceneChanges = {
+  materialChanges: AcceptedSceneMaterialChange[]
+  nodeUpdates: AcceptedSceneNodeUpdate[]
+}
+
+export type ApplyAcceptedSceneChangesOptions = {
   origin?: Extract<SceneCommitOrigin, 'remote' | 'reconciliation'>
 }
 
-export function applyAcceptedSceneNodeUpdates(
-  updates: AcceptedSceneNodeUpdate[],
-  options: ApplyAcceptedSceneNodeUpdatesOptions = {},
+export function applyAcceptedSceneChanges(
+  changes: AcceptedSceneChanges,
+  options: ApplyAcceptedSceneChangesOptions = {},
 ): boolean {
   const beforeState = useScene.getState()
-  const hasInvalidTarget = updates.some(({ id, data }) => {
+  const hasInvalidNodeTarget = changes.nodeUpdates.some(({ id, data, removeFields }) => {
     const node = beforeState.nodes[id]
     if (!node) return true
     if ('id' in data && data.id !== node.id) return true
     if ('type' in data && data.type !== node.type) return true
-    return 'object' in data && data.object !== node.object
+    if ('object' in data && data.object !== node.object) return true
+    if (removeFields.some((field) => field === 'id' || field === 'object' || field === 'type')) {
+      return true
+    }
+    return removeFields.some((field) => Object.hasOwn(data, field))
   })
-  if (updates.length === 0 || hasInvalidTarget) return false
+  const hasInvalidMaterialTarget = changes.materialChanges.some(
+    ({ id, material }) => material !== null && material.id !== id,
+  )
+  if (
+    (changes.nodeUpdates.length === 0 && changes.materialChanges.length === 0) ||
+    hasInvalidNodeTarget ||
+    hasInvalidMaterialTarget
+  ) {
+    return false
+  }
 
   const temporalState = useScene.temporal.getState()
   if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) return false
@@ -1360,13 +1384,24 @@ export function applyAcceptedSceneNodeUpdates(
   try {
     // Server-canonical fields bypass the UI lock without running local mutation cascades.
     useScene.setState((state) => {
-      const nodes = { ...state.nodes }
-      for (const { id, data } of updates) {
+      const nodes = changes.nodeUpdates.length > 0 ? { ...state.nodes } : state.nodes
+      for (const { id, data, removeFields } of changes.nodeUpdates) {
         const node = nodes[id]
         if (!node) return {}
-        nodes[id] = { ...node, ...data } as AnyNode
+        const nextNode = { ...node, ...data }
+        for (const field of removeFields) delete nextNode[field as keyof typeof nextNode]
+        nodes[id] = nextNode as AnyNode
       }
-      return { nodes }
+      const materials =
+        changes.materialChanges.length > 0 ? { ...state.materials } : state.materials
+      for (const { id, material } of changes.materialChanges) {
+        if (material === null) {
+          delete materials[id]
+        } else {
+          materials[id] = material
+        }
+      }
+      return { materials, nodes }
     })
   } finally {
     resumeSceneHistory(useScene)
@@ -1374,18 +1409,27 @@ export function applyAcceptedSceneNodeUpdates(
 
   const currentState = useScene.getState()
   const current = sceneHistorySnapshotFromState(currentState)
-  for (const { id } of updates) {
+  for (const { id } of changes.nodeUpdates) {
     useLiveNodeOverrides.getState().clear(id)
     useLiveTransforms.getState().clear(id)
   }
   if (areSceneHistorySnapshotsEqual(before, current)) return false
 
-  for (const { id } of updates) {
+  for (const { id } of changes.nodeUpdates) {
     currentState.markDirty(id)
     const beforeParentId = before.nodes[id]?.parentId as AnyNodeId | null | undefined
     const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
     if (beforeParentId) currentState.markDirty(beforeParentId)
     if (currentParentId) currentState.markDirty(currentParentId)
+  }
+  if (changes.materialChanges.length > 0) {
+    const materialRefs = new Set(changes.materialChanges.map(({ id }) => toSceneMaterialRef(id)))
+    for (const node of Object.values(current.nodes)) {
+      const slots = 'slots' in node ? node.slots : undefined
+      if (!(slots && Object.values(slots).some((ref) => materialRefs.has(ref)))) continue
+      currentState.markDirty(node.id)
+      if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
+    }
   }
 
   notifySceneCommit({

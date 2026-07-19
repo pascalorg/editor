@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { BuildingNode } from '../schema/nodes/building'
 import { LevelNode } from '../schema/nodes/level'
+import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
   areSceneHistorySnapshotsEqual,
@@ -15,7 +16,7 @@ import useLiveNodeOverrides from './use-live-node-overrides'
 import useLiveTransforms from './use-live-transforms'
 import useScene, {
   acquireSceneReadOnlyLease,
-  applyAcceptedSceneNodeUpdates,
+  applyAcceptedSceneChanges,
   applySceneHistorySnapshot,
   clearSceneHistory,
 } from './use-scene'
@@ -65,6 +66,17 @@ function levelNumber(): number {
 function currentSnapshot(): SceneHistorySnapshot {
   const { nodes, rootNodeIds, collections, materials } = useScene.getState()
   return { nodes, rootNodeIds, collections, materials }
+}
+
+function applyAcceptedNodeUpdates(
+  nodeUpdates: Array<
+    Omit<Parameters<typeof applyAcceptedSceneChanges>[0]['nodeUpdates'][number], 'removeFields'>
+  >,
+) {
+  return applyAcceptedSceneChanges({
+    materialChanges: [],
+    nodeUpdates: nodeUpdates.map((update) => ({ ...update, removeFields: [] })),
+  })
 }
 
 describe('scene commit boundary', () => {
@@ -133,7 +145,7 @@ describe('scene commit boundary', () => {
     useLiveTransforms.getState().set(LEVEL_ID, { position: [1, 0, 1], rotation: 0 })
 
     expect(
-      applyAcceptedSceneNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
+      applyAcceptedNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
     ).toBe(true)
 
     expect(levelNumber()).toBe(3)
@@ -144,6 +156,51 @@ describe('scene commit boundary', () => {
     expect(useScene.getState().dirtyNodes.has(BUILDING_ID)).toBe(true)
     expect(useLiveNodeOverrides.getState().get(LEVEL_ID)).toBeUndefined()
     expect(useLiveTransforms.getState().get(LEVEL_ID)).toBeUndefined()
+  })
+
+  test('applies accepted material changes atomically and dirties nodes that reference them', () => {
+    const materialId = 'mat_remote' as SceneMaterialId
+    const material = SceneMaterial.parse({
+      id: materialId,
+      name: 'Remote red',
+      material: { properties: { color: '#ff0000' } },
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: {
+          ...state.nodes[LEVEL_ID],
+          slots: { surface: `scene:${materialId}` },
+        } as AnyNode,
+      },
+    }))
+    clearSceneHistory()
+    useScene.getState().dirtyNodes.clear()
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    expect(
+      applyAcceptedSceneChanges({
+        materialChanges: [{ id: materialId, material }],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+
+    expect(useScene.getState().materials[materialId]).toEqual(material)
+    expect(useScene.getState().dirtyNodes.has(LEVEL_ID)).toBe(true)
+    expect(useScene.getState().dirtyNodes.has(BUILDING_ID)).toBe(true)
+    expect(commits.map((commit) => commit.origin)).toEqual(['remote'])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+
+    expect(
+      applyAcceptedSceneChanges({
+        materialChanges: [{ id: materialId, material: null }],
+        nodeUpdates: [{ id: LEVEL_ID, data: {}, removeFields: ['slots'] }],
+      }),
+    ).toBe(true)
+    expect(useScene.getState().materials[materialId]).toBeUndefined()
+    expect(useScene.getState().nodes[LEVEL_ID]).not.toHaveProperty('slots')
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   })
 
   test('keeps accepted remote updates untracked across nested history pauses', () => {
@@ -157,7 +214,7 @@ describe('scene commit boundary', () => {
 
     try {
       expect(
-        applyAcceptedSceneNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
+        applyAcceptedNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
       ).toBe(true)
     } finally {
       unsubscribeNestedPause()
@@ -177,7 +234,7 @@ describe('scene commit boundary', () => {
     const buildingBefore = beforeState.nodes[BUILDING_ID]
 
     expect(
-      applyAcceptedSceneNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
+      applyAcceptedNodeUpdates([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }]),
     ).toBe(true)
 
     expect(levelNumber()).toBe(3)
@@ -220,7 +277,7 @@ describe('scene commit boundary', () => {
     })
     useScene.getState().setReadOnly(true)
 
-    expect(() => applyAcceptedSceneNodeUpdates([{ id: LEVEL_ID, data: throwingData }])).toThrow(
+    expect(() => applyAcceptedNodeUpdates([{ id: LEVEL_ID, data: throwingData }])).toThrow(
       'update failed',
     )
 
@@ -234,7 +291,7 @@ describe('scene commit boundary', () => {
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
 
     expect(
-      applyAcceptedSceneNodeUpdates([
+      applyAcceptedNodeUpdates([
         { id: LEVEL_ID, data: { level: 4 } as Partial<AnyNode> },
         { id: 'level_missing' as AnyNodeId, data: { level: 5 } as Partial<AnyNode> },
       ]),
@@ -250,7 +307,7 @@ describe('scene commit boundary', () => {
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
 
     expect(
-      applyAcceptedSceneNodeUpdates([
+      applyAcceptedNodeUpdates([
         {
           id: LEVEL_ID,
           data: { id: 'level_rekeyed', level: 6 } as Partial<AnyNode>,
@@ -267,7 +324,7 @@ describe('scene commit boundary', () => {
     pauseSceneHistory(useScene)
     try {
       expect(
-        applyAcceptedSceneNodeUpdates([{ id: LEVEL_ID, data: { level: 7 } as Partial<AnyNode> }]),
+        applyAcceptedNodeUpdates([{ id: LEVEL_ID, data: { level: 7 } as Partial<AnyNode> }]),
       ).toBe(false)
       expect(levelNumber()).toBe(0)
       expect(useScene.temporal.getState().isTracking).toBe(false)

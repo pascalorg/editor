@@ -48,6 +48,21 @@ This is the important invariant. A surface is "textured" only if its node has an
 
 So picking the Mediterranean theme gives a blue roof + warm walls without touching the textures toggle. There is no "all white" mode — untextured always means "themed role colour".
 
+### Collaborative persistence
+
+Hosts that synchronize accepted scene operations must treat a node's material slot and
+its referenced custom scene material as one document change. A first paint commonly
+adds the optional `slots` field; undo must remove that field exactly rather than leave
+an empty or null substitute. Custom materials use `scene:<id>` refs and may require an
+atomic material-map create/update/delete, while catalog textures use `library:<id>` refs
+without adding a scene material.
+
+`@pascal-app/core` exposes `applyAcceptedSceneChanges` for this provider-neutral apply
+boundary. It applies node field additions/removals and material changes outside local
+history, then dirties changed nodes, their parents, and nodes that reference changed
+scene materials. Realtime providers remain host concerns and must not be imported into
+the editor packages.
+
 ### Where it's wired per kind
 
 | Kind | Where the role colour is applied |

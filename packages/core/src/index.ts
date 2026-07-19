@@ -180,11 +180,13 @@ export {
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export {
+  type AcceptedSceneChanges,
+  type AcceptedSceneMaterialChange,
   type AcceptedSceneNodeUpdate,
-  type ApplyAcceptedSceneNodeUpdatesOptions,
+  type ApplyAcceptedSceneChangesOptions,
   type ApplySceneHistorySnapshotOptions,
   acquireSceneReadOnlyLease,
-  applyAcceptedSceneNodeUpdates,
+  applyAcceptedSceneChanges,
   applySceneHistorySnapshot,
   clearSceneHistory,
   default as useScene,

@@ -3,11 +3,13 @@
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
 export {
+  type AcceptedSceneChanges,
+  type AcceptedSceneMaterialChange,
   type AcceptedSceneNodeUpdate,
-  type ApplyAcceptedSceneNodeUpdatesOptions,
+  type ApplyAcceptedSceneChangesOptions,
   type ApplySceneHistorySnapshotOptions,
   acquireSceneReadOnlyLease,
-  applyAcceptedSceneNodeUpdates,
+  applyAcceptedSceneChanges,
   applySceneHistorySnapshot,
   type SceneCommit,
   type SceneCommitListener,
