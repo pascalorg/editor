@@ -712,8 +712,11 @@ const PostProcessingPasses = ({
       !renderPipelineRef.current
     ) {
       try {
-        if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(transparentBackground ? 0 : 1)
+        const clearAlpha = transparentBackground ? 0 : 1
+        if ((renderer as any).setClearColor) {
+          ;(renderer as any).setClearColor(bgCurrent.current, clearAlpha)
+        } else if ((renderer as any).setClearAlpha) {
+          ;(renderer as any).setClearAlpha(clearAlpha)
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
@@ -752,6 +755,8 @@ const PostProcessingPasses = ({
       }
     } catch (error) {
       hasPipelineErrorRef.current = true
+      // A failed MRT pass may leave its target bound; clear it before the fallback render.
+      ;(renderer as any).setRenderTarget?.(null)
       console.error('[viewer/post-processing] Render pass failed.', {
         retryCount: retryCountRef.current,
         rendererCtor: (renderer as any).constructor?.name,

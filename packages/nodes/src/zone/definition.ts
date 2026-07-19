@@ -1,12 +1,19 @@
-import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import {
+  type NodeDefinition,
+  resolveAutoZonePolygon,
+  ZoneNode as ZoneNodeSchema,
+} from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
+  zoneDeleteVertexAffordance,
   zoneMoveEdgeAffordance,
   zoneMoveVertexAffordance,
 } from './floorplan-affordances'
 import { zoneFloorplanMoveTarget } from './floorplan-move'
 import { zoneParametrics } from './parametrics'
+import { zoneQuickMeasurement } from './quick-measurement'
 import { ZoneNode } from './schema'
 
 /**
@@ -38,6 +45,16 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   },
 
   parametrics: zoneParametrics,
+  measurement: {
+    features: (node, ctx) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'zone',
+        height: 0,
+        label: 'Zone',
+        polygon: resolveAutoZonePolygon(node, ctx.resolve),
+      }),
+    quickMeasure: (node, ctx) => zoneQuickMeasurement(node, ctx),
+  },
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 
@@ -50,18 +67,20 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     priority: 4,
   },
   floorplan: buildZoneFloorplan,
+  floorplanDependencies: (node) => (node.autoFromWalls ? node.boundaryWallIds : []),
   // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
   // Without this, zone fell through to the overlay's generic free-translate
   // path, which committed a `position` field zone has no schema for, so the
   // polygon never actually moved on drop.
   floorplanMoveTarget: zoneFloorplanMoveTarget,
-  // Polygon editor when selected — same three operations slabs / ceilings
+  // Polygon editor when selected — same four operations slabs / ceilings
   // expose. The shared factories key off `node.polygon`, optional
   // `node.holes` (absent on zones). See `floorplan-affordances.ts`.
   floorplanAffordances: {
     'move-vertex': zoneMoveVertexAffordance,
     'add-vertex': zoneAddVertexAffordance,
     'move-edge': zoneMoveEdgeAffordance,
+    'delete-vertex': zoneDeleteVertexAffordance,
   },
 
   presentation: {

@@ -16,6 +16,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -32,6 +33,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFloorplanDraftPreview,
   useSegmentDraftChain,
   useWallSnapIndicator,
   WALL_CONNECT_SNAP_RADIUS,
@@ -529,6 +531,10 @@ export const WallTool: React.FC = () => {
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const chainFirstVertex = useRef<Vector3 | null>(null)
+  // Ids of the walls committed by the current chain — the exclusion set for
+  // the "segment tees into an existing wall" chain-termination test, so
+  // snapping onto the chain's own segments never reads as a join.
+  const chainWallIds = useRef<string[]>([])
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -588,6 +594,10 @@ export const WallTool: React.FC = () => {
     const stopDrafting = () => {
       buildingState.current = 0
       chainFirstVertex.current = null
+      chainWallIds.current = []
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart(null)
+      draftPreview.setWallDraftEnd(null)
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -631,6 +641,9 @@ export const WallTool: React.FC = () => {
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draftPreview.setWallDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
         setAxisGuide({
           origin: [startingPoint.current.x, startingPoint.current.z],
@@ -700,6 +713,9 @@ export const WallTool: React.FC = () => {
         chainFirstVertex.current = startingPoint.current.clone()
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftStart(snappedStart)
+        draftPreview.setWallDraftEnd(snappedStart)
         setAxisGuide({
           origin: snappedStart,
           y: event.localPosition[1],
@@ -735,6 +751,7 @@ export const WallTool: React.FC = () => {
           snappedEnd,
         )
         if (!createdWall) return
+        chainWallIds.current.push(createdWall.id)
 
         // The new segment is now a real node — make it an alignment target
         // for the next segment, and drop the just-shown guide.
@@ -755,7 +772,16 @@ export const WallTool: React.FC = () => {
         // existing wall network (e.g. a bay closed onto the middle of another
         // wall), not just when the chain loops back to its own start. Shares the
         // room graph with auto slab/ceiling detection so the two never disagree.
-        if (closedToChainStart || wallClosesRoom(getCurrentLevelWalls(), createdWall)) {
+        // A resolved end that tees into wall geometry outside the chain also
+        // terminates even without an enclosed room — nobody continues drawing
+        // from a T-junction into an existing wall; a dead end in free space
+        // keeps the chain going.
+        const levelWalls = getCurrentLevelWalls()
+        if (
+          closedToChainStart ||
+          chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
+          wallClosesRoom(levelWalls, createdWall)
+        ) {
           stopDrafting()
           return
         }
@@ -767,6 +793,10 @@ export const WallTool: React.FC = () => {
         useSegmentDraftChain.getState().setChainStart('wall', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftEnd(null)
+        draftPreview.setWallDraftStart(nextStart)
+        draftPreview.setWallDraftEnd(nextStart)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -804,6 +834,9 @@ export const WallTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       useSegmentDraftChain.getState().clear('wall')
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart(null)
+      draftPreview.setWallDraftEnd(null)
     }
   }, [unit])
 

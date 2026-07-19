@@ -129,6 +129,17 @@ export type LinearResizeHandle<N> = {
   anchor: HandleAnchor
   currentValue: (node: N) => number
   apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  /**
+   * Additional live-only patches for geometry owned by related nodes. The
+   * editor publishes these during the drag and clears them on release or
+   * cancellation; committed scene writes remain the responsibility of
+   * `commit` (or the generic selected-node update).
+   */
+  previewOverrides?: (
+    node: N,
+    newValue: number,
+    sceneApi: SceneApi,
+  ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
   /** Optional live-scene visibility gate for context-dependent arrows. */
   visible?: (node: N, sceneApi: SceneApi) => boolean
   /**
@@ -163,6 +174,8 @@ export type LinearResizeHandle<N> = {
   max?: number | ((node: N, sceneApi: SceneApi) => number)
   /** Snap the resized scalar to the editor's active grid step before apply. */
   gridSnap?: boolean
+  /** Kind-owned magnetic snap for the resized scalar, gated by the active snapping mode. */
+  magneticSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
   placement: HandlePlacement<N>
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor
@@ -444,4 +457,6 @@ export type HandleDescriptor<N = any> =
  * Static array, or a function for shape-dependent cases (column
  * crossSection / supportStyle, stair-segment segmentType, etc.).
  */
-export type HandleList<N> = HandleDescriptor<N>[] | ((node: N) => HandleDescriptor<N>[])
+export type HandleList<N> =
+  | HandleDescriptor<N>[]
+  | ((node: N, sceneApi?: SceneApi) => HandleDescriptor<N>[])

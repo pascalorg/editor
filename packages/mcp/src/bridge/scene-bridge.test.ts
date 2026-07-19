@@ -432,6 +432,21 @@ describe('SceneBridge', () => {
       expect(Object.keys(bridge.getNodes()).length).toBe(Object.keys(snap.nodes).length)
     })
 
+    test('loadJSON preserves explicit plugin installs', () => {
+      const snap = bridge.exportJSON()
+      bridge.loadJSON({ ...snap, installedPlugins: ['pascal:trees'] })
+
+      expect(bridge.exportJSON().installedPlugins).toEqual(['pascal:trees'])
+    })
+
+    test('legacy graphs do not become explicitly uninstalled on export', () => {
+      const snap = bridge.exportJSON()
+      const { installedPlugins: _installedPlugins, ...legacy } = snap
+      bridge.loadJSON(legacy)
+
+      expect(Object.hasOwn(bridge.exportJSON(), 'installedPlugins')).toBe(false)
+    })
+
     test('loadJSON throws on malformed JSON string', () => {
       expect(() => bridge.loadJSON('not json')).toThrow(/invalid JSON/)
     })

@@ -34,13 +34,16 @@ import {
 } from '@pascal-app/viewer'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
-import { useGLTF } from '@react-three/drei/core/Gltf'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useLoader } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { AnimationAction, Group, Material, Mesh } from 'three'
+import type { AnimationAction, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils } from 'three'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
+import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
 
 type MutableMaterial = Material & {
   depthTest?: boolean
@@ -182,7 +185,7 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   const handlers = useNodeEvents(node, 'item')
   const shading = useViewer((s) => s.shading)
   const isExporting = useViewer((s) => s.isExporting)
-  const [w, h, d] = node.asset.dimensions
+  const [w, h, d] = getScaledDimensions(node)
   const material = useMemo(() => {
     const next = createDefaultMaterial('#ef4444', 1, shading) as MutableMaterial
     next.opacity = 0.6
@@ -204,16 +207,99 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   )
 }
 
-const MODEL_RETRY_DELAYS_MS = [1_000, 3_000]
+let itemDracoLoader: DRACOLoader | null = null
+
+const configureItemModelLoader = (loader: ItemGLTFLoader) => {
+  if (!itemDracoLoader) {
+    itemDracoLoader = new DRACOLoader(loader.manager)
+    itemDracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/')
+  }
+  loader.setDRACOLoader(itemDracoLoader)
+  loader.setMeshoptDecoder(MeshoptDecoder)
+}
+
+type LoadedItemGltf = GLTF & {
+  materials: Record<string, Material>
+  nodes: Record<string, Object3D>
+}
+
+const useItemGltf = (url: string): LoadedItemGltf =>
+  useLoader(ItemGLTFLoader, url, configureItemModelLoader) as LoadedItemGltf
+
+type DeferredUnavailableCleanup = {
+  consumers: number
+  timer: ReturnType<typeof setTimeout> | null
+}
+
+const unavailableAssetConsumers = new Map<string, DeferredUnavailableCleanup>()
+const unavailableFailureConsumers = new Map<string, DeferredUnavailableCleanup>()
+
+const retainUnavailableConsumer = (
+  entries: Map<string, DeferredUnavailableCleanup>,
+  key: string,
+) => {
+  const entry = entries.get(key) ?? { consumers: 0, timer: null }
+  if (entry.timer !== null) {
+    clearTimeout(entry.timer)
+    entry.timer = null
+  }
+  entry.consumers += 1
+  entries.set(key, entry)
+}
+
+const releaseUnavailableConsumer = (
+  entries: Map<string, DeferredUnavailableCleanup>,
+  key: string,
+  onLastRelease: () => void,
+) => {
+  const entry = entries.get(key)
+  if (!entry) return
+  entry.consumers = Math.max(0, entry.consumers - 1)
+  if (entry.consumers > 0 || entry.timer !== null) return
+
+  // A zero-delay release distinguishes a real unmount from Strict Mode's
+  // immediate setup-cleanup-setup cycle and same-tick replacements.
+  entry.timer = setTimeout(() => {
+    if (entry.consumers > 0 || entries.get(key) !== entry) return
+    entries.delete(key)
+    onLastRelease()
+  }, 0)
+}
+
+const UnavailableItemModel = ({
+  markSettled,
+  node,
+  url,
+}: {
+  markSettled: () => void
+  node: ItemNode
+  url: string
+}) => {
+  useEffect(() => {
+    retainUnavailableConsumer(unavailableFailureConsumers, node.id)
+    if (url) retainUnavailableConsumer(unavailableAssetConsumers, url)
+    markSettled()
+    useViewer.getState().reportItemLoadFailure(node.id, url)
+    return () => {
+      releaseUnavailableConsumer(unavailableFailureConsumers, node.id, () =>
+        useViewer.getState().clearItemLoadFailure(node.id),
+      )
+      if (url) {
+        releaseUnavailableConsumer(unavailableAssetConsumers, url, () => {
+          cancelItemModelLoad(url)
+          useLoader.clear(ItemGLTFLoader, url)
+        })
+      }
+    }
+  }, [markSettled, node.id, url])
+
+  return <BrokenItemFallback node={node} />
+}
 
 /**
- * Load the item model with bounded retries. drei's `useGLTF` caches a rejected
- * load by URL, so a transient fetch failure (e.g. a storage 504 under the bake
- * page's asset-request burst) would otherwise stay broken for the whole
- * session — clear the cache entry and re-mount. After the retries are
- * exhausted the item settles as SKIPPED: it renders the debug box (nothing
- * during exports) and lands in `useViewer.itemLoadFailures` so a bake host can
- * record which items are missing from the artifact.
+ * Expected network failures resolve through ItemGLTFLoader as an unavailable
+ * scene so they never become React render errors. Parse and renderer failures
+ * still reach this boundary and remain visible to developers.
  */
 const ModelWithRetry = ({
   node,
@@ -222,48 +308,30 @@ const ModelWithRetry = ({
   node: ItemNode
   setSettled: (value: boolean) => void
 }) => {
-  // `failures` counts boundary catches; `epoch` bumps after each cache clear
-  // to reset the boundary and re-mount the loader. The retry timer is owned by
-  // an effect (not the error handler) so StrictMode's synthetic
-  // unmount/remount re-arms it instead of silently discarding it. The host
-  // keys this component by asset URL, so a model swap starts from a clean
-  // retry budget — and the mount effect below un-settles the item so the new
-  // load is awaited too.
-  const [failures, setFailures] = useState(0)
-  const [epoch, setEpoch] = useState(0)
+  const [renderFailed, setRenderFailed] = useState(false)
   const url = resolveCdnUrl(node.asset.src) || ''
-  const gaveUp = !url || failures > MODEL_RETRY_DELAYS_MS.length
+  const markSettled = useCallback(() => setSettled(true), [setSettled])
 
-  const handleError = useCallback(() => setFailures((current) => current + 1), [])
-
-  useEffect(() => {
+  // Clear before child passive completion effects; a parent passive clear would run after them.
+  useLayoutEffect(() => {
     setSettled(false)
   }, [setSettled])
 
   useEffect(() => {
-    if (failures === 0 || gaveUp) return
-    const delay = MODEL_RETRY_DELAYS_MS[failures - 1] ?? 0
-    const timer = setTimeout(() => {
-      console.log(`[item] retrying model load (${failures}/${MODEL_RETRY_DELAYS_MS.length}) ${url}`)
-      useGLTF.clear(url)
-      setEpoch((current) => current + 1)
-    }, delay)
-    return () => clearTimeout(timer)
-  }, [failures, gaveUp, url])
-
-  const markSettled = useCallback(() => setSettled(true), [setSettled])
-
-  useEffect(() => {
-    if (!gaveUp) return
+    if (!renderFailed) return
     markSettled()
     useViewer.getState().reportItemLoadFailure(node.id, url)
     return () => useViewer.getState().clearItemLoadFailure(node.id)
-  }, [gaveUp, markSettled, node.id, url])
+  }, [markSettled, node.id, renderFailed, url])
 
-  if (gaveUp) return <BrokenItemFallback node={node} />
+  if (!url) return <UnavailableItemModel markSettled={markSettled} node={node} url={url} />
 
   return (
-    <ErrorBoundary fallback={<PreviewModel node={node} />} onError={handleError} resetKey={epoch}>
+    <ErrorBoundary
+      fallback={<BrokenItemFallback node={node} />}
+      onError={() => setRenderFailed(true)}
+      scope="item-model"
+    >
       <Suspense fallback={<PreviewModel node={node} />}>
         <ModelRenderer markSettled={markSettled} node={node} />
       </Suspense>
@@ -381,15 +449,31 @@ const multiplyScales = (
   b: [number, number, number],
 ): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
-const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled?: () => void }) => {
-  const { scene, nodes, animations } = useGLTF(resolveCdnUrl(node.asset.src) || '')
+const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
+  const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
+  const unavailable = getUnavailableItemAsset(gltf)
+  if (unavailable) {
+    return <UnavailableItemModel markSettled={markSettled} node={node} url={unavailable.url} />
+  }
+  return <LoadedModelRenderer gltf={gltf} markSettled={markSettled} node={node} />
+}
+
+const LoadedModelRenderer = ({
+  gltf: { scene, nodes, animations },
+  node,
+  markSettled,
+}: {
+  gltf: LoadedItemGltf
+  node: ItemNode
+  markSettled: () => void
+}) => {
   const ref = useRef<Group>(null!)
   const { actions } = useAnimations(animations, ref)
 
   // Mounting past the suspense gate means the GLB resolved — the item's build
   // work is done (`ItemSystem` may clear its dirty mark, scene-ready may fire).
   useEffect(() => {
-    markSettled?.()
+    markSettled()
   }, [markSettled])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)

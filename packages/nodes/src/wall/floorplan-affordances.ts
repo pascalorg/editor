@@ -6,6 +6,7 @@ import {
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
+  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -17,6 +18,7 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   isSegmentLongEnough,
+  resolveEndpointWallSplit,
   snapBuildingLocalToWorldGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -244,6 +246,17 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         const sceneState = useScene.getState()
         overrides.set(node.id as AnyNodeId, { start: primaryStart, end: primaryEnd })
         sceneState.markDirty(node.id as AnyNodeId)
+        if (modifiers.altKey) {
+          // Attach→detach transition: linked walls dragged on earlier attached
+          // ticks still carry overrides — drop them so their corners snap back
+          // to the scene originals (untouched during the drag).
+          for (const linked of linkedWalls) {
+            if (overrides.get(linked.id)) {
+              overrides.clear(linked.id)
+              sceneState.markDirty(linked.id)
+            }
+          }
+        }
         for (const upd of linkedUpdates) {
           overrides.set(upd.id, { start: upd.start, end: upd.end })
           sceneState.markDirty(upd.id)
@@ -261,14 +274,41 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
       commit() {
         // Atomic tracked write of the final endpoints, then drop the
         // overrides so the scene state is the single source of truth
-        // again.
-        useScene.getState().updateNodes([
-          { id: node.id, data: { start: lastPrimaryStart, end: lastPrimaryEnd } },
-          ...lastLinkedUpdates.map((u) => ({
-            id: u.id,
-            data: { start: u.start, end: u.end },
-          })),
-        ])
+        // again. Parity with the 3D move-endpoint tool: a drop on another
+        // wall's interior splits that host (create halves, migrate
+        // attachments, delete host) inside the same single history step as
+        // the endpoint write. Linked walls updated here share the drop point
+        // as an endpoint (a corner join, not a split) so they're excluded
+        // with the dragged wall; a zero-move drop skips the resolution
+        // entirely.
+        const movingPoint = endpoint === 'start' ? lastPrimaryStart : lastPrimaryEnd
+        const originalMovingPoint = endpoint === 'start' ? originalStart : originalEnd
+        runAsSingleSceneHistoryStep(useScene, () => {
+          const resolved = pointsEqual(movingPoint, originalMovingPoint)
+            ? null
+            : resolveEndpointWallSplit({
+                point: movingPoint,
+                levelId: (node.parentId ?? null) as string | null,
+                ignoreWallIds: [node.id, ...lastLinkedUpdates.map((u) => String(u.id))],
+              })
+          const finalPoint = resolved ?? movingPoint
+          useScene.getState().updateNodes([
+            {
+              id: node.id,
+              data: {
+                start: endpoint === 'start' ? finalPoint : lastPrimaryStart,
+                end: endpoint === 'end' ? finalPoint : lastPrimaryEnd,
+              },
+            },
+            ...lastLinkedUpdates.map((u) => ({
+              id: u.id,
+              data: {
+                start: pointsEqual(u.start, movingPoint) ? finalPoint : u.start,
+                end: pointsEqual(u.end, movingPoint) ? finalPoint : u.end,
+              },
+            })),
+          ])
+        })
         const overrides = useLiveNodeOverrides.getState()
         overrides.clear(node.id as AnyNodeId)
         for (const upd of lastLinkedUpdates) overrides.clear(upd.id)

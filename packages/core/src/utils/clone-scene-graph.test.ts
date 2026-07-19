@@ -41,6 +41,7 @@ function makeSceneGraph(): SceneGraph {
         nodeIds: ['scan_1', 'guide_1'] as AnyNodeId[],
       },
     },
+    installedPlugins: ['pascal:trees'],
   }
 }
 
@@ -53,6 +54,7 @@ describe('forkSceneGraph', () => {
     expect(nodes.some((node) => node.type === 'guide')).toBe(false)
     expect(nodes.some((node) => node.type === 'wall')).toBe(true)
     expect(forked.collections).toEqual({})
+    expect(forked.installedPlugins).toEqual(['pascal:trees'])
   })
 
   test('preserves scan and guide nodes when requested', () => {
@@ -66,5 +68,6 @@ describe('forkSceneGraph', () => {
     expect(
       Object.values(forked.collections ?? {}).flatMap((collection) => collection.nodeIds),
     ).toHaveLength(2)
+    expect(forked.installedPlugins).toEqual(['pascal:trees'])
   })
 })

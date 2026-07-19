@@ -2,7 +2,21 @@
 // own shells on top of `@pascal-app/editor` (community-app, embedders)
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
-export { useScene } from '@pascal-app/core'
+export {
+  type ApplySceneSnapshotOptions,
+  acquireSceneReadOnlyLease,
+  applyScenePatch,
+  applySceneSnapshot,
+  type SceneCommit,
+  type SceneCommitListener,
+  type SceneCommitOrigin,
+  type SceneMaterialPatch,
+  type SceneNodePatch,
+  type ScenePatch,
+  type SceneSnapshot,
+  subscribeSceneCommits,
+  useScene,
+} from '@pascal-app/core'
 export { useViewer } from '@pascal-app/viewer'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
@@ -61,10 +75,15 @@ export {
   useArrowMaterial,
   useInvisibleHitAreaMaterial,
 } from './components/editor/node-arrow-handles'
+export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export {
+  FloorplanNodePreview,
+  type FloorplanNodePreviewProps,
+} from './components/editor-2d/renderers/floorplan-placement-preview-layer'
 // SVG path builders for arc / annular-sector / arrow-head shapes —
 // inlined into `kind: 'path'` / `kind: 'polygon'` primitives by curved
 // stair rendering in `nodes/src/stair/floorplan.ts`.
@@ -149,9 +168,11 @@ export {
 } from './components/tools/stair/stair-defaults'
 export { ToolManager } from './components/tools/tool-manager'
 export {
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,
+  resolveEndpointWallSplit,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -285,11 +306,18 @@ export {
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
+  type HistoryCommandDelegate,
+  installHistoryCommandDelegate,
+  runRedo,
+  runUndo,
+} from './lib/history'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
   movingNodeOf,
+  scopeNodeId,
 } from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
@@ -300,12 +328,36 @@ export {
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
+  CREATABLE_MEASUREMENT_KINDS,
+  type CreatableMeasurementKind,
+  DEFAULT_CREATABLE_MEASUREMENT_KIND,
+  isCreatableMeasurementKind,
+  normalizeCreatableMeasurementKind,
+} from './lib/measurement-kind'
+export {
+  measurementPolygonLabelAnchor,
+  triangulateMeasurementPolygon,
+} from './lib/measurement-label'
+export {
+  buildMeasurementAngleArcPoints,
+  cubicMetersToVolumeUnit,
+  formatAreaLabel,
   formatLinearMeasurement,
+  formatVolumeLabel,
+  getAreaUnitLabel,
   getLinearUnitLabel,
+  getVolumeUnitLabel,
   type LinearUnit,
   linearControlValueToMeters,
   linearUnitToMeters,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_DANGLING_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
+  MEASUREMENT_PERSISTENT_COLOR,
+  measurementFloorplanPresentationColor,
+  measurementPresentationColor,
   metersToLinearUnit,
+  squareMetersToAreaUnit,
 } from './lib/measurements'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
@@ -325,6 +377,11 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export {
+  createQuickMeasurementPointerScheduler,
+  quickMeasurementContext,
+  resolveQuickMeasurementReport,
+} from './lib/quick-measurement'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
@@ -336,8 +393,11 @@ export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
 export {
   clearSlabSnapFeedback,
+  resolveSlabEdgeBandSnap,
   resolveSlabPlanPointSnap,
   SLAB_ALIGNMENT_THRESHOLD_M,
+  type SlabEdgeBandSnapInput,
+  type SlabEdgeBandSnapResult,
   type SlabPlanSnapInput,
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
@@ -394,6 +454,7 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
+export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -407,6 +468,21 @@ export {
   useReshapingNode,
 } from './store/use-interaction-scope'
 export {
+  commitMeasurementDraft,
+  finishMeasurementDraft,
+  handleMeasurementDraftEscape,
+  type MeasurementAxis,
+  type MeasurementAxisGuide,
+  type MeasurementDraftOwner,
+  type MeasurementDraftPayload,
+  type MeasurementDraftStage,
+  type MeasurementKind,
+  type MeasurementPoint,
+  type MeasurementSurfacePoint,
+  measurementPolygonMidpoints,
+  useMeasurementDraft,
+} from './store/use-measurement-draft'
+export {
   default as useOpeningGuides,
   type OpeningGuide3D,
   type OpeningGuideVec3,
@@ -416,8 +492,28 @@ export {
   type PaletteViewProps,
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
+export {
+  type PathDraftKind,
+  type PathDraftParameter,
+  type PathDraftParameters,
+  type PathDraftPoint,
+  usePathDraftPreview,
+} from './store/use-path-draft-preview'
 export { default as usePlacementPreview } from './store/use-placement-preview'
+export {
+  activateQuickMeasurementHudSource,
+  clearQuickMeasurementHudSource,
+  publishQuickMeasurementHudSource,
+  type QuickMeasurementHudEntry,
+  type QuickMeasurementHudSource,
+  selectQuickMeasurementHudEntry,
+  useQuickMeasurementHud,
+} from './store/use-quick-measurement-hud'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
+export {
+  type StairPreviewPoint,
+  useStairBuildPreview,
+} from './store/use-stair-build-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {

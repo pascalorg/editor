@@ -72,6 +72,9 @@ export class SceneBridge {
         nodes: state.nodes,
         rootNodeIds: state.rootNodeIds,
         collections: state.collections ?? {},
+        ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
+          ? { installedPlugins: state.installedPlugins }
+          : {}),
       }),
     )
   }
@@ -117,6 +120,12 @@ export class SceneBridge {
     }
 
     this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[])
+    if (Array.isArray(obj.installedPlugins)) {
+      useScene.getState().setInstalledPlugins(
+        obj.installedPlugins.filter((id): id is string => typeof id === 'string'),
+        { explicit: true },
+      )
+    }
   }
 
   /** Read a single node, or `null` if not present. */

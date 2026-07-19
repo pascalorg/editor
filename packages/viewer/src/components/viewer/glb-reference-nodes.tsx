@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   bakePolicyOf,
+  isNodeKindEnabled,
   nodeRegistry,
   type RendererSource,
   type SceneGraph,
@@ -30,6 +31,7 @@ export function buildGlbReferenceNodes(
   const out: AnyNode[] = []
   for (const raw of Object.values(nodes)) {
     const node = raw as AnyNode
+    if (!isNodeKindEnabled(node.type, sceneGraph?.installedPlugins)) continue
     if (bakePolicyOf(node.type) !== 'strip') continue
     if (node.type === 'scan' && !allow.scans) continue
     if (node.type === 'guide' && !allow.guides) continue
@@ -52,6 +54,7 @@ export function buildGlbReplaceNodes(sceneGraph: SceneGraph | null | undefined):
   const out: AnyNode[] = []
   for (const raw of Object.values(nodes)) {
     const node = raw as AnyNode
+    if (!isNodeKindEnabled(node.type, sceneGraph?.installedPlugins)) continue
     if (bakePolicyOf(node.type) === 'replace') out.push(node)
   }
   return out

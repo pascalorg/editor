@@ -23,13 +23,15 @@ import {
  * targets the outer `node.polygon`. The same factory wires both
  * boundary and hole interactions without duplicating the math.
  *
- * Three affordances available:
+ * Four affordances available:
  *
  * - `move-vertex` — drag an existing vertex.
  * - `add-vertex` — insert a new vertex at an edge midpoint, then drag
  *   it (click-without-drag reverts to the snapshot).
  * - `move-edge` — drag a whole edge perpendicular to itself (both
  *   endpoints translate by `normal * projection`).
+ * - `delete-vertex` — remove a double-clicked vertex while preserving
+ *   the minimum three-vertex ring.
  */
 
 export type PolygonVertexPayload = {
@@ -60,8 +62,28 @@ export type PolygonAffordanceSnapContext<N extends PolygonShape & { id: AnyNodeI
   mode: PolygonAffordanceMode
 }
 
-type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+export type PolygonEdgeSnapContext<N extends PolygonShape & { id: AnyNodeId }> = {
+  node: N
+  nodes: Record<AnyNodeId, AnyNode>
+  /** Candidate edge (after the perpendicular translation), in ring order. */
+  edge: [[number, number], [number, number]]
+  rawPoint: WallPlanPoint
+  modifiers: FloorplanAffordanceModifiers
+  holeIndex?: number
+}
+
+export type PolygonAffordanceOptions<N extends PolygonShape & { id: AnyNodeId }> = {
+  /** Data committed only when the outer boundary (not a hole) is edited. */
+  boundaryCommitData?: Partial<N>
   resolvePlanPoint?: (context: PolygonAffordanceSnapContext<N>) => WallPlanPoint
+  /**
+   * `move-edge` only: absolute edge snap. The point-based resolver runs
+   * on the CURSOR, so any grab offset between the pointer and the edge
+   * line gets baked into a point snap; an edge that must land exactly on
+   * a target line (wall centerline) snaps here instead — return the
+   * translated edge, or `null` to keep the candidate.
+   */
+  snapEdge?: (context: PolygonEdgeSnapContext<N>) => [[number, number], [number, number]] | null
 }
 
 type PolygonShape = {
@@ -89,9 +111,10 @@ function buildRingPatch(
   node: PolygonShape,
   holeIndex: number | undefined,
   nextRing: ReadonlyArray<[number, number]>,
+  boundaryCommitData?: object,
 ): unknown {
   if (holeIndex === undefined) {
-    return { polygon: nextRing }
+    return { ...boundaryCommitData, polygon: nextRing }
   }
   const nextHoles = (node.holes ?? []).map((hole, i) =>
     i === holeIndex ? nextRing : hole.map(([x, y]) => [x, y] as [number, number]),
@@ -145,7 +168,7 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
           const nextRing: [number, number][] = originalRing.map((p, i) =>
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
@@ -207,7 +230,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
 
       // Apply the insert immediately so the user sees the new vertex
       // before they even move.
-      const initialPatch = buildRingPatch(node, holeIndex, initialRing)
+      const initialPatch = buildRingPatch(node, holeIndex, initialRing, options?.boundaryCommitData)
       useScene
         .getState()
         .updateNodes([{ id: node.id, data: initialPatch as Partial<unknown> as never }])
@@ -233,7 +256,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           const nextRing: [number, number][] = initialRing.map((p, i) =>
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
@@ -243,6 +266,54 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
           if (!final || (final as unknown as { type: string }).type !== kind) return false
           const finalRing = holeIndex === undefined ? final.polygon : (final.holes ?? [])[holeIndex]
           return !!finalRing && finalRing.length >= 3
+        },
+      }
+    },
+  }
+}
+
+export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { id: AnyNodeId }>(
+  kind: string,
+  options?: PolygonAffordanceOptions<N>,
+): FloorplanAffordance<N> {
+  return {
+    start({ node, payload }): FloorplanAffordanceSession {
+      const { vertexIndex, holeIndex } = payload as PolygonVertexPayload
+      const canDeleteCurrentVertex = () => {
+        const current = useScene.getState().nodes[node.id] as N | undefined
+        if (!current || (current as unknown as { type: string }).type !== kind) return false
+        const ring = getRing(current, holeIndex)
+        return Boolean(
+          ring &&
+            ring.length > 3 &&
+            Number.isInteger(vertexIndex) &&
+            vertexIndex >= 0 &&
+            vertexIndex < ring.length,
+        )
+      }
+
+      return {
+        affectedIds: [node.id],
+        apply() {},
+        canCommit: canDeleteCurrentVertex,
+        commit() {
+          const current = useScene.getState().nodes[node.id] as N | undefined
+          if (!current || (current as unknown as { type: string }).type !== kind) return
+          const ring = getRing(current, holeIndex)
+          if (
+            !ring ||
+            ring.length <= 3 ||
+            !Number.isInteger(vertexIndex) ||
+            vertexIndex < 0 ||
+            vertexIndex >= ring.length
+          ) {
+            return
+          }
+          const nextRing = ring.filter((_, index) => index !== vertexIndex)
+          const patch = buildRingPatch(current, holeIndex, nextRing, options?.boundaryCommitData)
+          useScene
+            .getState()
+            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
         },
       }
     },
@@ -334,15 +405,40 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
             holeIndex,
             mode: 'move-edge',
           })
-          const normalDistance =
+          let normalDistance =
             (snappedPoint[0] - startX) * normalX + (snappedPoint[1] - startY) * normalY
+          if (options?.snapEdge) {
+            const candidate: [[number, number], [number, number]] = [
+              [
+                startVertex[0] + normalX * normalDistance,
+                startVertex[1] + normalY * normalDistance,
+              ],
+              [endVertex[0] + normalX * normalDistance, endVertex[1] + normalY * normalDistance],
+            ]
+            const snappedEdge = options.snapEdge({
+              node,
+              nodes,
+              edge: candidate,
+              rawPoint,
+              modifiers,
+              holeIndex,
+            })
+            if (snappedEdge) {
+              // Measure the final travel from the ORIGINAL edge so the
+              // stored edge lands exactly on the snapped line — grab
+              // offset and pointer position drop out entirely.
+              normalDistance =
+                (snappedEdge[0][0] - startVertex[0]) * normalX +
+                (snappedEdge[0][1] - startVertex[1]) * normalY
+            }
+          }
           const nextRing: [number, number][] = originalRing.map((p, i) => {
             if (i === edgeStartIndex || i === edgeEndIndex) {
               return [p[0] + normalX * normalDistance, p[1] + normalY * normalDistance]
             }
             return [p[0], p[1]] as [number, number]
           })
-          const patch = buildRingPatch(node, holeIndex, nextRing)
+          const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
           useScene
             .getState()
             .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])

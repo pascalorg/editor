@@ -31,6 +31,7 @@ import useEditor, {
 } from '../../../store/use-editor'
 
 import useFacingPose from '../../../store/use-facing-pose'
+import { useStairBuildPreview } from '../../../store/use-stair-build-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
@@ -233,6 +234,7 @@ export const StairTool: React.FC = () => {
 
     // Reset rotation when tool activates
     rotationRef.current = 0
+    useStairBuildPreview.getState().reset()
     if (previewRef.current) previewRef.current.rotation.y = 0
     lastCanonicalPositionRef.current = null
 
@@ -285,6 +287,7 @@ export const StairTool: React.FC = () => {
       const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)}`
       if (key === lastPreviewKey) return
       lastPreviewKey = key
+      useStairBuildPreview.getState().setPreview([position[0], position[2]], rotation)
       const preview = buildPreviewScene(position, rotation)
       const visualPosition = preview
         ? getFloorStackPreviewPosition({
@@ -510,6 +513,7 @@ export const StairTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
       openingPreview.clear()
       useFacingPose.getState().clear()
+      useStairBuildPreview.getState().reset()
     }
   }, [currentLevelId])
 

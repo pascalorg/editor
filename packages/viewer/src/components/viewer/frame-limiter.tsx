@@ -21,8 +21,10 @@ const DRAW_DISABLED =
   ).has('draw')
 
 const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
-  const { advance, set, frameloop: initFrameloop, scene, clock } = useThree()
+  const { advance, set, frameloop: initFrameloop } = useThree()
   const renderer = useThree((state) => state.gl)
+  const size = useThree((state) => state.size)
+  const dpr = useThree((state) => state.viewport.dpr)
   // Fully covered canvas (e.g. studio gallery) → stop advancing frames
   const renderPaused = useViewer((s) => s.renderPaused)
 
@@ -33,15 +35,31 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     let i = 0
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
+    let sizeSynced = false
     const interval = 1000 / fps
+    function syncSize() {
+      if (sizeSynced) return
+      renderer.setPixelRatio(dpr)
+      renderer.setSize(size.width, size.height, false)
+      sizeSynced = true
+    }
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
+      syncSize()
       elapsed = t - then
       if (elapsed > interval) {
         advance(i)
         i += elapsed / 1000 - (elapsed % interval) / 1000
         then = t - (elapsed % interval)
       }
+    }
+    function kick() {
+      syncSize()
+      i += 1 / 1000
+      advance(i)
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') kick()
     }
     // Set frameloop to never, it will shut down the default render loop
     set({ frameloop: 'never' })
@@ -53,6 +71,11 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     } else {
       // Kick off custom render loop
       raf = requestAnimationFrame(tick)
+      // rAF can stall while a tab is hidden, unfocused, or occluded. With the
+      // default loop disabled, force one current frame as soon as it resumes.
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      window.addEventListener('focus', kick)
+      window.addEventListener('pageshow', kick)
     }
     // Restore initial setting
     return () => {
@@ -62,9 +85,12 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       if (timer) {
         clearInterval(timer)
       }
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', kick)
+      window.removeEventListener('pageshow', kick)
       set({ frameloop: initFrameloop })
     }
-  }, [fps, advance, set, initFrameloop, renderPaused])
+  }, [advance, dpr, fps, initFrameloop, renderPaused, renderer, set, size.height, size.width])
 
   return null
 }

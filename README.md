@@ -10,19 +10,38 @@ A 3D building editor built with React Three Fiber and WebGPU.
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## Using Published Packages
+
+The viewer runtime and built-in node definitions are separate packages. Install the full built-in
+viewer set, then load the built-in plugin once before mounting `<Viewer>`:
+
+```bash
+npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
+```
+
+```typescript
+import { loadPlugin } from '@pascal-app/core'
+import { builtinPlugin } from '@pascal-app/nodes'
+
+await loadPlugin(builtinPlugin)
+```
+
+See the [`@pascal-app/viewer` quick start](packages/viewer/README.md#usage) for a React example.
 
 
 ## Repository Architecture
 
-This is a Turborepo monorepo with three main packages:
+This is a Turborepo monorepo with four main runtime packages:
 
 ```
 editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
-│   ├── core/            # Schema definitions, state management, systems
-│   ├── viewer/          # 3D rendering components
+│   ├── core/            # Schemas, scene state, and registry contracts
+│   ├── viewer/          # 3D rendering runtime and shared systems
+│   ├── editor/          # Editing tools and UI components
+│   ├── nodes/           # Built-in node definitions, renderers, and systems
 │   └── ui/              # Shared UI components
 ```
 
@@ -30,9 +49,11 @@ editor/
 
 | Package | Responsibility |
 |---------|---------------|
-| **@pascal-app/core** | Node schemas, scene state (Zustand), systems (geometry generation), spatial queries, event bus |
-| **@pascal-app/viewer** | 3D rendering via React Three Fiber, default camera/controls, post-processing |
-| **apps/editor** | UI components, tools, custom behaviors, editor-specific systems |
+| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
+| **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
+| **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
+| **apps/editor** | Standalone Next.js host for the editor packages |
 
 The **viewer** renders the scene with sensible defaults. The **editor** extends it with interactive tools, selection management, and editing capabilities.
 
@@ -339,8 +360,8 @@ Clears dirty flag
 
 The editor is extensible: a plugin ships node kinds (schema, 3D/2D rendering, placement tools, inspector parametrics) and left-rail panels through the same `Plugin` manifest the built-ins use — there is no separate internal API.
 
-- **Contract reference** — [`wiki/architecture/plugin-authoring.md`](wiki/architecture/plugin-authoring.md): the `Plugin` shape, panel contributions, discovery (`setPluginDiscovery`), lifecycle, and what's in/out of v1.
-- **Worked example** — [`packages/plugin-trees`](packages/plugin-trees): a first-party plugin (procedural trees, flowers, grass + a presets panel) structurally identical to a third-party pack. Copy it as a starting point.
+- **Developer guide** — [Create a plugin](https://editor.pascal.app/docs/developers/plugins): the `Plugin` shape, panel contributions, discovery, lifecycle, and what's in/out of v1.
+- **Worked example** — [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees): a standalone plugin with procedural trees, flowers, grass, and a presets panel. Clone it as a starting point.
 
 ---
 
@@ -375,7 +396,7 @@ bun dev
 # 1. Build @pascal-app/core and @pascal-app/viewer
 # 2. Start watching both packages for changes
 # 3. Start the Next.js editor dev server
-# Open http://localhost:3000
+# Open http://localhost:3002
 ```
 
 **Important:** Always run `bun dev` from the root directory to ensure the package watchers are running. This enables hot reload when you edit files in `packages/core/src/` or `packages/viewer/src/`.

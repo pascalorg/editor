@@ -387,6 +387,7 @@ export default function CabinetPanel() {
         modules,
         parentRun,
         patch: nextPatch,
+        preserveExtent: true,
         scene,
         selected: node,
       })

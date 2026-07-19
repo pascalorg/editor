@@ -7,7 +7,16 @@ export type EditorHostPanel = {
   label: string
   icon: IconRef
   component: LazyComponent
+  kinds?: readonly string[]
   workspaces?: readonly EditorHostPanelWorkspace[]
+  pluginId?: string
+  description?: string
+  creator?: {
+    name: string
+    url?: string
+  }
+  pluginUrl?: string
+  defaultInstalled?: boolean
 }
 
 function isDevMode(): boolean {
@@ -36,6 +45,18 @@ class EditorHostPanelRegistryImpl {
   }
 
   getSnapshot = (): EditorHostPanel[] => this.cached
+
+  panelForKind = (kind: string): string | undefined =>
+    this.cached.find((panel) => panel.kinds?.includes(kind))?.id
+
+  getDefaultInstalledPluginIds = (): string[] =>
+    Array.from(
+      new Set(
+        this.cached
+          .filter((panel) => panel.pluginId && panel.defaultInstalled)
+          .map((panel) => panel.pluginId as string),
+      ),
+    )
 
   reset(): void {
     this.panels.clear()

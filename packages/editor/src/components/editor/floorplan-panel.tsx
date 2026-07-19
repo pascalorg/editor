@@ -51,6 +51,7 @@ import {
   WallNode as WallNodeSchema,
   type WindowNode,
   WindowNode as WindowNodeSchema,
+  wallClosesRoom,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
@@ -61,6 +62,7 @@ import {
   type ComponentProps,
   memo,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -115,6 +117,7 @@ import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-g
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
+import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
 import {
@@ -173,6 +176,7 @@ import {
   DEFAULT_STAIR_WIDTH,
 } from '../tools/stair/stair-defaults'
 import {
+  chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
   snapWallDraftPoint,
@@ -5192,8 +5196,10 @@ export function FloorplanPanel({
    * in 2d, 3d, and split modes, while this panel itself may be display:none.
    */
   compassHost,
+  floorplanSceneSlot,
 }: {
   compassHost?: HTMLElement | null
+  floorplanSceneSlot?: ReactNode
 }) {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -5340,6 +5346,9 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
+  // Walls committed by the current 2D-only chain — exclusion set for the
+  // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
+  const wallChainWallIdsRef = useRef<string[]>([])
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
@@ -5365,6 +5374,18 @@ export function FloorplanPanel({
   )
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
+  // Mirror the per-click draft START anchors into the shared draft store so
+  // out-of-tree consumers (such as host-owned preview publishers) see the whole open
+  // segment without subscribing to this panel's state.
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setWallDraftStart(draftStart)
+  }, [draftStart])
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
+  }, [fenceDraftStart])
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setRoofDraftStart(roofDraftStart)
+  }, [roofDraftStart])
   const [zoneDraftPoints, setZoneDraftPoints] = useState<WallPlanPoint[]>([])
   const [siteBoundaryDraft, setSiteBoundaryDraft] = useState<SiteBoundaryDraft | null>(null)
   const [siteVertexDragState, setSiteVertexDragState] = useState<SiteVertexDragState | null>(null)
@@ -5922,7 +5943,12 @@ export function FloorplanPanel({
       const holes = (slab.holes ?? [])
         .map((hole) => toFloorplanPolygon(hole))
         .filter((hole) => hole.length >= 3)
-      const visualPolygon = toFloorplanPolygon(getRenderableSlabPolygon(slab))
+      const visualPolygon = toFloorplanPolygon(
+        getRenderableSlabPolygon(slab, {
+          walls: referenceWalls,
+          siblingSlabs: referenceSlabs.filter((other) => other.id !== slab.id),
+        }),
+      )
       const visualHoles = holes
 
       return [
@@ -6391,6 +6417,18 @@ export function FloorplanPanel({
     slabDraftPoints,
     zoneDraftPoints,
   ])
+  const activePolygonDraftType = isCeilingBuildActive
+    ? 'ceiling'
+    : isZoneBuildActive
+      ? 'zone'
+      : isSlabBuildActive
+        ? 'slab'
+        : null
+  useEffect(() => {
+    useFloorplanDraftPreview
+      .getState()
+      .setPolygonDraft(activePolygonDraftType, activePolygonDraftPoints)
+  }, [activePolygonDraftPoints, activePolygonDraftType])
   // The cursor-following polygon-draft preview (slab / zone / ceiling) moved into
   // `FloorplanDraftCursorLayer`, which reads the live cursor from the draft store
   // so it re-renders per move without re-rendering this panel.
@@ -7829,6 +7867,7 @@ export function FloorplanPanel({
   const clearWallPlacementDraft = useCallback(() => {
     setDraftStart(null)
     setWallChainFirstVertex(null)
+    wallChainWallIdsRef.current = []
     setDraftEnd(null)
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
@@ -8228,9 +8267,17 @@ export function FloorplanPanel({
         setShiftPressed(true)
       }
 
-      if (isStairBuildActive && (event.key === 'r' || event.key === 'R')) {
+      if (
+        isStairBuildActive &&
+        useEditor.getState().viewMode === '2d' &&
+        (event.key === 'r' || event.key === 'R')
+      ) {
         useStairBuildPreview.getState().rotateBy(Math.PI / 4)
-      } else if (isStairBuildActive && (event.key === 't' || event.key === 'T')) {
+      } else if (
+        isStairBuildActive &&
+        useEditor.getState().viewMode === '2d' &&
+        (event.key === 't' || event.key === 'T')
+      ) {
         useStairBuildPreview.getState().rotateBy(-Math.PI / 4)
       }
 
@@ -9673,8 +9720,11 @@ export function FloorplanPanel({
       // `display:none`, so the tool never commits. Mirror the slab /
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
-      const createdWall =
-        useEditor.getState().viewMode === '2d' ? createWallOnCurrentLevel(draftStart, point) : null
+      const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const createdWall = viewIs2DOnly ? createWallOnCurrentLevel(draftStart, point) : null
+      if (createdWall) {
+        wallChainWallIdsRef.current.push(createdWall.id)
+      }
 
       // Chain the next segment from the resolved commit endpoint (it may
       // have corner-snapped or split-adjusted): the wall we just made in
@@ -9694,11 +9744,48 @@ export function FloorplanPanel({
         return
       }
 
+      if (createdWall) {
+        // 2D-only committer: mirror the 3D tool's auto-close. Stop when the
+        // segment seals a room against the wall network, or when its resolved
+        // end tees into wall geometry outside the chain — continuing from a
+        // T-junction only drafts on top of existing walls.
+        const levelWalls = Object.values(useScene.getState().nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+        )
+        if (
+          chainEndJoinsExistingWall(
+            createdWall.end as WallPlanPoint,
+            levelWalls,
+            wallChainWallIdsRef.current,
+          ) ||
+          wallClosesRoom(levelWalls, createdWall)
+        ) {
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+          return
+        }
+      } else if (!(viewIs2DOnly || publishedNextStart)) {
+        // Split view: the 3D tool owns both the commit and the continuation
+        // decision, and it clears the published chain start whenever it stops
+        // drafting (room close, T-junction, single). Mirror that here instead
+        // of chaining the 2D draft from a dead point.
+        clearWallPlacementDraft()
+        setCursorPoint(null)
+        return
+      }
+
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
-    [clearWallPlacementDraft, draftStart, wallChainFirstVertex, setDraftEnd, setCursorPoint],
+    [
+      clearWallPlacementDraft,
+      draftStart,
+      levelId,
+      wallChainFirstVertex,
+      setDraftEnd,
+      setCursorPoint,
+    ],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     ceilingPolygons: displayCeilingPolygons,
@@ -11168,6 +11255,7 @@ export function FloorplanPanel({
           // panel, so pan/zoom is preserved across the toggle.
           <svg
             className="h-full w-full touch-none"
+            data-pascal-floorplan-2d
             onClick={isMarqueeSelectionToolActive ? undefined : handleSvgClick}
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
@@ -11343,6 +11431,8 @@ export function FloorplanPanel({
                       `floorplan-wall-move-ghost-layer.tsx`. */}
                   <FloorplanWallMoveGhostLayer />
                 </g>
+                <FloorplanMeasurementToolLayer />
+                {floorplanSceneSlot}
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal

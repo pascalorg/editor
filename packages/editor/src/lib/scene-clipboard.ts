@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   generateId,
   type LevelNode,
+  remapMeasurementReferences,
   type StairNode,
   useScene,
 } from '@pascal-app/core'
@@ -32,6 +33,7 @@ const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
   'zone',
   'cabinet',
   'cabinet-module',
+  'measurement',
 ])
 
 let clipboardPayload: ClipboardPayload | null = null
@@ -189,6 +191,10 @@ function remapNodeReferences(
     const nextLevelId = getNextLevelId(targetLevel, nodes)
     ;(clone as StairNode).fromLevelId = targetLevel.id
     ;(clone as StairNode).toLevelId = nextLevelId
+  }
+
+  if (clone.type === 'measurement') {
+    clone.measurement = remapMeasurementReferences(clone.measurement, idMap)
   }
 
   const metadata =

@@ -4,7 +4,7 @@ import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
-import { nodeRegistry } from '../registry/registry'
+import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
@@ -34,7 +34,18 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
-import { resetSceneHistoryPauseDepth } from './history-control'
+import {
+  areSceneSnapshotsEqual,
+  getSceneHistoryPauseDepth,
+  notifySceneCommit,
+  pauseSceneHistory,
+  resetSceneHistoryPauseDepth,
+  resumeSceneHistory,
+  type SceneCommitOrigin,
+  type SceneSnapshot,
+} from './history-control'
+import useLiveNodeOverrides from './use-live-node-overrides'
+import useLiveTransforms from './use-live-transforms'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -952,6 +963,8 @@ export type SceneState = {
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
   materials: Record<SceneMaterialId, SceneMaterial>
+  installedPlugins: string[]
+  hasExplicitPluginInstallState: boolean
 
   // 5. Read-only lock — when true all create/update/delete operations are no-ops
   readOnly: boolean
@@ -967,8 +980,11 @@ export type SceneState = {
     extra?: {
       collections?: Record<CollectionId, Collection>
       materials?: Record<SceneMaterialId, SceneMaterial>
+      installedPlugins?: string[]
+      hasExplicitPluginInstallState?: boolean
     },
   ) => void
+  setInstalledPlugins: (pluginIds: string[], options?: { explicit?: boolean }) => void
 
   markDirty: (id: AnyNodeId) => void
   clearDirty: (id: AnyNodeId) => void
@@ -1004,8 +1020,20 @@ export type SceneState = {
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<
-    TemporalState<Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials'>>
+    TemporalState<
+      Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'>
+    >
   >
+}
+
+function sceneHistorySnapshotFromState(
+  state: Pick<
+    SceneState,
+    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+  >,
+): SceneSnapshot {
+  const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
+  return { nodes, rootNodeIds, collections, materials, installedPlugins }
 }
 
 const useScene: UseSceneStore = create<SceneState>()(
@@ -1023,6 +1051,8 @@ const useScene: UseSceneStore = create<SceneState>()(
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
+      installedPlugins: [],
+      hasExplicitPluginInstallState: false,
 
       // 5. Read-only lock
       readOnly: false,
@@ -1035,12 +1065,17 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: {},
           materials: {},
+          installedPlugins: [],
+          hasExplicitPluginInstallState: false,
         })
       },
 
       clearScene: () => {
+        const installedPlugins = get().installedPlugins
+        const hasExplicitPluginInstallState = get().hasExplicitPluginInstallState
         get().unloadScene()
         get().loadScene() // Default scene
+        set({ installedPlugins, hasExplicitPluginInstallState })
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
@@ -1086,10 +1121,32 @@ const useScene: UseSceneStore = create<SceneState>()(
           dirtyNodes: new Set<AnyNodeId>(),
           collections: extra?.collections ?? {},
           materials,
+          installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
+          hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
         })
         // Mark all nodes as dirty to trigger re-validation
         Object.values(cleanedNodes).forEach((node) => {
           get().markDirty(node.id)
+        })
+      },
+
+      setInstalledPlugins: (pluginIds, options) => {
+        if (get().readOnly) return
+        const nextInstalledPlugins = Array.from(new Set(pluginIds))
+        const previousInstalledPlugins = get().installedPlugins
+        const dirtyNodes = new Set(get().dirtyNodes)
+        for (const node of Object.values(get().nodes)) {
+          if (!getNodePluginId(node.type)) continue
+          if (!isNodeKindEnabled(node.type, nextInstalledPlugins)) {
+            dirtyNodes.delete(node.id)
+          } else if (!isNodeKindEnabled(node.type, previousInstalledPlugins)) {
+            if (nodeRegistry.get(node.type)?.dirtyTracking !== false) dirtyNodes.add(node.id)
+          }
+        }
+        set({
+          installedPlugins: nextInstalledPlugins,
+          hasExplicitPluginInstallState: options?.explicit ?? get().hasExplicitPluginInstallState,
+          dirtyNodes,
         })
       },
 
@@ -1131,6 +1188,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       markDirty: (id) => {
         const node = get().nodes[id]
+        if (node && !isNodeKindEnabled(node.type, get().installedPlugins)) return
         if (node && nodeRegistry.get(node.type)?.dirtyTracking === false) return
         get().dirtyNodes.add(id)
       },
@@ -1274,9 +1332,14 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
     }),
     {
-      partialize: (state) => {
-        const { nodes, rootNodeIds, collections, materials } = state
-        return { nodes, rootNodeIds, collections, materials }
+      partialize: (state: SceneState) => sceneHistorySnapshotFromState(state),
+      equality: (pastState, currentState) => areSceneSnapshotsEqual(pastState, currentState),
+      onSave: (pastState, currentState) => {
+        notifySceneCommit({
+          origin: 'local',
+          before: sceneHistorySnapshotFromState(pastState),
+          current: sceneHistorySnapshotFromState(currentState),
+        })
       },
       limit: 50, // Limit to last 50 actions
     },
@@ -1284,6 +1347,165 @@ const useScene: UseSceneStore = create<SceneState>()(
 )
 
 export default useScene
+
+let sceneReadOnlyLeaseCount = 0
+let sceneReadOnlyLeaseBaseline = false
+
+export function acquireSceneReadOnlyLease(): () => void {
+  if (sceneReadOnlyLeaseCount === 0) {
+    sceneReadOnlyLeaseBaseline = useScene.getState().readOnly
+  }
+  sceneReadOnlyLeaseCount += 1
+  useScene.setState({ readOnly: true })
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    sceneReadOnlyLeaseCount = Math.max(0, sceneReadOnlyLeaseCount - 1)
+    if (sceneReadOnlyLeaseCount > 0) return
+    useScene.setState({ readOnly: sceneReadOnlyLeaseBaseline })
+    sceneReadOnlyLeaseBaseline = false
+  }
+}
+
+export type SceneNodePatch = {
+  id: AnyNodeId
+  data: Partial<AnyNode>
+  removeFields: string[]
+}
+
+export type SceneMaterialPatch = {
+  id: SceneMaterialId
+  material: SceneMaterial | null
+}
+
+export type ScenePatch = {
+  materialChanges: SceneMaterialPatch[]
+  nodeUpdates: SceneNodePatch[]
+}
+
+export function applyScenePatch(changes: ScenePatch): boolean {
+  const beforeState = useScene.getState()
+  const hasInvalidNodeTarget = changes.nodeUpdates.some(({ id, data, removeFields }) => {
+    const node = beforeState.nodes[id]
+    if (!node) return true
+    if ('id' in data && data.id !== node.id) return true
+    if ('type' in data && data.type !== node.type) return true
+    if ('object' in data && data.object !== node.object) return true
+    if (removeFields.some((field) => field === 'id' || field === 'object' || field === 'type')) {
+      return true
+    }
+    return removeFields.some((field) => Object.hasOwn(data, field))
+  })
+  const hasInvalidMaterialTarget = changes.materialChanges.some(
+    ({ id, material }) => material !== null && material.id !== id,
+  )
+  if (
+    (changes.nodeUpdates.length === 0 && changes.materialChanges.length === 0) ||
+    hasInvalidNodeTarget ||
+    hasInvalidMaterialTarget
+  ) {
+    return false
+  }
+
+  const temporalState = useScene.temporal.getState()
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) return false
+
+  const before = sceneHistorySnapshotFromState(beforeState)
+  pauseSceneHistory(useScene)
+  try {
+    // Host-owned fields bypass the UI lock without running local mutation cascades.
+    useScene.setState((state) => {
+      const nodes = changes.nodeUpdates.length > 0 ? { ...state.nodes } : state.nodes
+      for (const { id, data, removeFields } of changes.nodeUpdates) {
+        const node = nodes[id]
+        if (!node) return {}
+        const nextNode = { ...node, ...data }
+        for (const field of removeFields) delete nextNode[field as keyof typeof nextNode]
+        nodes[id] = nextNode as AnyNode
+      }
+      const materials =
+        changes.materialChanges.length > 0 ? { ...state.materials } : state.materials
+      for (const { id, material } of changes.materialChanges) {
+        if (material === null) {
+          delete materials[id]
+        } else {
+          materials[id] = material
+        }
+      }
+      return { materials, nodes }
+    })
+  } finally {
+    resumeSceneHistory(useScene)
+  }
+
+  const currentState = useScene.getState()
+  const current = sceneHistorySnapshotFromState(currentState)
+  for (const { id } of changes.nodeUpdates) {
+    useLiveNodeOverrides.getState().clear(id)
+    useLiveTransforms.getState().clear(id)
+  }
+  if (areSceneSnapshotsEqual(before, current)) return false
+
+  for (const { id } of changes.nodeUpdates) {
+    currentState.markDirty(id)
+    const beforeParentId = before.nodes[id]?.parentId as AnyNodeId | null | undefined
+    const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
+    if (beforeParentId) currentState.markDirty(beforeParentId)
+    if (currentParentId) currentState.markDirty(currentParentId)
+  }
+  if (changes.materialChanges.length > 0) {
+    const materialRefs = new Set(changes.materialChanges.map(({ id }) => toSceneMaterialRef(id)))
+    for (const node of Object.values(current.nodes)) {
+      const slots = 'slots' in node ? node.slots : undefined
+      if (!(slots && Object.values(slots).some((ref) => materialRefs.has(ref)))) continue
+      currentState.markDirty(node.id)
+      if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
+    }
+  }
+
+  notifySceneCommit({
+    origin: 'host',
+    before,
+    current,
+  })
+  return true
+}
+
+export type ApplySceneSnapshotOptions = {
+  origin: Extract<SceneCommitOrigin, 'load' | 'host'>
+}
+
+export function applySceneSnapshot(
+  snapshot: SceneSnapshot,
+  options: ApplySceneSnapshotOptions,
+): boolean {
+  const before = sceneHistorySnapshotFromState(useScene.getState())
+  const temporalState = useScene.temporal.getState()
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
+    throw new Error('Cannot replace the scene snapshot during an active interaction')
+  }
+  pauseSceneHistory(useScene)
+  try {
+    useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
+      collections: snapshot.collections,
+      installedPlugins: snapshot.installedPlugins,
+      materials: snapshot.materials,
+    })
+    useScene.temporal.getState().clear()
+  } finally {
+    resumeSceneHistory(useScene)
+  }
+
+  useLiveNodeOverrides.getState().clearAll()
+  useLiveTransforms.getState().clearAll()
+
+  const current = sceneHistorySnapshotFromState(useScene.getState())
+  if (areSceneSnapshotsEqual(before, current)) return false
+  notifySceneCommit({ origin: options.origin, before, current })
+  return true
+}
 
 // Track previous temporal state lengths and node snapshot for diffing
 let prevPastLength = 0

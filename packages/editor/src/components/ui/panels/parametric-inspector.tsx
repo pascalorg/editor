@@ -14,6 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
+import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
@@ -90,10 +91,11 @@ export function ParametricInspector({
 
   const handleMove = useCallback(() => {
     if (!selectedId) return
-    const node = useScene.getState().nodes[selectedId]
+    const sceneNodes = useScene.getState().nodes
+    const node = sceneNodes[selectedId]
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setMovingNode(node as any)
+    useEditor.getState().setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
     clearSelection()
   }, [selectedId, clearSelection])
 

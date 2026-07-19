@@ -80,6 +80,7 @@ describe('spawn definition', () => {
       parent: null,
       viewState: {
         selected: true,
+        unit: 'metric',
         highlighted: false,
         hovered: false,
         moving: false,

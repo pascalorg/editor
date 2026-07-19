@@ -12,6 +12,7 @@ import {
   roofSegmentResizeAffordance,
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
+import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
@@ -303,6 +304,17 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
     module: () => import('./renderer'),
   },
   floorplan: buildRoofSegmentFloorplan,
+  measurement: {
+    features: (node, ctx) =>
+      roofSegmentMeasurementFeatures(node, ctx.parent?.type === 'roof' ? ctx.parent : null),
+    match: (node, ctx, point, maxDistance) =>
+      matchRoofSegmentMeasurementFeature(
+        node,
+        ctx.parent?.type === 'roof' ? ctx.parent : null,
+        point,
+        maxDistance,
+      ),
+  },
   // Body-move target. The generic Path 2 fallback writes plan coords
   // directly to `position`, which is wrong here because the segment's
   // position is roof-local. `roofSegmentMoveTarget` inverts the parent

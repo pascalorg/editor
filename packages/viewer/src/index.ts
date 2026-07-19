@@ -177,6 +177,7 @@ export { StairSystem } from './systems/stair/stair-system'
 // (arch / rounded / frameless opening) identical across both hosts.
 export {
   buildOpeningCutoutGeometry,
+  getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
 export { WallCutout } from './systems/wall/wall-cutout'

@@ -180,12 +180,28 @@ function getCacheKey(props: MaterialProperties, shading: RenderShading): string 
   return `${shading}-${props.color}-${props.roughness}-${props.metalness}-${props.opacity}-${props.transparent}-${props.side}`
 }
 
-function getTextureKey(material?: MaterialSchema): string {
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+export function resolveTextureRepeat(repeat: unknown, scale: unknown): [number, number] {
+  const fallback = isFiniteNumber(scale) ? scale : 1
+  if (Array.isArray(repeat) && isFiniteNumber(repeat[0]) && isFiniteNumber(repeat[1])) {
+    return [repeat[0], repeat[1]]
+  }
+  if (isFiniteNumber(repeat)) return [repeat, repeat]
+  if (repeat && typeof repeat === 'object' && 'x' in repeat && 'y' in repeat) {
+    const { x, y } = repeat
+    if (isFiniteNumber(x) && isFiniteNumber(y)) return [x, y]
+  }
+  return [fallback, fallback]
+}
+
+export function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
-  const repeat = texture.repeat?.join('x') ?? 'default'
-  const scale = texture.scale ?? 'default'
-  return `${texture.url}-${repeat}-${scale}`
+  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
+  return `${texture.url}-${repeatX}x${repeatY}`
 }
 
 function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
@@ -200,8 +216,7 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
-  const repeatX = textureConfig.repeat?.[0] ?? textureConfig.scale ?? 1
-  const repeatY = textureConfig.repeat?.[1] ?? textureConfig.scale ?? 1
+  const [repeatX, repeatY] = resolveTextureRepeat(textureConfig.repeat, textureConfig.scale)
   texture.repeat.set(repeatX, repeatY)
   texture.updateMatrix()
   texture.colorSpace = THREE.SRGBColorSpace

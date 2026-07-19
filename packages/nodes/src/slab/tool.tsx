@@ -19,6 +19,7 @@ import {
   resolveSlabPlanPointSnap,
   triggerSFX,
   useEditor,
+  useFloorplanDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -78,6 +79,20 @@ export const SlabTool: React.FC = () => {
   useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
 
   useEffect(() => {
+    useFloorplanDraftPreview.getState().setPolygonDraft('slab', points)
+  }, [points])
+  useEffect(
+    () => () => {
+      const draftPreview = useFloorplanDraftPreview.getState()
+      if (draftPreview.polygonDraftType === 'slab') {
+        draftPreview.setPolygonDraft(null, [])
+      }
+      draftPreview.setCursorPoint(null)
+    },
+    [],
+  )
+
+  useEffect(() => {
     if (!currentLevelId) return
 
     const onGridMove = (event: GridEvent) => {
@@ -101,6 +116,7 @@ export const SlabTool: React.FC = () => {
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
       }).point
+      useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
       setSnappedCursorPosition(displayPoint)
       if (
         points.length > 0 &&

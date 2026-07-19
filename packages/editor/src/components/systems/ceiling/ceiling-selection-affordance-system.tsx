@@ -20,10 +20,7 @@ import {
 } from '../../../lib/ceiling-plan-snap'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { isGridSnapActive } from '../../../store/use-editor'
-import useInteractionScope, {
-  useIsCurveReshape,
-  useMovingNode,
-} from '../../../store/use-interaction-scope'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 
 const BRACKET_THICKNESS = 0.04
@@ -99,8 +96,13 @@ export const CeilingSelectionAffordanceSystem = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const structureLayer = useEditor((state) => state.structureLayer)
-  const movingNode = useMovingNode()
-  const isCurveReshape = useIsCurveReshape()
+  // ANY active interaction (moving/placing a node, reshaping a boundary or
+  // curve, dragging a handle) unmounts the brackets: their ceiling-height hit
+  // boxes would otherwise catch drag-time hover, set `hoveredId` to the
+  // ceiling, and flash the ceiling grid mid-gesture (e.g. while dragging a
+  // slab polygon vertex). The brackets' own corner drag doesn't begin a
+  // scope, so it can't unmount itself.
+  const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
   const ceilings = useScene(
@@ -120,8 +122,7 @@ export const CeilingSelectionAffordanceSystem = () => {
     phase === 'structure' &&
     mode === 'select' &&
     structureLayer === 'elements' &&
-    !movingNode &&
-    !isCurveReshape &&
+    scopeIdle &&
     currentLevelId !== null
 
   if (!shouldRender) return null

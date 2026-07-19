@@ -3,7 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Color, type Material, type Mesh } from 'three'
 import useEditor from '../../../store/use-editor'
-import { useMovingNode } from '../../../store/use-interaction-scope'
+import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
 
 const CEILING_GRID_HIGHLIGHT_COLOR = '#ffffff'
 const CEILING_GRID_BASE_MATERIAL_KEY = '__pascalCeilingGridBaseMaterial'
@@ -80,11 +80,18 @@ export const CeilingSystem = () => {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const hoveredId = useViewer((state) => state.hoveredId)
+  // A pending gesture (polygon/handle drag, reshape, move) must not flash the
+  // ceiling grid when the pointer strays over a ceiling — spatial hover events
+  // keep firing during host drags by design (see use-node-events), so the
+  // reveal is gated here, on the consumer.
+  const inputDragging = useViewer((state) => state.inputDragging)
+  const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
 
   useEffect(() => {
     const nodes = useScene.getState().nodes
     const hoveredNode = hoveredId ? nodes[hoveredId as AnyNodeId] : null
-    const hoveredCeilingId = hoveredNode?.type === 'ceiling' ? hoveredNode.id : null
+    const hoveredCeilingId =
+      hoveredNode?.type === 'ceiling' && scopeIdle && !inputDragging ? hoveredNode.id : null
 
     const levelsToShowCeilings = new Set<string>()
 
@@ -153,6 +160,15 @@ export const CeilingSystem = () => {
         }
       }
     })
-  }, [tool, selectedItem, movingNode, selectedIds, activeLevelId, hoveredId])
+  }, [
+    tool,
+    selectedItem,
+    movingNode,
+    selectedIds,
+    activeLevelId,
+    hoveredId,
+    scopeIdle,
+    inputDragging,
+  ])
   return null
 }

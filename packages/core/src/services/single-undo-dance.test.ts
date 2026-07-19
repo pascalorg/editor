@@ -125,12 +125,7 @@ describe('Single-undo dance', () => {
     expect((useScene.getState().nodes[FENCE_ID] as { curveOffset: number }).curveOffset).toBe(0)
   })
 
-  test('commit-returns-false (no change) does NOT consume the prior pastState', () => {
-    // This is the suspected bend regression: when action.commit returns
-    // false (draft.curveOffset === ctx.originalCurveOffset), session.commit
-    // calls scene.restoreAll() but doesn't push to pastStates. Subsequent
-    // undo pops the PRIOR action (e.g. fence creation), not the no-op
-    // bend.
+  test('commit-returns-false adds no step; a later standalone undo reaches the prior action', () => {
     useScene.getState().createNode(makeFence(0))
     const pastBeforeBend = useScene.temporal.getState().pastStates.length
 
@@ -143,20 +138,13 @@ describe('Single-undo dance', () => {
     scene.resumeHistory()
 
     const pastAfterNoOp = useScene.temporal.getState().pastStates.length
-    expect(pastAfterNoOp).toBe(pastBeforeBend) // no entries added
+    expect(pastAfterNoOp).toBe(pastBeforeBend)
 
-    // Now undo — this should be a no-op (state unchanged), but pops the create.
+    // This is an independent undo after the gesture has finished, so it
+    // correctly reaches the preceding real action rather than inventing a
+    // no-op history boundary for the cancelled bend.
     useScene.temporal.getState().undo()
-    // ⚠️ Reproduces the bug — undo removes the fence:
-    const fence = useScene.getState().nodes[FENCE_ID]
-    if (fence === undefined) {
-      // Bug reproduced. The "no-op bend" allowed Ctrl-Z to fall through
-      // to the fence creation. Fix is in action.commit: don't return false
-      // — push a no-op entry instead, or guard against the cancel path.
-      expect(fence).toBeUndefined()
-    } else {
-      expect((fence as { curveOffset: number }).curveOffset).toBe(0)
-    }
+    expect(useScene.getState().nodes[FENCE_ID]).toBeUndefined()
   })
 
   test('full session flow via createDragSession with real action.commit dance', async () => {

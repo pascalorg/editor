@@ -5,6 +5,7 @@ export type {
   CabinetModuleEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
+  CameraPose,
   CeilingEvent,
   ChimneyEvent,
   ColumnEvent,
@@ -18,6 +19,7 @@ export type {
   GutterEvent,
   ItemEvent,
   LevelEvent,
+  MeasurementEvent,
   NodeEvent,
   RidgeVentEvent,
   RoofEvent,
@@ -48,7 +50,11 @@ export {
   getFloorPlacedFootprints,
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
-export { pointInPolygon, spatialGridManager } from './hooks/spatial-grid/spatial-grid-manager'
+export {
+  pointInPolygon,
+  spatialGridManager,
+  type WallSlabSupportSegment,
+} from './hooks/spatial-grid/spatial-grid-manager'
 export {
   findLevelAncestorId,
   initSpatialGridSync,
@@ -66,6 +72,23 @@ export {
 } from './lib/door-operation'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
+  areMeasurementPointsCoplanar,
+  closestMeasurementFeatureBinding,
+  MEASUREMENT_PLANAR_TOLERANCE,
+  measurementAnchorFallback,
+  measurementAngle,
+  measurementArea,
+  measurementAreaVector,
+  measurementCentroid,
+  measurementDistance,
+  measurementFeatureLength,
+  measurementNormal,
+  measurementPerimeter,
+  measurementPrismVolume,
+  measurementReferenceNodeIds,
+  remapMeasurementReferences,
+} from './lib/measurement-geometry'
+export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,
   pointOnSegment,
@@ -75,7 +98,13 @@ export {
   segmentsIntersect,
 } from './lib/polygon-relations'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
-export { getRenderableSlabPolygon } from './lib/slab-polygon'
+export {
+  getRenderableSlabPolygon,
+  type SlabEdgeWallBandSnap,
+  type SlabPolygonContext,
+  slabPolygonContextFromGeometry,
+  snapSlabEdgeToWallBand,
+} from './lib/slab-polygon'
 export {
   deriveSlotId,
   isSlotMaterialName,
@@ -86,15 +115,19 @@ export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
   type AutoSlabSyncPlan,
+  type AutoZoneSyncPlan,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   isSpaceDetectionPaused,
   pauseSpaceDetection,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
+  planAutoZonesForLevel,
   projectAutoSlabsForPlan,
+  resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
+  type SpaceBoundaryFace,
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
@@ -106,6 +139,11 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export {
+  deriveZoneQuantityReport,
+  type ZoneQuantityReport,
+  type ZoneQuantityValue,
+} from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
@@ -142,6 +180,11 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
+  type SceneCommit,
+  type SceneCommitListener,
+  type SceneCommitOrigin,
+  type SceneSnapshot,
+  subscribeSceneCommits,
 } from './store/history-control'
 export {
   type ControlValue,
@@ -162,7 +205,17 @@ export {
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
-export { clearSceneHistory, default as useScene } from './store/use-scene'
+export {
+  type ApplySceneSnapshotOptions,
+  acquireSceneReadOnlyLease,
+  applyScenePatch,
+  applySceneSnapshot,
+  clearSceneHistory,
+  default as useScene,
+  type SceneMaterialPatch,
+  type SceneNodePatch,
+  type ScenePatch,
+} from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   type ElevatorDoorSide,

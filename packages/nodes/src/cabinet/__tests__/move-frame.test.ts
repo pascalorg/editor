@@ -190,11 +190,15 @@ describe('cabinetModuleParentFrame.magneticSnapMatches', () => {
       id: 'cabinet-module_moving',
       parentId: nestedRun.id,
       position: [0.65, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
     })
     const sibling = CabinetModuleNode.parse({
       id: 'cabinet-module_sibling',
       parentId: nestedRun.id,
       position: [0, 0.1, 0],
+      width: 0.6,
+      depth: 0.58,
     })
     const nodes = Object.fromEntries(
       [rootRun, parentModule, nestedRun, moving, sibling].map((node) => [node.id, node as AnyNode]),

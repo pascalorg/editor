@@ -19,15 +19,15 @@ const ANCHOR: StretchAnchor = {
 
 describe('cabinet continuous placement', () => {
   test('fills a stretch with full modules plus a partial end module when needed', () => {
-    const widths = fillCabinetContinuousSpan(1.35)
+    const widths = fillCabinetContinuousSpan(1.15)
     expect(widths).toHaveLength(3)
-    expect(widths[0]).toBeCloseTo(0.6)
-    expect(widths[1]).toBeCloseTo(0.6)
+    expect(widths[0]).toBeCloseTo(0.5)
+    expect(widths[1]).toBeCloseTo(0.5)
     expect(widths[2]).toBeCloseTo(0.15)
   })
 
   test('drops a tiny remainder below the minimum end-module width', () => {
-    expect(fillCabinetContinuousSpan(1.27)).toEqual([0.6, 0.6])
+    expect(fillCabinetContinuousSpan(1.07)).toEqual([0.5, 0.5])
   })
 
   test('plans module offsets to the right of the anchored cabinet', () => {
@@ -40,15 +40,15 @@ describe('cabinet continuous placement', () => {
     expect(stretch.modules).toHaveLength(3)
     expect(stretch.modules[0]?.x).toBeCloseTo(0)
     expect(stretch.modules[0]?.width).toBeCloseTo(0.6)
-    expect(stretch.modules[1]?.x).toBeCloseTo(0.6)
-    expect(stretch.modules[1]?.width).toBeCloseTo(0.6)
-    expect(stretch.modules[2]?.x).toBeCloseTo(1.125)
-    expect(stretch.modules[2]?.width).toBeCloseTo(0.45)
-    expect(stretch.length).toBeCloseTo(1.65)
-    expect(stretch.centerLocalX).toBeCloseTo(0.525)
+    expect(stretch.modules[1]?.x).toBeCloseTo(0.55)
+    expect(stretch.modules[1]?.width).toBeCloseTo(0.5)
+    expect(stretch.modules[2]?.x).toBeCloseTo(1.05)
+    expect(stretch.modules[2]?.width).toBeCloseTo(0.5)
+    expect(stretch.length).toBeCloseTo(1.6)
+    expect(stretch.centerLocalX).toBeCloseTo(0.5)
     expect(stretch.direction).toBe(1)
     expect(cabinetStretchExitSide(stretch)).toBe('right')
-    expect(cabinetStretchEndLocalX(stretch, 0.6)).toBeCloseTo(1.35)
+    expect(cabinetStretchEndLocalX(stretch, 0.6)).toBeCloseTo(1.3)
   })
 
   test('mirrors module offsets when the stretch grows left of the anchor', () => {
@@ -61,14 +61,14 @@ describe('cabinet continuous placement', () => {
     expect(stretch.modules).toHaveLength(3)
     expect(stretch.modules[0]?.x).toBeCloseTo(0)
     expect(stretch.modules[0]?.width).toBeCloseTo(0.6)
-    expect(stretch.modules[1]?.x).toBeCloseTo(-0.6)
-    expect(stretch.modules[1]?.width).toBeCloseTo(0.6)
-    expect(stretch.modules[2]?.x).toBeCloseTo(-1.125)
-    expect(stretch.modules[2]?.width).toBeCloseTo(0.45)
-    expect(stretch.centerLocalX).toBeCloseTo(-0.525)
+    expect(stretch.modules[1]?.x).toBeCloseTo(-0.55)
+    expect(stretch.modules[1]?.width).toBeCloseTo(0.5)
+    expect(stretch.modules[2]?.x).toBeCloseTo(-1.05)
+    expect(stretch.modules[2]?.width).toBeCloseTo(0.5)
+    expect(stretch.centerLocalX).toBeCloseTo(-0.5)
     expect(stretch.direction).toBe(-1)
     expect(cabinetStretchExitSide(stretch)).toBe('left')
-    expect(cabinetStretchEndLocalX(stretch, 0.6)).toBeCloseTo(-1.35)
+    expect(cabinetStretchEndLocalX(stretch, 0.6)).toBeCloseTo(-1.3)
   })
 
   test('forced-direction anchors keep orthogonal follow-on legs growing outward', () => {
@@ -91,7 +91,7 @@ describe('cabinet continuous placement', () => {
 
     expect(stretch.modules[0]?.width).toBeCloseTo(0.58)
     expect(stretch.modules[0]?.x).toBeCloseTo(0)
-    expect(stretch.modules[1]?.width).toBeCloseTo(0.6)
+    expect(stretch.modules[1]?.width).toBeCloseTo(0.5)
     expect(stretch.modules[1]?.x).toBeGreaterThan(0.58 / 2)
   })
 
@@ -102,8 +102,8 @@ describe('cabinet continuous placement', () => {
       rawPlanPosition: [0.05, 0, 0],
     })
 
-    expect(stretch.modules.map((module) => module.width)).toEqual([0.58, 0.6])
-    expect(stretch.length).toBeCloseTo(1.18)
+    expect(stretch.modules.map((module) => module.width)).toEqual([0.58, 0.5])
+    expect(stretch.length).toBeCloseTo(1.08)
   })
 
   test('prefers continuing straight when the cursor moves forward from the committed end', () => {

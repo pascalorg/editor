@@ -18,6 +18,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  usePathDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -284,6 +285,13 @@ const LiquidLineTool = () => {
 
   // Leaving the tool clears Follow so re-arming it starts in free-draw.
   useEffect(() => () => useLiquidLineToolOptions.getState().setFollow(false), [])
+
+  useEffect(() => {
+    usePathDraftPreview
+      .getState()
+      .setDraft('liquid-line', traceGhost ?? draftPoints, traceGhost ? null : cursorPos)
+  }, [cursorPos, draftPoints, traceGhost])
+  useEffect(() => () => usePathDraftPreview.getState().clear('liquid-line'), [])
 
   useEffect(() => {
     if (!activeLevelId) return

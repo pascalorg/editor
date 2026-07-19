@@ -11,6 +11,7 @@ import {
   canDirectMoveNode,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
+  resolveMoveActionNode,
   snapDirectRotationDelta,
 } from './direct-manipulation'
 
@@ -188,5 +189,87 @@ describe('resolveDirectManipulationNode', () => {
         [child.id]: child,
       }),
     ).toBe(parent)
+  })
+})
+
+describe('resolveMoveActionNode', () => {
+  test('routes a nested same-kind child move to its host', () => {
+    const kind = 'move-action-nested-kind-test'
+    registerTestDefinition(kind, {
+      capabilities: {
+        movable: {
+          axes: ['x', 'z'],
+          parentFrame: {
+            resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) =>
+              (node.parentId ? nodes[node.parentId] : null) ?? null,
+            parentRotationY: () => 0,
+            localToPlan: (_parent: AnyNode, local: readonly [number, number, number]) => [
+              local[0],
+              local[1],
+              local[2],
+            ],
+            planToLocal: (_parent: AnyNode, planX: number, localY: number, planZ: number) => [
+              planX,
+              localY,
+              planZ,
+            ],
+          },
+        },
+      },
+    })
+    const parent = { id: 'move_action_parent', type: kind } as unknown as AnyNode
+    const child = {
+      id: 'move_action_child',
+      type: kind,
+      parentId: parent.id,
+    } as unknown as AnyNode
+
+    expect(
+      resolveMoveActionNode(child, {
+        [parent.id]: parent,
+        [child.id]: child,
+      }),
+    ).toBe(parent)
+  })
+
+  test('keeps a child independently movable when its parent is a different kind', () => {
+    const parentKind = 'move-action-parent-kind-test'
+    const childKind = 'move-action-child-kind-test'
+    registerTestDefinition(parentKind, {})
+    registerTestDefinition(childKind, {
+      capabilities: {
+        movable: {
+          axes: ['x', 'z'],
+          parentFrame: {
+            resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) =>
+              (node.parentId ? nodes[node.parentId] : null) ?? null,
+            parentRotationY: () => 0,
+            localToPlan: (_parent: AnyNode, local: readonly [number, number, number]) => [
+              local[0],
+              local[1],
+              local[2],
+            ],
+            planToLocal: (_parent: AnyNode, planX: number, localY: number, planZ: number) => [
+              planX,
+              localY,
+              planZ,
+            ],
+          },
+        },
+      },
+    })
+    const parent = { id: 'move_action_run', type: parentKind } as unknown as AnyNode
+    const child = {
+      id: 'move_action_module',
+      type: childKind,
+      parentId: parent.id,
+    } as unknown as AnyNode
+
+    expect(
+      resolveMoveActionNode(child, {
+        [parent.id]: parent,
+        [child.id]: child,
+      }),
+    ).toBe(child)
   })
 })

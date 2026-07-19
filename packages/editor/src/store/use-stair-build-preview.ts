@@ -10,7 +10,7 @@
 
 import { create } from 'zustand'
 
-type StairPreviewPoint = [number, number]
+export type StairPreviewPoint = [number, number]
 
 type StairBuildPreviewState = {
   /** Snapped plan-XZ point the ghost staircase sits at; `null` when idle. */
@@ -21,6 +21,7 @@ type StairBuildPreviewState = {
    *  don't re-render) when the point is unchanged — `grid:move` fires far more
    *  often than the snapped cell actually changes. */
   setPoint(point: StairPreviewPoint | null): void
+  setPreview(point: StairPreviewPoint | null, rotation: number): void
   rotateBy(deltaRadians: number): void
   reset(): void
 }
@@ -33,7 +34,16 @@ export const useStairBuildPreview = create<StairBuildPreviewState>((set) => ({
       const prev = state.point
       if (!point && !prev) return state
       if (point && prev && prev[0] === point[0] && prev[1] === point[1]) return state
-      return { point }
+      return { point: point ? [point[0], point[1]] : null }
+    }),
+  setPreview: (point, rotation) =>
+    set((state) => {
+      const samePoint =
+        (!point && !state.point) ||
+        Boolean(point && state.point && state.point[0] === point[0] && state.point[1] === point[1])
+      return samePoint && state.rotation === rotation
+        ? state
+        : { point: point ? [point[0], point[1]] : null, rotation }
     }),
   rotateBy: (deltaRadians) => set((state) => ({ rotation: state.rotation + deltaRadians })),
   reset: () =>

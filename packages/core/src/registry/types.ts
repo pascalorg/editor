@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
+import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
@@ -60,6 +61,7 @@ export type GeometryContext = {
    */
   viewState?: {
     selected: boolean
+    unit: 'metric' | 'imperial'
     /** Marquee or programmatic highlight — shows selected chrome without keyboard focus. */
     highlighted: boolean
     /** Pointer-hovered. */
@@ -79,6 +81,83 @@ export type GeometryContext = {
      */
     palette: FloorplanPalette
   }
+}
+
+export type MeasurementSnapKind =
+  | 'endpoint'
+  | 'midpoint'
+  | 'edge'
+  | 'center'
+  | 'face'
+  | 'ridge'
+  | 'height'
+
+export type MeasurementFeatureGeometry =
+  | { kind: 'point'; point: MeasurementPoint }
+  | { kind: 'segment'; start: MeasurementPoint; end: MeasurementPoint }
+  | { kind: 'path'; points: MeasurementPoint[]; closed?: boolean }
+  | { kind: 'polygon'; points: MeasurementPoint[] }
+
+export type MeasurementFeature = {
+  /** Stable within the node kind; presentation labels must not be used as IDs. */
+  id: string
+  label: string
+  snapKind: MeasurementSnapKind
+  geometry: MeasurementFeatureGeometry
+  /**
+   * Level-local surface normal for contact markers. Continuous features may
+   * provide the normal from `resolve(...)` after applying reference parameters.
+   */
+  normal?: MeasurementPoint
+  /** Higher values win when multiple candidates occupy the same screen-space radius. */
+  priority?: number
+}
+
+export type MeasurementFeatureBinding = {
+  featureId: string
+  point: MeasurementPoint
+  parameters?: Record<string, string | number | boolean>
+  distance: number
+}
+
+export type QuickMeasurementQuantity = 'length' | 'area' | 'volume'
+
+export type QuickMeasurementMetric = {
+  key: string
+  label: string
+  abbreviation: string
+  quantity: QuickMeasurementQuantity
+  /** Canonical metres, square metres, or cubic metres according to `quantity`. */
+  value: number
+}
+
+export type QuickMeasurementReport = {
+  title: string
+  kindLabel: string
+  /** Stable level-local label anchor chosen by the node kind. */
+  anchor: MeasurementPoint
+  metrics: QuickMeasurementMetric[]
+  note?: string
+}
+
+export type MeasurementContribution<N = AnyNode> = {
+  /** Enumerates semantic candidates for hover, quick measure, and snapping. */
+  features: (node: N, ctx: GeometryContext) => MeasurementFeature[]
+  /** Resolve IDs that cannot be fully enumerated by `features`. */
+  resolve?: (
+    node: N,
+    ctx: GeometryContext,
+    reference: MeasurementFeatureReference,
+  ) => MeasurementFeature | null
+  /** Kind-aware nearest semantic binding for a level-local surface hit. */
+  match?: (
+    node: N,
+    ctx: GeometryContext,
+    point: MeasurementPoint,
+    maxDistance: number,
+  ) => MeasurementFeatureBinding | null
+  /** Live, non-persistent quantities shown by the smart measurement tool. */
+  quickMeasure?: (node: N, ctx: GeometryContext) => QuickMeasurementReport | null
 }
 
 // ─── FloorplanPalette ────────────────────────────────────────────────
@@ -499,7 +578,8 @@ export type FloorplanGeometry =
     }
   /**
    * Centered length / distance label. Renders as a small rounded
-   * background plate with text, oriented along `angle` (radians). The
+   * background plate by default, or as outlined text when `appearance`
+   * is `'outlined'`, oriented along `angle` (radians). The
    * 2D layer flips the label upright when it would otherwise be upside
    * down. Use this for simple "what length am I?" badges (fence, item
    * width, draft preview).
@@ -511,6 +591,12 @@ export type FloorplanGeometry =
       text: string
       /** Rotation in radians. The renderer auto-flips to keep text upright. */
       angle: number
+      /** Keep the plate horizontal on screen instead of following a segment. */
+      screenUpright?: boolean
+      /** Perpendicular screen-pixel offset from the anchor segment. */
+      offsetPx?: number
+      /** Match map-style labels without changing the default editing badge. */
+      appearance?: 'plate' | 'outlined'
     }
   /**
    * Equal-spacing badge — a small accent pill marking one gap in a run of
@@ -931,6 +1017,10 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
+  /** Extra node IDs whose committed changes invalidate this node's floor-plan cache. */
+  floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
+  /** Stable semantic geometry that associative measurement anchors may reference. */
+  measurement?: MeasurementContribution<z.infer<S>>
   /**
    * Which scope the floor-plan layer walks to find instances of this
    * kind. Default `'level'` — the layer's DFS from the active level id
@@ -980,6 +1070,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * and runs through `SceneApi`.
    */
   quickActions?: NodeQuickActionProvider<z.infer<S>>
+  /** Scene-graph scope the quick-action provider needs for derived availability. */
+  quickActionNodeScope?: NodeQuickActionNodeScope
   /**
    * Sidebar-tree presentation hooks. Lets a kind reshape how the generic
    * scene tree walks its subtree — hiding derived/managed nodes and
@@ -1232,6 +1324,9 @@ export type Presentation = {
   /** Set true for kinds that exist but should NOT appear in the palette
    * (containers like `site`/`building`/`level`, internal nodes). */
   hidden?: boolean
+  /** Set false when selection is edited directly through in-scene affordances
+   * and the generic floating action menu would duplicate or conflict with them. */
+  actionMenu?: boolean
 }
 
 export type IconRef =
@@ -1562,6 +1657,8 @@ export type NodeQuickActionResult = {
   selectedIds?: AnyNodeId[]
 }
 
+export type NodeQuickActionNodeScope = 'family' | 'level'
+
 export type NodeQuickAction = {
   id: string
   label: string
@@ -1574,6 +1671,8 @@ export type NodeQuickAction = {
    */
   icon?: NodeQuickActionIcon | IconRef
   disabled?: boolean
+  /** Whether pressing a disabled action should acknowledge its blocked state. */
+  blockedFeedback?: boolean
   history?: 'single'
   run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
 }

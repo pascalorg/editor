@@ -26,6 +26,7 @@ import type {
   LevelNode,
   LinesetNode,
   LiquidLineNode,
+  MeasurementNode,
   PipeFittingNode,
   PipeSegmentNode,
   PipeTrapNode,
@@ -129,6 +130,7 @@ export type PipeFittingEvent = NodeEvent<PipeFittingNode>
 export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 export type LiquidLineEvent = NodeEvent<LiquidLineNode>
+export type MeasurementEvent = NodeEvent<MeasurementNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -196,6 +198,15 @@ export interface CameraControlFitSceneEvent {
   }
 }
 
+export interface CameraPose {
+  position: [number, number, number]
+  target: [number, number, number]
+  projection: 'perspective' | 'orthographic'
+  /** Width, in scene units, of the visible plane through `target`. */
+  viewWidth?: number
+  fov?: number
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:focus': CameraControlEvent
@@ -205,6 +216,10 @@ type CameraControlEvents = {
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  'camera-controls:pose': CameraPose
+  'camera-controls:apply-pose': CameraPose
+  'camera-controls:cancel-pose': undefined
+  'camera-controls:interaction-start': undefined
 }
 
 type ToolEvents = {
@@ -308,6 +323,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'pipe-trap', PipeTrapEvent> &
   NodeEvents<'lineset', LinesetEvent> &
   NodeEvents<'liquid-line', LiquidLineEvent> &
+  NodeEvents<'measurement', MeasurementEvent> &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

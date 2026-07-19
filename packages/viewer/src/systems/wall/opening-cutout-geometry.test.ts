@@ -6,6 +6,7 @@ import type * as THREE from 'three'
 import {
   buildOpeningCutoutGeometry,
   buildOpeningCutoutShape,
+  getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './opening-cutout-geometry'
 
@@ -206,5 +207,18 @@ describe('hasFlatOpeningCutoutBottom', () => {
         }),
       ),
     ).toBe(false)
+  })
+})
+
+describe('getOpeningCutoutBottomPadding', () => {
+  test('pads floor-level openings with a flat bottom', () => {
+    expect(getOpeningCutoutBottomPadding(DoorNode.parse({}), 0)).toBe(0.02)
+    expect(getOpeningCutoutBottomPadding(DoorNode.parse({ openingShape: 'rounded' }), 0)).toBe(0.02)
+    expect(getOpeningCutoutBottomPadding(WindowNode.parse({ openingShape: 'arch' }), 0)).toBe(0.02)
+  })
+
+  test('does not pad openings above the floor or rounded window bottoms', () => {
+    expect(getOpeningCutoutBottomPadding(DoorNode.parse({}), 0.9)).toBe(0)
+    expect(getOpeningCutoutBottomPadding(WindowNode.parse({ openingShape: 'rounded' }), 0)).toBe(0)
   })
 })

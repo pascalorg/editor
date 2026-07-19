@@ -178,11 +178,8 @@ function getWallBoundaryFrame(wall: WallNode, endType: 'start' | 'end') {
     endType === 'start'
       ? { x: wall.start[0], y: wall.start[1] }
       : { x: wall.end[0], y: wall.end[1] }
-  const vector =
-    endType === 'start'
-      ? { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
-      : { x: wall.start[0] - wall.end[0], y: wall.start[1] - wall.end[1] }
-  const length = Math.hypot(vector.x, vector.y)
+  const direction = { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }
+  const length = Math.hypot(direction.x, direction.y)
 
   if (length < 1e-9) {
     return {
@@ -194,8 +191,11 @@ function getWallBoundaryFrame(wall: WallNode, endType: 'start' | 'end') {
 
   return {
     point,
-    tangent: { x: vector.x / length, y: vector.y / length },
-    normal: { x: -vector.y / length, y: vector.x / length },
+    tangent:
+      endType === 'start'
+        ? { x: direction.x / length, y: direction.y / length }
+        : { x: -direction.x / length, y: -direction.y / length },
+    normal: { x: -direction.y / length, y: direction.x / length },
   }
 }
 

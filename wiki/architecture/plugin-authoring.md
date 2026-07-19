@@ -30,7 +30,7 @@ export const myPlugin: Plugin = {
 | `apiVersion` | yes | Currently `1`. The host throws on mismatch — bumping breaks plugins, intentionally. |
 | `nodes` | optional | Array of `AnyNodeDefinition`. |
 
-The first-party [`@pascal-app/plugin-trees`](../../packages/plugin-trees) package is the worked example. Copy it as a starting point.
+The standalone [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees) repository is the worked example. Clone it as a starting point.
 
 The same shape powers the built-in `pascal:core` plugin in `@pascal-app/nodes` — there's no "internal" plugin format. Whatever works for built-ins works for third parties.
 
@@ -79,10 +79,10 @@ The packages are **peer dependencies**, not normal dependencies — the host app
 
 ```mermaid
 graph TD
-  Boot[App boot] --> LoadBuiltin[loadPlugin(builtinPlugin)]
-  LoadBuiltin --> Discover[await discoverPlugins()]
-  Discover --> LoadEach[for each: await loadPlugin(p)]
-  LoadEach --> Ready[Registry frozen for the session]
+  Boot["App boot"] --> LoadBuiltin["loadPlugin(builtinPlugin)"]
+  LoadBuiltin --> Discover["await discoverPlugins()"]
+  Discover --> LoadEach["for each plugin: await loadPlugin(plugin)"]
+  LoadEach --> Ready["Registry frozen for the session"]
 ```
 
 `loadPlugin` is **add-only** for v1. Hot-removing a kind would require tearing down every mounted instance in the scene — out of scope. Plugins are loaded once at boot.
@@ -110,6 +110,36 @@ setPluginDiscovery(async () => {
 
 `setPluginDiscovery` is global. Calling it twice silently overwrites — order with the bootstrap import matters.
 
+## Host panels and project installation
+
+The core `Plugin` manifest remains renderer-agnostic. A plugin that also ships editor UI exports an `EditorHostPanel` separately:
+
+```ts
+import type { EditorHostPanel } from '@pascal-app/editor'
+
+export const myHostPanel: EditorHostPanel = {
+  id: 'acme:furniture-pack:catalog',
+  pluginId: 'acme:furniture-pack',
+  label: 'Furniture pack',
+  description: 'A curated furniture catalog.',
+  creator: {
+    name: 'Acme',
+    url: 'https://acme.example',
+  },
+  pluginUrl: 'https://github.com/acme/pascal-furniture-pack',
+  icon: { kind: 'iconify', name: 'lucide:armchair' },
+  component: () => import('./catalog-panel'),
+}
+```
+
+The host registers that panel with `registerEditorHostPanel`. Registered plugins appear in the Plugins sidebar, while the scene graph's `installedPlugins: string[]` controls which plugin panels appear in that project's icon rail. `defaultInstalled: true` opts a first-party plugin into legacy and newly created projects; Nature uses this today.
+
+Install/uninstall is a project-level visibility operation. Plugin code and node definitions stay loaded for the browser session because `loadPlugin` is add-only, but an uninstalled plugin's panel, placement UI, renderers, systems, and floor-plan output are disabled. Existing plugin nodes remain serialized in the scene graph and become visible again when the plugin is reinstalled; uninstall never deletes project data.
+
+`creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins sidebar opens its detail page, where the host shows this metadata and the project install/uninstall control.
+
+Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
+
 ## Versioning
 
 `apiVersion: 1` covers the surface above. The host bumps the major when it removes or changes the shape of an existing field. New optional fields don't bump. The plan is to keep additions backwards-compatible as long as possible — the bump is the escape hatch, not the default.
@@ -120,7 +150,7 @@ A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The 
 
 - **Materials** — there's no `plugin.materials` slot. Use `createMaterial` from `@pascal-app/viewer` inside your `def.renderer` / `def.system`.
 - **Floor-plan primitives** — the `FloorplanGeometry` union is host-owned. To draw something the union can't express, fall back to `def.renderer` and render through a different 2D mount (or open an issue).
-- **Panels / sidebar UI** — host-specific. A host may layer its own extension surface on top of the core plugin manifest, but `@pascal-app/core` does not own that contract.
+- **Panels / sidebar UI in the core manifest** — host-specific. Export an `EditorHostPanel` separately for hosts that use `@pascal-app/editor`.
 - **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. Host stores are not part of the v1 plugin surface.
 - **Routes / pages** — plugins are visualisation + interaction code, not full app surfaces. Hosting a settings page belongs to the app.
 
@@ -128,7 +158,7 @@ The boundary stays narrow on purpose so the contract is shippable. Each "not yet
 
 ## Testing your plugin
 
-`@pascal-app/nodes` is the reference implementation — every built-in kind is structurally a plugin. To test locally:
+`@pascal-app/nodes` is the built-in reference implementation, and [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees) is the standalone example. To test locally:
 
 1. Build your plugin as a normal npm package with `@pascal-app/*` as peerDependencies.
 2. In a host app that consumes your built-ins (`apps/editor` is the easiest target), wire `setPluginDiscovery` to return your plugin.

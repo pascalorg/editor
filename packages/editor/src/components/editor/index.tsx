@@ -2,6 +2,7 @@
 
 import { Icon } from '@iconify/react'
 import {
+  acquireSceneReadOnlyLease,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getSceneMaterialIdFromRef,
@@ -29,7 +30,7 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
-import { initSFXBus } from '../../lib/sfx-bus'
+import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
@@ -69,6 +70,7 @@ import { GroupFloatingActionMenu } from './group-floating-action-menu'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { GroupSelectionBox3D } from './group-selection-box-3d'
 import { NodeArrowHandles } from './node-arrow-handles'
+import { QuickMeasurementHud } from './quick-measurement-hud'
 import { RiserDiagramPanel } from './riser-diagram-panel'
 import { SelectionManager } from './selection-manager'
 import { SiteEdgeLabels } from './site-edge-labels'
@@ -119,6 +121,7 @@ function initializeEditorRuntime(): () => void {
     unsubscribeSpaceDetection?.()
 
     spatialGridManager.clear()
+    disposeSFXBus()
 
     const outliner = useViewer.getState().outliner
     outliner.selectedObjects.length = 0
@@ -150,6 +153,11 @@ export interface EditorProps {
    * only while a node is selected.
    */
   inspectorFooter?: ReactNode
+
+  /** Host-owned content mounted inside the editor's React Three Fiber scene. */
+  viewerSceneSlot?: ReactNode
+  /** Host-owned SVG content mounted in the transformed floor-plan scene. */
+  floorplanSceneSlot?: ReactNode
 
   projectId?: string | null
 
@@ -713,12 +721,14 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode,
   isStudioMode,
   onThumbnailCapture,
+  viewerSceneSlot,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
   isStudioMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  viewerSceneSlot?: ReactNode
 }) {
   // Studio mode is a clean render/snapshot surface — no selection or editing
   // affordances. It mirrors version-preview's chrome gating on the canvas.
@@ -757,6 +767,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
+      {!noEditing && viewerSceneSlot}
     </>
   )
 })
@@ -939,6 +950,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey,
   onSceneReadyChange,
   onThumbnailCapture,
+  viewerSceneSlot,
+  floorplanSceneSlot,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -949,6 +962,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey: number
   onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  viewerSceneSlot?: ReactNode
+  floorplanSceneSlot?: ReactNode
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1015,6 +1030,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
       {/* `relative` so the floorplan compass (portaled here to stay visible in
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
       <div className="relative flex h-full" ref={setViewerAreaNode}>
+        <QuickMeasurementHud />
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
@@ -1024,7 +1040,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           }}
         >
           <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel compassHost={viewerAreaEl} />
+            <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
           </div>
           {viewMode === 'split' && (
             <div
@@ -1072,6 +1088,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
+              viewerSceneSlot={viewerSceneSlot}
             />
           </Viewer>
         </div>
@@ -1091,6 +1108,8 @@ export default function Editor({
   viewerToolbarRight,
   stageOverlay,
   inspectorFooter,
+  viewerSceneSlot,
+  floorplanSceneSlot,
   projectId,
   onLoad,
   onSave,
@@ -1206,13 +1225,10 @@ export default function Editor({
 
   // Lock scene graph and reset to select mode when entering version preview
   useEffect(() => {
-    useScene.getState().setReadOnly(isVersionPreviewMode)
-    if (isVersionPreviewMode) {
-      useEditor.getState().setMode('select')
-    }
-    return () => {
-      useScene.getState().setReadOnly(false)
-    }
+    if (!isVersionPreviewMode) return
+    const releaseReadOnly = acquireSceneReadOnlyLease()
+    useEditor.getState().setMode('select')
+    return releaseReadOnly
   }, [isVersionPreviewMode])
 
   useEffect(() => {
@@ -1311,6 +1327,8 @@ export default function Editor({
       onThumbnailCapture={onThumbnailCapture}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
+      viewerSceneSlot={viewerSceneSlot}
+      floorplanSceneSlot={floorplanSceneSlot}
     />
   )
 

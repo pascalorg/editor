@@ -95,6 +95,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
+  const measurementToolKind = useEditor((s) => s.toolDefaults.measurement?.kind)
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
   const movingNode = useMovingNode()
@@ -212,6 +213,18 @@ export function HelperManager() {
   // the idle selection hints.
   if (mode === 'select' && scope.kind === 'idle') {
     return <ContextualHelperPanel hints={selectModeHints} />
+  }
+
+  if (tool === 'measurement' && measurementToolKind === 'smart') {
+    return (
+      <ContextualHelperPanel
+        hints={[
+          { keys: ['Hover'], label: 'Inspect surface dimensions' },
+          { keys: ['Click'], label: 'Pin measurement lens' },
+          { keys: ['Esc'], label: 'Exit smart measure' },
+        ]}
+      />
+    )
   }
 
   // Legacy fallback — only `roof` remains because it hasn't migrated to
