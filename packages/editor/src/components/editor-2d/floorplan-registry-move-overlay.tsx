@@ -197,6 +197,10 @@ export function FloorplanRegistryMoveOverlay() {
 
       const commitFinalStateOrRevert = () => {
         const commitValid = session.canCommit()
+        const freshPlacement = isFreshPlacementMetadata(
+          (useScene.getState().nodes[movingNode.id] as { metadata?: unknown } | undefined)
+            ?.metadata,
+        )
 
         // Claim ownership of the drag teardown so the 3D move tool's
         // unmount-time cleanup skips its restore-from-snapshot — see
@@ -210,6 +214,29 @@ export function FloorplanRegistryMoveOverlay() {
         // planner). For those we still do Phase 1 (revert to baseline)
         // and Phase 2's resume — but Phase 2's write is delegated, and
         // we skip the snapshot-diff finalUpdates path.
+        if (commitValid && freshPlacement) {
+          session.commit?.()
+          const stagedNode = useScene.getState().nodes[movingNode.id]
+          const committedId = stagedNode
+            ? commitFreshPlacementSubtree(
+                movingNode.id as AnyNodeId,
+                {
+                  metadata: stripPlacementMetadataFlags(stagedNode.metadata),
+                  visible: true,
+                } as Partial<AnyNode>,
+              )
+            : null
+          if (historyPaused) {
+            resumeSceneHistory(useScene)
+            historyPaused = false
+          }
+          if (committedId) {
+            sfxEmitter.emit('sfx:item-place')
+            useViewer.getState().setSelection({ selectedIds: [committedId] })
+          }
+          return
+        }
+
         if (commitValid && session.commit) {
           useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
           if (historyPaused) {

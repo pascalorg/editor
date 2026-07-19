@@ -31,6 +31,7 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
+import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -476,6 +477,9 @@ export const RoofTool: React.FC = () => {
       })
 
       if (corner1Ref.current) {
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setRoofDraftStart([corner1Ref.current[0], corner1Ref.current[2]])
+        draftPreview.setRoofDraftEnd([gridX, gridZ])
         updateOutline(corner1Ref.current, cursorPosition)
       }
     }
@@ -497,11 +501,17 @@ export const RoofTool: React.FC = () => {
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 
         corner1Ref.current = null
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setRoofDraftStart(null)
+        draftPreview.setRoofDraftEnd(null)
         outlineRef.current.visible = false
         alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
         clearSurfacePlanSnapFeedback()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setRoofDraftStart([gridX, gridZ])
+        draftPreview.setRoofDraftEnd([gridX, gridZ])
         sfxEmitter.emit('sfx:structure-build-start')
         setPreview((prev) => ({
           ...prev,
@@ -514,6 +524,9 @@ export const RoofTool: React.FC = () => {
       if (corner1Ref.current) {
         markToolCancelConsumed()
         corner1Ref.current = null
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setRoofDraftStart(null)
+        draftPreview.setRoofDraftEnd(null)
         outlineRef.current.visible = false
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
@@ -531,6 +544,9 @@ export const RoofTool: React.FC = () => {
       clearSurfacePlanSnapFeedback()
 
       corner1Ref.current = null
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setRoofDraftStart(null)
+      draftPreview.setRoofDraftEnd(null)
     }
   }, [currentLevelId, setSelection])
 

@@ -198,6 +198,15 @@ export interface CameraControlFitSceneEvent {
   }
 }
 
+export interface CameraPose {
+  position: [number, number, number]
+  target: [number, number, number]
+  projection: 'perspective' | 'orthographic'
+  /** Width, in scene units, of the visible plane through `target`. */
+  viewWidth?: number
+  fov?: number
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:focus': CameraControlEvent
@@ -207,6 +216,10 @@ type CameraControlEvents = {
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  'camera-controls:pose': CameraPose
+  'camera-controls:apply-pose': CameraPose
+  'camera-controls:cancel-pose': undefined
+  'camera-controls:interaction-start': undefined
 }
 
 type ToolEvents = {

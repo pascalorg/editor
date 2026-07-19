@@ -21,6 +21,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  usePathDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -559,6 +560,35 @@ const DuctSegmentTool = () => {
   // the cursor was at key-press time.
   const lastClientYRef = useRef<number | null>(null)
 
+  const ghostFittings = useMemo(() => {
+    const last = draftPoints.at(-1)
+    if (!(activeLevelId && last && cursorPos) || altActive) return []
+    const fittings =
+      planDuctDraw(
+        last,
+        cursorPos,
+        startPortRef.current,
+        startBodyRef.current,
+        endSnap.port,
+        endSnap.body,
+        profile,
+      )?.fittings ?? []
+    return fittings.map(
+      (fitting, index): DuctFittingNode => ({
+        ...fitting,
+        id: `duct-fitting_live-draft-${index}`,
+        parentId: activeLevelId,
+      }),
+    )
+  }, [activeLevelId, altActive, cursorPos, draftPoints, endSnap, profile])
+
+  useEffect(() => {
+    usePathDraftPreview
+      .getState()
+      .setDraft('duct-segment', draftPoints, cursorPos, profile, ghostFittings)
+  }, [cursorPos, draftPoints, ghostFittings, profile])
+  useEffect(() => () => usePathDraftPreview.getState().clear('duct-segment'), [])
+
   useEffect(() => {
     if (!activeLevelId) return
 
@@ -926,22 +956,6 @@ const DuctSegmentTool = () => {
   if (last && cursorPos) {
     previewSegments.push({ a: last, b: cursorPos })
   }
-
-  // Ghost the auto-inserted fittings (elbow / tee / cross) the next click
-  // will mint, by running the SAME planner the commit uses against the
-  // in-flight endpoints. Skipped in Alt-vertical mode (no XZ tap there).
-  const ghostFittings =
-    last && cursorPos && !altActive
-      ? (planDuctDraw(
-          last,
-          cursorPos,
-          startPortRef.current,
-          startBodyRef.current,
-          endSnap.port,
-          endSnap.body,
-          profile,
-        )?.fittings ?? [])
-      : []
 
   // Wall-style dimension pill above the cursor: absolute world coords before
   // the first point, signed per-axis deltas from the last placed point while

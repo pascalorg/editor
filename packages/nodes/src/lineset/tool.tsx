@@ -11,6 +11,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  usePathDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -97,6 +98,11 @@ const LinesetTool = () => {
   draftRef.current = draftPoints
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
   const lastClientYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    usePathDraftPreview.getState().setDraft('lineset', draftPoints, cursorPos)
+  }, [cursorPos, draftPoints])
+  useEffect(() => () => usePathDraftPreview.getState().clear('lineset'), [])
 
   useEffect(() => {
     if (!activeLevelId) return

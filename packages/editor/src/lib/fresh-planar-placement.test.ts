@@ -8,6 +8,8 @@ import {
   findLevelAncestorId,
   nodeRegistry,
   registerNode,
+  type SceneCommit,
+  subscribeSceneCommits,
   useScene,
 } from '@pascal-app/core'
 import { z } from 'zod'
@@ -170,12 +172,15 @@ describe('commitFreshPlacementSubtree', () => {
   })
 
   test('commits a fresh draft as one undoable clean subtree', () => {
+    const commits: SceneCommit[] = []
+    const unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
     useScene.temporal.getState().pause()
 
     const committedId = commitFreshPlacementSubtree(SHELF_ID, {
       position: [2, 0, 3],
       visible: true,
     } as Partial<AnyNode>)
+    unsubscribe()
 
     expect(committedId).toBeTruthy()
     expect(committedId).not.toBe(SHELF_ID)
@@ -192,6 +197,12 @@ describe('commitFreshPlacementSubtree', () => {
     expect((useScene.getState().nodes[LEVEL_ID] as { children: AnyNodeId[] }).children).toEqual([
       finalId,
     ])
+    expect(commits).toHaveLength(1)
+    expect(commits[0]?.origin).toBe('local')
+    expect(commits[0]?.before.nodes[SHELF_ID]).toBeUndefined()
+    expect(commits[0]?.before.nodes[finalId]).toBeUndefined()
+    expect(commits[0]?.current.nodes[SHELF_ID]).toBeUndefined()
+    expect(commits[0]?.current.nodes[finalId]).toEqual(committed)
 
     useScene.temporal.getState().resume()
     useScene.temporal.getState().undo()
