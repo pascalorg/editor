@@ -80,4 +80,15 @@ describe('collectQuickActionNodeScope', () => {
       collectQuickActionNodeScope(nodes, selectedBase.id, 'level')?.[expandedWall.id as AnyNodeId],
     ).toBe(expandedWall)
   })
+
+  test('fails closed when a level-scoped provider has no level ancestor', () => {
+    const run = fixtureNode({ id: 'run', children: ['selected-base'] })
+    const selectedBase = fixtureNode({ id: 'selected-base', parentId: run.id })
+    const nodes = Object.fromEntries([run, selectedBase].map((node) => [node.id, node])) as Record<
+      AnyNodeId,
+      AnyNode
+    >
+
+    expect(collectQuickActionNodeScope(nodes, selectedBase.id, 'level')).toBeNull()
+  })
 })

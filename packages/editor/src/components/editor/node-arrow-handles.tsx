@@ -62,6 +62,7 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
+import { replacePreviewOverrideIds } from './handles/preview-overrides'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
@@ -728,7 +729,7 @@ function LinearArrow({
       // when the (snapped + clamped) value actually changes, so the cue
       // tracks real size steps instead of every sub-pixel pointer jitter.
       let lastTickValue = initialValue
-      const previewOverrideIds = new Set<AnyNodeId>()
+      let previewOverrideIds = new Set<AnyNodeId>()
 
       return {
         overrideId,
@@ -783,6 +784,14 @@ function LinearArrow({
           const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
           if (descriptor.kind === 'linear-resize' && descriptor.previewOverrides) {
             const previewEntries = descriptor.previewOverrides(initialNode as never, next, sceneApi)
+            const nextPreviewOverrideIds = replacePreviewOverrideIds(
+              previewOverrideIds,
+              previewEntries,
+              (previewId) => {
+                useLiveNodeOverrides.getState().clear(previewId)
+                useScene.getState().markDirty(previewId)
+              },
+            )
             useLiveNodeOverrides
               .getState()
               .setMany(
@@ -792,9 +801,9 @@ function LinearArrow({
                 ]),
               )
             for (const [previewId] of previewEntries) {
-              previewOverrideIds.add(previewId)
               useScene.getState().markDirty(previewId)
             }
+            previewOverrideIds = nextPreviewOverrideIds
           }
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)

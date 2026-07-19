@@ -37,6 +37,7 @@ export function collectQuickActionNodeScope(
       }
       current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
     }
+    return null
   }
 
   addSubtree(selected.id)
