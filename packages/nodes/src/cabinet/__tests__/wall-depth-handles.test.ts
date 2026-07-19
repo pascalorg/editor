@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type {
   AnyNode,
   AnyNodeId,
@@ -8,18 +8,9 @@ import type {
   LinearResizeHandle,
   SceneApi,
 } from '@pascal-app/core'
+import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { addCornerRun } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
-
-mock.module('../floorplan-move', () => ({ cabinetModuleFloorplanMoveTarget: () => null }))
-mock.module('../floorplan', () => ({
-  buildCabinetFloorplan: () => null,
-  buildCabinetModuleFloorplan: () => null,
-}))
-mock.module('../geometry', () => ({ buildCabinetGeometry: () => null }))
-mock.module('../paint', () => ({ cabinetPaint: {} }))
-
-const { cabinetDefinition, cabinetModuleDefinition } = await import('../definition')
 
 function wallDepthFixture() {
   const root = {
