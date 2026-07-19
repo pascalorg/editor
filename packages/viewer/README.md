@@ -5,19 +5,19 @@
 ## Installation
 
 ```bash
-npm install @pascal-app/viewer @pascal-app/core
+npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
 ```
 
 ## Peer Dependencies
 
 ```bash
-npm install react three @react-three/fiber @react-three/drei
+npm install next react react-dom three @react-three/fiber @react-three/drei lucide-react zustand
 ```
 
 ## What's Included
 
 - **Viewer Component** - WebGPU-powered 3D viewer with camera controls
-- **Node Renderers** - React Three Fiber components for all node types
+- **Node Rendering Runtime** - Registry-driven dispatch for node renderers supplied by `@pascal-app/nodes`
 - **Post-Processing** - SSGI (ambient occlusion + global illumination), TRAA (anti-aliasing), outline effects
 - **Level System** - Level visibility and positioning (stacked/exploded/solo modes)
 - **Wall Cutout System** - Dynamic wall hiding based on camera position
@@ -26,10 +26,22 @@ npm install react three @react-three/fiber @react-three/drei
 ## Usage
 
 ```typescript
-import { Viewer, useViewer } from '@pascal-app/viewer'
-import { useScene } from '@pascal-app/core'
+import { loadPlugin } from '@pascal-app/core'
+import { builtinPlugin } from '@pascal-app/nodes'
+import { Viewer } from '@pascal-app/viewer'
+import { useEffect, useState } from 'react'
+
+const registryReady = loadPlugin(builtinPlugin)
 
 function App() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    void registryReady.then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <Viewer />
@@ -37,6 +49,9 @@ function App() {
   )
 }
 ```
+
+Load the built-in plugin once, before mounting any viewer. Without it, the registry has no node
+definitions and scene nodes cannot render. Host-provided plugins use the same `loadPlugin` API.
 
 ## Custom Camera Controls
 
