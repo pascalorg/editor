@@ -37,19 +37,29 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     let timer: ReturnType<typeof setInterval> | null = null
     let sizeSynced = false
     const interval = 1000 / fps
+    function syncSize() {
+      if (sizeSynced) return
+      renderer.setPixelRatio(dpr)
+      renderer.setSize(size.width, size.height, false)
+      sizeSynced = true
+    }
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
-      if (!sizeSynced) {
-        renderer.setPixelRatio(dpr)
-        renderer.setSize(size.width, size.height, false)
-        sizeSynced = true
-      }
+      syncSize()
       elapsed = t - then
       if (elapsed > interval) {
         advance(i)
         i += elapsed / 1000 - (elapsed % interval) / 1000
         then = t - (elapsed % interval)
       }
+    }
+    function kick() {
+      syncSize()
+      i += 1 / 1000
+      advance(i)
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') kick()
     }
     // Set frameloop to never, it will shut down the default render loop
     set({ frameloop: 'never' })
@@ -61,6 +71,11 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
     } else {
       // Kick off custom render loop
       raf = requestAnimationFrame(tick)
+      // rAF can stall while a tab is hidden, unfocused, or occluded. With the
+      // default loop disabled, force one current frame as soon as it resumes.
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      window.addEventListener('focus', kick)
+      window.addEventListener('pageshow', kick)
     }
     // Restore initial setting
     return () => {
@@ -70,6 +85,9 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50 }) => {
       if (timer) {
         clearInterval(timer)
       }
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', kick)
+      window.removeEventListener('pageshow', kick)
       set({ frameloop: initFrameloop })
     }
   }, [advance, dpr, fps, initFrameloop, renderPaused, renderer, set, size.height, size.width])
