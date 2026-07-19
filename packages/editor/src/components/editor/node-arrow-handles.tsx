@@ -14,7 +14,6 @@ import {
   nodeRegistry,
   type RadialResizeHandle,
   sceneRegistry,
-  snapScalar,
   type TapActionHandle,
   useLiveNodeOverrides,
   useScene,
@@ -44,11 +43,10 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
-import { resolveDirectManipulationNode } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
-import useEditor from '../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
@@ -64,6 +62,8 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
+import { replacePreviewOverrideIds } from './handles/preview-overrides'
+import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
 // Pooled scratch for the handle rig's world-relative pose mapping.
@@ -213,8 +213,7 @@ export function NodeArrowHandles() {
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : activeRotateNodeId
   const rawNode = useScene((state) => {
     if (!selectedId) return null
-    const selectedNode = state.nodes[selectedId as AnyNodeId]
-    return selectedNode ? resolveDirectManipulationNode(selectedNode, state.nodes) : null
+    return state.nodes[selectedId as AnyNodeId] ?? null
   })
 
   // Merge any live drag override so the arrows themselves (positions,
@@ -234,7 +233,7 @@ export function NodeArrowHandles() {
     if (!(node && def?.handles)) return null
     const all =
       typeof def.handles === 'function'
-        ? def.handles(node as never)
+        ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
     // The whole-node move-cross gizmo is gone: moving is now click-to-move on
     // the selected node body (see selection-manager). Drop both flavours — the
@@ -718,10 +717,6 @@ function LinearArrow({
       const initialValue = descriptor.currentValue(initialNode)
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
-      const gridSnapStep =
-        descriptor.kind === 'linear-resize' && descriptor.gridSnap
-          ? useEditor.getState().gridSnapStep
-          : null
       const factor =
         descriptor.kind === 'radial-resize'
           ? 1
@@ -735,6 +730,7 @@ function LinearArrow({
       // when the (snapped + clamped) value actually changes, so the cue
       // tracks real size steps instead of every sub-pixel pointer jitter.
       let lastTickValue = initialValue
+      let previewOverrideIds = new Set<AnyNodeId>()
 
       return {
         overrideId,
@@ -756,6 +752,10 @@ function LinearArrow({
         onEnd: () => {
           useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
           if (onDrag) useOpeningGuides.getState().clear()
+          for (const previewId of previewOverrideIds) {
+            useLiveNodeOverrides.getState().clear(previewId)
+            useScene.getState().markDirty(previewId)
+          }
         },
         move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
@@ -766,16 +766,46 @@ function LinearArrow({
             ) / localToWorldScale
           const delta = currentPointer - initialPointer
           const rawNext = initialValue + delta * factor
-          const snappedNext =
-            !moveEvent.shiftKey && gridSnapStep && gridSnapStep > 0
-              ? snapScalar(rawNext, gridSnapStep)
-              : rawNext
+          const linearDescriptor = descriptor.kind === 'linear-resize' ? descriptor : null
+          const snappedNext = resolveResizeSnapValue({
+            rawValue: rawNext,
+            gridSnapEnabled: linearDescriptor?.gridSnap === true,
+            gridSnapActive: isGridSnapActive(),
+            gridSnapStep: useEditor.getState().gridSnapStep,
+            magneticSnapActive: isMagneticSnapActive(),
+            magneticSnap: linearDescriptor?.magneticSnap
+              ? (value) => linearDescriptor.magneticSnap?.(initialNode, value, sceneApi) ?? value
+              : undefined,
+          })
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))
           if (next !== lastTickValue) {
             lastTickValue = next
             sfxEmitter.emit('sfx:resize')
           }
           const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
+          if (descriptor.kind === 'linear-resize' && descriptor.previewOverrides) {
+            const previewEntries = descriptor.previewOverrides(initialNode as never, next, sceneApi)
+            const nextPreviewOverrideIds = replacePreviewOverrideIds(
+              previewOverrideIds,
+              previewEntries,
+              (previewId) => {
+                useLiveNodeOverrides.getState().clear(previewId)
+                useScene.getState().markDirty(previewId)
+              },
+            )
+            useLiveNodeOverrides
+              .getState()
+              .setMany(
+                previewEntries.map(([id, previewPatch]) => [
+                  id,
+                  previewPatch as Record<string, unknown>,
+                ]),
+              )
+            for (const [previewId] of previewEntries) {
+              useScene.getState().markDirty(previewId)
+            }
+            previewOverrideIds = nextPreviewOverrideIds
+          }
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
           return patch

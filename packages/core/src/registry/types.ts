@@ -1070,6 +1070,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * and runs through `SceneApi`.
    */
   quickActions?: NodeQuickActionProvider<z.infer<S>>
+  /** Scene-graph scope the quick-action provider needs for derived availability. */
+  quickActionNodeScope?: NodeQuickActionNodeScope
   /**
    * Sidebar-tree presentation hooks. Lets a kind reshape how the generic
    * scene tree walks its subtree — hiding derived/managed nodes and
@@ -1655,6 +1657,8 @@ export type NodeQuickActionResult = {
   selectedIds?: AnyNodeId[]
 }
 
+export type NodeQuickActionNodeScope = 'family' | 'level'
+
 export type NodeQuickAction = {
   id: string
   label: string
@@ -1667,6 +1671,8 @@ export type NodeQuickAction = {
    */
   icon?: NodeQuickActionIcon | IconRef
   disabled?: boolean
+  /** Whether pressing a disabled action should acknowledge its blocked state. */
+  blockedFeedback?: boolean
   history?: 'single'
   run: (args: { node: AnyNode; sceneApi: SceneApi }) => NodeQuickActionResult | undefined
 }

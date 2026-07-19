@@ -64,3 +64,17 @@ describe('wall mitering miter limit', () => {
     expect(startSideX).toBeGreaterThan(-0.5)
   })
 })
+
+describe('wall miter boundary sides', () => {
+  test('keeps left and right on the same physical face at both free endpoints', () => {
+    const node = wall('A', [0, 0], [3, 0])
+    const boundary = getWallMiterBoundaryPoints(node, calculateLevelMiters([node]))
+    expect(boundary).not.toBeNull()
+    if (!boundary) throw new Error('expected miter boundary points')
+
+    expect(boundary.startLeft.y).toBeCloseTo(0.05)
+    expect(boundary.endLeft.y).toBeCloseTo(0.05)
+    expect(boundary.startRight.y).toBeCloseTo(-0.05)
+    expect(boundary.endRight.y).toBeCloseTo(-0.05)
+  })
+})

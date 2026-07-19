@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 export function useMeshSettleEpoch(nodes: unknown): number {
   const [epoch, setEpoch] = useState(0)
   useEffect(() => {
+    void nodes
     let raf2 = 0
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => setEpoch((e) => e + 1))

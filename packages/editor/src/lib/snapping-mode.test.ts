@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
 import {
   cycleSnappingModeIn,
   DEFAULT_SNAPPING_MODE,
@@ -84,16 +85,34 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     zone: 'structural',
   }
   const profileOf = (t: string) => declared[t]
+  const profileOfNode = (id: string) =>
+    id === 'cabinet-module_1' ? declared.item : id === 'wall_1' ? declared.wall : undefined
   const ctx = (
-    scope: { kind: string; nodeType?: string; reshape?: string; tool?: string },
+    scope: {
+      kind: string
+      nodeType?: string
+      reshape?: string
+      nodeId?: string
+      tool?: string
+      handle?: string
+    },
     mode = 'select',
     tool: string | null = null,
-  ) => snapContextOf({ scope, mode, tool, profileOf })
+  ) => snapContextOf({ scope, mode, tool, profileOf, profileOfNode })
 
   it('translating a whole structural node has no angle (polygon, not wall)', () => {
     expect(ctx({ kind: 'moving', nodeType: 'wall' })).toBe('polygon')
     expect(ctx({ kind: 'moving', nodeType: 'slab' })).toBe('polygon')
     expect(ctx({ kind: 'placing', nodeType: 'item' }, 'build', 'item')).toBe('item')
+  })
+
+  it('resolves handle drags from the target node profile', () => {
+    expect(ctx({ kind: 'handle-drag', nodeId: 'cabinet-module_1' })).toBe('item')
+    expect(ctx({ kind: 'handle-drag', nodeId: 'wall_1' })).toBe('polygon')
+    expect(ctx({ kind: 'handle-drag', nodeId: 'unknown_1' })).toBeNull()
+    expect(
+      ctx({ kind: 'handle-drag', nodeId: 'cabinet-module_1', handle: ROTATE_HANDLE_DRAG_LABEL }),
+    ).toBeNull()
   })
 
   it('endpoint reshape is angle-bearing (wall); curve + polygon vertex edits are not', () => {

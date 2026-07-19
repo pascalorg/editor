@@ -44,7 +44,7 @@ describe('resolveCabinetWallSnapPlacement', () => {
     expect(placement!.yaw).toBeCloseTo(0)
   })
 
-  test('snaps along the wall axis when grid snap is active', () => {
+  test('snaps a footprint edge along the wall axis when grid snap is active', () => {
     const placement = resolveCabinetWallSnapPlacement({
       depth: 0.58,
       gridStep: 0.5,
@@ -53,8 +53,9 @@ describe('resolveCabinetWallSnapPlacement', () => {
     })
 
     expect(placement).not.toBeNull()
-    expect(placement!.localX).toBeCloseTo(0.5)
-    expect(placement!.position[0]).toBeCloseTo(0.5)
+    expect(placement!.localX).toBeCloseTo(0.8)
+    expect(placement!.position[0]).toBeCloseTo(0.8)
+    expect(placement!.localX - 0.6 / 2).toBeCloseTo(0.5)
   })
 
   test('clamps the cabinet center so its edges stay inside the wall span', () => {
@@ -466,7 +467,8 @@ describe('resolveCabinetRunWallSnap', () => {
     })
 
     expect(snapped).not.toBeNull()
-    expect(snapped![0]).toBeCloseTo(1)
+    expect(snapped![0]).toBeCloseTo(1.45)
+    expect(snapped![0] - movingModule.width / 2).toBeCloseTo(1)
     expect(snapped![2]).toBeCloseTo(0.39)
   })
 

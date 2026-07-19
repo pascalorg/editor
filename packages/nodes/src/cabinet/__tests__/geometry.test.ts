@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId, GeometryContext, LinearResizeHandle } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  GeometryContext,
+  HandleDescriptor,
+  LinearResizeHandle,
+} from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { Box3 } from 'three'
 import { bakeCabinetAnimationClip } from '../animation'
@@ -1316,10 +1322,15 @@ describe('buildCabinetGeometry — run countertops', () => {
       'rendered',
       false,
     )
-    const plinth = worldBounds(findMeshByName(group, 'cabinet-run-plinth'))
+    const plinths = findMeshesBySlot(group, 'plinth')
+      .map(worldBounds)
+      .sort((a, b) => a.min.x - b.min.x)
 
-    expect(plinth.min.z).toBeCloseTo(-standardDepth / 2)
-    expect(plinth.max.z).toBeCloseTo(fridgeZ + FRIDGE_STANDARD_DEPTH / 2 - run.toeKickDepth)
+    expect(plinths).toHaveLength(2)
+    expect(plinths[0]!.min.z).toBeCloseTo(-standardDepth / 2)
+    expect(plinths[0]!.max.z).toBeCloseTo(standardDepth / 2 - run.toeKickDepth)
+    expect(plinths[1]!.min.z).toBeCloseTo(-standardDepth / 2)
+    expect(plinths[1]!.max.z).toBeCloseTo(fridgeZ + FRIDGE_STANDARD_DEPTH / 2 - run.toeKickDepth)
   })
 
   test('run countertop follows shifted module depth extents instead of staying centered', () => {
@@ -1353,6 +1364,54 @@ describe('buildCabinetGeometry — run countertops', () => {
     expect(countertop).toBeDefined()
     expect(countertop!.minZ).toBeCloseTo(-standardDepth / 2)
     expect(countertop!.maxZ).toBeCloseTo(shiftedZ + nextDepth / 2 + run.countertopOverhang)
+  })
+
+  test('run countertop and plinth split at cabinet depth changes', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_individual-depth-surfaces',
+      showPlinth: true,
+      withCountertop: true,
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_shallow-surface',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [-0.3, run.plinthHeight, 0.25],
+        width: 0.6,
+        depth: 0.5,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_deep-surface',
+        parentId: run.id,
+        cabinetType: 'base',
+        position: [0.3, run.plinthHeight, 0.35],
+        width: 0.6,
+        depth: 0.7,
+      }),
+    ]
+
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+    const countertops = countertopBounds(group)
+    const plinths = findMeshesBySlot(group, 'plinth')
+      .map(worldBounds)
+      .sort((a, b) => a.min.x - b.min.x)
+
+    expect(countertops).toHaveLength(2)
+    expect(countertops[0]!.minZ).toBeCloseTo(0)
+    expect(countertops[0]!.maxZ).toBeCloseTo(0.5 + run.countertopOverhang)
+    expect(countertops[1]!.minZ).toBeCloseTo(0)
+    expect(countertops[1]!.maxZ).toBeCloseTo(0.7 + run.countertopOverhang)
+    expect(plinths).toHaveLength(2)
+    expect(plinths[0]!.min.z).toBeCloseTo(0)
+    expect(plinths[0]!.max.z).toBeCloseTo(0.5 - run.toeKickDepth)
+    expect(plinths[1]!.min.z).toBeCloseTo(0)
+    expect(plinths[1]!.max.z).toBeCloseTo(0.7 - run.toeKickDepth)
   })
 
   test('island back overhang extends the slab backward and adds a finished back panel', () => {
@@ -2187,7 +2246,7 @@ describe('cabinet handles', () => {
     ] as const
   }
 
-  function linearHandles() {
+  function moduleHandles() {
     const node = CabinetModuleNode.parse({
       position: [0, 0.1, 0],
       width: 0.6,
@@ -2197,32 +2256,335 @@ describe('cabinet handles', () => {
       typeof cabinetModuleDefinition.handles === 'function'
         ? cabinetModuleDefinition.handles(node)
         : (cabinetModuleDefinition.handles ?? [])
+    return { handles, node }
+  }
+
+  function generatedL(side: 'left' | 'right') {
+    const run = CabinetNode.parse({
+      id: `cabinet_handle-source-${side}`,
+      parentId: `level_handle-source-${side}`,
+      position: [0, 0, 0],
+      depth: 0.58,
+      children: [`cabinet-module_handle-source-${side}`],
+    })
+    const sourceModule = CabinetModuleNode.parse({
+      id: `cabinet-module_handle-source-${side}`,
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, sourceModule as AnyNode])
+    const selectedId = addCornerRun({ module: sourceModule, run, sceneApi, side })!
+    const selectedModule = sceneApi.get(selectedId) as CabinetModuleNode
+    const leg = sceneApi.get(selectedModule.parentId as AnyNodeId) as CabinetNode
+    const source = sceneApi.get(run.id as AnyNodeId) as CabinetNode
+    const liveSourceModule = sceneApi.get(sourceModule.id as AnyNodeId) as CabinetModuleNode
+    const legModule = leg.children
+      .map((id) => sceneApi.get(id as AnyNodeId))
+      .find((node): node is CabinetModuleNode => node?.type === 'cabinet-module')!
+    const handles =
+      typeof cabinetDefinition.handles === 'function'
+        ? cabinetDefinition.handles(source, sceneApi as never)
+        : (cabinetDefinition.handles ?? [])
+    const depthHandles = handles.filter(
+      (handle): handle is LinearResizeHandle<typeof source> =>
+        handle.kind === 'linear-resize' && handle.visible?.(source, sceneApi as never) !== false,
+    )
     return {
-      node,
-      handles: handles.filter(
-        (handle): handle is LinearResizeHandle<typeof node> => handle.kind === 'linear-resize',
-      ),
+      depthHandles,
+      leg,
+      legModule,
+      sceneApi,
+      selectedModule,
+      source,
+      sourceModule: liveSourceModule,
     }
   }
 
-  test('width arrows resize from the chosen side instead of around center', () => {
-    const { node, handles } = linearHandles()
-    const leftHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'max')
-    const rightHandle = handles.find((handle) => handle.axis === 'x' && handle.anchor === 'min')
+  function generatedU(side: 'left' | 'right') {
+    const fixture = generatedL(side)
+    const thirdSelectedId = addCornerRun({
+      module: fixture.selectedModule,
+      run: fixture.leg,
+      sceneApi: fixture.sceneApi,
+      side,
+    })!
+    const thirdSelectedModule = fixture.sceneApi.get(thirdSelectedId) as CabinetModuleNode
+    const thirdRun = fixture.sceneApi.get(thirdSelectedModule.parentId as AnyNodeId) as CabinetNode
+    const source = fixture.sceneApi.get(fixture.source.id as AnyNodeId) as CabinetNode
+    const buildHandles = cabinetDefinition.handles as (
+      node: CabinetNode,
+      sceneApi: ReturnType<typeof sceneApiFixture>,
+    ) => HandleDescriptor<CabinetNode>[]
+    const depthHandles = buildHandles(source, fixture.sceneApi).filter(
+      (handle): handle is LinearResizeHandle<CabinetNode> =>
+        handle.kind === 'linear-resize' &&
+        handle.visible?.(source, fixture.sceneApi as never) !== false,
+    )
+    return { ...fixture, depthHandles, source, thirdRun }
+  }
 
+  test('single cabinet side arrows resize from the dragged side', () => {
+    const { handles, node } = moduleHandles()
+    const widthHandles = handles.filter(
+      (handle): handle is LinearResizeHandle<typeof node> =>
+        handle.kind === 'linear-resize' && handle.axis === 'x',
+    )
+    const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')
+    const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')
+
+    expect(handles).toHaveLength(3)
     expect(leftHandle).toBeDefined()
     expect(rightHandle).toBeDefined()
     expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
     expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
   })
 
-  test('depth arrow keeps the back aligned and grows toward the front', () => {
-    const { node, handles } = linearHandles()
-    const depthHandle = handles.find((handle) => handle.axis === 'z')
+  test.each([
+    ['left', -Math.PI / 2],
+    ['right', Math.PI / 2],
+  ] as const)('L %s groups expose a depth arrow on both inside fronts', (_side, legRotation) => {
+    const sourceModule = CabinetModuleNode.parse({
+      id: `cabinet-module_source-${_side}`,
+      parentId: `cabinet_source-${_side}`,
+      position: [0, 0.1, 0],
+      depth: 0.58,
+    })
+    const legModule = CabinetModuleNode.parse({
+      id: `cabinet-module_leg-${_side}`,
+      parentId: `cabinet_leg-${_side}`,
+      position: [0, 0.1, 0],
+      depth: 0.58,
+    })
+    const leg = CabinetNode.parse({
+      id: `cabinet_leg-${_side}`,
+      parentId: `cabinet_source-${_side}`,
+      position: [legRotation < 0 ? -0.6 : 0.6, 0, 0.3],
+      rotation: legRotation,
+      depth: 0.58,
+      children: [legModule.id],
+      metadata: {
+        cabinetCornerDerivedRun: {
+          role: 'base-leg',
+          side: _side,
+          turnSide: _side,
+          sourceModuleId: sourceModule.id,
+          sourceRunId: `cabinet_source-${_side}`,
+        },
+      },
+    })
+    const run = {
+      ...CabinetNode.parse({
+        id: `cabinet_source-${_side}`,
+        position: [0, 0, 0],
+        depth: 0.58,
+        children: [sourceModule.id],
+      }),
+      children: [sourceModule.id, leg.id],
+    } as CabinetNode
+    const nodes = Object.fromEntries(
+      [run, sourceModule, leg, legModule].map((node) => [node.id as AnyNodeId, node as AnyNode]),
+    ) as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: (id: AnyNodeId) => nodes[id],
+      nodes: () => nodes,
+    }
+    const handles =
+      typeof cabinetDefinition.handles === 'function'
+        ? cabinetDefinition.handles(run, sceneApi as never)
+        : (cabinetDefinition.handles ?? [])
+    const depthHandles = handles.filter(
+      (handle): handle is LinearResizeHandle<typeof run> =>
+        handle.kind === 'linear-resize' && handle.visible?.(run, sceneApi as never) !== false,
+    )
 
+    expect(depthHandles.map((handle) => handle.axis).sort()).toEqual(['x', 'z'])
+
+    const legHandle = depthHandles.find((handle) => handle.axis === 'x')!
+    const frontOffset = leg.depth / 2 + 0.18
+    expect(legHandle.overrideTarget?.(run, sceneApi as never)).toBe(leg.id)
+    expect(legHandle.placement.position(run, sceneApi as never)[0]).toBeCloseTo(
+      leg.position[0] + Math.sin(legRotation) * frontOffset,
+    )
+    expect(legHandle.placement.position(run, sceneApi as never)[2]).toBeCloseTo(
+      leg.position[2] + Math.cos(legRotation) * frontOffset,
+    )
+
+    const patch = legHandle.apply(run, 0.78, sceneApi as never)
+    expect(patch.depth).toBeCloseTo(0.78)
+    expect(patch.position).toBeUndefined()
+
+    const originalBack = legModule.position[2] - legModule.depth / 2
+    const preview = legHandle.previewOverrides?.(run, 0.78, sceneApi as never) ?? []
+    const modulePreview = preview.find(([id]) => id === legModule.id)?.[1]
+    expect(modulePreview?.depth).toBeCloseTo(0.78)
+    expect(modulePreview?.position?.[2] - modulePreview?.depth / 2).toBeCloseTo(originalBack)
+    expect(nodes[legModule.id]?.depth).toBeCloseTo(0.58)
+    expect(nodes[legModule.id]?.position[2]).toBeCloseTo(0)
+  })
+
+  test('plain grouped runs expose bottom depth and rotate affordances', () => {
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_plain-group',
+      parentId: 'cabinet_plain-group',
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_plain-group',
+      children: [module.id],
+    })
+    const nodes = { [run.id]: run, [module.id]: module } as Record<AnyNodeId, AnyNode>
+    const sceneApi = {
+      get: (id: AnyNodeId) => nodes[id],
+      nodes: () => nodes,
+    }
+    const handles =
+      typeof cabinetDefinition.handles === 'function'
+        ? cabinetDefinition.handles(run, sceneApi as never)
+        : (cabinetDefinition.handles ?? [])
+    const visibleHandles = handles.filter(
+      (handle) =>
+        handle.kind !== 'linear-resize' || handle.visible?.(run, sceneApi as never) !== false,
+    )
+
+    expect(visibleHandles).toHaveLength(2)
+    const depthHandle = visibleHandles.find(
+      (handle): handle is LinearResizeHandle<typeof run> =>
+        handle.kind === 'linear-resize' && handle.axis === 'z',
+    )
     expect(depthHandle).toBeDefined()
-    expect(depthHandle!.anchor).toBe('min')
-    expect(depthHandle!.apply(node, 0.78, null as never).position?.[2]).toBeCloseTo(0.1)
+    expect(depthHandle?.overrideTarget?.(run, sceneApi as never)).toBe(run.id)
+    expect(visibleHandles.some((handle) => handle.kind === 'arc-resize')).toBe(true)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('source depth on an L %s changes only the source leg', (side) => {
+    const { depthHandles, leg, sceneApi, source, sourceModule } = generatedL(side)
+    const handle = depthHandles.find((candidate) => candidate.axis === 'z')!
+    const initialSourcePosition = [...source.position]
+    const initialLegPosition = [...leg.position]
+    const initialSourceBack = sourceModule.position[2] - sourceModule.depth / 2
+    const patch = handle.apply(source, 0.78, sceneApi as never)
+
+    expect(patch.position).toBeUndefined()
+    handle.commit?.(source, patch, sceneApi as never)
+
+    expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(0.78)
+    expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
+    const resizedSourceModule = sceneApi.get<CabinetModuleNode>(sourceModule.id)!
+    expect(resizedSourceModule.position[2] - resizedSourceModule.depth / 2).toBeCloseTo(
+      initialSourceBack,
+    )
+    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(leg.depth)
+    expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('perpendicular depth on an L %s changes only the derived leg', (side) => {
+    const { depthHandles, leg, legModule, sceneApi, source } = generatedL(side)
+    const handle = depthHandles.find((candidate) => candidate.axis === 'x')!
+    const initialSourcePosition = [...source.position]
+    const initialLegPosition = [...leg.position]
+    const initialLegBack = legModule.position[2] - legModule.depth / 2
+    const cornerWallFiller = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetModuleNode =>
+        node.type === 'cabinet-module' && node.name === 'Corner Wall Filler',
+    )!
+    const initialCornerWallWorld = resolveCabinetWorldTransform(
+      cornerWallFiller,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    const patch = handle.apply(source, 0.48, sceneApi as never)
+
+    handle.commit?.(source, patch, sceneApi as never)
+
+    expect(sceneApi.get<CabinetNode>(leg.id)?.depth).toBeCloseTo(0.48)
+    expect(sceneApi.get<CabinetNode>(leg.id)?.position).toEqual(initialLegPosition)
+    const resizedLegModule = sceneApi.get<CabinetModuleNode>(legModule.id)!
+    expect(resizedLegModule.position[2] - resizedLegModule.depth / 2).toBeCloseTo(initialLegBack)
+    expect(sceneApi.get<CabinetNode>(source.id)?.depth).toBeCloseTo(source.depth)
+    expect(sceneApi.get<CabinetNode>(source.id)?.position).toEqual(initialSourcePosition)
+    const resizedCornerWallWorld = resolveCabinetWorldTransform(
+      sceneApi.get<CabinetModuleNode>(cornerWallFiller.id)!,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    expect(resizedCornerWallWorld.position[0]).toBeCloseTo(initialCornerWallWorld.position[0])
+    expect(resizedCornerWallWorld.position[2]).toBeCloseTo(initialCornerWallWorld.position[2])
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('chained L %s groups expose one centered depth arrow per run', (side) => {
+    const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
+    const runs = [source, leg, thirdRun]
+    const sourceWorld = resolveCabinetWorldTransform(
+      source,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    const sourceCos = Math.cos(sourceWorld.rotation)
+    const sourceSin = Math.sin(sourceWorld.rotation)
+    const targetIds = depthHandles.map(
+      (handle) => handle.overrideTarget?.(source, sceneApi as never) ?? source.id,
+    )
+
+    expect(new Set(targetIds)).toEqual(new Set(runs.map((run) => run.id)))
+    expect(depthHandles).toHaveLength(3)
+
+    for (const run of runs) {
+      const modules = run.children
+        .map((id) => sceneApi.get(id as AnyNodeId))
+        .filter((node): node is CabinetModuleNode => node?.type === 'cabinet-module')
+      const centerX =
+        (Math.min(...modules.map((module) => module.position[0] - module.width / 2)) +
+          Math.max(...modules.map((module) => module.position[0] + module.width / 2))) /
+        2
+      const frontZ = Math.max(...modules.map((module) => module.position[2] + module.depth / 2))
+      const runWorld = resolveCabinetWorldTransform(
+        run,
+        sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+      )
+      const frontWorld = localPointToWorld(runWorld, [centerX, 0, frontZ + 0.18])
+      const dx = frontWorld[0] - sourceWorld.position[0]
+      const dz = frontWorld[2] - sourceWorld.position[2]
+      const expectedX = sourceCos * dx - sourceSin * dz
+      const expectedZ = sourceSin * dx + sourceCos * dz
+      const handle = depthHandles.find(
+        (candidate) =>
+          (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === run.id,
+      )!
+      const position = handle.placement.position(source, sceneApi as never)
+
+      expect(position[0]).toBeCloseTo(expectedX)
+      expect(position[2]).toBeCloseTo(expectedZ)
+    }
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('depth resize on a chained L %s updates the connected corner width', (side) => {
+    const { depthHandles, leg, sceneApi, source, thirdRun } = generatedU(side)
+    const handle = depthHandles.find(
+      (candidate) =>
+        (candidate.overrideTarget?.(source, sceneApi as never) ?? source.id) === leg.id,
+    )!
+    const patch = handle.apply(source, 0.78, sceneApi as never)
+
+    handle.commit?.(source, patch, sceneApi as never)
+
+    const connectedFiller = thirdRun.children
+      .map((id) => sceneApi.get(id as AnyNodeId))
+      .find(
+        (node): node is CabinetModuleNode =>
+          node?.type === 'cabinet-module' && node.name === 'Corner Filler',
+      )!
+    expect(connectedFiller.width).toBeCloseTo(0.78)
   })
 
   test('run rotation keeps the cabinet bounding-box center fixed', () => {
@@ -2255,7 +2617,7 @@ describe('cabinet handles', () => {
     }
     const rotateHandle = (
       typeof cabinetDefinition.handles === 'function'
-        ? cabinetDefinition.handles(run)
+        ? cabinetDefinition.handles(run, sceneApi as never)
         : (cabinetDefinition.handles ?? [])
     ).find((handle) => handle.kind === 'arc-resize' && handle.shape === 'rotate')
 

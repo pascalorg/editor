@@ -31,6 +31,7 @@ const CORNER_FILLER_TOP_INSET = 0.001
 const CORNER_FILLER_SIDE_INSET = 0.001
 const WALL_CORNER_FILLER_FRONT_HEIGHT_INSET = 0.001
 const SINK_FALSE_FRONT_HEIGHT = 0.22
+const MIN_RENDERABLE_BRIDGE_FILLER_WIDTH = 1e-4
 
 export function buildCabinetGeometry(
   node: CabinetGeometryNode,
@@ -43,6 +44,9 @@ export function buildCabinetGeometry(
   if (node.type === 'cabinet') {
     const run = buildCabinetRunGeometry(node, ctx, shading, textures, colorPreset, sceneTheme)
     if (run) return run
+    return new Group()
+  }
+  if (node.name === 'Wall Bridge Filler' && node.width <= MIN_RENDERABLE_BRIDGE_FILLER_WIDTH) {
     return new Group()
   }
 

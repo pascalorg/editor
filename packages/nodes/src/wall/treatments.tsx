@@ -2,6 +2,7 @@
 
 import {
   getWallCurveFrameAt,
+  getWallMiterBoundaryPoints,
   getWallThickness,
   isCurvedWall,
   type SceneMaterial,
@@ -24,6 +25,7 @@ import {
 import { memo, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
 const CURVE_SEGMENTS = 24
 const MIN_SLICE_PROUD = 0.0005
@@ -257,6 +259,28 @@ function resolveTrimProfile(kind: TrimKind, trim: WallTrimConfig) {
   )
 }
 
+export function wallTreatmentProudOffsets(node: WallNode): number[] {
+  const offsets = new Set<number>()
+  const configs: Array<[TrimKind, WallTrimConfig | undefined]> = [
+    ['skirting', node.skirting],
+    ['crown', node.crown],
+    ['chairRail', node.chairRail],
+  ]
+
+  for (const [kind, rawConfig] of configs) {
+    const trim = { ...TRIM_KIND_CONFIG[kind].defaultConfig, ...(rawConfig ?? {}) }
+    if (!trim.enabled) continue
+    const profile = resolveTrimProfile(kind, trim)
+    if (!profile) continue
+    for (let index = 0; index < profile.samples; index += 1) {
+      const t = (index + 0.5) / profile.samples
+      offsets.add(Math.max(MIN_SLICE_PROUD, trim.proud * profile.proudAt(t)))
+    }
+  }
+
+  return [...offsets]
+}
+
 function resolveTreatmentSideSign(node: WallNode, side: WallSide) {
   if (side === 'interior') {
     if (node.frontSide === 'interior') return 1
@@ -300,8 +324,30 @@ function buildSidePolyline(node: WallNode, side: WallSide, offset: number): Poin
   return points
 }
 
-function clipPolyline(points: Point2[], x0: number, x1: number): Point2[] {
-  if (points.length < 2 || x1 - x0 <= EPS) return []
+function buildMiteredSidePolyline(
+  node: WallNode,
+  levelData: WallTreatmentLevelData,
+  side: WallSide,
+  offset: number,
+): Point2[] {
+  if (isCurvedWall(node)) return buildSidePolyline(node, side, offset)
+
+  const sideSign = resolveTreatmentSideSign(node, side)
+  const toLocal = wallToLocalTransform(node)
+  const proud = offset - getWallThickness(node) / 2
+  const boundarySource = treatmentMiterDataForProud(levelData, proud)
+  if (!boundarySource) return buildSidePolyline(node, side, offset)
+  const boundary = getWallMiterBoundaryPoints({ ...node, thickness: offset * 2 }, boundarySource)
+
+  if (!boundary) return buildSidePolyline(node, side, offset)
+
+  const start = sideSign > 0 ? boundary.startLeft : boundary.startRight
+  const end = sideSign > 0 ? boundary.endLeft : boundary.endRight
+  return [toLocal(start.x, start.y), toLocal(end.x, end.y)]
+}
+
+function clipPolyline(points: Point2[], x0?: number, x1?: number): Point2[] {
+  if (points.length < 2 || (x0 !== undefined && x1 !== undefined && x1 - x0 <= EPS)) return []
   const out: Point2[] = []
   for (let index = 0; index < points.length - 1; index += 1) {
     const a = points[index]
@@ -309,7 +355,9 @@ function clipPolyline(points: Point2[], x0: number, x1: number): Point2[] {
     if (!(a && b)) continue
     const minX = Math.min(a.x, b.x)
     const maxX = Math.max(a.x, b.x)
-    if (maxX < x0 - EPS || minX > x1 + EPS) continue
+    if ((x0 !== undefined && maxX < x0 - EPS) || (x1 !== undefined && minX > x1 + EPS)) {
+      continue
+    }
 
     const pushPointAt = (x: number) => {
       if (Math.abs(b.x - a.x) <= EPS) {
@@ -322,8 +370,8 @@ function clipPolyline(points: Point2[], x0: number, x1: number): Point2[] {
       }
     }
 
-    const start = minX < x0 ? pushPointAt(x0) : a
-    const end = maxX > x1 ? pushPointAt(x1) : b
+    const start = x0 !== undefined && minX < x0 ? pushPointAt(x0) : a
+    const end = x1 !== undefined && maxX > x1 ? pushPointAt(x1) : b
     if (
       out.length === 0 ||
       Math.hypot(out[out.length - 1]!.x - start.x, out[out.length - 1]!.z - start.z) > EPS
@@ -446,12 +494,13 @@ function mergeGeometries(geometries: THREE.BufferGeometry[]) {
   return null
 }
 
-function buildTrimGeometry(
+export function buildTrimGeometry(
   node: WallNode,
   side: WallSide,
   trim: WallTrimConfig,
   kind: TrimKind,
   childrenNodes: OpeningLike[],
+  levelData: WallTreatmentLevelData,
 ) {
   const wallHeight = node.height ?? 2.5
   const height = trim.height
@@ -466,11 +515,12 @@ function buildTrimGeometry(
         : 0
 
   const thickness = getWallThickness(node)
-  const inner = buildSidePolyline(node, side, thickness / 2)
+  const inner = buildMiteredSidePolyline(node, levelData, side, thickness / 2)
   if (inner.length < 2) return null
 
+  const wallLength = Math.hypot(node.end[0] - node.start[0], node.end[1] - node.start[1])
   const openingRanges = trimOpeningRanges(node, childrenNodes, yBottom, height)
-  const fullRanges: Array<[number, number]> = [[inner[0]!.x, inner[inner.length - 1]!.x]]
+  const fullRanges: Array<[number, number]> = [[0, wallLength]]
   const runs = subtractOpeningRanges(fullRanges, openingRanges)
   if (runs.length === 0) return null
 
@@ -480,13 +530,15 @@ function buildTrimGeometry(
   const sliceHeight = height / profile.samples
 
   for (const [runStart, runEnd] of runs) {
-    const innerRun = clipPolyline(inner, runStart, runEnd)
+    const clipStart = runStart > EPS ? runStart : undefined
+    const clipEnd = runEnd < wallLength - EPS ? runEnd : undefined
+    const innerRun = clipPolyline(inner, clipStart, clipEnd)
     if (innerRun.length < 2) continue
     for (let index = 0; index < profile.samples; index += 1) {
       const t = (index + 0.5) / profile.samples
       const proud = Math.max(MIN_SLICE_PROUD, trim.proud * profile.proudAt(t))
-      const outerRun = buildSidePolyline(node, side, thickness / 2 + proud)
-      const outerClipped = clipPolyline(outerRun, runStart, runEnd)
+      const outerRun = buildMiteredSidePolyline(node, levelData, side, thickness / 2 + proud)
+      const outerClipped = clipPolyline(outerRun, clipStart, clipEnd)
       if (outerClipped.length < 2) continue
       const slice = buildTrimSliceGeometry(
         outerClipped,
@@ -538,10 +590,12 @@ export function createWallExtraSlotMaterials(
 export const WallTreatments = memo(function WallTreatments({
   node,
   childrenNodes,
+  levelData,
   materials,
 }: {
   node: WallNode
   childrenNodes: OpeningLike[]
+  levelData: WallTreatmentLevelData
   materials: Record<WallTreatmentSlotId, THREE.Material>
 }) {
   const fallbackMaterial =
@@ -574,7 +628,7 @@ export const WallTreatments = memo(function WallTreatments({
           ? (['interior', 'exterior'] as WallSide[])
           : ([trim.sides] as WallSide[])
       for (const side of sides) {
-        const geometry = buildTrimGeometry(node, side, trim, kind, childrenNodes)
+        const geometry = buildTrimGeometry(node, side, trim, kind, childrenNodes, levelData)
         if (!geometry) continue
         const slotId = TRIM_KIND_CONFIG[kind].slots[side]
         out.push({
@@ -587,7 +641,7 @@ export const WallTreatments = memo(function WallTreatments({
     }
 
     return out
-  }, [childrenNodes, fallbackMaterial, materials, node])
+  }, [childrenNodes, fallbackMaterial, levelData, materials, node])
 
   useEffect(
     () => () => {

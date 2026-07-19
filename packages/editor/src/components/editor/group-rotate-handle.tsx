@@ -132,6 +132,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
   //   - `pivot`  = bbox center (XZ), Y at the group's base → the rotation origin
   //   - `corner` = front-right bbox corner at mid-height → where the gizmo sits
   const rest = useMemo(() => {
+    void meshEpoch
     const box = computeGroupBox(ids)
     if (!box) return null
     const pivot = new Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
@@ -141,7 +142,6 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       box.max.z + CORNER_OFFSET,
     )
     return { pivot, corner }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
   }, [ids, meshEpoch])
 
   if (!rest) return null

@@ -613,6 +613,7 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   // which lag the `nodes` commit by a frame or two.
   const meshEpoch = useMeshSettleEpoch(nodes)
   const box = useMemo(() => {
+    void meshEpoch
     if (selectedIds.length < 2 || !levelId) return null
     const participantIds = selectedIds.filter(
       (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
@@ -630,7 +631,6 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
       width: Math.abs(max.x - min.x),
       depth: Math.abs(max.z - min.z),
     }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: meshEpoch re-measures settled meshes
   }, [selectedIds, levelId, nodes, meshEpoch])
 
   if (!box || movingNode || mode === 'delete') return null

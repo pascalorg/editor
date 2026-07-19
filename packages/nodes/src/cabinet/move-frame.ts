@@ -15,13 +15,13 @@ const GUIDE_EPSILON_M = 1e-4
 type PlanTransform = { position: [number, number, number]; rotation: number }
 type PlanPoint = { x: number; z: number }
 
-function runParent(
+function frameParent(
   node: AnyNode,
   nodes: Readonly<Record<string, AnyNode>>,
-): CabinetNodeType | null {
+): CabinetNodeType | CabinetModuleNodeType | null {
   if (node.type !== 'cabinet-module' || !node.parentId) return null
   const parent = nodes[node.parentId]
-  return parent?.type === 'cabinet' ? (parent as CabinetNodeType) : null
+  return isCabinetFrameNode(parent) ? parent : null
 }
 
 function isCabinetFrameNode(
@@ -295,7 +295,7 @@ function magneticSnapMatches(
 }
 
 export const cabinetModuleParentFrame: MovableParentFrame = {
-  resolveParent: runParent,
+  resolveParent: frameParent,
   parentRotationY: (parent, nodes) =>
     frameWorldTransform(parent as CabinetNodeType, nodes).rotation,
   localToPlan,
