@@ -43,7 +43,12 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   if (!def?.tool) return null
   const cached = lazyToolCache.get(def.tool)
   if (cached) return cached
-  const Comp = lazy(def.tool as () => Promise<{ default: ComponentType }>)
+  const Comp = lazy(async () => {
+    // A placed node is selected immediately. Resolve its custom inspector with
+    // the tool so that selection cannot introduce a second async boundary.
+    const [module] = await Promise.all([def.tool!(), def.parametrics?.customPanel?.()])
+    return module as { default: ComponentType }
+  })
   lazyToolCache.set(def.tool, Comp)
   return Comp
 }
