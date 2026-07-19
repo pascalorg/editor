@@ -11,6 +11,7 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  usePathDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -161,6 +162,30 @@ const PipeSegmentTool = () => {
   const startBodyRef = useRef<RunBodyHit | null>(null)
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
   const lastClientYRef = useRef<number | null>(null)
+
+  const displayStart =
+    draftStart &&
+    cursorPos &&
+    sloped &&
+    system === 'waste' &&
+    !startPortRef.current &&
+    !startBodyRef.current &&
+    !snapTarget &&
+    !altActive
+      ? ([
+          draftStart[0],
+          draftStart[1] +
+            Math.hypot(cursorPos[0] - draftStart[0], cursorPos[2] - draftStart[2]) * DRAIN_SLOPE,
+          draftStart[2],
+        ] as [number, number, number])
+      : draftStart
+
+  useEffect(() => {
+    usePathDraftPreview
+      .getState()
+      .setDraft('pipe-segment', displayStart ? [displayStart] : [], cursorPos, { diameter, system })
+  }, [cursorPos, diameter, displayStart, system])
+  useEffect(() => () => usePathDraftPreview.getState().clear('pipe-segment'), [])
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -612,26 +637,6 @@ const PipeSegmentTool = () => {
   }, [activeLevelId])
 
   if (!activeLevelId) return null
-
-  // Free waste start lifts at commit so the run falls ONTO the grid —
-  // mirror that here so the preview line / pill match the placed pipe.
-  // A snapped end (snapTarget set) keeps the start where it is.
-  const displayStart =
-    draftStart &&
-    cursorPos &&
-    sloped &&
-    system === 'waste' &&
-    !startPortRef.current &&
-    !startBodyRef.current &&
-    !snapTarget &&
-    !altActive
-      ? ([
-          draftStart[0],
-          draftStart[1] +
-            Math.hypot(cursorPos[0] - draftStart[0], cursorPos[2] - draftStart[2]) * DRAIN_SLOPE,
-          draftStart[2],
-        ] as [number, number, number])
-      : draftStart
 
   const pillParts = cursorPos
     ? [

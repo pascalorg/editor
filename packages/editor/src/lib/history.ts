@@ -1,5 +1,21 @@
 import { useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
 
+export type CollaborativeHistoryController = {
+  undo: () => void
+  redo: () => void
+}
+
+let collaborativeHistoryController: CollaborativeHistoryController | null = null
+
+export function installCollaborativeHistoryController(
+  controller: CollaborativeHistoryController,
+): () => void {
+  collaborativeHistoryController = controller
+  return () => {
+    if (collaborativeHistoryController === controller) collaborativeHistoryController = null
+  }
+}
+
 function refreshSceneAfterHistoryJump() {
   useLiveNodeOverrides.getState().clearAll()
   useLiveTransforms.getState().clearAll()
@@ -11,11 +27,19 @@ function refreshSceneAfterHistoryJump() {
 }
 
 export function runUndo() {
+  if (collaborativeHistoryController) {
+    collaborativeHistoryController.undo()
+    return
+  }
   useScene.temporal.getState().undo()
   refreshSceneAfterHistoryJump()
 }
 
 export function runRedo() {
+  if (collaborativeHistoryController) {
+    collaborativeHistoryController.redo()
+    return
+  }
   useScene.temporal.getState().redo()
   refreshSceneAfterHistoryJump()
 }

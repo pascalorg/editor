@@ -34,7 +34,18 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
-import { resetSceneHistoryPauseDepth } from './history-control'
+import {
+  areSceneHistorySnapshotsEqual,
+  getSceneHistoryPauseDepth,
+  notifySceneCommit,
+  pauseSceneHistory,
+  resetSceneHistoryPauseDepth,
+  resumeSceneHistory,
+  type SceneCommitOrigin,
+  type SceneHistorySnapshot,
+} from './history-control'
+import useLiveNodeOverrides from './use-live-node-overrides'
+import useLiveTransforms from './use-live-transforms'
 
 function getFiniteNumber(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -1008,6 +1019,13 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   >
 }
 
+function sceneHistorySnapshotFromState(
+  state: Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials'>,
+): SceneHistorySnapshot {
+  const { nodes, rootNodeIds, collections, materials } = state
+  return { nodes, rootNodeIds, collections, materials }
+}
+
 const useScene: UseSceneStore = create<SceneState>()(
   temporal(
     (set, get) => ({
@@ -1274,9 +1292,14 @@ const useScene: UseSceneStore = create<SceneState>()(
       },
     }),
     {
-      partialize: (state) => {
-        const { nodes, rootNodeIds, collections, materials } = state
-        return { nodes, rootNodeIds, collections, materials }
+      partialize: (state: SceneState) => sceneHistorySnapshotFromState(state),
+      equality: (pastState, currentState) => areSceneHistorySnapshotsEqual(pastState, currentState),
+      onSave: (pastState, currentState) => {
+        notifySceneCommit({
+          origin: 'local',
+          before: sceneHistorySnapshotFromState(pastState),
+          current: sceneHistorySnapshotFromState(currentState),
+        })
       },
       limit: 50, // Limit to last 50 actions
     },
@@ -1284,6 +1307,127 @@ const useScene: UseSceneStore = create<SceneState>()(
 )
 
 export default useScene
+
+let sceneReadOnlyLeaseCount = 0
+let sceneReadOnlyLeaseBaseline = false
+
+export function acquireSceneReadOnlyLease(): () => void {
+  if (sceneReadOnlyLeaseCount === 0) {
+    sceneReadOnlyLeaseBaseline = useScene.getState().readOnly
+  }
+  sceneReadOnlyLeaseCount += 1
+  useScene.setState({ readOnly: true })
+
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    sceneReadOnlyLeaseCount = Math.max(0, sceneReadOnlyLeaseCount - 1)
+    if (sceneReadOnlyLeaseCount > 0) return
+    useScene.setState({ readOnly: sceneReadOnlyLeaseBaseline })
+    sceneReadOnlyLeaseBaseline = false
+  }
+}
+
+export type AcceptedSceneNodeUpdate = {
+  id: AnyNodeId
+  data: Partial<AnyNode>
+}
+
+export type ApplyAcceptedSceneNodeUpdatesOptions = {
+  origin?: Extract<SceneCommitOrigin, 'remote' | 'reconciliation'>
+}
+
+export function applyAcceptedSceneNodeUpdates(
+  updates: AcceptedSceneNodeUpdate[],
+  options: ApplyAcceptedSceneNodeUpdatesOptions = {},
+): boolean {
+  const beforeState = useScene.getState()
+  const hasInvalidTarget = updates.some(({ id, data }) => {
+    const node = beforeState.nodes[id]
+    if (!node) return true
+    if ('id' in data && data.id !== node.id) return true
+    if ('type' in data && data.type !== node.type) return true
+    return 'object' in data && data.object !== node.object
+  })
+  if (updates.length === 0 || hasInvalidTarget) return false
+
+  const temporalState = useScene.temporal.getState()
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) return false
+
+  const before = sceneHistorySnapshotFromState(beforeState)
+  pauseSceneHistory(useScene)
+  try {
+    // Server-canonical fields bypass the UI lock without running local mutation cascades.
+    useScene.setState((state) => {
+      const nodes = { ...state.nodes }
+      for (const { id, data } of updates) {
+        const node = nodes[id]
+        if (!node) return {}
+        nodes[id] = { ...node, ...data } as AnyNode
+      }
+      return { nodes }
+    })
+  } finally {
+    resumeSceneHistory(useScene)
+  }
+
+  const currentState = useScene.getState()
+  const current = sceneHistorySnapshotFromState(currentState)
+  for (const { id } of updates) {
+    useLiveNodeOverrides.getState().clear(id)
+    useLiveTransforms.getState().clear(id)
+  }
+  if (areSceneHistorySnapshotsEqual(before, current)) return false
+
+  for (const { id } of updates) {
+    currentState.markDirty(id)
+    const beforeParentId = before.nodes[id]?.parentId as AnyNodeId | null | undefined
+    const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
+    if (beforeParentId) currentState.markDirty(beforeParentId)
+    if (currentParentId) currentState.markDirty(currentParentId)
+  }
+
+  notifySceneCommit({
+    origin: options.origin ?? 'remote',
+    before,
+    current,
+  })
+  return true
+}
+
+export type ApplySceneHistorySnapshotOptions = {
+  origin: Extract<SceneCommitOrigin, 'load' | 'remote' | 'reconciliation'>
+}
+
+export function applySceneHistorySnapshot(
+  snapshot: SceneHistorySnapshot,
+  options: ApplySceneHistorySnapshotOptions,
+): boolean {
+  const before = sceneHistorySnapshotFromState(useScene.getState())
+  const temporalState = useScene.temporal.getState()
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
+    throw new Error('Cannot apply an authoritative scene snapshot during an active interaction')
+  }
+  pauseSceneHistory(useScene)
+  try {
+    useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
+      collections: snapshot.collections,
+      materials: snapshot.materials,
+    })
+    useScene.temporal.getState().clear()
+  } finally {
+    resumeSceneHistory(useScene)
+  }
+
+  useLiveNodeOverrides.getState().clearAll()
+  useLiveTransforms.getState().clearAll()
+
+  const current = sceneHistorySnapshotFromState(useScene.getState())
+  if (areSceneHistorySnapshotsEqual(before, current)) return false
+  notifySceneCommit({ origin: options.origin, before, current })
+  return true
+}
 
 // Track previous temporal state lengths and node snapshot for diffing
 let prevPastLength = 0

@@ -3,6 +3,7 @@ export type {
   BuildingEvent,
   CabinetEvent,
   CabinetModuleEvent,
+  CameraCollaborationPose,
   CameraControlEvent,
   CameraControlFitSceneEvent,
   CeilingEvent,
@@ -153,6 +154,11 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
+  type SceneCommit,
+  type SceneCommitListener,
+  type SceneCommitOrigin,
+  type SceneHistorySnapshot,
+  subscribeSceneCommits,
 } from './store/history-control'
 export {
   type ControlValue,
@@ -173,7 +179,16 @@ export {
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
-export { clearSceneHistory, default as useScene } from './store/use-scene'
+export {
+  type AcceptedSceneNodeUpdate,
+  type ApplyAcceptedSceneNodeUpdatesOptions,
+  type ApplySceneHistorySnapshotOptions,
+  acquireSceneReadOnlyLease,
+  applyAcceptedSceneNodeUpdates,
+  applySceneHistorySnapshot,
+  clearSceneHistory,
+  default as useScene,
+} from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
   type ElevatorDoorSide,

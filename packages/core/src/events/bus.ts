@@ -196,6 +196,17 @@ export interface CameraControlFitSceneEvent {
   }
 }
 
+export interface CameraCollaborationPose {
+  position: [number, number, number]
+  target: [number, number, number]
+  projection: 'perspective' | 'orthographic'
+  /** Width, in scene units, of the visible plane through `target`. */
+  viewWidth?: number
+  /** Viewport width divided by height when this pose was sampled. */
+  aspect?: number
+  fov?: number
+}
+
 type CameraControlEvents = {
   'camera-controls:view': CameraControlEvent
   'camera-controls:focus': CameraControlEvent
@@ -205,6 +216,10 @@ type CameraControlEvents = {
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
+  'camera-controls:collaboration-pose': CameraCollaborationPose
+  'camera-controls:apply-collaboration-pose': CameraCollaborationPose
+  'camera-controls:cancel-collaboration-pose': undefined
+  'camera-controls:interaction-start': undefined
 }
 
 type ToolEvents = {

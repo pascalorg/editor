@@ -19,6 +19,7 @@ import {
   resolveCeilingPlanPointSnap,
   triggerSFX,
   useEditor,
+  useFloorplanDraftPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -79,6 +80,20 @@ export const CeilingTool: React.FC = () => {
   }, [points.length])
   useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
 
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setPolygonDraft('ceiling', points)
+  }, [points])
+  useEffect(
+    () => () => {
+      const draftPreview = useFloorplanDraftPreview.getState()
+      if (draftPreview.polygonDraftType === 'ceiling') {
+        draftPreview.setPolygonDraft(null, [])
+      }
+      draftPreview.setCursorPoint(null)
+    },
+    [],
+  )
+
   const verticalGeo = useMemo(
     () =>
       new BufferGeometry().setFromPoints([
@@ -117,6 +132,7 @@ export const CeilingTool: React.FC = () => {
         fallbackPoint: orthoPoint,
         levelId: currentLevelId,
       }).point
+      useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
       setSnappedCursorPosition(displayPoint)
       if (
         points.length > 0 &&
