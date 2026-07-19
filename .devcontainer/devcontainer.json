@@ -6,6 +6,6 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
-  "postCreateCommand": "bun install",
+  "postCreateCommand": "bun install --frozen-lockfile",
   "forwardPorts": [3002]
 }
