@@ -1,4 +1,11 @@
-import { getLevelHeight, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import {
+  type BuildingNode,
+  getLevelHeight,
+  type LevelNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { getLevelBuildingId, getLevelStackPositions } from './level-stacking'
 
 /**
  * Instantly snaps all level Objects3D to their true stacked Y positions
@@ -18,18 +25,33 @@ export function snapLevelsToTruePositions(): () => void {
   type LevelEntry = {
     obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
     levelId: string
+    buildingId: string | null
     index: number
+    height: number
   }
 
   const entries: LevelEntry[] = []
+  const buildings = Object.values(nodes).filter(
+    (node): node is BuildingNode => node?.type === 'building',
+  )
   sceneRegistry.byType.level!.forEach((levelId) => {
     const obj = sceneRegistry.nodes.get(levelId)
-    const level = nodes[levelId as LevelNode['id']]
+    const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
     if (obj && level) {
-      entries.push({ levelId, index: (level as any).level ?? 0, obj })
+      entries.push({
+        levelId,
+        buildingId: getLevelBuildingId(levelId, level.parentId, buildings),
+        index: level.level,
+        height: getLevelHeight(
+          levelId,
+          nodes,
+          (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
+        ),
+        obj,
+      })
     }
   })
-  entries.sort((a, b) => a.index - b.index)
+  const stackPositions = getLevelStackPositions(entries)
 
   // Snapshot current Y and visibility so we can restore them after the render
   const snapshot = new Map(
@@ -37,15 +59,9 @@ export function snapLevelsToTruePositions(): () => void {
   )
 
   // Snap to true stacked positions and make all levels visible
-  let cumulativeY = 0
   for (const { levelId, obj } of entries) {
-    obj.position.y = cumulativeY
+    obj.position.y = stackPositions.get(levelId) ?? 0
     obj.visible = true
-    cumulativeY += getLevelHeight(
-      levelId,
-      nodes,
-      (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
-    )
   }
 
   return () => {
