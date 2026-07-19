@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { AnyNode } from '../../schema'
+import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
 import useScene from '../../store/use-scene'
 import { syncAutoElevatorOpenings } from './elevator-opening-sync'
 
@@ -32,27 +33,32 @@ function hasOpeningRelevantNodeChange(
   return false
 }
 
-export const ElevatorOpeningSystem = () => {
-  const syncingAutoOpeningsRef = useRef(false)
+export function initializeElevatorOpeningSync() {
+  let syncingAutoOpenings = false
 
-  useEffect(() => {
-    const applyUpdates = (updates: ReturnType<typeof syncAutoElevatorOpenings>) => {
-      if (updates.length === 0) return
-      syncingAutoOpeningsRef.current = true
+  const applyUpdates = (updates: ReturnType<typeof syncAutoElevatorOpenings>) => {
+    if (updates.length === 0) return
+    syncingAutoOpenings = true
+    pauseSceneHistory(useScene)
+    try {
       useScene.getState().updateNodes(updates)
-      queueMicrotask(() => {
-        syncingAutoOpeningsRef.current = false
-      })
+    } finally {
+      resumeSceneHistory(useScene)
+      syncingAutoOpenings = false
     }
+  }
 
-    applyUpdates(syncAutoElevatorOpenings(useScene.getState().nodes))
+  applyUpdates(syncAutoElevatorOpenings(useScene.getState().nodes))
 
-    return useScene.subscribe((state, prevState) => {
-      if (syncingAutoOpeningsRef.current) return
-      if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-      applyUpdates(syncAutoElevatorOpenings(state.nodes))
-    })
-  }, [])
+  return useScene.subscribe((state, prevState) => {
+    if (syncingAutoOpenings) return
+    if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
+    applyUpdates(syncAutoElevatorOpenings(state.nodes))
+  })
+}
+
+export const ElevatorOpeningSystem = () => {
+  useEffect(() => initializeElevatorOpeningSync(), [])
 
   return null
 }

@@ -33,6 +33,7 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  useFloorplanDraftPreview,
   useSegmentDraftChain,
   useWallSnapIndicator,
   WALL_CONNECT_SNAP_RADIUS,
@@ -594,6 +595,9 @@ export const WallTool: React.FC = () => {
       buildingState.current = 0
       chainFirstVertex.current = null
       chainWallIds.current = []
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart(null)
+      draftPreview.setWallDraftEnd(null)
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -637,6 +641,9 @@ export const WallTool: React.FC = () => {
       if (buildingState.current === 1) {
         const snappedLocal = gridPosition
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draftPreview.setWallDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
         setAxisGuide({
           origin: [startingPoint.current.x, startingPoint.current.z],
@@ -706,6 +713,9 @@ export const WallTool: React.FC = () => {
         chainFirstVertex.current = startingPoint.current.clone()
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftStart(snappedStart)
+        draftPreview.setWallDraftEnd(snappedStart)
         setAxisGuide({
           origin: snappedStart,
           y: event.localPosition[1],
@@ -783,6 +793,10 @@ export const WallTool: React.FC = () => {
         useSegmentDraftChain.getState().setChainStart('wall', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftEnd(null)
+        draftPreview.setWallDraftStart(nextStart)
+        draftPreview.setWallDraftEnd(nextStart)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -820,6 +834,9 @@ export const WallTool: React.FC = () => {
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       useSegmentDraftChain.getState().clear('wall')
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setWallDraftStart(null)
+      draftPreview.setWallDraftEnd(null)
     }
   }, [unit])
 

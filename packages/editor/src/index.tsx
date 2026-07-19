@@ -2,7 +2,21 @@
 // own shells on top of `@pascal-app/editor` (community-app, embedders)
 // don't have to learn three separate package imports. The canonical
 // definitions still live in `@pascal-app/core` / `@pascal-app/viewer`.
-export { useScene } from '@pascal-app/core'
+export {
+  type ApplySceneSnapshotOptions,
+  acquireSceneReadOnlyLease,
+  applyScenePatch,
+  applySceneSnapshot,
+  type SceneCommit,
+  type SceneCommitListener,
+  type SceneCommitOrigin,
+  type SceneMaterialPatch,
+  type SceneNodePatch,
+  type ScenePatch,
+  type SceneSnapshot,
+  subscribeSceneCommits,
+  useScene,
+} from '@pascal-app/core'
 export { useViewer } from '@pascal-app/viewer'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
@@ -66,6 +80,10 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export {
+  FloorplanNodePreview,
+  type FloorplanNodePreviewProps,
+} from './components/editor-2d/renderers/floorplan-placement-preview-layer'
 // SVG path builders for arc / annular-sector / arrow-head shapes —
 // inlined into `kind: 'path'` / `kind: 'polygon'` primitives by curved
 // stair rendering in `nodes/src/stair/floorplan.ts`.
@@ -288,11 +306,18 @@ export {
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
+  type HistoryCommandDelegate,
+  installHistoryCommandDelegate,
+  runRedo,
+  runUndo,
+} from './lib/history'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
   movingNodeOf,
+  scopeNodeId,
 } from './lib/interaction/scope'
 export {
   buildResetSurfaceMaterialUpdates,
@@ -429,6 +454,7 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
+export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export {
   default as useInteractionScope,
   getEditingHole,
@@ -466,6 +492,13 @@ export {
   type PaletteViewProps,
   usePaletteViewRegistry,
 } from './store/use-palette-view-registry'
+export {
+  type PathDraftKind,
+  type PathDraftParameter,
+  type PathDraftParameters,
+  type PathDraftPoint,
+  usePathDraftPreview,
+} from './store/use-path-draft-preview'
 export { default as usePlacementPreview } from './store/use-placement-preview'
 export {
   activateQuickMeasurementHudSource,
@@ -477,6 +510,10 @@ export {
   useQuickMeasurementHud,
 } from './store/use-quick-measurement-hud'
 export { default as useSegmentDraftChain } from './store/use-segment-draft-chain'
+export {
+  type StairPreviewPoint,
+  useStairBuildPreview,
+} from './store/use-stair-build-preview'
 export { useUploadStore } from './store/use-upload'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {

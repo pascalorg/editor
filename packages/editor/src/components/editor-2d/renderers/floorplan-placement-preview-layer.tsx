@@ -12,6 +12,48 @@ import { memo } from 'react'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
+export interface FloorplanNodePreviewProps {
+  node: AnyNode
+  parentNode?: AnyNode | null
+  opacity?: number
+  className?: string
+}
+
+/**
+ * Stateless floor-plan ghost for an already-positioned node. Hosts can use
+ * this to render host-owned placement previews without publishing transient
+ * state into the editor's local placement-preview store.
+ */
+export const FloorplanNodePreview = memo(function FloorplanNodePreview({
+  node,
+  parentNode = null,
+  opacity = 0.5,
+  className,
+}: FloorplanNodePreviewProps) {
+  const builder = nodeRegistry.get(node.type)?.floorplan
+  if (!builder) return null
+
+  const ctx = {
+    resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
+    children: [],
+    siblings: [],
+    parent: parentNode,
+    viewState: undefined,
+  } as unknown as GeometryContext
+
+  const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+    node,
+    ctx,
+  )
+  if (!geometry) return null
+
+  return (
+    <g className={className} opacity={opacity} pointerEvents="none">
+      <FloorplanGeometryRenderer geometry={geometry} />
+    </g>
+  )
+})
+
 /**
  * Renders a faint, non-interactive ghost of the node being placed by a
  * registry placement tool (e.g. column), following the cursor in the floor
@@ -30,33 +72,9 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const parentNode = usePlacementPreview((s) => s.parentNode)
   if (!node) return null
 
-  const builder = nodeRegistry.get(node.type)?.floorplan
-  if (!builder) return null
-
-  // Minimal, unselected context — preview never shows selection chrome
-  // (move handles / resize arrows / hatch live behind `viewState.selected`).
-  // `resolve` reads the scene lazily (a builder rarely calls it for a ghost,
-  // and `parent: null` short-circuits the elevator's level walk) so the layer
-  // never subscribes to / bulk-reads the nodes map during render.
-  // `parentNode` is the synthetic wall for an off-wall door/window ghost so
-  // its builder draws the real swing-arc / pane symbol (see use-placement-preview).
-  const ctx = {
-    resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
-    children: [],
-    siblings: [],
-    parent: parentNode ?? null,
-    viewState: undefined,
-  } as unknown as GeometryContext
-
-  const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
-    node,
-    ctx,
-  )
-  if (!geometry) return null
-
   return (
-    <g data-floorplan-placement-preview opacity={0.5} pointerEvents="none">
-      <FloorplanGeometryRenderer geometry={geometry} />
+    <g data-floorplan-placement-preview>
+      <FloorplanNodePreview node={node} parentNode={parentNode} />
     </g>
   )
 })

@@ -62,6 +62,7 @@ import {
   type ComponentProps,
   memo,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -5195,8 +5196,10 @@ export function FloorplanPanel({
    * in 2d, 3d, and split modes, while this panel itself may be display:none.
    */
   compassHost,
+  floorplanSceneSlot,
 }: {
   compassHost?: HTMLElement | null
+  floorplanSceneSlot?: ReactNode
 }) {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -5371,6 +5374,18 @@ export function FloorplanPanel({
   )
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
+  // Mirror the per-click draft START anchors into the shared draft store so
+  // out-of-tree consumers (such as host-owned preview publishers) see the whole open
+  // segment without subscribing to this panel's state.
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setWallDraftStart(draftStart)
+  }, [draftStart])
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
+  }, [fenceDraftStart])
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setRoofDraftStart(roofDraftStart)
+  }, [roofDraftStart])
   const [zoneDraftPoints, setZoneDraftPoints] = useState<WallPlanPoint[]>([])
   const [siteBoundaryDraft, setSiteBoundaryDraft] = useState<SiteBoundaryDraft | null>(null)
   const [siteVertexDragState, setSiteVertexDragState] = useState<SiteVertexDragState | null>(null)
@@ -6402,6 +6417,18 @@ export function FloorplanPanel({
     slabDraftPoints,
     zoneDraftPoints,
   ])
+  const activePolygonDraftType = isCeilingBuildActive
+    ? 'ceiling'
+    : isZoneBuildActive
+      ? 'zone'
+      : isSlabBuildActive
+        ? 'slab'
+        : null
+  useEffect(() => {
+    useFloorplanDraftPreview
+      .getState()
+      .setPolygonDraft(activePolygonDraftType, activePolygonDraftPoints)
+  }, [activePolygonDraftPoints, activePolygonDraftType])
   // The cursor-following polygon-draft preview (slab / zone / ceiling) moved into
   // `FloorplanDraftCursorLayer`, which reads the live cursor from the draft store
   // so it re-renders per move without re-rendering this panel.
@@ -8240,9 +8267,17 @@ export function FloorplanPanel({
         setShiftPressed(true)
       }
 
-      if (isStairBuildActive && (event.key === 'r' || event.key === 'R')) {
+      if (
+        isStairBuildActive &&
+        useEditor.getState().viewMode === '2d' &&
+        (event.key === 'r' || event.key === 'R')
+      ) {
         useStairBuildPreview.getState().rotateBy(Math.PI / 4)
-      } else if (isStairBuildActive && (event.key === 't' || event.key === 'T')) {
+      } else if (
+        isStairBuildActive &&
+        useEditor.getState().viewMode === '2d' &&
+        (event.key === 't' || event.key === 'T')
+      ) {
         useStairBuildPreview.getState().rotateBy(-Math.PI / 4)
       }
 
@@ -11220,6 +11255,7 @@ export function FloorplanPanel({
           // panel, so pan/zoom is preserved across the toggle.
           <svg
             className="h-full w-full touch-none"
+            data-pascal-floorplan-2d
             onClick={isMarqueeSelectionToolActive ? undefined : handleSvgClick}
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
@@ -11396,6 +11432,7 @@ export function FloorplanPanel({
                   <FloorplanWallMoveGhostLayer />
                 </g>
                 <FloorplanMeasurementToolLayer />
+                {floorplanSceneSlot}
               </FloorplanRenderProvider>
               {/* Cursor-driven placement ghost for movingNode when the
                   active kind is registry-driven. Renders via a portal

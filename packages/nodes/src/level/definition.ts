@@ -9,7 +9,7 @@ import { LevelNode } from './schema'
  */
 export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   kind: 'level',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: LevelNode,
   category: 'site',
 

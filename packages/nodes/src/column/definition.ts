@@ -364,6 +364,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./renderer').then(({ ColumnPreview }) => ({ default: ColumnPreview })),
   // Registry-driven placement tool — renders a translucent `ColumnPreview`
   // ghost at the cursor (mirroring the shelf build tool) instead of the
   // bare sphere the legacy editor-side `ColumnTool` showed. `ToolManager`'s

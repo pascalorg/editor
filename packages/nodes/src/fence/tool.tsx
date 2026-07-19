@@ -40,6 +40,7 @@ import {
   useAlignmentGuides,
   useEditor,
   useFenceCurveDraft,
+  useFloorplanDraftPreview,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
@@ -511,6 +512,9 @@ const StraightFenceTool: React.FC = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setFenceDraftStart(null)
+      draftPreview.setFenceDraftEnd(null)
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
     }
@@ -538,6 +542,9 @@ const StraightFenceTool: React.FC = () => {
           { applySnap: !angleLocked },
         )
         endingPoint.current.set(snappedLocal[0], event.localPosition[1], snappedLocal[1])
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setFenceDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draftPreview.setFenceDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
@@ -601,6 +608,9 @@ const StraightFenceTool: React.FC = () => {
         startingPoint.current.set(snappedStart[0], event.localPosition[1], snappedStart[1])
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setFenceDraftStart(snappedStart)
+        draftPreview.setFenceDraftEnd(snappedStart)
         triggerSFX('sfx:structure-build-start')
         previewRef.current.visible = true
         setDraftMeasurement(null)
@@ -645,6 +655,10 @@ const StraightFenceTool: React.FC = () => {
         useSegmentDraftChain.getState().setChainStart('fence', [nextStart[0], nextStart[1]])
         startingPoint.current.set(nextStart[0], event.localPosition[1], nextStart[1])
         endingPoint.current.copy(startingPoint.current)
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setFenceDraftEnd(null)
+        draftPreview.setFenceDraftStart(nextStart)
+        draftPreview.setFenceDraftEnd(nextStart)
         cursorRef.current?.position.copy(startingPoint.current)
         previewRef.current.visible = false
         buildingState.current = 1
@@ -669,6 +683,9 @@ const StraightFenceTool: React.FC = () => {
       emitter.off('tool:cancel', onCancel)
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
+      const draftPreview = useFloorplanDraftPreview.getState()
+      draftPreview.setFenceDraftStart(null)
+      draftPreview.setFenceDraftEnd(null)
     }
   }, [unit])
 
@@ -725,11 +742,11 @@ const SplineFenceDraft: React.FC = () => {
 
   draftRef.current = draftPoints
 
-  // Mirror the draft length into the HUD store so the "finish curve" hint only
-  // shows once drafting has started; always clear it when the tool unmounts.
+  // Mirror the full transient curve so additional preview surfaces observe
+  // the same snapped control points as the local preview.
   useEffect(() => {
-    useFenceCurveDraft.getState().setPointCount(draftPoints.length)
-  }, [draftPoints])
+    useFenceCurveDraft.getState().setDraft(draftPoints, cursor)
+  }, [cursor, draftPoints])
   useEffect(() => () => useFenceCurveDraft.getState().reset(), [])
 
   useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])

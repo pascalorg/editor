@@ -18,6 +18,7 @@ import {
 } from './../../../lib/surface-plan-snap'
 import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
 import useEditor, { isAngleSnapActive, isGridSnapActive } from './../../../store/use-editor'
+import { useFloorplanDraftPreview } from './../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 
 const Y_OFFSET = 0.02
@@ -78,6 +79,20 @@ export const ZoneTool: React.FC = () => {
     cursorPoint: null,
     levelY: 0,
   })
+
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setPolygonDraft('zone', preview.points)
+  }, [preview.points])
+  useEffect(
+    () => () => {
+      const draftPreview = useFloorplanDraftPreview.getState()
+      if (draftPreview.polygonDraftType === 'zone') {
+        draftPreview.setPolygonDraft(null, [])
+      }
+      draftPreview.setCursorPoint(null)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -192,6 +207,7 @@ export const ZoneTool: React.FC = () => {
         event.localPosition[2],
       ])
       snappedCursorPosition = displayPoint
+      useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
 
       // Play snap sound when the snapped position changes during drawing — only
       // when a quantizing mode is active (off / lines move continuously).
