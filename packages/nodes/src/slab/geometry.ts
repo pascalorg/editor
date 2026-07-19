@@ -127,7 +127,10 @@ function splitSlabFacesByFacing(geometry: BufferGeometry): {
   const build = (data: { pos: number[]; uv: number[] }) => {
     const geo = new BufferGeometry()
     geo.setAttribute('position', new Float32BufferAttribute(data.pos, 3))
-    if (data.uv.length > 0) geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
+    if (data.uv.length > 0) {
+      geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
+      geo.setAttribute('uv2', new Float32BufferAttribute(data.uv.slice(), 2))
+    }
     geo.computeVertexNormals()
     return geo
   }

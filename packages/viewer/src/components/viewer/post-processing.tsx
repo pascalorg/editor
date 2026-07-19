@@ -755,6 +755,8 @@ const PostProcessingPasses = ({
       }
     } catch (error) {
       hasPipelineErrorRef.current = true
+      // A failed MRT pass may leave its target bound; clear it before the fallback render.
+      ;(renderer as any).setRenderTarget?.(null)
       console.error('[viewer/post-processing] Render pass failed.', {
         retryCount: retryCountRef.current,
         rendererCtor: (renderer as any).constructor?.name,
