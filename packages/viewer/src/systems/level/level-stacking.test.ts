@@ -1,7 +1,26 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { describe, expect, test } from 'bun:test'
-import { getLevelStackPositions, type LevelStackEntry } from './level-stacking'
+import { getLevelBuildingId, getLevelStackPositions, type LevelStackEntry } from './level-stacking'
+
+describe('getLevelBuildingId', () => {
+  const buildings = [
+    { id: 'building_a', children: ['level_a0'] },
+    { id: 'building_b', children: ['level_b0'] },
+  ]
+
+  test('uses an explicit building parent', () => {
+    expect(getLevelBuildingId('level_a0', 'building_a', buildings)).toBe('building_a')
+  })
+
+  test('falls back to building children for legacy levels without a parentId', () => {
+    expect(getLevelBuildingId('level_b0', null, buildings)).toBe('building_b')
+  })
+
+  test('ignores a non-building parent before checking building children', () => {
+    expect(getLevelBuildingId('level_a0', 'site_main', buildings)).toBe('building_a')
+  })
+})
 
 describe('getLevelStackPositions', () => {
   test('stacks levels within one building by level index', () => {

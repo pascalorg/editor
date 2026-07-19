@@ -5,6 +5,19 @@ export type LevelStackEntry = {
   height: number
 }
 
+type BuildingOwnership = { id: string; children: readonly string[] }
+
+export function getLevelBuildingId(
+  levelId: string,
+  parentId: string | null,
+  buildings: readonly BuildingOwnership[],
+): string | null {
+  const directParent = parentId ? buildings.find((building) => building.id === parentId) : undefined
+  if (directParent) return directParent.id
+
+  return buildings.find((building) => building.children.includes(levelId))?.id ?? null
+}
+
 export function getLevelStackPositions(entries: readonly LevelStackEntry[]): Map<string, number> {
   const positions = new Map<string, number>()
   const cumulativeYByBuilding = new Map<string | null, number>()

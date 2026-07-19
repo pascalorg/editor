@@ -1,5 +1,11 @@
-import { getLevelHeight, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { getLevelStackPositions } from './level-stacking'
+import {
+  type BuildingNode,
+  getLevelHeight,
+  type LevelNode,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { getLevelBuildingId, getLevelStackPositions } from './level-stacking'
 
 /**
  * Instantly snaps all level Objects3D to their true stacked Y positions
@@ -25,13 +31,16 @@ export function snapLevelsToTruePositions(): () => void {
   }
 
   const entries: LevelEntry[] = []
+  const buildings = Object.values(nodes).filter(
+    (node): node is BuildingNode => node?.type === 'building',
+  )
   sceneRegistry.byType.level!.forEach((levelId) => {
     const obj = sceneRegistry.nodes.get(levelId)
     const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
     if (obj && level) {
       entries.push({
         levelId,
-        buildingId: level.parentId ?? null,
+        buildingId: getLevelBuildingId(levelId, level.parentId, buildings),
         index: level.level,
         height: getLevelHeight(
           levelId,
