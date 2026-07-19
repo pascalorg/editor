@@ -2319,9 +2319,17 @@ describe('cabinet handles', () => {
       sceneApi: ReturnType<typeof sceneApiFixture>,
     ) => HandleDescriptor<CabinetNode>[]
     const depthHandles = buildHandles(source, fixture.sceneApi).filter(
-      (handle): handle is LinearResizeHandle<CabinetNode> =>
-        handle.kind === 'linear-resize' &&
-        handle.visible?.(source, fixture.sceneApi as never) !== false,
+      (handle): handle is LinearResizeHandle<CabinetNode> => {
+        if (
+          handle.kind !== 'linear-resize' ||
+          handle.visible?.(source, fixture.sceneApi as never) === false
+        ) {
+          return false
+        }
+        const targetId = handle.overrideTarget?.(source, fixture.sceneApi as never) ?? source.id
+        const target = fixture.sceneApi.get(targetId)
+        return target?.type === 'cabinet' && target.runTier === 'base'
+      },
     )
     return { ...fixture, depthHandles, source, thirdRun }
   }
@@ -2613,6 +2621,7 @@ describe('cabinet handles', () => {
       [run, ...modules].map((node) => [node.id as AnyNodeId, node as AnyNode]),
     ) as Record<AnyNodeId, AnyNode>
     const sceneApi = {
+      get: (id: AnyNodeId) => nodes[id],
       nodes: () => nodes,
     }
     const rotateHandle = (

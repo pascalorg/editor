@@ -1,14 +1,7 @@
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { WallNode, WallTrimConfig } from '@pascal-app/core'
 import { buildWallTreatmentLevelData } from './treatment-level-data'
-
-mock.module('@pascal-app/viewer', () => ({
-  baseMaterial: () => undefined,
-  createMaterialFromPresetRef: () => undefined,
-  resolveMaterialRef: () => undefined,
-}))
-
-const { buildTrimGeometry, wallTreatmentProudOffsets } = await import('./treatments')
+import { buildTrimGeometry, wallTreatmentProudOffsets } from './treatments'
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
   return {
