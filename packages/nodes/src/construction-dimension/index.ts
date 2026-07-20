@@ -1,3 +1,6 @@
 export { constructionDimensionDefinition } from './definition'
 export { buildConstructionDimensionFloorplan } from './floorplan'
-export { resolveConstructionDimensionLayout } from './geometry'
+export {
+  resolveCircularConstructionDimensionLayout,
+  resolveConstructionDimensionLayout,
+} from './geometry'

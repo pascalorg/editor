@@ -21,6 +21,16 @@ export const ConstructionDimensionBaseline = z
   })
 
 export const ConstructionDimensionChainMode = z.enum(['point-to-point', 'continuous'])
+export const ConstructionDimensionMode = z.enum([
+  'linear',
+  'radius',
+  'diameter',
+  'center-mark',
+  'chord',
+  'arc-length',
+  'angular',
+  'coordinate',
+])
 
 export const ConstructionDimensionNode = BaseNode.extend({
   id: objectId('construction-dimension'),
@@ -34,16 +44,32 @@ export const ConstructionDimensionNode = BaseNode.extend({
     ]),
   baseline: ConstructionDimensionBaseline.default({ origin: [0, 0.6], direction: [1, 0] }),
   chainMode: ConstructionDimensionChainMode.default('point-to-point'),
+  mode: ConstructionDimensionMode.default('linear'),
+  featureCount: z.number().int().min(1).max(999).default(1),
+  showCenterMark: z.boolean().default(true),
+  reference: z.boolean().default(false),
+  prefix: z.string().max(40).default(''),
+  suffix: z.string().max(40).default(''),
+  textOverride: z.string().trim().min(1).max(120).nullable().default(null),
 }).describe(
   dedent`
-  Construction dimension node - an associative linear floor-plan dimension
+  Construction dimension node - an associative floor-plan construction dimension
   - anchors: two or more free or semantic feature anchors that supply the witness origins
   - baseline.origin: a point on the independently placed dimension line
   - baseline.direction: the fixed plan direction used to project the witness origins
   - chainMode: point-to-point for one segment or continuous for adjacent dimension strings
+  - mode: linear, radius, diameter, center mark, chord, arc length, angular, or coordinate
+  - featureCount: repeated-feature multiplier used by diameter/radius and other notation
+  - showCenterMark: displays the resolved circle/angle center where applicable
+  - reference/prefix/suffix/textOverride: document notation overrides without changing geometry
   `,
 )
 
 export type ConstructionDimensionBaseline = z.infer<typeof ConstructionDimensionBaseline>
 export type ConstructionDimensionChainMode = z.infer<typeof ConstructionDimensionChainMode>
+export type ConstructionDimensionMode = z.infer<typeof ConstructionDimensionMode>
 export type ConstructionDimensionNode = z.infer<typeof ConstructionDimensionNode>
+
+export function constructionDimensionRequiredAnchorCount(mode: ConstructionDimensionMode): number {
+  return mode === 'arc-length' || mode === 'angular' ? 3 : 2
+}

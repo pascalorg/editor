@@ -4,8 +4,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDimensionChainMode,
+  type ConstructionDimensionMode,
   ConstructionDimensionNode,
   closestMeasurementFeatureBinding,
+  constructionDimensionRequiredAnchorCount,
   type FloorplanGeometry,
   type GeometryContext,
   type MeasurementAnchor,
@@ -123,7 +125,9 @@ export function buildConstructionDimensionPreviewGeometries(
   points: readonly MeasurementPoint[],
   baselinePoint: MeasurementPoint,
   unit: 'metric' | 'imperial',
+  mode: ConstructionDimensionMode = 'linear',
 ): Array<Extract<FloorplanGeometry, { kind: 'dimension' }>> {
+  if (!['linear', 'chord', 'radius', 'diameter'].includes(mode)) return []
   const direction = resolveConstructionDimensionDraftDirection(points)
   if (!direction) return []
   const normal: [number, number] = [-direction[1], direction[0]]
@@ -138,6 +142,15 @@ export function buildConstructionDimensionPreviewGeometries(
     const dx = end[0] - start[0]
     const dz = end[2] - start[2]
     const value = Math.abs(dx * direction[0] + dz * direction[1])
+    const rawText = formatLinearMeasurement(value, unit)
+    const text =
+      mode === 'radius'
+        ? `R ${rawText}`
+        : mode === 'diameter'
+          ? `Ø ${rawText}`
+          : mode === 'chord'
+            ? `CH ${rawText}`
+            : rawText
     return {
       kind: 'dimension',
       start: [start[0], start[2]],
@@ -147,7 +160,7 @@ export function buildConstructionDimensionPreviewGeometries(
       offsetNormal: normal,
       offsetDistance: 0,
       extensionOvershoot: 0.12,
-      text: formatLinearMeasurement(value, unit),
+      text,
       stroke: '#06b6d4',
     }
   })
@@ -159,18 +172,41 @@ export function normalizeConstructionDimensionChainMode(
   return value === 'continuous' ? 'continuous' : 'point-to-point'
 }
 
+export function normalizeConstructionDimensionMode(value: unknown): ConstructionDimensionMode {
+  return [
+    'radius',
+    'diameter',
+    'center-mark',
+    'chord',
+    'arc-length',
+    'angular',
+    'coordinate',
+  ].includes(value as string)
+    ? (value as ConstructionDimensionMode)
+    : 'linear'
+}
+
+export function constructionDimensionUsesBaseline(mode: ConstructionDimensionMode): boolean {
+  return ['linear', 'radius', 'chord', 'arc-length', 'angular'].includes(mode)
+}
+
 export function FloorplanConstructionDimensionToolLayer() {
   const groupRef = useRef<SVGGElement>(null)
   const draftRef = useRef<Draft>(emptyDraft())
   const [draft, setDraft] = useState<Draft>(draftRef.current)
   const [hover, setHover] = useState<AssociatedPoint | null>(null)
-  const mode = useEditor((state) => state.mode)
+  const editorMode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const toolChainMode = useEditor(
     (state) => state.toolDefaults['construction-dimension']?.chainMode,
   )
   const chainMode = normalizeConstructionDimensionChainMode(toolChainMode)
-  const active = mode === 'build' && tool === 'construction-dimension'
+  const toolDimensionMode = useEditor((state) => state.toolDefaults['construction-dimension']?.mode)
+  const dimensionMode = normalizeConstructionDimensionMode(toolDimensionMode)
+  const collectsMany =
+    dimensionMode === 'coordinate' || (dimensionMode === 'linear' && chainMode === 'continuous')
+  const usesBaseline = constructionDimensionUsesBaseline(dimensionMode)
+  const active = editorMode === 'build' && tool === 'construction-dimension'
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const unit = useViewer((state) => state.unit)
   const renderContext = useFloorplanRender()
@@ -210,9 +246,37 @@ export function FloorplanConstructionDimensionToolLayer() {
         event.altKey ? SEMANTIC_BYPASS_DISTANCE : SEMANTIC_SNAP_DISTANCE,
       )
     }
-    const beginBaseline = () => {
+    const commitDraft = (current: Draft, baselinePoint?: MeasurementPoint) => {
+      const direction = resolveConstructionDimensionDraftDirection(current.points)
+      const originPoint = baselinePoint ?? current.points.at(-1)
+      if (!(direction && originPoint)) return false
+      const node = ConstructionDimensionNode.parse({
+        name:
+          dimensionMode === 'linear' && chainMode === 'continuous'
+            ? 'Continuous Dimension'
+            : `${dimensionMode.replaceAll('-', ' ')} Dimension`,
+        anchors: current.anchors,
+        baseline: {
+          origin: [originPoint[0], originPoint[2]],
+          direction,
+        },
+        chainMode,
+        mode: dimensionMode,
+      })
+      useScene.getState().createNode(node, activeLevelId)
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      triggerSFX('sfx:structure-build')
+      useEditor.getState().setTool(null)
+      useEditor.getState().setMode('select')
+      updateDraft(emptyDraft())
+      setHover(null)
+      return true
+    }
+    const finishWitnesses = () => {
       const current = draftRef.current
-      if (current.stage !== 'witnesses' || current.points.length < 2) return false
+      const required = constructionDimensionRequiredAnchorCount(dimensionMode)
+      if (current.stage !== 'witnesses' || current.points.length < required) return false
+      if (!usesBaseline) return commitDraft(current)
       updateDraft({ ...current, stage: 'baseline' })
       triggerSFX('sfx:grid-snap')
       return true
@@ -229,24 +293,7 @@ export function FloorplanConstructionDimensionToolLayer() {
     }
     const commitAt = (associated: AssociatedPoint) => {
       const current = draftRef.current
-      const direction = resolveConstructionDimensionDraftDirection(current.points)
-      if (current.stage !== 'baseline' || !direction) return
-      const node = ConstructionDimensionNode.parse({
-        name: chainMode === 'continuous' ? 'Continuous Dimension' : 'Construction Dimension',
-        anchors: current.anchors,
-        baseline: {
-          origin: [associated.point[0], associated.point[2]],
-          direction,
-        },
-        chainMode,
-      })
-      useScene.getState().createNode(node, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
-      triggerSFX('sfx:structure-build')
-      useEditor.getState().setTool(null)
-      useEditor.getState().setMode('select')
-      updateDraft(emptyDraft())
-      setHover(null)
+      if (current.stage === 'baseline') commitDraft(current, associated.point)
     }
     const onPointerDown = (event: PointerEvent) => {
       if (event.button === 0) consume(event)
@@ -285,18 +332,22 @@ export function FloorplanConstructionDimensionToolLayer() {
       }
       updateDraft(next)
       triggerSFX('sfx:grid-snap')
-      if (chainMode === 'point-to-point' && next.points.length === 2) {
-        updateDraft({ ...next, stage: 'baseline' })
+      if (
+        !collectsMany &&
+        next.points.length === constructionDimensionRequiredAnchorCount(dimensionMode)
+      ) {
+        if (usesBaseline) updateDraft({ ...next, stage: 'baseline' })
+        else commitDraft(next)
       }
     }
     const onDoubleClick = (event: MouseEvent) => {
-      if (event.button !== 0 || chainMode !== 'continuous') return
+      if (event.button !== 0 || !collectsMany) return
       consume(event)
-      beginBaseline()
+      finishWitnesses()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter' && chainMode === 'continuous') {
-        if (!beginBaseline()) return
+      if (event.key === 'Enter' && collectsMany) {
+        if (!finishWitnesses()) return
         event.preventDefault()
         event.stopImmediatePropagation()
         return
@@ -340,14 +391,19 @@ export function FloorplanConstructionDimensionToolLayer() {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [active, activeLevelId, chainMode, updateDraft])
+  }, [active, activeLevelId, chainMode, collectsMany, dimensionMode, updateDraft, usesBaseline])
 
   const preview = useMemo(
     () =>
       draft.stage === 'baseline' && hover
-        ? buildConstructionDimensionPreviewGeometries(draft.points, hover.point, unit)
+        ? buildConstructionDimensionPreviewGeometries(
+            draft.points,
+            hover.point,
+            unit,
+            dimensionMode,
+          )
         : [],
-    [draft.points, draft.stage, hover, unit],
+    [dimensionMode, draft.points, draft.stage, hover, unit],
   )
   const witnessDraftPoints =
     draft.stage === 'witnesses' && hover ? [...draft.points, hover.point] : draft.points
@@ -359,7 +415,7 @@ export function FloorplanConstructionDimensionToolLayer() {
 
   return (
     <g ref={groupRef}>
-      {draft.stage === 'witnesses' && witnessDraftPoints.length >= 2 ? (
+      {witnessDraftPoints.length >= 2 && (draft.stage === 'witnesses' || preview.length === 0) ? (
         <polyline
           fill="none"
           pointerEvents="none"

@@ -54,7 +54,9 @@ export {
 export {
   ConstructionDimensionBaseline,
   ConstructionDimensionChainMode,
+  ConstructionDimensionMode,
   ConstructionDimensionNode,
+  constructionDimensionRequiredAnchorCount,
 } from './nodes/construction-dimension'
 export {
   ConstructionNoteContractScope,

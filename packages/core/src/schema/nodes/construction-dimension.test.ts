@@ -13,6 +13,15 @@ describe('ConstructionDimensionNode', () => {
     ])
     expect(node.baseline).toEqual({ origin: [0, 0.6], direction: [1, 0] })
     expect(node.chainMode).toBe('point-to-point')
+    expect(node).toMatchObject({
+      mode: 'linear',
+      featureCount: 1,
+      showCenterMark: true,
+      reference: false,
+      prefix: '',
+      suffix: '',
+      textOverride: null,
+    })
   })
 
   test('accepts semantic anchors and rejects a collapsed baseline direction', () => {
@@ -50,5 +59,21 @@ describe('ConstructionDimensionNode', () => {
       ConstructionDimensionNode.safeParse({ anchors: [[0, 0, 0]], chainMode: 'continuous' })
         .success,
     ).toBe(false)
+  })
+
+  test('accepts curved and circular notation settings', () => {
+    expect(
+      ConstructionDimensionNode.safeParse({
+        mode: 'diameter',
+        featureCount: 6,
+        prefix: 'TYP · ',
+        suffix: ' CLR',
+        reference: true,
+      }).success,
+    ).toBe(true)
+    expect(ConstructionDimensionNode.safeParse({ mode: 'arc-length' }).success).toBe(true)
+    expect(ConstructionDimensionNode.safeParse({ mode: 'angular' }).success).toBe(true)
+    expect(ConstructionDimensionNode.safeParse({ featureCount: 0 }).success).toBe(false)
+    expect(ConstructionDimensionNode.safeParse({ textOverride: '' }).success).toBe(false)
   })
 })

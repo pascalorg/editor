@@ -6,7 +6,7 @@ describe('constructionDimensionDefinition', () => {
     expect(constructionDimensionDefinition.kind).toBe('construction-dimension')
     expect(constructionDimensionDefinition.category).toBe('analysis')
     expect(constructionDimensionDefinition.bake).toBe('strip')
-    expect(constructionDimensionDefinition.schemaVersion).toBe(2)
+    expect(constructionDimensionDefinition.schemaVersion).toBe(3)
     expect(constructionDimensionDefinition.dirtyTracking).toBe(false)
     expect(constructionDimensionDefinition.capabilities).toMatchObject({
       selectable: { hitVolume: 'bbox' },

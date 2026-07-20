@@ -385,14 +385,21 @@ and an optional scope reference.
 
 ### 7.1 Curved and circular dimensions
 
-- Radius dimensions.
-- Diameter dimensions.
-- Center marks.
-- Chord dimensions.
-- Arc length where appropriate.
-- Angular dimensions.
-- Coordinate dimensions for repeated circular features.
-- Feature-count notation such as `6 x DIA ...`.
+Status: implemented as associative construction-dimension modes using the existing semantic-anchor
+workflow. The 2D measurement menu now exposes each mode; radius, chord, arc-length, and angular
+dimensions include explicit label/baseline placement, while diameter and center marks commit from
+their defining points and coordinate mode accepts repeated feature points. The selected-dimension
+panel controls center marks, feature count, reference presentation, prefixes, suffixes, and text
+overrides. All modes render through the live/PDF floor-plan pipeline with unit-aware values.
+
+- [x] Radius dimensions.
+- [x] Diameter dimensions.
+- [x] Center marks.
+- [x] Chord dimensions.
+- [x] Arc length where appropriate.
+- [x] Angular dimensions.
+- [x] Coordinate dimensions for repeated circular features.
+- [x] Feature-count notation such as `6 x DIA ...`.
 
 ### 7.2 Drawing-type coordination
 

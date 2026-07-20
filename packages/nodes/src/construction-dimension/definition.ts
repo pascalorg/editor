@@ -1,12 +1,13 @@
 import { measurementAnchorReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
 import { buildConstructionDimensionFloorplan } from './floorplan'
 import { moveConstructionDimensionBaselineAffordance } from './floorplan-affordances'
+import { constructionDimensionParametrics } from './parametrics'
 import { ConstructionDimensionNode } from './schema'
 
 export const constructionDimensionDefinition: NodeDefinition<typeof ConstructionDimensionNode> = {
   kind: 'construction-dimension',
   bake: 'strip',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: ConstructionDimensionNode,
   category: 'analysis',
   snapProfile: 'structural',
@@ -22,6 +23,13 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     ],
     baseline: { origin: [0, 0.6], direction: [1, 0] },
     chainMode: 'point-to-point',
+    mode: 'linear',
+    featureCount: 1,
+    showCenterMark: true,
+    reference: false,
+    prefix: '',
+    suffix: '',
+    textOverride: null,
   }),
 
   capabilities: {
@@ -32,6 +40,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   },
 
   dirtyTracking: false,
+  parametrics: constructionDimensionParametrics,
   floorplan: buildConstructionDimensionFloorplan,
   floorplanDependencies: (node) => measurementAnchorReferenceNodeIds(node.anchors),
   floorplanAffordances: {
@@ -40,15 +49,15 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Pick witness point' },
-    { key: 'Enter', label: 'Place continuous baseline' },
-    { key: 'Left click', label: 'Place dimension line' },
+    { key: 'Enter', label: 'Finish multi-point witnesses' },
+    { key: 'Left click', label: 'Place dimension line when needed' },
     { key: 'Backspace', label: 'Remove last witness' },
     { key: 'Esc', label: 'Step back or cancel' },
   ],
 
   presentation: {
     label: 'Construction Dimension',
-    description: 'Associative linear dimension or continuous string for construction floor plans.',
+    description: 'Associative linear, curved, circular, angular, or coordinate plan dimension.',
     icon: { kind: 'iconify', name: 'lucide:ruler-dimension-line' },
     hidden: true,
     actionMenu: false,
@@ -56,6 +65,6 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
 
   mcp: {
     description:
-      'An associative linear floor-plan dimension string with semantic witness anchors and an editable baseline.',
+      'An associative construction dimension with linear, curved, circular, angular, and coordinate modes, semantic witness anchors, and document notation overrides.',
   },
 }

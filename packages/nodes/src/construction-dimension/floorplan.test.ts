@@ -152,4 +152,134 @@ describe('buildConstructionDimensionFloorplan', () => {
       selected && flatten(selected).filter((entry) => entry.kind === 'endpoint-handle'),
     ).toEqual([expect.objectContaining({ affordance: 'move-construction-dimension-baseline' })])
   })
+
+  test('renders radius notation with a leader and center mark', () => {
+    const node = ConstructionDimensionNode.parse({
+      mode: 'radius',
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+      ],
+      baseline: { origin: [3, 1], direction: [1, 0] },
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const entries = geometry ? flatten(geometry) : []
+
+    expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
+      text: 'R 2m',
+      cx: 3,
+      cy: 1,
+    })
+    expect(entries.filter((entry) => entry.kind === 'line').length).toBeGreaterThanOrEqual(6)
+  })
+
+  test('renders diameter and repeated-feature notation', () => {
+    const node = ConstructionDimensionNode.parse({
+      mode: 'diameter',
+      anchors: [
+        [-1, 0, 0],
+        [1, 0, 0],
+      ],
+      featureCount: 6,
+      prefix: 'TYP · ',
+      suffix: ' CLR',
+      reference: true,
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const entries = geometry ? flatten(geometry) : []
+
+    expect(entries.find((entry) => entry.kind === 'dimension')).toMatchObject({
+      text: '(TYP · 6 x Ø 2m CLR)',
+      start: [-1, 0],
+      end: [1, 0],
+    })
+    expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(4)
+  })
+
+  test('renders a standalone center mark from a center and radius point', () => {
+    const node = ConstructionDimensionNode.parse({
+      mode: 'center-mark',
+      anchors: [
+        [3, 0, 4],
+        [5, 0, 4],
+      ],
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const entries = geometry ? flatten(geometry) : []
+
+    expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(4)
+    expect(entries.some((entry) => entry.kind === 'dimension-label')).toBe(false)
+    expect(entries.some((entry) => entry.kind === 'dimension')).toBe(false)
+  })
+
+  test('renders chord and arc-length dimensions', () => {
+    const chord = ConstructionDimensionNode.parse({
+      mode: 'chord',
+      anchors: [
+        [-1, 0, 0],
+        [1, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+    })
+    const arc = ConstructionDimensionNode.parse({
+      mode: 'arc-length',
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [0, 0, 2],
+      ],
+      baseline: { origin: [2, 2], direction: [1, 0] },
+    })
+    const chordGeometry = buildConstructionDimensionFloorplan(chord, context())
+    const arcGeometry = buildConstructionDimensionFloorplan(arc, context())
+    const chordEntries = chordGeometry ? flatten(chordGeometry) : []
+    const arcEntries = arcGeometry ? flatten(arcGeometry) : []
+
+    expect(chordEntries.find((entry) => entry.kind === 'dimension')).toMatchObject({
+      text: 'CH 2m',
+    })
+    expect(arcEntries.some((entry) => entry.kind === 'path')).toBe(true)
+    expect(arcEntries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
+      text: 'ARC 3.14m',
+    })
+  })
+
+  test('renders angular dimensions with an architectural angle label', () => {
+    const node = ConstructionDimensionNode.parse({
+      mode: 'angular',
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [0, 0, 2],
+      ],
+      baseline: { origin: [0.5, 0.5], direction: [1, 0] },
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const entries = geometry ? flatten(geometry) : []
+
+    expect(entries.some((entry) => entry.kind === 'path')).toBe(true)
+    expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
+      text: '∠ 90°',
+      screenUpright: true,
+    })
+  })
+
+  test('renders signed coordinate labels for repeated circular features', () => {
+    const node = ConstructionDimensionNode.parse({
+      mode: 'coordinate',
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 3],
+        [-1, 0, 4],
+      ],
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const labels = geometry
+      ? flatten(geometry)
+          .filter((entry) => entry.kind === 'dimension-label')
+          .map((entry) => entry.text)
+      : []
+
+    expect(labels).toEqual(['P1 · X 2m · Y 3m', 'P2 · X -1m · Y 4m'])
+  })
 })

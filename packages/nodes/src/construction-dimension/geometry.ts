@@ -1,4 +1,9 @@
-import type { ConstructionDimensionNode, FloorplanPoint, MeasurementPoint } from '@pascal-app/core'
+import type {
+  ConstructionDimensionMode,
+  ConstructionDimensionNode,
+  FloorplanPoint,
+  MeasurementPoint,
+} from '@pascal-app/core'
 
 export type ConstructionDimensionSegmentLayout = {
   dimensionStart: FloorplanPoint
@@ -18,6 +23,76 @@ export type ConstructionDimensionLayout = {
 }
 
 const project = (point: MeasurementPoint): FloorplanPoint => [point[0], point[2]]
+
+export type CircularConstructionDimensionLayout = {
+  center: FloorplanPoint
+  start: FloorplanPoint
+  end: FloorplanPoint | null
+  radius: number
+  startAngle: number
+  endAngle: number
+  sweep: number
+  chordLength: number
+  arcLength: number
+}
+
+export function resolveCircularConstructionDimensionLayout(
+  mode: ConstructionDimensionMode,
+  anchors: readonly MeasurementPoint[],
+): CircularConstructionDimensionLayout | null {
+  if (anchors.length < 2) return null
+  const first = project(anchors[0]!)
+  const second = project(anchors[1]!)
+
+  if (mode === 'diameter') {
+    const center: FloorplanPoint = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
+    const radius = distance(first, second) / 2
+    if (radius <= 1e-9) return null
+    return {
+      center,
+      start: first,
+      end: second,
+      radius,
+      startAngle: Math.atan2(first[1] - center[1], first[0] - center[0]),
+      endAngle: Math.atan2(second[1] - center[1], second[0] - center[0]),
+      sweep: Math.PI,
+      chordLength: radius * 2,
+      arcLength: Math.PI * radius,
+    }
+  }
+
+  const center = first
+  const start = second
+  const radius = distance(center, start)
+  if (radius <= 1e-9) return null
+  const startAngle = Math.atan2(start[1] - center[1], start[0] - center[0])
+  const endAnchor = anchors[2]
+  const end = endAnchor ? project(endAnchor) : null
+  const endAngle = end ? Math.atan2(end[1] - center[1], end[0] - center[0]) : startAngle
+  const sweep = end ? normalizedSignedSweep(startAngle, endAngle) : 0
+  return {
+    center,
+    start,
+    end,
+    radius,
+    startAngle,
+    endAngle,
+    sweep,
+    chordLength: end ? distance(start, end) : radius,
+    arcLength: Math.abs(sweep) * radius,
+  }
+}
+
+function normalizedSignedSweep(startAngle: number, endAngle: number): number {
+  let sweep = endAngle - startAngle
+  while (sweep > Math.PI) sweep -= Math.PI * 2
+  while (sweep <= -Math.PI) sweep += Math.PI * 2
+  return sweep
+}
+
+function distance(first: FloorplanPoint, second: FloorplanPoint): number {
+  return Math.hypot(second[0] - first[0], second[1] - first[1])
+}
 
 export function resolveConstructionDimensionLayout(
   node: Pick<ConstructionDimensionNode, 'baseline'>,
