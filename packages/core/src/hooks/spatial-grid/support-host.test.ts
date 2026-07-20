@@ -466,4 +466,71 @@ describe('deleteNodesAction strips supportSlabId references', () => {
     ).toBe('slab_low')
     expect(itemElevation()).toBeCloseTo(0.2)
   })
+
+  test('deleting the destination deck strips deckSlabId from stairs; undo restores it', () => {
+    const stair = {
+      id: 'stair_test',
+      type: 'stair',
+      object: 'node',
+      parentId: LEVEL_ID,
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [0, 0, 0],
+      rotation: 0,
+      deckSlabId: 'slab_low',
+    } as unknown as AnyNode
+
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        stair_test: stair,
+        [LEVEL_ID]: {
+          ...useScene.getState().nodes[LEVEL_ID as AnyNodeId]!,
+          children: ['slab_low', 'slab_high', 'item_test', 'stair_test'],
+        } as AnyNode,
+      } as never,
+    })
+    clearSceneHistory()
+
+    useScene.getState().deleteNodes(['slab_low' as AnyNodeId])
+
+    const afterDelete = useScene.getState().nodes
+    expect(
+      (afterDelete['stair_test' as AnyNodeId] as { deckSlabId?: string }).deckSlabId,
+    ).toBeUndefined()
+
+    useScene.temporal.getState().undo()
+
+    const afterUndo = useScene.getState().nodes
+    expect(afterUndo['slab_low' as AnyNodeId]).toBeDefined()
+    expect((afterUndo['stair_test' as AnyNodeId] as { deckSlabId?: string }).deckSlabId).toBe(
+      'slab_low',
+    )
+  })
+
+  test('deleting a slab that is not the destination deck leaves deckSlabId alone', () => {
+    const stair = {
+      id: 'stair_test',
+      type: 'stair',
+      object: 'node',
+      parentId: LEVEL_ID,
+      visible: true,
+      metadata: {},
+      children: [],
+      position: [0, 0, 0],
+      rotation: 0,
+      deckSlabId: 'slab_low',
+    } as unknown as AnyNode
+
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, stair_test: stair } as never,
+    })
+
+    useScene.getState().deleteNodes(['slab_high' as AnyNodeId])
+
+    expect(
+      (useScene.getState().nodes['stair_test' as AnyNodeId] as { deckSlabId?: string }).deckSlabId,
+    ).toBe('slab_low')
+  })
 })

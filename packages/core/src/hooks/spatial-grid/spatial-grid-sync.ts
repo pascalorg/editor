@@ -171,6 +171,9 @@ export function initSpatialGridSync(): () => void {
           markNodesOverlappingSlab(prev as SlabNode, state.nodes, markDirty)
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
         }
+        if (node.elevation !== prev.elevation) {
+          markDeckAttachedStairs(node.id, state.nodes, markDirty)
+        }
         // The covering bound over the level below also moves with thickness
         // (underside = elevation − thickness) and recessed (pools never
         // cover), which same-level support ignores.
@@ -229,6 +232,23 @@ export function markLevelHeightDependents(
       child.type === 'fence'
     ) {
       markDirty(child.id)
+    }
+  }
+}
+
+/**
+ * A deck slab's walking surface moved: stairs attached to it via
+ * `deckSlabId` derive their rise from that elevation, so their geometry
+ * (and rise-derived affordances) must rebuild.
+ */
+export function markDeckAttachedStairs(
+  slabId: string,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'stair' && node.deckSlabId === slabId) {
+      markDirty(node.id)
     }
   }
 }

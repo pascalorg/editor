@@ -1145,11 +1145,12 @@ export const deleteNodesAction = (
       }
     }
 
-    // Deleting a slab strips `supportSlabId` references from surviving
-    // nodes in the same undo commit (mirrors the collectionIds cleanup
-    // below), so those nodes re-elect their support. Deletion is the ONLY
-    // writer — a host merely reshaped away keeps the field and the read
-    // path falls back, letting hosting resume if the slab returns.
+    // Deleting a slab strips `supportSlabId` / `deckSlabId` references from
+    // surviving nodes in the same undo commit (mirrors the collectionIds
+    // cleanup below), so those nodes re-elect their support / re-derive
+    // their rise. Deletion is the ONLY writer — a host merely reshaped away
+    // keeps the field and the read path falls back, letting hosting resume
+    // if the slab returns.
     const deletedSlabIds = new Set<string>()
     for (const id of allIds) {
       if (nextNodes[id]?.type === 'slab') deletedSlabIds.add(id)
@@ -1157,9 +1158,13 @@ export const deleteNodesAction = (
     if (deletedSlabIds.size > 0) {
       for (const [nodeId, node] of Object.entries(nextNodes)) {
         if (allIds.has(nodeId as AnyNodeId)) continue
+        const patch: { supportSlabId?: undefined; deckSlabId?: undefined } = {}
         const hostId = (node as { supportSlabId?: string }).supportSlabId
-        if (hostId && deletedSlabIds.has(hostId)) {
-          nextNodes[nodeId as AnyNodeId] = { ...node, supportSlabId: undefined } as AnyNode
+        if (hostId && deletedSlabIds.has(hostId)) patch.supportSlabId = undefined
+        const deckId = (node as { deckSlabId?: string }).deckSlabId
+        if (deckId && deletedSlabIds.has(deckId)) patch.deckSlabId = undefined
+        if (Object.keys(patch).length > 0) {
+          nextNodes[nodeId as AnyNodeId] = { ...node, ...patch } as AnyNode
           nodesToMarkDirty.add(nodeId as AnyNodeId)
         }
       }

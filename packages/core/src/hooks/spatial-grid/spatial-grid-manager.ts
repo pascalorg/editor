@@ -304,6 +304,15 @@ export type ItemSlabSupport = {
   slabId: string | null
 }
 
+/**
+ * Tolerance for the pointer-decided support cap: a slab still counts as
+ * "the surface you're pointing at (or below)" when its walking surface is
+ * within this many meters ABOVE the pointed elevation. Absorbs elevation
+ * noise between the ray hit and slab tops without letting a deck hanging
+ * clearly above the hit point capture the election.
+ */
+export const SUPPORT_ELEVATION_EPSILON = 0.05
+
 export class SpatialGridManager {
   private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
   private readonly wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
@@ -792,8 +801,10 @@ export class SpatialGridManager {
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
+    maxElevation?: number | null,
   ): number {
-    return this.getSlabSupportForItem(levelId, position, dimensions, rotation).elevation
+    return this.getSlabSupportForItem(levelId, position, dimensions, rotation, maxElevation)
+      .elevation
   }
 
   /**
@@ -801,29 +812,81 @@ export class SpatialGridManager {
    * whose RENDERED polygon the footprint overlaps (center-point hole veto
    * applies). Returns `{ elevation: 0, slabId: null }` when nothing
    * overlaps.
+   *
+   * `maxElevation` is the pointer-decided cap: when set, only slabs whose
+   * walking surface sits at or below `maxElevation +
+   * SUPPORT_ELEVATION_EPSILON` may win — a deck hanging above the surface
+   * the cursor ray actually hit never captures the election.
    */
   getSlabSupportForItem(
     levelId: string,
     position: [number, number, number],
     dimensions: [number, number, number],
     rotation: [number, number, number],
+    maxElevation?: number | null,
   ): ItemSlabSupport {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return { elevation: 0, slabId: null }
 
-    let maxElevation = Number.NEGATIVE_INFINITY
+    let winningElevation = Number.NEGATIVE_INFINITY
     let winnerId: string | null = null
     for (const slab of slabMap.values()) {
-      if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
       const elevation = slab.elevation ?? 0.05
-      if (elevation > maxElevation) {
-        maxElevation = elevation
+      if (maxElevation != null && elevation > maxElevation + SUPPORT_ELEVATION_EPSILON) continue
+      if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
+      if (elevation > winningElevation) {
+        winningElevation = elevation
         winnerId = slab.id
       }
     }
     return winnerId === null
       ? { elevation: 0, slabId: null }
-      : { elevation: maxElevation, slabId: winnerId }
+      : { elevation: winningElevation, slabId: winnerId }
+  }
+
+  /**
+   * The walking surface the pointer actually points at: the nearest slab
+   * plane the ray crosses INSIDE that slab's rendered polygon (hole veto
+   * applies), or the level base (`{ elevation: 0, slabId: null }`) when it
+   * crosses none. Ray origin/direction are level-local. Deliberately a
+   * point test, not a footprint test — it answers "which surface is under
+   * the cursor", which then caps the footprint election so a deck hanging
+   * above the aimed-at floor never lifts the placement.
+   */
+  getPointedSupportSurface(
+    levelId: string,
+    rayOrigin: [number, number, number],
+    rayDirection: [number, number, number],
+  ): ItemSlabSupport {
+    const slabMap = this.slabsByLevel.get(levelId)
+    const [ox, oy, oz] = rayOrigin
+    const [dx, dy, dz] = rayDirection
+    if (!slabMap || Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null }
+
+    let best: { t: number; elevation: number; slabId: string } | null = null
+    for (const slab of slabMap.values()) {
+      if (slab.polygon.length < 3) continue
+      const elevation = slab.elevation ?? 0.05
+      const t = (elevation - oy) / dy
+      if (t <= 0) continue
+      if (best && t >= best.t) continue
+      const x = ox + dx * t
+      const z = oz + dz * t
+      const rendered = this.getRenderedSlabPolygon(levelId, slab)
+      if (rendered.length < 3 || !pointInPolygon(x, z, rendered)) continue
+      let inHole = false
+      for (const hole of slab.holes || []) {
+        if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
+          inHole = true
+          break
+        }
+      }
+      if (inHole) continue
+      best = { t, elevation, slabId: slab.id }
+    }
+    return best
+      ? { elevation: best.elevation, slabId: best.slabId }
+      : { elevation: 0, slabId: null }
   }
 
   /**

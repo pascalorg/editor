@@ -171,6 +171,68 @@ describe('spatial-grid sync dirty rules (vertical model)', () => {
   })
 })
 
+describe('spatial-grid sync dirty rules (deck-attached stairs)', () => {
+  let stopSync = () => {}
+
+  const deck = makeSlab('slab_deck', 'level_0', { elevation: 1.25, thickness: 0.05 })
+  const attachedStair = {
+    ...makeChild('stair_deck', 'stair', 'level_0'),
+    deckSlabId: 'slab_deck',
+  } as AnyNode
+  const otherStair = makeChild('stair_other', 'stair', 'level_0')
+  const deckLevel = makeLevel('level_0', 0, 2.5, ['slab_deck', 'stair_deck', 'stair_other'])
+
+  beforeEach(() => {
+    spatialGridManager.clear()
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set<AnyNodeId>(),
+      nodes: nodesFor(deckLevel, deck, attachedStair, otherStair),
+      readOnly: false,
+      rootNodeIds: ['level_0'] as AnyNodeId[],
+    } as never)
+    clearSceneHistory()
+    stopSync = initSpatialGridSync()
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+  })
+
+  afterEach(() => {
+    stopSync()
+    stopSync = () => {}
+  })
+
+  test('changing a deck elevation marks its attached stair dirty, not other stairs', () => {
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        slab_deck: { ...deck, elevation: 1.6 } as AnyNode,
+      } as never,
+    })
+
+    expect(useScene.getState().dirtyNodes.has('stair_deck' as AnyNodeId)).toBe(true)
+    expect(useScene.getState().dirtyNodes.has('stair_other' as AnyNodeId)).toBe(false)
+  })
+
+  test('a deck polygon-only change leaves the attached stair alone', () => {
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        slab_deck: {
+          ...deck,
+          polygon: [
+            [0, 0],
+            [5, 0],
+            [5, 5],
+            [0, 5],
+          ],
+        } as AnyNode,
+      } as never,
+    })
+
+    expect(useScene.getState().dirtyNodes.has('stair_deck' as AnyNodeId)).toBe(false)
+  })
+})
+
 describe('sync dirty helpers (pure)', () => {
   const collect = () => {
     const marked: string[] = []

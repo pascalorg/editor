@@ -1,13 +1,25 @@
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
-import { getFloorPlacedFootprints } from './floor-placed-elevation'
+import { GROUND_SUPPORT_ID, getFloorPlacedFootprints } from './floor-placed-elevation'
 import { spatialGridManager } from './spatial-grid-manager'
 
 export type SupportSlabPatch = { supportSlabId: string | undefined }
 
+export type SupportSlabPatchOptions = {
+  /**
+   * Pointer-decided support cap (level-local Y) — see
+   * `FloorPlacedElevationArgs.maxElevation`. When set, the persisted host
+   * reproduces the CAPPED election: the elected lower slab wins over a
+   * deck hanging above the cap, and `GROUND_SUPPORT_ID` is stored when the
+   * ground is elected while capped-out slabs still overlap the footprint.
+   */
+  maxElevation?: number | null
+}
+
 export function resolveSupportSlabPatch(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
+  options?: SupportSlabPatchOptions,
 ): SupportSlabPatch {
   const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
   if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(node))) {
@@ -18,9 +30,11 @@ export function resolveSupportSlabPatch(
   const parent = parentId ? nodes[parentId] : null
   if (parent?.type !== 'level') return { supportSlabId: undefined }
 
+  const maxElevation = options?.maxElevation
   const footprints = getFloorPlacedFootprints(floorPlaced, node, { nodes })
   const candidateElevations = new Set<number>()
   let winner: { slabId: string; elevation: number } | null = null
+  let cappedOut = false
 
   for (const footprint of footprints) {
     const position = footprint.position ?? (node as { position?: unknown }).position
@@ -38,15 +52,23 @@ export function resolveSupportSlabPatch(
       position as [number, number, number],
       footprint.dimensions,
       footprint.rotation,
+      maxElevation,
     )
     if (support.slabId && (!winner || support.elevation > winner.elevation)) {
       winner = { slabId: support.slabId, elevation: support.elevation }
     }
+    if (maxElevation != null && support.slabId === null && candidates.length > 0) {
+      cappedOut = true
+    }
   }
 
-  return {
-    supportSlabId: candidateElevations.size >= 2 && winner !== null ? winner.slabId : undefined,
+  if (winner !== null) {
+    return { supportSlabId: candidateElevations.size >= 2 ? winner.slabId : undefined }
   }
+  // Capped election chose the ground while overlapping slabs sit above the
+  // cap: persist the ground host, or the uncapped per-frame election would
+  // lift the committed node back onto the deck.
+  return { supportSlabId: cappedOut ? GROUND_SUPPORT_ID : undefined }
 }
 
 export function resolveWallSupportSlabPatch(

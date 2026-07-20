@@ -7,6 +7,14 @@ import { create } from 'zustand'
 export type LiveTransform = {
   position: [number, number, number]
   rotation: number // Y-axis rotation (plan-view rotation)
+  /**
+   * Pointer-decided support cap (level-local Y) published by 3D drags:
+   * the elevation of the surface the cursor ray actually points at. The
+   * floor-elevation system passes it to the slab-support election so a
+   * deck above the aimed-at floor never lifts the dragged node. Absent
+   * for 2D floorplan drags (no camera ray) — election stays uncapped.
+   */
+  supportElevationCap?: number
 }
 
 type LiveTransformState = {

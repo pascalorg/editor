@@ -152,6 +152,9 @@ export const ItemNode = BaseNode.extend({
   // silently fall back to election otherwise. Deleting the host slab
   // strips the field (deleteNodesAction); a host merely reshaped away is
   // deliberately kept so hosting resumes if the slab's polygon returns.
+  // The sentinel value 'ground' (GROUND_SUPPORT_ID) pins the node to the
+  // level base — written when a pointer-capped commit elected the ground
+  // while a slab (e.g. an elevated deck) still overlapped the footprint.
   supportSlabId: z.string().optional(),
 
   // Denormalized references to collections this node belongs to

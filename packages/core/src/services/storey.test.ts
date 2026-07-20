@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BuildingNode, LevelNode, SlabNode, type WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import reproFixture from './__fixtures__/wall-plane-top-boundary-repro.json'
+import { wallPlaneTopBoundaryRepro as reproFixture } from './__fixtures__/wall-plane-top-boundary-repro'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 import {
   CEILING_CLAMP_MARGIN,

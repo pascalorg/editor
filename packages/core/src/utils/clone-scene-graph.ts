@@ -1,3 +1,4 @@
+import { GROUND_SUPPORT_ID } from '../hooks/spatial-grid/floor-placed-elevation'
 import { remapMeasurementReferences } from '../lib/measurement-geometry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
@@ -85,11 +86,22 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ) as string | undefined
     }
 
-    // Remap supportSlabId (persisted slab-support hosts)
-    if ('supportSlabId' in clonedNode && typeof clonedNode.supportSlabId === 'string') {
+    // Remap supportSlabId (persisted slab-support hosts). The 'ground'
+    // sentinel is not a node id — keep it as-is.
+    if (
+      'supportSlabId' in clonedNode &&
+      typeof clonedNode.supportSlabId === 'string' &&
+      clonedNode.supportSlabId !== GROUND_SUPPORT_ID
+    ) {
       ;(clonedNode as Record<string, unknown>).supportSlabId = idMap.get(
         clonedNode.supportSlabId,
       ) as string | undefined
+    }
+
+    if ('deckSlabId' in clonedNode && typeof clonedNode.deckSlabId === 'string') {
+      ;(clonedNode as Record<string, unknown>).deckSlabId = idMap.get(clonedNode.deckSlabId) as
+        | string
+        | undefined
     }
 
     if (clonedNode.type === 'measurement') {
@@ -252,6 +264,11 @@ export function cloneLevelSubtree(
     if ('supportSlabId' in cloned && typeof cloned.supportSlabId === 'string') {
       ;(cloned as Record<string, unknown>).supportSlabId =
         idMap.get(cloned.supportSlabId) ?? cloned.supportSlabId
+    }
+
+    if ('deckSlabId' in cloned && typeof cloned.deckSlabId === 'string') {
+      ;(cloned as Record<string, unknown>).deckSlabId =
+        idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
 
     if (cloned.type === 'measurement') {

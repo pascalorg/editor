@@ -46,6 +46,7 @@ export {
 } from './hooks/scene-registry/scene-registry'
 export {
   type FloorPlacedElevationArgs,
+  GROUND_SUPPORT_ID,
   getFloorPlacedElevation,
   getFloorPlacedFootprints,
   getFloorStackedPosition,
@@ -53,6 +54,7 @@ export {
 export {
   getWallEffectiveHeightForNodes,
   pointInPolygon,
+  SUPPORT_ELEVATION_EPSILON,
   spatialGridManager,
   type WallSlabSupportSegment,
 } from './hooks/spatial-grid/spatial-grid-manager'

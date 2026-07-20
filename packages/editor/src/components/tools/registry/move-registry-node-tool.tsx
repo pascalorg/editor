@@ -31,6 +31,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
@@ -55,6 +56,7 @@ import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
+import { resolvePointerSupportElevation } from '../shared/pointer-support-cap'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
@@ -232,6 +234,15 @@ const CLICK_TRIGGER_KINDS = [
 ] as const
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
+  // Live camera ref — the pointer-surface cap reconstructs the cursor world
+  // ray (camera → grid hit) to find which walking surface is aimed at.
+  const camera = useThree((s) => s.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
+  // Level-local elevation of the surface the pointer ray points at,
+  // refreshed per grid move. Caps the floor-support election so a deck
+  // hanging above the aimed-at floor never lifts the dragged node.
+  const supportCapRef = useRef<number | null>(null)
   // Kinds whose `position` lives in a host parent's local frame declare
   // `movable.parentFrame` (cabinet module ↔ its run). The tool converts the
   // plan-frame cursor through the capability's hooks and previews via
@@ -357,6 +368,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             ? [(r[0] as number) ?? 0, rotationY, (r[2] as number) ?? 0]
             : rotationY
         })(),
+        maxElevation: supportCapRef.current,
       })
     },
     [parentFrame, frameParent, node],
@@ -405,6 +417,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     rotationRef.current = originalRotationY
     altRef.current = false
     validRef.current = true
+    // No pointer surface known yet — uncapped election (the node keeps its
+    // persisted host / committed elevation until the first grid move).
+    supportCapRef.current = null
     // Re-sync the box transform to the (possibly new) node. `node` changes
     // without this component remounting whenever a positioned preset re-arms a
     // fresh clone after a drop, or the user picks a different catalog tile —
@@ -594,6 +609,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const onGridMove = (event: GridEvent) => {
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
+      // The pointer decides the target surface: cap the floor-support
+      // election at the elevation of the surface the camera ray actually
+      // hits (deck top when aiming at the deck, floor/ground when aiming
+      // beneath it). The event's own Y rides the grid plane at the ghost's
+      // last height, so it can't be used directly.
+      supportCapRef.current = resolvePointerSupportElevation(cameraRef.current, event.position)
       revealFreshPlacement()
 
       const resolved = resolvePlanarCursorPosition({
@@ -722,9 +743,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // the absolute world plan position here. Polygon-based kinds
       // (slab / ceiling / fence) follow a different delta contract —
       // their floor-plan move-targets handle the override themselves.
+      // The pointer surface cap rides along so FloorElevationSystem's
+      // per-frame Y agrees with this tool's preview.
       useLiveTransforms.getState().set(node.id, {
         position,
         rotation: rotationRef.current,
+        supportElevationCap: supportCapRef.current ?? undefined,
       })
       syncParentFramePreview(position)
       markMovedNodeDirty()
@@ -790,10 +814,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         const data = {
           position,
           rotation,
-          ...resolveSupportSlabPatch(effectiveNode, {
-            ...useScene.getState().nodes,
-            [node.id]: effectiveNode,
-          }),
+          // The pointer cap makes the persisted host reproduce the capped
+          // election — a drop under a deck stores the aimed-at lower slab
+          // (or the ground), not the deck hanging above.
+          ...resolveSupportSlabPatch(
+            effectiveNode,
+            {
+              ...useScene.getState().nodes,
+              [node.id]: effectiveNode,
+            },
+            { maxElevation: supportCapRef.current },
+          ),
           ...(isNew
             ? {
                 metadata: stripPlacementMetadataFlags(node.metadata),
@@ -858,10 +889,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           const committedNode = def.schema.parse({
             ...reparsed,
             parentId: node.parentId,
-            ...resolveSupportSlabPatch({ ...reparsed, parentId: node.parentId } as AnyNode, {
-              ...useScene.getState().nodes,
-              [reparsed.id]: reparsed,
-            }),
+            ...resolveSupportSlabPatch(
+              { ...reparsed, parentId: node.parentId } as AnyNode,
+              {
+                ...useScene.getState().nodes,
+                [reparsed.id]: reparsed,
+              },
+              { maxElevation: supportCapRef.current },
+            ),
           }) as AnyNode
           useScene.temporal.getState().resume()
           useScene.getState().createNode(committedNode, node.parentId as AnyNodeId)
@@ -929,6 +964,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       useLiveTransforms.getState().set(node.id, {
         position,
         rotation: rotationRef.current,
+        supportElevationCap: supportCapRef.current ?? undefined,
       })
       syncParentFramePreview(position)
       markMovedNodeDirty()

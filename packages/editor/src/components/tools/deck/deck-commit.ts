@@ -119,9 +119,11 @@ export function commitDeck(options: {
       stairType: 'straight',
       fromLevelId: levelId,
       // Same-level deck boarding: no destination level, no slab opening —
-      // you board the deck over its open edge, so nothing gets cut.
+      // you board the deck over its open edge, so nothing gets cut. The
+      // rise derives from the deck via `deckSlabId` (no explicit totalRise),
+      // so moving the deck later moves the stair with it.
       slabOpeningMode: 'none',
-      totalRise: elevation,
+      deckSlabId: deck.id,
       width: stairPlan.width,
       stepCount: stairPlan.stepCount,
       thickness: DEFAULT_STAIR_THICKNESS,
