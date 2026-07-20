@@ -132,15 +132,11 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             const boxY = PAGE_MARGIN_PT + TITLE_BAND_PT
             const boxW = pageW - PAGE_MARGIN_PT * 2
             const boxH = pageH - PAGE_MARGIN_PT * 2 - TITLE_BAND_PT
-            const aspect = mounted.width / mounted.height
-            let w = boxW
-            let h = w / aspect
-            if (h > boxH) {
-              h = boxH
-              w = h * aspect
+            let fitted = fitPlanToBox(mounted.width, mounted.height, boxX, boxY, boxW, boxH)
+            for (let pass = 0; pass < 2; pass++) {
+              await mounted.setAnnotationUnitsPerPoint(mounted.width / fitted.width)
+              fitted = fitPlanToBox(mounted.width, mounted.height, boxX, boxY, boxW, boxH)
             }
-            const x = boxX + (boxW - w) / 2
-            const y = boxY + (boxH - h) / 2
 
             // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
             // many builders use to keep door/window/stair line weights constant
@@ -148,9 +144,14 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             // metre-wide strokes — huge grey blobs. Convert them to the real-unit
             // width that lands at the intended point weight once svg2pdf scales
             // the plan onto the page.
-            inlineNonScalingStrokes(mounted.svg, w / mounted.width)
+            inlineNonScalingStrokes(mounted.svg, fitted.width / mounted.width)
 
-            await svg2pdf(mounted.svg, doc, { x, y, width: w, height: h })
+            await svg2pdf(mounted.svg, doc, {
+              x: fitted.x,
+              y: fitted.y,
+              width: fitted.width,
+              height: fitted.height,
+            })
           } finally {
             mounted.cleanup()
           }
@@ -331,7 +332,31 @@ type MountedFloorplan = {
   /** Padded viewBox dimensions, in meters — used for aspect-preserving fit. */
   width: number
   height: number
+  setAnnotationUnitsPerPoint: (value: number) => Promise<void>
   cleanup: () => void
+}
+
+export function fitPlanToBox(
+  planWidth: number,
+  planHeight: number,
+  boxX: number,
+  boxY: number,
+  boxWidth: number,
+  boxHeight: number,
+) {
+  const aspect = planWidth / planHeight
+  let width = boxWidth
+  let height = width / aspect
+  if (height > boxHeight) {
+    height = boxHeight
+    width = height * aspect
+  }
+  return {
+    x: boxX + (boxWidth - width) / 2,
+    y: boxY + (boxHeight - height) / 2,
+    width,
+    height,
+  }
 }
 
 async function mountFloorplanSvg(
@@ -347,62 +372,86 @@ async function mountFloorplanSvg(
     container.remove()
   }
 
-  // Render a full `<svg>` as the React root child so React enters the SVG
-  // namespace at the `<svg>` tag, then mutate the DOM node afterwards —
-  // viewBox/background depend on the post-mount measured bounds.
-  flushSync(() => {
-    root.render(
-      createElement(
-        'svg',
-        { xmlns: SVG_NS },
+  const render = (annotationUnitsPerPoint?: number) => {
+    flushSync(() => {
+      root.render(
         createElement(
-          'g',
-          { 'data-floorplan-content': '' },
+          'svg',
+          { xmlns: SVG_NS },
           createElement(
             'g',
-            { transform: `rotate(${rotationDeg})` },
-            geometries.map(({ id, base }) =>
-              createElement(FloorplanGeometryRenderer, {
-                key: id,
-                geometry: base,
-                sceneRotationDeg: rotationDeg,
-              }),
+            { 'data-floorplan-content': '' },
+            createElement(
+              'g',
+              { transform: `rotate(${rotationDeg})` },
+              geometries.map(({ id, base }) =>
+                createElement(FloorplanGeometryRenderer, {
+                  key: id,
+                  geometry: base,
+                  sceneRotationDeg: rotationDeg,
+                  annotationUnitsPerPoint,
+                }),
+              ),
             ),
           ),
         ),
-      ),
-    )
-  })
+      )
+    })
+  }
+
+  render()
 
   // Give async asset images (item icons) a couple of frames to resolve so
   // they're included in the measured bounds and the rendered output.
   await nextFrames(2)
 
   const svg = container.querySelector('svg')
-  const content = svg?.querySelector('[data-floorplan-content]') as SVGGraphicsElement | null
-  const bbox = content?.getBBox()
-  if (!svg || !bbox || bbox.width === 0 || bbox.height === 0) {
+  if (!svg) {
     cleanup()
     return null
   }
 
+  const mounted: MountedFloorplan = {
+    svg,
+    width: 0,
+    height: 0,
+    cleanup,
+    setAnnotationUnitsPerPoint: async (value) => {
+      render(value)
+      await nextFrames(1)
+      if (!measureMountedFloorplan(mounted)) throw new Error('Unable to measure floor plan export')
+    },
+  }
+  if (!measureMountedFloorplan(mounted)) {
+    cleanup()
+    return null
+  }
+  return mounted
+}
+
+function measureMountedFloorplan(mounted: MountedFloorplan): boolean {
+  const content = mounted.svg.querySelector('[data-floorplan-content]') as SVGGraphicsElement | null
+  const bbox = content?.getBBox()
+  if (!bbox || bbox.width === 0 || bbox.height === 0) return false
+
   const minX = bbox.x - PADDING_M
   const minY = bbox.y - PADDING_M
-  const width = bbox.width + PADDING_M * 2
-  const height = bbox.height + PADDING_M * 2
-  svg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`)
-  svg.setAttribute('width', `${width}`)
-  svg.setAttribute('height', `${height}`)
+  mounted.width = bbox.width + PADDING_M * 2
+  mounted.height = bbox.height + PADDING_M * 2
+  mounted.svg.setAttribute('viewBox', `${minX} ${minY} ${mounted.width} ${mounted.height}`)
+  mounted.svg.setAttribute('width', `${mounted.width}`)
+  mounted.svg.setAttribute('height', `${mounted.height}`)
 
+  mounted.svg.querySelector('[data-floorplan-background]')?.remove()
   const background = document.createElementNS(SVG_NS, 'rect')
+  background.setAttribute('data-floorplan-background', '')
   background.setAttribute('x', `${minX}`)
   background.setAttribute('y', `${minY}`)
-  background.setAttribute('width', `${width}`)
-  background.setAttribute('height', `${height}`)
+  background.setAttribute('width', `${mounted.width}`)
+  background.setAttribute('height', `${mounted.height}`)
   background.setAttribute('fill', '#ffffff')
-  svg.insertBefore(background, svg.firstChild)
-
-  return { svg, width, height, cleanup }
+  mounted.svg.insertBefore(background, mounted.svg.firstChild)
+  return true
 }
 
 /**

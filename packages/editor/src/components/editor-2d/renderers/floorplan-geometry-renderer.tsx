@@ -29,12 +29,14 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
   geometry,
   pointerEventsOverride,
   sceneRotationDeg = 0,
+  annotationUnitsPerPoint,
 }: {
   geometry: FloorplanGeometry
   pointerEventsOverride?: string
   sceneRotationDeg?: number
+  annotationUnitsPerPoint?: number
 }) {
-  return renderNode(geometry, 0, pointerEventsOverride, sceneRotationDeg)
+  return renderNode(geometry, 0, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint)
 })
 
 function styleAttrs(
@@ -81,6 +83,7 @@ function renderNode(
   keyHint: number,
   pointerEventsOverride?: string,
   sceneRotationDeg = 0,
+  annotationUnitsPerPoint?: number,
 ): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
@@ -196,15 +199,17 @@ function renderNode(
           geometry={g}
           key={keyHint}
           sceneRotationDeg={sceneRotationDeg}
+          annotationUnitsPerPoint={annotationUnitsPerPoint}
         />
       )
 
     case 'dimension-label': {
-      const unitsPerPixel = STATIC_LABEL_UNITS_PER_PIXEL
+      const unitsPerPixel = annotationUnitsPerPoint ?? STATIC_LABEL_UNITS_PER_PIXEL
+      const documentMode = annotationUnitsPerPoint !== undefined
       const outlined = g.appearance === 'outlined'
       const padX = unitsPerPixel * 6
       const padY = unitsPerPixel * 3
-      const fontSize = unitsPerPixel * (outlined ? 12 : 10)
+      const fontSize = unitsPerPixel * (documentMode ? 8 : outlined ? 12 : 10)
       const textWidth = g.text.length * unitsPerPixel * 6.2
       const plateW = textWidth + padX * 2
       const plateH = fontSize + padY * 2
@@ -274,7 +279,7 @@ function renderNode(
       return (
         <g key={keyHint} transform={transform}>
           {g.children.map((child, i) =>
-            renderNode(child, i, pointerEventsOverride, sceneRotationDeg),
+            renderNode(child, i, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint),
           )}
         </g>
       )

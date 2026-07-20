@@ -52,4 +52,23 @@ describe('FloorplanGeometryRenderer static labels', () => {
     expect(markup).toContain('A 6.0m²')
     expect(markup).toContain('rotate(-90)')
   })
+
+  test('uses paper-point sizing when document scale is provided', () => {
+    const geometry = {
+      kind: 'dimension-label',
+      appearance: 'outlined',
+      cx: 1,
+      cy: 2,
+      text: '2.00m',
+      angle: 0,
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer annotationUnitsPerPoint={0.01} geometry={geometry} />
+      </svg>,
+    )
+
+    expect(markup).toContain('font-size="0.08"')
+  })
 })

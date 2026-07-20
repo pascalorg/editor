@@ -181,6 +181,8 @@ The model belongs in Core because it is persistent project data. Interactive she
 
 ### 3.2 Implement paper-space annotation sizing
 
+Status: initial automatic sizing is implemented for exported construction dimensions and measurement labels. Text height, tick size, extension gaps, overshoot, and label offsets are resolved from page points after the plan is fitted. Fixed user-selectable architectural scales and the remaining annotation categories still require the drawing-sheet work in Phase 3.1.
+
 Resolve the following from plotted scale:
 
 - Dimension text height.

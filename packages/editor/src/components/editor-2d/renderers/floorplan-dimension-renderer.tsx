@@ -5,6 +5,11 @@ const EXTENSION_START_GAP = 0.075
 const TICK_HALF_LENGTH = 0.09
 const LABEL_FONT_SIZE = 0.15
 const LABEL_BASELINE_OFFSET = 0.12
+const DOCUMENT_EXTENSION_START_GAP_PT = 3
+const DOCUMENT_EXTENSION_OVERSHOOT_PT = 4
+const DOCUMENT_TICK_HALF_LENGTH_PT = 4.5
+const DOCUMENT_LABEL_FONT_SIZE_PT = 8
+const DOCUMENT_LABEL_BASELINE_OFFSET_PT = 5
 const LINE_STROKE_WIDTH_PX = 0.9
 const TICK_STROKE_WIDTH_PX = 1.35
 const SQRT_ONE_HALF = Math.SQRT1_2
@@ -26,7 +31,17 @@ export type ArchitecturalDimensionLayout = {
 export function computeArchitecturalDimensionLayout(
   geometry: DimensionGeometry,
   sceneRotationDeg: number,
+  annotationUnitsPerPoint?: number,
 ): ArchitecturalDimensionLayout | null {
+  const extensionStartGap = annotationUnitsPerPoint
+    ? DOCUMENT_EXTENSION_START_GAP_PT * annotationUnitsPerPoint
+    : EXTENSION_START_GAP
+  const extensionOvershoot = annotationUnitsPerPoint
+    ? DOCUMENT_EXTENSION_OVERSHOOT_PT * annotationUnitsPerPoint
+    : geometry.extensionOvershoot
+  const tickHalfLength = annotationUnitsPerPoint
+    ? DOCUMENT_TICK_HALF_LENGTH_PT * annotationUnitsPerPoint
+    : TICK_HALF_LENGTH
   const offsetX = geometry.offsetNormal[0] * geometry.offsetDistance
   const offsetY = geometry.offsetNormal[1] * geometry.offsetDistance
   const dimensionStart: FloorplanPoint = geometry.dimensionStart ?? [
@@ -46,14 +61,14 @@ export function computeArchitecturalDimensionLayout(
   const dirY = dy / length
   const startOffsetDistance = dot(subtract(dimensionStart, geometry.start), geometry.offsetNormal)
   const endOffsetDistance = dot(subtract(dimensionEnd, geometry.end), geometry.offsetNormal)
-  const startExtensionGap = Math.min(EXTENSION_START_GAP, Math.max(0, startOffsetDistance - 0.01))
-  const endExtensionGap = Math.min(EXTENSION_START_GAP, Math.max(0, endOffsetDistance - 0.01))
+  const startExtensionGap = Math.min(extensionStartGap, Math.max(0, startOffsetDistance - 0.01))
+  const endExtensionGap = Math.min(extensionStartGap, Math.max(0, endOffsetDistance - 0.01))
 
   // A 45-degree architectural slash. Every terminator within one string uses
   // this same vector instead of rotating independently around its endpoint.
   const tickHalfVector: FloorplanPoint = [
-    (dirX + dirY) * TICK_HALF_LENGTH * SQRT_ONE_HALF,
-    (dirY - dirX) * TICK_HALF_LENGTH * SQRT_ONE_HALF,
+    (dirX + dirY) * tickHalfLength * SQRT_ONE_HALF,
+    (dirY - dirX) * tickHalfLength * SQRT_ONE_HALF,
   ]
 
   return {
@@ -61,12 +76,8 @@ export function computeArchitecturalDimensionLayout(
     dimensionEnd,
     extensionStart: addScaled(geometry.start, geometry.offsetNormal, startExtensionGap),
     extensionEnd: addScaled(geometry.end, geometry.offsetNormal, endExtensionGap),
-    extensionStartTip: addScaled(
-      dimensionStart,
-      geometry.offsetNormal,
-      geometry.extensionOvershoot,
-    ),
-    extensionEndTip: addScaled(dimensionEnd, geometry.offsetNormal, geometry.extensionOvershoot),
+    extensionStartTip: addScaled(dimensionStart, geometry.offsetNormal, extensionOvershoot),
+    extensionEndTip: addScaled(dimensionEnd, geometry.offsetNormal, extensionOvershoot),
     tickHalfVector,
     labelPoint: [
       (dimensionStart[0] + dimensionEnd[0]) / 2,
@@ -96,13 +107,26 @@ export function FloorplanDimensionRenderer({
   geometry,
   sceneRotationDeg = 0,
   stroke = geometry.stroke ?? '#334155',
+  annotationUnitsPerPoint,
 }: {
   geometry: DimensionGeometry
   sceneRotationDeg?: number
   stroke?: string
+  annotationUnitsPerPoint?: number
 }): React.ReactElement | null {
-  const layout = computeArchitecturalDimensionLayout(geometry, sceneRotationDeg)
+  const layout = computeArchitecturalDimensionLayout(
+    geometry,
+    sceneRotationDeg,
+    annotationUnitsPerPoint,
+  )
   if (!layout) return null
+
+  const labelFontSize = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_FONT_SIZE_PT * annotationUnitsPerPoint
+    : LABEL_FONT_SIZE
+  const labelBaselineOffset = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_BASELINE_OFFSET_PT * annotationUnitsPerPoint
+    : LABEL_BASELINE_OFFSET
 
   const lineProps = {
     stroke,
@@ -157,11 +181,11 @@ export function FloorplanDimensionRenderer({
         <text
           fill={stroke}
           fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fontSize={LABEL_FONT_SIZE}
+          fontSize={labelFontSize}
           fontWeight={500}
           textAnchor="middle"
           x={0}
-          y={-LABEL_BASELINE_OFFSET}
+          y={-labelBaselineOffset}
         >
           {geometry.text}
         </text>

@@ -75,4 +75,18 @@ describe('architectural floor-plan dimensions', () => {
   test('keeps labels readable after the scene rotates', () => {
     expect(computeArchitecturalDimensionLayout(dimension, 180)?.labelAngleDeg).toBe(-180)
   })
+
+  test('resolves document annotation sizes from paper points', () => {
+    const layout = computeArchitecturalDimensionLayout(dimension, 0, 0.01)
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionRenderer annotationUnitsPerPoint={0.01} geometry={dimension} />
+      </svg>,
+    )
+
+    expect(layout?.extensionStart[1]).toBeCloseTo(0.03)
+    expect(layout?.extensionStartTip[1]).toBeCloseTo(0.49)
+    expect(markup).toContain('font-size="0.08"')
+    expect(markup).toContain('y="-0.05"')
+  })
 })
