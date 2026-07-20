@@ -224,6 +224,8 @@ export type FloorplanStyle = {
   opacity?: number
   /** Treat this primitive as fixed plan geometry during annotation layout. */
   annotationObstacle?: 'bounds' | 'outline'
+  /** Semantic annotation role used by editor visibility and export filters. */
+  annotationRole?: 'column-center'
   /**
    * When `'non-scaling-stroke'`, the SVG renderer interprets `strokeWidth`
    * as a constant screen-pixel width regardless of viewport zoom. Maps

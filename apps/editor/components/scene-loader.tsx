@@ -6,6 +6,7 @@
 import {
   applySceneGraphToEditor,
   Editor,
+  FloorplanStructuralGridToolLayer,
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
@@ -232,6 +233,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </Link>
       </div>
       <Editor
+        floorplanSceneSlot={<FloorplanStructuralGridToolLayer />}
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}

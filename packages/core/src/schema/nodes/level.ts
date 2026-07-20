@@ -24,6 +24,7 @@ import { ShelfNode } from './shelf'
 import { SlabNode } from './slab'
 import { SpawnNode } from './spawn'
 import { StairNode } from './stair'
+import { StructuralGridNode } from './structural-grid'
 import { WallNode } from './wall'
 import { ZoneNode } from './zone'
 
@@ -38,6 +39,7 @@ export const LevelNode = BaseNode.extend({
         ColumnNode.shape.id,
         ConstructionDimensionNode.shape.id,
         ConstructionNoteNode.shape.id,
+        StructuralGridNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,
         SlabNode.shape.id,

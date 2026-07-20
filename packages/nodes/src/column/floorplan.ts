@@ -72,6 +72,7 @@ export function buildColumnFloorplan(
       strokeWidth: 0.9,
       vectorEffect: 'non-scaling-stroke',
       pointerEvents: 'none',
+      annotationRole: 'column-center',
     },
     {
       kind: 'line',
@@ -83,6 +84,7 @@ export function buildColumnFloorplan(
       strokeWidth: 0.9,
       vectorEffect: 'non-scaling-stroke',
       pointerEvents: 'none',
+      annotationRole: 'column-center',
     },
   )
 

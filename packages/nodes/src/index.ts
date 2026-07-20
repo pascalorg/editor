@@ -40,6 +40,7 @@ import { solarPanelDefinition } from './solar-panel'
 import { spawnDefinition } from './spawn'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
+import { structuralGridDefinition } from './structural-grid'
 import { turbineVentDefinition } from './turbine-vent'
 import { wallDefinition } from './wall'
 import { windowDefinition } from './window'
@@ -94,6 +95,7 @@ export const builtinPlugin: Plugin = {
     measurementDefinition as unknown as AnyNodeDefinition,
     constructionDimensionDefinition as unknown as AnyNodeDefinition,
     constructionNoteDefinition as unknown as AnyNodeDefinition,
+    structuralGridDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
@@ -169,6 +171,7 @@ export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
+export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'
 export { wallDefinition } from './wall'
 export { windowDefinition } from './window'

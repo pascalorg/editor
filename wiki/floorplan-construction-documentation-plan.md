@@ -41,9 +41,9 @@ Status: implemented without new sidebar UI. Full export honors the existing meas
 ### 1.3 Add construction-annotation visibility controls
 
 Status: initial editor controls are implemented for automatic dimensions, manual construction
-dimensions, generic measurements, door/window marks, and construction notes. The persisted settings
-apply to both the live 2D plan and PDF export. Categories that do not yet have an implementation
-remain deferred.
+dimensions, generic measurements, door/window marks, construction notes, structural grids, and
+column centers. The persisted settings apply to both the live 2D plan and PDF export. Categories
+that do not yet have an implementation remain deferred.
 
 Introduce per-view controls for:
 
@@ -53,7 +53,8 @@ Introduce per-view controls for:
 - Door/window marks.
 - Local notes.
 - Room labels.
-- Structural grids and column centers.
+- Structural grids and column centers. Initial persistent two-point grid axes use automatic
+  numeric/alphabetic identifiers, endpoint bubbles, plan snapping, and derived column-center marks.
 - Hidden or overhead geometry.
 - Reference dimensions.
 

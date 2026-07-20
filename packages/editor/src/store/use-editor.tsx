@@ -149,6 +149,7 @@ export type StructureTool =
   | 'ceiling'
   | 'roof'
   | 'column'
+  | 'structural-grid'
   | 'elevator'
   | 'stair'
   | 'item'

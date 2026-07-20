@@ -1,6 +1,6 @@
 'use client'
 
-import { Editor, ItemsPanel } from '@pascal-app/editor'
+import { Editor, FloorplanStructuralGridToolLayer, ItemsPanel } from '@pascal-app/editor'
 import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -106,6 +106,7 @@ export default function Home() {
         </div>
       )}
       <Editor
+        floorplanSceneSlot={<FloorplanStructuralGridToolLayer />}
         layoutVersion="v2"
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}

@@ -28,6 +28,7 @@ type BuildToolKind =
   | 'door'
   | 'window'
   | 'column'
+  | 'structural-grid'
   | 'shelf'
   | 'spawn'
 
@@ -78,6 +79,12 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door' },
   { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window' },
   { id: 'column', label: 'Column', iconSrc: '/icons/column.webp', kind: 'column' },
+  {
+    id: 'structural-grid',
+    label: 'Structural Grid',
+    iconSrc: '/icons/blueprint.webp',
+    kind: 'structural-grid',
+  },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },
   // Group tile — no tool of its own; opens the MEP sub-grid below (like Roof).
@@ -107,6 +114,7 @@ const MEP_ITEMS: MepItem[] = [
  */
 function activateBuildTool(kind: BuildToolKind | MepToolKind): void {
   const ed = useEditor.getState()
+  if (kind === 'structural-grid') ed.setViewMode('2d')
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)

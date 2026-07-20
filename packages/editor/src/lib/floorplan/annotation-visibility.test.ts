@@ -113,4 +113,38 @@ describe('floor-plan annotation visibility', () => {
       }),
     ).toBeNull()
   })
+
+  test('hides structural grids and only the center marks within column geometry', () => {
+    const centerMark = {
+      kind: 'line',
+      x1: -0.1,
+      y1: -0.1,
+      x2: 0.1,
+      y2: 0.1,
+      annotationRole: 'column-center',
+    } satisfies FloorplanGeometry
+    const footprint = {
+      kind: 'rect',
+      x: -0.2,
+      y: -0.2,
+      width: 0.4,
+      height: 0.4,
+    } satisfies FloorplanGeometry
+    const visibility = {
+      ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+      structuralGrids: false,
+    }
+
+    expect(
+      filterFloorplanAnnotationGeometry(
+        'column',
+        {
+          kind: 'group',
+          children: [footprint, centerMark],
+        },
+        visibility,
+      ),
+    ).toEqual({ kind: 'group', children: [footprint] })
+    expect(filterFloorplanAnnotationGeometry('structural-grid', footprint, visibility)).toBeNull()
+  })
 })

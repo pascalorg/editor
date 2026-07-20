@@ -35,6 +35,7 @@ describe('buildColumnFloorplan', () => {
         y1: 2.91,
         x2: 2.09,
         y2: 3.09,
+        annotationRole: 'column-center',
         pointerEvents: 'none',
       }),
       expect.objectContaining({
@@ -42,6 +43,7 @@ describe('buildColumnFloorplan', () => {
         y1: 3.09,
         x2: 2.09,
         y2: 2.91,
+        annotationRole: 'column-center',
         pointerEvents: 'none',
       }),
     ])

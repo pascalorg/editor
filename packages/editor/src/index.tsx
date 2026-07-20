@@ -80,6 +80,7 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { FloorplanStructuralGridToolLayer } from './components/editor-2d/floorplan-structural-grid-tool-layer'
 export {
   FloorplanNodePreview,
   type FloorplanNodePreviewProps,

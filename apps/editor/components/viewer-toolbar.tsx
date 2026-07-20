@@ -144,6 +144,7 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'measurements', name: 'Measurements', icon: ScanLine },
   { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
   { id: 'constructionNotes', name: 'Construction notes', icon: StickyNote },
+  { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
 ] as const
 
 function ViewModeControl() {

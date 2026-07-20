@@ -36,6 +36,7 @@ export type {
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
+  StructuralGridEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
