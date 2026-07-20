@@ -3,8 +3,8 @@ import type { FloorplanGeometry } from '@pascal-app/core'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   computeArchitecturalDimensionLayout,
-  floorplanDimensionAnnotationPriority,
   FloorplanDimensionRenderer,
+  floorplanDimensionAnnotationPriority,
 } from './floorplan-dimension-renderer'
 
 const dimension = {
@@ -51,12 +51,25 @@ describe('architectural floor-plan dimensions', () => {
 
     expect(layout?.labelPlacement).toBe('outside-end')
     expect(layout?.labelPoint[0]).toBeGreaterThan(0.23)
+    expect(layout?.outsideStartLabelPoint?.[0]).toBeLessThan(0)
+    expect(layout?.outsideStartDimensionLineStart?.[0]).toBeLessThan(
+      layout?.outsideStartLabelPoint?.[0] ?? 0,
+    )
     expect(layout?.dimensionLineEnd[0]).toBeGreaterThan(layout?.labelPoint[0] ?? 0)
     expect(layout?.dimensionEnd).toEqual([0.23, 0.45])
 
     const documentLayout = computeArchitecturalDimensionLayout(shortDimension, 0, 0.01)
     expect(documentLayout?.labelPlacement).toBe('outside-end')
     expect(documentLayout?.dimensionLineEnd[0]).toBeGreaterThan(documentLayout?.labelPoint[0] ?? 0)
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionRenderer geometry={shortDimension} />
+      </svg>,
+    )
+    expect(markup).toContain('data-floorplan-dimension-outside-start-local-x=')
+    expect(markup).toContain('data-floorplan-dimension-leader=""')
+    expect(markup).toContain('visibility="hidden"')
   })
 
   test('aligns stepped feature origins to an explicit exterior baseline', () => {

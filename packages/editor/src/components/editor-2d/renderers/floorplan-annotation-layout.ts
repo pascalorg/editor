@@ -9,6 +9,7 @@ export type AnnotationLabelRectangle = {
   priority: number
   tangentX?: number
   tangentY?: number
+  preferredShifts?: readonly { dx: number; dy: number }[]
 }
 
 export type AnnotationObstacleRectangle = Pick<
@@ -28,6 +29,7 @@ const LABEL_PLACEMENT_GAP_PX = LABEL_GAP_PX + 0.5
 const OUTLINE_SAMPLE_SPACING_PX = 6
 const OUTLINE_OBSTACLE_PADDING_PX = 1
 const MAX_LABEL_SHIFT_CANDIDATES = 512
+const PREFERRED_SHIFT_COST_STEP = 1_000_000
 
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
@@ -66,11 +68,27 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
     if (defaultTransform !== undefined) label.setAttribute('transform', defaultTransform)
     label.removeAttribute('data-floorplan-layout-unresolved')
   }
+  resetDimensionConnectors(svg)
 
   const rectangles = labels.map((label, index) => {
     const bounds = label.getBoundingClientRect()
     const matrix = label.getScreenCTM()
     const tangentLength = matrix ? Math.hypot(matrix.a, matrix.b) : 0
+    const outsideStartLocalX = Number(
+      label.dataset.floorplanDimensionOutsideStartLocalX ?? Number.NaN,
+    )
+    const outsideStartLocalY = Number(
+      label.dataset.floorplanDimensionOutsideStartLocalY ?? Number.NaN,
+    )
+    const preferredShifts =
+      matrix && Number.isFinite(outsideStartLocalX) && Number.isFinite(outsideStartLocalY)
+        ? [
+            {
+              dx: matrix.a * outsideStartLocalX + matrix.c * outsideStartLocalY,
+              dy: matrix.b * outsideStartLocalX + matrix.d * outsideStartLocalY,
+            },
+          ]
+        : undefined
     return {
       id: label.dataset.floorplanAnnotationId ?? `annotation-${index}`,
       x: bounds.x,
@@ -80,6 +98,7 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
       priority: Number(label.dataset.floorplanAnnotationPriority ?? 0),
       tangentX: tangentLength > 1e-9 && matrix ? matrix.a / tangentLength : undefined,
       tangentY: tangentLength > 1e-9 && matrix ? matrix.b / tangentLength : undefined,
+      preferredShifts,
     }
   })
   const obstacles = Array.from(
@@ -99,8 +118,116 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
     const local = screenVectorToLocal(matrix, shift.dx, shift.dy)
     const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
     label.setAttribute('transform', `${defaultTransform} translate(${local.x} ${local.y})`.trim())
+    const preferredShift = rectangle.preferredShifts?.[0]
+    const usedOutsideStart =
+      preferredShift !== undefined &&
+      Math.hypot(shift.dx - preferredShift.dx, shift.dy - preferredShift.dy) < 0.5
+    if (usedOutsideStart) applyOutsideStartDimensionLine(label)
+    else if (label.dataset.floorplanDimensionLabelPlacement === 'outside-end') {
+      showDimensionLeader(label, matrix, shift.dx, shift.dy)
+    }
     if (!shift.resolved) label.dataset.floorplanLayoutUnresolved = 'true'
   })
+}
+
+function resetDimensionConnectors(svg: SVGSVGElement): void {
+  for (const line of svg.querySelectorAll<SVGLineElement>('[data-floorplan-dimension-line]')) {
+    line.setAttribute(
+      'x1',
+      line.dataset.floorplanDimensionDefaultX1 ?? line.getAttribute('x1') ?? '0',
+    )
+    line.setAttribute(
+      'y1',
+      line.dataset.floorplanDimensionDefaultY1 ?? line.getAttribute('y1') ?? '0',
+    )
+    line.setAttribute(
+      'x2',
+      line.dataset.floorplanDimensionDefaultX2 ?? line.getAttribute('x2') ?? '0',
+    )
+    line.setAttribute(
+      'y2',
+      line.dataset.floorplanDimensionDefaultY2 ?? line.getAttribute('y2') ?? '0',
+    )
+  }
+  for (const leader of svg.querySelectorAll<SVGLineElement>('[data-floorplan-dimension-leader]')) {
+    leader.setAttribute('visibility', 'hidden')
+  }
+}
+
+function applyOutsideStartDimensionLine(label: SVGGElement): void {
+  const dimension = label.closest('[data-floorplan-dimension]')
+  const line = dimension?.querySelector<SVGLineElement>('[data-floorplan-dimension-line]')
+  if (!line) return
+  const { dataset } = line
+  if (
+    dataset.floorplanDimensionOutsideStartX1 === undefined ||
+    dataset.floorplanDimensionOutsideStartY1 === undefined ||
+    dataset.floorplanDimensionOutsideStartX2 === undefined ||
+    dataset.floorplanDimensionOutsideStartY2 === undefined
+  ) {
+    return
+  }
+  line.setAttribute('x1', dataset.floorplanDimensionOutsideStartX1)
+  line.setAttribute('y1', dataset.floorplanDimensionOutsideStartY1)
+  line.setAttribute('x2', dataset.floorplanDimensionOutsideStartX2)
+  line.setAttribute('y2', dataset.floorplanDimensionOutsideStartY2)
+}
+
+function showDimensionLeader(
+  label: SVGGElement,
+  labelMatrix: DOMMatrix,
+  dx: number,
+  dy: number,
+): void {
+  const dimension = label.closest('[data-floorplan-dimension]') as SVGGElement | null
+  const leader = dimension?.querySelector<SVGLineElement>('[data-floorplan-dimension-leader]')
+  const dimensionLine = dimension?.querySelector<SVGLineElement>('[data-floorplan-dimension-line]')
+  const dimensionMatrix = dimension?.getScreenCTM()
+  if (!leader || !dimensionLine || !dimensionMatrix) return
+
+  const start = dimensionEndpoint(label, 'start')
+  const end = dimensionEndpoint(label, 'end')
+  if (!start || !end) return
+  dimensionLine.setAttribute('x1', String(start.x))
+  dimensionLine.setAttribute('y1', String(start.y))
+  dimensionLine.setAttribute('x2', String(end.x))
+  dimensionLine.setAttribute('y2', String(end.y))
+  const labelScreen = { x: labelMatrix.e + dx, y: labelMatrix.f + dy }
+  const startScreen = localPointToScreen(dimensionMatrix, start.x, start.y)
+  const endScreen = localPointToScreen(dimensionMatrix, end.x, end.y)
+  const anchor =
+    Math.hypot(labelScreen.x - startScreen.x, labelScreen.y - startScreen.y) <
+    Math.hypot(labelScreen.x - endScreen.x, labelScreen.y - endScreen.y)
+      ? start
+      : end
+  const labelPoint = screenPointToLocal(dimensionMatrix, labelScreen.x, labelScreen.y)
+
+  leader.setAttribute('x1', String(anchor.x))
+  leader.setAttribute('y1', String(anchor.y))
+  leader.setAttribute('x2', String(labelPoint.x))
+  leader.setAttribute('y2', String(labelPoint.y))
+  leader.setAttribute('visibility', 'visible')
+}
+
+function dimensionEndpoint(
+  label: SVGGElement,
+  endpoint: 'start' | 'end',
+): { x: number; y: number } | null {
+  const x = Number(label.dataset[`floorplanDimension${endpoint === 'start' ? 'Start' : 'End'}X`])
+  const y = Number(label.dataset[`floorplanDimension${endpoint === 'start' ? 'Start' : 'End'}Y`])
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
+}
+
+function localPointToScreen(matrix: DOMMatrix, x: number, y: number) {
+  return {
+    x: matrix.a * x + matrix.c * y + matrix.e,
+    y: matrix.b * x + matrix.d * y + matrix.f,
+  }
+}
+
+function screenPointToLocal(matrix: DOMMatrix, x: number, y: number) {
+  const local = screenVectorToLocal(matrix, x - matrix.e, y - matrix.f)
+  return { x: local.x, y: local.y }
 }
 
 function svgAnnotationObstacleRectangles(
@@ -164,11 +291,18 @@ function resolveLabelShift(
   rectangle: AnnotationLabelRectangle,
   occupied: ReadonlyArray<AnnotationObstacleRectangle & { dx: number; dy: number }>,
 ): { dx: number; dy: number } | undefined {
-  const candidates = new Map<string, { dx: number; dy: number }>()
-  const addCandidate = (dx: number, dy: number) => {
-    candidates.set(`${dx}:${dy}`, { dx, dy })
+  const candidates = new Map<string, { dx: number; dy: number; preference: number }>()
+  const addCandidate = (dx: number, dy: number, preference = 0) => {
+    const key = `${dx}:${dy}`
+    const existing = candidates.get(key)
+    if (!existing || preference < existing.preference) {
+      candidates.set(key, { dx, dy, preference })
+    }
   }
-  addCandidate(0, 0)
+  addCandidate(0, 0, -2)
+  for (const preferred of rectangle.preferredShifts ?? []) {
+    addCandidate(preferred.dx, preferred.dy, -1)
+  }
 
   const visited = new Set<string>()
   while (candidates.size > 0 && visited.size < MAX_LABEL_SHIFT_CANDIDATES) {
@@ -191,7 +325,7 @@ function resolveLabelShift(
         y: other.y + other.dy,
       }),
     )
-    if (blockers.length === 0) return candidate
+    if (blockers.length === 0) return { dx: candidate.dx, dy: candidate.dy }
 
     for (const other of blockers) {
       const otherX = other.x + other.dx
@@ -217,16 +351,19 @@ function resolveLabelShift(
 }
 
 function candidateCost(
-  candidate: { dx: number; dy: number },
+  candidate: { dx: number; dy: number; preference?: number },
   rectangle: AnnotationLabelRectangle,
 ): number {
   const distance = Math.hypot(candidate.dx, candidate.dy)
-  if (rectangle.tangentX === undefined || rectangle.tangentY === undefined) return distance
+  const preference = (candidate.preference ?? 0) * PREFERRED_SHIFT_COST_STEP
+  if (rectangle.tangentX === undefined || rectangle.tangentY === undefined) {
+    return preference + distance
+  }
 
   const perpendicularMovement = Math.abs(
     candidate.dx * -rectangle.tangentY + candidate.dy * rectangle.tangentX,
   )
-  return distance + perpendicularMovement * 4
+  return preference + distance + perpendicularMovement * 4
 }
 
 export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometry): boolean {

@@ -57,6 +57,49 @@ describe('resolveAnnotationLabelRectangles', () => {
     expect(shifts.find((entry) => entry.id === 'adjacent')?.dx).not.toBe(0)
   })
 
+  test('tries a short dimension alternative before generic relocation', () => {
+    const shifts = resolveAnnotationLabelRectangles(
+      [
+        {
+          id: 'short-dimension',
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 12,
+          priority: 10,
+          preferredShifts: [{ dx: 100, dy: 0 }],
+        },
+      ],
+      [{ x: 0, y: 0, width: 40, height: 12 }],
+    )
+
+    expect(shifts).toEqual([{ id: 'short-dimension', dx: 100, dy: 0, resolved: true }])
+  })
+
+  test('falls back to a third position when both short-dimension sides are blocked', () => {
+    const shifts = resolveAnnotationLabelRectangles(
+      [
+        {
+          id: 'short-dimension',
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 12,
+          priority: 10,
+          preferredShifts: [{ dx: 100, dy: 0 }],
+        },
+      ],
+      [
+        { x: 0, y: 0, width: 40, height: 12 },
+        { x: 100, y: 0, width: 40, height: 12 },
+      ],
+    )
+
+    expect(shifts[0]).toMatchObject({ id: 'short-dimension', resolved: true })
+    expect(shifts[0]).not.toMatchObject({ dx: 0, dy: 0 })
+    expect(shifts[0]).not.toMatchObject({ dx: 100, dy: 0 })
+  })
+
   test('approximates diagonal outlines without blocking their full bounding box', () => {
     expect(
       polylineObstacleRectangles([

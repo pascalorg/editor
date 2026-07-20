@@ -22,6 +22,7 @@ type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 export type ArchitecturalDimensionLayout = {
   dimensionStart: FloorplanPoint
   dimensionEnd: FloorplanPoint
+  dimensionLineStart: FloorplanPoint
   dimensionLineEnd: FloorplanPoint
   extensionStart: FloorplanPoint
   extensionEnd: FloorplanPoint
@@ -31,6 +32,8 @@ export type ArchitecturalDimensionLayout = {
   labelPoint: FloorplanPoint
   labelAngleDeg: number
   labelPlacement: 'inside' | 'outside-end'
+  outsideStartLabelPoint?: FloorplanPoint
+  outsideStartDimensionLineStart?: FloorplanPoint
 }
 
 export function floorplanDimensionAnnotationPriority(offsetDistance: number): number {
@@ -103,10 +106,19 @@ export function computeArchitecturalDimensionLayout(
     labelPlacement === 'inside'
       ? dimensionEnd
       : addScaled(dimensionEnd, direction, labelEndGap * 2 + labelWidth)
+  const outsideStartLabelPoint =
+    labelPlacement === 'outside-end'
+      ? addScaled(dimensionStart, direction, -(labelEndGap + labelWidth / 2))
+      : undefined
+  const outsideStartDimensionLineStart =
+    labelPlacement === 'outside-end'
+      ? addScaled(dimensionStart, direction, -(labelEndGap * 2 + labelWidth))
+      : undefined
 
   return {
     dimensionStart,
     dimensionEnd,
+    dimensionLineStart: dimensionStart,
     dimensionLineEnd,
     extensionStart: addScaled(geometry.start, geometry.offsetNormal, startExtensionGap),
     extensionEnd: addScaled(geometry.end, geometry.offsetNormal, endExtensionGap),
@@ -116,6 +128,8 @@ export function computeArchitecturalDimensionLayout(
     labelPoint,
     labelAngleDeg: resolveFloorplanLabelAngle(Math.atan2(dy, dx), sceneRotationDeg),
     labelPlacement,
+    outsideStartLabelPoint,
+    outsideStartDimensionLineStart,
   }
 }
 
@@ -168,9 +182,15 @@ export function FloorplanDimensionRenderer({
   }
   const [tickX, tickY] = layout.tickHalfVector
   const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
+  const outsideStartLocalShift = layout.outsideStartLabelPoint
+    ? rotateVector(
+        subtract(layout.outsideStartLabelPoint, layout.labelPoint),
+        (-layout.labelAngleDeg * Math.PI) / 180,
+      )
+    : undefined
 
   return (
-    <g pointerEvents="none">
+    <g data-floorplan-dimension="" pointerEvents="none">
       <line
         {...lineProps}
         x1={layout.extensionStart[0]}
@@ -187,9 +207,18 @@ export function FloorplanDimensionRenderer({
       />
       <line
         {...lineProps}
-        x1={layout.dimensionStart[0]}
+        data-floorplan-dimension-default-x1={layout.dimensionLineStart[0]}
+        data-floorplan-dimension-default-x2={layout.dimensionLineEnd[0]}
+        data-floorplan-dimension-default-y1={layout.dimensionLineStart[1]}
+        data-floorplan-dimension-default-y2={layout.dimensionLineEnd[1]}
+        data-floorplan-dimension-line=""
+        data-floorplan-dimension-outside-start-x1={layout.outsideStartDimensionLineStart?.[0]}
+        data-floorplan-dimension-outside-start-x2={layout.dimensionEnd[0]}
+        data-floorplan-dimension-outside-start-y1={layout.outsideStartDimensionLineStart?.[1]}
+        data-floorplan-dimension-outside-start-y2={layout.dimensionEnd[1]}
+        x1={layout.dimensionLineStart[0]}
         x2={layout.dimensionLineEnd[0]}
-        y1={layout.dimensionStart[1]}
+        y1={layout.dimensionLineStart[1]}
         y2={layout.dimensionLineEnd[1]}
       />
       <line
@@ -208,6 +237,17 @@ export function FloorplanDimensionRenderer({
         y1={layout.dimensionEnd[1] - tickY}
         y2={layout.dimensionEnd[1] + tickY}
       />
+      {layout.labelPlacement === 'outside-end' ? (
+        <line
+          {...lineProps}
+          data-floorplan-dimension-leader=""
+          visibility="hidden"
+          x1={layout.dimensionEnd[0]}
+          x2={layout.labelPoint[0]}
+          y1={layout.dimensionEnd[1]}
+          y2={layout.labelPoint[1]}
+        />
+      ) : null}
       <g
         data-floorplan-annotation-default-transform={labelTransform}
         data-floorplan-annotation-label=""
@@ -215,6 +255,12 @@ export function FloorplanDimensionRenderer({
           geometry.offsetDistance,
         )}
         data-floorplan-dimension-label-placement={layout.labelPlacement}
+        data-floorplan-dimension-outside-start-local-x={outsideStartLocalShift?.[0]}
+        data-floorplan-dimension-outside-start-local-y={outsideStartLocalShift?.[1]}
+        data-floorplan-dimension-start-x={layout.dimensionStart[0]}
+        data-floorplan-dimension-start-y={layout.dimensionStart[1]}
+        data-floorplan-dimension-end-x={layout.dimensionEnd[0]}
+        data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
         transform={labelTransform}
       >
         <text
@@ -236,4 +282,10 @@ export function FloorplanDimensionRenderer({
       </g>
     </g>
   )
+}
+
+function rotateVector(vector: FloorplanPoint, radians: number): FloorplanPoint {
+  const cosine = Math.cos(radians)
+  const sine = Math.sin(radians)
+  return [vector[0] * cosine - vector[1] * sine, vector[0] * sine + vector[1] * cosine]
 }
