@@ -16,7 +16,7 @@ The review covered the full 19-page chapter and the floor-plan stack across:
 - Door/window documentation and schedules.
 - Per-level PDF export.
 
-The focused verification suite passed 39 tests with no failures. It covered construction strings, architectural dimension rendering, opening schedules and marks, and associative construction-note rendering.
+The latest focused floor-plan verification passed 68 tests with no failures. It covered construction strings, architectural dimension rendering and collision layout, plan-geometry rendering, PDF filtering, measurement output, construction notes, columns, and related floor-plan behavior.
 
 ## What the chapter is teaching
 
@@ -73,6 +73,27 @@ The planner also supports:
 - Text above the dimension line.
 - Text that remains readable when the plan is rotated.
 - Explicit aligned baselines for stepped facade dimensions.
+- Separate edit and document presentation profiles.
+- True modeled wall thickness in document output while retaining interactive legibility in edit mode.
+- Paper-space dimension text, tick, extension-gap, overshoot, and label-offset sizing in PDF output.
+- Whole-millimetre document notation without an `mm` suffix, while retaining metre notation in the interactive editor.
+- Short-segment values outside the dimension ticks when the value cannot fit inside.
+
+### Automatic annotation layout
+
+`packages/editor/src/components/editor-2d/renderers/floorplan-annotation-layout.ts` now resolves automatic dimension-value collisions in both the live floor plan and PDF composition. It supports:
+
+- Label-to-label separation, including dense clusters.
+- Stable same-string drawing order and priority for farther-out architectural strings.
+- Movement along the dimension string before crossing into an adjacent tier.
+- Fixed door/window mark pills as obstacles.
+- Semantic architectural obstacles for walls, wall corners, door symbols and swing envelopes, windows, and columns.
+- Sampled diagonal wall outlines, avoiding the oversized screen-aligned bounds produced by rotated walls.
+- Outside-end placement for short values, followed by outside-start when the end side is blocked.
+- Matching baseline extensions when a short value changes sides.
+- A leader and true tick-to-tick baseline when both outside positions require further relocation.
+
+The former orange/red dashed collision overlay was removed because it displayed stale pre-layout conflicts on top of labels that the automatic resolver had already made readable. Any future unresolved-collision reporting should live in a separate preflight surface rather than being painted over the drawing.
 
 `packages/nodes/src/shared/construction-length.ts` formats imperial construction dimensions using feet, inches, and reduced fractions rounded to the nearest sixteenth.
 
@@ -145,6 +166,11 @@ The rough-opening fields intentionally remain optional rather than being invente
 - Door and window schedule pages.
 - Registry-driven geometry matching the live floor-plan builders.
 - Conversion of non-scaling SVG strokes for PDF output.
+- Preservation of persistent measurement value labels in full export.
+- Respect for the existing measurement-visibility preference.
+- Document-purpose wall rendering at modeled thickness.
+- Document metric notation and initial paper-space sizing for construction dimensions and measurement labels.
+- The same automatic annotation collision layout used by the live floor plan.
 
 The plan is fitted to an A4 landscape page. It is not yet plotted at a fixed architectural scale.
 
@@ -158,27 +184,17 @@ The measurement system stores geometric analysis annotations. The wall planner c
 
 `WallNode` stores total thickness and finish materials but does not describe studs, sheathing, finish layers, veneer, air space, concrete block, or furring. Automatic dimensions can reference a generic wall face, but the model cannot yet prove that this face is a structural stud face or finish face.
 
-### Annotation sizes are not paper-space controlled
+### Paper-space control is only partially implemented
 
-Dimension offsets, text sizes, note text sizes, and some line weights are expressed in plan or screen units. Since export fits each plan to the page, the plotted annotation size varies with the size of the building.
+Exported construction dimensions and measurement labels now resolve their main text, tick, extension-gap, overshoot, and label-offset sizes from paper points. Note text, mark bubbles, room labels, remaining line-weight categories, and fixed user-selectable drawing scales still require the drawing-sheet work.
 
 ### Construction dimensions have no independent visibility layer
 
-Automatic wall dimensions are produced as part of wall floor-plan geometry. There is no separate per-view control for automatic dimensions, opening marks, local notes, room labels, structural references, or reference dimensions.
+Measurement visibility is respected by full export, but automatic wall dimensions are still produced as part of wall floor-plan geometry. Automatic dimensions, opening marks, local notes, room labels, structural references, and reference dimensions do not yet have independent per-view visibility controls.
 
-### Metric construction notation differs from the chapter
+### Automatic collision layout has no persistent manual override
 
-The construction formatter currently emits metres with an `m` suffix. The chapter's architectural metric convention uses millimetres and normally omits the `mm` suffix from dimension-line values.
-
-Temporary opening-placement dimensions also format their values directly with a hardcoded `m`, so they do not fully respect imperial mode.
-
-### Export does not preserve every interactive measurement label
-
-The full export keeps architectural `dimension` primitives and ordinary text, but the overlay filter excludes `dimension-label` primitives. Persistent measurement geometry may therefore be exported without its displayed value label.
-
-### Editing wall graphics are not construction-document graphics
-
-The 2D wall builder slightly exaggerates thin wall thicknesses for interactive legibility. That is appropriate in edit mode but should not be used for scale-accurate construction output.
+Automatic placement now handles adjacent labels, short values, opening marks, and the first set of architectural obstacles. It does not yet let a drafter pin a chosen label position, suppress a segment, or persist a view-specific layout override. Broader fixed-symbol coverage and a separate unresolved-collision preflight also remain.
 
 ### Construction notes are local notes only
 
