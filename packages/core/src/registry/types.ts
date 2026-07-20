@@ -216,6 +216,8 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
+export type FloorplanAnnotationRole = 'column-center' | 'room-label'
+
 export type FloorplanStyle = {
   stroke?: string
   fill?: string
@@ -225,7 +227,7 @@ export type FloorplanStyle = {
   /** Treat this primitive as fixed plan geometry during annotation layout. */
   annotationObstacle?: 'bounds' | 'outline'
   /** Semantic annotation role used by editor visibility and export filters. */
-  annotationRole?: 'column-center'
+  annotationRole?: FloorplanAnnotationRole
   /**
    * When `'non-scaling-stroke'`, the SVG renderer interprets `strokeWidth`
    * as a constant screen-pixel width regardless of viewport zoom. Maps
@@ -407,7 +409,7 @@ export type FloorplanGeometry =
        */
       upright?: boolean
       /** Semantic annotation role used by editor visibility and export filters. */
-      annotationRole?: 'column-center'
+      annotationRole?: FloorplanAnnotationRole
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated

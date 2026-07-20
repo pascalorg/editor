@@ -41,9 +41,9 @@ Status: implemented without new sidebar UI. Full export honors the existing meas
 ### 1.3 Add construction-annotation visibility controls
 
 Status: initial editor controls are implemented for automatic dimensions, manual construction
-dimensions, generic measurements, door/window marks, construction notes, structural grids, and
-column centers. The persisted settings apply to both the live 2D plan and PDF export. Categories
-that do not yet have an implementation remain deferred.
+dimensions, generic measurements, door/window marks, construction notes, structural grids, column
+centers, and architectural room labels. The persisted settings apply to both the live 2D plan and
+PDF export. Categories that do not yet have an implementation remain deferred.
 
 Introduce per-view controls for:
 
@@ -316,6 +316,10 @@ Do not derive rough openings from nominal dimensions unless an explicit manufact
 
 ### 6.1 Add an architectural space model
 
+Status: the existing zone model now has an explicit opt-in architectural-room role while generic
+site and analysis zones remain unchanged. Room zones persist number, enclosure policy, floor/wall/
+ceiling finishes, ceiling height, occupancy/use, and clear-dimension policy.
+
 Generic zones should remain available for lawns, sites, analysis regions, and user-defined areas. Add either a distinct room node or an explicit architectural-space role containing:
 
 - Room name.
@@ -329,6 +333,10 @@ Generic zones should remain available for lawns, sites, analysis regions, and us
 - Optional clear-dimension policy.
 
 ### 6.2 Add room documentation
+
+Status: initial centered plan labels are implemented for room name, number, finishes, ceiling
+height, and occupancy/use, with independent live/PDF visibility. Room schedules and reliable clear
+dimensions remain.
 
 - Center room name and number.
 - Place finish information below the room name.

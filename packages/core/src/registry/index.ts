@@ -81,6 +81,7 @@ export type {
   FloorplanAffordanceModifiers,
   FloorplanAffordancePoint,
   FloorplanAffordanceSession,
+  FloorplanAnnotationRole,
   FloorplanGeometry,
   FloorplanMoveTarget,
   FloorplanMoveTargetSession,

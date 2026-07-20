@@ -5,6 +5,7 @@ import {
   resolveAutoZonePolygon,
   type ZoneNode,
 } from '@pascal-app/core'
+import { formatConstructionLength } from '../shared/construction-length'
 
 /**
  * Stage C floor-plan builder for zone. Zones are colored polygons —
@@ -28,7 +29,8 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
 
   const points: FloorplanPoint[] = ring.map(([x, z]) => [x, z] as FloorplanPoint)
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : node.color
-  const fillOpacity = isSelected ? 0.28 : 0.16
+  const isRoom = node.spaceRole === 'room'
+  const fillOpacity = isRoom ? (isSelected ? 0.12 : 0.04) : isSelected ? 0.28 : 0.16
 
   const children: FloorplanGeometry[] = [
     {
@@ -91,9 +93,11 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   // it). Mirrors the legacy `FloorplanZoneLabel` so the look is
   // consistent. Centered on the polygon's area-weighted centroid; the
   // bbox-center fallback handles degenerate rings without throwing.
+  const [cx, cy] = polygonCentroid(ring)
   const name = node.name?.trim()
-  if (name) {
-    const [cx, cy] = polygonCentroid(ring)
+  if (isRoom) {
+    children.push(...buildRoomLabels(node, cx, cy, view?.unit ?? 'metric', stroke))
+  } else if (name) {
     children.push({
       kind: 'text',
       x: cx,
@@ -119,6 +123,57 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
 }
 
 const ZONE_LABEL_FONT_SIZE = 0.2
+const ROOM_NAME_FONT_SIZE = 0.2
+const ROOM_NUMBER_FONT_SIZE = 0.16
+const ROOM_DETAIL_FONT_SIZE = 0.11
+const ROOM_LABEL_LINE_SPACING = 0.18
+
+function buildRoomLabels(
+  node: ZoneNode,
+  x: number,
+  y: number,
+  unit: 'metric' | 'imperial',
+  color: string,
+): FloorplanGeometry[] {
+  const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []
+  const name = node.name.trim()
+  if (name) lines.push({ text: name, fontSize: ROOM_NAME_FONT_SIZE, fontWeight: 700 })
+  if (node.roomNumber) {
+    lines.push({ text: node.roomNumber, fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600 })
+  }
+
+  const finishes = [
+    node.floorFinish ? `FL: ${node.floorFinish}` : '',
+    node.wallFinish ? `WL: ${node.wallFinish}` : '',
+    node.ceilingFinish ? `CL: ${node.ceilingFinish}` : '',
+  ].filter(Boolean)
+  if (finishes.length > 0) {
+    lines.push({ text: finishes.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
+  }
+
+  const roomDetails = [`CH: ${formatConstructionLength(node.ceilingHeight, unit)}`]
+  if (node.occupancy) roomDetails.push(node.occupancy)
+  lines.push({ text: roomDetails.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
+
+  const startY = y - ((lines.length - 1) * ROOM_LABEL_LINE_SPACING) / 2
+  return lines.map((line, index) => ({
+    kind: 'text',
+    x,
+    y: startY + index * ROOM_LABEL_LINE_SPACING,
+    text: line.text,
+    fontSize: line.fontSize,
+    fill: color,
+    stroke: '#ffffff',
+    strokeWidth: line.fontSize * 0.18,
+    paintOrder: 'stroke',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    fontWeight: line.fontWeight,
+    textAnchor: 'middle',
+    dominantBaseline: 'central',
+    upright: true,
+    annotationRole: 'room-label',
+  }))
+}
 
 /**
  * Area-weighted centroid of a simple polygon (Shoelace formula). Falls

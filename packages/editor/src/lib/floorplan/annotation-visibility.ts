@@ -7,6 +7,7 @@ export type FloorplanAnnotationCategory =
   | 'openingMarks'
   | 'constructionNotes'
   | 'structuralGrids'
+  | 'roomLabels'
 
 export type FloorplanAnnotationVisibility = Record<FloorplanAnnotationCategory, boolean>
 
@@ -17,6 +18,7 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   openingMarks: true,
   constructionNotes: true,
   structuralGrids: true,
+  roomLabels: true,
 }
 
 export function normalizeFloorplanAnnotationVisibility(
@@ -49,6 +51,10 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.structuralGrids === 'boolean'
         ? persisted.structuralGrids
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.structuralGrids,
+    roomLabels:
+      typeof persisted.roomLabels === 'boolean'
+        ? persisted.roomLabels
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.roomLabels,
   }
 }
 
@@ -61,6 +67,13 @@ export function filterFloorplanAnnotationGeometry(
   if (nodeType === 'construction-dimension' && !visibility.manualDimensions) return null
   if (nodeType === 'construction-note' && !visibility.constructionNotes) return null
   if (nodeType === 'structural-grid' && !visibility.structuralGrids) return null
+  if (
+    !visibility.roomLabels &&
+    'annotationRole' in geometry &&
+    geometry.annotationRole === 'room-label'
+  ) {
+    return null
+  }
   if (
     !visibility.structuralGrids &&
     'annotationRole' in geometry &&

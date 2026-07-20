@@ -63,7 +63,7 @@ function styleAttrs(
     pointerEvents?: string
     cursor?: string
     annotationObstacle?: 'bounds' | 'outline'
-    annotationRole?: 'column-center'
+    annotationRole?: 'column-center' | 'room-label'
   }
   return {
     'data-floorplan-annotation-obstacle': s.annotationObstacle,

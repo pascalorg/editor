@@ -40,6 +40,7 @@ import {
   ScanLine,
   SlidersHorizontal,
   Sparkles,
+  SquareUserRound,
   StickyNote,
   SwatchBook,
   Tag,
@@ -145,6 +146,7 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
   { id: 'constructionNotes', name: 'Construction notes', icon: StickyNote },
   { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
+  { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
 ] as const
 
 function ViewModeControl() {

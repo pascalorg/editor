@@ -155,4 +155,31 @@ describe('floor-plan annotation visibility', () => {
     ).toEqual({ kind: 'group', children: [footprint] })
     expect(filterFloorplanAnnotationGeometry('structural-grid', footprint, visibility)).toBeNull()
   })
+
+  test('hides room labels without removing the room footprint', () => {
+    const footprint = {
+      kind: 'polygon',
+      points: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+      ],
+    } satisfies FloorplanGeometry
+    const roomName = {
+      kind: 'text',
+      x: 2,
+      y: 1.5,
+      text: 'Office',
+      fontSize: 0.2,
+      annotationRole: 'room-label',
+    } satisfies FloorplanGeometry
+
+    expect(
+      filterFloorplanAnnotationGeometry(
+        'zone',
+        { kind: 'group', children: [footprint, roomName] },
+        { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, roomLabels: false },
+      ),
+    ).toEqual({ kind: 'group', children: [footprint] })
+  })
 })
