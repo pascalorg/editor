@@ -350,13 +350,19 @@ presenting an unproven datum; finish-face dimensions remain dependent on Phase 5
 
 ### 6.3 Add stair annotations
 
-- `UP` and `DN` labels.
-- Riser count.
-- Riser height.
-- Tread depth.
-- Stair clear width.
-- Rail-height note.
-- Break-line and overhead conventions.
+Status: implemented for straight, curved, and spiral stairs. Direction labels and arrows resolve to
+`UP` or `DN` from the active level, flight notes derive riser count/height, tread depth, and clear
+width from modeled geometry, rail notes use the configured side and height, and break lines separate
+solid lower treads from dashed overhead construction. Stair annotations have independent persisted
+live/PDF visibility.
+
+- [x] `UP` and `DN` labels.
+- [x] Riser count.
+- [x] Riser height.
+- [x] Tread depth.
+- [x] Stair clear width.
+- [x] Rail-height note.
+- [x] Break-line and overhead conventions.
 
 ### 6.4 Add typed specialty notes
 

@@ -11,6 +11,7 @@ import { z } from 'zod'
 import {
   cancelFloorplanAffordanceDrag,
   collectFloorplanDependencyNodes,
+  collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanHandleDoubleClickAffordance,
   splitFloorplanOverlay,
@@ -321,5 +322,43 @@ describe('collectFloorplanDependencyNodes', () => {
       expect.objectContaining({ id: roof.id, position: [3, 0, 2] }),
       expect.objectContaining({ id: level.id, visible: false }),
     ])
+  })
+})
+
+describe('collectFloorplanLinkedLevelNodes', () => {
+  test('projects a node onto a linked destination level with its real children', () => {
+    nodeRegistry._reset()
+    registerNode({
+      kind: 'linked-floorplan-test',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('linked-floorplan-test') }) as never,
+      category: 'structure',
+      defaults: () => ({}) as never,
+      floorplan: () => null,
+      floorplanLinkedLevelIds: () => ['level_upper' as AnyNodeId],
+    } as unknown as AnyNodeDefinition)
+    const child = {
+      id: 'linked_child',
+      type: 'linked-child',
+      parentId: 'linked_parent',
+    } as unknown as AnyNode
+    const parent = {
+      id: 'linked_parent',
+      type: 'linked-floorplan-test',
+      parentId: 'level_lower',
+      children: [child.id],
+    } as unknown as AnyNode
+    const nodes = { [parent.id]: parent, [child.id]: child }
+
+    expect(collectFloorplanLinkedLevelNodes(nodes, 'level_upper' as AnyNodeId)).toEqual([
+      { id: parent.id, node: parent, children: [child] },
+    ])
+    expect(
+      collectFloorplanLinkedLevelNodes(
+        nodes,
+        'level_upper' as AnyNodeId,
+        new Set([parent.id as AnyNodeId]),
+      ),
+    ).toEqual([])
   })
 })

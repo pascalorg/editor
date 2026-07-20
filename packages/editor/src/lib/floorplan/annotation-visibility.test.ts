@@ -182,4 +182,40 @@ describe('floor-plan annotation visibility', () => {
       ),
     ).toEqual({ kind: 'group', children: [footprint] })
   })
+
+  test('hides stair notes and break lines without removing stair geometry', () => {
+    const footprint = {
+      kind: 'polygon',
+      points: [
+        [0, 0],
+        [1, 0],
+        [1, 3],
+        [0, 3],
+      ],
+    } satisfies FloorplanGeometry
+    const direction = {
+      kind: 'text',
+      x: 0.5,
+      y: 0.5,
+      text: 'UP',
+      fontSize: 0.16,
+      annotationRole: 'stair-annotation',
+    } satisfies FloorplanGeometry
+    const breakLine = {
+      kind: 'polyline',
+      points: [
+        [0, 2],
+        [1, 2],
+      ],
+      annotationRole: 'stair-annotation',
+    } satisfies FloorplanGeometry
+
+    expect(
+      filterFloorplanAnnotationGeometry(
+        'stair',
+        { kind: 'group', children: [footprint, direction, breakLine] },
+        { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, stairAnnotations: false },
+      ),
+    ).toEqual({ kind: 'group', children: [footprint] })
+  })
 })

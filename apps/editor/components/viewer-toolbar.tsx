@@ -147,6 +147,7 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'constructionNotes', name: 'Construction notes', icon: StickyNote },
   { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
   { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
+  { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
 ] as const
 
 function ViewModeControl() {

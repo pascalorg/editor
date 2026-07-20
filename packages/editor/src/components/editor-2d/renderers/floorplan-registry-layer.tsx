@@ -873,6 +873,22 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     visit(levelId as AnyNodeId)
 
+    const activeLevelNode = nodes[levelId as AnyNodeId] as AnyNode | undefined
+    if (activeLevelNode) {
+      const collectedIds = new Set(out.map((entry) => entry.id))
+      for (const linked of collectFloorplanLinkedLevelNodes(
+        nodes,
+        levelId as AnyNodeId,
+        collectedIds,
+      )) {
+        pushEntry(linked.id, linked.node, {
+          children: linked.children,
+          siblings: [],
+          parent: activeLevelNode,
+        })
+      }
+    }
+
     // Building-scoped kinds (`def.floorplanScope === 'building'`) live
     // as siblings of the level, not under it — the `visit(levelId)` DFS
     // above doesn't reach them. Walk every node of those kinds whose
@@ -881,7 +897,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // builders that gate on the current floor — e.g. elevator service
     // range — keep working). Pure registry-driven dispatch: no kind
     // name appears in this file.
-    const activeLevelNode = nodes[levelId as AnyNodeId] as AnyNode | undefined
     const activeBuildingId = activeLevelNode
       ? resolveBuildingForLevel(levelId as AnyNodeId, nodes)
       : null
@@ -2810,6 +2825,28 @@ export function buildContext(
         }
       : undefined,
   }
+}
+
+export function collectFloorplanLinkedLevelNodes(
+  nodes: Record<string, AnyNode>,
+  levelId: AnyNodeId,
+  excludedIds: ReadonlySet<AnyNodeId> = new Set(),
+): Array<{ id: AnyNodeId; node: AnyNode; children: AnyNode[] }> {
+  const linked: Array<{ id: AnyNodeId; node: AnyNode; children: AnyNode[] }> = []
+  for (const [rawId, node] of Object.entries(nodes)) {
+    if (!node) continue
+    const definition = nodeRegistry.get(node.type)
+    if (!definition?.floorplan || !definition.floorplanLinkedLevelIds) continue
+    const id = rawId as AnyNodeId
+    if (excludedIds.has(id)) continue
+    if (!definition.floorplanLinkedLevelIds(node).includes(levelId)) continue
+    const childIds = (node as { children?: AnyNodeId[] }).children
+    const children = Array.isArray(childIds)
+      ? childIds.map((childId) => nodes[childId]).filter((child): child is AnyNode => !!child)
+      : []
+    linked.push({ id, node, children })
+  }
+  return linked
 }
 
 /**

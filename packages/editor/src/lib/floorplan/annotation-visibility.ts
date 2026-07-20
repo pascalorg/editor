@@ -8,6 +8,7 @@ export type FloorplanAnnotationCategory =
   | 'constructionNotes'
   | 'structuralGrids'
   | 'roomLabels'
+  | 'stairAnnotations'
 
 export type FloorplanAnnotationVisibility = Record<FloorplanAnnotationCategory, boolean>
 
@@ -19,6 +20,7 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   constructionNotes: true,
   structuralGrids: true,
   roomLabels: true,
+  stairAnnotations: true,
 }
 
 export function normalizeFloorplanAnnotationVisibility(
@@ -55,6 +57,10 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.roomLabels === 'boolean'
         ? persisted.roomLabels
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.roomLabels,
+    stairAnnotations:
+      typeof persisted.stairAnnotations === 'boolean'
+        ? persisted.stairAnnotations
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.stairAnnotations,
   }
 }
 
@@ -78,6 +84,13 @@ export function filterFloorplanAnnotationGeometry(
     !visibility.structuralGrids &&
     'annotationRole' in geometry &&
     geometry.annotationRole === 'column-center'
+  ) {
+    return null
+  }
+  if (
+    !visibility.stairAnnotations &&
+    'annotationRole' in geometry &&
+    geometry.annotationRole === 'stair-annotation'
   ) {
     return null
   }

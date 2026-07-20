@@ -216,7 +216,7 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
-export type FloorplanAnnotationRole = 'column-center' | 'room-label'
+export type FloorplanAnnotationRole = 'column-center' | 'room-label' | 'stair-annotation'
 
 export type FloorplanStyle = {
   stroke?: string
@@ -1082,6 +1082,14 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * synthesises a `GeometryContext` whose `parent` is the active level.
    */
   floorplanScope?: 'level' | 'building'
+  /**
+   * Additional levels where this level-owned node contributes floor-plan
+   * geometry. The collector still resolves the node's real children, but
+   * presents the linked level as `ctx.parent` so the builder can derive the
+   * correct per-level representation. Stairs use this to render UP on their
+   * source level and DN on their destination level.
+   */
+  floorplanLinkedLevelIds?: (node: z.infer<S>) => readonly AnyNodeId[]
   /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via

@@ -20,6 +20,7 @@ import { resolveSvgAnnotationCollisions } from '../../components/editor-2d/rende
 import { FloorplanGeometryRenderer } from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import {
   buildContext,
+  collectFloorplanLinkedLevelNodes,
   floorplanLayerRank,
   getFloorplanLevelData,
   isFloorplanNodeVisible,
@@ -508,7 +509,7 @@ function collectFloorplanGeometry(
 ): { id: AnyNodeId; base: FloorplanGeometry }[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
-  const entries: { id: AnyNodeId; node: AnyNode }[] = []
+  const entries: { id: AnyNodeId; node: AnyNode; parentOverride?: AnyNode }[] = []
 
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
@@ -531,6 +532,20 @@ function collectFloorplanGeometry(
   }
   visit(levelId)
 
+  const activeLevelNode = nodes[levelId]
+  if (activeLevelNode) {
+    const collectedIds = new Set(entries.map((entry) => entry.id))
+    for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
+      const definition = nodeRegistry.get(linked.node.type)
+      if (
+        isFloorplanNodeVisible(linked.node) &&
+        (scope === 'full' || definition?.category === 'structure')
+      ) {
+        entries.push({ id: linked.id, node: linked.node, parentOverride: activeLevelNode })
+      }
+    }
+  }
+
   // Document order is paint order — sort the same way the live layer does so
   // zones sit under walls/slabs/furniture rather than on top of them.
   entries.sort((a, b) => floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type))
@@ -539,7 +554,7 @@ function collectFloorplanGeometry(
   // module-private to the registry layer, so let it infer.
   const levelDataCache = new Map()
   const out: { id: AnyNodeId; base: FloorplanGeometry }[] = []
-  for (const { id, node } of entries) {
+  for (const { id, node, parentOverride } of entries) {
     const builder = nodeRegistry.get(node.type)?.floorplan
     if (!builder) continue
     const levelData = getFloorplanLevelData(
@@ -549,7 +564,8 @@ function collectFloorplanGeometry(
       levelNodeIdsByType,
       levelDataCache,
     )
-    const ctx = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
+    const baseContext = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
+    const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext
     const geometry = builder(node, ctx)
     if (!geometry) continue
     const visibleGeometry = filterFloorplanAnnotationGeometry(
