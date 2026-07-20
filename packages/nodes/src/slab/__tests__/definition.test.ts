@@ -45,7 +45,7 @@ describe('slabDefinition handles', () => {
     expect(pointInPolygon2D([x, z], slab.holes[0]!, { includeBoundary: true })).toBe(false)
   })
 
-  test('allows the elevation arrow to cross zero into a recessed slab', () => {
+  test('routes the elevation arrow through adaptive slab top changes', () => {
     const slab = SlabNode.parse({
       elevation: 0.05,
       polygon: [
@@ -66,6 +66,7 @@ describe('slabDefinition handles', () => {
     })
     expect(heightHandle.apply(slab, 0.1, {} as never)).toEqual({
       elevation: 0.1,
+      thickness: 0.1,
       recessed: false,
     })
   })

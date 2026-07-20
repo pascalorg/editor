@@ -5,7 +5,7 @@ import {
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
-import { slabElevationUpperBound } from './elevation-limit'
+import { applySlabTopChange, slabElevationUpperBound } from './elevation-limit'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -93,14 +93,11 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
 }
 
 // Slab elevation arrow — vertical chevron on solid slab surface near the
-// polygon center. Moves the walking surface (the body follows: underside
-// stays at elevation − thickness) and drags through zero: a negative value
-// flips the slab to a recessed floor whose depth follows the pointer, and
-// the same patch writes the `recessed` intent so live preview + commit
-// stay in one update. Same registry-handle pipeline as the column height
-// arrow, so live override + commit-on-release come for free. `max` clamps
-// the drag under the storey plane while plane-bound walls elect this slab
-// as their base (conflicts clamp, never ask).
+// polygon center. The shared top-change policy stretches grounded slabs,
+// moves floating slabs, and preserves the drag-through-zero pool gesture.
+// Same registry-handle pipeline as the column height arrow, so live override
+// + commit-on-release come for free. `max` clamps the drag under the storey
+// plane while plane-bound walls elect this slab as their base.
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
@@ -109,7 +106,7 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
     min: MIN_SLAB_ELEVATION,
     max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n),
     currentValue: (n) => n.elevation ?? 0.05,
-    apply: (_n, newValue) => ({ elevation: newValue, recessed: newValue < 0 }),
+    apply: (n, newValue) => applySlabTopChange(n, newValue),
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)

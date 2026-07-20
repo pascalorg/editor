@@ -16,6 +16,27 @@ type SlabLevelContext = {
   slabs: SlabNode[]
 }
 
+const GROUNDED_SLAB_EPSILON = 1e-3
+
+export function applySlabTopChange(slab: SlabNode, newTop: number): Partial<SlabNode> {
+  if (slab.recessed) return { elevation: newTop, recessed: newTop < 0 }
+
+  const underside = slab.elevation - slab.thickness
+  if (Math.abs(underside) < GROUNDED_SLAB_EPSILON) {
+    return newTop > 0
+      ? { elevation: newTop, thickness: newTop, recessed: false }
+      : { elevation: newTop, recessed: true }
+  }
+
+  return { elevation: Math.max(newTop, slab.thickness), recessed: false }
+}
+
+export function applySlabElevationPreset(newTop: number): Partial<SlabNode> {
+  return newTop < 0
+    ? { elevation: newTop, recessed: true }
+    : { elevation: newTop, thickness: Math.max(newTop, 0), recessed: false }
+}
+
 function resolveSlabLevelContext(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   slab: SlabNode,

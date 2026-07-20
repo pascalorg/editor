@@ -212,7 +212,7 @@ function LevelRow({
               <button
                 className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
-                title="Storey height"
+                title="Level height"
                 type="button"
               >
                 {storeyHeightLabel}
@@ -226,7 +226,7 @@ function LevelRow({
               sideOffset={8}
             >
               <SliderControl
-                label="Storey height"
+                label="Level height"
                 max={6}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}

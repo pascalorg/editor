@@ -16,7 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
-import { clampSlabElevation } from './elevation-limit'
+import { applySlabElevationPreset, applySlabTopChange, clampSlabElevation } from './elevation-limit'
 
 /**
  * Phase 5 Stage E — slab inspector (kind-owned).
@@ -53,16 +53,12 @@ export function SlabPanel() {
     [selectedId],
   )
 
-  // Clamp-never-ask: cap the written elevation under the storey plane
-  // while plane-bound walls elect this slab as their base. Negative
-  // elevations pass through untouched — committing one flips the
-  // `recessed` intent (and committing ≥ 0 clears it) in the same update.
   const handleElevationChange = useCallback(
     (proposed: number) => {
       const current = nodeRef.current
       if (!current) return
       const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
-      handleUpdate({ elevation, recessed: elevation < 0 })
+      handleUpdate(applySlabTopChange(current, elevation))
     },
     [handleUpdate],
   )
@@ -74,15 +70,12 @@ export function SlabPanel() {
     [handleUpdate],
   )
 
-  // Presets reproduce the legacy extrude-from-zero look: grounded solids
-  // write thickness = elevation so the underside stays on the level plane
-  // (free elevation edits above deliberately don't couple thickness).
-  const handleGroundedPreset = useCallback(
+  const handleElevationPreset = useCallback(
     (proposed: number) => {
       const current = nodeRef.current
       if (!current) return
       const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
-      handleUpdate({ elevation, thickness: Math.max(elevation, 0), recessed: false })
+      handleUpdate(applySlabElevationPreset(elevation))
     },
     [handleUpdate],
   )
@@ -230,10 +223,10 @@ export function SlabPanel() {
         )}
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label="Sunken (-15cm)" onClick={() => handleElevationChange(-0.15)} />
-          <ActionButton label="Ground (0m)" onClick={() => handleGroundedPreset(0)} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleGroundedPreset(0.05)} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleGroundedPreset(0.15)} />
+          <ActionButton label="Sunken (-15cm)" onClick={() => handleElevationPreset(-0.15)} />
+          <ActionButton label="Ground (0m)" onClick={() => handleElevationPreset(0)} />
+          <ActionButton label="Raised (+5cm)" onClick={() => handleElevationPreset(0.05)} />
+          <ActionButton label="Step (+15cm)" onClick={() => handleElevationPreset(0.15)} />
         </div>
       </PanelSection>
 

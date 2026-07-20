@@ -235,7 +235,7 @@ export default function WallPanel() {
         <SegmentedControl
           onChange={handleTopModeChange}
           options={[
-            { label: 'Follows storey', value: 'storey' },
+            { label: 'Follows level', value: 'storey' },
             { label: 'Custom height', value: 'custom' },
           ]}
           value={isPlaneBound ? 'storey' : 'custom'}
