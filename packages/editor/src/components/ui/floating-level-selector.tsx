@@ -22,6 +22,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  getStoredLevelHeight,
   LevelNode,
   useScene,
 } from '@pascal-app/core'
@@ -49,7 +50,10 @@ import {
   subscribeEditorClipboard,
 } from '../../lib/scene-clipboard'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
+import { ActionButton } from './controls/action-button'
+import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
 import {
   Dialog,
@@ -145,6 +149,12 @@ function LevelRow({
 }) {
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const updateNode = useScene((s) => s.updateNode)
+  const { toDisplay, displayUnit } = useLinearDisplay('m', 2)
+
+  const storeyHeight = getStoredLevelHeight(level)
+  // toFixed(2) + strip one trailing zero: "2.50" → "2.5", "2.75" stays.
+  const storeyHeightLabel = `${toDisplay(storeyHeight).toFixed(2).replace(/0$/, '')} ${displayUnit}`
 
   return (
     <div className="group/level">
@@ -194,6 +204,55 @@ function LevelRow({
           >
             <span className="truncate">{getLevelDisplayName(level)}</span>
           </button>
+
+          {/* Storey height badge — opens the height popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
+                onClick={(e) => e.stopPropagation()}
+                title="Storey height"
+                type="button"
+              >
+                {storeyHeightLabel}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-56 p-2"
+              onClick={(e) => e.stopPropagation()}
+              side="right"
+              sideOffset={8}
+            >
+              <SliderControl
+                label="Storey height"
+                max={6}
+                min={1}
+                onChange={(v) => updateNode(level.id, { height: v })}
+                precision={3}
+                step={0.1}
+                unit="m"
+                value={Math.round(storeyHeight * 1000) / 1000}
+              />
+              <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                <ActionButton
+                  className="h-7 px-2"
+                  label="2.5 m"
+                  onClick={() => updateNode(level.id, { height: 2.5 })}
+                />
+                <ActionButton
+                  className="h-7 px-2"
+                  label="3.0 m"
+                  onClick={() => updateNode(level.id, { height: 3.0 })}
+                />
+                <ActionButton
+                  className="h-7 px-2"
+                  label="3.5 m"
+                  onClick={() => updateNode(level.id, { height: 3.5 })}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Vertical three-dot menu — inside the pill */}
           <Popover>
