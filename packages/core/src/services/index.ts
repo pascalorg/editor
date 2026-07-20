@@ -103,6 +103,11 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
+  getLevelElevations,
+  getStoredLevelHeight,
+  type LevelElevation,
+} from './storey'
+export {
   buildPortComponents,
   type SystemSummary,
   summarizeSystemFor,
