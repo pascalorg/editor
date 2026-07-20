@@ -23,8 +23,6 @@ import {
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
-import { BalconyTool } from './deck/balcony-tool'
-import { MezzanineTool } from './deck/mezzanine-tool'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RoofTool } from './roof/roof-tool'
@@ -66,8 +64,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     roof: RoofTool,
     stair: StairTool,
     zone: ZoneTool,
-    mezzanine: MezzanineTool,
-    balcony: BalconyTool,
   },
   furnish: {},
 }

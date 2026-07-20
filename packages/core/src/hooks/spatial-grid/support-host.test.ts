@@ -5,6 +5,7 @@ import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, AnyNodeId, SlabNode } from '../../schema'
 import { WallNode } from '../../schema'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
+import { resolveWallEffectiveHeight, resolveWallTop } from '../../systems/wall/wall-top'
 import { getFloorPlacedElevation } from './floor-placed-elevation'
 import { spatialGridManager } from './spatial-grid-manager'
 import { initSpatialGridSync } from './spatial-grid-sync'
@@ -284,7 +285,9 @@ describe('persisted support hosts (items)', () => {
     const level = makeLevel(walls.map((wall) => wall.id))
     const node = makeFloorNode()
     useScene.setState({ nodes: nodesFor(level, node, ...(walls as AnyNode[])) })
-    addSlab(makeSlab('slab_room', roomPolygon, 0.4))
+    // Grounded raised floor (thickness = elevation): band adoption only
+    // applies to grounded slabs — a floating deck keeps its drawn polygon.
+    addSlab(makeSlab('slab_room', roomPolygon, 0.4, { thickness: 0.4 }))
 
     // Footprint fully outside the STORED polygon (x from 4.0 to 4.6 with a
     // 0.01 overlap inset) but inside the rendered band edge at x = 4.05.
@@ -391,6 +394,95 @@ describe('persisted support hosts (walls, via the manager)', () => {
 
     expect(resolveWallSupportSlabPatch(wall, nodes)).toEqual({
       supportSlabId: 'slab_high',
+    })
+  })
+
+  // Elevated deck stacked over a ground floor slab — the "wall on a deck"
+  // fixture (both slabs cover the wall band; the deck sits above).
+  const DECK_ELEVATION = 0.9
+  const FLOOR_ELEVATION = 0.05
+  function makeDeckOverFloorFixture() {
+    const deck = makeSlab(
+      'slab_deck',
+      [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      DECK_ELEVATION,
+    )
+    const ground = makeSlab(
+      'slab_ground',
+      [
+        [-6, -6],
+        [6, -6],
+        [6, 6],
+        [-6, 6],
+      ],
+      FLOOR_ELEVATION,
+    )
+    const wall = WallNode.parse({
+      id: 'wall_on_deck',
+      parentId: LEVEL_ID,
+      start: [0.5, 1.5],
+      end: [3.5, 1.5],
+      thickness: 0.1,
+    })
+    const level = makeLevel([deck.id, ground.id, wall.id])
+    const nodes = nodesFor(level, deck as AnyNode, ground as AnyNode, wall as AnyNode)
+    useScene.setState({ nodes })
+    addSlab(deck)
+    addSlab(ground)
+    return { wall, nodes }
+  }
+
+  test('a wall whose band lies over an elevated deck bases on the deck with a plane-bound top', () => {
+    const { wall, nodes } = makeDeckOverFloorFixture()
+
+    const support = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      wall.start,
+      wall.end,
+      0,
+      wall.thickness,
+    )
+    expect(support.electedSlabId).toBe('slab_deck')
+    expect(support.elevation).toBeCloseTo(DECK_ELEVATION)
+
+    // Wall-top inversion: no stored height → the top stays at the storey
+    // plane, so the extruded body is the plane minus the deck base.
+    const storeyHeight = 2.7
+    expect(resolveWallTop(wall, storeyHeight, support.elevation)).toBeCloseTo(storeyHeight)
+    expect(resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)).toBeCloseTo(
+      storeyHeight - DECK_ELEVATION,
+    )
+
+    // Commit persists the deck deterministically (two candidate elevations).
+    expect(resolveWallSupportSlabPatch(wall, nodes)).toEqual({ supportSlabId: 'slab_deck' })
+  })
+
+  test('pointer cap: aiming at the floor under the deck elects and persists the floor', () => {
+    const { wall, nodes } = makeDeckOverFloorFixture()
+
+    const capped = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      wall.start,
+      wall.end,
+      0,
+      wall.thickness,
+      null,
+      FLOOR_ELEVATION,
+    )
+    expect(capped.electedSlabId).toBe('slab_ground')
+    expect(capped.elevation).toBeCloseTo(FLOOR_ELEVATION)
+
+    expect(resolveWallSupportSlabPatch(wall, nodes, { maxElevation: FLOOR_ELEVATION })).toEqual({
+      supportSlabId: 'slab_ground',
+    })
+    // Aiming at the deck top keeps the deck.
+    expect(resolveWallSupportSlabPatch(wall, nodes, { maxElevation: DECK_ELEVATION })).toEqual({
+      supportSlabId: 'slab_deck',
     })
   })
 })

@@ -413,6 +413,17 @@ export function wallOverlapsSlabFootprint(
   return overlap >= threshold
 }
 
+/**
+ * Tolerance for the pointer-decided support cap: a slab still counts as
+ * "the surface you're pointing at (or below)" when its walking surface is
+ * within this many meters ABOVE the pointed elevation. Absorbs elevation
+ * noise between the ray hit and slab tops without letting a deck hanging
+ * clearly above the hit point capture the election. Defined here (rather
+ * than in the spatial-grid manager, which re-exports it) so the wall
+ * election below can honour the same cap without an import cycle.
+ */
+export const SUPPORT_ELEVATION_EPSILON = 0.05
+
 // A slab elevation must support at least this fraction of the wall's
 // length before it can dictate the wall's base. Below majority, a raised
 // slab reaching one endpoint would hoist the whole wall off the floor
@@ -474,12 +485,21 @@ export type WallSlabSupportSegment = {
  * unchanged. A preferred slab that no longer qualifies is silently
  * ignored — deliberately never cleared here, so the host resumes if the
  * slab's polygon returns (only slab deletion strips the stored field).
+ *
+ * `maxElevation` is the pointer-decided support cap (level-local Y, same
+ * semantics as the item election): when set, elevation groups whose
+ * walking surface sits above `maxElevation + SUPPORT_ELEVATION_EPSILON`
+ * are excluded from the majority/best election — a deck hanging above the
+ * surface the cursor ray actually hit never captures the elected base.
+ * `baseSegments` / `baseElevation` stay uncapped (geometry fill-down), and
+ * an explicit `preferredSlabId` still wins over the cap.
  */
 export function computeWallSlabSupport(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
   preferredSlabId?: string | null,
+  maxElevation?: number | null,
 ): WallSlabSupport {
   const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
   const halfThickness = Math.max(thickness / 2, 0)
@@ -554,10 +574,17 @@ export function computeWallSlabSupport(
     return { ...group, coverage, mergedPerPolyline }
   })
 
+  const electableGroups =
+    maxElevation == null
+      ? evaluatedGroups
+      : evaluatedGroups.filter(
+          (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
+        )
+
   let majorityElevation = Number.NEGATIVE_INFINITY
   let bestElevation = Number.NEGATIVE_INFINITY
   let bestCoverage = -1
-  for (const group of evaluatedGroups) {
+  for (const group of electableGroups) {
     if (group.coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
       majorityElevation = Math.max(majorityElevation, group.elevation)
     }
@@ -580,7 +607,7 @@ export function computeWallSlabSupport(
           : bestElevation
   const electedSlabId =
     preferredElectedSlabId ??
-    evaluatedGroups
+    electableGroups
       .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
       ?.slabIds.slice()
       .sort()[0] ??

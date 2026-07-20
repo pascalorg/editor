@@ -7,6 +7,7 @@ import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
   pointInPolygon,
+  SUPPORT_ELEVATION_EPSILON,
   type WallSlabSupport,
 } from '../../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
@@ -19,6 +20,7 @@ export {
   computeWallSlabElevation,
   computeWallSlabSupport,
   pointInPolygon,
+  SUPPORT_ELEVATION_EPSILON,
   type WallOverlapInput,
   type WallSlabSupport,
   type WallSlabSupportSegment,
@@ -303,15 +305,6 @@ export type ItemSlabSupport = {
   /** The winning slab, or null when no slab overlaps the footprint. */
   slabId: string | null
 }
-
-/**
- * Tolerance for the pointer-decided support cap: a slab still counts as
- * "the surface you're pointing at (or below)" when its walking surface is
- * within this many meters ABOVE the pointed elevation. Absorbs elevation
- * noise between the ray hit and slab tops without letting a deck hanging
- * clearly above the hit point capture the election.
- */
-export const SUPPORT_ELEVATION_EPSILON = 0.05
 
 export class SpatialGridManager {
   private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
@@ -963,6 +956,7 @@ export class SpatialGridManager {
     curveOffset = 0,
     thickness = DEFAULT_WALL_THICKNESS,
     preferredSlabId?: string | null,
+    maxElevation?: number | null,
   ): WallSlabSupport {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
@@ -979,6 +973,7 @@ export class SpatialGridManager {
       [...slabMap.values()],
       this.getLevelWallNodes(levelId),
       preferredSlabId,
+      maxElevation,
     )
   }
 

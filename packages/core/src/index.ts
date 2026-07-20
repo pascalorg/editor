@@ -65,9 +65,12 @@ export {
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
 export {
+  type FenceSupportInput,
+  resolveFenceSupportSlabPatch,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
   type SupportSlabPatch,
+  type SupportSlabPatchOptions,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'

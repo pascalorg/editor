@@ -5,7 +5,7 @@ import type { FenceNode } from './schema'
  * Elevation (meters above the level plane) a hosted fence stands at.
  *
  * A fence carrying `supportSlabId` is a railing on that slab's walking
- * surface (deck railings placed by the mezzanine / balcony tools). The
+ * surface (drawn onto a deck, or placed by a deck preset). The
  * host pins the lift only while it still exists as a slab on the fence's
  * own level — a stale host (deleted slab, reparented fence) silently
  * falls back to the level floor, mirroring the read-path rules of the

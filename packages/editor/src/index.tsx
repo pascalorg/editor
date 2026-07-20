@@ -132,6 +132,13 @@ export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
 export { PlacementBox } from './components/tools/shared/placement-box'
+// Pointer-decided support surface (deck top vs floor underneath) — the
+// draw tools (wall / fence) ride their grid plane and commit cap on it.
+export {
+  type PointerSupportSurface,
+  resolvePointerSupportElevation,
+  resolvePointerSupportSurface,
+} from './components/tools/shared/pointer-support-cap'
 // Phase 5 Stage D — PolygonEditor for slab/ceiling boundary + hole editors.
 export {
   PolygonEditor,

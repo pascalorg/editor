@@ -6141,12 +6141,6 @@ export function FloorplanPanel({
   const fenceContinuation = useEditor((state) => state.continuationByContext.fence)
   const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
   const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
-  // Mezzanine / balcony deck drafting — composite editor tools (no registry
-  // kind, so the registry catch-all misses them) that consume grid events
-  // exactly like the slab tool; the 2D ghost renders from the shared
-  // polygon-draft store the tools publish into.
-  const isDeckBuildActive =
-    phase === 'structure' && mode === 'build' && (tool === 'mezzanine' || tool === 'balcony')
   const isStairMoveActive = movingNode?.type === 'stair'
   const isRoofMoveActive = movingNode?.type === 'roof' || movingNode?.type === 'roof-segment'
   const isSlabMoveActive = movingNode?.type === 'slab'
@@ -6185,7 +6179,6 @@ export function FloorplanPanel({
     isRoofBuildActive ||
     isCeilingBuildActive ||
     isStairBuildActive ||
-    isDeckBuildActive ||
     isStairMoveActive ||
     isRoofMoveActive ||
     isSlabMoveActive ||
@@ -9878,9 +9871,7 @@ export function FloorplanPanel({
 
   const handleBackgroundClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
-      // Deck drafting joins the polygon tools here: the double-click's second
-      // click must not also emit a vertex-adding `grid:click`.
-      if ((isPolygonBuildActive || isDeckBuildActive) && event.detail >= 2) {
+      if (isPolygonBuildActive && event.detail >= 2) {
         return
       }
 
@@ -10007,7 +9998,6 @@ export function FloorplanPanel({
       handleBackgroundPlacementClick,
       canSelectElementFloorplanGeometry,
       canSelectFloorplanZones,
-      isDeckBuildActive,
       isPolygonBuildActive,
       isWallBuildActive,
       levelId,
@@ -10038,19 +10028,12 @@ export function FloorplanPanel({
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
-      if (!((isPolygonDraftBuildActive || isDeckBuildActive) && !isRoofBuildActive)) {
+      if (!(isPolygonDraftBuildActive && !isRoofBuildActive)) {
         return
       }
 
       const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
       if (!planPoint) {
-        return
-      }
-
-      // Deck drafting is grid-event driven end to end — forward the finish
-      // gesture so the mounted mezzanine / balcony tool commits the polygon.
-      if (isDeckBuildActive) {
-        emitFloorplanGridEvent('double-click', getSnappedFloorplanPoint(planPoint), event)
         return
       }
 
@@ -10096,7 +10079,6 @@ export function FloorplanPanel({
       handleSlabPlacementConfirm,
       handleZonePlacementConfirm,
       isCeilingBuildActive,
-      isDeckBuildActive,
       isPolygonDraftBuildActive,
       isRoofBuildActive,
       isZoneBuildActive,

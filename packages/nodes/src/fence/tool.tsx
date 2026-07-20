@@ -18,6 +18,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  clearPlacementSurface,
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
   EDITOR_LAYER,
@@ -33,6 +34,8 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  publishPlacementSurface,
+  resolvePointerSupportSurface,
   type SegmentAngleReference,
   snapFenceDraftPoint,
   snapScalarToGrid,
@@ -46,11 +49,34 @@ import {
 
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import {
+  BoxGeometry,
+  BufferGeometry,
+  type Camera,
+  DoubleSide,
+  type Group,
+  type Mesh,
+  Vector3,
+} from 'three'
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
+// Grid-plane surface publish (pointer-decided): scratch + constant normal so
+// per-move publishes don't allocate.
+const SURFACE_UP = new Vector3(0, 1, 0)
+const surfacePointScratch = new Vector3()
+
+// The walking surface the pointer actually aims at (deck top when over the
+// deck, floor/ground underneath it) — only for genuine 3D pointer events.
+// The 2D floor plan emits synthetic grid events with no camera ray behind
+// them; those keep the uncapped max election and leave the grid plane alone.
+function pointedSurfaceFor(camera: Camera, event: GridEvent) {
+  return event.nativeEvent?.target instanceof HTMLCanvasElement
+    ? resolvePointerSupportSurface(camera, event.position)
+    : null
+}
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
 // HUD label heights are measured from the top of the preview bar, so they
@@ -460,6 +486,11 @@ const StraightFenceTool: React.FC = () => {
   previewHeightRef.current = previewHeight
   const previewThicknessRef = useRef(previewThickness)
   previewThicknessRef.current = previewThickness
+  // Camera for the pointer-support resolution (deck top vs floor) — read
+  // through a ref so the live event handlers see the current camera.
+  const camera = useThree((state) => state.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
   const cursorRef = useRef<Group>(null)
   const previewRef = useRef<Mesh>(null!)
   const startingPoint = useRef(new Vector3(0, 0, 0))
@@ -521,6 +552,18 @@ const StraightFenceTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && previewRef.current)) return
+      // Ride the grid event plane on the pointed surface: aiming at an
+      // elevated deck lifts the plane to the deck top, so the draft's XZ
+      // lands where the cursor points and the preview/cursor Y
+      // (`event.localPosition[1]`) sits at the lift the committed fence
+      // will get. Aiming past the deck edge drops it back to the floor.
+      const pointed = pointedSurfaceFor(cameraRef.current, event)
+      if (pointed) {
+        publishPlacementSurface(
+          surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
+          SURFACE_UP,
+        )
+      }
       const { walls, fences } = getCurrentLevelElements()
       const localPoint: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
       // While drafting, the segment locks to 15° rays from its start.
@@ -630,9 +673,11 @@ const StraightFenceTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
+        const pointed = pointedSurfaceFor(cameraRef.current, event)
         const createdFence = createFenceOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           snappedEnd,
+          { supportCap: pointed ? pointed.elevation : null },
         )
         if (!createdFence) return
 
@@ -681,6 +726,7 @@ const StraightFenceTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      clearPlacementSurface()
       useSegmentDraftChain.getState().clear('fence')
       useAlignmentGuides.getState().clear()
       const draftPreview = useFloorplanDraftPreview.getState()
@@ -738,6 +784,16 @@ const SplineFenceDraft: React.FC = () => {
       : FENCE_PREVIEW_HEIGHT
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
   const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
+  // Building-local Y of the grid plane (rides the pointed surface — see
+  // `pointedSurfaceFor`), so the spline preview draws on the deck top when
+  // the curve is being laid out on one.
+  const [liftY, setLiftY] = useState(0)
+  const camera = useThree((state) => state.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
+  // Pointer cap for the commit (Enter / double-click carry no useful grid
+  // event of their own) — last resolved on move/click.
+  const supportCapRef = useRef<number | null>(null)
   const draftRef = useRef(draftPoints)
 
   draftRef.current = draftPoints
@@ -761,7 +817,9 @@ const SplineFenceDraft: React.FC = () => {
     const commit = () => {
       const points = draftRef.current
       if (points.length >= 2) {
-        const created = createSplineFenceOnCurrentLevel(points)
+        const created = createSplineFenceOnCurrentLevel(points, undefined, {
+          supportCap: supportCapRef.current,
+        })
         if (created) {
           triggerSFX('sfx:item-place')
           // Once the new curve fence is selected for direct editing, leave
@@ -775,11 +833,24 @@ const SplineFenceDraft: React.FC = () => {
       setCursor(null)
     }
 
+    const trackPointedSurface = (event: GridEvent) => {
+      const pointed = pointedSurfaceFor(cameraRef.current, event)
+      if (!pointed) return
+      supportCapRef.current = pointed.elevation
+      publishPlacementSurface(
+        surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
+        SURFACE_UP,
+      )
+      setLiftY(event.localPosition[1])
+    }
+
     const onMove = (event: GridEvent) => {
+      trackPointedSurface(event)
       setCursor(snapPoint([event.localPosition[0], event.localPosition[2]]))
     }
 
     const onClick = (event: GridEvent) => {
+      trackPointedSurface(event)
       if (event.nativeEvent.detail >= 2) {
         commit()
         return
@@ -807,6 +878,7 @@ const SplineFenceDraft: React.FC = () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       emitter.off('tool:cancel', onCancel)
+      clearPlacementSurface()
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
@@ -820,18 +892,18 @@ const SplineFenceDraft: React.FC = () => {
       SPLINE_PREVIEW_SEGMENTS,
     )
     return new BufferGeometry().setFromPoints(
-      sampled.map((point) => new Vector3(point.x, previewHeight, point.y)),
+      sampled.map((point) => new Vector3(point.x, liftY + previewHeight, point.y)),
     )
-  }, [previewHeight, previewPoints])
+  }, [liftY, previewHeight, previewPoints])
 
   return (
     <group>
-      {cursor && <CursorSphere height={previewHeight} position={[cursor[0], 0, cursor[1]]} />}
+      {cursor && <CursorSphere height={previewHeight} position={[cursor[0], liftY, cursor[1]]} />}
       {draftPoints.map((point, index) => (
         <mesh
           key={`fence-spline-pt-${index}`}
           layers={EDITOR_LAYER}
-          position={[point[0], previewHeight, point[1]]}
+          position={[point[0], liftY + previewHeight, point[1]]}
         >
           <sphereGeometry args={[0.07, 16, 12]} />
           <meshBasicMaterial color={SPLINE_PREVIEW_COLOR} depthTest={false} />
