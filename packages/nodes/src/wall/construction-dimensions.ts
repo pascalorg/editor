@@ -87,8 +87,15 @@ export function buildLevelWallConstructionDimensionPlan(
 ): WallConstructionDimensionPlan {
   const dimensionsByWallId = new Map<string, PlannedConstructionDimension[]>()
   const wallNetworkById = buildWallNetworkIndex(walls)
+  const interiorWallIds = new Set(
+    walls.flatMap((wall) => {
+      if (isCurvedWall(wall)) return []
+      const network = wallNetworkById.get(wall.id) ?? [wall]
+      return shouldDimensionInteriorWall(wall, walls, network) ? [wall.id] : []
+    }),
+  )
   const exteriorMembers = walls.flatMap((wall): FacadeMember[] => {
-    if (isCurvedWall(wall)) return []
+    if (isCurvedWall(wall) || interiorWallIds.has(wall.id)) return []
     const normal = exteriorNormal(wall)
     if (!normal) return []
     const network = wallNetworkById.get(wall.id) ?? [wall]
@@ -130,7 +137,7 @@ export function buildLevelWallConstructionDimensionPlan(
 
       for (const groupedMembers of lineGroups.values()) {
         for (const run of splitFacadeRuns(groupedMembers)) {
-          appendFacadeRunDimensions(pending, run, walls, nodes, normal, tangent)
+          appendFacadeRunDimensions(pending, run, walls, nodes, interiorWallIds, normal, tangent)
         }
       }
 
@@ -204,9 +211,8 @@ export function buildLevelWallConstructionDimensionPlan(
 
   for (const wall of walls) {
     if (isCurvedWall(wall)) continue
+    if (!interiorWallIds.has(wall.id)) continue
     const openings = hostedOpeningsForWall(wall, nodes)
-    const network = wallNetworkById.get(wall.id) ?? [wall]
-    if (!shouldDimensionInteriorWall(wall, walls, openings, network)) continue
     const planned = buildInteriorWallDimensions(wall, walls, openings)
     if (planned.length > 0) dimensionsByWallId.set(wall.id, planned)
   }
@@ -490,11 +496,9 @@ function hostedOpeningsForWall(wall: WallNode, nodes: Record<string, AnyNode>): 
 function shouldDimensionInteriorWall(
   wall: WallNode,
   walls: ReadonlyArray<WallNode>,
-  openings: readonly OpeningNode[],
   network: ReadonlyArray<WallNode>,
 ): boolean {
   if (isClassifiedInteriorWall(wall)) return true
-  if (openings.length === 0) return false
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dz)
@@ -713,6 +717,7 @@ function appendFacadeRunDimensions(
   members: readonly FacadeMember[],
   walls: ReadonlyArray<WallNode>,
   nodes: Record<string, AnyNode>,
+  interiorWallIds: ReadonlySet<string>,
   normal: FloorplanPoint,
   tangent: FloorplanPoint,
 ): void {
@@ -790,7 +795,7 @@ function appendFacadeRunDimensions(
     if (
       memberIds.has(candidate.id) ||
       isCurvedWall(candidate) ||
-      exteriorNormal(candidate) !== null
+      !interiorWallIds.has(candidate.id)
     ) {
       continue
     }

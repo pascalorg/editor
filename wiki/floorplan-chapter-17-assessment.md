@@ -53,7 +53,8 @@ The planner also supports:
 - Angled exterior walls.
 - Exterior-side classification.
 - Wall-thickness-aware partition references.
-- Interior partition strings.
+- Interior partition strings, including geometrically enclosed partitions whose side metadata remains stale after wall splitting.
+- Subdivision chains on every exterior orientation when internal walls divide a facade into multiple runs.
 - Hosted door and window widths.
 - Interior clear spans bounded by adjacent wall faces.
 - Suppression of very short accidental segments.

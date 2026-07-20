@@ -760,6 +760,62 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     ).toBeCloseTo(5)
   })
 
+  test('dimensions every exterior side and interior run in a subdivided rectangular plan', () => {
+    const topLeft = wall({ id: 'wall_top_left', end: [2.5, 0] })
+    const topRight = wall({ id: 'wall_top_right', start: [2.5, 0], end: [6, 0] })
+    const rightTop = wall({ id: 'wall_right_top', start: [6, 0], end: [6, -1.5] })
+    const rightBottom = wall({ id: 'wall_right_bottom', start: [6, -1.5], end: [6, -3] })
+    const bottomRight = wall({ id: 'wall_bottom_right', start: [6, -3], end: [4, -3] })
+    const bottomMiddle = wall({ id: 'wall_bottom_middle', start: [4, -3], end: [2.5, -3] })
+    const bottomLeft = wall({ id: 'wall_bottom_left', start: [2.5, -3], end: [0, -3] })
+    const leftBottom = wall({ id: 'wall_left_bottom', start: [0, -3], end: [0, -1.5] })
+    const leftTop = wall({ id: 'wall_left_top', start: [0, -1.5], end: [0, 0] })
+    const interior = (id: string, start: [number, number], end: [number, number]) =>
+      wall({ id, start, end })
+    const middleLeft = interior('wall_middle_left', [0, -1.5], [2.5, -1.5])
+    const middleCenter = interior('wall_middle_center', [2.5, -1.5], [4, -1.5])
+    const middleRight = interior('wall_middle_right', [4, -1.5], [6, -1.5])
+    const centerTop = interior('wall_center_top', [2.5, 0], [2.5, -1.5])
+    const centerBottom = interior('wall_center_bottom', [2.5, -1.5], [2.5, -3])
+    const lowerRight = interior('wall_lower_right', [4, -1.5], [4, -3])
+    const walls = [
+      topLeft,
+      topRight,
+      rightTop,
+      rightBottom,
+      bottomRight,
+      bottomMiddle,
+      bottomLeft,
+      leftBottom,
+      leftTop,
+      middleLeft,
+      middleCenter,
+      middleRight,
+      centerTop,
+      centerBottom,
+      lowerRight,
+    ]
+
+    const plan = buildLevelWallConstructionDimensionPlan(walls, {})
+    const exteriorFacades = [
+      [topLeft.id, topRight.id],
+      [rightTop.id, rightBottom.id],
+      [bottomRight.id, bottomMiddle.id, bottomLeft.id],
+      [leftBottom.id, leftTop.id],
+    ]
+    expect(
+      exteriorFacades.map((ids) =>
+        ids.some((id) => plan.get(id)?.some((entry) => entry.tier === 'partitions')),
+      ),
+    ).toEqual([true, true, true, true])
+
+    expect(
+      [middleLeft, middleCenter, middleRight, centerTop, centerBottom, lowerRight].map((entry) =>
+        plan.get(entry.id)?.some((dimension) => dimension.tier === 'interior-overall'),
+      ),
+    ).toEqual([true, true, true, true, true, true])
+  })
+
   test('does not automatically dimension walls without a side classification', () => {
     const plan = buildLevelWallConstructionDimensionPlan(
       [wall({ frontSide: 'unknown', backSide: 'unknown' })],
