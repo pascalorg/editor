@@ -15,6 +15,7 @@ export type AnnotationLabelShift = {
 }
 
 const LABEL_GAP_PX = 6
+const LABEL_PLACEMENT_GAP_PX = LABEL_GAP_PX + 0.5
 
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
@@ -26,7 +27,7 @@ export function resolveAnnotationLabelRectangles(
   )
 
   for (const rectangle of ordered) {
-    const candidates = labelShiftCandidates(rectangle)
+    const candidates = labelShiftCandidates(rectangle, placed)
     const selected = candidates.find(
       ({ dx, dy }) =>
         !placed.some((other) =>
@@ -86,20 +87,37 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
   })
 }
 
-function labelShiftCandidates(rectangle: AnnotationLabelRectangle) {
-  const horizontal = rectangle.width + LABEL_GAP_PX
-  const vertical = rectangle.height + LABEL_GAP_PX
-  return [
-    { dx: 0, dy: 0 },
-    { dx: -horizontal, dy: 0 },
-    { dx: horizontal, dy: 0 },
-    { dx: 0, dy: -vertical },
-    { dx: -horizontal, dy: -vertical },
-    { dx: horizontal, dy: -vertical },
-    { dx: 0, dy: -vertical * 2 },
-    { dx: -horizontal * 2, dy: 0 },
-    { dx: horizontal * 2, dy: 0 },
-  ]
+function labelShiftCandidates(
+  rectangle: AnnotationLabelRectangle,
+  placed: ReadonlyArray<AnnotationLabelRectangle & { dx: number; dy: number }>,
+) {
+  const candidates = new Map<string, { dx: number; dy: number }>()
+  const addCandidate = (dx: number, dy: number) => {
+    candidates.set(`${dx}:${dy}`, { dx, dy })
+  }
+  addCandidate(0, 0)
+
+  for (const other of placed) {
+    const otherX = other.x + other.dx
+    const otherY = other.y + other.dy
+    const left = otherX - LABEL_PLACEMENT_GAP_PX - rectangle.width - rectangle.x
+    const right = otherX + other.width + LABEL_PLACEMENT_GAP_PX - rectangle.x
+    const above = otherY - LABEL_PLACEMENT_GAP_PX - rectangle.height - rectangle.y
+    const below = otherY + other.height + LABEL_PLACEMENT_GAP_PX - rectangle.y
+
+    addCandidate(0, above)
+    addCandidate(0, below)
+    addCandidate(left, 0)
+    addCandidate(right, 0)
+    addCandidate(left, above)
+    addCandidate(right, above)
+    addCandidate(left, below)
+    addCandidate(right, below)
+  }
+
+  return [...candidates.values()].sort(
+    (left, right) => Math.hypot(left.dx, left.dy) - Math.hypot(right.dx, right.dy),
+  )
 }
 
 function rectanglesOverlap(

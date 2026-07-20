@@ -70,6 +70,8 @@ describe('architectural floor-plan dimensions', () => {
     expect(markup).not.toContain('stroke-dasharray')
     expect(markup).toContain('y="-0.12"')
     expect(markup).toContain('13&#x27;-1 1/2&quot;')
+    expect(markup).toContain('paint-order="stroke"')
+    expect(markup).toContain('stroke="#ffffff"')
   })
 
   test('keeps labels readable after the scene rotates', () => {

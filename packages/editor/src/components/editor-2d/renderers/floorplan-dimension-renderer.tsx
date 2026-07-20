@@ -187,7 +187,12 @@ export function FloorplanDimensionRenderer({
           fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
           fontSize={labelFontSize}
           fontWeight={500}
+          paintOrder="stroke"
+          stroke="#ffffff"
+          strokeLinejoin="round"
+          strokeWidth={3}
           textAnchor="middle"
+          vectorEffect="non-scaling-stroke"
           x={0}
           y={-labelBaselineOffset}
         >
