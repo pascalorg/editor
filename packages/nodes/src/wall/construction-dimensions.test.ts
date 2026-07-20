@@ -1,8 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import { DoorNode, type GeometryContext, WallNode, WindowNode } from '@pascal-app/core'
 import {
+  type AnyNode,
+  DoorNode,
+  type GeometryContext,
+  WallNode,
+  WindowNode,
+} from '@pascal-app/core'
+import {
+  buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
   formatConstructionLength,
+  renderPlannedConstructionDimensions,
 } from './construction-dimensions'
 
 function wall(overrides: Partial<WallNode> = {}) {
@@ -39,7 +47,7 @@ describe('formatConstructionLength', () => {
 
   test('rounds to the nearest sixteenth and carries into the next foot', () => {
     expect(formatConstructionLength((11 + 0.99) * 0.0254, 'imperial')).toBe(`1'-0"`)
-    expect(formatConstructionLength(-0.5 * 0.0254, 'imperial')).toBe(`-0'-0 1/2"`)
+    expect(formatConstructionLength(-0.5 * 0.0254, 'imperial')).toBe(`-0 1/2"`)
   })
 
   test('keeps metric output concise', () => {
@@ -112,5 +120,110 @@ describe('buildWallConstructionDimensions', () => {
     expect(
       buildWallConstructionDimensions(wall({ curveOffset: 1 }), context(), { unit: 'metric' }),
     ).toEqual([])
+  })
+})
+
+describe('buildLevelWallConstructionDimensionPlan', () => {
+  test('coordinates opening widths, centers, partition references, and overall extent', () => {
+    const exterior = wall()
+    const partition = wall({
+      id: 'wall_partition',
+      start: [4, 0],
+      end: [4, -4],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: exterior.id,
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const window = WindowNode.parse({
+      id: 'window_front',
+      parentId: exterior.id,
+      position: [6, 1.5, 0],
+      width: 2,
+    })
+    const nodes = { [door.id]: door, [window.id]: window } satisfies Record<string, AnyNode>
+
+    const plan = buildLevelWallConstructionDimensionPlan([exterior, partition], nodes)
+    const planned = plan.get(exterior.id)
+    expect(planned?.map((entry) => entry.tier)).toEqual([
+      'opening-widths',
+      'opening-widths',
+      'openings',
+      'openings',
+      'openings',
+      'partitions',
+      'partitions',
+      'overall',
+    ])
+    expect(planned?.map((entry) => entry.offsetDistance)).toEqual([
+      0.18, 0.18, 0.45, 0.45, 0.45, 0.93, 0.93, 1.41,
+    ])
+    expect(
+      renderPlannedConstructionDimensions(planned ?? [], 'metric').map((entry) =>
+        entry.kind === 'dimension' ? entry.text : null,
+      ),
+    ).toEqual(['1m', '2m', '2m', '4m', '4m', '4m', '6m', '10m'])
+    expect(planned?.at(-1)).toMatchObject({
+      start: [0, 0.1],
+      end: [10, 0.1],
+      offsetNormal: [0, 1],
+    })
+  })
+
+  test('combines collinear exterior wall segments into one facade run', () => {
+    const first = wall({ id: 'wall_a', end: [5, 0] })
+    const second = wall({ id: 'wall_b', start: [5, 0] })
+    const opening = WindowNode.parse({
+      id: 'window_b',
+      parentId: second.id,
+      position: [2, 1.5, 0],
+      width: 1,
+    })
+
+    const plan = buildLevelWallConstructionDimensionPlan([second, first], { [opening.id]: opening })
+
+    expect([...plan.keys()]).toEqual([first.id])
+    expect(
+      renderPlannedConstructionDimensions(plan.get(first.id) ?? [], 'metric').map((entry) =>
+        entry.kind === 'dimension' ? entry.text : null,
+      ),
+    ).toEqual(['1m', '7m', '3m', '10m'])
+  })
+
+  test('keeps disconnected collinear facade runs independent', () => {
+    const first = wall({ id: 'wall_a', end: [4, 0] })
+    const second = wall({ id: 'wall_b', start: [8, 0], end: [12, 0] })
+
+    const plan = buildLevelWallConstructionDimensionPlan([first, second], {})
+
+    expect([...plan.keys()]).toEqual([first.id, second.id])
+    expect(plan.get(first.id)?.at(-1)).toMatchObject({ start: [0, 0.1], end: [4, 0.1] })
+    expect(plan.get(second.id)?.at(-1)).toMatchObject({ start: [8, 0.1], end: [12, 0.1] })
+  })
+
+  test('places a back-side exterior facade beyond the back face', () => {
+    const exterior = wall({ frontSide: 'interior', backSide: 'exterior' })
+    const planned = buildLevelWallConstructionDimensionPlan([exterior], {}).get(exterior.id)
+
+    expect(planned).toHaveLength(1)
+    expect(planned?.[0]).toMatchObject({
+      start: [10, -0.1],
+      end: [0, -0.1],
+      offsetNormal: [0, -1],
+      offsetDistance: 1.41,
+    })
+  })
+
+  test('does not automatically dimension walls without an exterior classification', () => {
+    const plan = buildLevelWallConstructionDimensionPlan(
+      [wall({ frontSide: 'interior', backSide: 'interior' })],
+      {},
+    )
+
+    expect(plan.size).toBe(0)
   })
 })

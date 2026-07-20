@@ -12,8 +12,11 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
   formatConstructionLength,
+  renderPlannedConstructionDimensions,
+  type WallConstructionDimensionPlan,
 } from './construction-dimensions'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
@@ -36,13 +39,23 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
 
+export type WallFloorplanLevelData = {
+  miters: WallMiterData
+  constructionDimensionsByWallId: WallConstructionDimensionPlan
+}
+
 export function computeWallFloorplanLevelData({
   siblings,
+  nodes,
 }: {
   siblings: ReadonlyArray<WallNode>
   nodes: Record<string, AnyNode>
-}): WallMiterData {
-  return calculateLevelMiters(siblings.map(exaggerateWallThickness))
+}): WallFloorplanLevelData {
+  const walls = siblings.map(exaggerateWallThickness)
+  return {
+    miters: calculateLevelMiters(walls),
+    constructionDimensionsByWallId: buildLevelWallConstructionDimensionPlan(walls, nodes),
+  }
 }
 
 /**
@@ -68,8 +81,9 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // a direct builder caller with no shared data — pays the O(N) exaggerate +
   // level-wide miter calc per wall; the dispatcher path is O(1) here, which is
   // what keeps a wall drag from being O(N²) across the level.
+  const levelData = ctx.levelData as WallFloorplanLevelData | undefined
   const miters =
-    (ctx.levelData as WallMiterData | undefined) ??
+    levelData?.miters ??
     calculateLevelMiters([
       self,
       ...ctx.siblings
@@ -119,16 +133,25 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   ]
 
   if (!isCurvedWall(node)) {
-    children.push(
-      ...buildWallConstructionDimensions(self, ctx, {
-        unit: view?.unit ?? 'metric',
-        stroke:
-          isSelected && palette
-            ? palette.selectedStroke
-            : (palette?.measurementStroke ?? '#334155'),
-        force: isSelected,
-      }),
-    )
+    const planned = levelData?.constructionDimensionsByWallId.get(node.id)
+    const dimensionStroke =
+      isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
+    if (planned) {
+      children.push(
+        ...renderPlannedConstructionDimensions(planned, view?.unit ?? 'metric', dimensionStroke),
+      )
+    } else if (
+      !levelData ||
+      (isSelected && node.frontSide !== 'exterior' && node.backSide !== 'exterior')
+    ) {
+      children.push(
+        ...buildWallConstructionDimensions(self, ctx, {
+          unit: view?.unit ?? 'metric',
+          stroke: dimensionStroke,
+          force: isSelected,
+        }),
+      )
+    }
   }
 
   // Selection hatch overlay — only when the wall is *the* selected item

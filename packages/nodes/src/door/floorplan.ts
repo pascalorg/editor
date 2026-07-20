@@ -6,6 +6,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import { buildOpeningSizeAnnotation } from '../shared/opening-size-annotation'
 
 /**
  * Stage C floor-plan builder for door. 1:1 visual port of the legacy
@@ -721,6 +722,13 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       children.push(dim)
     }
   }
+
+  const sizeAnnotation = buildOpeningSizeAnnotation(node, wall, {
+    unit: view?.unit ?? 'metric',
+    preferredSide: swingSign === 1 ? -1 : 1,
+    fill: showSelectedChrome ? '#f97316' : '#334155',
+  })
+  if (sizeAnnotation) children.push(sizeAnnotation)
 
   return { kind: 'group', children }
 }

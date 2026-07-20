@@ -6,6 +6,7 @@ import type {
   WindowNode,
 } from '@pascal-app/core'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import { buildOpeningSizeAnnotation } from '../shared/opening-size-annotation'
 
 /**
  * Stage C floor-plan builder for window. Mirrors the legacy
@@ -168,6 +169,12 @@ export function buildWindowFloorplan(
       children.push(dim)
     }
   }
+
+  const sizeAnnotation = buildOpeningSizeAnnotation(node, wall, {
+    unit: view?.unit ?? 'metric',
+    fill: showSelectedChrome ? '#f97316' : '#334155',
+  })
+  if (sizeAnnotation) children.push(sizeAnnotation)
 
   return { kind: 'group', children }
 }
