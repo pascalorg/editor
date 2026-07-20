@@ -904,6 +904,7 @@ export class SpatialGridManager {
     if (!slabMap) {
       return {
         elevation: 0,
+        electedSlabId: null,
         baseElevation: 0,
         baseSegments: [{ start: 0, end: 1, elevation: 0 }],
       }

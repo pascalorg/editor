@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type AssetInput,
   ItemNode,
+  resolveSupportSlabPatch,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -139,6 +140,13 @@ export function useDraftNode(): DraftNodeHandle {
       // Resume → tracked update (undo reverts to original)
       useScene.temporal.getState().resume()
 
+      const effectiveNode = ItemNode.parse({
+        ...draft,
+        ...updateProps,
+        parentId,
+        metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+      })
+
       useScene.getState().updateNode(draft.id, {
         position: updateProps.position ?? draft.position,
         rotation: updateProps.rotation ?? draft.rotation,
@@ -154,6 +162,7 @@ export function useDraftNode(): DraftNodeHandle {
         // Only when the strategy decided about wallId (roof commits clear
         // it) — floor/ceiling commits never managed the field.
         ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
+        ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes),
       })
 
       useScene.temporal.getState().pause()
@@ -192,15 +201,21 @@ export function useDraftNode(): DraftNodeHandle {
       roofFace: updateProps.roofFace,
       ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
       metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+      parentId,
     })
-    useScene.getState().createNode(finalNode, parentId)
+    const nodes = useScene.getState().nodes
+    const committedNode = ItemNode.parse({
+      ...finalNode,
+      ...resolveSupportSlabPatch(finalNode, { ...nodes, [finalNode.id]: finalNode }),
+    })
+    useScene.getState().createNode(committedNode, parentId)
 
     // Re-pause for next draft cycle
     useScene.temporal.getState().pause()
 
     adoptedRef.current = false
     originalStateRef.current = null
-    return finalNode.id
+    return committedNode.id
   }, [])
 
   const destroy = useCallback(() => {

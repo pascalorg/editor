@@ -42,6 +42,7 @@ export function resolveWallOpeningCeiling(
     wall.end,
     wall.curveOffset ?? 0,
     wall.thickness,
+    wall.supportSlabId,
   )
   return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }

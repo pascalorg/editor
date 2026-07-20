@@ -132,7 +132,7 @@ export function resolveReportedWallHeight(
   const walls = levelNodes.filter(
     (node): node is Extract<AnyNode, { type: 'wall' }> => node.type === 'wall',
   )
-  const support = computeWallSlabSupport(wall, slabs, walls)
+  const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
   return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }
 

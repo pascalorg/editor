@@ -481,7 +481,7 @@ export function deriveZoneQuantityReport(
   const storeyHeight =
     level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
   const wallEffectiveHeight = (wall: WallNode) => {
-    const support = computeWallSlabSupport(wall, slabs, walls)
+    const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
     return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
   }
   const edgeLengths = zone.polygon.map((start, index) => {

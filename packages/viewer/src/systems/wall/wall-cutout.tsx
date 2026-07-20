@@ -144,6 +144,7 @@ export const WallCutout = () => {
           wallNode.end,
           wallNode.curveOffset ?? 0,
           wallNode.thickness,
+          wallNode.supportSlabId,
         )
         const effectiveWallHeight = resolveWallEffectiveHeight(
           wallNode,

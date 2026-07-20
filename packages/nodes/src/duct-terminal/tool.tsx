@@ -6,6 +6,7 @@ import {
   emitter,
   pointInPolygon,
   resolveLevelId,
+  resolveSupportSlabPatch,
   sceneRegistry,
   useScene,
   type WallEvent,
@@ -289,9 +290,14 @@ const DuctTerminalTool = () => {
         mount: p.mount,
         position: p.position,
         rotation: p.yaw,
+        parentId: activeLevelId,
       })
-      useScene.getState().createNode(terminal, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [terminal.id] })
+      const committedTerminal = DuctTerminalNode.parse({
+        ...terminal,
+        ...resolveSupportSlabPatch(terminal, useScene.getState().nodes),
+      })
+      useScene.getState().createNode(committedTerminal, activeLevelId)
+      useViewer.getState().setSelection({ selectedIds: [committedTerminal.id] })
       triggerSFX('sfx:item-place')
     }
 

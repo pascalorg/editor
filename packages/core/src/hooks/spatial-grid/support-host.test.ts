@@ -8,6 +8,7 @@ import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { getFloorPlacedElevation } from './floor-placed-elevation'
 import { spatialGridManager } from './spatial-grid-manager'
 import { initSpatialGridSync } from './spatial-grid-sync'
+import { resolveSupportSlabPatch, resolveWallSupportSlabPatch } from './support-host-patch'
 
 const LEVEL_ID = 'level_test'
 
@@ -245,6 +246,24 @@ describe('persisted support hosts (items)', () => {
     ).toEqual([])
   })
 
+  test('resolveSupportSlabPatch persists only an ambiguous stacked-slab winner', () => {
+    registerFloorPlacedItem()
+    const low = makeSlab('slab_low', SQUARE, 0.2)
+    const high = makeSlab('slab_high', SQUARE, 0.8)
+    addSlab(low)
+    addSlab(high)
+
+    const level = makeLevel()
+    const node = makeFloorNode()
+    const nodes = nodesFor(level, node, low as AnyNode, high as AnyNode)
+    expect(resolveSupportSlabPatch(node, nodes)).toEqual({ supportSlabId: 'slab_high' })
+
+    spatialGridManager.handleNodeDeleted(high.id, 'slab', LEVEL_ID)
+    expect(resolveSupportSlabPatch(node, nodesFor(level, node, low as AnyNode))).toEqual({
+      supportSlabId: undefined,
+    })
+  })
+
   test('item support follows the RENDERED slab polygon (wall band adoption)', () => {
     registerFloorPlacedItem()
 
@@ -309,16 +328,70 @@ describe('persisted support hosts (walls, via the manager)', () => {
     const start: [number, number] = [0, 1.5]
     const end: [number, number] = [4, 1.5]
 
-    expect(spatialGridManager.getSlabSupportForWall(LEVEL_ID, start, end).elevation).toBeCloseTo(
-      0.6,
+    const elected = spatialGridManager.getSlabSupportForWall(LEVEL_ID, start, end)
+    expect(elected.elevation).toBeCloseTo(0.6)
+    expect(elected.electedSlabId).toBe('slab_high')
+
+    const preferred = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      start,
+      end,
+      0,
+      0.1,
+      'slab_low',
     )
-    expect(
-      spatialGridManager.getSlabSupportForWall(LEVEL_ID, start, end, 0, 0.1, 'slab_low').elevation,
-    ).toBeCloseTo(0.1)
-    expect(
-      spatialGridManager.getSlabSupportForWall(LEVEL_ID, start, end, 0, 0.1, 'slab_missing')
-        .elevation,
-    ).toBeCloseTo(0.6)
+    expect(preferred.elevation).toBeCloseTo(0.1)
+    expect(preferred.electedSlabId).toBe('slab_low')
+
+    const fallback = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      start,
+      end,
+      0,
+      0.1,
+      'slab_missing',
+    )
+    expect(fallback.elevation).toBeCloseTo(0.6)
+    expect(fallback.electedSlabId).toBe('slab_high')
+  })
+
+  test('resolveWallSupportSlabPatch persists the winner over two elevations', () => {
+    const low = makeSlab(
+      'slab_low',
+      [
+        [-2, -1],
+        [0, -1],
+        [0, 1],
+        [-2, 1],
+      ],
+      0.2,
+    )
+    const high = makeSlab(
+      'slab_high',
+      [
+        [0, -1],
+        [2, -1],
+        [2, 1],
+        [0, 1],
+      ],
+      0.8,
+    )
+    const wall = WallNode.parse({
+      id: 'wall_test',
+      parentId: LEVEL_ID,
+      start: [-2, 0],
+      end: [2, 0],
+      thickness: 0.1,
+    })
+    const level = makeLevel([low.id, high.id, wall.id])
+    const nodes = nodesFor(level, low as AnyNode, high as AnyNode, wall as AnyNode)
+    useScene.setState({ nodes })
+    addSlab(low)
+    addSlab(high)
+
+    expect(resolveWallSupportSlabPatch(wall, nodes)).toEqual({
+      supportSlabId: 'slab_high',
+    })
   })
 })
 

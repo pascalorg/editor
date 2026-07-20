@@ -157,6 +157,7 @@ function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
     wall.end,
     wall.curveOffset ?? 0,
     wall.thickness,
+    wall.supportSlabId,
   )
   return resolveWallTop(wall, storeyHeight, support.elevation) + WALL_TOP_HIGHLIGHT_LIFT
 }

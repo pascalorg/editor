@@ -5,6 +5,7 @@ import {
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
@@ -541,8 +542,18 @@ export function createWallOnCurrentLevel(
     })
 
     createNode(wall, currentLevelId)
+    const createdWall = useScene.getState().nodes[wall.id]
+    if (createdWall?.type === 'wall') {
+      useScene
+        .getState()
+        .updateNode(
+          createdWall.id,
+          resolveWallSupportSlabPatch(createdWall, useScene.getState().nodes),
+        )
+    }
     sfxEmitter.emit('sfx:structure-build')
 
-    return wall
+    const committedWall = useScene.getState().nodes[wall.id]
+    return committedWall?.type === 'wall' ? committedWall : wall
   })
 }

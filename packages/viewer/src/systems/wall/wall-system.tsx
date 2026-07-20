@@ -712,6 +712,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     node.end,
     node.curveOffset ?? 0,
     node.thickness,
+    node.supportSlabId,
   )
   const slabElevation = slabSupport.elevation
 

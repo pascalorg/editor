@@ -9,6 +9,7 @@ import {
   getWallThickness,
   pauseSceneHistory,
   resolveAlignment,
+  resolveWallSupportSlabPatch,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
@@ -521,6 +522,16 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
               },
             })),
           ])
+          const affectedIds = [nodeId as AnyNodeId, ...linkedUpdates.map((u) => u.id as AnyNodeId)]
+          const committedNodes = useScene.getState().nodes
+          useScene.getState().updateNodes(
+            affectedIds.flatMap((id) => {
+              const wall = committedNodes[id]
+              return wall?.type === 'wall'
+                ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+                : []
+            }),
+          )
           useScene.getState().markDirty(nodeId as AnyNodeId)
           for (const u of linkedUpdates) {
             useScene.getState().markDirty(u.id as AnyNodeId)

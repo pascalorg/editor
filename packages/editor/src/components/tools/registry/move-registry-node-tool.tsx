@@ -23,6 +23,7 @@ import {
   resolveAlignment,
   resolveConnectivityUpdates,
   resolveFacingIndicator,
+  resolveSupportSlabPatch,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -781,9 +782,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       let committedId = node.id as AnyNodeId
 
       if (useScene.getState().nodes[node.id]) {
+        const effectiveNode = {
+          ...(node as Record<string, unknown>),
+          position,
+          rotation,
+        } as AnyNode
         const data = {
           position,
           rotation,
+          ...resolveSupportSlabPatch(effectiveNode, {
+            ...useScene.getState().nodes,
+            [node.id]: effectiveNode,
+          }),
           ...(isNew
             ? {
                 metadata: stripPlacementMetadataFlags(node.metadata),
@@ -819,6 +829,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             const liveParent = useScene.getState().nodes[frameParent.id as AnyNodeId]
             if (liveNode && liveParent) {
               parentFrame.onCommit(liveNode, liveParent, createSceneApi(useScene))
+              const committedNodes = useScene.getState().nodes
+              const committedParent = committedNodes[frameParent.id as AnyNodeId]
+              if (committedParent) {
+                useScene
+                  .getState()
+                  .updateNode(
+                    committedParent.id,
+                    resolveSupportSlabPatch(committedParent, committedNodes),
+                  )
+              }
             }
           }
           useScene.temporal.getState().pause()
@@ -834,9 +854,17 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             metadata: {},
             position,
             rotation,
-          })
+          }) as AnyNode
+          const committedNode = def.schema.parse({
+            ...reparsed,
+            parentId: node.parentId,
+            ...resolveSupportSlabPatch({ ...reparsed, parentId: node.parentId } as AnyNode, {
+              ...useScene.getState().nodes,
+              [reparsed.id]: reparsed,
+            }),
+          }) as AnyNode
           useScene.temporal.getState().resume()
-          useScene.getState().createNode(reparsed as AnyNode, node.parentId as AnyNodeId)
+          useScene.getState().createNode(committedNode, node.parentId as AnyNodeId)
           useScene.temporal.getState().pause()
           committed = true
         }

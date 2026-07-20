@@ -430,6 +430,8 @@ const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
 export type WallSlabSupport = {
   /** Existing wall-relative floor elevation used by hosted children and wall height. */
   elevation: number
+  /** Slab whose elevation won the election, or null when the wall has no support. */
+  electedSlabId: string | null
   /** Lowest exposed adjacent support; wall geometry fills down to this elevation. */
   baseElevation: number
   /** Piecewise bottom elevation along the wall centerline, in normalized arc-length units. */
@@ -464,14 +466,19 @@ export function computeWallSlabSupport(
   const polylineLengths = polylines.map(polylineLength)
   const wallLength = polylineLengths[0]!
   if (wallLength < 1e-9) {
-    return { elevation: 0, baseElevation: 0, baseSegments: [] }
+    return { elevation: 0, electedSlabId: null, baseElevation: 0, baseSegments: [] }
   }
 
   const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
 
-  type ElevationGroup = { elevation: number; perPolyline: LengthInterval[][] }
+  type ElevationGroup = {
+    elevation: number
+    slabIds: string[]
+    perPolyline: LengthInterval[][]
+  }
   const groups: ElevationGroup[] = []
   let preferredElevation: number | null = null
+  let preferredElectedSlabId: string | null = null
 
   for (const slab of slabs) {
     if (slab.polygon.length < 3) continue
@@ -496,14 +503,16 @@ export function computeWallSlabSupport(
     const elevation = slab.elevation ?? 0.05
     if (preferredSlabId != null && slab.id === preferredSlabId) {
       preferredElevation = elevation
+      preferredElectedSlabId = slab.id
     }
     let group = groups.find(
       (candidate) => Math.abs(candidate.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
     )
     if (!group) {
-      group = { elevation, perPolyline: polylines.map(() => []) }
+      group = { elevation, slabIds: [], perPolyline: polylines.map(() => []) }
       groups.push(group)
     }
+    group.slabIds.push(slab.id)
     for (let i = 0; i < perPolyline.length; i++) {
       group.perPolyline[i]!.push(...perPolyline[i]!)
     }
@@ -548,6 +557,13 @@ export function computeWallSlabSupport(
         : bestElevation === Number.NEGATIVE_INFINITY
           ? 0
           : bestElevation
+  const electedSlabId =
+    preferredElectedSlabId ??
+    evaluatedGroups
+      .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
+      ?.slabIds.slice()
+      .sort()[0] ??
+    null
   const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
     const lineLength = polylineLengths[polylineIndex]!
     if (lineLength < 1e-9) return []
@@ -612,7 +628,7 @@ export function computeWallSlabSupport(
 
   if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
   const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
-  return { elevation, baseElevation, baseSegments }
+  return { elevation, electedSlabId, baseElevation, baseSegments }
 }
 
 export function computeWallSlabElevation(

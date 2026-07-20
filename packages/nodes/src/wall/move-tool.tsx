@@ -17,6 +17,7 @@ import {
   planAutoSlabsForLevel,
   planWallMoveJunctions,
   projectAutoSlabsForPlan,
+  resolveWallSupportSlabPatch,
   resumeSceneHistory,
   type SlabNode,
   useLiveNodeOverrides,
@@ -599,6 +600,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // undoable step. Then drop the live overrides — the renderer
       // now reads the committed walls + polygons directly.
       commitSurfacesToStore()
+      const affectedWallIds = [
+        ...commitUpdates.map((entry) => entry.id),
+        ...bridgeCreates.map((entry) => entry.node.id as AnyNodeId),
+      ]
+      const committedNodes = useScene.getState().nodes
+      useScene.getState().updateNodes(
+        affectedWallIds.flatMap((id) => {
+          const wall = committedNodes[id]
+          return wall?.type === 'wall'
+            ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+            : []
+        }),
+      )
       clearSurfaceOverrides()
       clearWallOverrides()
 

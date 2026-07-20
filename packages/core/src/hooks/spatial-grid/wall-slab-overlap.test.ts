@@ -304,6 +304,7 @@ describe('computeWallSlabElevation', () => {
       computeWallSlabSupport({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [floor, platform], []),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: platform.id,
       baseElevation: 0.6,
       baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
     })
@@ -329,6 +330,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: platform.id,
       baseElevation: 0.05,
       baseSegments: [
         { start: 0, end: 2 / 3, elevation: 0.6 },
@@ -358,6 +360,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: high.id,
       baseElevation: 0.6,
       baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
     })
@@ -401,6 +404,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: high.id,
       baseElevation: 0.05,
       baseSegments: [
         { start: 0, end: 3.05 / 4.5, elevation: 0.6 },

@@ -119,6 +119,7 @@ function getWallEffectiveHeight(wall: WallNode, nodes: Record<string, AnyNode>):
     wall.end,
     wall.curveOffset ?? 0,
     wall.thickness,
+    wall.supportSlabId,
   )
   return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }

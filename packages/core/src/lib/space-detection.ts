@@ -342,6 +342,7 @@ function resolveAutoCeilingHeight(
       },
       slabs,
       walls,
+      wall.supportSlabId,
     ).elevation
     const top = resolveWallTop(wall, storeyHeight, electedBase)
     if (Number.isFinite(top)) maxTop = Math.max(maxTop, top)
