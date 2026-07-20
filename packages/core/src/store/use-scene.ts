@@ -33,6 +33,7 @@ import {
 } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { deriveLegacyLevelHeight } from '../services/level-height'
+import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 import { healSceneNodes } from '../utils/heal-scene-graph'
@@ -569,12 +570,14 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
-// Walls whose top lands within this of the storey plane become plane-bound.
+// Walls whose top lands within this of the storey plane become plane-bound;
+// ceilings whose stored height lands within this of their clamp bound become
+// follows-mode (step 3f) — same census-backed threshold for both.
 // From a prod census: the 0.15-short "hole pattern" (default 2.5 walls next to
 // a taller wall) must snap to the plane, while intentional 0.20-short walls
 // (2.5 under a 2.7 plane, 2.3 under a 2.5 plane) must keep their explicit
 // height — hence 0.20 with a strictly-less-than comparison.
-const WALL_PLANE_BOUND_EPSILON = 0.2
+const PLANE_BOUND_EPSILON = 0.2
 
 function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
@@ -989,7 +992,7 @@ function migrateNodes(nodes: Record<string, any>): {
       ).elevation
       const effectiveHeight = wall.height ?? DEFAULT_WALL_HEIGHT
       const top = Math.max(0, electedBase) + effectiveHeight
-      if (Math.abs(plane - top) < WALL_PLANE_BOUND_EPSILON) {
+      if (Math.abs(plane - top) < PLANE_BOUND_EPSILON) {
         if ('height' in wall) {
           const { height: _height, ...planeBound } = wall
           patchedNodes[wall.id] = planeBound
@@ -1028,6 +1031,42 @@ function migrateNodes(nodes: Record<string, any>): {
       elevation < 0
         ? { ...node, thickness: 0.05, recessed: true }
         : { ...node, thickness: elevation }
+  }
+
+  // 3f. Ceiling follows-mode classification (the ceiling mirror of 3c; runs
+  // after 3b/3e so the clamp bound sees stored level heights and split slab
+  // thicknesses). A stored ceiling height within PLANE_BOUND_EPSILON of its
+  // clamp bound (min(storey plane, covering-slab underside) − margin, via
+  // getCeilingClampBound) is the legacy default tracking the level top, not
+  // a choice — drop it so the ceiling follows the level from now on.
+  // autoFromWalls ceilings always convert: their height was derived by the
+  // space-detection sync, never user intent. Gated on isLegacyScene, which
+  // is exact — nothing shipped between the level-height migration and this
+  // one — and makes the step idempotent. Known accepted edge: a
+  // post-migration user typing a custom height exactly equal to the bound
+  // keeps it (the gate prevents re-classification on later loads).
+  if (isLegacyScene) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      if (node?.type !== 'ceiling' || !('height' in node)) continue
+      const dropHeight = () => {
+        const { height: _height, ...follows } = node
+        patchedNodes[id] = follows
+      }
+      if (node.autoFromWalls === true) {
+        dropHeight()
+        continue
+      }
+      if (typeof node.parentId !== 'string') continue
+      const bound = getCeilingClampBound(
+        node.parentId,
+        patchedNodes as Record<AnyNodeId, AnyNode>,
+        Array.isArray(node.polygon) ? node.polygon : [],
+      )
+      const stored = getFiniteNumber(node.height, Number.NaN)
+      if (Number.isFinite(bound) && Math.abs(stored - bound) < PLANE_BOUND_EPSILON) {
+        dropHeight()
+      }
+    }
   }
 
   return { nodes: patchedNodes as Record<string, AnyNode>, mintedMaterials }

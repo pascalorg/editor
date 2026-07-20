@@ -2,9 +2,11 @@
 
 import {
   type AnyNodeId,
+  type CeilingNode,
   DuctTerminalNode,
   emitter,
   pointInPolygon,
+  resolveCeilingHeight,
   resolveLevelId,
   resolveSupportSlabPatch,
   sceneRegistry,
@@ -34,8 +36,6 @@ import { COLLAR_LENGTH, mountQuaternion } from './ports'
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°. */
 const ROTATE_STEP_RAD = Math.PI / 4
-/** Fallback height (meters) for a ceiling node that carries no `height`. */
-const DEFAULT_CEILING_HEIGHT = 2.5
 /** Snap radius (meters) for mating the collar onto a nearby duct port. */
 const PORT_SNAP_RADIUS_M = 0.5
 
@@ -228,12 +228,8 @@ const DuctTerminalTool = () => {
       for (const node of Object.values(nodes)) {
         if (node?.type !== 'ceiling') continue
         if (resolveLevelId(node, nodes) !== activeLevelId) continue
-        const ceiling = node as {
-          height?: number
-          polygon: Array<[number, number]>
-          holes?: Array<Array<[number, number]>>
-        }
-        const height = ceiling.height ?? DEFAULT_CEILING_HEIGHT
+        const ceiling = node as CeilingNode
+        const height = resolveCeilingHeight(ceiling, nodes)
         const hit = hitLocalPlane(nativeEvent, height)
         if (!hit) continue
         if (!pointInPolygon(hit.x, hit.z, ceiling.polygon)) continue

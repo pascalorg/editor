@@ -51,6 +51,7 @@ export {
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  getWallEffectiveHeightForNodes,
   pointInPolygon,
   spatialGridManager,
   type WallSlabSupportSegment,
@@ -128,7 +129,6 @@ export {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
-  projectAutoSlabsForPlan,
   resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,

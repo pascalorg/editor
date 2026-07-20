@@ -8,6 +8,7 @@ import {
   type GridEvent,
   polygonAnchors,
   resolveAlignment,
+  resolveCeilingHeight,
   sceneRegistry,
   snapScalar,
   useLiveTransforms,
@@ -99,7 +100,8 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     (node.holes ?? []).map((hole) => hole.map(([x, z]) => [x, z] as [number, number])),
   )
   const originalCenterRef = useRef(getPolygonCenter(originalPolygonRef.current))
-  const heightRef = useRef(node.height ?? 2.5)
+  // Resolved once at drag start — the ceiling plane can't change mid-move.
+  const heightRef = useRef(resolveCeilingHeight(node, useScene.getState().nodes))
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const deltaRef = useRef<[number, number]>([0, 0])
@@ -254,7 +256,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     <CeilingMovePreview
       ceilingId={node.id}
       cursorLocalPos={cursorLocalPos}
-      height={node.height ?? 2.5}
+      height={heightRef.current}
       originalHoles={originalHolesRef.current}
       originalPolygon={originalPolygonRef.current}
     />

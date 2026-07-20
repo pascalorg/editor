@@ -55,8 +55,9 @@ function ceiling(
   levelId: string,
   polygon: Array<[number, number]>,
   height: number,
+  extra: RawNode = {},
 ): RawNode {
-  return baseNode(id, 'ceiling', levelId, { polygon, holes: [], height })
+  return baseNode(id, 'ceiling', levelId, { polygon, holes: [], height, ...extra })
 }
 
 function stair(id: string, levelId: string, extra: RawNode = {}): RawNode {
@@ -79,6 +80,7 @@ type LevelResult = Extract<AnyNode, { type: 'level' }>
 type WallResult = Extract<AnyNode, { type: 'wall' }>
 type StairResult = Extract<AnyNode, { type: 'stair' }>
 type SlabResult = Extract<AnyNode, { type: 'slab' }>
+type CeilingResult = Extract<AnyNode, { type: 'ceiling' }>
 
 describe('scene vertical model migration', () => {
   beforeEach(() => {
@@ -176,6 +178,68 @@ describe('scene vertical model migration', () => {
     expect((nodes.level_b2 as LevelResult).level).toBe(-1)
     expect((nodes.level_b3 as LevelResult).level).toBe(0)
     expect((nodes.level_b4 as LevelResult).level).toBe(1)
+  })
+
+  test('near-bound ceiling heights become follows-mode', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a', 'level_b']),
+      // Legacy default: ceiling 2.5 drives the derived level height 2.5,
+      // so the clamp bound is 2.49 and |2.5 − 2.49| < 0.20 → follows.
+      level_a: level('level_a', 'building_a', 0, ['ceiling_a']),
+      ceiling_a: ceiling('ceiling_a', 'level_a', SQUARE, 2.5),
+      // Already write-clamped default: 2.49 under a derived 2.49 level
+      // (bound 2.48) → follows too.
+      level_b: level('level_b', 'building_a', 1, ['ceiling_b']),
+      ceiling_b: ceiling('ceiling_b', 'level_b', SQUARE, 2.49),
+    })
+
+    expect('height' in (nodes.ceiling_a as CeilingResult)).toBe(false)
+    expect('height' in (nodes.ceiling_b as CeilingResult)).toBe(false)
+  })
+
+  test('an intentional low ceiling keeps its explicit height', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      // The 3.0 wall drives the plane; the 2.0 ceiling sits 0.99 under
+      // the 2.99 bound — a deliberate dropped ceiling, kept explicit.
+      level_a: level('level_a', 'building_a', 0, ['wall_tall', 'ceiling_low']),
+      wall_tall: wall('wall_tall', 'level_a', [0, 0], [4, 0], 3.0),
+      ceiling_low: ceiling('ceiling_low', 'level_a', SQUARE, 2.0),
+    })
+
+    expect((nodes.level_a as LevelResult).height).toBe(3.0)
+    expect((nodes.ceiling_low as CeilingResult).height).toBe(2.0)
+  })
+
+  test('autoFromWalls ceilings always convert to follows-mode', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      // 2.2 is far from the 2.99 bound, but auto heights were always
+      // derived by the sync — never user intent — so it drops anyway.
+      level_a: level('level_a', 'building_a', 0, ['wall_tall', 'ceiling_auto']),
+      wall_tall: wall('wall_tall', 'level_a', [0, 0], [4, 0], 3.0),
+      ceiling_auto: ceiling('ceiling_auto', 'level_a', SQUARE, 2.2, { autoFromWalls: true }),
+    })
+
+    expect('height' in (nodes.ceiling_auto as CeilingResult)).toBe(false)
+  })
+
+  test('migrated scene keeps a near-bound ceiling height (gate respected)', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      // Post-migration scene (level carries height): a stored 2.49 IS a
+      // deliberately typed value and must survive reloads.
+      level_a: level('level_a', 'building_a', 0, ['ceiling_a', 'ceiling_auto'], { height: 2.5 }),
+      ceiling_a: ceiling('ceiling_a', 'level_a', SQUARE, 2.49),
+      ceiling_auto: ceiling('ceiling_auto', 'level_a', SQUARE, 2.49, { autoFromWalls: true }),
+    })
+
+    expect((nodes.ceiling_a as CeilingResult).height).toBe(2.49)
+    expect((nodes.ceiling_auto as CeilingResult).height).toBe(2.49)
   })
 
   test('legacy scene drops totalRise 2.5 but keeps other rises', () => {

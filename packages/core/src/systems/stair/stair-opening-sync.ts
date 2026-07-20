@@ -9,8 +9,8 @@ import type {
   StairSegmentNode,
   SurfaceHoleMetadata,
 } from '../../schema'
+import { resolveCeilingHeight } from '../../services/level-height'
 import { getLevelElevations } from '../../services/storey'
-import { DEFAULT_WALL_HEIGHT } from '../wall/wall-footprint'
 import { computeSegmentTransforms, rotateXZ } from './stair-footprint'
 import { resolveStairTotalRise } from './stair-rise'
 
@@ -631,20 +631,17 @@ function getTargetCeilingElevationForStair(
   const fromElevation = fromLevelId ? elevations.get(fromLevelId) : undefined
   const ceilingElevation = elevations.get(ceilingLevelId)
 
+  const ceilingHeight = resolveCeilingHeight(ceiling, nodes as Record<AnyNodeId, AnyNode>)
+
   if (
     !fromElevation ||
     !ceilingElevation ||
     fromElevation.buildingId !== ceilingElevation.buildingId
   ) {
-    return ceiling.height ?? DEFAULT_WALL_HEIGHT
+    return ceilingHeight
   }
 
-  return (
-    ceilingElevation.baseY -
-    fromElevation.baseY +
-    (ceiling.height ?? DEFAULT_WALL_HEIGHT) -
-    (stair.position[1] ?? 0)
-  )
+  return ceilingElevation.baseY - fromElevation.baseY + ceilingHeight - (stair.position[1] ?? 0)
 }
 
 function shouldApplyStairToSlab(

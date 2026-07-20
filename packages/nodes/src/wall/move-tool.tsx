@@ -17,7 +17,6 @@ import {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
-  projectAutoSlabsForPlan,
   resolveWallSupportSlabPatch,
   resumeSceneHistory,
   type SlabNode,
@@ -293,8 +292,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         roomPolygons,
         getLevelCeilings(levelId, sceneState.nodes),
         {
-          walls: levelWalls,
-          slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
           storeyHeight:
             levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
           ceilingClampBound: (polygon) => getCeilingClampBound(levelId, sceneState.nodes, polygon),

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { resolveCeilingHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import {
   detectSpacesForLevel,
@@ -32,17 +33,6 @@ function squareWalls(height = 2.5) {
   ]
 }
 
-// Post wall-top inversion the default wall stores NO height — its top is
-// bound to the storey plane.
-function squarePlaneBoundWalls() {
-  return [
-    WallNode.parse({ start: [0, 0], end: [4, 0] }),
-    WallNode.parse({ start: [4, 0], end: [4, 3] }),
-    WallNode.parse({ start: [4, 3], end: [0, 3] }),
-    WallNode.parse({ start: [0, 3], end: [0, 0] }),
-  ]
-}
-
 function slab(elevation: number) {
   return SlabNode.parse({
     polygon: square,
@@ -52,79 +42,35 @@ function slab(elevation: number) {
 }
 
 describe('planAutoCeilingsForLevel', () => {
-  // Explicit-height walls keep the legacy elected-base + height top, so
-  // these expectations survive the wall-top inversion as long as the
-  // storey plane sits above them (heights clamp to ≤ storeyHeight).
-  test('creates auto ceilings at the top of the room walls', () => {
+  test('creates auto ceilings height-less so they follow the level top', () => {
     const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squareWalls(),
-      slabs: [slab(0.05)],
       storeyHeight: 2.7,
     }).create[0]
 
-    expect(created?.height).toBeCloseTo(2.55)
+    expect(created).toBeDefined()
+    // Follows-mode: no stored height — the effective height derives from
+    // the clamp bound at read time via resolveCeilingHeight.
+    expect('height' in created!).toBe(false)
+    expect(created?.autoFromWalls).toBe(true)
   })
 
-  test('creates auto ceilings at the storey plane for plane-bound walls', () => {
-    // Inversion: a plane-bound wall's top IS the storey plane, whatever
-    // slab lifts its base — the auto ceiling follows the plane, not the
-    // old slabElevation + wallHeight sum.
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squarePlaneBoundWalls(),
-      slabs: [slab(0.05)],
-      storeyHeight: 2.55,
-    }).create[0]
-
-    // Stage 3-B: the clamp target moved from the plane itself to the
-    // plane minus CEILING_CLAMP_MARGIN (0.01).
-    expect(created?.height).toBeCloseTo(2.54)
-  })
-
-  test('keeps an explicit-height room ceiling based on its wall height', () => {
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squareWalls(2.1),
-      slabs: [slab(0.05)],
-      storeyHeight: 2.55,
-    }).create[0]
-
-    expect(created?.height).toBeCloseTo(2.15)
-  })
-
-  test('clamps the auto ceiling to the storey plane', () => {
-    // Explicit 2.5m walls on a 0.4m platform would top out at 2.9 — above
-    // the 2.7 storey plane, where the ceiling would poke into the level
-    // above. Conflicts clamp, never ask.
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squareWalls(),
-      slabs: [slab(0.4)],
-      storeyHeight: 2.7,
-    }).create[0]
-
-    // Stage 3-B: the clamp target moved from the plane itself to the
-    // plane minus CEILING_CLAMP_MARGIN (0.01).
-    expect(created?.height).toBeCloseTo(2.69)
-  })
-
-  test('updates existing auto ceiling height when the slab elevation changes', () => {
+  test('never writes a height onto a matched auto ceiling', () => {
     const ceiling = CeilingNode.parse({
       polygon: square,
-      height: 2.55,
       autoFromWalls: true,
     })
 
     const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      walls: squareWalls(),
-      slabs: [slab(0.4)],
       storeyHeight: 3,
     })
 
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.id).toBe(ceiling.id)
-    expect(plan.update[0]?.data.polygon).toBeUndefined()
-    expect(plan.update[0]?.data.height).toBeCloseTo(2.9)
+    // Same polygon, follows-mode height — nothing to update.
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
   })
 
-  test('updates existing auto ceiling height when wall height changes', () => {
+  test('a leftover explicit height on a matched auto ceiling is not rewritten', () => {
     const ceiling = CeilingNode.parse({
       polygon: square,
       height: 2.55,
@@ -132,13 +78,12 @@ describe('planAutoCeilingsForLevel', () => {
     })
 
     const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      walls: squareWalls(3),
-      slabs: [slab(0.05)],
-      storeyHeight: 3.2,
+      storeyHeight: 3,
     })
 
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.data.height).toBeCloseTo(3.05)
+    // The sync no longer re-derives auto heights; a user-set explicit
+    // height survives (still under the bound, so no clamp either).
+    expect(plan.update).toHaveLength(0)
   })
 
   test('does not replace a manual ceiling with an auto ceiling', () => {
@@ -151,8 +96,6 @@ describe('planAutoCeilingsForLevel', () => {
     // Storey plane above the stored 2.5 so the stage 3-B manual re-clamp
     // stays out of this test's scope (suppression only).
     const plan = planAutoCeilingsForLevel([roomPolygon()], [manualCeiling], {
-      walls: squareWalls(),
-      slabs: [slab(0.4)],
       storeyHeight: 2.7,
     })
 
@@ -226,8 +169,6 @@ describe('planAutoCeilingsForLevel', () => {
     // Storey plane above the stored 2.55 so the stage 3-B manual re-clamp
     // stays out of this test's scope (suppression only).
     const plan = planAutoCeilingsForLevel([roomPolygon()], [demoted], {
-      walls: squareWalls(),
-      slabs: [slab(0.05)],
       storeyHeight: 2.7,
     })
 
@@ -264,14 +205,17 @@ function stackedDeckNodes(): Record<AnyNodeId, AnyNode> {
 }
 
 describe('stage 3-B ceiling clamp bound', () => {
-  test('auto ceilings derive under the covering-slab bound', () => {
+  test('height-less auto ceilings resolve under the covering-slab bound at read time', () => {
+    const nodes = stackedDeckNodes()
     const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squarePlaneBoundWalls(),
       storeyHeight: 2.5,
-      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', stackedDeckNodes(), polygon),
+      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
     }).create[0]
 
-    expect(created?.height).toBeCloseTo(2.19)
+    expect(created).toBeDefined()
+    expect('height' in created!).toBe(false)
+    // Follows-mode: the effective height is the deck-limited bound.
+    expect(resolveCeilingHeight({ ...created!, parentId: 'level_0' }, nodes)).toBeCloseTo(2.19)
   })
 
   test('clamps a manual ceiling above the bound down to it (plane-only degradation)', () => {
@@ -293,6 +237,18 @@ describe('stage 3-B ceiling clamp bound', () => {
     expect(plan.update).toHaveLength(0)
   })
 
+  test('skips follows-mode manual ceilings (never converts them to explicit)', () => {
+    const nodes = stackedDeckNodes()
+    const manual = CeilingNode.parse({ polygon: square, autoFromWalls: false })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
+      storeyHeight: 2.5,
+      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
+    })
+
+    expect(plan.update).toHaveLength(0)
+  })
+
   test('a flush deck above clamps a manual ceiling at the plane margin to its underside', () => {
     // Scenario gate 11: manual ceiling at storeyHeight - 0.01 (the no-deck
     // bound) → deck occupying [-0.3, 0] above → clamps to 2.5 - 0.3 - 0.01.
@@ -300,7 +256,6 @@ describe('stage 3-B ceiling clamp bound', () => {
     const manual = CeilingNode.parse({ polygon: square, height: 2.49, autoFromWalls: false })
 
     const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
-      walls: squarePlaneBoundWalls(),
       storeyHeight: 2.5,
       ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
     })

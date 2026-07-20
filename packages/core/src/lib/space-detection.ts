@@ -22,13 +22,11 @@ import {
   pauseSceneHistory,
   resumeSceneHistory,
 } from '../store/history-control'
-import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import {
   getClampedWallCurveOffset,
   getWallCurveFrameAt,
   isCurvedWall,
 } from '../systems/wall/wall-curve'
-import { resolveWallTop } from '../systems/wall/wall-top'
 import { simplifyClosedPolygon } from './polygon-geometry'
 
 type Point2D = { x: number; y: number }
@@ -67,10 +65,6 @@ type DetectedRoom = {
   bbox: ReturnType<typeof bboxOf>
 }
 
-type DetectedCeilingRoom = DetectedRoom & {
-  ceilingHeight: number
-}
-
 export type AutoSlabSyncPlan = {
   create: SlabNodeType[]
   update: Array<{ id: SlabNodeType['id']; data: Partial<SlabNodeType> }>
@@ -88,7 +82,6 @@ export type AutoZoneSyncPlan = {
 }
 
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
-const DEFAULT_AUTO_CEILING_HEIGHT = 2.5
 const CEILING_HEIGHT_EPSILON = 1e-6
 const ROOM_CURVE_TOLERANCE = 0.04
 const MAX_CURVE_SUBDIVISION_DEPTH = 6
@@ -105,9 +98,11 @@ const WALL_JUNCTION_TOLERANCE = 0.08
 const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
 const COVERAGE_SAMPLE_STEPS = 12
 
+// Auto ceilings are created height-less (follows-mode: they track the
+// clamp bound live through `resolveCeilingHeight`), so the planner needs
+// no wall/slab inputs anymore — only the bound for the explicit-height
+// reactive re-clamp below.
 export type AutoCeilingPlanningContext = {
-  walls?: WallNode[]
-  slabs?: SlabNodeType[]
   /** Stored storey height of the level being planned (floor-to-floor). */
   storeyHeight?: number
   /**
@@ -338,49 +333,6 @@ function resolveCeilingClampBound(
 ) {
   if (context.ceilingClampBound) return context.ceilingClampBound(polygon)
   return (context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT) - CEILING_CLAMP_MARGIN
-}
-
-/**
- * Auto-ceiling height for a detected room, post wall-top inversion: the
- * max over the room's bounding walls of {@link resolveWallTop} (storey
- * plane for plane-bound walls; elected base + height for explicit
- * walls, elected via {@link computeWallSlabSupport} against the level's
- * slabs), clamped to the stage 3-B ceiling bound — min(storey plane,
- * covering-slab underside from the level above) − margin — so a ceiling
- * can never poke into the level above or a deck hanging from it. Rooms
- * with no resolvable bounding wall fall back to the plane (same clamp).
- */
-function resolveAutoCeilingHeight(
-  roomPolygon: Point2D[],
-  context: AutoCeilingPlanningContext = {},
-) {
-  const storeyHeight = context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT
-  const walls = context.walls ?? []
-  const slabs = context.slabs ?? []
-  const bound = resolveCeilingClampBound(roomPolygon.map(pointToTuple), context)
-
-  let maxTop = 0
-  for (const wall of walls) {
-    if (!wallBoundsRoom(wall, roomPolygon)) continue
-    const electedBase = computeWallSlabSupport(
-      {
-        start: wall.start,
-        end: wall.end,
-        curveOffset: wall.curveOffset,
-        thickness: wall.thickness,
-      },
-      slabs,
-      walls,
-      wall.supportSlabId,
-    ).elevation
-    const top = resolveWallTop(wall, storeyHeight, electedBase)
-    if (Number.isFinite(top)) maxTop = Math.max(maxTop, top)
-  }
-
-  // `Math.min` (not just `bound`) so an Infinity bound from an
-  // unresolvable level degrades to the stage-1 plane clamp.
-  if (maxTop <= 0) return Math.min(storeyHeight, bound)
-  return Math.min(maxTop, bound)
 }
 
 function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
@@ -854,8 +806,8 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
 // generated footprints caused delete/recreate feedback. Zones are included
 // only so a newly traced room footprint can adopt its enclosing walls
 // without waiting for the next remodel. Slab ELEVATIONS and the level's
-// stored storey height ARE included — both are inputs to the auto-ceiling
-// height (elected bases / the storey plane), and neither is rewritten by
+// stored storey height ARE included — both feed the explicit-ceiling
+// re-clamp bound (the storey plane), and neither is rewritten by
 // the sync, so regeneration triggers when they change without feedback.
 // Stage 3-B adds the LEVEL-ABOVE's covering-slab undersides (elevation −
 // thickness, recessed pools excluded): a deck created, lowered, or
@@ -1167,29 +1119,6 @@ function syncAutoSlabsForLevel(
   return plan
 }
 
-export function projectAutoSlabsForPlan(
-  existingSlabs: SlabNodeType[],
-  plan: AutoSlabSyncPlan,
-): SlabNodeType[] {
-  const slabsById = new Map(existingSlabs.map((slab) => [slab.id, slab]))
-
-  for (const id of plan.delete) {
-    slabsById.delete(id)
-  }
-
-  for (const update of plan.update) {
-    const slab = slabsById.get(update.id)
-    if (!slab) continue
-    slabsById.set(update.id, SlabNode.parse({ ...slab, ...update.data }))
-  }
-
-  for (const slab of plan.create) {
-    slabsById.set(slab.id, slab)
-  }
-
-  return [...slabsById.values()]
-}
-
 export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
@@ -1201,7 +1130,7 @@ export function planAutoCeilingsForLevel(
   )
   const manualPolygons = manualCeilings.map((ceiling) => ceiling.polygon.map(pointFromTuple))
 
-  const detectedAll: DetectedCeilingRoom[] = roomPolygons
+  const detectedAll: DetectedRoom[] = roomPolygons
     .map((poly) => ({
       poly: simplifyClosedPolygon(poly.map(pointToTuple), AUTO_SLAB_POLYGON_SIMPLIFY_TOLERANCE).map(
         pointFromTuple,
@@ -1217,7 +1146,6 @@ export function planAutoCeilingsForLevel(
       centroid: polygonCentroid(room.poly),
       area: Math.abs(polygonArea(room.poly)),
       bbox: bboxOf(room.poly),
-      ceilingHeight: resolveAutoCeilingHeight(room.poly, context),
     }))
 
   const detected = detectedAll.filter(
@@ -1238,7 +1166,7 @@ export function planAutoCeilingsForLevel(
 
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, { polygon: [number, number][]; height: number }>()
+  const updatesById = new Map<string, { polygon: [number, number][] }>()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
@@ -1255,7 +1183,6 @@ export function planAutoCeilingsForLevel(
     matchedCeilingIds.add(existing.ceiling.id)
     updatesById.set(existing.ceiling.id, {
       polygon: room.poly.map(pointToTuple),
-      height: room.ceilingHeight,
     })
   })
 
@@ -1293,7 +1220,6 @@ export function planAutoCeilingsForLevel(
     matchedCeilingIds.add(bestMatch.entry.ceiling.id)
     updatesById.set(bestMatch.entry.ceiling.id, {
       polygon: room.poly.map(pointToTuple),
-      height: room.ceilingHeight,
     })
   }
 
@@ -1313,37 +1239,31 @@ export function planAutoCeilingsForLevel(
 
   // Stage 3-B reactive re-clamp (clamp-never-ask): a covering slab
   // created, moved, or thickened on the level above can leave an EXISTING
-  // manual ceiling poking into its solid. Clamp manual ceilings down to
-  // the bound; never raise them — a user-lowered ceiling is intent, only
-  // an over-bound one is a conflict.
+  // manual explicit-height ceiling poking into its solid. Clamp explicit
+  // heights down to the bound; never raise them — a user-lowered ceiling
+  // is intent, only an over-bound one is a conflict. Follows-mode
+  // ceilings (absent height) derive under the bound by construction and
+  // are skipped, so the clamp can never convert one to an explicit
+  // height.
   const manualClamps: AutoCeilingSyncPlan['update'] = manualCeilings.flatMap((ceiling) => {
+    if (ceiling.height == null) return []
     const bound = resolveCeilingClampBound(ceiling.polygon, context)
     if (!Number.isFinite(bound)) return []
-    const stored = ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT
-    return stored > bound + CEILING_HEIGHT_EPSILON
+    return ceiling.height > bound + CEILING_HEIGHT_EPSILON
       ? [{ id: ceiling.id, data: { height: bound } }]
       : []
   })
 
   const ceilingsToUpdate = [
+    // Auto ceilings only track their room's POLYGON here — their height is
+    // follows-mode (absent) and derives from the level top at read time.
     ...existingAuto
       .filter((ceiling) => updatesById.has(ceiling.id))
       .flatMap((ceiling) => {
         const update = updatesById.get(ceiling.id)
         if (!update) return []
-
-        const data: Partial<CeilingNodeType> = {}
-        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) {
-          data.polygon = update.polygon
-        }
-        if (
-          Math.abs((ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT) - update.height) >
-          CEILING_HEIGHT_EPSILON
-        ) {
-          data.height = update.height
-        }
-
-        return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
+        if (sameTuplePolygon(ceiling.polygon, update.polygon)) return []
+        return [{ id: ceiling.id, data: { polygon: update.polygon } }]
       }),
     ...ceilingDemotions,
     ...manualClamps,
@@ -1360,12 +1280,14 @@ export function planAutoCeilingsForLevel(
     const name = nextAutoRoomName(plannedCeilingsForNaming, 'Ceiling')
     plannedCeilingsForNaming.push({ name })
 
+    // Height-less on purpose: auto ceilings follow the level top (the
+    // clamp bound) through `resolveCeilingHeight` instead of baking a
+    // derived height that would go stale on level-height edits.
     ceilingsToCreate.push(
       CeilingNode.parse({
         name,
         polygon: room.poly.map(pointToTuple),
         holes: [],
-        height: room.ceilingHeight,
         autoFromWalls: true,
       }),
     )
@@ -1473,8 +1395,7 @@ function runSpaceDetection(
     }
 
     const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
-    const slabPlan = syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore)
-    const projectedSlabs = projectAutoSlabsForPlan(parsedSlabs, slabPlan)
+    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore)
     const levelNode = nodes[levelId]
     const storeyHeight =
       levelNode?.type === 'level'
@@ -1486,8 +1407,6 @@ function runSpaceDetection(
       ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
       {
-        walls,
-        slabs: projectedSlabs,
         storeyHeight,
         ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
       },

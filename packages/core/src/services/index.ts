@@ -46,6 +46,7 @@ export {
   DEFAULT_LEVEL_HEIGHT,
   getCeilingAt,
   getCeilingHeightAt,
+  resolveCeilingHeight,
 } from './level-height'
 export {
   type AxisLock,
@@ -104,11 +105,14 @@ export {
 export {
   CEILING_CLAMP_MARGIN,
   findLevelAboveId,
+  findLevelBelowId,
   getCeilingClampBound,
   getCoveringSlabUndersideAt,
   getLevelAbove,
+  getLevelBelow,
   getLevelElevations,
   getStoredLevelHeight,
+  getWallPlaneTop,
   type LevelElevation,
 } from './storey'
 export {

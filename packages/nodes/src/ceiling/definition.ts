@@ -4,7 +4,9 @@ import {
   getCeilingClampBound,
   type HandleDescriptor,
   type NodeDefinition,
+  resolveCeilingHeight,
   type SceneApi,
+  useScene,
 } from '@pascal-app/core'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildCeilingFloorplan } from './floorplan'
@@ -53,8 +55,12 @@ function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
 // the cursor upward grows the value directly. Live override + commit
 // flow comes from the shared registry arrow pipeline.
 //
+// `currentValue` resolves through `resolveCeilingHeight`, and `apply`
+// always writes `height` — so dragging a follows-mode ceiling converts
+// it to an explicit custom height, mirroring the wall top-drag.
+//
 // The placement Y is in *mesh-local* coords. CeilingSystem already
-// parks `mesh.position.y = ceiling.height - 0.01`, so the local Y is
+// parks `mesh.position.y = resolved height - 0.01`, so the local Y is
 // just the offset above that plane (NOT `height + offset` — that
 // would double-add the height and push the arrow off-screen).
 function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
@@ -64,7 +70,7 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     anchor: 'min',
     min: MIN_CEILING_HEIGHT,
     max: ceilingHeightBound,
-    currentValue: (n) => n.height ?? 2.5,
+    currentValue: (n) => resolveCeilingHeight(n, useScene.getState().nodes),
     apply: (_n, newValue) => ({ height: newValue }),
     placement: {
       position: (n) => {
@@ -103,6 +109,8 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   category: 'structure',
   surfaceRole: 'ceiling',
 
+  // Height-less on purpose: a new ceiling follows the level top until the
+  // user gives it an explicit custom height.
   defaults: () => ({
     object: 'node',
     parentId: null,
@@ -112,14 +120,15 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     polygon: [],
     holes: [],
     holeMetadata: [],
-    height: 2.5,
     autoFromWalls: false,
   }),
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     surfaces: {
-      top: { height: (n) => (n as CeilingNode).height },
+      top: {
+        height: (n) => resolveCeilingHeight(n as CeilingNodeType, useScene.getState().nodes),
+      },
     },
     duplicable: true,
     deletable: true,
@@ -140,7 +149,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     features: (node) =>
       polygonMeasurementFeatures({
         featurePrefix: 'ceiling',
-        height: node.height,
+        height: resolveCeilingHeight(node, useScene.getState().nodes),
         label: 'Ceiling',
         polygon: node.polygon,
       }),

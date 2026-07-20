@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { DEFAULT_LEVEL_HEIGHT, getStoredLevelHeight, resolveStairTotalRise } from '@pascal-app/core'
+import { resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
@@ -269,8 +269,6 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
       const points = footprint as [number, number][]
-      const resolvedWallHeight =
-        level.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
       const wallIds: string[] = []
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
 
@@ -310,10 +308,13 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       let ceilingId: string | null = null
       if (createCeiling) {
+        // Height-less unless the caller pinned one: a new story ceiling
+        // follows the level top automatically.
+        const explicitCeilingHeight = ceilingHeight ?? wallHeight
         const ceiling = CeilingNode.parse({
           name: namePrefix ? `${namePrefix} Ceiling` : undefined,
           polygon: points,
-          height: ceilingHeight ?? wallHeight ?? resolvedWallHeight,
+          ...(explicitCeilingHeight !== undefined ? { height: explicitCeilingHeight } : {}),
           ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
           metadata: { role: 'story-ceiling' },
         })

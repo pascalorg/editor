@@ -1,12 +1,20 @@
 'use client'
 
-import { type AnyNode, type CeilingNode, getCeilingClampBound, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type CeilingNode,
+  getCeilingClampBound,
+  resolveCeilingHeight,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  formatLinearMeasurement,
   holeEditScope,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditingHole,
@@ -27,6 +35,7 @@ import { useCallback, useEffect, useRef } from 'react'
  */
 export function CeilingPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -48,6 +57,16 @@ export function CeilingPanel() {
       : 6
   })
 
+  // Effective height: the stored custom height, or — for follows-mode
+  // ceilings (absent `height`) — the live level-top bound. Primitive
+  // selector so it tracks level-height / covering-slab edits.
+  const resolvedHeight = useScene((s) => {
+    const ceiling = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined)
+      : undefined
+    return ceiling?.type === 'ceiling' ? resolveCeilingHeight(ceiling, s.nodes) : 2.5
+  })
+
   // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
   // handler refs so slider drags don't trigger Maximum update depth.
   const nodeRef = useRef(node)
@@ -55,6 +74,9 @@ export function CeilingPanel() {
 
   const maxHeightRef = useRef(maxHeight)
   maxHeightRef.current = maxHeight
+
+  const resolvedHeightRef = useRef(resolvedHeight)
+  resolvedHeightRef.current = resolvedHeight
 
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
@@ -67,6 +89,24 @@ export function CeilingPanel() {
   const handleHeightChange = useCallback(
     (proposed: number) => {
       handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+    },
+    [handleUpdate],
+  )
+
+  const handleTopModeChange = useCallback(
+    (mode: 'storey' | 'custom') => {
+      const n = nodeRef.current
+      if (!n) return
+      const isCustom = n.height != null
+      if (mode === 'custom' && !isCustom) {
+        // Seed from the current resolved height so the surface doesn't
+        // jump at the moment of detaching from the level top.
+        handleUpdate({ height: Math.min(resolvedHeightRef.current, maxHeightRef.current) })
+      } else if (mode === 'storey' && isCustom) {
+        // Absent `height` = follows the level top; the store strips
+        // undefined keys.
+        handleUpdate({ height: undefined })
+      }
     },
     [handleUpdate],
   )
@@ -179,6 +219,7 @@ export function CeilingPanel() {
   }
 
   const area = calculateArea(node.polygon)
+  const isFollows = node.height == null
 
   return (
     <PanelWrapper
@@ -188,17 +229,33 @@ export function CeilingPanel() {
       width={320}
     >
       <PanelSection title="Height">
-        <SliderControl
-          label="Height"
-          max={Math.min(6, maxHeight)}
-          min={0}
-          onChange={handleHeightChange}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.height * 1000) / 1000}
+        <SegmentedControl
+          onChange={handleTopModeChange}
+          options={[
+            { label: 'Follows level', value: 'storey' },
+            { label: 'Custom height', value: 'custom' },
+          ]}
+          value={isFollows ? 'storey' : 'custom'}
         />
+        {isFollows ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(resolvedHeight, unit)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Height"
+            max={Math.min(6, maxHeight)}
+            min={0}
+            onChange={handleHeightChange}
+            precision={3}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.height ?? resolvedHeight) * 1000) / 1000}
+          />
+        )}
 
+        {/* Presets write an explicit height (clamped to the bound), so
+            clicking one on a follows-mode ceiling switches it to custom. */}
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
           <ActionButton label="Low (2.4m)" onClick={() => handleHeightChange(2.4)} />
           <ActionButton label="Standard (2.5m)" onClick={() => handleHeightChange(2.5)} />
