@@ -74,6 +74,8 @@ function addSlab(polygon: Array<[number, number]>, elevation: number, id = `slab
     holes: [],
     holeMetadata: [],
     elevation,
+    thickness: Math.max(elevation, 0),
+    recessed: elevation < 0,
     autoFromWalls: false,
   } as SlabNode
   spatialGridManager.handleNodeCreated(slab as AnyNode, LEVEL_ID)

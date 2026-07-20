@@ -15,8 +15,9 @@ export type SlabElevationClamp = {
  * rises past `storeyHeight - MIN_WALL_HEIGHT` while electing as that
  * wall's base would squeeze the wall body below its minimum (and at the
  * plane, to nothing). Walls with explicit heights don't constrain — their
- * top rides the elected base, not the plane. Negative elevations (pool
- * recess) are untouched: this is an upper bound only.
+ * top rides the elected base, not the plane. Negative proposals (the
+ * drag-through-zero path that commits the `recessed` intent) pass
+ * through untouched: this is a purely numeric upper bound.
  *
  * The election runs against `levelSlabs` with `proposedElevation`
  * substituted into `slab`, so a slab that would only WIN the election at

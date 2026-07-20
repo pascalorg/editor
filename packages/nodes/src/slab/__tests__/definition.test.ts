@@ -58,6 +58,15 @@ describe('slabDefinition handles', () => {
     const heightHandle = getHeightHandle(slab)
 
     expect(heightHandle.min).toBe(-1)
-    expect(heightHandle.apply(slab, -0.15, {} as never)).toEqual({ elevation: -0.15 })
+    // Crossing zero flips the recessed intent in the same patch; coming back
+    // above the plane clears it.
+    expect(heightHandle.apply(slab, -0.15, {} as never)).toEqual({
+      elevation: -0.15,
+      recessed: true,
+    })
+    expect(heightHandle.apply(slab, 0.1, {} as never)).toEqual({
+      elevation: 0.1,
+      recessed: false,
+    })
   })
 })

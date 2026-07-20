@@ -92,13 +92,15 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
   return best ?? fallback
 }
 
-// Slab height arrow — vertical chevron on solid slab surface near the
-// polygon center. Drags elevation through zero: positive values extrude
-// upward from ground while negative values create a recessed floor whose
-// depth follows the pointer. Same registry-handle pipeline as the column
-// height arrow, so live override + commit-on-release come for free.
-// `max` clamps the drag under the storey plane while plane-bound walls
-// elect this slab as their base (conflicts clamp, never ask).
+// Slab elevation arrow — vertical chevron on solid slab surface near the
+// polygon center. Moves the walking surface (the body follows: underside
+// stays at elevation − thickness) and drags through zero: a negative value
+// flips the slab to a recessed floor whose depth follows the pointer, and
+// the same patch writes the `recessed` intent so live preview + commit
+// stay in one update. Same registry-handle pipeline as the column height
+// arrow, so live override + commit-on-release come for free. `max` clamps
+// the drag under the storey plane while plane-bound walls elect this slab
+// as their base (conflicts clamp, never ask).
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
@@ -107,7 +109,7 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
     min: MIN_SLAB_ELEVATION,
     max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n),
     currentValue: (n) => n.elevation ?? 0.05,
-    apply: (_n, newValue) => ({ elevation: newValue }),
+    apply: (_n, newValue) => ({ elevation: newValue, recessed: newValue < 0 }),
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)
@@ -155,6 +157,8 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     holes: [],
     holeMetadata: [],
     elevation: 0.05,
+    thickness: 0.05,
+    recessed: false,
     autoFromWalls: false,
   }),
 

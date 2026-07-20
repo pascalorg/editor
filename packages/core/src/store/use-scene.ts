@@ -1013,6 +1013,23 @@ function migrateNodes(nodes: Record<string, any>): {
     }
   }
 
+  // 3e. Slab placement/thickness split. `elevation` stays the walking surface;
+  // the new `thickness` grows downward so the solid occupies
+  // [elevation − thickness, elevation]. Legacy solids extruded [0, elevation],
+  // so thickness = elevation EXACTLY (including degenerate 0 — MIN_SLAB_THICKNESS
+  // applies to edits only, never here) keeps the occupied interval identical.
+  // Legacy pools (elevation < 0) become explicit `recessed` intent with
+  // elevation unchanged. Gated per slab on a missing `thickness` — the
+  // migration output is cast, so schema defaults never materialize on load.
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'slab' || 'thickness' in node) continue
+    const elevation = getFiniteNumber(node.elevation, 0.05)
+    patchedNodes[id] =
+      elevation < 0
+        ? { ...node, thickness: 0.05, recessed: true }
+        : { ...node, thickness: elevation }
+  }
+
   return { nodes: patchedNodes as Record<string, AnyNode>, mintedMaterials }
 }
 

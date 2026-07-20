@@ -296,6 +296,11 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           name: namePrefix ? `${namePrefix} Slab` : undefined,
           polygon: points,
           elevation: slabElevation,
+          // Grounded solid: underside on the level plane, so the created
+          // story slab occupies [0, slabElevation] like the legacy
+          // extrude-from-zero model.
+          thickness: Math.max(slabElevation, 0),
+          recessed: slabElevation < 0,
           ...(slabMaterialPreset ? { materialPreset: slabMaterialPreset } : {}),
           metadata: { role: 'story-slab' },
         })

@@ -78,6 +78,7 @@ function loadScene(nodes: Record<string, RawNode>): Record<string, AnyNode> {
 type LevelResult = Extract<AnyNode, { type: 'level' }>
 type WallResult = Extract<AnyNode, { type: 'wall' }>
 type StairResult = Extract<AnyNode, { type: 'stair' }>
+type SlabResult = Extract<AnyNode, { type: 'slab' }>
 
 describe('scene vertical model migration', () => {
   beforeEach(() => {
@@ -214,6 +215,73 @@ describe('scene vertical model migration', () => {
     expect((nodes.level_a as LevelResult).height).toBe(4.0)
     expect('height' in (nodes.wall_a as WallResult)).toBe(false)
     expect((nodes.wall_b as WallResult).height).toBe(2.5)
+  })
+
+  test('slab split writes thickness = elevation exactly for legacy solids', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      level_a: level('level_a', 'building_a', 0, ['slab_a', 'slab_b']),
+      slab_a: slab('slab_a', 'level_a', SQUARE, 0.3),
+      slab_b: slab('slab_b', 'level_a', SQUARE, 0),
+    })
+
+    const raised = nodes.slab_a as SlabResult
+    expect(raised.elevation).toBe(0.3)
+    expect(raised.thickness).toBe(0.3)
+    expect(raised.recessed).not.toBe(true)
+
+    // Degenerate zero-elevation slab keeps its zero occupied interval —
+    // migration never clamps to MIN_SLAB_THICKNESS.
+    const flush = nodes.slab_b as SlabResult
+    expect(flush.elevation).toBe(0)
+    expect(flush.thickness).toBe(0)
+  })
+
+  test('slab split defaults an absent elevation to the effective 0.05 thickness', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      level_a: level('level_a', 'building_a', 0, ['slab_a']),
+      slab_a: baseNode('slab_a', 'slab', 'level_a', { polygon: SQUARE, holes: [] }),
+    })
+
+    expect((nodes.slab_a as SlabResult).thickness).toBe(0.05)
+  })
+
+  test('legacy pool becomes recessed with its elevation unchanged', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      level_a: level('level_a', 'building_a', 0, ['slab_a']),
+      slab_a: slab('slab_a', 'level_a', SQUARE, -0.15),
+    })
+
+    const pool = nodes.slab_a as SlabResult
+    expect(pool.elevation).toBe(-0.15)
+    expect(pool.recessed).toBe(true)
+    expect(pool.thickness).toBe(0.05)
+  })
+
+  test('slab with thickness already present is untouched', () => {
+    const nodes = loadScene({
+      site_test: site(['building_a']),
+      building_a: building('building_a', ['level_a']),
+      level_a: level('level_a', 'building_a', 0, ['slab_a']),
+      // A below-plane SOLID (already-split scene): the gate must not
+      // reinterpret its negative elevation as a pool.
+      slab_a: baseNode('slab_a', 'slab', 'level_a', {
+        polygon: SQUARE,
+        holes: [],
+        elevation: -0.15,
+        thickness: 0.3,
+      }),
+    })
+
+    const deck = nodes.slab_a as SlabResult
+    expect(deck.elevation).toBe(-0.15)
+    expect(deck.thickness).toBe(0.3)
+    expect('recessed' in deck).toBe(false)
   })
 
   test('migration is idempotent', () => {

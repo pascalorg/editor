@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNode, MIN_SLAB_THICKNESS, type SlabNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -54,14 +54,35 @@ export function SlabPanel() {
   )
 
   // Clamp-never-ask: cap the written elevation under the storey plane
-  // while plane-bound walls elect this slab as their base. Recessed
-  // (negative) elevations pass through untouched.
+  // while plane-bound walls elect this slab as their base. Negative
+  // elevations pass through untouched — committing one flips the
+  // `recessed` intent (and committing ≥ 0 clears it) in the same update.
   const handleElevationChange = useCallback(
     (proposed: number) => {
       const current = nodeRef.current
       if (!current) return
       const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
-      handleUpdate({ elevation })
+      handleUpdate({ elevation, recessed: elevation < 0 })
+    },
+    [handleUpdate],
+  )
+
+  const handleThicknessChange = useCallback(
+    (proposed: number) => {
+      handleUpdate({ thickness: Math.max(MIN_SLAB_THICKNESS, proposed) })
+    },
+    [handleUpdate],
+  )
+
+  // Presets reproduce the legacy extrude-from-zero look: grounded solids
+  // write thickness = elevation so the underside stays on the level plane
+  // (free elevation edits above deliberately don't couple thickness).
+  const handleGroundedPreset = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
+      handleUpdate({ elevation, thickness: Math.max(elevation, 0), recessed: false })
     },
     [handleUpdate],
   )
@@ -195,11 +216,24 @@ export function SlabPanel() {
           value={Math.round(node.elevation * 1000) / 1000}
         />
 
+        {!node.recessed && (
+          <SliderControl
+            label="Thickness"
+            max={0.5}
+            min={MIN_SLAB_THICKNESS}
+            onChange={handleThicknessChange}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.thickness ?? 0.05) * 100) / 100}
+          />
+        )}
+
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
           <ActionButton label="Sunken (-15cm)" onClick={() => handleElevationChange(-0.15)} />
-          <ActionButton label="Ground (0m)" onClick={() => handleElevationChange(0)} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleElevationChange(0.05)} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleElevationChange(0.15)} />
+          <ActionButton label="Ground (0m)" onClick={() => handleGroundedPreset(0)} />
+          <ActionButton label="Raised (+5cm)" onClick={() => handleGroundedPreset(0.05)} />
+          <ActionButton label="Step (+15cm)" onClick={() => handleGroundedPreset(0.15)} />
         </div>
       </PanelSection>
 

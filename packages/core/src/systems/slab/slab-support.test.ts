@@ -48,7 +48,7 @@ describe('clampSlabElevationForWalls', () => {
     expect(result.elevation).toBeCloseTo(BOUND)
   })
 
-  it('never touches negative elevations (pool recess)', () => {
+  it('passes negative (recessed-committing) proposals through untouched', () => {
     const slab = roomSlab(0.05)
     const result = clampSlabElevationForWalls(-0.6, slab, roomWalls(), [slab], STOREY_HEIGHT)
 
