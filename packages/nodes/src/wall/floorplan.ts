@@ -11,6 +11,10 @@ import {
   type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
+import {
+  buildWallConstructionDimensions,
+  formatConstructionLength,
+} from './construction-dimensions'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
 // Slightly exaggerates thin walls so the 2D plan stays legible without
@@ -32,10 +36,6 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
 
-function formatLengthMetric(meters: number): string {
-  return `${Number.parseFloat(meters.toFixed(2))}m`
-}
-
 export function computeWallFloorplanLevelData({
   siblings,
 }: {
@@ -55,7 +55,7 @@ export function computeWallFloorplanLevelData({
  *      wall body easily.
  *   4. Two endpoint handles (start + end) when selected — the registry
  *      layer hosts the 5-circle stack + hover transitions + 2D drag.
- *   5. A small dimension label at the midpoint when selected.
+ *   5. Construction dimension strings for wall spans and hosted openings.
  *
  * `ctx.levelData` provides the shared level miter graph when the floor-plan
  * dispatcher precomputes it; `ctx.siblings` remains the fallback path for
@@ -117,6 +117,19 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       cursor: isSelected ? 'default' : undefined,
     },
   ]
+
+  if (!isCurvedWall(node)) {
+    children.push(
+      ...buildWallConstructionDimensions(self, ctx, {
+        unit: view?.unit ?? 'metric',
+        stroke:
+          isSelected && palette
+            ? palette.selectedStroke
+            : (palette?.measurementStroke ?? '#334155'),
+        force: isSelected,
+      }),
+    )
+  }
 
   // Selection hatch overlay — only when the wall is *the* selected item
   // (not when it's just marquee-highlighted), matching the legacy.
@@ -207,66 +220,25 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       })
     }
 
-    // Length measurement. Curved walls use the simple rounded label
-    // (the chord-vs-arc thing is hard to express with a dimension line);
-    // straight walls get the full architect's overlay with extension
-    // marks + ticks, offset to the side facing away from the level
-    // centroid (matches the legacy `getWallMeasurementOverlay`).
+    // Curved walls cannot express their arc length through a straight
+    // construction string, so selection keeps the compact arc-length label.
     const length = getWallCurveLength(node)
-    if (length >= 0.1) {
+    if (length >= 0.1 && isCurvedWall(node)) {
       const dx = node.end[0] - node.start[0]
       const dz = node.end[1] - node.start[1]
       const midX = (node.start[0] + node.end[0]) / 2
       const midZ = (node.start[1] + node.end[1]) / 2
-
-      if (isCurvedWall(node)) {
-        children.push({
-          kind: 'dimension-label',
-          cx: midX,
-          cy: midZ,
-          text: formatLengthMetric(length),
-          angle: Math.atan2(dz, dx),
-        })
-      } else {
-        // Outward unit normal = perpendicular to (dx, dz), choose the
-        // side facing away from other walls' centroid so the dimension
-        // line sits outside the building.
-        const nx = -dz / length
-        const nz = dx / length
-        const wallSiblings = ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall')
-        const centroid = wallCentroid([node, ...wallSiblings])
-        const cx = midX - centroid[0]
-        const cz = midZ - centroid[1]
-        const facingAway = cx * nx + cz * nz >= 0 ? 1 : -1
-        children.push({
-          kind: 'dimension',
-          start: [node.start[0], node.start[1]],
-          end: [node.end[0], node.end[1]],
-          offsetNormal: [nx * facingAway, nz * facingAway],
-          offsetDistance: 0.75,
-          extensionOvershoot: 0.12,
-          text: formatLengthMetric(length),
-        })
-      }
+      children.push({
+        kind: 'dimension-label',
+        cx: midX,
+        cy: midZ,
+        text: formatConstructionLength(length, view?.unit ?? 'metric'),
+        angle: Math.atan2(dz, dx),
+      })
     }
   }
 
   return { kind: 'group', children }
-}
-
-function wallCentroid(walls: WallNode[]): [number, number] {
-  // Mean of every wall endpoint — cheap approximation of "where the
-  // building lives" so we can offset the dimension line away from it.
-  let sumX = 0
-  let sumZ = 0
-  let count = 0
-  for (const wall of walls) {
-    sumX += wall.start[0] + wall.end[0]
-    sumZ += wall.start[1] + wall.end[1]
-    count += 2
-  }
-  if (count === 0) return [0, 0]
-  return [sumX / count, sumZ / count]
 }
 
 /**

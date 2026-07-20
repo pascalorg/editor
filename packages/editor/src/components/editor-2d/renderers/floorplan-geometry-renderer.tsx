@@ -2,6 +2,7 @@
 
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
+import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 
 /**
  * Pure-data → SVG converter. Walks a `FloorplanGeometry` tree returned by
@@ -24,11 +25,13 @@ import { memo, useEffect, useState } from 'react'
 export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer({
   geometry,
   pointerEventsOverride,
+  sceneRotationDeg = 0,
 }: {
   geometry: FloorplanGeometry
   pointerEventsOverride?: string
+  sceneRotationDeg?: number
 }) {
-  return renderNode(geometry, 0, pointerEventsOverride)
+  return renderNode(geometry, 0, pointerEventsOverride, sceneRotationDeg)
 })
 
 function styleAttrs(
@@ -74,6 +77,7 @@ function renderNode(
   g: FloorplanGeometry,
   keyHint: number,
   pointerEventsOverride?: string,
+  sceneRotationDeg = 0,
 ): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
@@ -135,6 +139,31 @@ function renderNode(
       )
 
     case 'text':
+      if (g.upright) {
+        return (
+          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
+            <text
+              dominantBaseline={g.dominantBaseline ?? 'middle'}
+              fill={g.fill ?? '#171717'}
+              fontFamily={g.fontFamily}
+              fontSize={g.fontSize}
+              fontWeight={g.fontWeight}
+              opacity={g.opacity}
+              paintOrder={g.paintOrder}
+              pointerEvents={pointerEventsOverride}
+              stroke={g.stroke}
+              strokeLinecap={g.stroke ? 'round' : undefined}
+              strokeLinejoin={g.stroke ? 'round' : undefined}
+              strokeWidth={g.strokeWidth}
+              textAnchor={g.textAnchor ?? 'start'}
+              x={0}
+              y={0}
+            >
+              {g.text}
+            </text>
+          </g>
+        )
+      }
       return (
         <text
           dominantBaseline={g.dominantBaseline ?? 'middle'}
@@ -158,6 +187,15 @@ function renderNode(
         </text>
       )
 
+    case 'dimension':
+      return (
+        <FloorplanDimensionRenderer
+          geometry={g}
+          key={keyHint}
+          sceneRotationDeg={sceneRotationDeg}
+        />
+      )
+
     case 'image':
       return (
         <FloorplanImage
@@ -176,7 +214,9 @@ function renderNode(
       const transform = formatTransform(g.transform)
       return (
         <g key={keyHint} transform={transform}>
-          {g.children.map((child, i) => renderNode(child, i, pointerEventsOverride))}
+          {g.children.map((child, i) =>
+            renderNode(child, i, pointerEventsOverride, sceneRotationDeg),
+          )}
         </g>
       )
     }

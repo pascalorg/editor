@@ -74,6 +74,7 @@ import {
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
+import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
@@ -2598,147 +2599,13 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
       }
       case 'dimension': {
         if (!palette) return <></>
-        const stroke = g.stroke ?? palette.measurementStroke
-        // Offset endpoints along the outward normal — this is where the
-        // dimension line sits, parallel to the edge.
-        const ox = g.offsetNormal[0] * g.offsetDistance
-        const oy = g.offsetNormal[1] * g.offsetDistance
-        const dStart: [number, number] = [g.start[0] + ox, g.start[1] + oy]
-        const dEnd: [number, number] = [g.end[0] + ox, g.end[1] + oy]
-
-        // Extension line endpoints — extend past the dimension line by
-        // `extensionOvershoot` so the tip clears the dimension stroke.
-        const eOvershoot = g.extensionOvershoot
-        const eOx = g.offsetNormal[0] * (g.offsetDistance + eOvershoot)
-        const eOy = g.offsetNormal[1] * (g.offsetDistance + eOvershoot)
-        const eStartTip: [number, number] = [g.start[0] + eOx, g.start[1] + eOy]
-        const eEndTip: [number, number] = [g.end[0] + eOx, g.end[1] + eOy]
-
-        const dx = dEnd[0] - dStart[0]
-        const dy = dEnd[1] - dStart[1]
-        const length = Math.hypot(dx, dy)
-        if (length < 1e-6) return <></>
-        const dirX = dx / length
-        const dirY = dy / length
-
-        // Plan-unit constants matching the legacy `floorplan-
-        // measurements-layer.tsx`. `strokeWidth` is intentionally a
-        // raw value (not multiplied by `unitsPerPixel`) because every
-        // stroke here uses `vectorEffect: non-scaling-stroke` — the
-        // browser interprets it as screen-pixel-stable. Multiplying
-        // by `unitsPerPixel` would shrink the strokes by ~100× and
-        // make them invisible. Tick length, dash pattern, font size,
-        // and the label gap stay in plan units (they're geometry,
-        // not stroke width).
-        const tickHalf = 0.09 // FLOORPLAN_MEASUREMENT_END_TICK / 2 = 0.18 / 2
-        const perpX = -dirY * tickHalf
-        const perpY = dirX * tickHalf
-
-        const fontSize = 0.15 // FLOORPLAN_MEASUREMENT_LABEL_FONT_SIZE
-        const labelGap = 0.5 // plan units — gap in the dimension line for the label
-        const gapHalf = Math.min(labelGap / 2, length / 2 - 0.04)
-
-        const midX = (dStart[0] + dEnd[0]) / 2
-        const midY = (dStart[1] + dEnd[1]) / 2
-        const gapStart: [number, number] = [midX - dirX * gapHalf, midY - dirY * gapHalf]
-        const gapEnd: [number, number] = [midX + dirX * gapHalf, midY + dirY * gapHalf]
-
-        // Keep the label parallel to the dimension line, but decide the
-        // 180° flip from the on-SCREEN angle, not the local one. The parent
-        // `<g>` is rotated by `sceneRotationDeg` (default 90° in the floor
-        // plan), so a label kept upright in local coords still renders
-        // upside down for half of the wall orientations. Same fix as the
-        // `dimension-label` case above.
-        let labelDeg = (Math.atan2(dy, dx) * 180) / Math.PI
-        let screenDeg = labelDeg + sceneRotationDeg
-        screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
-        if (screenDeg > 90) labelDeg -= 180
-        else if (screenDeg <= -90) labelDeg += 180
-
         return (
-          <g key={keyHint} pointerEvents="none">
-            {/* Extension lines (dashed). */}
-            <line
-              stroke={stroke}
-              strokeDasharray="0.08 0.12"
-              strokeLinecap="round"
-              strokeOpacity={0.95}
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={g.start[0]}
-              x2={eStartTip[0]}
-              y1={g.start[1]}
-              y2={eStartTip[1]}
-            />
-            <line
-              stroke={stroke}
-              strokeDasharray="0.08 0.12"
-              strokeLinecap="round"
-              strokeOpacity={0.95}
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={g.end[0]}
-              x2={eEndTip[0]}
-              y1={g.end[1]}
-              y2={eEndTip[1]}
-            />
-            {/* Dimension line: two halves with the label in between. */}
-            <line
-              stroke={stroke}
-              strokeLinecap="round"
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={dStart[0]}
-              x2={gapStart[0]}
-              y1={dStart[1]}
-              y2={gapStart[1]}
-            />
-            <line
-              stroke={stroke}
-              strokeLinecap="round"
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={gapEnd[0]}
-              x2={dEnd[0]}
-              y1={gapEnd[1]}
-              y2={dEnd[1]}
-            />
-            {/* End ticks. */}
-            <line
-              stroke={stroke}
-              strokeLinecap="round"
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={dStart[0] - perpX}
-              x2={dStart[0] + perpX}
-              y1={dStart[1] - perpY}
-              y2={dStart[1] + perpY}
-            />
-            <line
-              stroke={stroke}
-              strokeLinecap="round"
-              strokeWidth={1.35}
-              vectorEffect="non-scaling-stroke"
-              x1={dEnd[0] - perpX}
-              x2={dEnd[0] + perpX}
-              y1={dEnd[1] - perpY}
-              y2={dEnd[1] + perpY}
-            />
-            {/* Rotated label centered in the gap. */}
-            <text
-              dominantBaseline="central"
-              fill={stroke}
-              fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-              fontSize={fontSize}
-              fontWeight={600}
-              textAnchor="middle"
-              transform={`rotate(${labelDeg} ${midX} ${midY})`}
-              x={midX}
-              y={midY}
-            >
-              {g.text}
-            </text>
-          </g>
+          <FloorplanDimensionRenderer
+            geometry={g}
+            key={keyHint}
+            sceneRotationDeg={sceneRotationDeg}
+            stroke={g.stroke ?? palette.measurementStroke}
+          />
         )
       }
       case 'text': {

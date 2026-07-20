@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type FloorplanGeometry,
+  type FloorplanPalette,
   type LiveNodeOverrides,
   nodeRegistry,
   resolveBuildingForLevel,
@@ -47,14 +48,32 @@ const PADDING_M = 1
 const PAGE_MARGIN_PT = 36
 const TITLE_BAND_PT = 28
 
-// Neutral view state — no selection / hover / palette, so builders emit their
-// default appearance (the core palette only carries selection/handle colors).
+const NEUTRAL_PALETTE: FloorplanPalette = {
+  selectedStroke: '#334155',
+  selectedFill: '#ffffff',
+  selectedHatch: '#334155',
+  wallHoverStroke: '#334155',
+  endpointHandleFill: '#ffffff',
+  endpointHandleStroke: '#334155',
+  endpointHandleHoverStroke: '#334155',
+  endpointHandleActiveFill: '#334155',
+  endpointHandleActiveStroke: '#334155',
+  curveHandleFill: '#ffffff',
+  curveHandleStroke: '#334155',
+  curveHandleHoverStroke: '#334155',
+  measurementStroke: '#334155',
+  measurementLabelBackground: '#ffffff',
+  measurementLabelText: '#111827',
+}
+
+// Neutral view state — no selection / hover. A neutral palette keeps the
+// full view state (including unit preference) available to node builders.
 const NEUTRAL_VIEW_STATE = {
   selected: false,
   highlighted: false,
   hovered: false,
   moving: false,
-  palette: undefined,
+  palette: NEUTRAL_PALETTE,
 } as const
 
 type ExportLevel = { id: AnyNodeId; label: string }
@@ -179,7 +198,11 @@ async function mountFloorplanSvg(
             'g',
             { transform: `rotate(${rotationDeg})` },
             geometries.map(({ id, base }) =>
-              createElement(FloorplanGeometryRenderer, { key: id, geometry: base }),
+              createElement(FloorplanGeometryRenderer, {
+                key: id,
+                geometry: base,
+                sceneRotationDeg: rotationDeg,
+              }),
             ),
           ),
         ),
@@ -302,10 +325,32 @@ function collectFloorplanGeometry(
     const ctx = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
     const geometry = builder(node, ctx)
     if (!geometry) continue
-    const { base } = splitFloorplanOverlay(geometry)
-    if (base) out.push({ id, base })
+    const { base, overlay } = splitFloorplanOverlay(geometry)
+    const exportOverlay = overlay ? filterExportOverlay(overlay) : null
+    const exportGeometry = combineGeometry(base, exportOverlay)
+    if (exportGeometry) out.push({ id, base: exportGeometry })
   }
   return out
+}
+
+function filterExportOverlay(geometry: FloorplanGeometry): FloorplanGeometry | null {
+  if (geometry.kind === 'dimension' || geometry.kind === 'text') return geometry
+  if (geometry.kind !== 'group') return null
+
+  const children = geometry.children
+    .map(filterExportOverlay)
+    .filter((child): child is FloorplanGeometry => child !== null)
+  if (children.length === 0) return null
+  return { ...geometry, children }
+}
+
+function combineGeometry(
+  base: FloorplanGeometry | null,
+  overlay: FloorplanGeometry | null,
+): FloorplanGeometry | null {
+  if (!base) return overlay
+  if (!overlay) return base
+  return { kind: 'group', children: [base, overlay] }
 }
 
 /**
