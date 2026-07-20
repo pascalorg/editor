@@ -20,7 +20,6 @@ describe('GPU renderer capability and initialization', () => {
     const createRenderer = mock(() => ({ init: async () => undefined }))
 
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({}),
       createRenderer,
       gpu: {
         requestAdapter: async () => ({
@@ -37,9 +36,9 @@ describe('GPU renderer capability and initialization', () => {
     const createRenderer = mock(() => ({ init: async () => undefined }))
 
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({}),
       createRenderer,
       gpu: null,
+      probeCanvas: canvasWithContexts({}),
     })
 
     expect(result.status).toBe('unsupported')
@@ -52,7 +51,6 @@ describe('GPU renderer capability and initialization', () => {
     const createRenderer = mock(() => ({ init }))
 
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({ webgl2: webglContext }),
       createRenderer,
       gpu: {
         requestAdapter: async () => ({
@@ -61,22 +59,25 @@ describe('GPU renderer capability and initialization', () => {
           },
         }),
       },
+      probeCanvas: canvasWithContexts({ webgl2: webglContext }),
     })
 
     expect(result.status).toBe('ready')
-    expect(createRenderer).toHaveBeenCalledWith({ context: webglContext, forceWebGL: true })
+    expect(createRenderer).toHaveBeenCalledWith({ forceWebGL: true })
     expect(init).toHaveBeenCalledTimes(1)
   })
 
   test('falls back to WebGL when WebGPU renderer initialization fails', async () => {
     const device = {}
     const webglContext = {}
+    const displayGetContext = mock((_contextId: 'webgl2', attributes?: { antialias?: boolean }) =>
+      attributes?.antialias ? webglContext : null,
+    )
     const webgpuDispose = mock(() => undefined)
     const webglInit = mock(async () => undefined)
     const parameters: RendererBackendParameters[] = []
 
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({ webgl2: webglContext }),
       createRenderer: (backendParameters) => {
         parameters.push(backendParameters)
         if (backendParameters.device) {
@@ -87,7 +88,14 @@ describe('GPU renderer capability and initialization', () => {
             },
           }
         }
-        return { init: webglInit }
+        return {
+          init: async () => {
+            if (!displayGetContext('webgl2', { antialias: true })) {
+              throw new Error('WebGL context unavailable')
+            }
+            await webglInit()
+          },
+        }
       },
       gpu: {
         requestAdapter: async () => ({
@@ -98,18 +106,103 @@ describe('GPU renderer capability and initialization', () => {
 
     expect(result.status).toBe('ready')
     if (result.status === 'ready') expect(result.backend).toBe('webgl')
-    expect(parameters).toEqual([{ device }, { context: webglContext, forceWebGL: true }])
+    expect(parameters).toEqual([{ device }, { forceWebGL: true }])
+    expect(displayGetContext).toHaveBeenCalledWith('webgl2', { antialias: true })
     expect(webgpuDispose).toHaveBeenCalledTimes(1)
     expect(webglInit).toHaveBeenCalledTimes(1)
   })
 
+  test('isolates WebGL capability probing from the display canvas', async () => {
+    const probeContext = {}
+    const displayContext = {}
+    const probeGetContext = mock(() => probeContext)
+    const displayGetContext = mock((_contextId: 'webgl2', attributes?: { antialias?: boolean }) =>
+      attributes?.antialias ? displayContext : null,
+    )
+
+    const result = await initializeGpuRenderer({
+      createRenderer: (backendParameters) => ({
+        init: async () => {
+          expect(backendParameters).toEqual({ forceWebGL: true })
+          expect(displayGetContext('webgl2', { antialias: true })).toBe(displayContext)
+        },
+      }),
+      gpu: null,
+      probeCanvas: { getContext: probeGetContext },
+    })
+
+    expect(result.status).toBe('ready')
+    expect(probeGetContext).toHaveBeenCalledTimes(1)
+    expect(probeGetContext).toHaveBeenCalledWith('webgl2')
+    expect(displayGetContext).toHaveBeenCalledTimes(1)
+    expect(displayGetContext).toHaveBeenCalledWith('webgl2', { antialias: true })
+  })
+
+  test('times out a hung WebGPU adapter request and falls back to WebGL', async () => {
+    const createRenderer = mock(() => ({ init: async () => undefined }))
+
+    const result = await initializeGpuRenderer({
+      createRenderer,
+      gpu: {
+        requestAdapter: () => new Promise<never>(() => undefined),
+      },
+      probeCanvas: canvasWithContexts({ webgl2: {} }),
+      webgpuTimeoutMs: 10,
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+    expect(createRenderer).toHaveBeenCalledWith({ forceWebGL: true })
+  })
+
+  test('reports unsupported after a hung WebGPU adapter times out without WebGL', async () => {
+    const result = await initializeGpuRenderer({
+      createRenderer: () => ({ init: async () => undefined }),
+      gpu: {
+        requestAdapter: () => new Promise<never>(() => undefined),
+      },
+      probeCanvas: canvasWithContexts({}),
+      webgpuTimeoutMs: 10,
+    })
+
+    expect(result.status).toBe('unsupported')
+    expect(JSON.stringify(UnsupportedGpuViewerFallback())).toContain('3D viewer unavailable')
+  })
+
+  test('times out hung WebGPU renderer initialization and falls back to WebGL', async () => {
+    const device = {}
+    const webgpuDispose = mock(() => undefined)
+    const parameters: RendererBackendParameters[] = []
+
+    const result = await initializeGpuRenderer({
+      createRenderer: (backendParameters) => {
+        parameters.push(backendParameters)
+        return backendParameters.device
+          ? {
+              dispose: webgpuDispose,
+              init: () => new Promise<never>(() => undefined),
+            }
+          : { init: async () => undefined }
+      },
+      gpu: {
+        requestAdapter: async () => ({ requestDevice: async () => device }),
+      },
+      webgpuTimeoutMs: 10,
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+    expect(parameters).toEqual([{ device }, { forceWebGL: true }])
+    expect(webgpuDispose).toHaveBeenCalledTimes(1)
+  })
+
   test('reports unsupported when WebGPU device and WebGL are unavailable', async () => {
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({}),
       createRenderer: () => ({ init: async () => undefined }),
       gpu: {
         requestAdapter: async () => null,
       },
+      probeCanvas: canvasWithContexts({}),
     })
 
     expect(result.status).toBe('unsupported')
@@ -119,7 +212,6 @@ describe('GPU renderer capability and initialization', () => {
     const dispose = mock(() => undefined)
 
     const result = await initializeGpuRenderer({
-      canvas: canvasWithContexts({ webgl2: {} }),
       createRenderer: () => ({
         dispose,
         init: async () => {
@@ -127,6 +219,7 @@ describe('GPU renderer capability and initialization', () => {
         },
       }),
       gpu: null,
+      probeCanvas: canvasWithContexts({ webgl2: {} }),
     })
 
     expect(result.status).toBe('unsupported')

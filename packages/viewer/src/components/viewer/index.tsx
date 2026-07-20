@@ -506,7 +506,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           if (cached) return cached
           const promise = (async () => {
             const result = await initializeGpuRenderer({
-              canvas,
               createRenderer: (backendParameters) => {
                 const renderer = new THREE.WebGPURenderer({
                   ...(props as any),

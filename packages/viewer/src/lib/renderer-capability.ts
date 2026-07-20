@@ -13,11 +13,10 @@ type RendererGpu = {
 
 export type RendererCapability =
   | { backend: 'webgpu'; device: unknown; status: 'supported' }
-  | { backend: 'webgl'; context: unknown; status: 'supported' }
+  | { backend: 'webgl'; status: 'supported' }
   | { error?: unknown; status: 'unsupported' }
 
 export type RendererBackendParameters = {
-  context?: unknown
   device?: unknown
   forceWebGL?: boolean
 }
@@ -31,6 +30,8 @@ export type RendererInitializationResult<Renderer> =
   | { backend: 'webgpu' | 'webgl'; renderer: Renderer; status: 'ready' }
   | { error?: unknown; status: 'unsupported' }
 
+const WEBGPU_INITIALIZATION_TIMEOUT_MS = 4000
+
 function browserGpu(): RendererGpu | null {
   if (typeof navigator === 'undefined') return null
   return (navigator as Navigator & { gpu?: RendererGpu }).gpu ?? null
@@ -41,25 +42,44 @@ function browserCanvas(): RendererCapabilityCanvas | null {
   return document.createElement('canvas')
 }
 
+function withTimeout<Result>(promise: Promise<Result>, timeoutMs: number, operation: string) {
+  let timeout: ReturnType<typeof setTimeout>
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+  })
+
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeout))
+}
+
+async function requestWebGpuDevice(gpu: RendererGpu) {
+  const adapter = await gpu.requestAdapter({ featureLevel: 'compatibility' })
+  if (!adapter) return null
+
+  const requiredFeatures = adapter.features ? Array.from(adapter.features) : undefined
+  return adapter.requestDevice(requiredFeatures?.length ? { requiredFeatures } : undefined)
+}
+
 export async function detectRendererCapability({
   canvas = browserCanvas(),
   gpu = browserGpu(),
+  webgpuTimeoutMs = WEBGPU_INITIALIZATION_TIMEOUT_MS,
 }: {
   canvas?: RendererCapabilityCanvas | null
   gpu?: RendererGpu | null
+  webgpuTimeoutMs?: number
 } = {}): Promise<RendererCapability> {
   let capabilityError: unknown
 
   if (gpu) {
     try {
-      const adapter = await gpu.requestAdapter({ featureLevel: 'compatibility' })
-      if (adapter) {
-        const requiredFeatures = adapter.features ? Array.from(adapter.features) : undefined
-        const device = await adapter.requestDevice(
-          requiredFeatures?.length ? { requiredFeatures } : undefined,
-        )
-        if (device) return { backend: 'webgpu', device, status: 'supported' }
-      }
+      const device = await withTimeout(
+        requestWebGpuDevice(gpu),
+        webgpuTimeoutMs,
+        'WebGPU adapter/device request',
+      )
+      if (device) return { backend: 'webgpu', device, status: 'supported' }
     } catch (error) {
       capabilityError = error
     }
@@ -68,7 +88,7 @@ export async function detectRendererCapability({
   if (canvas) {
     try {
       const context = canvas.getContext('webgl2')
-      if (context) return { backend: 'webgl', context, status: 'supported' }
+      if (context) return { backend: 'webgl', status: 'supported' }
     } catch (error) {
       capabilityError ??= error
     }
@@ -78,26 +98,32 @@ export async function detectRendererCapability({
 }
 
 export async function initializeGpuRenderer<Renderer extends InitializableRenderer>({
-  canvas,
   createRenderer,
   gpu,
+  probeCanvas = browserCanvas(),
+  webgpuTimeoutMs = WEBGPU_INITIALIZATION_TIMEOUT_MS,
 }: {
-  canvas?: RendererCapabilityCanvas | null
   createRenderer: (parameters: RendererBackendParameters) => Renderer
   gpu?: RendererGpu | null
+  probeCanvas?: RendererCapabilityCanvas | null
+  webgpuTimeoutMs?: number
 }): Promise<RendererInitializationResult<Renderer>> {
-  const resolvedCanvas = canvas === undefined ? browserCanvas() : canvas
-  const capability = await detectRendererCapability({ canvas: resolvedCanvas, gpu })
+  const capability = await detectRendererCapability({
+    canvas: probeCanvas,
+    gpu,
+    webgpuTimeoutMs,
+  })
   if (capability.status === 'unsupported') return capability
 
   let renderer: Renderer | undefined
   try {
     renderer = createRenderer(
-      capability.backend === 'webgpu'
-        ? { device: capability.device }
-        : { context: capability.context, forceWebGL: true },
+      capability.backend === 'webgpu' ? { device: capability.device } : { forceWebGL: true },
     )
-    await renderer.init()
+    const initPromise = renderer.init()
+    await (capability.backend === 'webgpu'
+      ? withTimeout(initPromise, webgpuTimeoutMs, 'WebGPU renderer initialization')
+      : initPromise)
     return { backend: capability.backend, renderer, status: 'ready' }
   } catch (error) {
     try {
@@ -105,17 +131,9 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
     } catch {}
     if (capability.backend !== 'webgpu') return { error, status: 'unsupported' }
 
-    let context: unknown
-    try {
-      context = resolvedCanvas?.getContext('webgl2')
-    } catch (fallbackError) {
-      return { error: fallbackError, status: 'unsupported' }
-    }
-    if (!context) return { error, status: 'unsupported' }
-
     renderer = undefined
     try {
-      renderer = createRenderer({ context, forceWebGL: true })
+      renderer = createRenderer({ forceWebGL: true })
       await renderer.init()
       return { backend: 'webgl', renderer, status: 'ready' }
     } catch (fallbackError) {
