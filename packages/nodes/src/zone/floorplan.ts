@@ -6,6 +6,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { formatConstructionLength } from '../shared/construction-length'
+import { buildRoomClearDimensions } from './room-clear-dimensions'
 
 /**
  * Stage C floor-plan builder for zone. Zones are colored polygons —
@@ -97,6 +98,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const name = node.name?.trim()
   if (isRoom) {
     children.push(...buildRoomLabels(node, cx, cy, view?.unit ?? 'metric', stroke))
+    children.push(...buildRoomClearDimensions(node, ctx))
   } else if (name) {
     children.push({
       kind: 'text',

@@ -338,12 +338,15 @@ Status: centered plan labels are implemented for room name, number, finishes, ce
 occupancy/use, with independent live/PDF visibility. Generated room schedules now include area,
 finishes, ceiling height, occupancy/use, resolved enclosure state, unit-aware values, and document
 warnings for missing/duplicate room numbers or unproven enclosure claims. Reliable clear dimensions
-remain.
+now render between modeled inside wall faces for proven straight rectangular enclosures, including
+rotated rooms. Open, irregular, incomplete, and finish-face cases remain suppressed rather than
+presenting an unproven datum; finish-face dimensions remain dependent on Phase 5 wall assemblies.
 
 - Center room name and number.
 - Place finish information below the room name.
 - [x] Generate room schedules.
-- Generate room-to-room or inside-face clear dimensions only when enclosure and finish-face evidence are reliable.
+- [x] Generate inside-face clear dimensions only when enclosure evidence is reliable. Finish-face
+  and room-to-room dimensions remain dependent on wall-assembly and inter-room datum evidence.
 
 ### 6.3 Add stair annotations
 
