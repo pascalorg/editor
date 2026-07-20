@@ -17,15 +17,49 @@ type SlabLevelContext = {
 }
 
 const GROUNDED_SLAB_EPSILON = 1e-3
+/** Deck thickness an unsticking slab pops to — the schema default. */
+const UNSTUCK_DECK_THICKNESS = 0.05
+/**
+ * Grounded-stretch ceiling for the 3D elevation arrow (m) — above any
+ * plausible step/platform height. While grounded, dragging the top up to
+ * here stretches the body; dragging past it unsticks the slab into a
+ * thin floating deck and the drag continues as pure placement.
+ */
+export const SLAB_UNSTICK_THRESHOLD = 0.4
 
-export function applySlabTopChange(slab: SlabNode, newTop: number): Partial<SlabNode> {
+export type SlabTopChangeMode = 'drag' | 'panel'
+
+/**
+ * The one owner of the slab vertical-editing rules. Both edit surfaces
+ * route through it: the viewport arrow as `mode: 'drag'`, the panel
+ * elevation input as `mode: 'panel'`.
+ *
+ * Hysteresis-free state machine (pure in current state + newTop):
+ *  - recessed → move the pool floor; rising to ≥ 0 un-recesses.
+ *  - grounded, newTop ≤ 0 → pool gesture (both modes).
+ *  - grounded drag, newTop ≤ {@link SLAB_UNSTICK_THRESHOLD} → stretch
+ *    (elevation and thickness move together, underside stays at 0).
+ *  - grounded drag past the threshold → unstick: pop to the default deck
+ *    thickness and continue as placement.
+ *  - otherwise (floating, or any panel edit) → placement: move the body
+ *    preserving thickness, clamping the underside to the level plane —
+ *    landing re-grounds the slab, so the way back up stretches again
+ *    below the threshold.
+ */
+export function applySlabTopChange(
+  slab: SlabNode,
+  newTop: number,
+  options: { mode: SlabTopChangeMode },
+): Partial<SlabNode> {
   if (slab.recessed) return { elevation: newTop, recessed: newTop < 0 }
 
-  const underside = slab.elevation - slab.thickness
-  if (Math.abs(underside) < GROUNDED_SLAB_EPSILON) {
-    return newTop > 0
+  const grounded = Math.abs(slab.elevation - slab.thickness) < GROUNDED_SLAB_EPSILON
+  if (grounded && newTop <= 0) return { elevation: newTop, recessed: true }
+
+  if (grounded && options.mode === 'drag') {
+    return newTop <= SLAB_UNSTICK_THRESHOLD
       ? { elevation: newTop, thickness: newTop, recessed: false }
-      : { elevation: newTop, recessed: true }
+      : { elevation: newTop, thickness: UNSTUCK_DECK_THICKNESS, recessed: false }
   }
 
   return { elevation: Math.max(newTop, slab.thickness), recessed: false }

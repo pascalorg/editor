@@ -69,5 +69,13 @@ describe('slabDefinition handles', () => {
       thickness: 0.1,
       recessed: false,
     })
+    // The arrow is the drag surface: past SLAB_UNSTICK_THRESHOLD a
+    // grounded slab pops to the default deck thickness instead of
+    // stretching further.
+    expect(heightHandle.apply(slab, 0.6, {} as never)).toEqual({
+      elevation: 0.6,
+      thickness: 0.05,
+      recessed: false,
+    })
   })
 })

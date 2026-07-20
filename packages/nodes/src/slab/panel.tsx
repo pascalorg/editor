@@ -58,7 +58,7 @@ export function SlabPanel() {
       const current = nodeRef.current
       if (!current) return
       const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
-      handleUpdate(applySlabTopChange(current, elevation))
+      handleUpdate(applySlabTopChange(current, elevation, { mode: 'panel' }))
     },
     [handleUpdate],
   )

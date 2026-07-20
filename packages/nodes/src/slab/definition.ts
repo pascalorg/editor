@@ -93,11 +93,13 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
 }
 
 // Slab elevation arrow — vertical chevron on solid slab surface near the
-// polygon center. The shared top-change policy stretches grounded slabs,
-// moves floating slabs, and preserves the drag-through-zero pool gesture.
-// Same registry-handle pipeline as the column height arrow, so live override
-// + commit-on-release come for free. `max` clamps the drag under the storey
-// plane while plane-bound walls elect this slab as their base.
+// polygon center. The shared top-change policy stretches grounded slabs up
+// to SLAB_UNSTICK_THRESHOLD (past it the slab pops to a thin floating
+// deck), moves floating slabs, and preserves the drag-through-zero pool
+// gesture. Same registry-handle pipeline as the column height arrow, so
+// live override + commit-on-release come for free. `max` clamps the drag
+// under the storey plane while plane-bound walls elect this slab as their
+// base.
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
@@ -106,7 +108,7 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
     min: MIN_SLAB_ELEVATION,
     max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n),
     currentValue: (n) => n.elevation ?? 0.05,
-    apply: (n, newValue) => applySlabTopChange(n, newValue),
+    apply: (n, newValue) => applySlabTopChange(n, newValue, { mode: 'drag' }),
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)
