@@ -1,1 +1,7 @@
-export { ConstructionNoteNode, ConstructionNoteTerminator } from '@pascal-app/core'
+export {
+  ConstructionNoteContractScope,
+  ConstructionNoteNode,
+  ConstructionNoteSpecialty,
+  ConstructionNoteSpecialtyKind,
+  ConstructionNoteTerminator,
+} from '@pascal-app/core'

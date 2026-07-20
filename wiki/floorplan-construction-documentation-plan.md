@@ -366,14 +366,20 @@ live/PDF visibility.
 
 ### 6.4 Add typed specialty notes
 
-- Attic and crawl-space access sizes.
-- Firewalls and rated assemblies.
-- Tub, shower, and spa size/type/material.
-- Fireplace and solid-fuel appliance requirements.
-- Closet type, shelf count, and shelf/pole notation.
-- Equipment and appliance identifiers.
-- Floor-above, balcony-above, and projection outlines.
-- Contract-scope metadata and `NIC` presentation.
+Status: implemented as structured construction-note specializations with schema-validated fields,
+standardized derived note text, associative leaders, editor controls, and live/PDF output. Overhead
+notes generate dimensioned dashed rectangular outlines with configurable rotation. Every specialty
+note also carries explicit in-contract, owner-provided, existing, or `NIC` responsibility metadata
+and an optional scope reference.
+
+- [x] Attic and crawl-space access sizes.
+- [x] Firewalls and rated assemblies.
+- [x] Tub, shower, and spa size/type/material.
+- [x] Fireplace and solid-fuel appliance requirements.
+- [x] Closet type, shelf count, and shelf/pole notation.
+- [x] Equipment and appliance identifiers.
+- [x] Floor-above, balcony-above, and projection outlines.
+- [x] Contract-scope metadata and `NIC` presentation.
 
 ## Phase 7: curved, circular, and coordinated drawings
 

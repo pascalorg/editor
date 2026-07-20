@@ -26,7 +26,11 @@ const palette = {
   measurementLabelText: '#0f172a',
 }
 
-function context(nodes: Record<string, AnyNode> = {}, selected = false): GeometryContext {
+function context(
+  nodes: Record<string, AnyNode> = {},
+  selected = false,
+  unit: 'metric' | 'imperial' = 'imperial',
+): GeometryContext {
   return {
     resolve: (id) => nodes[id],
     children: [],
@@ -34,7 +38,7 @@ function context(nodes: Record<string, AnyNode> = {}, selected = false): Geometr
     parent: null,
     viewState: {
       selected,
-      unit: 'imperial',
+      unit,
       highlighted: false,
       hovered: false,
       moving: false,
@@ -160,5 +164,90 @@ describe('buildConstructionNoteFloorplan', () => {
       expect.objectContaining({ affordance: 'move-construction-note-curve' }),
     )
     expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(2)
+  })
+
+  test('derives standardized text for every specialty-note category', () => {
+    const cases = [
+      {
+        specialty: { kind: 'access', spaceType: 'attic', openingWidth: 0.6, openingHeight: 0.75 },
+        expected: ['ATTIC SCUTTLE ACCESS', 'OPENING 0.6m x 0.75m'],
+      },
+      {
+        specialty: { kind: 'rated-assembly', ratingMinutes: 90, assemblyReference: 'UL U305' },
+        expected: ['FIREWALL · 90 MIN', 'UL U305'],
+      },
+      {
+        specialty: { kind: 'plumbing-fixture', fixtureType: 'tub', width: 1.5, depth: 0.75 },
+        expected: ['TUB · ACRYLIC', '1.5m x 0.75m'],
+      },
+      {
+        specialty: { kind: 'solid-fuel', applianceType: 'wood-stove', minimumClearance: 0.45 },
+        expected: ['WOOD STOVE', 'MIN CLR 0.45m', 'INSTALL PER LISTING'],
+      },
+      {
+        specialty: { kind: 'closet', closetType: 'walk-in', shelfCount: 3, hasPole: true },
+        expected: ['WALK IN CLOSET', '3 SHELVES @ 0.35m + POLE'],
+      },
+      {
+        specialty: { kind: 'equipment', identifier: 'WH-1', equipmentType: 'water heater' },
+        expected: ['WH-1 · WATER HEATER'],
+      },
+      {
+        specialty: { kind: 'overhead', outlineType: 'balcony', width: 4, depth: 1.5 },
+        expected: ['BALCONY ABOVE', '4m x 1.5m'],
+      },
+    ] as const
+
+    for (const [index, fixture] of cases.entries()) {
+      const note = ConstructionNoteNode.parse({
+        id: `construction-note_specialty-${index}`,
+        type: 'construction-note',
+        specialty: fixture.specialty,
+      })
+      const geometry = buildConstructionNoteFloorplan(note, context({}, false, 'metric'))
+      const lines = geometry
+        ? flatten(geometry)
+            .filter((entry) => entry.kind === 'text')
+            .map((entry) => entry.text)
+        : []
+      expect(lines).toEqual(fixture.expected)
+    }
+  })
+
+  test('renders contract scope and a dashed rotated overhead outline', () => {
+    const note = ConstructionNoteNode.parse({
+      id: 'construction-note_balcony-above',
+      type: 'construction-note',
+      anchor: [2, 3],
+      specialty: {
+        kind: 'overhead',
+        outlineType: 'balcony',
+        width: 4,
+        depth: 2,
+        rotation: Math.PI / 2,
+      },
+      contractScope: 'nic',
+      scopeReference: 'BY OWNER',
+    })
+    const geometry = buildConstructionNoteFloorplan(note, context({}, false, 'metric'))
+    const entries = geometry ? flatten(geometry) : []
+    const outline = entries.find(
+      (entry) => entry.kind === 'polygon' && entry.strokeDasharray === '0.18 0.1',
+    )
+
+    expect(entries.filter((entry) => entry.kind === 'text').map((entry) => entry.text)).toEqual([
+      'NIC · BALCONY ABOVE',
+      '4m x 2m',
+      'SCOPE · BY OWNER',
+    ])
+    expect(outline).toMatchObject({
+      kind: 'polygon',
+      fill: 'none',
+      annotationObstacle: 'outline',
+    })
+    if (outline?.kind === 'polygon') {
+      expect(outline.points[0]?.[0]).toBeCloseTo(3)
+      expect(outline.points[0]?.[1]).toBeCloseTo(1)
+    }
   })
 })

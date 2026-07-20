@@ -19,6 +19,9 @@ describe('ConstructionNoteNode', () => {
       shoulderLength: 0.55,
       targetId: null,
       targetOffset: [0, 0],
+      specialty: null,
+      contractScope: 'contract',
+      scopeReference: '',
     })
   })
 
@@ -58,5 +61,43 @@ describe('ConstructionNoteNode', () => {
     })
 
     expect(LevelNode.parse({ children: [note.id] }).children).toEqual([note.id])
+  })
+
+  test('validates typed specialty data and contract scope', () => {
+    const access = ConstructionNoteNode.parse({
+      id: 'construction-note_access',
+      type: 'construction-note',
+      specialty: { kind: 'access', spaceType: 'crawl-space' },
+      contractScope: 'nic',
+      scopeReference: 'BY OWNER',
+    })
+    const overhead = ConstructionNoteNode.parse({
+      id: 'construction-note_overhead',
+      type: 'construction-note',
+      specialty: { kind: 'overhead', outlineType: 'balcony', width: 4, depth: 1.8 },
+    })
+
+    expect(access.specialty).toEqual({
+      kind: 'access',
+      spaceType: 'crawl-space',
+      accessType: 'scuttle',
+      openingWidth: 0.55,
+      openingHeight: 0.75,
+    })
+    expect(access).toMatchObject({ contractScope: 'nic', scopeReference: 'BY OWNER' })
+    expect(overhead.specialty).toMatchObject({
+      kind: 'overhead',
+      outlineType: 'balcony',
+      width: 4,
+      depth: 1.8,
+      rotation: 0,
+    })
+    expect(
+      ConstructionNoteNode.safeParse({
+        id: 'construction-note_invalid-specialty',
+        type: 'construction-note',
+        specialty: { kind: 'rated-assembly', ratingMinutes: 5 },
+      }).success,
+    ).toBe(false)
   })
 })

@@ -11,7 +11,7 @@ import { ConstructionNoteNode } from './schema'
 export const constructionNoteDefinition: NodeDefinition<typeof ConstructionNoteNode> = {
   kind: 'construction-note',
   bake: 'strip',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: ConstructionNoteNode,
   category: 'analysis',
   snapProfile: 'structural',
@@ -30,6 +30,9 @@ export const constructionNoteDefinition: NodeDefinition<typeof ConstructionNoteN
     shoulderLength: 0.55,
     targetId: null,
     targetOffset: [0, 0],
+    specialty: null,
+    contractScope: 'contract',
+    scopeReference: '',
   }),
 
   capabilities: {
@@ -65,6 +68,6 @@ export const constructionNoteDefinition: NodeDefinition<typeof ConstructionNoteN
 
   mcp: {
     description:
-      'A floor-plan construction note with a straight or curved leader, shoulder, terminator, multiline text, and optional target-node attachment.',
+      'A floor-plan construction note with an associative leader, typed specialty data, contract-scope metadata, and optional target-node attachment.',
   },
 }
