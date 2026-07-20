@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   DoorNode,
   emitter,
@@ -11,6 +12,7 @@ import {
   useScene,
   type WallEvent,
   type WallNode,
+  WallNode as WallNodeSchema,
 } from '@pascal-app/core'
 import {
   calculateCursorRotation,
@@ -23,6 +25,7 @@ import {
   useAlignmentGuides,
   useEditor,
   useFacingPose,
+  usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -106,6 +109,34 @@ const DoorTool: React.FC = () => {
   useEffect(() => {
     useScene.temporal.getState().pause()
 
+    const ownedPreviewIds = new Set<string>()
+    const fallbackPreview = DoorNode.parse({
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      side: 'front',
+    })
+    const fallbackWallId = WallNodeSchema.parse({
+      end: [1, 0],
+      start: [0, 0],
+      thickness: 0.1,
+    }).id
+    const publishPlacementPreview = (node: AnyNode, parentNode: AnyNode | null) => {
+      ownedPreviewIds.add(node.id)
+      usePlacementPreview.getState().set(node, parentNode)
+    }
+    const clearPlacementPreview = () => {
+      const current = usePlacementPreview.getState().node
+      if (current && ownedPreviewIds.has(current.id)) usePlacementPreview.getState().clear()
+    }
+    const publishDraftPreview = (parentNode: AnyNode) => {
+      const draft = draftRef.current
+      if (!draft) return
+      const live = useScene.getState().nodes[draft.id as AnyNodeId]
+      if (live?.type !== 'door') return
+      draftRef.current = live
+      publishPlacementPreview(live, parentNode)
+    }
+
     let hostKind: HostKind = null
     // timeStamp of the most recent wall/roof mesh event. A wall/roof hover and
     // the grid raycast from the SAME pointermove share the source DOM event's
@@ -136,10 +167,15 @@ const DoorTool: React.FC = () => {
     }
 
     const destroyDraft = () => {
-      if (!draftRef.current) return
-      const wallId = draftRef.current.parentId
-      useScene.getState().deleteNode(draftRef.current.id)
+      const draft = draftRef.current
+      if (!draft) {
+        clearPlacementPreview()
+        return
+      }
+      const wallId = draft.parentId
+      useScene.getState().deleteNode(draft.id)
       draftRef.current = null
+      clearPlacementPreview()
       if (wallId) markHostDirty(wallId)
     }
 
@@ -149,6 +185,7 @@ const DoorTool: React.FC = () => {
       clearOpeningGuides3D()
       setFallbackPose(null)
       useFacingPose.getState().clear()
+      clearPlacementPreview()
     }
 
     // Alignment candidates — anchors of every alignable object; refreshed
@@ -192,6 +229,23 @@ const DoorTool: React.FC = () => {
         rotationY: sideFlip ? Math.PI : 0,
         side: sideFlip ? 'back' : 'front',
       })
+      const halfWidth = fallbackPreview.width / 2 + 0.5
+      const wall = WallNodeSchema.parse({
+        end: [position[0] + halfWidth, position[2]],
+        id: fallbackWallId,
+        start: [position[0] - halfWidth, position[2]],
+        thickness: 0.1,
+      })
+      const ghost = DoorNode.parse({
+        ...fallbackPreview,
+        metadata: { isTransient: true },
+        parentId: wall.id,
+        position: [halfWidth, fallbackPreview.height / 2, 0],
+        rotation: [0, sideFlip ? Math.PI : 0, 0],
+        side: sideFlip ? 'back' : 'front',
+        wallId: wall.id,
+      })
+      publishPlacementPreview(ghost, wall)
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       // Off-host (invalid) floating ghost — no direction triangle.
@@ -290,6 +344,7 @@ const DoorTool: React.FC = () => {
           roofFace: undefined,
         })
       }
+      publishDraftPreview(wall)
 
       updateCursor(
         wallLocalToWorld(
@@ -331,6 +386,7 @@ const DoorTool: React.FC = () => {
     ) => {
       const draft = draftRef.current
       if (!draft) return
+      clearPlacementPreview()
       draftRef.current = null
       hostKind = null
 
@@ -530,6 +586,7 @@ const DoorTool: React.FC = () => {
         useScene.getState().createNode(node, segment.id as AnyNodeId)
         draftRef.current = node
       }
+      publishDraftPreview(segment)
       // Opening guides are wall-specific; clear them while over a roof face.
       clearOpeningGuides3D()
       updateRoofCursor(target, event.node as RoofNode)
@@ -545,6 +602,7 @@ const DoorTool: React.FC = () => {
       const { segment, face, position } = target
 
       const draft = draftRef.current
+      clearPlacementPreview()
       draftRef.current = null
       hostKind = null
 
@@ -654,6 +712,7 @@ const DoorTool: React.FC = () => {
     return () => {
       destroyDraft()
       hideCursor()
+      clearPlacementPreview()
       useAlignmentGuides.getState().clear()
       clearOpeningGuides3D()
       useScene.temporal.getState().resume()

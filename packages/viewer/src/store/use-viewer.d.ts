@@ -15,6 +15,8 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  externalSelectedIds: BaseNode['id'][]
+  setExternalSelectedIds: (ids: BaseNode['id'][]) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null

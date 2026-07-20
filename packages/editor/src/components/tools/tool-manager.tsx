@@ -1,4 +1,5 @@
 import {
+  type AnyNodeDefinition,
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
@@ -36,6 +37,29 @@ import { ZoneTool } from './zone/zone-tool'
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
+
+export function preloadRegistryToolModules(tool: string | null): Promise<void> {
+  if (!tool) return Promise.resolve()
+  const def = nodeRegistry.get(tool)
+  if (!def) return Promise.resolve()
+  const cached = registryToolPreloadCache.get(def)
+  if (cached) return cached
+
+  const loaders: Array<() => Promise<unknown>> = []
+  if (def.tool) loaders.push(def.tool)
+  if (def.preview) loaders.push(def.preview)
+  if (def.renderer?.kind === 'parametric') loaders.push(def.renderer.module)
+  if (def.system) loaders.push(def.system.module)
+  if (def.parametrics?.customPanel) loaders.push(def.parametrics.customPanel)
+  if (def.parametrics?.trailingSection) loaders.push(def.parametrics.trailingSection)
+  const moveTool = def.affordanceTools?.move
+  if (moveTool) loaders.push(moveTool)
+
+  const preload = Promise.allSettled(loaders.map((loader) => loader())).then(() => undefined)
+  registryToolPreloadCache.set(def, preload)
+  return preload
+}
 
 function getRegistryTool(tool: Tool | null): ComponentType | null {
   if (!tool) return null
@@ -44,10 +68,11 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
   const cached = lazyToolCache.get(def.tool)
   if (cached) return cached
   const Comp = lazy(async () => {
-    // A placed node is selected immediately. Resolve its custom inspector with
-    // the tool so that selection cannot introduce a second async boundary.
-    const [module] = await Promise.all([def.tool!(), def.parametrics?.customPanel?.()])
-    return module as { default: ComponentType }
+    // Placement can only begin once the node's preview, committed renderer,
+    // inspector, and move contribution are warm. This keeps the click itself
+    // synchronous even under Next.js dev-time on-demand compilation.
+    await preloadRegistryToolModules(tool)
+    return def.tool!() as Promise<{ default: ComponentType }>
   })
   lazyToolCache.set(def.tool, Comp)
   return Comp
