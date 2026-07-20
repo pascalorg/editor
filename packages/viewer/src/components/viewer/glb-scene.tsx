@@ -525,7 +525,7 @@ export function GlbScene({
       _camBox.setFromObject(object)
     } else {
       bookmarkNode = rootNode
-      _camBox.setFromObject(gltf.scene)
+      _camBox.setFromObject(rootNode ?? gltf.scene)
     }
 
     const bookmark = (bookmarkNode?.userData as PascalExtras | undefined)?.camera

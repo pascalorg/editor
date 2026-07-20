@@ -78,6 +78,22 @@ describe('prepareSceneForExport', () => {
     expect(meshes).toHaveLength(1)
   })
 
+  test('strips presentation-only geometry marked by its renderer', () => {
+    const root = new THREE.Group()
+    const siteGround = meshWithNodeMaterial(nodeMaterial())
+    const horizonDisc = meshWithNodeMaterial(nodeMaterial())
+    horizonDisc.userData.pascalExport = 'strip'
+    root.add(siteGround, horizonDisc)
+
+    const { scene } = prepareSceneForExport(root, {})
+
+    const meshes: THREE.Mesh[] = []
+    scene.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh)
+    })
+    expect(meshes).toHaveLength(1)
+  })
+
   test('neutralises an invisible hitbox root but keeps its visible children', () => {
     // Door/window roots are selection hitboxes: a box geometry with an invisible
     // material (object stays visible). Left intact it would plug the wall opening.
