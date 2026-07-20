@@ -10,7 +10,13 @@ import {
   type ZoneNode as ZoneNodeType,
 } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
-import { getStoredLevelHeight } from '../services/storey'
+import {
+  CEILING_CLAMP_MARGIN,
+  findLevelAboveId,
+  getCeilingClampBound,
+  getLevelElevations,
+  getStoredLevelHeight,
+} from '../services/storey'
 import {
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
@@ -104,6 +110,14 @@ export type AutoCeilingPlanningContext = {
   slabs?: SlabNodeType[]
   /** Stored storey height of the level being planned (floor-to-floor). */
   storeyHeight?: number
+  /**
+   * Stage 3-B clamp-bound resolver for a polygon on the planned level:
+   * `min(storey plane, lowest covering-slab underside from the level
+   * above) - CEILING_CLAMP_MARGIN` (see `getCeilingClampBound`). Absent
+   * (pure-planner callers without a nodes record), the bound degrades to
+   * the plane-only `storeyHeight - CEILING_CLAMP_MARGIN`.
+   */
+  ceilingClampBound?: (polygon: Array<[number, number]>) => number
 }
 
 function pointFromTuple(point: [number, number]): Point2D {
@@ -314,13 +328,27 @@ function wallBoundsRoom(wall: WallNode, roomPolygon: Point2D[]) {
 }
 
 /**
+ * The clamp bound for a ceiling polygon under this planning context —
+ * the context's cross-level resolver when provided, else the plane-only
+ * `storeyHeight - CEILING_CLAMP_MARGIN` degradation.
+ */
+function resolveCeilingClampBound(
+  polygon: Array<[number, number]>,
+  context: AutoCeilingPlanningContext,
+) {
+  if (context.ceilingClampBound) return context.ceilingClampBound(polygon)
+  return (context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT) - CEILING_CLAMP_MARGIN
+}
+
+/**
  * Auto-ceiling height for a detected room, post wall-top inversion: the
  * max over the room's bounding walls of {@link resolveWallTop} (storey
  * plane for plane-bound walls; elected base + height for explicit
  * walls, elected via {@link computeWallSlabSupport} against the level's
- * slabs), clamped to the storey plane so a ceiling can never poke into
- * the level above. Rooms with no resolvable bounding wall fall back to
- * the plane — the plane-bound default.
+ * slabs), clamped to the stage 3-B ceiling bound — min(storey plane,
+ * covering-slab underside from the level above) − margin — so a ceiling
+ * can never poke into the level above or a deck hanging from it. Rooms
+ * with no resolvable bounding wall fall back to the plane (same clamp).
  */
 function resolveAutoCeilingHeight(
   roomPolygon: Point2D[],
@@ -329,6 +357,7 @@ function resolveAutoCeilingHeight(
   const storeyHeight = context.storeyHeight ?? DEFAULT_LEVEL_HEIGHT
   const walls = context.walls ?? []
   const slabs = context.slabs ?? []
+  const bound = resolveCeilingClampBound(roomPolygon.map(pointToTuple), context)
 
   let maxTop = 0
   for (const wall of walls) {
@@ -348,8 +377,10 @@ function resolveAutoCeilingHeight(
     if (Number.isFinite(top)) maxTop = Math.max(maxTop, top)
   }
 
-  if (maxTop <= 0) return storeyHeight
-  return Math.min(maxTop, storeyHeight)
+  // `Math.min` (not just `bound`) so an Infinity bound from an
+  // unresolvable level degrades to the stage-1 plane clamp.
+  if (maxTop <= 0) return Math.min(storeyHeight, bound)
+  return Math.min(maxTop, bound)
 }
 
 function getWallDirection(wall: Pick<WallNode, 'start' | 'end'>) {
@@ -826,10 +857,17 @@ function zoneGeometrySignature(zone: ZoneNodeType) {
 // stored storey height ARE included — both are inputs to the auto-ceiling
 // height (elected bases / the storey plane), and neither is rewritten by
 // the sync, so regeneration triggers when they change without feedback.
+// Stage 3-B adds the LEVEL-ABOVE's covering-slab undersides (elevation −
+// thickness, recessed pools excluded): a deck created, lowered, or
+// thickened above must re-run the sync below so ceilings re-clamp under
+// it. Same polygon exclusion applies — the level-above's own auto sync
+// rewrites its slab footprints, and hashing them here would re-trigger
+// this level on every remodel above.
 function levelStructureSnapshots(nodes: Record<string, any>) {
   const wallsByLevel = new Map<string, WallNode[]>()
   const zonesByLevel = new Map<string, ZoneNodeType[]>()
   const slabElevationsByLevel = new Map<string, string[]>()
+  const coveringUndersidesByLevel = new Map<string, string[]>()
 
   for (const node of Object.values(nodes)) {
     if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
@@ -848,9 +886,17 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
         `${(node as any).id}:${(((node as any).elevation as number | undefined) ?? DEFAULT_AUTO_SLAB_ELEVATION).toFixed(4)}`,
       )
       slabElevationsByLevel.set(levelId, elevations)
+      if ((node as any).recessed !== true) {
+        const undersides = coveringUndersidesByLevel.get(levelId) ?? []
+        const elevation = ((node as any).elevation as number | undefined) ?? 0.05
+        const thickness = ((node as any).thickness as number | undefined) ?? 0.05
+        undersides.push(`${(node as any).id}:${(elevation - thickness).toFixed(4)}`)
+        coveringUndersidesByLevel.set(levelId, undersides)
+      }
     }
   }
 
+  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, any>)
   const snapshots = new Map<string, string>()
   const levelIds = new Set([...wallsByLevel.keys(), ...zonesByLevel.keys()])
   for (const levelId of levelIds) {
@@ -860,9 +906,13 @@ function levelStructureSnapshots(nodes: Record<string, any>) {
     const storeyKey =
       level?.type === 'level' && typeof level.height === 'number' ? level.height.toFixed(4) : ''
     const slabKey = (slabElevationsByLevel.get(levelId) ?? []).sort().join(';')
+    const aboveId = findLevelAboveId(levelId, levelElevations)
+    const aboveSlabKey = aboveId
+      ? (coveringUndersidesByLevel.get(aboveId) ?? []).sort().join(';')
+      : ''
     snapshots.set(
       levelId,
-      `${storeyKey}#${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}`,
+      `${storeyKey}#${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}`,
     )
   }
 
@@ -1261,6 +1311,20 @@ export function planAutoCeilingsForLevel(
     }
   }
 
+  // Stage 3-B reactive re-clamp (clamp-never-ask): a covering slab
+  // created, moved, or thickened on the level above can leave an EXISTING
+  // manual ceiling poking into its solid. Clamp manual ceilings down to
+  // the bound; never raise them — a user-lowered ceiling is intent, only
+  // an over-bound one is a conflict.
+  const manualClamps: AutoCeilingSyncPlan['update'] = manualCeilings.flatMap((ceiling) => {
+    const bound = resolveCeilingClampBound(ceiling.polygon, context)
+    if (!Number.isFinite(bound)) return []
+    const stored = ceiling.height ?? DEFAULT_AUTO_CEILING_HEIGHT
+    return stored > bound + CEILING_HEIGHT_EPSILON
+      ? [{ id: ceiling.id, data: { height: bound } }]
+      : []
+  })
+
   const ceilingsToUpdate = [
     ...existingAuto
       .filter((ceiling) => updatesById.has(ceiling.id))
@@ -1282,6 +1346,7 @@ export function planAutoCeilingsForLevel(
         return Object.keys(data).length === 0 ? [] : [{ id: ceiling.id, data }]
       }),
     ...ceilingDemotions,
+    ...manualClamps,
   ]
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
@@ -1420,7 +1485,12 @@ function runSpaceDetection(
       roomPolygons,
       ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
-      { walls, slabs: projectedSlabs, storeyHeight },
+      {
+        walls,
+        slabs: projectedSlabs,
+        storeyHeight,
+        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
+      },
     )
     const zonePlan = planAutoZonesForLevel(
       spaces,

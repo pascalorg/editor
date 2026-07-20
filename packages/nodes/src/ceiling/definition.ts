@@ -1,9 +1,8 @@
 import {
   type AnyNodeId,
   type CeilingNode as CeilingNodeType,
-  getStoredLevelHeight,
+  getCeilingClampBound,
   type HandleDescriptor,
-  type LevelNode,
   type NodeDefinition,
   type SceneApi,
 } from '@pascal-app/core'
@@ -25,13 +24,14 @@ const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_CEILING_HEIGHT = 0.5
 
 // Ceilings no longer drive the storey height; the stored level height
-// does. A ceiling raised past the storey plane would poke into the level
-// above, so height writes clamp at the plane (the renderer's -0.01
-// z-fight offset keeps the effective top just under it).
-function ceilingStoreyPlane(n: CeilingNodeType, sceneApi: SceneApi): number {
+// does. Height writes clamp under min(storey plane, lowest underside of
+// any covering slab from the level above) − CEILING_CLAMP_MARGIN, so a
+// ceiling can poke into neither the level above nor a deck hanging from
+// it (clamp, never ask).
+function ceilingHeightBound(n: CeilingNodeType, sceneApi: SceneApi): number {
   const parent = n.parentId ? sceneApi.get(n.parentId as AnyNodeId) : undefined
   return parent?.type === 'level'
-    ? getStoredLevelHeight(parent as LevelNode)
+    ? getCeilingClampBound(parent.id, sceneApi.nodes(), n.polygon ?? [])
     : Number.POSITIVE_INFINITY
 }
 
@@ -63,7 +63,7 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     axis: 'y',
     anchor: 'min',
     min: MIN_CEILING_HEIGHT,
-    max: ceilingStoreyPlane,
+    max: ceilingHeightBound,
     currentValue: (n) => n.height ?? 2.5,
     apply: (_n, newValue) => ({ height: newValue }),
     placement: {

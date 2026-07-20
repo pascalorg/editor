@@ -102,6 +102,11 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
+  CEILING_CLAMP_MARGIN,
+  findLevelAboveId,
+  getCeilingClampBound,
+  getCoveringSlabUndersideAt,
+  getLevelAbove,
   getLevelElevations,
   getStoredLevelHeight,
   type LevelElevation,

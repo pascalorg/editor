@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  type AnyNode,
-  type CeilingNode,
-  getStoredLevelHeight,
-  type LevelNode,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type CeilingNode, getCeilingClampBound, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -42,13 +36,17 @@ export function CeilingPanel() {
   )
 
   // Ceilings no longer drive the storey height — the stored level height
-  // does — so height writes clamp at the storey plane instead of poking
-  // into the level above (clamp, never ask).
-  const level = useScene((s) => {
+  // does — so height writes clamp under min(storey plane, lowest covering
+  // slab underside from the level above) − margin instead of poking into
+  // the level above or a deck hanging from it (clamp, never ask).
+  // Selector returns a primitive, so recomputing per store update is
+  // re-render-safe.
+  const maxHeight = useScene((s) => {
     const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
-    return parent?.type === 'level' ? (parent as LevelNode) : undefined
+    return parent?.type === 'level'
+      ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
+      : 6
   })
-  const maxHeight = level ? getStoredLevelHeight(level) : 6
 
   // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
   // handler refs so slider drags don't trigger Maximum update depth.

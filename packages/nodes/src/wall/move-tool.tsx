@@ -8,6 +8,7 @@ import {
   detectSpacesForLevel,
   emitter,
   type GridEvent,
+  getCeilingClampBound,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
   getStoredLevelHeight,
@@ -296,6 +297,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
           storeyHeight:
             levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
+          ceilingClampBound: (polygon) => getCeilingClampBound(levelId, sceneState.nodes, polygon),
         },
       )
 
