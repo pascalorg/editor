@@ -2,7 +2,11 @@
 // include Bun ambient types in its production declaration build.
 import { describe, expect, mock, test } from 'bun:test'
 import { UnsupportedGpuViewerFallback } from '../components/viewer/unsupported-gpu-fallback'
-import { initializeGpuRenderer, type RendererCapabilityCanvas } from './renderer-capability'
+import {
+  initializeGpuRenderer,
+  type RendererBackendParameters,
+  type RendererCapabilityCanvas,
+} from './renderer-capability'
 
 function canvasWithContexts(contexts: Partial<Record<'webgl2', unknown>>) {
   return {
@@ -62,6 +66,41 @@ describe('GPU renderer capability and initialization', () => {
     expect(result.status).toBe('ready')
     expect(createRenderer).toHaveBeenCalledWith({ context: webglContext, forceWebGL: true })
     expect(init).toHaveBeenCalledTimes(1)
+  })
+
+  test('falls back to WebGL when WebGPU renderer initialization fails', async () => {
+    const device = {}
+    const webglContext = {}
+    const webgpuDispose = mock(() => undefined)
+    const webglInit = mock(async () => undefined)
+    const parameters: RendererBackendParameters[] = []
+
+    const result = await initializeGpuRenderer({
+      canvas: canvasWithContexts({ webgl2: webglContext }),
+      createRenderer: (backendParameters) => {
+        parameters.push(backendParameters)
+        if (backendParameters.device) {
+          return {
+            dispose: webgpuDispose,
+            init: async () => {
+              throw new Error('WebGPU renderer init failed')
+            },
+          }
+        }
+        return { init: webglInit }
+      },
+      gpu: {
+        requestAdapter: async () => ({
+          requestDevice: async () => device,
+        }),
+      },
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+    expect(parameters).toEqual([{ device }, { context: webglContext, forceWebGL: true }])
+    expect(webgpuDispose).toHaveBeenCalledTimes(1)
+    expect(webglInit).toHaveBeenCalledTimes(1)
   })
 
   test('reports unsupported when WebGPU device and WebGL are unavailable', async () => {

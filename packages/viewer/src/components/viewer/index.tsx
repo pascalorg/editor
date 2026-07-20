@@ -525,6 +525,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               return result.renderer
             }
 
+            if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
             console.error('[viewer] WebGPURenderer init failed', result.error)
             setRendererInitFailed(true)
             return new Promise<never>(() => undefined)

@@ -86,7 +86,8 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
   createRenderer: (parameters: RendererBackendParameters) => Renderer
   gpu?: RendererGpu | null
 }): Promise<RendererInitializationResult<Renderer>> {
-  const capability = await detectRendererCapability({ canvas, gpu })
+  const resolvedCanvas = canvas === undefined ? browserCanvas() : canvas
+  const capability = await detectRendererCapability({ canvas: resolvedCanvas, gpu })
   if (capability.status === 'unsupported') return capability
 
   let renderer: Renderer | undefined
@@ -102,6 +103,26 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
     try {
       renderer?.dispose?.()
     } catch {}
-    return { error, status: 'unsupported' }
+    if (capability.backend !== 'webgpu') return { error, status: 'unsupported' }
+
+    let context: unknown
+    try {
+      context = resolvedCanvas?.getContext('webgl2')
+    } catch (fallbackError) {
+      return { error: fallbackError, status: 'unsupported' }
+    }
+    if (!context) return { error, status: 'unsupported' }
+
+    renderer = undefined
+    try {
+      renderer = createRenderer({ context, forceWebGL: true })
+      await renderer.init()
+      return { backend: 'webgl', renderer, status: 'ready' }
+    } catch (fallbackError) {
+      try {
+        renderer?.dispose?.()
+      } catch {}
+      return { error: fallbackError, status: 'unsupported' }
+    }
   }
 }
