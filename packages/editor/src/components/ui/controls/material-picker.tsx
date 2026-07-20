@@ -31,9 +31,9 @@ export type MaterialPickerProps = {
 const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'pascal', label: 'Pascal' },
-  { id: 'community', label: 'Community' },
   { id: 'mine', label: 'Mine' },
   { id: 'workspace', label: 'Workspace' },
+  { id: 'community', label: 'Community' },
 ]
 
 function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
@@ -119,17 +119,23 @@ export function MaterialPicker({
           </button>
         ))}
       </div>
-      {/* Fixed source filter tabs. */}
-      <div className="flex shrink-0 flex-wrap gap-1">
+      {/* Fixed source filter tabs — underline style, matching the catalog
+          browse surfaces (Items / Rooms / Build / Search) rather than the
+          pill-button category row above. */}
+      <div className="flex shrink-0 items-center gap-4 px-1">
         {visibleSourceFilters.map((filter) => (
           <button
-            className={`rounded-full px-3 py-1 font-medium text-xs transition-colors ${
+            className={`-mb-px border-b-2 px-0.5 py-1.5 font-medium text-xs transition-colors ${
               sourceFilter === filter.id
-                ? 'bg-foreground text-background'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
             key={filter.id}
-            onClick={() => setSourceFilter(filter.id)}
+            onClick={() => {
+              triggerSFX('sfx:menu-click')
+              setSourceFilter(filter.id)
+            }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             {filter.label}
