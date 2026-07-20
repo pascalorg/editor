@@ -29,6 +29,8 @@ describe('architectural floor-plan dimensions', () => {
     expect(layout?.extensionEndTip[1]).toBeCloseTo(0.57)
     expect(layout?.dimensionStart).toEqual([0, 0.45])
     expect(layout?.dimensionEnd).toEqual([4, 0.45])
+    expect(layout?.dimensionLineEnd).toEqual([4, 0.45])
+    expect(layout?.labelPlacement).toBe('inside')
   })
 
   test('builds consistent 45-degree architectural slash terminators', () => {
@@ -36,6 +38,24 @@ describe('architectural floor-plan dimensions', () => {
 
     expect(layout?.tickHalfVector[0]).toBeCloseTo(0.06364, 5)
     expect(layout?.tickHalfVector[1]).toBeCloseTo(-0.06364, 5)
+  })
+
+  test('moves a short value beyond its end tick and extends the dimension line', () => {
+    const shortDimension = {
+      ...dimension,
+      end: [0.23, 0] as [number, number],
+      text: '0.23m',
+    }
+    const layout = computeArchitecturalDimensionLayout(shortDimension, 0)
+
+    expect(layout?.labelPlacement).toBe('outside-end')
+    expect(layout?.labelPoint[0]).toBeGreaterThan(0.23)
+    expect(layout?.dimensionLineEnd[0]).toBeGreaterThan(layout?.labelPoint[0] ?? 0)
+    expect(layout?.dimensionEnd).toEqual([0.23, 0.45])
+
+    const documentLayout = computeArchitecturalDimensionLayout(shortDimension, 0, 0.01)
+    expect(documentLayout?.labelPlacement).toBe('outside-end')
+    expect(documentLayout?.dimensionLineEnd[0]).toBeGreaterThan(documentLayout?.labelPoint[0] ?? 0)
   })
 
   test('aligns stepped feature origins to an explicit exterior baseline', () => {

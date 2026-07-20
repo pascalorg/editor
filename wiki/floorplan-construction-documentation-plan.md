@@ -210,7 +210,7 @@ The same annotation should plot consistently whether the modeled building is 8 m
 
 ### 3.4 Implement collision resolution
 
-Status: initial label-to-label resolution is implemented in the live floor plan and PDF composition. Fixed mark pills are registered as layout obstacles, so dimension values relocate instead of overlapping door/window identifiers after an opening is flipped. Construction dimensions retain priority while lower-priority labels try nearby horizontal and outward paper-space positions. General plan-geometry avoidance, outside-extension placement for short segments, leaders, and user-pinned positions remain.
+Status: initial label-to-label resolution is implemented in the live floor plan and PDF composition. Fixed mark pills are registered as layout obstacles, so dimension values relocate instead of overlapping door/window identifiers after an opening is flipped. Short segments now place values beyond the end tick and extend the dimension line beneath them using the same paper-space sizing in the editor and PDF. General plan-geometry avoidance, outside-start/manual placement, leaders, and user-pinned positions remain.
 
 - Move text outside short segments with a leader or extended dimension line.
 - Preserve string order and datum consistency.

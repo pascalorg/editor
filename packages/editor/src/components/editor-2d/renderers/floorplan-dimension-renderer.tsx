@@ -5,11 +5,14 @@ const EXTENSION_START_GAP = 0.075
 const TICK_HALF_LENGTH = 0.09
 const LABEL_FONT_SIZE = 0.15
 const LABEL_BASELINE_OFFSET = 0.12
+const LABEL_CHARACTER_WIDTH_RATIO = 0.62
+const LABEL_END_GAP = 0.075
 const DOCUMENT_EXTENSION_START_GAP_PT = 3
 const DOCUMENT_EXTENSION_OVERSHOOT_PT = 4
 const DOCUMENT_TICK_HALF_LENGTH_PT = 4.5
 const DOCUMENT_LABEL_FONT_SIZE_PT = 8
 const DOCUMENT_LABEL_BASELINE_OFFSET_PT = 5
+const DOCUMENT_LABEL_END_GAP_PT = 3
 const LINE_STROKE_WIDTH_PX = 0.9
 const TICK_STROKE_WIDTH_PX = 1.35
 const SQRT_ONE_HALF = Math.SQRT1_2
@@ -19,6 +22,7 @@ type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 export type ArchitecturalDimensionLayout = {
   dimensionStart: FloorplanPoint
   dimensionEnd: FloorplanPoint
+  dimensionLineEnd: FloorplanPoint
   extensionStart: FloorplanPoint
   extensionEnd: FloorplanPoint
   extensionStartTip: FloorplanPoint
@@ -26,6 +30,7 @@ export type ArchitecturalDimensionLayout = {
   tickHalfVector: FloorplanPoint
   labelPoint: FloorplanPoint
   labelAngleDeg: number
+  labelPlacement: 'inside' | 'outside-end'
 }
 
 export function computeArchitecturalDimensionLayout(
@@ -42,6 +47,12 @@ export function computeArchitecturalDimensionLayout(
   const tickHalfLength = annotationUnitsPerPoint
     ? DOCUMENT_TICK_HALF_LENGTH_PT * annotationUnitsPerPoint
     : TICK_HALF_LENGTH
+  const labelFontSize = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_FONT_SIZE_PT * annotationUnitsPerPoint
+    : LABEL_FONT_SIZE
+  const labelEndGap = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_END_GAP_PT * annotationUnitsPerPoint
+    : LABEL_END_GAP
   const offsetX = geometry.offsetNormal[0] * geometry.offsetDistance
   const offsetY = geometry.offsetNormal[1] * geometry.offsetDistance
   const dimensionStart: FloorplanPoint = geometry.dimensionStart ?? [
@@ -70,20 +81,37 @@ export function computeArchitecturalDimensionLayout(
     (dirX + dirY) * tickHalfLength * SQRT_ONE_HALF,
     (dirY - dirX) * tickHalfLength * SQRT_ONE_HALF,
   ]
+  const labelWidth = Math.max(
+    labelFontSize,
+    geometry.text.length * labelFontSize * LABEL_CHARACTER_WIDTH_RATIO,
+  )
+  const labelPlacement =
+    length >= labelWidth + labelEndGap * 2 ? ('inside' as const) : ('outside-end' as const)
+  const direction: FloorplanPoint = [dirX, dirY]
+  const labelPoint =
+    labelPlacement === 'inside'
+      ? ([
+          (dimensionStart[0] + dimensionEnd[0]) / 2,
+          (dimensionStart[1] + dimensionEnd[1]) / 2,
+        ] as FloorplanPoint)
+      : addScaled(dimensionEnd, direction, labelEndGap + labelWidth / 2)
+  const dimensionLineEnd =
+    labelPlacement === 'inside'
+      ? dimensionEnd
+      : addScaled(dimensionEnd, direction, labelEndGap * 2 + labelWidth)
 
   return {
     dimensionStart,
     dimensionEnd,
+    dimensionLineEnd,
     extensionStart: addScaled(geometry.start, geometry.offsetNormal, startExtensionGap),
     extensionEnd: addScaled(geometry.end, geometry.offsetNormal, endExtensionGap),
     extensionStartTip: addScaled(dimensionStart, geometry.offsetNormal, extensionOvershoot),
     extensionEndTip: addScaled(dimensionEnd, geometry.offsetNormal, extensionOvershoot),
     tickHalfVector,
-    labelPoint: [
-      (dimensionStart[0] + dimensionEnd[0]) / 2,
-      (dimensionStart[1] + dimensionEnd[1]) / 2,
-    ],
+    labelPoint,
     labelAngleDeg: resolveFloorplanLabelAngle(Math.atan2(dy, dx), sceneRotationDeg),
+    labelPlacement,
   }
 }
 
@@ -156,9 +184,9 @@ export function FloorplanDimensionRenderer({
       <line
         {...lineProps}
         x1={layout.dimensionStart[0]}
-        x2={layout.dimensionEnd[0]}
+        x2={layout.dimensionLineEnd[0]}
         y1={layout.dimensionStart[1]}
-        y2={layout.dimensionEnd[1]}
+        y2={layout.dimensionLineEnd[1]}
       />
       <line
         {...lineProps}
@@ -180,6 +208,7 @@ export function FloorplanDimensionRenderer({
         data-floorplan-annotation-default-transform={labelTransform}
         data-floorplan-annotation-label=""
         data-floorplan-annotation-priority="100"
+        data-floorplan-dimension-label-placement={layout.labelPlacement}
         transform={labelTransform}
       >
         <text
