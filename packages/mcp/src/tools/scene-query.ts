@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { getStoredLevelHeight, resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -308,7 +309,7 @@ function stairFootprintPolygons(
           {
             width: stair.width ?? 1,
             length: 3,
-            height: stair.totalRise ?? 2.5,
+            height: resolveStairTotalRise(stair, nodes),
             stepCount: stair.stepCount ?? 10,
             attachmentSide: 'front' as const,
           },
@@ -657,13 +658,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
           if (level.type !== 'level') continue
           const summary = levels.find((entry) => entry.levelId === level.id)
           if (!summary?.isOccupiedStory) continue
-          const expectedHeight =
-            typeof level.metadata === 'object' &&
-            level.metadata !== null &&
-            'height' in level.metadata &&
-            typeof level.metadata.height === 'number'
-              ? level.metadata.height
-              : 3.2
+          const expectedHeight = getStoredLevelHeight(level)
           for (const wall of nodesOnLevel(bridge, level.id as AnyNodeId).filter(
             (node): node is AnyNode & { type: 'wall' } => node.type === 'wall',
           )) {

@@ -2,7 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
   getEffectiveNode,
@@ -18,6 +18,7 @@ import {
   type Point2D,
   pointToKey,
   resolveLevelId,
+  resolveWallTop,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -445,15 +446,14 @@ function splitGeometryAtHorizontalPlanes(
   return split
 }
 
-function getWallBandSplitPlanes(wall: WallNode): number[] {
+function getWallBandSplitPlanes(wall: WallNode, wallTopLocalY: number): number[] {
   const bands = getWallFaceBandConfig(wall)
   if (!bands.enabled) return []
   const planes = [bands.lowerTop]
   if (bands.count >= 3) planes.push(bands.middleTop)
   if (bands.count >= 4) planes.push(bands.upperTop)
   return planes.filter(
-    (plane) =>
-      plane > WALL_BAND_SPLIT_EPSILON && plane < (wall.height ?? 2.5) - WALL_BAND_SPLIT_EPSILON,
+    (plane) => plane > WALL_BAND_SPLIT_EPSILON && plane < wallTopLocalY - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -695,6 +695,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
+  const level = nodes[levelId as AnyNodeId]
+  const storeyHeight =
+    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
   const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
     node.start,
@@ -731,6 +734,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     slabElevation,
     slabSupport.baseElevation,
     slabSupport.baseSegments,
+    storeyHeight,
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -755,6 +759,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       slabElevation,
       slabSupport.baseElevation,
       slabSupport.baseSegments,
+      storeyHeight,
     )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
@@ -845,14 +850,19 @@ export function generateExtrudedWall(
   baseSegments: readonly WallSlabSupportSegment[] = [
     { start: 0, end: 1, elevation: baseElevation },
   ],
+  storeyHeight = DEFAULT_LEVEL_HEIGHT,
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const wallHeight = wallNode.height ?? DEFAULT_WALL_HEIGHT
-  const topElevation = slabElevation > 0 ? slabElevation + wallHeight : wallHeight
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
   const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
   const localBottom = effectiveBaseElevation - slabElevation
   const height = topElevation - effectiveBaseElevation
+  // A slab at or above the storey plane leaves a plane-bound wall with no
+  // body — bail before ExtrudeGeometry sees a non-positive depth.
+  if (height <= 1e-9) {
+    return new THREE.BufferGeometry()
+  }
 
   const thickness = getWallThickness(wallNode)
 
@@ -1015,7 +1025,7 @@ export function generateExtrudedWall(
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
       geometry,
-      getWallBandSplitPlanes(wallNode),
+      getWallBandSplitPlanes(wallNode, topElevation - slabElevation),
     )
     splitGeometry.computeVertexNormals()
     assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges)
@@ -1052,7 +1062,7 @@ export function generateExtrudedWall(
   const resultGeometry = csgGeometry(resultBrush)
   const splitResultGeometry = splitGeometryAtHorizontalPlanes(
     resultGeometry,
-    getWallBandSplitPlanes(wallNode),
+    getWallBandSplitPlanes(wallNode, topElevation - slabElevation),
   )
   splitResultGeometry.computeVertexNormals()
   assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges)

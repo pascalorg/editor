@@ -22,6 +22,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  DEFAULT_LEVEL_HEIGHT,
   getStoredLevelHeight,
   LevelNode,
   useScene,
@@ -430,6 +431,7 @@ export function FloatingLevelSelector() {
     const maxLevel = levels.length > 0 ? Math.max(...levels.map((l) => l.level)) : -1
     const newLevel = LevelNode.parse({
       level: maxLevel + 1,
+      height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: resolvedBuildingId,
     })
@@ -442,6 +444,7 @@ export function FloatingLevelSelector() {
     const minLevel = levels.length > 0 ? Math.min(...levels.map((l) => l.level)) : 1
     const newLevel = LevelNode.parse({
       level: minLevel - 1,
+      height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: resolvedBuildingId,
     })
@@ -468,6 +471,7 @@ export function FloatingLevelSelector() {
 
       const newLevel = LevelNode.parse({
         level: newLevelNumber,
+        height: DEFAULT_LEVEL_HEIGHT,
         children: [],
         parentId: resolvedBuildingId,
       })

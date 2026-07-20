@@ -31,6 +31,32 @@ describe('wall support extension', () => {
     geometry.dispose()
   })
 
+  test('plane-bound wall tops out at the storey plane regardless of slab elevation', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], thickness: 0.1 })
+
+    const flat = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 0, 0, undefined, 3)
+    flat.computeBoundingBox()
+    expect(flat.boundingBox?.max.y).toBeCloseTo(3)
+    expect(flat.boundingBox?.min.y).toBeCloseTo(0)
+    flat.dispose()
+
+    const raised = generateExtrudedWall(
+      wall,
+      [],
+      calculateLevelMiters([wall]),
+      0.6,
+      0.6,
+      undefined,
+      3,
+    )
+    raised.computeBoundingBox()
+    // Mesh sits at Y=0.6, so a 2.4 local top keeps the world top at the 3m
+    // plane — the raised slab shortens the wall instead of lifting its top.
+    expect(raised.boundingBox?.max.y).toBeCloseTo(2.4)
+    expect(raised.boundingBox?.min.y).toBeCloseTo(0)
+    raised.dispose()
+  })
+
   test('raises only the high-supported part of a mixed wall run', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
     const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), 0.6, 0.05, [

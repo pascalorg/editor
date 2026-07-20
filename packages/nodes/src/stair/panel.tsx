@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type LevelNode,
+  resolveStairTotalRise,
   type StairNode,
   type StairRailingMode,
   type StairSegmentNode,
@@ -389,7 +390,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
+            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
           />
           <MetricControl
             label="Steps"

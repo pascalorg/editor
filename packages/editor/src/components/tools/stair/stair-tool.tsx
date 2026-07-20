@@ -150,7 +150,6 @@ function createDefaultStairNode({
     slabOpeningMode: 'destination',
     openingOffset: DEFAULT_STAIR_OPENING_OFFSET,
     width: DEFAULT_STAIR_WIDTH,
-    totalRise: DEFAULT_STAIR_HEIGHT,
     stepCount: DEFAULT_STAIR_STEP_COUNT,
     thickness: DEFAULT_STAIR_THICKNESS,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,

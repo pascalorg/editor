@@ -9,6 +9,7 @@ import type {
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
@@ -31,12 +32,6 @@ function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unkn
   const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
-function readWallHeight(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!w.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
-  return wall?.height ?? Number.POSITIVE_INFINITY
 }
 
 function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeType> {
@@ -96,9 +91,9 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       const roofMax = readRoofFaceHeightMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
       // Maximum: distance from the anchored edge to the wall's allowed Y
-      // bounds. Top arrow caps at wall.height - bottom; bottom arrow caps
-      // at top (positive Y room above the floor).
-      const wallH = readWallHeight(n, scene)
+      // bounds. Top arrow caps at the wall's resolved ceiling - bottom;
+      // bottom arrow caps at top (positive Y room above the floor).
+      const wallH = readHostWallCeiling(n.wallId, scene)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)

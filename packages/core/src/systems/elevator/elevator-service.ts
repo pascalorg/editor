@@ -1,13 +1,5 @@
-import type {
-  AnyNode,
-  AnyNodeId,
-  CeilingNode,
-  ElevatorNode,
-  LevelNode,
-  WallNode,
-} from '../../schema'
-
-export const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
+import type { AnyNode, AnyNodeId, ElevatorNode, LevelNode } from '../../schema'
+import { getStoredLevelHeight } from '../../services/storey'
 
 export type ElevatorLevelEntry = {
   id: LevelNode['id']
@@ -81,28 +73,6 @@ export function resolveElevatorServiceLevels(
   return levels.slice(minIndex, maxIndex + 1)
 }
 
-export function getElevatorLevelHeight(levelId: string, nodes: Record<string, AnyNode>): number {
-  const level = nodes[levelId as AnyNodeId] as LevelNode | undefined
-  if (level?.type !== 'level') return DEFAULT_ELEVATOR_LEVEL_HEIGHT
-
-  let maxTop = 0
-
-  for (const childId of level.children) {
-    const child = nodes[childId as AnyNodeId]
-    if (!child) continue
-
-    if (child.type === 'ceiling') {
-      const height = (child as CeilingNode).height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT
-      if (height > maxTop) maxTop = height
-    } else if (child.type === 'wall') {
-      const height = (child as WallNode).height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT
-      if (height > maxTop) maxTop = height
-    }
-  }
-
-  return maxTop > 0 ? maxTop : DEFAULT_ELEVATOR_LEVEL_HEIGHT
-}
-
 export function resolveElevatorLevels(
   elevator: ElevatorNode,
   nodes: Record<string, AnyNode>,
@@ -119,7 +89,7 @@ export function resolveElevatorLevels(
   let cumulativeY = 0
   for (const level of allLevels) {
     baseYByLevelId.set(level.id, cumulativeY)
-    cumulativeY += getElevatorLevelHeight(level.id, nodes)
+    cumulativeY += getStoredLevelHeight(level)
   }
 
   const serviceLevels = resolveElevatorServiceLevels(elevator, nodes)

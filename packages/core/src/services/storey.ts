@@ -21,9 +21,9 @@ export type LevelElevation = {
 }
 
 /**
- * Resolves the owning building the same way viewer level stacking does:
- * explicit `parentId` pointing at a building wins; legacy levels that only
- * appear in a building's `children` array resolve through that membership.
+ * Resolves the owning building: explicit `parentId` pointing at a building
+ * wins; legacy levels that only appear in a building's `children` array
+ * resolve through that membership.
  */
 function resolveLevelBuildingId(
   levelId: LevelNode['id'],

@@ -250,6 +250,7 @@ function buildTemplate(): SceneGraph {
     visible: true,
     metadata: {},
     level: 0,
+    height: WALL_HEIGHT,
     children: [
       'wall_n',
       'wall_e',

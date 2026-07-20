@@ -1,3 +1,4 @@
+import { DEFAULT_LEVEL_HEIGHT } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 
@@ -217,6 +218,7 @@ function buildNodes(): StudioNodes {
     visible: true,
     metadata: {},
     level: 0,
+    height: DEFAULT_LEVEL_HEIGHT,
     children: [...wallIds, 'zone_living'] as AnyNodeId[],
   } as unknown as AnyNode
 

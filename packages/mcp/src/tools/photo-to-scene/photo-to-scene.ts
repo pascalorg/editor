@@ -235,7 +235,7 @@ function buildSceneGraphFromVision(
 
   // Build the skeleton: site → building → level.
   const building = BuildingNode.parse({})
-  const level = LevelNode.parse({ level: 0 })
+  const level = LevelNode.parse({ level: 0, height: defaultWallHeight })
   const site = SiteNode.parse({ children: [building.id] })
 
   // Link parent ids so downstream traversal works.

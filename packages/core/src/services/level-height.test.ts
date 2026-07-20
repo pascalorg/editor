@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import { CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { computeWallSlabSupport } from '../systems/slab/slab-support'
-import { deriveLegacyLevelHeight, getLevelHeight, type WallBaseYResolver } from './level-height'
+import { deriveLegacyLevelHeight } from './level-height'
 
 function createFixture(): Record<AnyNodeId, AnyNode> {
   const nodes: AnyNode[] = [
@@ -93,35 +92,6 @@ function createFixture(): Record<AnyNodeId, AnyNode> {
   return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
 }
 
-function createWallBaseResolver(
-  levelId: string,
-  nodes: Record<AnyNodeId, AnyNode>,
-): WallBaseYResolver {
-  const level = nodes[levelId as AnyNodeId]
-  if (level?.type !== 'level') return () => undefined
-
-  const children = level.children
-    .map((childId) => nodes[childId as AnyNodeId])
-    .filter((child): child is AnyNode => child !== undefined)
-  const slabs = children.filter((child): child is SlabNode => child.type === 'slab')
-  const walls = children.filter((child): child is WallNode => child.type === 'wall')
-
-  return (wallId) => {
-    const wall = nodes[wallId]
-    if (wall?.type !== 'wall') return undefined
-    return computeWallSlabSupport(
-      {
-        start: wall.start,
-        end: wall.end,
-        curveOffset: wall.curveOffset,
-        thickness: wall.thickness,
-      },
-      slabs,
-      walls,
-    ).elevation
-  }
-}
-
 describe('deriveLegacyLevelHeight', () => {
   const nodes = createFixture()
   const cases = [
@@ -134,12 +104,8 @@ describe('deriveLegacyLevelHeight', () => {
   ] as const
 
   for (const [levelId, expected] of cases) {
-    it(`matches getLevelHeight for ${levelId}`, () => {
-      const derived = deriveLegacyLevelHeight(levelId, nodes)
-      const resolved = getLevelHeight(levelId, nodes, createWallBaseResolver(levelId, nodes))
-
-      expect(derived).toBe(resolved)
-      expect(derived).toBeCloseTo(expected)
+    it(`derives ${expected} for ${levelId}`, () => {
+      expect(deriveLegacyLevelHeight(levelId, nodes)).toBeCloseTo(expected)
     })
   }
 })

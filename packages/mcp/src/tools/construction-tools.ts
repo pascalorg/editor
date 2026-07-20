@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
@@ -100,7 +101,7 @@ export const createStairBetweenLevelsInput = {
   totalRise: measurement('length', 'm', {
     positive: true,
     description: 'Total vertical rise.',
-  }).default(2.8),
+  }).optional(),
   stepCount: z.number().int().positive().default(14),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
@@ -372,12 +373,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         const roofLevel = LevelNode.parse({
           name: roofLevelLabel,
           level: roofLevelElevation ?? nextLevelIndex(bridge, buildingId, referenceLevel),
+          height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           children: [],
           metadata: {
             role: 'roof',
             label: roofLevelLabel,
             referenceLevelId: levelId,
-            height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           },
         })
         targetRoofLevelId = roofLevel.id as AnyNodeId
@@ -460,15 +461,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
 
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
-        width,
-        length: runLength,
-        height: totalRise,
-        stepCount,
-        ...(materialPreset ? { materialPreset } : {}),
-      })
-      const stair = StairNode.parse({
+      const stairDraft = StairNode.parse({
         name: name ?? 'Stair',
         position: position as [number, number, number],
         rotation,
@@ -478,15 +471,33 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         slabOpeningMode: 'none',
         openingOffset,
         width,
-        totalRise,
+        ...(totalRise !== undefined ? { totalRise } : {}),
         stepCount,
         railingMode,
-        children: [segment.id],
+        children: [],
         ...(materialPreset ? { materialPreset } : {}),
         metadata: {
           openingManaged: 'manual-rectangular',
         },
       })
+      const riseNodes = {
+        ...bridge.getNodes(),
+        [fromLevel.id]: {
+          ...fromLevel,
+          children: [...(fromLevel as Extract<AnyNode, { type: 'level' }>).children, stairDraft.id],
+        },
+        [stairDraft.id]: stairDraft,
+      } as Record<string, AnyNode>
+      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
+      const segment = StairSegmentNode.parse({
+        segmentType: 'stair',
+        width,
+        length: runLength,
+        height: resolvedTotalRise,
+        stepCount,
+        ...(materialPreset ? { materialPreset } : {}),
+      })
+      const stair = { ...stairDraft, children: [segment.id] }
 
       const openingPolygon = rectangularOpening({
         position: position as [number, number, number],

@@ -43,7 +43,7 @@ export const StairNode = BaseNode.extend({
   slabOpeningMode: StairSlabOpeningMode.default('none'),
   openingOffset: z.number().default(0),
   width: z.number().default(1.0),
-  totalRise: z.number().default(2.5),
+  totalRise: z.number().optional(),
   stepCount: z.number().default(10),
   thickness: z.number().default(0.25),
   fillToFloor: z.boolean().default(true),

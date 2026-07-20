@@ -46,7 +46,6 @@ export {
   DEFAULT_LEVEL_HEIGHT,
   getCeilingAt,
   getCeilingHeightAt,
-  getLevelHeight,
 } from './level-height'
 export {
   type AxisLock,
