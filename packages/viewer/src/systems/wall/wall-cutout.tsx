@@ -1,8 +1,8 @@
 import {
   type AnyNodeId,
-  DEFAULT_LEVEL_HEIGHT,
   emitter,
   getWallFaceBandConfig,
+  getWallPlaneTop,
   resolveLevelId,
   resolveWallEffectiveHeight,
   sceneRegistry,
@@ -135,9 +135,6 @@ export const WallCutout = () => {
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
         const levelId = resolveLevelId(wallNode, sceneState.nodes)
-        const level = sceneState.nodes[levelId as AnyNodeId]
-        const storeyHeight =
-          level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
         const support = spatialGridManager.getSlabSupportForWall(
           levelId,
           wallNode.start,
@@ -148,7 +145,7 @@ export const WallCutout = () => {
         )
         const effectiveWallHeight = resolveWallEffectiveHeight(
           wallNode,
-          storeyHeight,
+          getWallPlaneTop(wallNode, levelId, sceneState.nodes),
           support.elevation,
         )
         const shouldSelectionHighlight =

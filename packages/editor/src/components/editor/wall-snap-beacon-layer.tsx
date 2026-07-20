@@ -3,9 +3,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  DEFAULT_LEVEL_HEIGHT,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallPlaneTop,
   getWallThickness,
   isCurvedWall,
   resolveLevelId,
@@ -148,9 +148,6 @@ type WallTopHighlightSegment = {
 
 function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
   const levelId = resolveLevelId(wall, nodes as Record<string, AnyNode>)
-  const level = nodes[levelId]
-  const storeyHeight =
-    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
   const support = spatialGridManager.getSlabSupportForWall(
     levelId,
     wall.start,
@@ -159,7 +156,8 @@ function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
     wall.thickness,
     wall.supportSlabId,
   )
-  return resolveWallTop(wall, storeyHeight, support.elevation) + WALL_TOP_HIGHLIGHT_LIFT
+  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<string, AnyNode>)
+  return resolveWallTop(wall, planeTop, support.elevation) + WALL_TOP_HIGHLIGHT_LIFT
 }
 
 function buildHighlightSegment(start: [number, number], end: [number, number]) {

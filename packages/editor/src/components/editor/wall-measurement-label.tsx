@@ -4,8 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
-  DEFAULT_LEVEL_HEIGHT,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
   getWallSurfacePolygon,
@@ -13,11 +13,8 @@ import {
   isCurvedWall,
   type Point2D,
   pointToKey,
-  resolveLevelId,
-  resolveWallEffectiveHeight,
   sampleWallCenterline,
   sceneRegistry,
-  spatialGridManager,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -106,22 +103,6 @@ function getLevelWalls(wall: WallNode, nodes: Record<string, AnyNode>): WallNode
   return levelNode.children
     .map((childId) => nodes[childId as AnyNodeId])
     .filter((node): node is WallNode => Boolean(node && node.type === 'wall'))
-}
-
-function getWallEffectiveHeight(wall: WallNode, nodes: Record<string, AnyNode>): number {
-  const levelId = resolveLevelId(wall, nodes)
-  const level = nodes[levelId]
-  const storeyHeight =
-    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
-  const support = spatialGridManager.getSlabSupportForWall(
-    levelId,
-    wall.start,
-    wall.end,
-    wall.curveOffset ?? 0,
-    wall.thickness,
-    wall.supportSlabId,
-  )
-  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }
 
 function pointMatchesWallPlanPoint(point: Point2D | undefined, planPoint: [number, number]) {
@@ -334,7 +315,7 @@ function buildMeasurementGuide(
   const measurementPoints = measurementLine ?? fallbackMiddlePoints
   if (!measurementPoints) return null
 
-  const height = getWallEffectiveHeight(wall, nodes)
+  const height = getWallEffectiveHeightForNodes(wall, nodes)
   const startLocal = worldPointToWallLocal(wall, measurementPoints.start)
   const endLocal = worldPointToWallLocal(wall, measurementPoints.end)
   const curvedMeasurementPath = isCurvedWall(wall)
@@ -548,7 +529,7 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
     return total
   }, [guide, wall])
   const label = formatLinearMeasurement(length, unit)
-  const height = useMemo(() => getWallEffectiveHeight(wall, nodes), [nodes, wall])
+  const height = useMemo(() => getWallEffectiveHeightForNodes(wall, nodes), [nodes, wall])
   const heightLabel = `H ${formatLinearMeasurement(height, unit)}`
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null

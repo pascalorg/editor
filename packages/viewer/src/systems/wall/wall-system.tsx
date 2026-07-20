@@ -11,6 +11,7 @@ import {
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallMiterBoundaryPoints,
+  getWallPlaneTop,
   getWallPlanFootprint,
   getWallSurfacePolygon,
   getWallThickness,
@@ -703,9 +704,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
-  const level = nodes[levelId as AnyNodeId]
-  const storeyHeight =
-    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  // Covering-clamped plane: a flush/thick slab on the level above shortens
+  // the plane-bound walls below it (explicit-height walls ignore the value).
+  const planeTop = getWallPlaneTop(node, levelId, nodes)
   const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
     node.start,
@@ -743,7 +744,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     slabElevation,
     slabSupport.baseElevation,
     slabSupport.baseSegments,
-    storeyHeight,
+    planeTop,
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -768,7 +769,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       slabElevation,
       slabSupport.baseElevation,
       slabSupport.baseSegments,
-      storeyHeight,
+      planeTop,
     )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo

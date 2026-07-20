@@ -2,7 +2,7 @@ import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
-import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
+import { getWallPlaneTop } from '../../services/storey'
 import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
@@ -348,9 +348,6 @@ export class SpatialGridManager {
 
     const nodes = useScene.getState().nodes
     const levelId = resolveNodeLevelId(wall, nodes)
-    const level = nodes[levelId as AnyNode['id']]
-    const storeyHeight =
-      level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
     const support = this.getSlabSupportForWall(
       levelId,
       wall.start,
@@ -359,7 +356,11 @@ export class SpatialGridManager {
       wall.thickness,
       wall.supportSlabId ?? null,
     )
-    return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
+    return resolveWallEffectiveHeight(
+      wall,
+      getWallPlaneTop(wall, levelId, nodes),
+      support.elevation,
+    )
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {
@@ -1043,3 +1044,27 @@ export class SpatialGridManager {
 
 // Singleton instance
 export const spatialGridManager = new SpatialGridManager()
+
+/**
+ * Effective (extruded) height of a wall resolved from a nodes record:
+ * {@link resolveWallEffectiveHeight} over the covering-clamped plane top
+ * (`getWallPlaneTop`) and the singleton manager's slab election — so the
+ * value always agrees with the rendered wall. One shared resolver for the
+ * editor overlays (measurement label, action menu, side handles) that used
+ * to copy this derivation locally.
+ */
+export function getWallEffectiveHeightForNodes(
+  wall: WallNode,
+  nodes: Record<string, AnyNode>,
+): number {
+  const levelId = resolveNodeLevelId(wall, nodes)
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+    wall.supportSlabId ?? null,
+  )
+  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), support.elevation)
+}

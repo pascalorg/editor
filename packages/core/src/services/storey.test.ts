@@ -7,8 +7,10 @@ import {
   getCeilingClampBound,
   getCoveringSlabUndersideAt,
   getLevelAbove,
+  getLevelBelow,
   getLevelElevations,
   getStoredLevelHeight,
+  getWallPlaneTop,
 } from './storey'
 
 const buildNodes = (list: AnyNode[]): Record<AnyNodeId, AnyNode> =>
@@ -238,6 +240,39 @@ describe('getLevelAbove', () => {
   })
 })
 
+describe('getLevelBelow', () => {
+  test('returns the next-lower ordinal in the same building, skipping ordinal gaps', () => {
+    const nodes = buildNodes([
+      building('building_a', ['level_0', 'level_2', 'level_5']),
+      level('level_0', 0, { parentId: 'building_a' }),
+      level('level_5', 5, { parentId: 'building_a' }),
+      level('level_2', 2, { parentId: 'building_a' }),
+    ])
+
+    expect(getLevelBelow('level_5', nodes)?.id).toBe('level_2')
+    expect(getLevelBelow('level_2', nodes)?.id).toBe('level_0')
+    expect(getLevelBelow('level_0', nodes)).toBeNull()
+  })
+
+  test('never crosses into another building', () => {
+    const nodes = buildNodes([
+      building('building_a', ['level_a0']),
+      building('building_b', ['level_b0', 'level_b1']),
+      level('level_a0', 0, { parentId: 'building_a' }),
+      level('level_b0', 0, { parentId: 'building_b' }),
+      level('level_b1', 1, { parentId: 'building_b' }),
+    ])
+
+    expect(getLevelBelow('level_a0', nodes)).toBeNull()
+    expect(getLevelBelow('level_b1', nodes)?.id).toBe('level_b0')
+  })
+
+  test('returns null for an unknown level id', () => {
+    const nodes = buildNodes([level('level_0', 0)])
+    expect(getLevelBelow('level_missing', nodes)).toBeNull()
+  })
+})
+
 // Two stacked levels in one building; `slabs` become children of the level
 // above the queried one.
 const stackedNodes = (slabs: SlabNode[], queriedHeight = 2.5) =>
@@ -303,6 +338,57 @@ describe('getCoveringSlabUndersideAt', () => {
   test('returns null when there is no level above', () => {
     const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
     expect(getCoveringSlabUndersideAt('level_1', nodes, 2, 2)).toBeNull()
+  })
+})
+
+describe('getWallPlaneTop', () => {
+  // Samples stay strictly inside / outside slab polygons — pointInPolygon
+  // on a boundary point is ray-cast ambiguous and not what's under test.
+  const wallAt = (
+    start: [number, number],
+    end: [number, number],
+  ): { start: [number, number]; end: [number, number] } => ({ start, end })
+
+  test('no covering slab → the stored level height', () => {
+    const nodes = stackedNodes([], 3)
+    expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_0', nodes)).toBe(3)
+  })
+
+  test('a flush thick deck above clamps the plane to its underside', () => {
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_0', nodes)).toBeCloseTo(2.2)
+  })
+
+  test('a slab covering only part of the span clamps via the min of the samples', () => {
+    // Deck over x ∈ [3.5, 6]: start (0,2) and chord midpoint (2,2) miss it,
+    // only the end sample (4,2) lands inside — the min still clamps.
+    const nodes = stackedNodes([
+      slabNode('slab_deck', {
+        polygon: [
+          [3.5, 0],
+          [6, 0],
+          [6, 4],
+          [3.5, 4],
+        ],
+        elevation: 0,
+        thickness: 0.3,
+      }),
+    ])
+    expect(getWallPlaneTop(wallAt([0, 2], [4, 2]), 'level_0', nodes)).toBeCloseTo(2.2)
+  })
+
+  test('a recessed slab above is ignored', () => {
+    const nodes = stackedNodes([
+      slabNode('slab_pool', { elevation: -1, thickness: 0.3, recessed: true }),
+    ])
+    expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_0', nodes)).toBe(2.5)
+  })
+
+  test('falls back to the default height when the level does not resolve', () => {
+    const nodes = stackedNodes([])
+    expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_missing', nodes)).toBe(
+      DEFAULT_LEVEL_HEIGHT,
+    )
   })
 })
 

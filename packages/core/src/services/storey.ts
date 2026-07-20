@@ -1,4 +1,4 @@
-import type { BuildingNode, LevelNode, SlabNode } from '../schema'
+import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { pointInPolygon } from '../systems/slab/slab-support'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
@@ -126,6 +126,45 @@ export function getLevelAbove(
   return above?.type === 'level' ? (above as LevelNode) : null
 }
 
+/**
+ * The id of the level directly below `levelId` in its own stack — mirror of
+ * {@link findLevelAboveId}: the level with the highest ordinal strictly less
+ * than the queried level's. `null` when the level is lowest or unresolvable.
+ */
+export function findLevelBelowId(
+  levelId: string,
+  elevations: Map<string, LevelElevation>,
+): string | null {
+  const entry = elevations.get(levelId)
+  if (!entry) return null
+
+  let belowId: string | null = null
+  let belowOrdinal = Number.NEGATIVE_INFINITY
+  for (const [candidateId, candidate] of elevations) {
+    if (candidateId === levelId) continue
+    if (candidate.buildingId !== entry.buildingId) continue
+    if (candidate.ordinal < entry.ordinal && candidate.ordinal > belowOrdinal) {
+      belowOrdinal = candidate.ordinal
+      belowId = candidateId
+    }
+  }
+  return belowId
+}
+
+/**
+ * The level directly below `levelId` — see {@link findLevelBelowId}.
+ * `null` when lowest or unresolvable. Pure.
+ */
+export function getLevelBelow(
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): LevelNode | null {
+  const belowId = findLevelBelowId(levelId, getLevelElevations(nodes))
+  if (!belowId) return null
+  const below = nodes[belowId as LevelNode['id']]
+  return below?.type === 'level' ? (below as LevelNode) : null
+}
+
 type CoveringSlabContext = {
   /** Stored storey height of the QUERIED level. */
   storeyHeight: number
@@ -204,6 +243,46 @@ export function getCoveringSlabUndersideAt(
   const context = resolveCoveringSlabContext(levelId, nodes)
   if (!context) return null
   return lowestCoveringUndersideAt(context, x, z)
+}
+
+/**
+ * Top plane for a plane-bound wall on `levelId`, in level-local Y:
+ * `min(stored storey height, lowest covering-slab underside over the wall's
+ * span)` — a thick or flush slab on the level above SHORTENS the walls below
+ * instead of colliding with them (Revit-style automatic attach).
+ *
+ * Sampling: the covering underside is evaluated at the wall's start, end,
+ * and chord midpoint (curved walls sample the chord midpoint, not the arc).
+ * A covering slab that overlaps a wall span virtually always covers one of
+ * those three points, and exact segment-vs-polygon coverage isn't worth its
+ * cost for a clamp bound — same tradeoff as {@link getCeilingClampBound}'s
+ * vertex + centroid sampling.
+ *
+ * This is THE plane for a plane-bound wall (`height` absent). Explicit-height
+ * walls ignore the value (`resolveWallTop` returns their stored height), so
+ * passing it wherever a raw storey height feeds `resolveWallTop` /
+ * `resolveWallEffectiveHeight` is always safe. Falls back to
+ * {@link DEFAULT_LEVEL_HEIGHT} when `levelId` doesn't resolve to a level.
+ */
+export function getWallPlaneTop(
+  wall: Pick<WallNode, 'start' | 'end'>,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number {
+  const context = resolveCoveringSlabContext(levelId, nodes)
+  if (!context) return DEFAULT_LEVEL_HEIGHT
+
+  let plane = context.storeyHeight
+  const samples: Array<[number, number]> = [
+    wall.start,
+    wall.end,
+    [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2],
+  ]
+  for (const [x, z] of samples) {
+    const underside = lowestCoveringUndersideAt(context, x, z)
+    if (underside !== null && underside < plane) plane = underside
+  }
+  return plane
 }
 
 /**

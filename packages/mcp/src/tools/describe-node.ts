@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { resolveCeilingHeight } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -46,7 +47,7 @@ function describe(node: AnyNode, bridge: SceneOperations): string {
     case 'slab':
       return `Slab with ${node.polygon.length} vertices`
     case 'ceiling':
-      return `Ceiling with ${node.polygon.length} vertices, height ${node.height.toFixed(2)}m`
+      return `Ceiling with ${node.polygon.length} vertices, height ${resolveCeilingHeight(node, bridge.getNodes()).toFixed(2)}m`
     case 'door':
       return `Door (${node.width.toFixed(2)}m x ${node.height.toFixed(2)}m)`
     case 'window':

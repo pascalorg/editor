@@ -1,7 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  DEFAULT_LEVEL_HEIGHT,
+  getWallPlaneTop,
   resolveWallEffectiveHeight,
   spatialGridManager,
   type WallNode,
@@ -33,18 +33,19 @@ export function resolveWallOpeningCeiling(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): number {
-  const level = wall.parentId ? nodes[wall.parentId as AnyNodeId] : undefined
-  const storeyHeight =
-    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  const levelId = wall.parentId ?? 'default'
   const support = spatialGridManager.getSlabSupportForWall(
-    wall.parentId ?? 'default',
+    levelId,
     wall.start,
     wall.end,
     wall.curveOffset ?? 0,
     wall.thickness,
     wall.supportSlabId,
   )
-  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
+  // Covering-clamped plane: openings cap under a flush/thick slab from the
+  // level above, matching the shortened wall body.
+  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
+  return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
 }
 
 /**

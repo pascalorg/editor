@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   DEFAULT_LEVEL_HEIGHT,
   getStoredLevelHeight,
+  getWallPlaneTop,
   resolveStairTotalRise,
   resolveWallEffectiveHeight,
 } from '@pascal-app/core'
@@ -123,8 +124,11 @@ export function resolveReportedWallHeight(
   wall: Extract<AnyNode, { type: 'wall' }>,
 ): number {
   const levelId = bridge.resolveLevelId(wall.id as AnyNodeId)
-  const level = levelId ? bridge.getNode(levelId) : null
-  const storeyHeight = level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
+  // Covering-clamped plane for plane-bound walls; explicit heights pass
+  // through resolveWallEffectiveHeight untouched.
+  const planeTop = levelId
+    ? getWallPlaneTop(wall, levelId, bridge.getNodes())
+    : DEFAULT_LEVEL_HEIGHT
   const levelNodes = levelId ? nodesOnLevel(bridge, levelId) : []
   const slabs = levelNodes.filter(
     (node): node is Extract<AnyNode, { type: 'slab' }> => node.type === 'slab',
@@ -133,7 +137,7 @@ export function resolveReportedWallHeight(
     (node): node is Extract<AnyNode, { type: 'wall' }> => node.type === 'wall',
   )
   const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
-  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
+  return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
 }
 
 function metadataRecord(node: AnyNode): Record<string, unknown> | null {
