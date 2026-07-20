@@ -3,6 +3,7 @@ export type LevelStackEntry = {
   buildingId: string | null
   index: number
   height: number
+  baseElevation?: number
 }
 
 type BuildingOwnership = { id: string; children: readonly string[] }
@@ -24,8 +25,11 @@ export function getLevelStackPositions(entries: readonly LevelStackEntry[]): Map
 
   for (const entry of [...entries].sort((a, b) => a.index - b.index)) {
     const baseY = cumulativeYByBuilding.get(entry.buildingId) ?? 0
-    positions.set(entry.levelId, baseY)
-    cumulativeYByBuilding.set(entry.buildingId, baseY + entry.height)
+    // baseElevation is an offset, not an absolute Y: it shifts this level and,
+    // cumulatively, every level above it in the same building. Negative offsets are valid.
+    const levelY = baseY + (entry.baseElevation ?? 0)
+    positions.set(entry.levelId, levelY)
+    cumulativeYByBuilding.set(entry.buildingId, levelY + entry.height)
   }
 
   return positions

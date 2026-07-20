@@ -28,6 +28,7 @@ export function snapLevelsToTruePositions(): () => void {
     buildingId: string | null
     index: number
     height: number
+    baseElevation: number
   }
 
   const entries: LevelEntry[] = []
@@ -47,6 +48,7 @@ export function snapLevelsToTruePositions(): () => void {
           nodes,
           (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
         ),
+        baseElevation: level.baseElevation,
         obj,
       })
     }

@@ -59,11 +59,16 @@ export const LevelNode = BaseNode.extend({
     .default([]),
   // Specific props
   level: z.number().default(0),
+  baseElevation: z
+    .number()
+    .default(0)
+    .describe("Additive Y offset in meters applied above this level's computed stack position."),
 }).describe(
   dedent`
   Level node - used to represent a level in the building
   - children: array of architectural, equipment, and MEP distribution nodes
   - level: level number
+  - baseElevation: additive Y offset in meters above the computed stack position
   `,
 )
 
