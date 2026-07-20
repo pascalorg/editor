@@ -106,6 +106,7 @@ export function buildWindowFloorplan(
       strokeWidth: showSelectedChrome ? 1.9 : 1.25,
       vectorEffect: 'non-scaling-stroke',
       strokeLinejoin: 'round',
+      annotationObstacle: 'bounds',
     },
     // Inset glass-pane outline.
     {

@@ -24,6 +24,11 @@ describe('buildColumnFloorplan', () => {
     expect(geometry?.kind).toBe('group')
     if (geometry?.kind !== 'group') return
 
+    expect(geometry.children[0]).toMatchObject({
+      kind: 'polygon',
+      annotationObstacle: 'bounds',
+    })
+
     expect(geometry.children.filter((child) => child.kind === 'line')).toEqual([
       expect.objectContaining({
         x1: 1.91,

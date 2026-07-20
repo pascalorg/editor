@@ -76,6 +76,8 @@ describe('buildWallFloorplan render purpose', () => {
       Math.min(...documentPolygon.points.map((point) => point[1]))
     expect(editThickness).toBeCloseTo(0.13)
     expect(documentThickness).toBeCloseTo(0.1)
+    expect(editPolygon.annotationObstacle).toBe('outline')
+    expect(documentPolygon.annotationObstacle).toBe('outline')
   })
 
   test('uses document metric notation only for document output', () => {

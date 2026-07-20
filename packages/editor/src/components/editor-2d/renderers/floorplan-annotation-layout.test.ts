@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveAnnotationLabelRectangles } from './floorplan-annotation-layout'
+import {
+  polylineObstacleRectangles,
+  resolveAnnotationLabelRectangles,
+} from './floorplan-annotation-layout'
 
 describe('resolveAnnotationLabelRectangles', () => {
   test('keeps the higher-priority label and moves the conflicting label', () => {
@@ -52,6 +55,19 @@ describe('resolveAnnotationLabelRectangles', () => {
 
     expect(shifts.find((entry) => entry.id === 'adjacent')).toMatchObject({ dy: 0, resolved: true })
     expect(shifts.find((entry) => entry.id === 'adjacent')?.dx).not.toBe(0)
+  })
+
+  test('approximates diagonal outlines without blocking their full bounding box', () => {
+    expect(
+      polylineObstacleRectangles([
+        { x: 0, y: 0 },
+        { x: 4, y: 4 },
+        { x: 8, y: 8 },
+      ]),
+    ).toEqual([
+      { x: -1, y: -1, width: 6, height: 6 },
+      { x: 3, y: 3, width: 6, height: 6 },
+    ])
   })
 
   test('moves a dimension value clear of a fixed door-mark pill', () => {

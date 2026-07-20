@@ -737,7 +737,27 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   )
   if (markAnnotation) children.push(markAnnotation)
 
-  return { kind: 'group', children }
+  return { kind: 'group', children: children.map(markDoorPlanObstacle) }
+}
+
+function markDoorPlanObstacle(geometry: FloorplanGeometry): FloorplanGeometry {
+  if (geometry.kind === 'group') {
+    const isOpeningMark = geometry.children.some((child) => child.kind === 'text' && child.upright)
+    return isOpeningMark
+      ? geometry
+      : { ...geometry, children: geometry.children.map(markDoorPlanObstacle) }
+  }
+  if (
+    geometry.kind === 'path' ||
+    geometry.kind === 'polygon' ||
+    geometry.kind === 'polyline' ||
+    geometry.kind === 'rect' ||
+    geometry.kind === 'circle' ||
+    geometry.kind === 'line'
+  ) {
+    return { ...geometry, annotationObstacle: 'bounds' }
+  }
+  return geometry
 }
 
 /**

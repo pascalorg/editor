@@ -90,4 +90,24 @@ describe('FloorplanGeometryRenderer static labels', () => {
 
     expect(markup).toContain('data-floorplan-annotation-obstacle=""')
   })
+
+  test('registers semantic plan primitives as annotation obstacles', () => {
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer
+          geometry={{
+            kind: 'polygon',
+            points: [
+              [0, 0],
+              [4, 0],
+              [4, 0.2],
+            ],
+            annotationObstacle: 'outline',
+          }}
+        />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-annotation-obstacle="outline"')
+  })
 })

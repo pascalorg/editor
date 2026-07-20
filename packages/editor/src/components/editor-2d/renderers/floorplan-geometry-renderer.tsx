@@ -62,8 +62,10 @@ function styleAttrs(
     vectorEffect?: 'non-scaling-stroke'
     pointerEvents?: string
     cursor?: string
+    annotationObstacle?: 'bounds' | 'outline'
   }
   return {
+    'data-floorplan-annotation-obstacle': s.annotationObstacle,
     fill: s.fill ?? 'none',
     fillOpacity: s.fillOpacity,
     stroke: s.stroke,

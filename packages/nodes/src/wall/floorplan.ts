@@ -126,6 +126,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
+      annotationObstacle: 'outline',
       // Once the wall is selected, the body keeps catching the pointer
       // so the cursor stays neutral (no drag/pointer affordance from
       // the slab below leaking through), but only the side-arrows and

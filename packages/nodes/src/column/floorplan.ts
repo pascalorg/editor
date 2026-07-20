@@ -54,6 +54,7 @@ export function buildColumnFloorplan(
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
+      annotationObstacle: 'bounds',
     },
   ]
   const { halfX, halfZ } = columnPlanHalfExtents(node)
