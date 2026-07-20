@@ -112,14 +112,31 @@ export const StairOpeningSystem = () => {
       applyUpdates(syncAutoStairOpenings(useScene.getState().nodes))
     }
 
-    runAutoSync()
-    refreshLivePreview()
+    let disposed = false
+    let autoSyncQueued = false
+    const scheduleAutoSync = () => {
+      if (autoSyncQueued) return
+      autoSyncQueued = true
+      // One microtask later so every other scene-store listener for the
+      // triggering transition (and, at mount, the editor's spatial-grid
+      // init) runs first — the spatial-grid sync in particular. The
+      // deck-attached rise elects the stair's floor-stack base elevation
+      // through the spatial grid; syncing before the grid listener would
+      // rescale flights against the pre-transition slab state.
+      queueMicrotask(() => {
+        autoSyncQueued = false
+        if (disposed) return
+        runAutoSync()
+        refreshLivePreview()
+      })
+    }
+
+    scheduleAutoSync()
 
     const unsubscribeScene = useScene.subscribe((state, prevState) => {
       if (syncingAutoOpeningsRef.current) return
       if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-      runAutoSync()
-      refreshLivePreview()
+      scheduleAutoSync()
     })
 
     const unsubscribeLiveTransforms = useLiveTransforms.subscribe(() => {
@@ -131,6 +148,7 @@ export const StairOpeningSystem = () => {
     })
 
     return () => {
+      disposed = true
       unsubscribeScene()
       unsubscribeLiveTransforms()
       unsubscribeLiveOverrides()

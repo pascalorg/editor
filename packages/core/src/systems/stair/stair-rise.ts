@@ -1,3 +1,4 @@
+import { getFloorStackedPosition } from '../../hooks/spatial-grid/floor-placed-elevation'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
 import { getStoredLevelHeight } from '../../services/storey'
@@ -5,18 +6,33 @@ import { getStoredLevelHeight } from '../../services/storey'
 export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, AnyNode>): number {
   if (stair.totalRise !== undefined) return stair.totalRise
 
-  if (stair.deckSlabId) {
-    const deck = nodes[stair.deckSlabId]
-    // The mezzanine stair stands on the storey floor (Y 0) and the deck's
-    // `elevation` IS its walking surface, so rise = elevation — the same
-    // value the deck tools used to write as an explicit totalRise. A stale
-    // reference (deck gone) falls through to the level-derived rise.
-    if (deck?.type === 'slab') return deck.elevation ?? 0.05
-  }
-
   const level = Object.values(nodes).find(
     (node) => node.type === 'level' && node.children.includes(stair.id),
   )
+
+  if (stair.deckSlabId) {
+    const deck = nodes[stair.deckSlabId]
+    // The deck's `elevation` IS its walking surface (level-local), but the
+    // stair's own base may be lifted onto a floor slab by the floor-stack
+    // (`FloorElevationSystem` / `syncStairGroupElevation` put the group at
+    // `position[1] + elected slab elevation`). The rise is measured from
+    // that base, so subtract it — electing the base exactly the way the
+    // visual systems do (persisted `supportSlabId` honored, uncapped
+    // election otherwise) keeps base + rise landing precisely on the deck's
+    // walking surface. A stale reference (deck gone) falls through to the
+    // level-derived rise.
+    if (deck?.type === 'slab') {
+      const baseElevation = getFloorStackedPosition({
+        node: stair,
+        nodes,
+        position: stair.position,
+        rotation: stair.rotation,
+        levelId: level?.id ?? null,
+      })[1]
+      return (deck.elevation ?? 0.05) - baseElevation
+    }
+  }
+
   return level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
 }
 
