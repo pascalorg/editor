@@ -33,6 +33,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -75,6 +76,7 @@ import {
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import { analyzeFloorplanAnnotationCollisions } from './floorplan-annotation-diagnostics'
+import { resolveSvgAnnotationCollisions } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
@@ -1382,6 +1384,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           />
         ))}
       </g>
+      <FloorplanAnnotationLayoutResolver />
       <FloorplanAnnotationDiagnosticsLayer
         entryIds={entries.map((entry) => entry.id)}
         geometryCacheRef={geometryCacheRef}
@@ -1411,6 +1414,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 })
 
+function FloorplanAnnotationLayoutResolver() {
+  const markerRef = useRef<SVGGElement>(null)
+  useLayoutEffect(() => {
+    const svg = markerRef.current?.ownerSVGElement
+    if (svg) resolveSvgAnnotationCollisions(svg)
+  })
+  return <g pointerEvents="none" ref={markerRef} />
+}
+
 function FloorplanAnnotationDiagnosticsLayer({
   entryIds,
   geometryCacheRef,
@@ -1435,7 +1447,11 @@ function FloorplanAnnotationDiagnosticsLayer({
         ]
       : []
   })
-  const diagnostics = analyzeFloorplanAnnotationCollisions(sources, unitsPerPixel, sceneRotationDeg)
+  const diagnostics = analyzeFloorplanAnnotationCollisions(
+    sources,
+    unitsPerPixel,
+    sceneRotationDeg,
+  ).filter((diagnostic) => diagnostic.kind !== 'label-overlap')
   if (diagnostics.length === 0) return null
 
   return (
@@ -2559,11 +2575,15 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
         const textWidth = g.text.length * labelUnitsPerPixel * 6.2
         const plateW = textWidth + padX * 2
         const plateH = fontSize + padY * 2
+        const labelTransform = `translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * labelUnitsPerPixel})`
         return (
           <g
+            data-floorplan-annotation-default-transform={labelTransform}
+            data-floorplan-annotation-label=""
+            data-floorplan-annotation-priority="20"
             key={keyHint}
             pointerEvents="none"
-            transform={`translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * labelUnitsPerPixel})`}
+            transform={labelTransform}
           >
             {outlined ? null : (
               <rect

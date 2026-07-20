@@ -135,6 +135,7 @@ export function FloorplanDimensionRenderer({
     vectorEffect: 'non-scaling-stroke' as const,
   }
   const [tickX, tickY] = layout.tickHalfVector
+  const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
 
   return (
     <g pointerEvents="none">
@@ -176,7 +177,10 @@ export function FloorplanDimensionRenderer({
         y2={layout.dimensionEnd[1] + tickY}
       />
       <g
-        transform={`translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`}
+        data-floorplan-annotation-default-transform={labelTransform}
+        data-floorplan-annotation-label=""
+        data-floorplan-annotation-priority="100"
+        transform={labelTransform}
       >
         <text
           fill={stroke}

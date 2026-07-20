@@ -210,6 +210,8 @@ The same annotation should plot consistently whether the modeled building is 8 m
 
 ### 3.4 Implement collision resolution
 
+Status: initial label-to-label resolution is implemented in the live floor plan and PDF composition. Construction dimensions retain priority while lower-priority labels try nearby horizontal and outward paper-space positions. Plan-geometry avoidance, outside-extension placement for short segments, leaders, and user-pinned positions remain.
+
 - Move text outside short segments with a leader or extended dimension line.
 - Preserve string order and datum consistency.
 - Avoid overlaps between adjacent facade strings.

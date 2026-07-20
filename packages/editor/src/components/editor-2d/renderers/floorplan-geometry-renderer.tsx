@@ -214,12 +214,16 @@ function renderNode(
       const plateW = textWidth + padX * 2
       const plateH = fontSize + padY * 2
       const degrees = resolveFloorplanLabelAngle(g.angle, sceneRotationDeg, g.screenUpright)
+      const labelTransform = `translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * unitsPerPixel})`
 
       return (
         <g
+          data-floorplan-annotation-default-transform={labelTransform}
+          data-floorplan-annotation-label=""
+          data-floorplan-annotation-priority="20"
           key={keyHint}
           pointerEvents="none"
-          transform={`translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * unitsPerPixel})`}
+          transform={labelTransform}
         >
           {outlined ? null : (
             <rect

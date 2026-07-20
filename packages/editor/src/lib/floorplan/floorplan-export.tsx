@@ -16,6 +16,7 @@ import type { jsPDF as JsPdfDocument } from 'jspdf'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
+import { resolveSvgAnnotationCollisions } from '../../components/editor-2d/renderers/floorplan-annotation-layout'
 import { FloorplanGeometryRenderer } from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import {
   buildContext,
@@ -419,6 +420,7 @@ async function mountFloorplanSvg(
     setAnnotationUnitsPerPoint: async (value) => {
       render(value)
       await nextFrames(1)
+      resolveSvgAnnotationCollisions(svg)
       if (!measureMountedFloorplan(mounted)) throw new Error('Unable to measure floor plan export')
     },
   }
