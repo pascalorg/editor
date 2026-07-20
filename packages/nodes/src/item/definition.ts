@@ -283,6 +283,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./renderer').then(({ ItemPreview }) => ({ default: ItemPreview })),
   system: {
     module: () => import('./system'),
     // Same priority as the legacy ItemSystem.

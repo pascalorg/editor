@@ -217,6 +217,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
   system: {
     module: () => import('./system'),
     // Priority 3 mirrors the legacy DoorSystem (after animation at 2,

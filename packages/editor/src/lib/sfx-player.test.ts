@@ -3,13 +3,16 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test'
 type FakeContext = { id: string }
 
 let activeContext: FakeContext = { id: 'first' }
+let initialState: 'loaded' | 'loading' = 'loaded'
 let throwOnPlay = false
 const instances: FakeHowl[] = []
 
 class FakeHowl {
-  stateValue: 'loaded' | 'unloaded' = 'loaded'
+  stateValue: 'loaded' | 'loading' | 'unloaded' = initialState
   unloadCount = 0
   playCount = 0
+  stereoCalls: Array<[number, number | undefined]> = []
+  volumeCalls: Array<[number, number | undefined]> = []
 
   constructor(_options: unknown) {
     instances.push(this)
@@ -21,7 +24,13 @@ class FakeHowl {
     return 1
   }
 
-  volume() {
+  volume(value: number, id?: number) {
+    this.volumeCalls.push([value, id])
+    return this
+  }
+
+  stereo(value: number, id?: number) {
+    this.stereoCalls.push([value, id])
     return this
   }
 
@@ -59,6 +68,7 @@ const { disposeSFXBus, initSFXBus, triggerSFX } = await import('./sfx-bus')
 beforeEach(() => {
   disposeSFXBus()
   activeContext = { id: 'first' }
+  initialState = 'loaded'
   throwOnPlay = false
   instances.length = 0
 })
@@ -104,6 +114,16 @@ describe('SFX audio context lifecycle', () => {
     expect(instances.length).toBe(initialCount)
   })
 
+  test('does not queue spatial mutations while a sound is still loading', () => {
+    initialState = 'loading'
+
+    playSFX('itemDelete', { source: 'remote', stereo: 0.65, volumeMultiplier: 0.25 })
+
+    expect(instances.every((sound) => sound.playCount === 0)).toBe(true)
+    expect(instances.every((sound) => sound.stereoCalls.length === 0)).toBe(true)
+    expect(instances.every((sound) => sound.volumeCalls.length === 0)).toBe(true)
+  })
+
   test('disposes idempotently and recreates sounds after remount', () => {
     preloadSFX()
     const initialCount = instances.length
@@ -120,5 +140,21 @@ describe('SFX audio context lifecycle', () => {
     throwOnPlay = true
 
     expect(() => triggerSFX('sfx:item-delete')).not.toThrow()
+  })
+
+  test('applies bounded gain and stereo positioning to a remote cue', () => {
+    playSFX('itemDelete', { source: 'remote', stereo: 0.65, volumeMultiplier: 0.25 })
+
+    const played = instances.find((sound) => sound.playCount === 1)
+    expect(played?.volumeCalls[0]?.[0]).toBeGreaterThanOrEqual(0.225)
+    expect(played?.volumeCalls[0]?.[0]).toBeLessThanOrEqual(0.25)
+    expect(played?.stereoCalls).toEqual([[0.65, 1]])
+  })
+
+  test('keeps local feedback audible after the same remote cue', () => {
+    playSFX('itemDelete', { source: 'remote', volumeMultiplier: 0.25 })
+    playSFX('itemDelete')
+
+    expect(instances.reduce((total, sound) => total + sound.playCount, 0)).toBe(2)
   })
 })

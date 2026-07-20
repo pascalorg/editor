@@ -254,6 +254,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
   system: {
     module: () => import('./system'),
     priority: 3,

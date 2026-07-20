@@ -429,6 +429,34 @@ const PreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
+const LoadedItemPreview = ({ node }: { node: ItemNode }) => {
+  const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
+  if (getUnavailableItemAsset(gltf)) return <PreviewModel node={node} />
+  return (
+    <group rotation={node.rotation} scale={node.scale}>
+      <Clone
+        dispose={null}
+        object={gltf.scene}
+        position={node.asset.offset}
+        rotation={node.asset.rotation}
+        scale={node.asset.scale || [1, 1, 1]}
+      />
+    </group>
+  )
+}
+
+export const ItemPreview = ({ node }: { node: ItemNode }) => {
+  const url = resolveCdnUrl(node.asset.src) || ''
+  if (!url) return <PreviewModel node={node} />
+  return (
+    <Suspense fallback={<PreviewModel node={node} />}>
+      <ErrorBoundary fallback={<PreviewModel node={node} />} scope="item-preview-model">
+        <LoadedItemPreview node={node} />
+      </ErrorBoundary>
+    </Suspense>
+  )
+}
+
 const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
   const [w, h, d] = getScaledDimensions(node)
