@@ -34,8 +34,8 @@ export function buildColumnFloorplan(
   node: ColumnNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  const polygon = getColumnPlanFootprint(node)
-  if (polygon.length < 3) return null
+  const points = getColumnFloorplanFootprint(node)
+  if (points.length < 3) return null
 
   const view = ctx.viewState
   const palette = view?.palette
@@ -45,8 +45,6 @@ export function buildColumnFloorplan(
 
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#374151'
   const fill = showSelectedChrome ? '#fed7aa' : '#9ca3af'
-
-  const points: FloorplanPoint[] = polygon.map((p) => [p.x, p.y] as FloorplanPoint)
 
   const children: FloorplanGeometry[] = [
     {
@@ -58,6 +56,34 @@ export function buildColumnFloorplan(
       opacity: 0.92,
     },
   ]
+  const { halfX, halfZ } = columnPlanHalfExtents(node)
+  const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
+  const centerX = node.position[0]
+  const centerZ = node.position[2]
+  children.push(
+    {
+      kind: 'line',
+      x1: centerX - centerMarkHalf,
+      y1: centerZ - centerMarkHalf,
+      x2: centerX + centerMarkHalf,
+      y2: centerZ + centerMarkHalf,
+      stroke,
+      strokeWidth: 0.9,
+      vectorEffect: 'non-scaling-stroke',
+      pointerEvents: 'none',
+    },
+    {
+      kind: 'line',
+      x1: centerX - centerMarkHalf,
+      y1: centerZ + centerMarkHalf,
+      x2: centerX + centerMarkHalf,
+      y2: centerZ - centerMarkHalf,
+      stroke,
+      strokeWidth: 0.9,
+      vectorEffect: 'non-scaling-stroke',
+      pointerEvents: 'none',
+    },
+  )
 
   // Hatch overlay on selected — same `<defs>` pattern as the wall.
   if (isSelected && palette) {
@@ -146,7 +172,6 @@ export function buildColumnFloorplan(
     // Rotate-arrow at the +X / +Z corner — matches the 3D
     // `columnRotateHandle` corner placement so users see the rotation
     // affordance in the same quadrant across views.
-    const { halfX, halfZ } = columnPlanHalfExtents(node)
     const cornerLocalX = halfX + ROTATE_ARROW_CORNER_OFFSET
     const cornerLocalZ = halfZ + ROTATE_ARROW_CORNER_OFFSET
     const [cornerWorldX, cornerWorldZ] = rotatePlanVector(cornerLocalX, cornerLocalZ, rot)
@@ -161,6 +186,10 @@ export function buildColumnFloorplan(
   }
 
   return { kind: 'group', children }
+}
+
+export function getColumnFloorplanFootprint(node: ColumnNode): FloorplanPoint[] {
+  return getColumnPlanFootprint(node).map((point) => [point.x, point.y])
 }
 
 // ── Inlined helpers from legacy floorplan-panel.tsx ───────────────────

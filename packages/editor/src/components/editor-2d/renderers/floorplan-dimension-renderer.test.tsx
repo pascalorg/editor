@@ -38,6 +38,27 @@ describe('architectural floor-plan dimensions', () => {
     expect(layout?.tickHalfVector[1]).toBeCloseTo(-0.06364, 5)
   })
 
+  test('aligns stepped feature origins to an explicit exterior baseline', () => {
+    const layout = computeArchitecturalDimensionLayout(
+      {
+        ...dimension,
+        start: [0, 0],
+        end: [4, 1],
+        dimensionStart: [0, 2],
+        dimensionEnd: [4, 2],
+        offsetDistance: 2,
+      },
+      0,
+    )
+
+    expect(layout?.dimensionStart).toEqual([0, 2])
+    expect(layout?.dimensionEnd).toEqual([4, 2])
+    expect(layout?.extensionStart).toEqual([0, 0.075])
+    expect(layout?.extensionEnd).toEqual([4, 1.075])
+    expect(layout?.extensionStartTip).toEqual([0, 2.12])
+    expect(layout?.extensionEndTip).toEqual([4, 2.12])
+  })
+
   test('renders one uninterrupted line with the label above it', () => {
     const markup = renderToStaticMarkup(
       <svg>

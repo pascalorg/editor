@@ -51,6 +51,10 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export {
+  ConstructionNoteNode,
+  ConstructionNoteTerminator,
+} from './nodes/construction-note'
 export { CupolaNode } from './nodes/cupola'
 export { DoorNode, DoorSegment } from './nodes/door'
 export {

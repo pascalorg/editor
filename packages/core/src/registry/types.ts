@@ -629,6 +629,15 @@ export type FloorplanGeometry =
       kind: 'dimension'
       start: FloorplanPoint
       end: FloorplanPoint
+      /**
+       * Optional explicit dimension-line endpoints. Use these when the
+       * measured origins sit at different depths, such as stepped facades or
+       * an exterior column row. Extension lines still originate at
+       * `start`/`end`, while the measurement is drawn between these aligned
+       * baseline points.
+       */
+      dimensionStart?: FloorplanPoint
+      dimensionEnd?: FloorplanPoint
       /** Outward-pointing unit normal — the dimension line offsets along this. */
       offsetNormal: FloorplanPoint
       /** Distance (plan units) from the edge to the dimension line. */

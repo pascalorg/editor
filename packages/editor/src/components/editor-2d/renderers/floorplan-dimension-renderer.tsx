@@ -29,8 +29,14 @@ export function computeArchitecturalDimensionLayout(
 ): ArchitecturalDimensionLayout | null {
   const offsetX = geometry.offsetNormal[0] * geometry.offsetDistance
   const offsetY = geometry.offsetNormal[1] * geometry.offsetDistance
-  const dimensionStart: FloorplanPoint = [geometry.start[0] + offsetX, geometry.start[1] + offsetY]
-  const dimensionEnd: FloorplanPoint = [geometry.end[0] + offsetX, geometry.end[1] + offsetY]
+  const dimensionStart: FloorplanPoint = geometry.dimensionStart ?? [
+    geometry.start[0] + offsetX,
+    geometry.start[1] + offsetY,
+  ]
+  const dimensionEnd: FloorplanPoint = geometry.dimensionEnd ?? [
+    geometry.end[0] + offsetX,
+    geometry.end[1] + offsetY,
+  ]
   const dx = dimensionEnd[0] - dimensionStart[0]
   const dy = dimensionEnd[1] - dimensionStart[1]
   const length = Math.hypot(dx, dy)
@@ -38,12 +44,10 @@ export function computeArchitecturalDimensionLayout(
 
   const dirX = dx / length
   const dirY = dy / length
-  const extensionGap = Math.min(EXTENSION_START_GAP, Math.max(0, geometry.offsetDistance - 0.01))
-  const extensionGapX = geometry.offsetNormal[0] * extensionGap
-  const extensionGapY = geometry.offsetNormal[1] * extensionGap
-  const extensionTipDistance = geometry.offsetDistance + geometry.extensionOvershoot
-  const extensionTipX = geometry.offsetNormal[0] * extensionTipDistance
-  const extensionTipY = geometry.offsetNormal[1] * extensionTipDistance
+  const startOffsetDistance = dot(subtract(dimensionStart, geometry.start), geometry.offsetNormal)
+  const endOffsetDistance = dot(subtract(dimensionEnd, geometry.end), geometry.offsetNormal)
+  const startExtensionGap = Math.min(EXTENSION_START_GAP, Math.max(0, startOffsetDistance - 0.01))
+  const endExtensionGap = Math.min(EXTENSION_START_GAP, Math.max(0, endOffsetDistance - 0.01))
 
   // A 45-degree architectural slash. Every terminator within one string uses
   // this same vector instead of rotating independently around its endpoint.
@@ -55,10 +59,14 @@ export function computeArchitecturalDimensionLayout(
   return {
     dimensionStart,
     dimensionEnd,
-    extensionStart: [geometry.start[0] + extensionGapX, geometry.start[1] + extensionGapY],
-    extensionEnd: [geometry.end[0] + extensionGapX, geometry.end[1] + extensionGapY],
-    extensionStartTip: [geometry.start[0] + extensionTipX, geometry.start[1] + extensionTipY],
-    extensionEndTip: [geometry.end[0] + extensionTipX, geometry.end[1] + extensionTipY],
+    extensionStart: addScaled(geometry.start, geometry.offsetNormal, startExtensionGap),
+    extensionEnd: addScaled(geometry.end, geometry.offsetNormal, endExtensionGap),
+    extensionStartTip: addScaled(
+      dimensionStart,
+      geometry.offsetNormal,
+      geometry.extensionOvershoot,
+    ),
+    extensionEndTip: addScaled(dimensionEnd, geometry.offsetNormal, geometry.extensionOvershoot),
     tickHalfVector,
     labelPoint: [
       (dimensionStart[0] + dimensionEnd[0]) / 2,
@@ -66,6 +74,22 @@ export function computeArchitecturalDimensionLayout(
     ],
     labelAngleDeg: resolveFloorplanLabelAngle(Math.atan2(dy, dx), sceneRotationDeg),
   }
+}
+
+function subtract(left: FloorplanPoint, right: FloorplanPoint): FloorplanPoint {
+  return [left[0] - right[0], left[1] - right[1]]
+}
+
+function dot(left: FloorplanPoint, right: FloorplanPoint): number {
+  return left[0] * right[0] + left[1] * right[1]
+}
+
+function addScaled(
+  point: FloorplanPoint,
+  direction: FloorplanPoint,
+  distance: number,
+): FloorplanPoint {
+  return [point[0] + direction[0] * distance, point[1] + direction[1] * distance]
 }
 
 export function FloorplanDimensionRenderer({

@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type ColumnNode,
   type DoorNode,
   type FloorplanGeometry,
   type FloorplanPoint,
@@ -8,6 +9,7 @@ import {
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { getColumnFloorplanFootprint } from '../column/floorplan'
 import {
   type ConstructionLinearUnit,
   formatConstructionLength,
@@ -17,23 +19,42 @@ export { formatConstructionLength } from '../shared/construction-length'
 
 const OPENING_CHAIN_OFFSET = 0.45
 const WALL_SPAN_OFFSET = 0.82
-const FACADE_OPENING_WIDTH_OFFSET = 0.18
-const FACADE_OPENING_OFFSET = 0.45
-const FACADE_PARTITION_OFFSET = 0.93
-const FACADE_OVERALL_OFFSET = 1.41
+const FIRST_OPENING_WIDTH_OFFSET = 0.18
+const FIRST_GENERAL_TIER_OFFSET = 0.45
+const TIER_SPACING = 0.48
 const EXTENSION_OVERSHOOT = 0.12
 const MIN_SEGMENT_LENGTH = 0.02
 const FACADE_LINE_TOLERANCE = 0.03
 const FACADE_DIRECTION_TOLERANCE = 0.001
+const COLUMN_ROW_TOLERANCE = 0.05
 
 type OpeningNode = DoorNode | WindowNode
 
-export type ConstructionDimensionTier = 'opening-widths' | 'openings' | 'partitions' | 'overall'
+export type ConstructionDimensionTier =
+  | 'opening-widths'
+  | 'openings'
+  | 'partitions'
+  | 'structure'
+  | 'jogs'
+  | 'overall'
+  | 'structural-overall'
+
+const TIER_ORDER: readonly ConstructionDimensionTier[] = [
+  'opening-widths',
+  'openings',
+  'partitions',
+  'structure',
+  'jogs',
+  'overall',
+  'structural-overall',
+]
 
 export type PlannedConstructionDimension = {
   tier: ConstructionDimensionTier
   start: FloorplanPoint
   end: FloorplanPoint
+  dimensionStart?: FloorplanPoint
+  dimensionEnd?: FloorplanPoint
   offsetNormal: FloorplanPoint
   offsetDistance: number
 }
@@ -49,39 +70,48 @@ type FacadeMember = {
   tangent: FloorplanPoint
 }
 
+type PendingConstructionDimension = {
+  tier: ConstructionDimensionTier
+  start: FloorplanPoint
+  end: FloorplanPoint
+  startProjection: number
+  endProjection: number
+}
+
 export function buildLevelWallConstructionDimensionPlan(
   walls: ReadonlyArray<WallNode>,
   nodes: Record<string, AnyNode>,
 ): WallConstructionDimensionPlan {
-  const groups = new Map<string, FacadeMember[]>()
-
-  for (const wall of walls) {
-    if (isCurvedWall(wall)) continue
-    const normal = exteriorNormal(wall)
-    if (!normal) continue
-    const tangent: FloorplanPoint = [cleanZero(normal[1]), cleanZero(-normal[0])]
-    const midpoint: FloorplanPoint = [
-      (wall.start[0] + wall.end[0]) / 2,
-      (wall.start[1] + wall.end[1]) / 2,
-    ]
-    const directionKey = `${Math.round(normal[0] / FACADE_DIRECTION_TOLERANCE)},${Math.round(normal[1] / FACADE_DIRECTION_TOLERANCE)}`
-    const lineKey = Math.round(dot(midpoint, normal) / FACADE_LINE_TOLERANCE)
-    const key = `${directionKey}:${lineKey}`
-    const members = groups.get(key)
-    const member = { wall, normal, tangent }
-    if (members) members.push(member)
-    else groups.set(key, [member])
-  }
-
   const dimensionsByWallId = new Map<string, PlannedConstructionDimension[]>()
-  for (const groupedMembers of groups.values()) {
-    for (const members of splitFacadeRuns(groupedMembers)) {
-      members.sort((left, right) => String(left.wall.id).localeCompare(String(right.wall.id)))
-      const representative = members[0]
+  const wallNetworkById = buildWallNetworkIndex(walls)
+  const exteriorMembers = walls.flatMap((wall): FacadeMember[] => {
+    if (isCurvedWall(wall)) return []
+    const normal = exteriorNormal(wall)
+    if (!normal) return []
+    const network = wallNetworkById.get(wall.id) ?? [wall]
+    if (isFacadeOccluded(wall, normal, network)) return []
+    return [{ wall, normal, tangent: [cleanZero(normal[1]), cleanZero(-normal[0])] }]
+  })
+  const columns = Object.values(nodes).filter(
+    (node): node is ColumnNode => node.type === 'column' && node.visible !== false,
+  )
+
+  const components = splitConnectedFacadeComponents(exteriorMembers)
+  for (const component of components) {
+    const directionGroups = groupFacadeMembersByDirection(component)
+    const componentColumns = columns.filter(
+      (column) =>
+        column.parentId === component[0]?.wall.parentId &&
+        nearestFacadeComponent(column, components) === component,
+    )
+
+    for (const directionMembers of directionGroups.values()) {
+      const representative = [...directionMembers].sort((left, right) =>
+        String(left.wall.id).localeCompare(String(right.wall.id)),
+      )[0]
       if (!representative) continue
       const { normal, tangent } = representative
-
-      const wallProjections = members.flatMap(({ wall }) => [
+      const wallProjections = directionMembers.flatMap(({ wall }) => [
         dot(wall.start, tangent),
         dot(wall.end, tangent),
       ])
@@ -89,117 +119,83 @@ export function buildLevelWallConstructionDimensionPlan(
       const extentEnd = Math.max(...wallProjections)
       if (extentEnd - extentStart < MIN_SEGMENT_LENGTH) continue
 
-      const faceCoordinate = Math.max(
-        ...members.map(({ wall }) => {
-          const midpoint: FloorplanPoint = [
-            (wall.start[0] + wall.end[0]) / 2,
-            (wall.start[1] + wall.end[1]) / 2,
-          ]
-          return dot(midpoint, normal) + (wall.thickness ?? 0.1) / 2
-        }),
+      const outerFaceCoordinate = Math.max(
+        ...directionMembers.map(({ wall }) => exteriorFaceCoordinate(wall, normal)),
       )
-      const pointAt = (projection: number): FloorplanPoint => [
-        tangent[0] * projection + normal[0] * faceCoordinate,
-        tangent[1] * projection + normal[1] * faceCoordinate,
-      ]
+      const pending: PendingConstructionDimension[] = []
+      const lineGroups = groupFacadeMembersByLine(directionMembers, normal)
 
-      const openingCenters: number[] = []
-      const openingSpans: Array<readonly [number, number]> = []
-      for (const { wall } of members) {
-        const dx = wall.end[0] - wall.start[0]
-        const dz = wall.end[1] - wall.start[1]
-        const length = Math.hypot(dx, dz)
-        if (length < MIN_SEGMENT_LENGTH) continue
-        for (const opening of Object.values(nodes)) {
-          if (opening.type !== 'door' && opening.type !== 'window') continue
-          if (opening.visible === false) continue
-          const hostWallId = opening.wallId ?? opening.parentId
-          if (hostWallId !== wall.id) continue
-          const along = clamp(opening.position[0], 0, length)
-          const center: FloorplanPoint = [
-            wall.start[0] + (dx / length) * along,
-            wall.start[1] + (dz / length) * along,
-          ]
-          openingCenters.push(dot(center, tangent))
-          const halfWidth = Math.max(0, opening.width) / 2
-          const startAlong = clamp(along - halfWidth, 0, length)
-          const endAlong = clamp(along + halfWidth, 0, length)
-          const startPoint: FloorplanPoint = [
-            wall.start[0] + (dx / length) * startAlong,
-            wall.start[1] + (dz / length) * startAlong,
-          ]
-          const endPoint: FloorplanPoint = [
-            wall.start[0] + (dx / length) * endAlong,
-            wall.start[1] + (dz / length) * endAlong,
-          ]
-          const startProjection = dot(startPoint, tangent)
-          const endProjection = dot(endPoint, tangent)
-          if (Math.abs(endProjection - startProjection) >= MIN_SEGMENT_LENGTH) {
-            openingSpans.push([
-              Math.min(startProjection, endProjection),
-              Math.max(startProjection, endProjection),
-            ])
-          }
+      for (const groupedMembers of lineGroups.values()) {
+        for (const run of splitFacadeRuns(groupedMembers)) {
+          appendFacadeRunDimensions(pending, run, walls, nodes, normal, tangent)
         }
       }
 
-      const memberIds = new Set(members.map(({ wall }) => wall.id))
-      const partitionReferences: number[] = []
-      for (const candidate of walls) {
-        if (memberIds.has(candidate.id) || isCurvedWall(candidate)) continue
-        for (const { wall } of members) {
-          const intersection = facadeInsideFaceIntersection(wall, candidate, normal)
-          if (!intersection) continue
-          const projection = dot(intersection, tangent)
-          if (
-            projection > extentStart + MIN_SEGMENT_LENGTH &&
-            projection < extentEnd - MIN_SEGMENT_LENGTH
-          ) {
-            partitionReferences.push(projection)
-          }
-        }
+      if (lineGroups.size > 1) {
+        const jogProjections = uniqueSorted(wallProjections)
+        appendProjectedChain(pending, jogProjections, 'jogs', (projection) =>
+          exteriorOriginAtProjection(directionMembers, projection, tangent, normal),
+        )
       }
 
-      const planned: PlannedConstructionDimension[] = []
-      openingSpans
-        .sort((left, right) => left[0] - right[0])
-        .forEach(([start, end]) => {
-          planned.push({
-            tier: 'opening-widths',
-            start: pointAt(start),
-            end: pointAt(end),
-            offsetNormal: normal,
-            offsetDistance: FACADE_OPENING_WIDTH_OFFSET,
-          })
-        })
-      appendTier(
-        planned,
-        openingCenters,
-        extentStart,
-        extentEnd,
-        pointAt,
-        normal,
-        'openings',
-        FACADE_OPENING_OFFSET,
+      const exteriorColumns = componentColumns.filter(
+        (column) =>
+          dot(columnPlanPoint(column), normal) + columnNormalHalfExtent(column, normal) >=
+          outerFaceCoordinate - FACADE_LINE_TOLERANCE,
       )
-      appendTier(
-        planned,
-        partitionReferences,
-        extentStart,
-        extentEnd,
-        pointAt,
-        normal,
-        'partitions',
-        FACADE_PARTITION_OFFSET,
-      )
-      planned.push({
+      const structureRow = outermostColumnRow(exteriorColumns, component, normal, tangent)
+      if (structureRow.length >= 2) {
+        const projections = uniqueSorted(
+          structureRow.map((column) => dot(columnPlanPoint(column), tangent)),
+        )
+        appendProjectedChain(pending, projections, 'structure', (projection) =>
+          columnOriginAtProjection(structureRow, projection, tangent),
+        )
+      }
+
+      pending.push({
         tier: 'overall',
-        start: pointAt(extentStart),
-        end: pointAt(extentEnd),
-        offsetNormal: normal,
-        offsetDistance: FACADE_OVERALL_OFFSET,
+        start: exteriorOriginAtProjection(directionMembers, extentStart, tangent, normal),
+        end: exteriorOriginAtProjection(directionMembers, extentEnd, tangent, normal),
+        startProjection: extentStart,
+        endProjection: extentEnd,
       })
-      dimensionsByWallId.set(representative.wall.id, planned)
+
+      const structuralProjections = structureRow.map((column) =>
+        dot(columnPlanPoint(column), tangent),
+      )
+      const structuralStart = Math.min(extentStart, ...structuralProjections)
+      const structuralEnd = Math.max(extentEnd, ...structuralProjections)
+      if (
+        structureRow.length >= 2 &&
+        (structuralStart < extentStart - MIN_SEGMENT_LENGTH ||
+          structuralEnd > extentEnd + MIN_SEGMENT_LENGTH)
+      ) {
+        pending.push({
+          tier: 'structural-overall',
+          start:
+            structuralStart < extentStart - MIN_SEGMENT_LENGTH
+              ? columnOriginAtProjection(structureRow, structuralStart, tangent)
+              : exteriorOriginAtProjection(directionMembers, extentStart, tangent, normal),
+          end:
+            structuralEnd > extentEnd + MIN_SEGMENT_LENGTH
+              ? columnOriginAtProjection(structureRow, structuralEnd, tangent)
+              : exteriorOriginAtProjection(directionMembers, extentEnd, tangent, normal),
+          startProjection: structuralStart,
+          endProjection: structuralEnd,
+        })
+      }
+
+      const structuralFaceCoordinate = Math.max(
+        outerFaceCoordinate,
+        ...structureRow.map(
+          (column) => dot(columnPlanPoint(column), normal) + columnNormalHalfExtent(column, normal),
+        ),
+      )
+      dimensionsByWallId.set(
+        representative.wall.id,
+        finalizeDimensionTiers(pending, tangent, normal, structuralFaceCoordinate),
+      )
     }
   }
 
@@ -212,7 +208,16 @@ export function renderPlannedConstructionDimensions(
   stroke?: string,
 ): FloorplanGeometry[] {
   return planned.map((entry) =>
-    dimension(entry.start, entry.end, entry.offsetNormal, entry.offsetDistance, unit, stroke),
+    dimension(
+      entry.start,
+      entry.end,
+      entry.offsetNormal,
+      entry.offsetDistance,
+      unit,
+      stroke,
+      entry.dimensionStart,
+      entry.dimensionEnd,
+    ),
   )
 }
 
@@ -290,15 +295,24 @@ function dimension(
   offsetDistance: number,
   unit: ConstructionLinearUnit,
   stroke?: string,
+  dimensionStart?: FloorplanPoint,
+  dimensionEnd?: FloorplanPoint,
 ): FloorplanGeometry {
+  const measurementStart = dimensionStart ?? start
+  const measurementEnd = dimensionEnd ?? end
   return {
     kind: 'dimension',
     start,
     end,
+    dimensionStart,
+    dimensionEnd,
     offsetNormal,
     offsetDistance,
     extensionOvershoot: EXTENSION_OVERSHOOT,
-    text: formatConstructionLength(Math.hypot(end[0] - start[0], end[1] - start[1]), unit),
+    text: formatConstructionLength(
+      Math.hypot(measurementEnd[0] - measurementStart[0], measurementEnd[1] - measurementStart[1]),
+      unit,
+    ),
     stroke,
   }
 }
@@ -341,6 +355,459 @@ function exteriorNormal(wall: WallNode): FloorplanPoint | null {
   return null
 }
 
+function buildWallNetworkIndex(
+  walls: ReadonlyArray<WallNode>,
+): Map<string, ReadonlyArray<WallNode>> {
+  const straightWalls = walls.filter((wall) => !isCurvedWall(wall))
+  const unvisited = new Set(straightWalls)
+  const networkById = new Map<string, ReadonlyArray<WallNode>>()
+
+  while (unvisited.size > 0) {
+    const seed = unvisited.values().next().value
+    if (!seed) break
+    unvisited.delete(seed)
+    const network = [seed]
+    const queue = [seed]
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current) continue
+      for (const candidate of unvisited) {
+        if (!wallSegmentsTouch(current, candidate)) continue
+        unvisited.delete(candidate)
+        network.push(candidate)
+        queue.push(candidate)
+      }
+    }
+    for (const wall of network) networkById.set(wall.id, network)
+  }
+
+  return networkById
+}
+
+function wallSegmentsTouch(left: WallNode, right: WallNode): boolean {
+  return (
+    pointSegmentDistance(left.start, right.start, right.end) <= FACADE_LINE_TOLERANCE ||
+    pointSegmentDistance(left.end, right.start, right.end) <= FACADE_LINE_TOLERANCE ||
+    pointSegmentDistance(right.start, left.start, left.end) <= FACADE_LINE_TOLERANCE ||
+    pointSegmentDistance(right.end, left.start, left.end) <= FACADE_LINE_TOLERANCE ||
+    segmentIntersection(left.start, left.end, right.start, right.end) !== null
+  )
+}
+
+function isFacadeOccluded(
+  wall: WallNode,
+  outwardNormal: FloorplanPoint,
+  network: ReadonlyArray<WallNode>,
+): boolean {
+  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const origin = addScaled(
+    [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2],
+    outwardNormal,
+    halfThickness + FACADE_LINE_TOLERANCE,
+  )
+  return network.some(
+    (candidate) =>
+      candidate.id !== wall.id &&
+      raySegmentDistance(origin, outwardNormal, candidate.start, candidate.end) !== null,
+  )
+}
+
+function raySegmentDistance(
+  rayOrigin: FloorplanPoint,
+  rayDirection: FloorplanPoint,
+  segmentStart: FloorplanPoint,
+  segmentEnd: FloorplanPoint,
+): number | null {
+  const segmentDirection = subtract(segmentEnd, segmentStart)
+  const denominator = cross(rayDirection, segmentDirection)
+  if (Math.abs(denominator) < 1e-8) return null
+  const fromRay = subtract(segmentStart, rayOrigin)
+  const alongRay = cross(fromRay, segmentDirection) / denominator
+  const alongSegment = cross(fromRay, rayDirection) / denominator
+  if (alongRay <= FACADE_LINE_TOLERANCE || alongSegment < -1e-6 || alongSegment > 1 + 1e-6) {
+    return null
+  }
+  return alongRay
+}
+
+function splitConnectedFacadeComponents(members: FacadeMember[]): FacadeMember[][] {
+  const unvisited = new Set(members)
+  const components: FacadeMember[][] = []
+
+  while (unvisited.size > 0) {
+    const seed = unvisited.values().next().value
+    if (!seed) break
+    unvisited.delete(seed)
+    const component = [seed]
+    const queue = [seed]
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current) continue
+      for (const candidate of unvisited) {
+        if (!wallsTouch(current.wall, candidate.wall)) continue
+        unvisited.delete(candidate)
+        component.push(candidate)
+        queue.push(candidate)
+      }
+    }
+    components.push(component)
+  }
+
+  return components
+}
+
+function wallsTouch(left: WallNode, right: WallNode): boolean {
+  return [left.start, left.end].some((leftPoint) =>
+    [right.start, right.end].some(
+      (rightPoint) => distance(leftPoint, rightPoint) <= FACADE_LINE_TOLERANCE,
+    ),
+  )
+}
+
+function groupFacadeMembersByDirection(
+  members: readonly FacadeMember[],
+): Map<string, FacadeMember[]> {
+  const groups = new Map<string, FacadeMember[]>()
+  for (const member of members) {
+    const key = `${Math.round(member.normal[0] / FACADE_DIRECTION_TOLERANCE)},${Math.round(member.normal[1] / FACADE_DIRECTION_TOLERANCE)}`
+    const group = groups.get(key)
+    if (group) group.push(member)
+    else groups.set(key, [member])
+  }
+  return groups
+}
+
+function groupFacadeMembersByLine(
+  members: readonly FacadeMember[],
+  normal: FloorplanPoint,
+): Map<number, FacadeMember[]> {
+  const groups = new Map<number, FacadeMember[]>()
+  for (const member of members) {
+    const midpoint: FloorplanPoint = [
+      (member.wall.start[0] + member.wall.end[0]) / 2,
+      (member.wall.start[1] + member.wall.end[1]) / 2,
+    ]
+    const key = Math.round(dot(midpoint, normal) / FACADE_LINE_TOLERANCE)
+    const group = groups.get(key)
+    if (group) group.push(member)
+    else groups.set(key, [member])
+  }
+  return groups
+}
+
+function appendFacadeRunDimensions(
+  pending: PendingConstructionDimension[],
+  members: readonly FacadeMember[],
+  walls: ReadonlyArray<WallNode>,
+  nodes: Record<string, AnyNode>,
+  normal: FloorplanPoint,
+  tangent: FloorplanPoint,
+): void {
+  const wallProjections = members.flatMap(({ wall }) => [
+    dot(wall.start, tangent),
+    dot(wall.end, tangent),
+  ])
+  const extentStart = Math.min(...wallProjections)
+  const extentEnd = Math.max(...wallProjections)
+  if (extentEnd - extentStart < MIN_SEGMENT_LENGTH) return
+
+  const faceCoordinate = Math.max(
+    ...members.map(({ wall }) => exteriorFaceCoordinate(wall, normal)),
+  )
+  const pointAt = (projection: number): FloorplanPoint =>
+    pointFromCoordinates(projection, faceCoordinate, tangent, normal)
+  const openingCenters: number[] = []
+  const openingSpans: Array<readonly [number, number]> = []
+
+  for (const { wall } of members) {
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length < MIN_SEGMENT_LENGTH) continue
+    for (const opening of Object.values(nodes)) {
+      if (opening.type !== 'door' && opening.type !== 'window') continue
+      if (opening.visible === false) continue
+      if ((opening.wallId ?? opening.parentId) !== wall.id) continue
+      const along = clamp(opening.position[0], 0, length)
+      const center: FloorplanPoint = [
+        wall.start[0] + (dx / length) * along,
+        wall.start[1] + (dz / length) * along,
+      ]
+      openingCenters.push(dot(center, tangent))
+      const halfWidth = Math.max(0, opening.width) / 2
+      const startProjection = dot(
+        [
+          wall.start[0] + (dx / length) * clamp(along - halfWidth, 0, length),
+          wall.start[1] + (dz / length) * clamp(along - halfWidth, 0, length),
+        ],
+        tangent,
+      )
+      const endProjection = dot(
+        [
+          wall.start[0] + (dx / length) * clamp(along + halfWidth, 0, length),
+          wall.start[1] + (dz / length) * clamp(along + halfWidth, 0, length),
+        ],
+        tangent,
+      )
+      if (Math.abs(endProjection - startProjection) >= MIN_SEGMENT_LENGTH) {
+        openingSpans.push([
+          Math.min(startProjection, endProjection),
+          Math.max(startProjection, endProjection),
+        ])
+      }
+    }
+  }
+
+  for (const [startProjection, endProjection] of openingSpans.sort(
+    (left, right) => left[0] - right[0],
+  )) {
+    pending.push({
+      tier: 'opening-widths',
+      start: pointAt(startProjection),
+      end: pointAt(endProjection),
+      startProjection,
+      endProjection,
+    })
+  }
+  appendReferenceTier(pending, openingCenters, extentStart, extentEnd, pointAt, 'openings')
+
+  const memberIds = new Set(members.map(({ wall }) => wall.id))
+  const partitionReferences: number[] = []
+  for (const candidate of walls) {
+    if (
+      memberIds.has(candidate.id) ||
+      isCurvedWall(candidate) ||
+      exteriorNormal(candidate) !== null
+    ) {
+      continue
+    }
+    for (const { wall } of members) {
+      const references = facadePartitionFaceIntersections(wall, candidate, normal).map((point) =>
+        dot(point, tangent),
+      )
+      const faceOfStud = Math.min(...references)
+      if (
+        Number.isFinite(faceOfStud) &&
+        faceOfStud > extentStart + MIN_SEGMENT_LENGTH &&
+        faceOfStud < extentEnd - MIN_SEGMENT_LENGTH
+      ) {
+        partitionReferences.push(faceOfStud)
+      }
+    }
+  }
+  appendReferenceTier(pending, partitionReferences, extentStart, extentEnd, pointAt, 'partitions')
+}
+
+function appendReferenceTier(
+  pending: PendingConstructionDimension[],
+  references: number[],
+  extentStart: number,
+  extentEnd: number,
+  pointAt: (projection: number) => FloorplanPoint,
+  tier: 'openings' | 'partitions',
+): void {
+  const interiorReferences = uniqueSorted(references).filter(
+    (value) => value > extentStart + MIN_SEGMENT_LENGTH && value < extentEnd - MIN_SEGMENT_LENGTH,
+  )
+  if (interiorReferences.length === 0) return
+  appendProjectedChain(pending, [extentStart, ...interiorReferences, extentEnd], tier, pointAt)
+}
+
+function appendProjectedChain(
+  pending: PendingConstructionDimension[],
+  projections: number[],
+  tier: ConstructionDimensionTier,
+  originAt: (projection: number) => FloorplanPoint,
+): void {
+  const breakpoints = uniqueSorted(projections)
+  for (let index = 0; index < breakpoints.length - 1; index++) {
+    const startProjection = breakpoints[index]
+    const endProjection = breakpoints[index + 1]
+    if (
+      startProjection === undefined ||
+      endProjection === undefined ||
+      endProjection - startProjection < MIN_SEGMENT_LENGTH
+    ) {
+      continue
+    }
+    pending.push({
+      tier,
+      start: originAt(startProjection),
+      end: originAt(endProjection),
+      startProjection,
+      endProjection,
+    })
+  }
+}
+
+function finalizeDimensionTiers(
+  pending: PendingConstructionDimension[],
+  tangent: FloorplanPoint,
+  normal: FloorplanPoint,
+  outerCoordinate: number,
+): PlannedConstructionDimension[] {
+  const activeTiers = TIER_ORDER.filter((tier) => pending.some((entry) => entry.tier === tier))
+  const offsets = new Map<ConstructionDimensionTier, number>()
+  activeTiers.forEach((tier, index) => {
+    const firstOffset =
+      activeTiers[0] === 'opening-widths' ? FIRST_OPENING_WIDTH_OFFSET : FIRST_GENERAL_TIER_OFFSET
+    offsets.set(tier, firstOffset + index * TIER_SPACING)
+  })
+
+  return [...pending]
+    .sort((left, right) => {
+      const tierDelta = TIER_ORDER.indexOf(left.tier) - TIER_ORDER.indexOf(right.tier)
+      return tierDelta || left.startProjection - right.startProjection
+    })
+    .map((entry) => {
+      const offset = offsets.get(entry.tier) ?? FIRST_GENERAL_TIER_OFFSET
+      const baselineCoordinate = outerCoordinate + offset
+      const dimensionStart = pointFromCoordinates(
+        entry.startProjection,
+        baselineCoordinate,
+        tangent,
+        normal,
+      )
+      const dimensionEnd = pointFromCoordinates(
+        entry.endProjection,
+        baselineCoordinate,
+        tangent,
+        normal,
+      )
+      return {
+        tier: entry.tier,
+        start: entry.start,
+        end: entry.end,
+        dimensionStart,
+        dimensionEnd,
+        offsetNormal: normal,
+        offsetDistance: Math.max(0, dot(subtract(dimensionStart, entry.start), normal)),
+      }
+    })
+}
+
+function exteriorFaceCoordinate(wall: WallNode, normal: FloorplanPoint): number {
+  const midpoint: FloorplanPoint = [
+    (wall.start[0] + wall.end[0]) / 2,
+    (wall.start[1] + wall.end[1]) / 2,
+  ]
+  return dot(midpoint, normal) + (wall.thickness ?? 0.1) / 2
+}
+
+function exteriorOriginAtProjection(
+  members: readonly FacadeMember[],
+  projection: number,
+  tangent: FloorplanPoint,
+  normal: FloorplanPoint,
+): FloorplanPoint {
+  const endpoint = members
+    .flatMap(({ wall }) => [
+      { point: wall.start, wall },
+      { point: wall.end, wall },
+    ])
+    .sort((left, right) => {
+      const projectionDelta =
+        Math.abs(dot(left.point, tangent) - projection) -
+        Math.abs(dot(right.point, tangent) - projection)
+      return (
+        projectionDelta ||
+        exteriorFaceCoordinate(right.wall, normal) - exteriorFaceCoordinate(left.wall, normal)
+      )
+    })[0]
+  if (!endpoint) return pointFromCoordinates(projection, 0, tangent, normal)
+  return addScaled(endpoint.point, normal, (endpoint.wall.thickness ?? 0.1) / 2)
+}
+
+function outermostColumnRow(
+  columns: readonly ColumnNode[],
+  component: readonly FacadeMember[],
+  normal: FloorplanPoint,
+  tangent: FloorplanPoint,
+): ColumnNode[] {
+  if (columns.length < 2) return []
+  const centroid = facadeCentroid(component)
+  const outwardColumns = columns.filter(
+    (column) => dot(subtract(columnPlanPoint(column), centroid), normal) >= -COLUMN_ROW_TOLERANCE,
+  )
+  const sorted = [...outwardColumns].sort(
+    (left, right) => dot(columnPlanPoint(right), normal) - dot(columnPlanPoint(left), normal),
+  )
+  const outerCoordinate = sorted[0] ? dot(columnPlanPoint(sorted[0]), normal) : 0
+  return sorted
+    .filter(
+      (column) =>
+        Math.abs(dot(columnPlanPoint(column), normal) - outerCoordinate) <= COLUMN_ROW_TOLERANCE,
+    )
+    .sort(
+      (left, right) => dot(columnPlanPoint(left), tangent) - dot(columnPlanPoint(right), tangent),
+    )
+}
+
+function columnOriginAtProjection(
+  columns: readonly ColumnNode[],
+  projection: number,
+  tangent: FloorplanPoint,
+): FloorplanPoint {
+  return columnPlanPoint(
+    [...columns].sort(
+      (left, right) =>
+        Math.abs(dot(columnPlanPoint(left), tangent) - projection) -
+        Math.abs(dot(columnPlanPoint(right), tangent) - projection),
+    )[0]!,
+  )
+}
+
+function columnPlanPoint(column: ColumnNode): FloorplanPoint {
+  return [column.position[0], column.position[2]]
+}
+
+function columnNormalHalfExtent(column: ColumnNode, normal: FloorplanPoint): number {
+  const center = columnPlanPoint(column)
+  return Math.max(
+    ...getColumnFloorplanFootprint(column).map((point) => dot(subtract(point, center), normal)),
+  )
+}
+
+function nearestFacadeComponent(
+  column: ColumnNode,
+  components: readonly FacadeMember[][],
+): FacadeMember[] | undefined {
+  const point = columnPlanPoint(column)
+  return [...components]
+    .filter((component) => component[0]?.wall.parentId === column.parentId)
+    .sort(
+      (left, right) =>
+        distanceToFacadeComponent(point, left) - distanceToFacadeComponent(point, right),
+    )[0]
+}
+
+function distanceToFacadeComponent(
+  point: FloorplanPoint,
+  component: readonly FacadeMember[],
+): number {
+  return Math.min(...component.map(({ wall }) => pointSegmentDistance(point, wall.start, wall.end)))
+}
+
+function facadeCentroid(component: readonly FacadeMember[]): FloorplanPoint {
+  const points = component.flatMap(({ wall }) => [wall.start, wall.end])
+  return [
+    points.reduce((sum, point) => sum + point[0], 0) / points.length,
+    points.reduce((sum, point) => sum + point[1], 0) / points.length,
+  ]
+}
+
+function pointFromCoordinates(
+  tangentCoordinate: number,
+  normalCoordinate: number,
+  tangent: FloorplanPoint,
+  normal: FloorplanPoint,
+): FloorplanPoint {
+  return [
+    tangent[0] * tangentCoordinate + normal[0] * normalCoordinate,
+    tangent[1] * tangentCoordinate + normal[1] * normalCoordinate,
+  ]
+}
+
 function splitFacadeRuns(members: FacadeMember[]): FacadeMember[][] {
   const tangent = members[0]?.tangent
   if (!tangent) return []
@@ -366,11 +833,11 @@ function splitFacadeRuns(members: FacadeMember[]): FacadeMember[][] {
   return runs
 }
 
-function facadeInsideFaceIntersection(
+function facadePartitionFaceIntersections(
   facade: WallNode,
   candidate: WallNode,
   outwardNormal: FloorplanPoint,
-): FloorplanPoint | null {
+): FloorplanPoint[] {
   const halfThickness = (facade.thickness ?? 0.1) / 2
   const insideStart: FloorplanPoint = [
     facade.start[0] - outwardNormal[0] * halfThickness,
@@ -380,58 +847,19 @@ function facadeInsideFaceIntersection(
     facade.end[0] - outwardNormal[0] * halfThickness,
     facade.end[1] - outwardNormal[1] * halfThickness,
   ]
-  return segmentIntersection(insideStart, insideEnd, candidate.start, candidate.end)
-}
+  const dx = candidate.end[0] - candidate.start[0]
+  const dz = candidate.end[1] - candidate.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < MIN_SEGMENT_LENGTH) return []
+  const candidateNormal: FloorplanPoint = [-dz / length, dx / length]
+  const candidateHalfThickness = (candidate.thickness ?? 0.1) / 2
 
-function appendTier(
-  out: PlannedConstructionDimension[],
-  references: number[],
-  extentStart: number,
-  extentEnd: number,
-  pointAt: (projection: number) => FloorplanPoint,
-  offsetNormal: FloorplanPoint,
-  tier: Exclude<ConstructionDimensionTier, 'overall'>,
-  offsetDistance: number,
-): void {
-  const interiorReferences = references.filter(
-    (value) => value > extentStart + MIN_SEGMENT_LENGTH && value < extentEnd - MIN_SEGMENT_LENGTH,
-  )
-  if (interiorReferences.length === 0) return
-  appendDimensionChain(
-    out,
-    interiorReferences,
-    extentStart,
-    extentEnd,
-    pointAt,
-    offsetNormal,
-    tier,
-    offsetDistance,
-  )
-}
-
-function appendDimensionChain(
-  out: PlannedConstructionDimension[],
-  references: number[],
-  extentStart: number,
-  extentEnd: number,
-  pointAt: (projection: number) => FloorplanPoint,
-  offsetNormal: FloorplanPoint,
-  tier: Exclude<ConstructionDimensionTier, 'overall'>,
-  offsetDistance: number,
-): void {
-  const breakpoints = uniqueSorted([extentStart, ...references, extentEnd])
-  for (let index = 0; index < breakpoints.length - 1; index++) {
-    const start = breakpoints[index]
-    const end = breakpoints[index + 1]
-    if (start === undefined || end === undefined || end - start < MIN_SEGMENT_LENGTH) continue
-    out.push({
-      tier,
-      start: pointAt(start),
-      end: pointAt(end),
-      offsetNormal,
-      offsetDistance,
-    })
-  }
+  return [-1, 1].flatMap((side): FloorplanPoint[] => {
+    const faceStart = addScaled(candidate.start, candidateNormal, side * candidateHalfThickness)
+    const faceEnd = addScaled(candidate.end, candidateNormal, side * candidateHalfThickness)
+    const intersection = segmentIntersection(insideStart, insideEnd, faceStart, faceEnd)
+    return intersection ? [intersection] : []
+  })
 }
 
 function segmentIntersection(
@@ -457,8 +885,40 @@ function segmentIntersection(
   return [aStart[0] + ax * alongA, aStart[1] + ay * alongA]
 }
 
+function pointSegmentDistance(
+  point: FloorplanPoint,
+  start: FloorplanPoint,
+  end: FloorplanPoint,
+): number {
+  const segment = subtract(end, start)
+  const lengthSquared = dot(segment, segment)
+  if (lengthSquared < 1e-12) return distance(point, start)
+  const along = clamp(dot(subtract(point, start), segment) / lengthSquared, 0, 1)
+  return distance(point, addScaled(start, segment, along))
+}
+
+function distance(left: FloorplanPoint, right: FloorplanPoint): number {
+  return Math.hypot(left[0] - right[0], left[1] - right[1])
+}
+
+function subtract(left: FloorplanPoint, right: FloorplanPoint): FloorplanPoint {
+  return [left[0] - right[0], left[1] - right[1]]
+}
+
+function addScaled(
+  point: FloorplanPoint,
+  direction: FloorplanPoint,
+  distance: number,
+): FloorplanPoint {
+  return [point[0] + direction[0] * distance, point[1] + direction[1] * distance]
+}
+
 function dot(left: FloorplanPoint, right: FloorplanPoint): number {
   return left[0] * right[0] + left[1] * right[1]
+}
+
+function cross(left: FloorplanPoint, right: FloorplanPoint): number {
+  return left[0] * right[1] - left[1] * right[0]
 }
 
 function negate(point: FloorplanPoint): FloorplanPoint {
