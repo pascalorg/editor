@@ -52,6 +52,10 @@ export {
   ColumnSupportStyle,
 } from './nodes/column'
 export {
+  ConstructionDimensionBaseline,
+  ConstructionDimensionNode,
+} from './nodes/construction-dimension'
+export {
   ConstructionNoteLeaderStyle,
   ConstructionNoteNode,
   ConstructionNoteTerminator,

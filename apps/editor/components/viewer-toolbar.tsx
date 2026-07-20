@@ -11,6 +11,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   useEditor,
+  useFloorplanAnnotationVisibility,
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
@@ -32,12 +33,16 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers3,
   Magnet,
   PenLine,
   Ruler,
+  ScanLine,
   SlidersHorizontal,
   Sparkles,
+  StickyNote,
   SwatchBook,
+  Tag,
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
@@ -131,6 +136,14 @@ const wallModeConfig: Record<string, { icon: string; label: string }> = {
 const SHADING_OPTIONS = [
   { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
   { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+] as const
+
+const FLOORPLAN_ANNOTATION_OPTIONS = [
+  { id: 'automaticDimensions', name: 'Automatic dimensions', icon: Ruler },
+  { id: 'manualDimensions', name: 'Manual dimensions', icon: Ruler },
+  { id: 'measurements', name: 'Measurements', icon: ScanLine },
+  { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
+  { id: 'constructionNotes', name: 'Construction notes', icon: StickyNote },
 ] as const
 
 function ViewModeControl() {
@@ -278,6 +291,7 @@ const EDGE_OPTIONS = [
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
 function DisplayMenu() {
+  const viewMode = useEditor((state) => state.viewMode)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
@@ -296,6 +310,8 @@ function DisplayMenu() {
   const setShadows = useViewer((state) => state.setShadows)
   const magneticSnap = useEditor((state) => state.magneticSnap)
   const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+  const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
+  const setAnnotationCategory = useFloorplanAnnotationVisibility((state) => state.setCategory)
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -337,17 +353,47 @@ function DisplayMenu() {
             <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
           )}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
-        >
-          <Ruler className="h-4 w-4" />
-          <span>Measurements</span>
-          {showMeasurements ? (
-            <Eye className="ml-auto h-4 w-4 text-foreground" />
-          ) : (
-            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-          )}
-        </DropdownMenuItem>
+        {viewMode !== '2d' ? (
+          <DropdownMenuItem
+            onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+          >
+            <Ruler className="h-4 w-4" />
+            <span>{viewMode === 'split' ? '3D measurements' : 'Measurements'}</span>
+            {showMeasurements ? (
+              <Eye className="ml-auto h-4 w-4 text-foreground" />
+            ) : (
+              <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {viewMode !== '3d' ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Layers3 className="h-4 w-4" />
+              <span>Floor plan annotations</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+              {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
+                const OptionIcon = option.icon
+                const visible = annotationVisibility[option.id]
+                return (
+                  <DropdownMenuItem
+                    key={option.id}
+                    onSelect={(e) => keepOpen(e, () => setAnnotationCategory(option.id, !visible))}
+                  >
+                    <OptionIcon className="h-4 w-4" />
+                    <span>{option.name}</span>
+                    {visible ? (
+                      <Eye className="ml-auto h-4 w-4 text-foreground" />
+                    ) : (
+                      <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+                    )}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
           <Magnet className="h-4 w-4" />
           <span>Magnetic snap</span>

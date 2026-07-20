@@ -149,6 +149,35 @@ describe('cloneNodesInto', () => {
     }
   })
 
+  test('remaps associative construction-dimension anchors inside the cloned subtree', () => {
+    const wall = makeNode('wall_1', 'wall', { parentId: 'level_1' })
+    const dimension = makeNode('construction-dimension_1', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: 'wall_1', featureId: 'wall:start' },
+          fallback: [0, 0, 0],
+        },
+        [1, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+    })
+    const result = cloneNodesInto([wall, dimension], {
+      rootId: 'wall_1' as AnyNodeId,
+    })
+    const clonedDimension = result.nodes.find((node) => node.type === 'construction-dimension')
+
+    expect(clonedDimension?.type).toBe('construction-dimension')
+    if (clonedDimension?.type === 'construction-dimension') {
+      const anchor = clonedDimension.anchors[0]
+      expect(Array.isArray(anchor)).toBe(false)
+      if (!Array.isArray(anchor)) {
+        expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+    }
+  })
+
   test('parents the cloned root under opts.parentId when supplied', () => {
     const orig = makeNode('shelf_1', 'shelf', { parentId: 'level_old' })
     const { nodes } = cloneNodesInto([orig], {

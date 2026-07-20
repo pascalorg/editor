@@ -237,7 +237,7 @@ export function FloorplanDimensionRenderer({
         y1={layout.dimensionEnd[1] - tickY}
         y2={layout.dimensionEnd[1] + tickY}
       />
-      {layout.labelPlacement === 'outside-end' ? (
+      {layout.labelPlacement === 'outside-end' && annotationUnitsPerPoint !== undefined ? (
         <line
           {...lineProps}
           data-floorplan-dimension-leader=""

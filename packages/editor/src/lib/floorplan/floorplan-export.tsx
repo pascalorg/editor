@@ -25,6 +25,11 @@ import {
   isFloorplanNodeVisible,
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
+import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
+import {
+  type FloorplanAnnotationVisibility,
+  filterFloorplanAnnotationGeometry,
+} from './annotation-visibility'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
@@ -86,7 +91,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const nodes = useScene.getState().nodes
   const viewer = useViewer.getState()
   const unit = viewer.unit
-  const showMeasurements = viewer.showMeasurements
+  const annotationVisibility = useFloorplanAnnotationVisibility.getState().visibility
   const levels = resolveExportLevels(nodes)
   if (levels.length === 0) {
     console.warn('[floorplan-export] no level to export')
@@ -106,7 +111,13 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   let pageCount = 0
   try {
     for (const level of levels) {
-      const geometries = collectFloorplanGeometry(nodes, level.id, scope, unit, showMeasurements)
+      const geometries = collectFloorplanGeometry(
+        nodes,
+        level.id,
+        scope,
+        unit,
+        annotationVisibility,
+      )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
 
@@ -493,7 +504,7 @@ function collectFloorplanGeometry(
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
   unit: 'metric' | 'imperial',
-  showMeasurements: boolean,
+  annotationVisibility: FloorplanAnnotationVisibility,
 ): { id: AnyNodeId; base: FloorplanGeometry }[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -511,7 +522,6 @@ function collectFloorplanGeometry(
     if (
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
-      (node.type !== 'measurement' || showMeasurements) &&
       (scope === 'full' || def.category === 'structure')
     ) {
       entries.push({ id, node })
@@ -542,7 +552,13 @@ function collectFloorplanGeometry(
     const ctx = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
     const geometry = builder(node, ctx)
     if (!geometry) continue
-    const { base, overlay } = splitFloorplanOverlay(geometry)
+    const visibleGeometry = filterFloorplanAnnotationGeometry(
+      node.type,
+      geometry,
+      annotationVisibility,
+    )
+    if (!visibleGeometry) continue
+    const { base, overlay } = splitFloorplanOverlay(visibleGeometry)
     const exportOverlay = overlay ? filterFloorplanExportOverlay(overlay) : null
     const exportGeometry = combineGeometry(base, exportOverlay)
     if (exportGeometry) out.push({ id, base: exportGeometry })

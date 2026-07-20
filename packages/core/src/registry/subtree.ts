@@ -169,6 +169,13 @@ export function cloneNodesInto(
     if (cloned.type === 'measurement') {
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
+    if (cloned.type === 'construction-dimension') {
+      const remapped = remapMeasurementReferences(
+        { kind: 'distance', points: cloned.anchors },
+        idMap,
+      )
+      cloned.anchors = remapped.kind === 'distance' ? remapped.points : cloned.anchors
+    }
 
     if (original.id === opts.rootId) {
       if (opts.position) {

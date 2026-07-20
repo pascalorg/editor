@@ -30,14 +30,55 @@ const OUTLINE_SAMPLE_SPACING_PX = 6
 const OUTLINE_OBSTACLE_PADDING_PX = 1
 const MAX_LABEL_SHIFT_CANDIDATES = 512
 const PREFERRED_SHIFT_COST_STEP = 1_000_000
+const COLLISION_GRID_CELL_SIZE_PX = 64
+
+class AnnotationObstacleIndex {
+  private readonly cells = new Map<string, Set<AnnotationObstacleRectangle>>()
+
+  add(rectangle: AnnotationObstacleRectangle): void {
+    this.forEachCell(rectangle, 0, (key) => {
+      let cell = this.cells.get(key)
+      if (!cell) {
+        cell = new Set()
+        this.cells.set(key, cell)
+      }
+      cell.add(rectangle)
+    })
+  }
+
+  findOverlaps(rectangle: AnnotationObstacleRectangle): AnnotationObstacleRectangle[] {
+    const candidates = new Set<AnnotationObstacleRectangle>()
+    this.forEachCell(rectangle, LABEL_GAP_PX, (key) => {
+      for (const candidate of this.cells.get(key) ?? []) candidates.add(candidate)
+    })
+    return [...candidates].filter((candidate) => rectanglesOverlap(rectangle, candidate))
+  }
+
+  private forEachCell(
+    rectangle: AnnotationObstacleRectangle,
+    padding: number,
+    visit: (key: string) => void,
+  ): void {
+    const minCellX = Math.floor((rectangle.x - padding) / COLLISION_GRID_CELL_SIZE_PX)
+    const maxCellX = Math.floor(
+      (rectangle.x + rectangle.width + padding) / COLLISION_GRID_CELL_SIZE_PX,
+    )
+    const minCellY = Math.floor((rectangle.y - padding) / COLLISION_GRID_CELL_SIZE_PX)
+    const maxCellY = Math.floor(
+      (rectangle.y + rectangle.height + padding) / COLLISION_GRID_CELL_SIZE_PX,
+    )
+    for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+      for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) visit(`${cellX}:${cellY}`)
+    }
+  }
+}
 
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
   obstacles: readonly AnnotationObstacleRectangle[] = [],
 ): AnnotationLabelShift[] {
-  const occupied: Array<AnnotationObstacleRectangle & { dx: number; dy: number }> = obstacles.map(
-    (obstacle) => ({ ...obstacle, dx: 0, dy: 0 }),
-  )
+  const occupied = new AnnotationObstacleIndex()
+  for (const obstacle of obstacles) occupied.add(obstacle)
   const shifts = new Map<string, AnnotationLabelShift>()
   const ordered = rectangles
     .map((rectangle, order) => ({ order, rectangle }))
@@ -50,7 +91,12 @@ export function resolveAnnotationLabelRectangles(
     const selected = resolveLabelShift(rectangle, occupied)
     const shift = selected ?? { dx: 0, dy: 0 }
     const resolved = selected !== undefined
-    occupied.push({ ...rectangle, ...shift })
+    occupied.add({
+      x: rectangle.x + shift.dx,
+      y: rectangle.y + shift.dy,
+      width: rectangle.width,
+      height: rectangle.height,
+    })
     shifts.set(rectangle.id, { id: rectangle.id, ...shift, resolved })
   }
 
@@ -289,14 +335,22 @@ export function polylineObstacleRectangles(
 
 function resolveLabelShift(
   rectangle: AnnotationLabelRectangle,
-  occupied: ReadonlyArray<AnnotationObstacleRectangle & { dx: number; dy: number }>,
+  occupied: AnnotationObstacleIndex,
 ): { dx: number; dy: number } | undefined {
-  const candidates = new Map<string, { dx: number; dy: number; preference: number }>()
+  const candidates = new Map<string, { dx: number; dy: number; preference: number; cost: number }>()
+  const visited = new Set<string>()
   const addCandidate = (dx: number, dy: number, preference = 0) => {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return
     const key = `${dx}:${dy}`
+    if (visited.has(key)) return
     const existing = candidates.get(key)
     if (!existing || preference < existing.preference) {
-      candidates.set(key, { dx, dy, preference })
+      candidates.set(key, {
+        dx,
+        dy,
+        preference,
+        cost: candidateCost({ dx, dy, preference }, rectangle),
+      })
     }
   }
   addCandidate(0, 0, -2)
@@ -304,11 +358,12 @@ function resolveLabelShift(
     addCandidate(preferred.dx, preferred.dy, -1)
   }
 
-  const visited = new Set<string>()
   while (candidates.size > 0 && visited.size < MAX_LABEL_SHIFT_CANDIDATES) {
-    const candidate = [...candidates.values()].sort(
-      (left, right) => candidateCost(left, rectangle) - candidateCost(right, rectangle),
-    )[0]!
+    let candidate: { dx: number; dy: number; preference: number; cost: number } | undefined
+    for (const queued of candidates.values()) {
+      if (!candidate || queued.cost < candidate.cost) candidate = queued
+    }
+    if (!candidate) return undefined
     const key = `${candidate.dx}:${candidate.dy}`
     candidates.delete(key)
     visited.add(key)
@@ -318,34 +373,36 @@ function resolveLabelShift(
       x: rectangle.x + candidate.dx,
       y: rectangle.y + candidate.dy,
     }
-    const blockers = occupied.filter((other) =>
-      rectanglesOverlap(shifted, {
-        ...other,
-        x: other.x + other.dx,
-        y: other.y + other.dy,
-      }),
-    )
+    const blockers = occupied.findOverlaps(shifted)
     if (blockers.length === 0) return { dx: candidate.dx, dy: candidate.dy }
 
-    for (const other of blockers) {
-      const otherX = other.x + other.dx
-      const otherY = other.y + other.dy
-      const left = otherX - LABEL_PLACEMENT_GAP_PX - rectangle.width - rectangle.x
-      const right = otherX + other.width + LABEL_PLACEMENT_GAP_PX - rectangle.x
-      const above = otherY - LABEL_PLACEMENT_GAP_PX - rectangle.height - rectangle.y
-      const below = otherY + other.height + LABEL_PLACEMENT_GAP_PX - rectangle.y
+    const blockerBounds = blockers.reduce(
+      (bounds, blocker) => ({
+        minX: Math.min(bounds.minX, blocker.x),
+        minY: Math.min(bounds.minY, blocker.y),
+        maxX: Math.max(bounds.maxX, blocker.x + blocker.width),
+        maxY: Math.max(bounds.maxY, blocker.y + blocker.height),
+      }),
+      {
+        minX: Number.POSITIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+      },
+    )
+    const left = blockerBounds.minX - LABEL_PLACEMENT_GAP_PX - rectangle.width - rectangle.x
+    const right = blockerBounds.maxX + LABEL_PLACEMENT_GAP_PX - rectangle.x
+    const above = blockerBounds.minY - LABEL_PLACEMENT_GAP_PX - rectangle.height - rectangle.y
+    const below = blockerBounds.maxY + LABEL_PLACEMENT_GAP_PX - rectangle.y
 
-      addCandidate(candidate.dx, above)
-      addCandidate(candidate.dx, below)
-      addCandidate(left, candidate.dy)
-      addCandidate(right, candidate.dy)
-      addCandidate(left, above)
-      addCandidate(right, above)
-      addCandidate(left, below)
-      addCandidate(right, below)
-    }
-
-    for (const visitedKey of visited) candidates.delete(visitedKey)
+    addCandidate(candidate.dx, above)
+    addCandidate(candidate.dx, below)
+    addCandidate(left, candidate.dy)
+    addCandidate(right, candidate.dy)
+    addCandidate(left, above)
+    addCandidate(right, above)
+    addCandidate(left, below)
+    addCandidate(right, below)
   }
   return undefined
 }

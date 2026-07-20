@@ -1,0 +1,126 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  ConstructionDimensionNode,
+  type FloorplanGeometry,
+  type GeometryContext,
+  nodeRegistry,
+  registerNode,
+  WallNode,
+} from '@pascal-app/core'
+import { wallDefinition } from '../wall/definition'
+import { buildConstructionDimensionFloorplan } from './floorplan'
+
+const palette = {
+  selectedStroke: '#2563eb',
+  selectedFill: '#dbeafe',
+  selectedHatch: '#93c5fd',
+  wallHoverStroke: '#60a5fa',
+  endpointHandleFill: '#f97316',
+  endpointHandleStroke: '#ffffff',
+  endpointHandleHoverStroke: '#fdba74',
+  endpointHandleActiveFill: '#ea580c',
+  endpointHandleActiveStroke: '#ffffff',
+  curveHandleFill: '#14b8a6',
+  curveHandleStroke: '#ffffff',
+  curveHandleHoverStroke: '#5eead4',
+  measurementStroke: '#334155',
+  measurementLabelBackground: '#ffffff',
+  measurementLabelText: '#0f172a',
+}
+
+function context(nodes: Record<string, AnyNode> = {}, selected = false): GeometryContext {
+  return {
+    resolve: (id) => nodes[id],
+    children: [],
+    siblings: [],
+    parent: null,
+    viewState: {
+      selected,
+      unit: 'metric',
+      highlighted: false,
+      hovered: false,
+      moving: false,
+      palette,
+    },
+  }
+}
+
+function flatten(geometry: FloorplanGeometry): FloorplanGeometry[] {
+  return geometry.kind === 'group' ? [geometry, ...geometry.children.flatMap(flatten)] : [geometry]
+}
+
+describe('buildConstructionDimensionFloorplan', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+    registerNode(wallDefinition)
+  })
+
+  afterEach(() => nodeRegistry._reset())
+
+  test('projects witness origins onto the placed baseline', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [1, 0, 1],
+        [4, 0, 2],
+      ],
+      baseline: { origin: [0, 5], direction: [1, 0] },
+    })
+
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const dimension = geometry && flatten(geometry).find((entry) => entry.kind === 'dimension')
+
+    expect(dimension).toMatchObject({
+      start: [1, 1],
+      end: [4, 2],
+      dimensionStart: [1, 5],
+      dimensionEnd: [4, 5],
+      text: '3m',
+    })
+  })
+
+  test('follows semantic anchors and reports dangling references', () => {
+    const wall = WallNode.parse({ id: 'wall_target', start: [0, 0], end: [4, 0] })
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: wall.id, featureId: 'wall:centerline', parameters: { t: 0.25 } },
+          fallback: [1, 0, 0],
+        },
+        [4, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+    })
+
+    const linked = buildConstructionDimensionFloorplan(node, context({ [wall.id]: wall }))
+    const movedWall = WallNode.parse({ ...wall, start: [2, 0], end: [6, 0] })
+    const moved = buildConstructionDimensionFloorplan(node, context({ [wall.id]: movedWall }))
+    const dangling = buildConstructionDimensionFloorplan(node, context())
+    const linkedDimension = linked && flatten(linked).find((entry) => entry.kind === 'dimension')
+    const movedDimension = moved && flatten(moved).find((entry) => entry.kind === 'dimension')
+    const danglingDimension =
+      dangling && flatten(dangling).find((entry) => entry.kind === 'dimension')
+
+    expect(linkedDimension).toMatchObject({ start: [1, 0], text: '3m' })
+    expect(movedDimension).toMatchObject({ start: [3, 0], text: '1m' })
+    expect(danglingDimension).toMatchObject({
+      start: [1, 0],
+      text: 'UNLINKED · 3m',
+      stroke: '#dc2626',
+    })
+  })
+
+  test('shows one baseline handle only while selected', () => {
+    const node = ConstructionDimensionNode.parse({})
+    const idle = buildConstructionDimensionFloorplan(node, context())
+    const selected = buildConstructionDimensionFloorplan(node, context({}, true))
+
+    expect(idle && flatten(idle).filter((entry) => entry.kind === 'endpoint-handle')).toHaveLength(
+      0,
+    )
+    expect(
+      selected && flatten(selected).filter((entry) => entry.kind === 'endpoint-handle'),
+    ).toEqual([expect.objectContaining({ affordance: 'move-construction-dimension-baseline' })])
+  })
+})

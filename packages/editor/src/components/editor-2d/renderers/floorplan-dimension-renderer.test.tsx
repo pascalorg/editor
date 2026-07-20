@@ -64,12 +64,23 @@ describe('architectural floor-plan dimensions', () => {
 
     const markup = renderToStaticMarkup(
       <svg>
-        <FloorplanDimensionRenderer geometry={shortDimension} />
+        <FloorplanDimensionRenderer geometry={shortDimension} sceneRotationDeg={37} />
       </svg>,
     )
     expect(markup).toContain('data-floorplan-dimension-outside-start-local-x=')
-    expect(markup).toContain('data-floorplan-dimension-leader=""')
-    expect(markup).toContain('visibility="hidden"')
+    expect(markup).not.toContain('data-floorplan-dimension-leader=""')
+
+    const documentMarkup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionRenderer
+          annotationUnitsPerPoint={0.01}
+          geometry={shortDimension}
+          sceneRotationDeg={37}
+        />
+      </svg>,
+    )
+    expect(documentMarkup).toContain('data-floorplan-dimension-leader=""')
+    expect(documentMarkup).toContain('visibility="hidden"')
   })
 
   test('aligns stepped feature origins to an explicit exterior baseline', () => {

@@ -40,6 +40,11 @@ Status: implemented without new sidebar UI. Full export honors the existing meas
 
 ### 1.3 Add construction-annotation visibility controls
 
+Status: initial editor controls are implemented for automatic dimensions, manual construction
+dimensions, generic measurements, door/window marks, and construction notes. The persisted settings
+apply to both the live 2D plan and PDF export. Categories that do not yet have an implementation
+remain deferred.
+
 Introduce per-view controls for:
 
 - Automatic construction dimensions.
@@ -81,6 +86,13 @@ Status: deferred to a future preflight surface. The former orange/red dashed ove
 - Report the conflicts before implementing automatic relocation.
 
 ## Phase 2: manual associative construction dimensions
+
+Status: the first linear two-point slice is implemented. A dedicated Core node stores two free or
+semantic measurement anchors and an independent baseline. The 2D three-click tool creates one
+undoable node, supports Escape step-back and Alt magnetic bypass, follows referenced geometry,
+reports dangling references, and exposes a selected baseline drag handle. Continuous and
+point-to-point strings, witness reassociation/detachment, additional dimension modes, and the shared
+dimension-string primitive remain.
 
 ### 2.1 Add a construction-dimension schema
 

@@ -181,4 +181,29 @@ describe('resolveAnnotationLabelRectangles', () => {
       }
     }
   })
+
+  test('resolves a construction-plan label set without blocking the view transition', () => {
+    const labels = Array.from({ length: 25 }, (_, index) => ({
+      id: `label-${index}`,
+      x: index % 5,
+      y: index % 7,
+      width: 80,
+      height: 20,
+      priority: 25 - index,
+    }))
+    const obstacles = Array.from({ length: 100 }, (_, index) => ({
+      x: (index % 10) * 2,
+      y: (index % 13) * 2,
+      width: 100,
+      height: 40,
+    }))
+
+    const startedAt = performance.now()
+    const shifts = resolveAnnotationLabelRectangles(labels, obstacles)
+    const elapsedMs = performance.now() - startedAt
+
+    expect(shifts).toHaveLength(labels.length)
+    expect(shifts.every((entry) => entry.resolved)).toBe(true)
+    expect(elapsedMs).toBeLessThan(500)
+  })
 })

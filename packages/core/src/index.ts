@@ -9,6 +9,7 @@ export type {
   CeilingEvent,
   ChimneyEvent,
   ColumnEvent,
+  ConstructionDimensionEvent,
   ConstructionNoteEvent,
   DoorEvent,
   DormerEvent,

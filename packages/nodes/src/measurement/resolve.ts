@@ -170,7 +170,7 @@ export function measurementFeaturePoint(
   }
 }
 
-function resolveAnchor(
+export function resolveMeasurementAnchor(
   anchor: MeasurementAnchor,
   resolve: NodeResolver,
 ): {
@@ -227,7 +227,7 @@ export function resolveMeasurementNode(
   const dangling: MeasurementFeatureReference[] = []
   const anchorNormals: Array<MeasurementPoint | null> = []
   const point = (anchor: MeasurementAnchor) => {
-    const result = resolveAnchor(anchor, resolve)
+    const result = resolveMeasurementAnchor(anchor, resolve)
     if (result.dangling) dangling.push(result.dangling)
     anchorNormals.push(result.normal)
     return result.point

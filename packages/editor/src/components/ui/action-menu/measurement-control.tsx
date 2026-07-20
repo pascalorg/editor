@@ -49,15 +49,22 @@ export function MeasurementControl() {
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
+  const setViewMode = useEditor((state) => state.setViewMode)
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
   const isActive = mode === 'build' && tool === 'measurement'
+  const isConstructionDimensionActive = mode === 'build' && tool === 'construction-dimension'
+  const isControlActive = isActive || isConstructionDimensionActive
   const isSmartActive = isActive && activeToolKind === 'smart'
   const SelectedIcon = isSmartActive ? ScanSearch : selectedOption.icon
-  const selectedLabel = isSmartActive ? 'Smart' : selectedOption.label
+  const selectedLabel = isConstructionDimensionActive
+    ? 'Construction dimension'
+    : isSmartActive
+      ? 'Smart'
+      : selectedOption.label
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
     setPhase('structure')
@@ -69,7 +76,7 @@ export function MeasurementControl() {
   }
 
   const handlePrimaryClick = () => {
-    if (isActive) {
+    if (isControlActive) {
       setMode('select')
       return
     }
@@ -84,15 +91,23 @@ export function MeasurementControl() {
     setTool('measurement')
   }
 
+  const activateConstructionDimension = () => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setViewMode('2d')
+    setMode('build')
+    setTool('construction-dimension')
+  }
+
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <div className="flex items-center">
         <ActionButton
           aria-label={`Measure: ${selectedLabel}`}
-          aria-pressed={isActive}
+          aria-pressed={isControlActive}
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
-            isActive
+            isControlActive
               ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
               : 'hover:bg-cyan-500/15 hover:text-cyan-400',
           )}
@@ -163,6 +178,30 @@ export function MeasurementControl() {
               </button>
             )
           })}
+
+          <div className="my-1.5 h-px bg-border/60" />
+
+          <button
+            aria-checked={isConstructionDimensionActive}
+            className={cn(
+              'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
+              isConstructionDimensionActive
+                ? 'bg-white/10 text-foreground'
+                : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+            )}
+            onClick={() => {
+              activateConstructionDimension()
+              setIsOpen(false)
+            }}
+            role="menuitemradio"
+            type="button"
+          >
+            <Ruler aria-hidden="true" className="h-4 w-4" />
+            <span>Construction dimension</span>
+            {isConstructionDimensionActive ? (
+              <Check aria-hidden="true" className="ml-auto h-4 w-4" />
+            ) : null}
+          </button>
 
           <div className="my-1.5 h-px bg-border/60" />
 

@@ -303,6 +303,10 @@ export {
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export type {
+  FloorplanAnnotationCategory,
+  FloorplanAnnotationVisibility,
+} from './lib/floorplan/annotation-visibility'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
@@ -454,6 +458,7 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
+export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export {
   default as useInteractionScope,

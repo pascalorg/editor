@@ -48,6 +48,10 @@ import {
   snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
 import { createEditorApi } from '../../../lib/editor-api'
+import {
+  type FloorplanAnnotationVisibility,
+  filterFloorplanAnnotationGeometry,
+} from '../../../lib/floorplan/annotation-visibility'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -62,6 +66,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useEditor from '../../../store/use-editor'
+import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
@@ -349,7 +354,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const unit = useViewer((s) => s.unit)
-  const showMeasurements = useViewer((s) => s.showMeasurements)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
@@ -429,6 +433,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // selectors freeze to `undefined` so drag publishes do not re-render the
   // hidden floor-plan tree.
   const floorplanVisible = useEditor((s) => s.viewMode !== '3d')
+  const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
   // Elevator builders read runtime state imperatively, so entries include this
   // rare-changing ref in their cache deps.
   const interactiveElevators = useInteractive((s) => s.elevators)
@@ -846,7 +851,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const def = nodeRegistry.get(node.type)
       if (!def?.floorplan) return
-      if (node.type === 'measurement' && !showMeasurements) return
       const dependsOnSiblingInputs = !!(
         def.floorplanDependsOnSiblings ||
         def.floorplanSiblingOverrides ||
@@ -913,7 +917,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [installedPlugins, levelId, nodes, showMeasurements])
+  }, [installedPlugins, levelId, nodes])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //
@@ -1296,6 +1300,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           <FloorplanRegistryEntry
             activeDragId={handleIdForNode(activeDragId, entry.id)}
             activeRotateNodeId={activeRotateNodeId === entry.id ? activeRotateNodeId : null}
+            annotationVisibility={annotationVisibility}
             floorplanVisible={floorplanVisible}
             geometryCacheRef={geometryCacheRef}
             hatchPatternId={renderCtx?.hatchPatternId}
@@ -1347,6 +1352,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           <FloorplanRegistryEntry
             activeDragId={handleIdForNode(activeDragId, entry.id)}
             activeRotateNodeId={activeRotateNodeId === entry.id ? activeRotateNodeId : null}
+            annotationVisibility={annotationVisibility}
             floorplanVisible={floorplanVisible}
             geometryCacheRef={geometryCacheRef}
             hatchPatternId={renderCtx?.hatchPatternId}
@@ -1386,7 +1392,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           />
         ))}
       </g>
-      <FloorplanAnnotationLayoutResolver />
+      <FloorplanAnnotationLayoutResolver active={floorplanVisible} />
       {/* Dashed group bbox — shows what a group drag carries along while a
           multi-selection exists, rides the live delta mid-drag, and doubles
           as the group's whole-area drag handle. */}
@@ -1410,9 +1416,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 })
 
-function FloorplanAnnotationLayoutResolver() {
+function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
   useLayoutEffect(() => {
+    if (!active) return
     const svg = markerRef.current?.ownerSVGElement
     if (svg) resolveSvgAnnotationCollisions(svg)
   })
@@ -1422,6 +1429,7 @@ function FloorplanAnnotationLayoutResolver() {
 type FloorplanRegistryEntryProps = {
   activeDragId: string | null
   activeRotateNodeId: AnyNodeId | null
+  annotationVisibility: FloorplanAnnotationVisibility
   ctxOverrides: FloorplanContextOverrides | undefined
   floorplanVisible: boolean
   geometryCacheRef: { current: Map<string, CacheEntry> }
@@ -1476,6 +1484,7 @@ type FloorplanRegistryEntryProps = {
 const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   activeDragId,
   activeRotateNodeId,
+  annotationVisibility,
   ctxOverrides,
   floorplanVisible,
   geometryCacheRef,
@@ -1618,13 +1627,16 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     visibilityRootId,
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
+  const visibleGeometry = rawGeometry
+    ? filterFloorplanAnnotationGeometry(node.type, rawGeometry, annotationVisibility)
+    : null
   // Multi-selection shows highlight only: strip this member's edit handles /
   // dimension chrome (all of which live in the overlay pass) while keeping
   // its highlighted body geometry.
   const geometry =
-    rawGeometry && suppressHandles && pass === 'overlay'
-      ? stripHandleChrome(rawGeometry)
-      : rawGeometry
+    visibleGeometry && suppressHandles && pass === 'overlay'
+      ? stripHandleChrome(visibleGeometry)
+      : visibleGeometry
   if (!geometry) return null
 
   const entryClick = isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : onClickStop
