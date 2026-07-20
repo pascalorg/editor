@@ -73,7 +73,7 @@ In document mode:
 
 ### 1.5 Add initial collision diagnostics
 
-Status: implemented as a non-interactive floor-plan overlay. Conflicting labels receive dashed warning outlines for label-to-label overlap, plan-geometry collision, and dimension strings that are too short for their value. The diagnostics are canvas-only and are not added to PDF output.
+Status: deferred to a future preflight surface. The former orange/red dashed overlay used pre-layout geometry and obscured otherwise readable labels, so both the live overlay and its orphaned analyzer were removed from the normal floor-plan implementation. Collision warnings must not be reintroduced as graphics painted over the drawing and are not added to PDF output.
 
 - Detect overlapping dimension labels.
 - Detect labels that collide with plan geometry.

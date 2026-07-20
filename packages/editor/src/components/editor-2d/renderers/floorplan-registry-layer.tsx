@@ -75,7 +75,6 @@ import {
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
-import { analyzeFloorplanAnnotationCollisions } from './floorplan-annotation-diagnostics'
 import { resolveSvgAnnotationCollisions } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -1385,12 +1384,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         ))}
       </g>
       <FloorplanAnnotationLayoutResolver />
-      <FloorplanAnnotationDiagnosticsLayer
-        entryIds={entries.map((entry) => entry.id)}
-        geometryCacheRef={geometryCacheRef}
-        sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
-        unitsPerPixel={unitsPerPixel}
-      />
       {/* Dashed group bbox — shows what a group drag carries along while a
           multi-selection exists, rides the live delta mid-drag, and doubles
           as the group's whole-area drag handle. */}
@@ -1421,61 +1414,6 @@ function FloorplanAnnotationLayoutResolver() {
     if (svg) resolveSvgAnnotationCollisions(svg)
   })
   return <g pointerEvents="none" ref={markerRef} />
-}
-
-function FloorplanAnnotationDiagnosticsLayer({
-  entryIds,
-  geometryCacheRef,
-  sceneRotationDeg,
-  unitsPerPixel,
-}: {
-  entryIds: readonly AnyNodeId[]
-  geometryCacheRef: { current: Map<string, CacheEntry> }
-  sceneRotationDeg: number
-  unitsPerPixel: number
-}) {
-  const sources = entryIds.flatMap((id) => {
-    const entry = geometryCacheRef.current.get(id)
-    return entry
-      ? [
-          {
-            ownerId: String(id),
-            ownerType: entry.node.type,
-            base: entry.base,
-            overlay: entry.overlay,
-          },
-        ]
-      : []
-  })
-  const diagnostics = analyzeFloorplanAnnotationCollisions(
-    sources,
-    unitsPerPixel,
-    sceneRotationDeg,
-  ).filter((diagnostic) => diagnostic.kind !== 'label-overlap')
-  if (diagnostics.length === 0) return null
-
-  return (
-    <g className="floorplan-annotation-diagnostics" pointerEvents="none">
-      {diagnostics.map((diagnostic) => {
-        const color = diagnostic.kind === 'short-segment' ? '#d97706' : '#dc2626'
-        return (
-          <polygon
-            data-diagnostic-kind={diagnostic.kind}
-            fill={color}
-            fillOpacity={0.06}
-            key={diagnostic.id}
-            points={diagnostic.corners.map(([x, y]) => `${x},${y}`).join(' ')}
-            stroke={color}
-            strokeDasharray="4 3"
-            strokeWidth={1.5}
-            vectorEffect="non-scaling-stroke"
-          >
-            <title>{`${diagnostic.kind}: ${diagnostic.label}`}</title>
-          </polygon>
-        )
-      })}
-    </g>
-  )
 }
 
 type FloorplanRegistryEntryProps = {
