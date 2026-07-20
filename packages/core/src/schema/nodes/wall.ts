@@ -151,6 +151,8 @@ export const WallNode = BaseNode.extend({
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),

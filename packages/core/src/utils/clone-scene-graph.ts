@@ -85,6 +85,13 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ) as string | undefined
     }
 
+    // Remap supportSlabId (persisted slab-support hosts)
+    if ('supportSlabId' in clonedNode && typeof clonedNode.supportSlabId === 'string') {
+      ;(clonedNode as Record<string, unknown>).supportSlabId = idMap.get(
+        clonedNode.supportSlabId,
+      ) as string | undefined
+    }
+
     if (clonedNode.type === 'measurement') {
       clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
     }
@@ -238,6 +245,13 @@ export function cloneLevelSubtree(
     if ('roofSegmentId' in cloned && typeof cloned.roofSegmentId === 'string') {
       ;(cloned as Record<string, unknown>).roofSegmentId =
         idMap.get(cloned.roofSegmentId) ?? cloned.roofSegmentId
+    }
+
+    // Remap supportSlabId when the host slab is inside the cloned subtree;
+    // preserve it otherwise (like wallId, the reference may point outside).
+    if ('supportSlabId' in cloned && typeof cloned.supportSlabId === 'string') {
+      ;(cloned as Record<string, unknown>).supportSlabId =
+        idMap.get(cloned.supportSlabId) ?? cloned.supportSlabId
     }
 
     if (cloned.type === 'measurement') {

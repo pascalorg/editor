@@ -1145,6 +1145,26 @@ export const deleteNodesAction = (
       }
     }
 
+    // Deleting a slab strips `supportSlabId` references from surviving
+    // nodes in the same undo commit (mirrors the collectionIds cleanup
+    // below), so those nodes re-elect their support. Deletion is the ONLY
+    // writer — a host merely reshaped away keeps the field and the read
+    // path falls back, letting hosting resume if the slab returns.
+    const deletedSlabIds = new Set<string>()
+    for (const id of allIds) {
+      if (nextNodes[id]?.type === 'slab') deletedSlabIds.add(id)
+    }
+    if (deletedSlabIds.size > 0) {
+      for (const [nodeId, node] of Object.entries(nextNodes)) {
+        if (allIds.has(nodeId as AnyNodeId)) continue
+        const hostId = (node as { supportSlabId?: string }).supportSlabId
+        if (hostId && deletedSlabIds.has(hostId)) {
+          nextNodes[nodeId as AnyNodeId] = { ...node, supportSlabId: undefined } as AnyNode
+          nodesToMarkDirty.add(nodeId as AnyNodeId)
+        }
+      }
+    }
+
     for (const id of allIds) {
       const node = nextNodes[id]
       if (!node) continue

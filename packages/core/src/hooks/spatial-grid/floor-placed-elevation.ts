@@ -66,8 +66,28 @@ export function getFloorPlacedElevation({
   const resolvedLevelId = parent?.type === 'level' ? parent.id : levelId
   if (!resolvedLevelId) return 0
 
+  const footprints = getFloorPlacedFootprints(floorPlaced, effectiveNode, { nodes })
+
+  // A persisted support host pins the elevation while it still exists and
+  // overlaps a footprint — deterministic across stacked slabs. A stale
+  // host (deleted or reshaped away) silently falls through to the
+  // election below; this per-frame read path never writes the field.
+  const supportSlabId = (effectiveNode as { supportSlabId?: string | null }).supportSlabId
+  if (supportSlabId) {
+    for (const footprint of footprints) {
+      const hosted = spatialGridManager.getHostSlabElevationForFootprint(
+        resolvedLevelId,
+        supportSlabId,
+        footprint.position ?? position,
+        footprint.dimensions,
+        footprint.rotation,
+      )
+      if (hosted !== null) return finiteSlabElevation(hosted)
+    }
+  }
+
   let maxElevation = Number.NEGATIVE_INFINITY
-  for (const footprint of getFloorPlacedFootprints(floorPlaced, effectiveNode, { nodes })) {
+  for (const footprint of footprints) {
     const footprintPosition = footprint.position ?? position
     const elevation = finiteSlabElevation(
       spatialGridManager.getSlabElevationForItem(

@@ -442,10 +442,21 @@ export type WallSlabSupportSegment = {
   elevation: number
 }
 
+/**
+ * `preferredSlabId` is a persisted support host (`wall.supportSlabId`):
+ * while that slab is still in the candidate set (still overlaps the wall
+ * band with enough covered length), the elected `elevation` is pinned to
+ * it instead of the majority/best-coverage election. `baseSegments` /
+ * `baseElevation` (fill-down) still derive from ALL supporting slabs
+ * unchanged. A preferred slab that no longer qualifies is silently
+ * ignored — deliberately never cleared here, so the host resumes if the
+ * slab's polygon returns (only slab deletion strips the stored field).
+ */
 export function computeWallSlabSupport(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
+  preferredSlabId?: string | null,
 ): WallSlabSupport {
   const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
   const halfThickness = Math.max(thickness / 2, 0)
@@ -460,6 +471,7 @@ export function computeWallSlabSupport(
 
   type ElevationGroup = { elevation: number; perPolyline: LengthInterval[][] }
   const groups: ElevationGroup[] = []
+  let preferredElevation: number | null = null
 
   for (const slab of slabs) {
     if (slab.polygon.length < 3) continue
@@ -482,6 +494,9 @@ export function computeWallSlabSupport(
     if (supported < minSupport) continue
 
     const elevation = slab.elevation ?? 0.05
+    if (preferredSlabId != null && slab.id === preferredSlabId) {
+      preferredElevation = elevation
+    }
     let group = groups.find(
       (candidate) => Math.abs(candidate.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
     )
@@ -526,11 +541,13 @@ export function computeWallSlabSupport(
   }
 
   const elevation =
-    majorityElevation !== Number.NEGATIVE_INFINITY
-      ? majorityElevation
-      : bestElevation === Number.NEGATIVE_INFINITY
-        ? 0
-        : bestElevation
+    preferredElevation !== null
+      ? preferredElevation
+      : majorityElevation !== Number.NEGATIVE_INFINITY
+        ? majorityElevation
+        : bestElevation === Number.NEGATIVE_INFINITY
+          ? 0
+          : bestElevation
   const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
     const lineLength = polylineLengths[polylineIndex]!
     if (lineLength < 1e-9) return []

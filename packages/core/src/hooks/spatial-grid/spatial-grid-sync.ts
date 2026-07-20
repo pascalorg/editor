@@ -168,6 +168,18 @@ export function initSpatialGridSync(): () => void {
           markNodesOverlappingSlab(prev as SlabNode, state.nodes, markDirty)
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
         }
+      } else if (node.type === 'wall' && prev.type === 'wall') {
+        if (
+          node.start !== prev.start ||
+          node.end !== prev.end ||
+          node.curveOffset !== prev.curveOffset ||
+          node.thickness !== prev.thickness
+        ) {
+          // Rendered slab polygons adopt wall bands, so a wall reshape
+          // must reach the manager to refresh its wall map and drop the
+          // level's rendered-polygon cache.
+          spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
+        }
       }
     }
   })
@@ -190,10 +202,11 @@ function markNodesOverlappingSlab(
   if (slab.polygon.length < 3) return
   const slabLevelId = resolveLevelId(slab, nodes)
 
-  // Walls follow the slab's RENDERED footprint (band-adopted edges reach
-  // the wall's outer face), so the dirty gate must test the same polygon
-  // `getSlabElevationForWall` will re-evaluate — a stored polygon that
-  // stops short of the wall body would otherwise never re-elevate it.
+  // Walls AND floor-placed nodes follow the slab's RENDERED footprint
+  // (band-adopted edges reach the wall's outer face), so the dirty gate
+  // must test the same polygon the support queries re-evaluate — a stored
+  // polygon that stops short of the wall body would otherwise never
+  // re-elevate nodes sitting over the adopted band.
   const levelWalls: WallNode[] = []
   const siblingSlabs: SlabNode[] = []
   for (const node of Object.values(nodes)) {
@@ -249,7 +262,7 @@ function markNodesOverlappingSlab(
           footprint.position ?? position,
           footprint.dimensions,
           footprint.rotation,
-          slab.polygon,
+          renderedPolygon,
           0.01,
         )
       ) {
