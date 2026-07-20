@@ -2,6 +2,7 @@
 
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
+import { isFloorplanAnnotationObstacleGeometry } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
@@ -281,7 +282,13 @@ function renderNode(
     case 'group': {
       const transform = formatTransform(g.transform)
       return (
-        <g key={keyHint} transform={transform}>
+        <g
+          data-floorplan-annotation-obstacle={
+            isFloorplanAnnotationObstacleGeometry(g) ? '' : undefined
+          }
+          key={keyHint}
+          transform={transform}
+        >
           {g.children.map((child, i) =>
             renderNode(child, i, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint),
           )}

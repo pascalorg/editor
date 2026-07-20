@@ -3,6 +3,7 @@ import type {
   AnyNode,
   AnyNodeId,
   FloorplanAffordanceSession,
+  FloorplanGeometry,
   LiveNodeOverrides,
 } from '@pascal-app/core'
 import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
@@ -12,6 +13,7 @@ import {
   collectFloorplanDependencyNodes,
   computeAffectedSiblingIds,
   floorplanHandleDoubleClickAffordance,
+  splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
 
@@ -206,6 +208,21 @@ describe('floorplan vertex double-click routing', () => {
         payload: { endpoint: 'end' },
       }),
     ).toBeNull()
+  })
+})
+
+describe('floorplan annotation overlay routing', () => {
+  test('keeps a fixed mark pill together in the overlay pass', () => {
+    const mark = {
+      kind: 'group',
+      children: [
+        { kind: 'line', x1: 0, y1: 0, x2: 0, y2: 0.4 },
+        { kind: 'rect', x: -0.2, y: 0.4, width: 0.4, height: 0.32 },
+        { kind: 'text', x: 0, y: 0.56, text: '107', fontSize: 0.15, upright: true },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(mark)).toEqual({ base: null, overlay: mark })
   })
 })
 

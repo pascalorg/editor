@@ -25,6 +25,23 @@ describe('resolveAnnotationLabelRectangles', () => {
     ])
   })
 
+  test('moves a dimension value clear of a fixed door-mark pill', () => {
+    const shifts = resolveAnnotationLabelRectangles(
+      [{ id: 'door-width', x: 94, y: 88, width: 42, height: 16, priority: 100 }],
+      [{ x: 100, y: 82, width: 48, height: 32 }],
+    )
+
+    expect(shifts).toEqual([expect.objectContaining({ id: 'door-width', resolved: true })])
+    const shift = shifts[0]
+    expect(shift).not.toMatchObject({ dx: 0, dy: 0 })
+    expect(
+      94 + (shift?.dx ?? 0) + 42 + 6 <= 100 ||
+        148 + 6 <= 94 + (shift?.dx ?? 0) ||
+        88 + (shift?.dy ?? 0) + 16 + 6 <= 82 ||
+        114 + 6 <= 88 + (shift?.dy ?? 0),
+    ).toBe(true)
+  })
+
   test('finds separate nearby positions for a dense label cluster', () => {
     const shifts = resolveAnnotationLabelRectangles(
       Array.from({ length: 4 }, (_, index) => ({

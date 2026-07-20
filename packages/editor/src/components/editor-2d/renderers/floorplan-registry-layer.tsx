@@ -75,7 +75,10 @@ import {
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
-import { resolveSvgAnnotationCollisions } from './floorplan-annotation-layout'
+import {
+  isFloorplanAnnotationObstacleGeometry,
+  resolveSvgAnnotationCollisions,
+} from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
@@ -1962,7 +1965,13 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
       case 'group': {
         const transform = formatGroupTransform(g.transform)
         return (
-          <g key={keyHint} transform={transform}>
+          <g
+            data-floorplan-annotation-obstacle={
+              isFloorplanAnnotationObstacleGeometry(g) ? '' : undefined
+            }
+            key={keyHint}
+            transform={transform}
+          >
             {g.children.map((child, i) => renderInteractive(child, i))}
           </g>
         )
@@ -2855,6 +2864,9 @@ export function splitFloorplanOverlay(g: FloorplanGeometry): {
   base: FloorplanGeometry | null
   overlay: FloorplanGeometry | null
 } {
+  if (isFloorplanAnnotationObstacleGeometry(g)) {
+    return { base: null, overlay: g }
+  }
   if (OVERLAY_KINDS.has(g.kind)) {
     return { base: null, overlay: g }
   }

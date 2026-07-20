@@ -71,4 +71,23 @@ describe('FloorplanGeometryRenderer static labels', () => {
 
     expect(markup).toContain('font-size="0.08"')
   })
+
+  test('registers fixed mark pills as annotation obstacles', () => {
+    const geometry = {
+      kind: 'group',
+      children: [
+        { kind: 'line', x1: 0, y1: 0, x2: 0, y2: 0.4 },
+        { kind: 'rect', x: -0.2, y: 0.4, width: 0.4, height: 0.32 },
+        { kind: 'text', x: 0, y: 0.56, text: '107', fontSize: 0.15, upright: true },
+      ],
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-annotation-obstacle=""')
+  })
 })

@@ -1,3 +1,5 @@
+import type { FloorplanGeometry } from '@pascal-app/core'
+
 export type AnnotationLabelRectangle = {
   id: string
   x: number
@@ -6,6 +8,11 @@ export type AnnotationLabelRectangle = {
   height: number
   priority: number
 }
+
+export type AnnotationObstacleRectangle = Pick<
+  AnnotationLabelRectangle,
+  'x' | 'y' | 'width' | 'height'
+>
 
 export type AnnotationLabelShift = {
   id: string
@@ -19,18 +26,21 @@ const LABEL_PLACEMENT_GAP_PX = LABEL_GAP_PX + 0.5
 
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
+  obstacles: readonly AnnotationObstacleRectangle[] = [],
 ): AnnotationLabelShift[] {
-  const placed: Array<AnnotationLabelRectangle & { dx: number; dy: number }> = []
+  const occupied: Array<AnnotationObstacleRectangle & { dx: number; dy: number }> = obstacles.map(
+    (obstacle) => ({ ...obstacle, dx: 0, dy: 0 }),
+  )
   const shifts = new Map<string, AnnotationLabelShift>()
   const ordered = [...rectangles].sort(
     (left, right) => right.priority - left.priority || right.width - left.width,
   )
 
   for (const rectangle of ordered) {
-    const candidates = labelShiftCandidates(rectangle, placed)
+    const candidates = labelShiftCandidates(rectangle, occupied)
     const selected = candidates.find(
       ({ dx, dy }) =>
-        !placed.some((other) =>
+        !occupied.some((other) =>
           rectanglesOverlap(
             { ...rectangle, x: rectangle.x + dx, y: rectangle.y + dy },
             { ...other, x: other.x + other.dx, y: other.y + other.dy },
@@ -39,7 +49,7 @@ export function resolveAnnotationLabelRectangles(
     )
     const shift = selected ?? { dx: 0, dy: 0 }
     const resolved = selected !== undefined
-    placed.push({ ...rectangle, ...shift })
+    occupied.push({ ...rectangle, ...shift })
     shifts.set(rectangle.id, { id: rectangle.id, ...shift, resolved })
   }
 
@@ -69,7 +79,13 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
       priority: Number(label.dataset.floorplanAnnotationPriority ?? 0),
     }
   })
-  const shifts = resolveAnnotationLabelRectangles(rectangles)
+  const obstacles = Array.from(
+    svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-obstacle]'),
+  ).map((obstacle) => {
+    const bounds = obstacle.getBoundingClientRect()
+    return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+  })
+  const shifts = resolveAnnotationLabelRectangles(rectangles, obstacles)
 
   labels.forEach((label, index) => {
     const rectangle = rectangles[index]
@@ -89,7 +105,7 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
 
 function labelShiftCandidates(
   rectangle: AnnotationLabelRectangle,
-  placed: ReadonlyArray<AnnotationLabelRectangle & { dx: number; dy: number }>,
+  occupied: ReadonlyArray<AnnotationObstacleRectangle & { dx: number; dy: number }>,
 ) {
   const candidates = new Map<string, { dx: number; dy: number }>()
   const addCandidate = (dx: number, dy: number) => {
@@ -97,7 +113,7 @@ function labelShiftCandidates(
   }
   addCandidate(0, 0)
 
-  for (const other of placed) {
+  for (const other of occupied) {
     const otherX = other.x + other.dx
     const otherY = other.y + other.dy
     const left = otherX - LABEL_PLACEMENT_GAP_PX - rectangle.width - rectangle.x
@@ -118,6 +134,15 @@ function labelShiftCandidates(
   return [...candidates.values()].sort(
     (left, right) => Math.hypot(left.dx, left.dy) - Math.hypot(right.dx, right.dy),
   )
+}
+
+export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometry): boolean {
+  if (geometry.kind !== 'group') return false
+  const hasPlate = geometry.children.some(
+    (child) => child.kind === 'rect' || child.kind === 'circle',
+  )
+  const hasUprightText = geometry.children.some((child) => child.kind === 'text' && child.upright)
+  return hasPlate && hasUprightText
 }
 
 function rectanglesOverlap(
