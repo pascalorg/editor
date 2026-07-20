@@ -1,6 +1,10 @@
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { pointInPolygon } from '../systems/slab/slab-support'
+import {
+  pointInPolygon,
+  pointOnPolygonBoundary,
+  wallOverlapsSlabFootprint,
+} from '../systems/slab/slab-support'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 
 /**
@@ -201,10 +205,40 @@ function resolveCoveringSlabContext(
 }
 
 /**
- * Lowest underside among `slabs` covering `[x, z]`, in the queried
- * level's local Y, or `null` when none covers the point. The slab solid
+ * Underside of `slab`'s solid in the QUERIED level's local Y. The solid
  * occupies `[elevation - thickness, elevation]` in ITS level's local Y,
  * which sits `storeyHeight` above the queried level's floor.
+ */
+function coveringUndersideY(storeyHeight: number, slab: SlabNode): number {
+  return storeyHeight + ((slab.elevation ?? 0.05) - (slab.thickness ?? 0.05))
+}
+
+/**
+ * Whether `slab`'s stored footprint (polygon minus holes) covers `[x, z]`.
+ * Ray-cast pointInPolygon flips arbitrarily for points exactly ON the
+ * boundary (min-side edges read inside, max-side edges outside), so
+ * boundary contact counts as covered explicitly — the same convention as
+ * the slab-support interval classification. A point on a hole's rim keeps
+ * coverage (mirrors the support election's hole handling).
+ *
+ * Raw stored polygon + holes on purpose (mirrors getCeilingAt): the
+ * clamp bound doesn't need the rendered footprint's junction trims,
+ * and staying off the render path keeps this query cheap and pure.
+ */
+function slabCoversPoint(slab: SlabNode, x: number, z: number): boolean {
+  if (!pointInPolygon(x, z, slab.polygon) && !pointOnPolygonBoundary(x, z, slab.polygon)) {
+    return false
+  }
+  for (const hole of slab.holes ?? []) {
+    if (hole.length < 3) continue
+    if (pointInPolygon(x, z, hole) && !pointOnPolygonBoundary(x, z, hole)) return false
+  }
+  return true
+}
+
+/**
+ * Lowest underside among `slabs` covering `[x, z]`, in the queried
+ * level's local Y, or `null` when none covers the point.
  */
 function lowestCoveringUndersideAt(
   context: CoveringSlabContext,
@@ -213,12 +247,8 @@ function lowestCoveringUndersideAt(
 ): number | null {
   let lowest: number | null = null
   for (const slab of context.slabs) {
-    if (!pointInPolygon(x, z, slab.polygon)) continue
-    if (slab.holes?.some((hole) => hole.length >= 3 && pointInPolygon(x, z, hole))) continue
-    // Raw stored polygon + holes on purpose (mirrors getCeilingAt): the
-    // clamp bound doesn't need the rendered footprint's junction trims,
-    // and staying off the render path keeps this query cheap and pure.
-    const underside = context.storeyHeight + ((slab.elevation ?? 0.05) - (slab.thickness ?? 0.05))
+    if (!slabCoversPoint(slab, x, z)) continue
+    const underside = coveringUndersideY(context.storeyHeight, slab)
     if (lowest === null || underside < lowest) lowest = underside
   }
   return lowest
@@ -251,12 +281,14 @@ export function getCoveringSlabUndersideAt(
  * span)` — a thick or flush slab on the level above SHORTENS the walls below
  * instead of colliding with them (Revit-style automatic attach).
  *
- * Sampling: the covering underside is evaluated at the wall's start, end,
- * and chord midpoint (curved walls sample the chord midpoint, not the arc).
- * A covering slab that overlaps a wall span virtually always covers one of
- * those three points, and exact segment-vs-polygon coverage isn't worth its
- * cost for a clamp bound — same tradeoff as {@link getCeilingClampBound}'s
- * vertex + centroid sampling.
+ * Coverage: the wall's thickness band (centerline + face lines, arc-aware)
+ * is clipped against each covering slab's stored polygon minus holes via
+ * {@link wallOverlapsSlabFootprint} — the same overlap machinery as the
+ * support election. Point sampling is deliberately avoided: auto-slab
+ * polygons derive from wall CENTERLINES, so perimeter walls sit exactly ON
+ * the polygon boundary, where ray-cast point-in-polygon flips with the
+ * edge's orientation (one wall clamped, its neighbor didn't). Boundary
+ * contact counts as covered on every side of the slab.
  *
  * This is THE plane for a plane-bound wall (`height` absent). Explicit-height
  * walls ignore the value (`resolveWallTop` returns their stored height), so
@@ -265,7 +297,7 @@ export function getCoveringSlabUndersideAt(
  * {@link DEFAULT_LEVEL_HEIGHT} when `levelId` doesn't resolve to a level.
  */
 export function getWallPlaneTop(
-  wall: Pick<WallNode, 'start' | 'end'>,
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): number {
@@ -273,14 +305,11 @@ export function getWallPlaneTop(
   if (!context) return DEFAULT_LEVEL_HEIGHT
 
   let plane = context.storeyHeight
-  const samples: Array<[number, number]> = [
-    wall.start,
-    wall.end,
-    [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2],
-  ]
-  for (const [x, z] of samples) {
-    const underside = lowestCoveringUndersideAt(context, x, z)
-    if (underside !== null && underside < plane) plane = underside
+  for (const slab of context.slabs) {
+    const underside = coveringUndersideY(context.storeyHeight, slab)
+    if (underside >= plane) continue
+    if (!wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes)) continue
+    plane = underside
   }
   return plane
 }
@@ -291,7 +320,10 @@ export function getWallPlaneTop(
  * The covering underside is sampled at every polygon vertex plus the
  * centroid — cheap, and a slab overlapping a convex-ish ceiling almost
  * always covers one of those points; exact polygon-vs-polygon overlap is
- * not worth its cost for a clamp bound.
+ * not worth its cost for a clamp bound. Ceiling outlines share footprint
+ * edges with the slabs above them the same way walls do, so vertices
+ * sitting exactly on a slab's boundary count as covered on every side
+ * (see `slabCoversPoint`) instead of flipping with the edge orientation.
  *
  * Returns `Infinity` when `levelId` doesn't resolve, so callers clamp
  * against nothing rather than a garbage plane.

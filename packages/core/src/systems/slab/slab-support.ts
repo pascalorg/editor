@@ -123,7 +123,11 @@ function pointSegmentDistance(
 // classify identically on every side of the slab.
 const ON_BOUNDARY_EPSILON = 1e-4
 
-function pointOnPolygonBoundary(px: number, pz: number, polygon: Array<[number, number]>): boolean {
+export function pointOnPolygonBoundary(
+  px: number,
+  pz: number,
+  polygon: Array<[number, number]>,
+): boolean {
   const n = polygon.length
   for (let i = 0; i < n; i++) {
     const [ax, az] = polygon[i]!
@@ -265,13 +269,6 @@ function polylineInsideIntervals(
   return mergeIntervals(intervals)
 }
 
-function polylineInsideLength(
-  points: Array<{ x: number; y: number }>,
-  polygon: Array<[number, number]>,
-): number {
-  return intervalsLength(polylineInsideIntervals(points, polygon))
-}
-
 export type WallOverlapInput = {
   start: [number, number]
   end: [number, number]
@@ -379,6 +376,23 @@ export function wallOverlapsPolygon(
     thickness = startOrWall.thickness ?? DEFAULT_WALL_THICKNESS
     polygon = endOrPolygon as Array<[number, number]>
   }
+  return wallOverlapsSlabFootprint({ start, end, curveOffset, thickness }, polygon)
+}
+
+/**
+ * {@link wallOverlapsPolygon} with the slab's stored holes subtracted from
+ * the covered length: a wall whose band only reaches the polygon inside a
+ * hole does not overlap. Hole boundaries keep coverage (rim convention —
+ * see {@link computeWallSlabSupport}). Polygon boundary contact counts as
+ * covered, so a wall sitting exactly on a slab edge resolves identically
+ * on every side of the slab. Pure.
+ */
+export function wallOverlapsSlabFootprint(
+  wallLike: WallOverlapInput,
+  polygon: Array<[number, number]>,
+  holes?: ReadonlyArray<Array<[number, number]>>,
+): boolean {
+  const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
   const halfThickness = Math.max(thickness / 2, 0)
 
   const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
@@ -387,7 +401,13 @@ export function wallOverlapsPolygon(
 
   let overlap = 0
   for (const line of polylines) {
-    overlap = Math.max(overlap, polylineInsideLength(line, polygon))
+    let intervals = polylineInsideIntervals(line, polygon)
+    for (const hole of holes ?? []) {
+      if (intervals.length === 0) break
+      if (hole.length < 3) continue
+      intervals = subtractIntervals(intervals, polylineInsideIntervals(line, hole, false))
+    }
+    overlap = Math.max(overlap, intervalsLength(intervals))
   }
   const threshold = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, centerLength * 0.5))
   return overlap >= threshold

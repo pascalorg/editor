@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { BuildingNode, LevelNode, SlabNode } from '../schema'
+import { BuildingNode, LevelNode, SlabNode, type WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import reproFixture from './__fixtures__/wall-plane-top-boundary-repro.json'
 import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 import {
   CEILING_CLAMP_MARGIN,
@@ -342,8 +343,6 @@ describe('getCoveringSlabUndersideAt', () => {
 })
 
 describe('getWallPlaneTop', () => {
-  // Samples stay strictly inside / outside slab polygons — pointInPolygon
-  // on a boundary point is ray-cast ambiguous and not what's under test.
   const wallAt = (
     start: [number, number],
     end: [number, number],
@@ -389,6 +388,64 @@ describe('getWallPlaneTop', () => {
     expect(getWallPlaneTop(wallAt([0.5, 2], [3.5, 2]), 'level_missing', nodes)).toBe(
       DEFAULT_LEVEL_HEIGHT,
     )
+  })
+
+  test('repro project: both boundary walls clamp to the covering slab underside', () => {
+    // Real scene subset (project_O1z9NLOylyb5kFX4): the level-1 auto slab's
+    // polygon derives from the level-0 wall CENTERLINES, so every perimeter
+    // wall's samples sit exactly ON the polygon boundary. Wall 2 (min-x edge)
+    // clamped while Wall 1 (max-z edge) ran full height — ray-cast
+    // pointInPolygon includes min-side boundaries and excludes max-side ones.
+    const nodes = reproFixture as unknown as Record<AnyNodeId, AnyNode>
+    const levelId = 'level_pomuk0sbwec15mf3'
+    const wall1 = nodes['wall_39bnnq29h824ryy0' as AnyNodeId] as WallNode
+    const wall2 = nodes['wall_on4rj410n69n3rzf' as AnyNodeId] as WallNode
+    // storeyHeight 2.7 + (slab elevation 0.19757… - thickness 0.5)
+    const underside = 2.7 + (0.19757210573188194 - 0.5)
+    expect(getWallPlaneTop(wall1, levelId, nodes)).toBeCloseTo(underside)
+    expect(getWallPlaneTop(wall2, levelId, nodes)).toBeCloseTo(underside)
+  })
+
+  test('all four rectangle walls under a same-footprint covering slab clamp', () => {
+    // The repro shape distilled: wall centerlines lie exactly on the covering
+    // slab's polygon edges. Every orientation must clamp identically.
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    const walls: Array<[[number, number], [number, number]]> = [
+      [
+        [0, 0],
+        [4, 0],
+      ],
+      [
+        [4, 0],
+        [4, 4],
+      ],
+      [
+        [4, 4],
+        [0, 4],
+      ],
+      [
+        [0, 4],
+        [0, 0],
+      ],
+    ]
+    for (const [start, end] of walls) {
+      expect(getWallPlaneTop(wallAt(start, end), 'level_0', nodes)).toBeCloseTo(2.2)
+    }
+  })
+
+  test('a diagonal wall under the covering slab clamps', () => {
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    expect(getWallPlaneTop(wallAt([0.5, 0.5], [3.5, 3.5]), 'level_0', nodes)).toBeCloseTo(2.2)
+  })
+
+  test('a wall fully outside the covering slab keeps the storey height', () => {
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    expect(getWallPlaneTop(wallAt([6, 0], [6, 4]), 'level_0', nodes)).toBe(2.5)
+  })
+
+  test('a wall partially overlapping the covering slab clamps', () => {
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    expect(getWallPlaneTop(wallAt([2, 2], [8, 2]), 'level_0', nodes)).toBeCloseTo(2.2)
   })
 })
 
@@ -438,6 +495,33 @@ describe('getCeilingClampBound', () => {
     const nodes = stackedNodes([])
     expect(getCeilingClampBound('level_missing', nodes, ceilingPolygon)).toBe(
       Number.POSITIVE_INFINITY,
+    )
+  })
+
+  test('vertices on the covering slab boundary clamp identically on every side', () => {
+    // Two mirrored strips share an edge with the 4x4 deck: one along its
+    // min-z edge, one along its max-z edge. Their interiors and centroids sit
+    // outside the deck, so only the shared-edge vertices can register —
+    // ray-cast pointInPolygon used to admit the min-side vertices and reject
+    // the max-side ones, giving orientation-dependent clamps.
+    const nodes = stackedNodes([slabNode('slab_deck', { elevation: 0, thickness: 0.3 })])
+    const minSideStrip: Array<[number, number]> = [
+      [0, -1],
+      [4, -1],
+      [4, 0],
+      [0, 0],
+    ]
+    const maxSideStrip: Array<[number, number]> = [
+      [0, 4],
+      [4, 4],
+      [4, 5],
+      [0, 5],
+    ]
+    expect(getCeilingClampBound('level_0', nodes, minSideStrip)).toBeCloseTo(
+      2.2 - CEILING_CLAMP_MARGIN,
+    )
+    expect(getCeilingClampBound('level_0', nodes, maxSideStrip)).toBeCloseTo(
+      2.2 - CEILING_CLAMP_MARGIN,
     )
   })
 })
