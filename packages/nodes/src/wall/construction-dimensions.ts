@@ -204,7 +204,8 @@ export function buildLevelWallConstructionDimensionPlan(
   for (const wall of walls) {
     if (isCurvedWall(wall)) continue
     const openings = hostedOpeningsForWall(wall, nodes)
-    if (!shouldDimensionInteriorWall(wall, walls, openings)) continue
+    const network = wallNetworkById.get(wall.id) ?? [wall]
+    if (!shouldDimensionInteriorWall(wall, walls, openings, network)) continue
     const planned = buildInteriorWallDimensions(wall, walls, openings)
     if (planned.length > 0) dimensionsByWallId.set(wall.id, planned)
   }
@@ -223,6 +224,8 @@ function buildInteriorWallDimensions(
   if (wallLength < MIN_SEGMENT_LENGTH) return []
 
   const tangent: FloorplanPoint = [dx / wallLength, dz / wallLength]
+  const [spanStart, spanEnd] = interiorWallClearSpan(wall, walls, tangent, wallLength)
+  if (spanEnd - spanStart < MIN_SEGMENT_LENGTH) return []
   const normal = resolveInteriorDimensionNormal(wall, walls, tangent)
   const halfThickness = (wall.thickness ?? 0.1) / 2
   const pointAt = (along: number): FloorplanPoint => [
@@ -231,14 +234,14 @@ function buildInteriorWallDimensions(
   ]
   const openingSpans = openings.flatMap((opening): Array<readonly [number, number]> => {
     const halfWidth = Math.max(0, opening.width) / 2
-    const start = clamp(opening.position[0] - halfWidth, 0, wallLength)
-    const end = clamp(opening.position[0] + halfWidth, 0, wallLength)
+    const start = clamp(opening.position[0] - halfWidth, spanStart, spanEnd)
+    const end = clamp(opening.position[0] + halfWidth, spanStart, spanEnd)
     return end - start >= MIN_SEGMENT_LENGTH ? [[start, end]] : []
   })
 
   const planned: PlannedConstructionDimension[] = []
   if (openingSpans.length > 0) {
-    const breakpoints = uniqueSorted([0, wallLength, ...openingSpans.flat()])
+    const breakpoints = uniqueSorted([spanStart, spanEnd, ...openingSpans.flat()])
     for (let index = 0; index < breakpoints.length - 1; index++) {
       const start = breakpoints[index]
       const end = breakpoints[index + 1]
@@ -255,12 +258,47 @@ function buildInteriorWallDimensions(
 
   planned.push({
     tier: 'interior-overall',
-    start: pointAt(0),
-    end: pointAt(wallLength),
+    start: pointAt(spanStart),
+    end: pointAt(spanEnd),
     offsetNormal: normal,
     offsetDistance: openingSpans.length > 0 ? WALL_SPAN_OFFSET : OPENING_CHAIN_OFFSET,
   })
   return planned
+}
+
+function interiorWallClearSpan(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+  tangent: FloorplanPoint,
+  wallLength: number,
+): readonly [number, number] {
+  const insetAt = (endpoint: FloorplanPoint, inward: FloorplanPoint): number => {
+    let inset = 0
+    for (const candidate of walls) {
+      if (
+        candidate.id === wall.id ||
+        isCurvedWall(candidate) ||
+        pointSegmentDistance(endpoint, candidate.start, candidate.end) > FACADE_LINE_TOLERANCE
+      ) {
+        continue
+      }
+      const candidateDirection = subtract(candidate.end, candidate.start)
+      const candidateLength = Math.hypot(candidateDirection[0], candidateDirection[1])
+      if (candidateLength < MIN_SEGMENT_LENGTH) continue
+      const candidateNormal: FloorplanPoint = [
+        -candidateDirection[1] / candidateLength,
+        candidateDirection[0] / candidateLength,
+      ]
+      const crossing = Math.abs(dot(inward, candidateNormal))
+      if (crossing < FACADE_DIRECTION_TOLERANCE) continue
+      inset = Math.max(inset, (candidate.thickness ?? 0.1) / 2 / crossing)
+    }
+    return inset
+  }
+
+  const spanStart = clamp(insetAt(wall.start, tangent), 0, wallLength)
+  const spanEnd = clamp(wallLength - insetAt(wall.end, negate(tangent)), spanStart, wallLength)
+  return [spanStart, spanEnd]
 }
 
 export function renderPlannedConstructionDimensions(
@@ -433,8 +471,8 @@ function shouldDimensionInteriorWall(
   wall: WallNode,
   walls: ReadonlyArray<WallNode>,
   openings: readonly OpeningNode[],
+  network: ReadonlyArray<WallNode>,
 ): boolean {
-  if (wall.frontSide === 'exterior' || wall.backSide === 'exterior') return false
   if (isClassifiedInteriorWall(wall)) return true
   if (openings.length === 0) return false
   const dx = wall.end[0] - wall.start[0]
@@ -443,7 +481,10 @@ function shouldDimensionInteriorWall(
   if (length < MIN_SEGMENT_LENGTH) return false
   const tangent: FloorplanPoint = [dx / length, dz / length]
   const { frontClearance, backClearance } = interiorDimensionClearances(wall, walls, tangent)
-  return frontClearance !== null && backClearance !== null
+  if (frontClearance === null || backClearance === null) return false
+
+  const claimedExteriorNormal = exteriorNormal(wall)
+  return claimedExteriorNormal === null || isFacadeOccluded(wall, claimedExteriorNormal, network)
 }
 
 function resolveInteriorDimensionNormal(

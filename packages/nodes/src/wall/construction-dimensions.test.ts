@@ -277,6 +277,59 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     })
   })
 
+  test('starts and ends an interior opening chain at the adjacent wall faces', () => {
+    const partition = wall({
+      id: 'wall_partition_clear_span',
+      start: [0, 4],
+      end: [10, 4],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
+    const lowerBoundary = wall({ id: 'wall_lower', start: [0, 0], end: [10, 0] })
+    const upperBoundary = wall({ id: 'wall_upper', start: [10, 10], end: [0, 10] })
+    const leftBoundary = wall({
+      id: 'wall_left',
+      start: [0, 10],
+      end: [0, 0],
+      thickness: 0.4,
+    })
+    const rightBoundary = wall({
+      id: 'wall_right',
+      start: [10, 0],
+      end: [10, 10],
+      thickness: 0.2,
+    })
+    const door = DoorNode.parse({
+      id: 'door_clear_span',
+      parentId: partition.id,
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const window = WindowNode.parse({
+      id: 'window_clear_span',
+      parentId: partition.id,
+      position: [6, 1.5, 0],
+      width: 2,
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan(
+        [partition, lowerBoundary, upperBoundary, leftBoundary, rightBoundary],
+        { [door.id]: door, [window.id]: window },
+      ).get(partition.id) ?? []
+
+    expect(planned[0]).toMatchObject({ start: [0.2, 4.1] })
+    expect(planned.at(-1)).toMatchObject({
+      start: [0.2, 4.1],
+      end: [9.9, 4.1],
+    })
+    expect(
+      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
+        entry.kind === 'dimension' ? entry.text : null,
+      ),
+    ).toEqual(['1.3m', '1m', '2.5m', '2m', '2.9m', '9.7m'])
+  })
+
   test('dimensions hosted openings on a bounded partition with incomplete side metadata', () => {
     const partition = wall({
       id: 'wall_unclassified_partition',
@@ -320,6 +373,70 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
         entry.kind === 'dimension' ? entry.text : null,
       ),
     ).toEqual(['1.5m', '1m', '2.5m', '2m', '3m', '10m'])
+  })
+
+  test('dimensions hosted openings on a bounded partition with stale exterior metadata', () => {
+    const top = wall({ id: 'wall_top' })
+    const right = wall({
+      id: 'wall_right',
+      start: [10, 0],
+      end: [10, -6],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const bottom = wall({
+      id: 'wall_bottom',
+      start: [10, -6],
+      end: [0, -6],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const left = wall({
+      id: 'wall_left',
+      start: [0, -6],
+      end: [0, 0],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const partition = wall({
+      id: 'wall_stale_partition',
+      start: [0, -3],
+      end: [10, -3],
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    const door = DoorNode.parse({
+      id: 'door_stale_partition',
+      parentId: partition.id,
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const window = WindowNode.parse({
+      id: 'window_stale_partition',
+      parentId: partition.id,
+      position: [6, 1.5, 0],
+      width: 2,
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan([top, right, bottom, left, partition], {
+        [door.id]: door,
+        [window.id]: window,
+      }).get(partition.id) ?? []
+
+    expect(planned.map((entry) => entry.tier)).toEqual([
+      'interior',
+      'interior',
+      'interior',
+      'interior',
+      'interior',
+      'interior-overall',
+    ])
+    expect(
+      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
+        entry.kind === 'dimension' ? entry.text : null,
+      ),
+    ).toEqual(['1.4m', '1m', '2.5m', '2m', '2.9m', '9.8m'])
   })
 
   test('does not treat an unbounded unknown wall with an opening as an interior partition', () => {
@@ -507,7 +624,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     expect(planned.map((entry) => entry.tier)).toEqual(['overall'])
   })
 
-  test('does not stretch interior doors or windows to exterior opening strings', () => {
+  test('keeps internal openings off exterior strings and dimensions them locally', () => {
     const top = wall({ id: 'wall_top' })
     const right = wall({
       id: 'wall_right',
@@ -555,9 +672,22 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       { [door.id]: door, [window.id]: window },
     )
     const bottomDimensions = plan.get(bottom.id) ?? []
+    const interiorDimensions = plan.get(interiorDoorWall.id) ?? []
 
     expect(bottomDimensions.map((entry) => entry.tier)).toEqual(['overall'])
-    expect(plan.get(interiorDoorWall.id)).toBeUndefined()
+    expect(interiorDimensions.map((entry) => entry.tier)).toEqual([
+      'interior',
+      'interior',
+      'interior',
+      'interior',
+      'interior',
+      'interior-overall',
+    ])
+    expect(
+      renderPlannedConstructionDimensions(interiorDimensions, 'metric').map((entry) =>
+        entry.kind === 'dimension' ? entry.text : null,
+      ),
+    ).toEqual(['1m', '1m', '0.5m', '1m', '2.4m', '5.9m'])
   })
 
   test('keeps disconnected collinear facade runs independent', () => {
