@@ -3,6 +3,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
+import { resolveReportedWallHeight } from './scene-query'
 import { NodeIdSchema } from './schemas'
 
 export const describeNodeInput = {
@@ -23,13 +24,13 @@ export const describeNodeOutput = {
  * Build a short, human-readable one-liner describing the node.
  * Covers the common shapes; falls back to a generic sentence otherwise.
  */
-function describe(node: AnyNode): string {
+function describe(node: AnyNode, bridge: SceneOperations): string {
   switch (node.type) {
     case 'wall': {
       const [x1, z1] = node.start
       const [x2, z2] = node.end
       const t = node.thickness ?? 0.1
-      const h = node.height ?? 2.5
+      const h = resolveReportedWallHeight(bridge, node)
       return `Wall from (${x1},${z1}) to (${x2},${z2}), thickness ${t.toFixed(2)}m, height ${h.toFixed(2)}m`
     }
     case 'level':
@@ -83,14 +84,22 @@ export function registerDescribeNode(server: McpServer, bridge: SceneOperations)
       const childrenIds = children.map((n) => n.id as string)
 
       const n = node as AnyNode
+      const properties =
+        n.type === 'wall'
+          ? {
+              ...n,
+              resolvedHeight: resolveReportedWallHeight(bridge, n),
+              heightIsExplicit: n.height !== undefined,
+            }
+          : n
       const payload = {
         id: n.id as string,
         type: n.type as string,
         parentId: (n.parentId ?? null) as string | null,
         ancestryIds,
         childrenIds,
-        properties: n as unknown as Record<string, unknown>,
-        description: describe(n),
+        properties: properties as unknown as Record<string, unknown>,
+        description: describe(n, bridge),
       }
 
       return {

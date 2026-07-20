@@ -1,7 +1,11 @@
-import type {
-  CeilingNode as CeilingNodeType,
-  HandleDescriptor,
-  NodeDefinition,
+import {
+  type AnyNodeId,
+  type CeilingNode as CeilingNodeType,
+  getStoredLevelHeight,
+  type HandleDescriptor,
+  type LevelNode,
+  type NodeDefinition,
+  type SceneApi,
 } from '@pascal-app/core'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildCeilingFloorplan } from './floorplan'
@@ -19,6 +23,17 @@ import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
 const MIN_CEILING_HEIGHT = 0.5
+
+// Ceilings no longer drive the storey height; the stored level height
+// does. A ceiling raised past the storey plane would poke into the level
+// above, so height writes clamp at the plane (the renderer's -0.01
+// z-fight offset keeps the effective top just under it).
+function ceilingStoreyPlane(n: CeilingNodeType, sceneApi: SceneApi): number {
+  const parent = n.parentId ? sceneApi.get(n.parentId as AnyNodeId) : undefined
+  return parent?.type === 'level'
+    ? getStoredLevelHeight(parent as LevelNode)
+    : Number.POSITIVE_INFINITY
+}
 
 function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
   const polygon = n.polygon ?? []
@@ -48,6 +63,7 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     axis: 'y',
     anchor: 'min',
     min: MIN_CEILING_HEIGHT,
+    max: ceilingStoreyPlane,
     currentValue: (n) => n.height ?? 2.5,
     apply: (_n, newValue) => ({ height: newValue }),
     placement: {

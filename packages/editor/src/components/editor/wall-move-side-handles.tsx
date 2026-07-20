@@ -1,13 +1,18 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   type FenceNode,
   getWallCurveFrameAt,
   getWallThickness,
   isCurvedWall,
+  MIN_WALL_HEIGHT,
+  resolveLevelId,
+  resolveWallEffectiveHeight,
   sceneRegistry,
+  spatialGridManager,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -55,7 +60,6 @@ const HANDLE_MIN_OFFSET = 0.33
 const HANDLE_MIN_HEIGHT = 0.4
 const HANDLE_TOP_INSET = 0.08
 const HEIGHT_HANDLE_OFFSET = 0.26
-const MIN_WALL_HEIGHT = 0.5
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
 // Match the door arrows: scale the rendered chevron down to ~two-thirds
@@ -71,6 +75,23 @@ type WallMoveHandle = {
   key: string
   position: [number, number, number]
   rotationY: number
+}
+
+// Plane-bound walls (no explicit height) top out at the storey plane, so the
+// handle geometry must use the resolved effective height, not a 2.5 fallback.
+function getWallEffectiveHeight(wall: WallNode, nodes: Record<string, AnyNode>): number {
+  const levelId = resolveLevelId(wall, nodes)
+  const level = nodes[levelId]
+  const storeyHeight =
+    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+  )
+  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }
 
 // Pre-empt the synthetic `click` the browser fires immediately after a
@@ -244,7 +265,7 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const corner = endpoint === 'start' ? wall.start : wall.end
   const x = corner[0]
   const z = corner[1]
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = getWallEffectiveHeight(wall, useScene.getState().nodes)
 
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
   const hitGeometry = useMemo(() => createEndpointHitAreaGeometry(CORNER_HEX_RADIUS), [])
@@ -433,7 +454,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const wallAngle = Math.atan2(-dirZ, dirX)
   // `wall` is the override-merged effective wall (see
   // WallMoveSideHandlesForWall), so this height is already live during a drag.
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = getWallEffectiveHeight(wall, useScene.getState().nodes)
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
@@ -466,7 +487,9 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const hit = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hit)) return
 
-    const initialHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+    // Dragging the top makes the wall custom-height; seed from the resolved
+    // effective height so a plane-bound wall's drag starts at its real top.
+    const initialHeight = getWallEffectiveHeight(wall, useScene.getState().nodes)
     const initialY = hit.y
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight
@@ -774,7 +797,7 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
   const midpoint: [number, number] = frame
     ? [frame.point.x, frame.point.y]
     : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = getWallEffectiveHeight(wall, useScene.getState().nodes)
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
 

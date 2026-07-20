@@ -10,6 +10,8 @@ import {
   type GridEvent,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  getStoredLevelHeight,
+  type LevelNode,
   pauseSceneHistory,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
@@ -284,12 +286,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // re-flowed through the planner.
       const existingSlabs = getLevelSlabs(levelId, sceneState.nodes)
       const slabPlan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
+      const levelNode = sceneState.nodes[levelId as AnyNodeId]
       const ceilingPlan = planAutoCeilingsForLevel(
         roomPolygons,
         getLevelCeilings(levelId, sceneState.nodes),
         {
           walls: levelWalls,
           slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
+          storeyHeight:
+            levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
         },
       )
 

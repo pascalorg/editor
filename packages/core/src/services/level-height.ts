@@ -1,7 +1,7 @@
 import type { CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
-import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
+import { resolveWallTop } from '../systems/wall/wall-top'
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
 
@@ -36,7 +36,7 @@ export function deriveLegacyLevelHeight(
         slabs,
         walls,
       ).elevation
-      const top = Math.max(0, electedElevation) + (wall.height ?? DEFAULT_WALL_HEIGHT)
+      const top = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation)
       if (top > maxTop) maxTop = top
     }
   }

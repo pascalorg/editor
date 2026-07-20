@@ -2,6 +2,82 @@ import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import type { SlabNode, WallNode } from '../../schema'
 import { getWallCurveFrameAt, isCurvedWall } from '../wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../wall/wall-footprint'
+import { MIN_WALL_HEIGHT } from '../wall/wall-top'
+
+export type SlabElevationClamp = {
+  elevation: number
+  clamped: boolean
+}
+
+/**
+ * Clamp-never-ask upper bound for a slab's elevation. A plane-bound wall
+ * (no stored `height`) keeps its top at the storey plane, so a slab that
+ * rises past `storeyHeight - MIN_WALL_HEIGHT` while electing as that
+ * wall's base would squeeze the wall body below its minimum (and at the
+ * plane, to nothing). Walls with explicit heights don't constrain — their
+ * top rides the elected base, not the plane. Negative elevations (pool
+ * recess) are untouched: this is an upper bound only.
+ *
+ * The election runs against `levelSlabs` with `proposedElevation`
+ * substituted into `slab`, so a slab that would only WIN the election at
+ * the proposed elevation still clamps, and a slab out-elected by a
+ * sibling doesn't. Pure.
+ */
+export function clampSlabElevationForWalls(
+  proposedElevation: number,
+  slab: SlabNode,
+  levelWalls: WallNode[],
+  levelSlabs: readonly SlabNode[],
+  storeyHeight: number,
+): SlabElevationClamp {
+  const bound = storeyHeight - MIN_WALL_HEIGHT
+  if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
+  if (slab.polygon.length < 3) return { elevation: proposedElevation, clamped: false }
+
+  const substituted = levelSlabs.some((candidate) => candidate.id === slab.id)
+    ? levelSlabs.map((candidate) =>
+        candidate.id === slab.id ? { ...candidate, elevation: proposedElevation } : candidate,
+      )
+    : [...levelSlabs, { ...slab, elevation: proposedElevation }]
+
+  for (const wall of levelWalls) {
+    if (wall.height != null) continue
+    const wallLike: WallOverlapInput = {
+      start: wall.start,
+      end: wall.end,
+      curveOffset: wall.curveOffset,
+      thickness: wall.thickness,
+    }
+    // Cheap pre-filter: a wall that never reaches the slab's footprint
+    // can't elect it, whatever the election says about sibling slabs.
+    if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
+    const support = computeWallSlabSupport(wallLike, substituted, levelWalls)
+    if (Math.abs(support.elevation - proposedElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON) {
+      return { elevation: bound, clamped: true }
+    }
+  }
+
+  return { elevation: proposedElevation, clamped: false }
+}
+
+/**
+ * Static upper bound for a slab-elevation drag: probe the election with
+ * the slab raised above every sibling and the storey plane. If any
+ * plane-bound wall would elect it there, the drag may not pass
+ * `storeyHeight - MIN_WALL_HEIGHT`; otherwise it is unbounded above.
+ */
+export function getSlabElevationUpperBound(
+  slab: SlabNode,
+  levelWalls: WallNode[],
+  levelSlabs: readonly SlabNode[],
+  storeyHeight: number,
+): number {
+  const probe =
+    Math.max(storeyHeight, ...levelSlabs.map((candidate) => candidate.elevation ?? 0.05)) + 1
+  return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight).clamped
+    ? storeyHeight - MIN_WALL_HEIGHT
+    : Number.POSITIVE_INFINITY
+}
 
 /**
  * Point-in-polygon test using ray casting algorithm.

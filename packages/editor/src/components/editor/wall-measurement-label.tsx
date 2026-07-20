@@ -1,9 +1,10 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   getWallCurveLength,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
@@ -12,8 +13,11 @@ import {
   isCurvedWall,
   type Point2D,
   pointToKey,
+  resolveLevelId,
+  resolveWallEffectiveHeight,
   sampleWallCenterline,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -91,10 +95,7 @@ export function WallMeasurementLabel() {
   return createPortal(<SelectedMeasurementAnnotation node={measurableNode} />, selectedObject)
 }
 
-function getLevelWalls(
-  wall: WallNode,
-  nodes: Record<string, WallNode | { type: string; children?: string[] }>,
-): WallNode[] {
+function getLevelWalls(wall: WallNode, nodes: Record<string, AnyNode>): WallNode[] {
   if (!wall.parentId) return [wall]
 
   const levelNode = nodes[wall.parentId as AnyNodeId]
@@ -105,6 +106,21 @@ function getLevelWalls(
   return levelNode.children
     .map((childId) => nodes[childId as AnyNodeId])
     .filter((node): node is WallNode => Boolean(node && node.type === 'wall'))
+}
+
+function getWallEffectiveHeight(wall: WallNode, nodes: Record<string, AnyNode>): number {
+  const levelId = resolveLevelId(wall, nodes)
+  const level = nodes[levelId]
+  const storeyHeight =
+    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+  )
+  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }
 
 function pointMatchesWallPlanPoint(point: Point2D | undefined, planPoint: [number, number]) {
@@ -308,7 +324,7 @@ function getCurvedWallMeasurementPath(
 
 function buildMeasurementGuide(
   wall: WallNode,
-  nodes: Record<string, WallNode | { type: string; children?: string[] }>,
+  nodes: Record<string, AnyNode>,
 ): MeasurementGuide | null {
   const levelWalls = getLevelWalls(wall, nodes)
   const miterData = calculateLevelMiters(levelWalls)
@@ -317,7 +333,7 @@ function buildMeasurementGuide(
   const measurementPoints = measurementLine ?? fallbackMiddlePoints
   if (!measurementPoints) return null
 
-  const height = wall.height ?? DEFAULT_WALL_HEIGHT
+  const height = getWallEffectiveHeight(wall, nodes)
   const startLocal = worldPointToWallLocal(wall, measurementPoints.start)
   const endLocal = worldPointToWallLocal(wall, measurementPoints.end)
   const curvedMeasurementPath = isCurvedWall(wall)
@@ -516,14 +532,7 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const color = isNight ? '#ffffff' : '#111111'
   const shadowColor = isNight ? '#111111' : '#ffffff'
 
-  const guide = useMemo(
-    () =>
-      buildMeasurementGuide(
-        wall,
-        nodes as Record<string, WallNode | { type: string; children?: string[] }>,
-      ),
-    [nodes, wall],
-  )
+  const guide = useMemo(() => buildMeasurementGuide(wall, nodes), [nodes, wall])
   const length = useMemo(() => {
     if (!guide?.guidePath?.length || guide.guidePath.length < 2) {
       return getWallCurveLength(wall)
@@ -538,7 +547,8 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
     return total
   }, [guide, wall])
   const label = formatLinearMeasurement(length, unit)
-  const heightLabel = `H ${formatLinearMeasurement(wall.height ?? DEFAULT_WALL_HEIGHT, unit)}`
+  const height = useMemo(() => getWallEffectiveHeight(wall, nodes), [nodes, wall])
+  const heightLabel = `H ${formatLinearMeasurement(height, unit)}`
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null
 

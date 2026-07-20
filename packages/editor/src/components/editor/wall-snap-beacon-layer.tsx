@@ -3,12 +3,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallThickness,
   isCurvedWall,
   resolveLevelId,
+  resolveWallTop,
   sceneRegistry,
   spatialGridManager,
   useScene,
@@ -147,15 +148,17 @@ type WallTopHighlightSegment = {
 
 function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
   const levelId = resolveLevelId(wall, nodes as Record<string, AnyNode>)
-  const slabElevation = spatialGridManager.getSlabElevationForWall(
+  const level = nodes[levelId]
+  const storeyHeight =
+    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  const support = spatialGridManager.getSlabSupportForWall(
     levelId,
     wall.start,
     wall.end,
     wall.curveOffset ?? 0,
     wall.thickness,
   )
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
-  return (slabElevation > 0 ? slabElevation + wallHeight : wallHeight) + WALL_TOP_HIGHLIGHT_LIFT
+  return resolveWallTop(wall, storeyHeight, support.elevation) + WALL_TOP_HIGHLIGHT_LIFT
 }
 
 function buildHighlightSegment(start: [number, number], end: [number, number]) {

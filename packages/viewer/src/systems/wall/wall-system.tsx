@@ -223,15 +223,16 @@ function getWallFaceMaterialIndex(
   wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands'>,
   face: 'front' | 'back',
   y: number,
+  effectiveWallHeight: number,
 ): number {
   const semantic = face === 'front' ? wall.frontSide : wall.backSide
   const fallback: WallSurfaceSide = face === 'front' ? 'interior' : 'exterior'
   const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
 
-  const bands = getWallFaceBandConfig(wall)
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return WALL_BAND_SLOT_MATERIAL_INDEX[side]
 
-  const band = getWallFaceBandForHeight(wall, y)
+  const band = getWallFaceBandForHeight(wall, y, effectiveWallHeight)
   return WALL_BAND_SLOT_MATERIAL_INDEX[getWallBandSlotId(side, band)]
 }
 
@@ -239,6 +240,7 @@ function assignWallMaterialGroups(
   geometry: THREE.BufferGeometry,
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
+  effectiveWallHeight: number,
 ) {
   const position = geometry.getAttribute('position')
   if (!position) return
@@ -318,7 +320,12 @@ function assignWallMaterialGroups(
       continue
     }
 
-    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag, centroid.y)
+    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(
+      wall,
+      nearestTag,
+      centroid.y,
+      effectiveWallHeight,
+    )
   }
 
   geometry.clearGroups()
@@ -446,14 +453,15 @@ function splitGeometryAtHorizontalPlanes(
   return split
 }
 
-function getWallBandSplitPlanes(wall: WallNode, wallTopLocalY: number): number[] {
-  const bands = getWallFaceBandConfig(wall)
+function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): number[] {
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return []
   const planes = [bands.lowerTop]
   if (bands.count >= 3) planes.push(bands.middleTop)
   if (bands.count >= 4) planes.push(bands.upperTop)
   return planes.filter(
-    (plane) => plane > WALL_BAND_SPLIT_EPSILON && plane < wallTopLocalY - WALL_BAND_SPLIT_EPSILON,
+    (plane) =>
+      plane > WALL_BAND_SPLIT_EPSILON && plane < effectiveWallHeight - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -855,6 +863,7 @@ export function generateExtrudedWall(
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const effectiveWallHeight = topElevation - slabElevation
   const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
   const localBottom = effectiveBaseElevation - slabElevation
   const height = topElevation - effectiveBaseElevation
@@ -923,7 +932,7 @@ export function generateExtrudedWall(
   geometry.rotateX(-Math.PI / 2)
   if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
   geometry.computeVertexNormals()
-  assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
+  assignWallMaterialGroups(geometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(geometry)
 
   // Start with the lowest required wall prism, then remove the volume below
@@ -1025,10 +1034,10 @@ export function generateExtrudedWall(
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
       geometry,
-      getWallBandSplitPlanes(wallNode, topElevation - slabElevation),
+      getWallBandSplitPlanes(wallNode, effectiveWallHeight),
     )
     splitGeometry.computeVertexNormals()
-    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges)
+    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, effectiveWallHeight)
     ensureRenderableGeometryAttributes(splitGeometry)
     return splitGeometry
   }
@@ -1062,10 +1071,10 @@ export function generateExtrudedWall(
   const resultGeometry = csgGeometry(resultBrush)
   const splitResultGeometry = splitGeometryAtHorizontalPlanes(
     resultGeometry,
-    getWallBandSplitPlanes(wallNode, topElevation - slabElevation),
+    getWallBandSplitPlanes(wallNode, effectiveWallHeight),
   )
   splitResultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges)
+  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(splitResultGeometry)
 
   return splitResultGeometry

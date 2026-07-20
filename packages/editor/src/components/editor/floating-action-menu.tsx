@@ -6,7 +6,7 @@ import {
   type CeilingNode,
   ColumnNode,
   createSceneApi,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   DoorNode,
   ElevatorNode,
   emitter,
@@ -24,12 +24,15 @@ import {
   type NodeQuickAction,
   nodeRegistry,
   RoofSegmentNode,
+  resolveLevelId,
+  resolveWallEffectiveHeight,
   runAsSingleSceneHistoryStep,
   type SlabNode,
   SpawnNode,
   StairNode,
   StairSegmentNode,
   sceneRegistry,
+  spatialGridManager,
   summarizeSystemFor,
   useLiveNodeOverrides,
   useScene,
@@ -271,7 +274,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: node.height ?? DEFAULT_WALL_HEIGHT,
+      height: getResolvedWallEffectiveHeight(node, useScene.getState().nodes),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -281,6 +284,21 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
     length: getWallCurveLength(node),
     thickness: node.thickness ?? FENCE_DEFAULT_THICKNESS,
   }
+}
+
+function getResolvedWallEffectiveHeight(wall: WallNode, nodes: Record<AnyNodeId, AnyNode>): number {
+  const levelId = resolveLevelId(wall, nodes)
+  const level = nodes[levelId as AnyNodeId]
+  const storeyHeight =
+    level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+  )
+  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
 }
 
 export function FloatingActionMenu() {
@@ -413,7 +431,10 @@ export function FloatingActionMenu() {
       const override = useLiveNodeOverrides.getState().overrides.get(selectedId) as
         | { height?: number }
         | undefined
-      const fallbackHeight = node.type === 'wall' ? DEFAULT_WALL_HEIGHT : FENCE_DEFAULT_HEIGHT
+      const fallbackHeight =
+        node.type === 'wall'
+          ? getResolvedWallEffectiveHeight(node, useScene.getState().nodes)
+          : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
       pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit)}`
     }

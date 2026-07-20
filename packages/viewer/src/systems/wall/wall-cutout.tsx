@@ -1,8 +1,12 @@
 import {
   type AnyNodeId,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
   getWallFaceBandConfig,
+  resolveLevelId,
+  resolveWallEffectiveHeight,
   sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -130,8 +134,24 @@ export const WallCutout = () => {
         const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
         const isDeleteHighlighted = deleteHoveredWallId === wallId
         const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
+        const levelId = resolveLevelId(wallNode, sceneState.nodes)
+        const level = sceneState.nodes[levelId as AnyNodeId]
+        const storeyHeight =
+          level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+        const support = spatialGridManager.getSlabSupportForWall(
+          levelId,
+          wallNode.start,
+          wallNode.end,
+          wallNode.curveOffset ?? 0,
+          wallNode.thickness,
+        )
+        const effectiveWallHeight = resolveWallEffectiveHeight(
+          wallNode,
+          storeyHeight,
+          support.elevation,
+        )
         const shouldSelectionHighlight =
-          isSelectionHighlighted && !getWallFaceBandConfig(wallNode).enabled
+          isSelectionHighlighted && !getWallFaceBandConfig(wallNode, effectiveWallHeight).enabled
         const materials = getMaterialsForWall(
           wallNode,
           shading,

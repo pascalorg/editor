@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type CeilingNode,
+  getStoredLevelHeight,
+  type LevelNode,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -35,10 +41,22 @@ export function CeilingPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined) : undefined,
   )
 
+  // Ceilings no longer drive the storey height — the stored level height
+  // does — so height writes clamp at the storey plane instead of poking
+  // into the level above (clamp, never ask).
+  const level = useScene((s) => {
+    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
+    return parent?.type === 'level' ? (parent as LevelNode) : undefined
+  })
+  const maxHeight = level ? getStoredLevelHeight(level) : 6
+
   // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
   // handler refs so slider drags don't trigger Maximum update depth.
   const nodeRef = useRef(node)
   nodeRef.current = node
+
+  const maxHeightRef = useRef(maxHeight)
+  maxHeightRef.current = maxHeight
 
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
@@ -46,6 +64,13 @@ export function CeilingPanel() {
       useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId],
+  )
+
+  const handleHeightChange = useCallback(
+    (proposed: number) => {
+      handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -167,9 +192,9 @@ export function CeilingPanel() {
       <PanelSection title="Height">
         <SliderControl
           label="Height"
-          max={6}
+          max={Math.min(6, maxHeight)}
           min={0}
-          onChange={(v) => handleUpdate({ height: v })}
+          onChange={handleHeightChange}
           precision={3}
           step={0.01}
           unit="m"
@@ -177,9 +202,9 @@ export function CeilingPanel() {
         />
 
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
-          <ActionButton label="Low (2.4m)" onClick={() => handleUpdate({ height: 2.4 })} />
-          <ActionButton label="Standard (2.5m)" onClick={() => handleUpdate({ height: 2.5 })} />
-          <ActionButton label="High (3.0m)" onClick={() => handleUpdate({ height: 3.0 })} />
+          <ActionButton label="Low (2.4m)" onClick={() => handleHeightChange(2.4)} />
+          <ActionButton label="Standard (2.5m)" onClick={() => handleHeightChange(2.5)} />
+          <ActionButton label="High (3.0m)" onClick={() => handleHeightChange(3.0)} />
         </div>
       </PanelSection>
 

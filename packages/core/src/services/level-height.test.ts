@@ -96,7 +96,7 @@ describe('deriveLegacyLevelHeight', () => {
   const nodes = createFixture()
   const cases = [
     ['level_no_slab', 2.5],
-    ['level_standard_slab', 2.55],
+    ['level_standard_slab', 2.5],
     ['level_tall_wall', 3.55],
     ['level_ceiling', 3.4],
     ['level_negative_slab', 2.8],

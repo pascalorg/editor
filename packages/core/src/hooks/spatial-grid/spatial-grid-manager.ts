@@ -1,6 +1,7 @@
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
+import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
 import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
@@ -8,6 +9,7 @@ import {
   type WallSlabSupport,
 } from '../../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
+import { resolveWallEffectiveHeight } from '../../systems/wall/wall-top'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
 import { WallSpatialGrid } from './wall-spatial-grid'
@@ -328,7 +330,22 @@ export class SpatialGridManager {
 
   private getWallHeight(wallId: string): number {
     const wall = this.walls.get(wallId)
-    return wall?.height ?? 2.5 // Default wall height
+    if (!wall) return 0
+    if (wall.height != null) return wall.height
+
+    const nodes = useScene.getState().nodes
+    const levelId = resolveNodeLevelId(wall, nodes)
+    const level = nodes[levelId as AnyNode['id']]
+    const storeyHeight =
+      level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+    const support = this.getSlabSupportForWall(
+      levelId,
+      wall.start,
+      wall.end,
+      wall.curveOffset ?? 0,
+      wall.thickness,
+    )
+    return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
   }
 
   private getCeilingGrid(ceilingId: string): SpatialGrid {

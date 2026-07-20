@@ -5,6 +5,7 @@ import {
   type SlabNode as SlabNodeType,
 } from '@pascal-app/core'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { slabElevationUpperBound } from './elevation-limit'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -96,12 +97,15 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
 // upward from ground while negative values create a recessed floor whose
 // depth follows the pointer. Same registry-handle pipeline as the column
 // height arrow, so live override + commit-on-release come for free.
+// `max` clamps the drag under the storey plane while plane-bound walls
+// elect this slab as their base (conflicts clamp, never ask).
 function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
     axis: 'y',
     anchor: 'min',
     min: MIN_SLAB_ELEVATION,
+    max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n),
     currentValue: (n) => n.elevation ?? 0.05,
     apply: (_n, newValue) => ({ elevation: newValue }),
     placement: {

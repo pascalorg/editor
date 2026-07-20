@@ -29,6 +29,17 @@ function squareWalls(height = 2.5) {
   ]
 }
 
+// Post wall-top inversion the default wall stores NO height — its top is
+// bound to the storey plane.
+function squarePlaneBoundWalls() {
+  return [
+    WallNode.parse({ start: [0, 0], end: [4, 0] }),
+    WallNode.parse({ start: [4, 0], end: [4, 3] }),
+    WallNode.parse({ start: [4, 3], end: [0, 3] }),
+    WallNode.parse({ start: [0, 3], end: [0, 0] }),
+  ]
+}
+
 function slab(elevation: number) {
   return SlabNode.parse({
     polygon: square,
@@ -38,13 +49,53 @@ function slab(elevation: number) {
 }
 
 describe('planAutoCeilingsForLevel', () => {
+  // Explicit-height walls keep the legacy elected-base + height top, so
+  // these expectations survive the wall-top inversion as long as the
+  // storey plane sits above them (heights clamp to ≤ storeyHeight).
   test('creates auto ceilings at the top of the room walls', () => {
     const created = planAutoCeilingsForLevel([roomPolygon()], [], {
       walls: squareWalls(),
       slabs: [slab(0.05)],
+      storeyHeight: 2.7,
     }).create[0]
 
     expect(created?.height).toBeCloseTo(2.55)
+  })
+
+  test('creates auto ceilings at the storey plane for plane-bound walls', () => {
+    // Inversion: a plane-bound wall's top IS the storey plane, whatever
+    // slab lifts its base — the auto ceiling follows the plane, not the
+    // old slabElevation + wallHeight sum.
+    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
+      walls: squarePlaneBoundWalls(),
+      slabs: [slab(0.05)],
+      storeyHeight: 2.55,
+    }).create[0]
+
+    expect(created?.height).toBeCloseTo(2.55)
+  })
+
+  test('keeps an explicit-height room ceiling based on its wall height', () => {
+    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
+      walls: squareWalls(2.1),
+      slabs: [slab(0.05)],
+      storeyHeight: 2.55,
+    }).create[0]
+
+    expect(created?.height).toBeCloseTo(2.15)
+  })
+
+  test('clamps the auto ceiling to the storey plane', () => {
+    // Explicit 2.5m walls on a 0.4m platform would top out at 2.9 — above
+    // the 2.7 storey plane, where the ceiling would poke into the level
+    // above. Conflicts clamp, never ask.
+    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
+      walls: squareWalls(),
+      slabs: [slab(0.4)],
+      storeyHeight: 2.7,
+    }).create[0]
+
+    expect(created?.height).toBeCloseTo(2.7)
   })
 
   test('updates existing auto ceiling height when the slab elevation changes', () => {
@@ -57,6 +108,7 @@ describe('planAutoCeilingsForLevel', () => {
     const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
       walls: squareWalls(),
       slabs: [slab(0.4)],
+      storeyHeight: 3,
     })
 
     expect(plan.update).toHaveLength(1)
@@ -75,6 +127,7 @@ describe('planAutoCeilingsForLevel', () => {
     const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
       walls: squareWalls(3),
       slabs: [slab(0.05)],
+      storeyHeight: 3.2,
     })
 
     expect(plan.update).toHaveLength(1)

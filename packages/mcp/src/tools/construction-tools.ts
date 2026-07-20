@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { resolveStairTotalRise } from '@pascal-app/core'
+import { DEFAULT_LEVEL_HEIGHT, getStoredLevelHeight, resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
@@ -24,9 +24,10 @@ const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
-  wallHeight: measurement('length', 'm', { positive: true, description: 'Wall height.' }).default(
-    2.8,
-  ),
+  wallHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Explicit wall height override. Omit for level-plane-bound walls.',
+  }).optional(),
   wallThickness: measurement('length', 'm', {
     positive: true,
     description: 'Wall thickness.',
@@ -268,6 +269,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
       const points = footprint as [number, number][]
+      const resolvedWallHeight =
+        level.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
       const wallIds: string[] = []
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
 
@@ -277,7 +280,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           start: points[i],
           end: points[(i + 1) % points.length],
           thickness: wallThickness,
-          height: wallHeight,
+          ...(wallHeight !== undefined ? { height: wallHeight } : {}),
           frontSide: 'exterior',
           backSide: 'interior',
           ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
@@ -305,7 +308,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         const ceiling = CeilingNode.parse({
           name: namePrefix ? `${namePrefix} Ceiling` : undefined,
           polygon: points,
-          height: ceilingHeight ?? wallHeight,
+          height: ceilingHeight ?? wallHeight ?? resolvedWallHeight,
           ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
           metadata: { role: 'story-ceiling' },
         })

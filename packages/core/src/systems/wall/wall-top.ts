@@ -1,6 +1,15 @@
 import type { WallNode } from '../../schema/nodes/wall'
 
 /**
+ * Minimum wall body height in meters. Governs both the wall height
+ * arrow's lower drag bound and the slab-elevation clamp: a slab may not
+ * rise past `storeyHeight - MIN_WALL_HEIGHT` while a plane-bound wall
+ * elects it as its base, or the wall's extrusion (plane minus base)
+ * would collapse below this minimum.
+ */
+export const MIN_WALL_HEIGHT = 0.5
+
+/**
  * Wall-top inversion (vertical building model): a wall with no stored
  * `height` is plane-bound — its top sits at the storey plane (level-local
  * Y = the level's stored height), so a slab lifting the wall's base makes

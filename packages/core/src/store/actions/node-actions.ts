@@ -498,8 +498,21 @@ function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   return sanitized.value as AnyNode
 }
 
+// An explicit `key: undefined` in update data REMOVES the key: optional
+// fields like wall.height encode a mode by their absence (absent =
+// plane-bound top), and zod's safeParse echoes explicit-undefined keys, so
+// a plain spread would leave a lingering own key that breaks `'height' in
+// node` checks.
+function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode {
+  const merged: Record<string, unknown> = { ...currentNode, ...patch }
+  for (const key of Object.keys(patch)) {
+    if ((patch as Record<string, unknown>)[key] === undefined) delete merged[key]
+  }
+  return merged as AnyNode
+}
+
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
-  const candidate = { ...currentNode, ...data }
+  const candidate = mergeNodeUpdate(currentNode, data)
   const parsed = AnyNodeSchema.safeParse(candidate)
   if (parsed.success) return parsed.data
 
@@ -507,12 +520,12 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   const sanitized = sanitizeNumericValue(schema, data, currentNode, [])
 
   if (sanitized.issues.length === 0) {
-    return candidate as AnyNode
+    return candidate
   }
 
   warnSanitizedNodeMutation('update', currentNode.id, sanitized.issues)
 
-  return { ...currentNode, ...(sanitized.value as Partial<AnyNode>) } as AnyNode
+  return mergeNodeUpdate(currentNode, sanitized.value as Partial<AnyNode>)
 }
 
 function shouldRefreshDefaultRidgeVents(data: Partial<AnyNode>) {
@@ -590,7 +603,10 @@ function areWallStylesCompatible(a: WallNode, b: WallNode) {
     (a.parentId ?? null) === (b.parentId ?? null) &&
     Math.abs((a.curveOffset ?? 0) - (b.curveOffset ?? 0)) <= 1e-6 &&
     Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) <= 1e-6 &&
-    Math.abs((a.height ?? 2.5) - (b.height ?? 2.5)) <= 1e-6 &&
+    // Absent height means plane-bound (follows the storey), which must never
+    // merge with an explicit height — even one that currently matches the plane.
+    (a.height == null) === (b.height == null) &&
+    Math.abs((a.height ?? 0) - (b.height ?? 0)) <= 1e-6 &&
     aInterior === bInterior &&
     aExterior === bExterior &&
     a.frontSide === b.frontSide &&

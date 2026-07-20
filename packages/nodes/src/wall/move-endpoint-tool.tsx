@@ -3,7 +3,6 @@
 import {
   type AnyNodeId,
   collectAlignmentAnchors,
-  DEFAULT_WALL_HEIGHT,
   emitter,
   type GridEvent,
   getWallCurveLength,
@@ -39,6 +38,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -613,7 +613,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     end: previewEnd,
     curveOffset: target.wall.curveOffset,
   })
-  const wallHeight = target.wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = resolveWallOpeningCeiling(target.wall, useScene.getState().nodes)
   const dimMidX = (previewStart[0] + previewEnd[0]) / 2
   const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
 

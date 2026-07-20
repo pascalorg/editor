@@ -45,7 +45,6 @@ function wall(
     metadata: {},
     children,
     thickness: WALL_THICKNESS,
-    height: WALL_HEIGHT,
     start,
     end,
     frontSide: 'unknown',

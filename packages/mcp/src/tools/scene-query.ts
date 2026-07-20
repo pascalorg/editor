@@ -1,6 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { getStoredLevelHeight, resolveStairTotalRise } from '@pascal-app/core'
+import {
+  DEFAULT_LEVEL_HEIGHT,
+  getStoredLevelHeight,
+  resolveStairTotalRise,
+  resolveWallEffectiveHeight,
+} from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
+import { computeWallSlabSupport } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import {
@@ -112,6 +118,24 @@ function nodesOnLevel(bridge: SceneOperations, levelId: AnyNodeId): AnyNode[] {
   )
 }
 
+export function resolveReportedWallHeight(
+  bridge: SceneOperations,
+  wall: Extract<AnyNode, { type: 'wall' }>,
+): number {
+  const levelId = bridge.resolveLevelId(wall.id as AnyNodeId)
+  const level = levelId ? bridge.getNode(levelId) : null
+  const storeyHeight = level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
+  const levelNodes = levelId ? nodesOnLevel(bridge, levelId) : []
+  const slabs = levelNodes.filter(
+    (node): node is Extract<AnyNode, { type: 'slab' }> => node.type === 'slab',
+  )
+  const walls = levelNodes.filter(
+    (node): node is Extract<AnyNode, { type: 'wall' }> => node.type === 'wall',
+  )
+  const support = computeWallSlabSupport(wall, slabs, walls)
+  return resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)
+}
+
 function metadataRecord(node: AnyNode): Record<string, unknown> | null {
   return typeof node.metadata === 'object' && node.metadata !== null
     ? (node.metadata as Record<string, unknown>)
@@ -160,6 +184,7 @@ function openingSummaries(bridge: SceneOperations, wallId: AnyNodeId) {
 function wallSummary(bridge: SceneOperations, wall: AnyNode) {
   if (wall.type !== 'wall') return null
   const length = distance2D(wall.start, wall.end)
+  const resolvedHeight = resolveReportedWallHeight(bridge, wall)
   return {
     id: wall.id,
     name: wall.name,
@@ -167,6 +192,8 @@ function wallSummary(bridge: SceneOperations, wall: AnyNode) {
     end: wall.end,
     length: Math.round(length * 100) / 100,
     height: wall.height,
+    resolvedHeight,
+    heightIsExplicit: wall.height !== undefined,
     thickness: wall.thickness,
     openings: openingSummaries(bridge, wall.id as AnyNodeId),
   }
@@ -662,7 +689,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
           for (const wall of nodesOnLevel(bridge, level.id as AnyNodeId).filter(
             (node): node is AnyNode & { type: 'wall' } => node.type === 'wall',
           )) {
-            const wallHeight = wall.height ?? 2.5
+            const wallHeight = resolveReportedWallHeight(bridge, wall)
             if (wallHeight > expectedHeight + 0.25) {
               issues.push(
                 `Wall ${wall.name ?? wall.id} on ${level.name ?? level.id} is ${wallHeight}m high; multi-story exterior walls should be split into level-owned story walls`,
@@ -694,7 +721,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
           if (localX - width / 2 < -0.01 || localX + width / 2 > length + 0.01) {
             issues.push(`${node.type} ${node.id} extends outside wall ${parent.id}`)
           }
-          const wallHeight = parent.height ?? 2.5
+          const wallHeight = resolveReportedWallHeight(bridge, parent)
           const bottom = node.position[1] - height / 2
           const top = node.position[1] + height / 2
           if (bottom < -0.01 || top > wallHeight + 0.01) {

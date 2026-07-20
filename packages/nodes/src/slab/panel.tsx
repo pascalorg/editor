@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { clampSlabElevation } from './elevation-limit'
 
 /**
  * Phase 5 Stage E — slab inspector (kind-owned).
@@ -50,6 +51,19 @@ export function SlabPanel() {
       useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId],
+  )
+
+  // Clamp-never-ask: cap the written elevation under the storey plane
+  // while plane-bound walls elect this slab as their base. Recessed
+  // (negative) elevations pass through untouched.
+  const handleElevationChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
+      handleUpdate({ elevation })
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -174,7 +188,7 @@ export function SlabPanel() {
           label="Height"
           max={1}
           min={-1}
-          onChange={(v) => handleUpdate({ elevation: v })}
+          onChange={handleElevationChange}
           precision={3}
           step={0.01}
           unit="m"
@@ -182,10 +196,10 @@ export function SlabPanel() {
         />
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label="Sunken (-15cm)" onClick={() => handleUpdate({ elevation: -0.15 })} />
-          <ActionButton label="Ground (0m)" onClick={() => handleUpdate({ elevation: 0 })} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleUpdate({ elevation: 0.05 })} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleUpdate({ elevation: 0.15 })} />
+          <ActionButton label="Sunken (-15cm)" onClick={() => handleElevationChange(-0.15)} />
+          <ActionButton label="Ground (0m)" onClick={() => handleElevationChange(0)} />
+          <ActionButton label="Raised (+5cm)" onClick={() => handleElevationChange(0.05)} />
+          <ActionButton label="Step (+15cm)" onClick={() => handleElevationChange(0.15)} />
         </div>
       </PanelSection>
 

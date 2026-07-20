@@ -90,7 +90,7 @@ describe('scene vertical model migration', () => {
     useScene.temporal.getState().clear()
   })
 
-  test('default legacy storey derives height 2.55 and keeps walls plane-bound', () => {
+  test('default legacy storey derives height 2.5 and keeps walls plane-bound', () => {
     const nodes = loadScene({
       site_test: site(['building_a']),
       building_a: building('building_a', ['level_a']),
@@ -100,8 +100,7 @@ describe('scene vertical model migration', () => {
       wall_b: wall('wall_b', 'level_a', [4, 0], [4, 4]),
     })
 
-    // Exactly as derived: 0.05 slab support + 2.5 default wall — never snapped.
-    expect((nodes.level_a as LevelResult).height).toBe(0.05 + 2.5)
+    expect((nodes.level_a as LevelResult).height).toBe(2.5)
     expect('height' in (nodes.wall_a as WallResult)).toBe(false)
     expect('height' in (nodes.wall_b as WallResult)).toBe(false)
   })
