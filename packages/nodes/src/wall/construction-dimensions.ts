@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core'
 import { getColumnFloorplanFootprint } from '../column/floorplan'
 import {
+  type ConstructionLengthProfile,
   type ConstructionLinearUnit,
   formatConstructionLength,
 } from '../shared/construction-length'
@@ -305,6 +306,7 @@ export function renderPlannedConstructionDimensions(
   planned: readonly PlannedConstructionDimension[],
   unit: ConstructionLinearUnit,
   stroke?: string,
+  profile: ConstructionLengthProfile = 'editor',
 ): FloorplanGeometry[] {
   return planned.map((entry) =>
     dimension(
@@ -316,6 +318,7 @@ export function renderPlannedConstructionDimensions(
       stroke,
       entry.dimensionStart,
       entry.dimensionEnd,
+      profile,
     ),
   )
 }
@@ -326,9 +329,11 @@ export function buildWallConstructionDimensions(
   {
     unit,
     stroke,
+    profile = 'editor',
   }: {
     unit: ConstructionLinearUnit
     stroke?: string
+    profile?: ConstructionLengthProfile
   },
 ): FloorplanGeometry[] {
   if (isCurvedWall(wall)) return []
@@ -368,7 +373,17 @@ export function buildWallConstructionDimensions(
       const end = breakpoints[index + 1]!
       if (end - start < MIN_SEGMENT_LENGTH) continue
       dimensions.push(
-        dimension(pointAt(start), pointAt(end), outwardNormal, OPENING_CHAIN_OFFSET, unit, stroke),
+        dimension(
+          pointAt(start),
+          pointAt(end),
+          outwardNormal,
+          OPENING_CHAIN_OFFSET,
+          unit,
+          stroke,
+          undefined,
+          undefined,
+          profile,
+        ),
       )
     }
   }
@@ -381,6 +396,9 @@ export function buildWallConstructionDimensions(
       openings.length > 0 ? WALL_SPAN_OFFSET : OPENING_CHAIN_OFFSET,
       unit,
       stroke,
+      undefined,
+      undefined,
+      profile,
     ),
   )
 
@@ -396,6 +414,7 @@ function dimension(
   stroke?: string,
   dimensionStart?: FloorplanPoint,
   dimensionEnd?: FloorplanPoint,
+  profile: ConstructionLengthProfile = 'editor',
 ): FloorplanGeometry {
   const measurementStart = dimensionStart ?? start
   const measurementEnd = dimensionEnd ?? end
@@ -411,6 +430,7 @@ function dimension(
     text: formatConstructionLength(
       Math.hypot(measurementEnd[0] - measurementStart[0], measurementEnd[1] - measurementStart[1]),
       unit,
+      profile,
     ),
     stroke,
   }

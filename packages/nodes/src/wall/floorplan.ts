@@ -41,6 +41,7 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
 
 export type WallFloorplanLevelData = {
   miters: WallMiterData
+  documentMiters: WallMiterData
   constructionDimensionsByWallId: WallConstructionDimensionPlan
 }
 
@@ -54,6 +55,7 @@ export function computeWallFloorplanLevelData({
   const walls = siblings.map(exaggerateWallThickness)
   return {
     miters: calculateLevelMiters(walls),
+    documentMiters: calculateLevelMiters([...siblings]),
     constructionDimensionsByWallId: buildLevelWallConstructionDimensionPlan(siblings, nodes),
   }
 }
@@ -75,7 +77,10 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const self = exaggerateWallThickness(node)
+  const purpose = ctx.viewState?.purpose ?? 'edit'
+  const documentMode = purpose === 'document'
+  const wallForPurpose = (wall: WallNode) => (documentMode ? wall : exaggerateWallThickness(wall))
+  const self = wallForPurpose(node)
   // Prefer the level-batch miter graph the floor-plan dispatcher precomputes
   // once per pass (`computeWallFloorplanLevelData`). Only the fallback path —
   // a direct builder caller with no shared data — pays the O(N) exaggerate +
@@ -83,12 +88,10 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // what keeps a wall drag from being O(N²) across the level.
   const levelData = ctx.levelData as WallFloorplanLevelData | undefined
   const miters =
-    levelData?.miters ??
+    (documentMode ? levelData?.documentMiters : levelData?.miters) ??
     calculateLevelMiters([
       self,
-      ...ctx.siblings
-        .filter((s): s is AnyNode & WallNode => s.type === 'wall')
-        .map(exaggerateWallThickness),
+      ...ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall').map(wallForPurpose),
     ])
 
   const polygon = getWallPlanFootprint(self, miters)
@@ -138,13 +141,19 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
     if (planned) {
       children.push(
-        ...renderPlannedConstructionDimensions(planned, view?.unit ?? 'metric', dimensionStroke),
+        ...renderPlannedConstructionDimensions(
+          planned,
+          view?.unit ?? 'metric',
+          dimensionStroke,
+          documentMode ? 'document' : 'editor',
+        ),
       )
     } else if (!levelData) {
       children.push(
         ...buildWallConstructionDimensions(self, ctx, {
           unit: view?.unit ?? 'metric',
           stroke: dimensionStroke,
+          profile: documentMode ? 'document' : 'editor',
         }),
       )
     }

@@ -2,11 +2,18 @@ const INCHES_PER_METER = 1 / 0.0254
 const IMPERIAL_FRACTION_DENOMINATOR = 16
 
 export type ConstructionLinearUnit = 'metric' | 'imperial'
+export type ConstructionLengthProfile = 'editor' | 'document'
 
-export function formatConstructionLength(meters: number, unit: ConstructionLinearUnit): string {
+export function formatConstructionLength(
+  meters: number,
+  unit: ConstructionLinearUnit,
+  profile: ConstructionLengthProfile = 'editor',
+): string {
   if (!Number.isFinite(meters)) return '--'
 
   if (unit === 'metric') {
+    if (profile === 'document') return `${Math.round(meters * 1000)}`
+
     const rounded = Number.parseFloat(Math.abs(meters).toFixed(2))
     const sign = meters < 0 && rounded !== 0 ? '-' : ''
     return `${sign}${rounded}m`

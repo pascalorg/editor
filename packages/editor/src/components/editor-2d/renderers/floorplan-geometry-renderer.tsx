@@ -3,6 +3,9 @@
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
+import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
+
+const STATIC_LABEL_UNITS_PER_PIXEL = 0.01
 
 /**
  * Pure-data → SVG converter. Walks a `FloorplanGeometry` tree returned by
@@ -196,6 +199,62 @@ function renderNode(
         />
       )
 
+    case 'dimension-label': {
+      const unitsPerPixel = STATIC_LABEL_UNITS_PER_PIXEL
+      const outlined = g.appearance === 'outlined'
+      const padX = unitsPerPixel * 6
+      const padY = unitsPerPixel * 3
+      const fontSize = unitsPerPixel * (outlined ? 12 : 10)
+      const textWidth = g.text.length * unitsPerPixel * 6.2
+      const plateW = textWidth + padX * 2
+      const plateH = fontSize + padY * 2
+      const degrees = resolveFloorplanLabelAngle(g.angle, sceneRotationDeg, g.screenUpright)
+
+      return (
+        <g
+          key={keyHint}
+          pointerEvents="none"
+          transform={`translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * unitsPerPixel})`}
+        >
+          {outlined ? null : (
+            <rect
+              fill="#ffffff"
+              height={plateH}
+              opacity={0.92}
+              rx={unitsPerPixel * 3}
+              ry={unitsPerPixel * 3}
+              stroke="#334155"
+              strokeWidth={unitsPerPixel * 0.5}
+              width={plateW}
+              x={-plateW / 2}
+              y={-plateH / 2}
+            />
+          )}
+          <text
+            dominantBaseline="middle"
+            fill={outlined ? '#ffffff' : '#111827'}
+            fontFamily={
+              outlined
+                ? 'system-ui, -apple-system, sans-serif'
+                : 'ui-monospace, SFMono-Regular, Menlo, monospace'
+            }
+            fontSize={fontSize}
+            fontWeight={outlined ? 500 : 600}
+            paintOrder={outlined ? 'stroke' : undefined}
+            stroke={outlined ? '#334155' : undefined}
+            strokeLinecap={outlined ? 'round' : undefined}
+            strokeLinejoin={outlined ? 'round' : undefined}
+            strokeWidth={outlined ? fontSize * 0.35 : undefined}
+            textAnchor="middle"
+            x={0}
+            y={0}
+          >
+            {g.text}
+          </text>
+        </g>
+      )
+    }
+
     case 'image':
       return (
         <FloorplanImage
@@ -221,8 +280,8 @@ function renderNode(
       )
     }
 
-    // The interactive primitives (hatch / hit-line / endpoint-handle /
-    // dimension-label) need the SVG context + theme palette + units-per-
+    // The remaining interactive primitives (hatch / hit-line / endpoint-handle)
+    // need the SVG context + theme palette + units-per-
     // pixel that only the registry layer has access to. They're rendered
     // by `floorplan-registry-layer.tsx`'s interactive walker instead. If
     // a caller routes one of these through this pure renderer it

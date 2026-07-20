@@ -1831,6 +1831,7 @@ function buildFloorplanEntryGeometry({
           ? {
               selected,
               unit,
+              purpose: 'edit',
               highlighted,
               hovered,
               moving,
@@ -2720,6 +2721,7 @@ export function buildContext(
   viewState: {
     selected: boolean
     unit: 'metric' | 'imperial'
+    purpose?: 'edit' | 'document'
     highlighted: boolean
     hovered: boolean
     moving: boolean
@@ -2763,6 +2765,7 @@ export function buildContext(
       ? {
           selected: viewState.selected,
           unit: viewState.unit,
+          purpose: viewState.purpose ?? 'edit',
           highlighted: viewState.highlighted,
           hovered: viewState.hovered,
           moving: viewState.moving,

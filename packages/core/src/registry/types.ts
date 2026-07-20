@@ -19,6 +19,8 @@ import type { CloneNodesIntoOptions, Subtree } from './subtree'
 // `levelData` carries level-scoped batch data (wall mitering across an
 // entire level) from registry dispatchers into pure builders.
 
+export type FloorplanRenderPurpose = 'edit' | 'document'
+
 export type GeometryContext = {
   /** Look up any node by ID. Returns undefined if the node doesn't exist. */
   resolve: <N = AnyNode>(id: AnyNodeId) => N | undefined
@@ -62,6 +64,8 @@ export type GeometryContext = {
   viewState?: {
     selected: boolean
     unit: 'metric' | 'imperial'
+    /** Editing canvas or construction-document output. Defaults to `edit`. */
+    purpose?: FloorplanRenderPurpose
     /** Marquee or programmatic highlight — shows selected chrome without keyboard focus. */
     highlighted: boolean
     /** Pointer-hovered. */

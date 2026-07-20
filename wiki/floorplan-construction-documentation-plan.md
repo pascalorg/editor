@@ -21,6 +21,8 @@ The plan is based on the assessment in `wiki/floorplan-chapter-17-assessment.md`
 
 ### 1.1 Fix unit consistency
 
+Status: formatter and opening-placement work implemented. Temporary opening clearances and equal-spacing badges now use the live metric/imperial preference, and the shared formatter exposes a document profile for whole millimetres without a suffix. Selecting that profile from document rendering remains part of Phase 1.4.
+
 - Route opening-placement labels through the shared construction-length formatter.
 - Respect the live unit preference in all temporary dimension graphics.
 - Add a construction-document metric profile that displays millimetres and can omit the `mm` suffix on dimension lines.
@@ -28,6 +30,8 @@ The plan is based on the assessment in `wiki/floorplan-chapter-17-assessment.md`
 - Add tests for metric and imperial placement dimensions.
 
 ### 1.2 Preserve measurement labels in full PDF export
+
+Status: implemented without new sidebar UI. Full export honors the existing measurement visibility preference, preserves export-safe `dimension-label` rendering, and removes measurement nodes entirely when measurements are hidden.
 
 - Decide whether a full export should honor the current `showMeasurements` preference or expose a separate export option.
 - Render `dimension-label` primitives in export-safe form.
@@ -51,6 +55,8 @@ Introduce per-view controls for:
 Do not overload the existing `showMeasurements` preference with every documentation category.
 
 ### 1.4 Separate edit and document rendering
+
+Status: the render-purpose seam and true-thickness wall output are implemented. Interactive plans retain legibility exaggeration; document output uses modeled wall thickness, document metric notation, and neutral interaction state. Scale-derived paper-space styling remains part of Phase 3.2.
 
 Extend the floor-plan render context with an explicit purpose such as:
 

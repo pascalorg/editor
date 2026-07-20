@@ -72,6 +72,7 @@ const NEUTRAL_PALETTE: FloorplanPalette = {
 // full view state (including unit preference) available to node builders.
 const NEUTRAL_VIEW_STATE = {
   selected: false,
+  purpose: 'document',
   highlighted: false,
   hovered: false,
   moving: false,
@@ -82,7 +83,9 @@ type ExportLevel = { id: AnyNodeId; label: string }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
   const nodes = useScene.getState().nodes
-  const unit = useViewer.getState().unit
+  const viewer = useViewer.getState()
+  const unit = viewer.unit
+  const showMeasurements = viewer.showMeasurements
   const levels = resolveExportLevels(nodes)
   if (levels.length === 0) {
     console.warn('[floorplan-export] no level to export')
@@ -102,7 +105,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   let pageCount = 0
   try {
     for (const level of levels) {
-      const geometries = collectFloorplanGeometry(nodes, level.id, scope, unit)
+      const geometries = collectFloorplanGeometry(nodes, level.id, scope, unit, showMeasurements)
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
 
@@ -439,6 +442,7 @@ function collectFloorplanGeometry(
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
   unit: 'metric' | 'imperial',
+  showMeasurements: boolean,
 ): { id: AnyNodeId; base: FloorplanGeometry }[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -456,6 +460,7 @@ function collectFloorplanGeometry(
     if (
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
+      (node.type !== 'measurement' || showMeasurements) &&
       (scope === 'full' || def.category === 'structure')
     ) {
       entries.push({ id, node })
@@ -487,19 +492,27 @@ function collectFloorplanGeometry(
     const geometry = builder(node, ctx)
     if (!geometry) continue
     const { base, overlay } = splitFloorplanOverlay(geometry)
-    const exportOverlay = overlay ? filterExportOverlay(overlay) : null
+    const exportOverlay = overlay ? filterFloorplanExportOverlay(overlay) : null
     const exportGeometry = combineGeometry(base, exportOverlay)
     if (exportGeometry) out.push({ id, base: exportGeometry })
   }
   return out
 }
 
-function filterExportOverlay(geometry: FloorplanGeometry): FloorplanGeometry | null {
-  if (geometry.kind === 'dimension' || geometry.kind === 'text') return geometry
+export function filterFloorplanExportOverlay(
+  geometry: FloorplanGeometry,
+): FloorplanGeometry | null {
+  if (
+    geometry.kind === 'dimension' ||
+    geometry.kind === 'dimension-label' ||
+    geometry.kind === 'text'
+  ) {
+    return geometry
+  }
   if (geometry.kind !== 'group') return null
 
   const children = geometry.children
-    .map(filterExportOverlay)
+    .map(filterFloorplanExportOverlay)
     .filter((child): child is FloorplanGeometry => child !== null)
   if (children.length === 0) return null
   return { ...geometry, children }
