@@ -334,13 +334,15 @@ Generic zones should remain available for lawns, sites, analysis regions, and us
 
 ### 6.2 Add room documentation
 
-Status: initial centered plan labels are implemented for room name, number, finishes, ceiling
-height, and occupancy/use, with independent live/PDF visibility. Room schedules and reliable clear
-dimensions remain.
+Status: centered plan labels are implemented for room name, number, finishes, ceiling height, and
+occupancy/use, with independent live/PDF visibility. Generated room schedules now include area,
+finishes, ceiling height, occupancy/use, resolved enclosure state, unit-aware values, and document
+warnings for missing/duplicate room numbers or unproven enclosure claims. Reliable clear dimensions
+remain.
 
 - Center room name and number.
 - Place finish information below the room name.
-- Generate room schedules.
+- [x] Generate room schedules.
 - Generate room-to-room or inside-face clear dimensions only when enclosure and finish-face evidence are reliable.
 
 ### 6.3 Add stair annotations

@@ -238,7 +238,7 @@ function drawFloorplanSchedulePages(
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(14)
     doc.setLineWidth(0.5)
-    doc.text(`${levelLabel} - Opening Schedules`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
+    doc.text(`${levelLabel} - Construction Schedules`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
     y = PAGE_MARGIN_PT + TITLE_BAND_PT + 8
   }
 

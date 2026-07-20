@@ -14,6 +14,7 @@ import {
 import { zoneFloorplanMoveTarget } from './floorplan-move'
 import { zoneParametrics } from './parametrics'
 import { zoneQuickMeasurement } from './quick-measurement'
+import { buildRoomFloorplanSchedule } from './room-documentation'
 import { ZoneNode } from './schema'
 
 /**
@@ -67,6 +68,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     priority: 4,
   },
   floorplan: buildZoneFloorplan,
+  floorplanSchedule: buildRoomFloorplanSchedule,
   floorplanDependencies: (node) => (node.autoFromWalls ? node.boundaryWallIds : []),
   // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
   // Without this, zone fell through to the overlay's generic free-translate
