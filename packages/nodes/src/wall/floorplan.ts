@@ -68,7 +68,7 @@ export function computeWallFloorplanLevelData({
  *      wall body easily.
  *   4. Two endpoint handles (start + end) when selected — the registry
  *      layer hosts the 5-circle stack + hover transitions + 2D drag.
- *   5. Construction dimension strings for wall spans and hosted openings.
+ *   5. Exterior facade strings plus interior wall spans and hosted-opening widths.
  *
  * `ctx.levelData` provides the shared level miter graph when the floor-plan
  * dispatcher precomputes it; `ctx.siblings` remains the fallback path for

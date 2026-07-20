@@ -22,10 +22,10 @@ This is a working implementation tracker, not a claim that every convention in t
 
 ## Current product decisions
 
-1. Automatic internal room dimension strings are intentionally excluded. They were removed because the generated chains did not reliably express construction intent.
-2. Automatic construction dimensions must remain outside the building or exterior zone. They must not be drawn across rooms.
+1. Classified interior partitions receive wall-local jamb-to-jamb strings plus an overall wall span. Full room-to-room clear-dimension automation still waits for a reliable room model.
+2. Exterior construction dimensions remain outside the building or exterior zone. Interior partition strings use the larger bounded adjacent space and do not alter the exterior hierarchy.
 3. The existing metric/imperial control is the product-level unit switch. Strict textbook metric notation is not currently a priority.
-4. Door and window dimensions may be documented through exterior strings and schedules rather than repeating full nominal size labels beside every opening.
+4. Door and window widths are documented through exterior or interior wall strings and schedules rather than repeating full nominal size labels beside every opening.
 
 ## Combined recommendation
 
@@ -126,7 +126,8 @@ The Phase 1 implementation keeps its baselines outside the outermost wall or str
 | Structural column and post centerline string | Reference | Implemented | Aligned exterior or wall-integrated column rows use structural centers; fully interior columns retain local center marks without sending witness lines outside. |
 | Overall structural envelope beyond walls | Reference | Implemented | Added when the exterior column row extends past the wall envelope. |
 | Project-selectable centerline/face-of-stud/face-of-finish policy | PDF | Partial | Face-of-stud is the automatic default; project-level selection remains planned. |
-| Automatic internal room dimensions | PDF and reference | Intentionally excluded | Do not restore without a new product decision and a reliable room-aware design. |
+| Automatic internal partition dimensions | PDF and reference | Implemented | Wall-local strings dimension solid segments, hosted door/window widths, and the overall partition span; bounded partitions remain eligible when side metadata is incomplete, and the larger adjacent side is preferred. |
+| Automatic room-to-room clear dimensions | PDF and reference | Planned | Requires a reliable architectural room model and finish-face policy. |
 
 ### C. Doors and windows
 
@@ -149,6 +150,7 @@ The Phase 1 implementation keeps its baselines outside the outermost wall or str
 | --- | --- | --- | --- |
 | Centered zone name | Current implementation | Implemented | Existing zone labels are not yet a complete architectural room model. |
 | Architectural room/space object | PDF and reference | Planned | Needs room name, number, finish data, and reliable room polygon ownership. |
+| Interior partition and opening dimension strings | Reference | Implemented | Associative wall-local chains include door/window widths and a farther overall span. |
 | Room name and finish dimensions | PDF | Planned | Finish information should appear below the room name when required. |
 | Appliance labels | PDF | Partial | Cabinet appliance modules provide common labels; generic items do not have a complete documentation policy. |
 | Tub, shower, spa, fireplace, and equipment notes | PDF | Planned | Depends on the reusable note and leader system. |
@@ -162,7 +164,7 @@ The Phase 1 implementation keeps its baselines outside the outermost wall or str
 | Requirement | Source | Status | Notes |
 | --- | --- | --- | --- |
 | Generic straight leader with shoulder and terminator | PDF and reference | Implemented | Construction notes support multiline text, arrow/dot/no terminator, editable shoulder length, free anchors, and optional associative attachment to scene elements. |
-| Curved leader | PDF | Planned | Needed for crowded and circular-feature callouts. |
+| Curved leader | PDF | Implemented | Construction notes support quadratic leaders with a draggable on-curve handle that remains associative as targets and text move. |
 | Specific or local construction note | PDF and reference | Implemented | The reusable construction-note node can author examples such as column size, grouting, ventilation, and installation notes. |
 | General numbered notes block | PDF | Planned | Needs sheet-level placement and reusable project notes. |
 | Keyed note symbols | PDF and reference | Planned | Includes symbol-to-note mapping. |
@@ -204,7 +206,7 @@ The Phase 1 implementation keeps its baselines outside the outermost wall or str
 | --- | --- | --- | --- |
 | Heavy wall cut graphics | Reference | Partial | Walls have strong graphics, but they are not assembly-specific. |
 | Medium door, window, stair, and fixture graphics | Reference | Partial | Individual symbols exist; plotted hierarchy needs normalization. |
-| Thin dimensions, leaders, and centerlines | PDF and reference | Partial | Dimensions and straight construction-note leaders are implemented; a unified centerline annotation remains planned. |
+| Thin dimensions, leaders, and centerlines | PDF and reference | Partial | Dimensions and straight or curved construction-note leaders are implemented; a unified centerline annotation remains planned. |
 | Material poche and hatch patterns | Reference | Planned | Needed for masonry, concrete, elevator shafts, and wall assemblies. |
 | Hidden or overhead dashed geometry | PDF and reference | Partial | Some nodes use dashed graphics, but there is no unified architectural visibility policy. |
 | Upper-floor, balcony, or projection-above outline | PDF | Planned | Should use dashed lines and a specific note. |
@@ -241,7 +243,7 @@ Implemented with consistent face-of-stud partition references, active-tier spaci
 
 ### Phase 2 - Reusable construction annotation framework (in progress)
 
-The first slice is implemented as a reusable construction-note node with multiline text, a straight leader and shoulder, selectable terminators, editable anchor and text handles, and optional associative attachment to walls, openings, and other scene elements.
+The construction-note node now supports multiline text, straight and curved leaders with shoulders, selectable terminators, editable anchor, text, and curve handles, and optional associative attachment to walls, openings, and other scene elements.
 
 Build reusable scene/document primitives for:
 
@@ -297,6 +299,10 @@ This phase unlocks many later features without adding one-off annotation impleme
 
 ## Change log
 
+- `2026-07-20` - Made internal door/window dimension chains resilient to incomplete wall-side metadata by geometrically recognizing bounded partitions without treating unbounded unknown walls as interior.
+- `2026-07-20` - Increased the facade clear zone and active dimension-tier spacing so opening widths, center locations, partitions, structure, jogs, and overall strings remain readable as tiers accumulate.
+- `2026-07-20` - Added quadratic curved construction-note leaders with tangent terminators and an associative draggable curve control.
+- `2026-07-20` - Added automatic interior partition chains with door/window widths, clear wall segments, overall spans, and bounded-side placement.
 - `2026-07-20` - Started Phase 2 with reusable straight-leader construction notes, multiline text, terminator controls, editable handles, and associative target attachment.
 - `2026-07-20` - Implemented Phase 1 exterior datum policy, compact tier planning, jog chains, column center marks and centerline strings, and structural-envelope dimensions.
 - `1f09dc120` - Added opening marks, opening schedules, rough-opening documentation, exterior construction-dimension refinements, and removed automatic internal dimension strings.

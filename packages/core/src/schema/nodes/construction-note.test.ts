@@ -14,6 +14,8 @@ describe('ConstructionNoteNode', () => {
       textPosition: [1.5, 0.75],
       text: 'CONSTRUCTION NOTE',
       terminator: 'arrow',
+      leaderStyle: 'straight',
+      curveControl: [0.5, 0.35],
       shoulderLength: 0.55,
       targetId: null,
       targetOffset: [0, 0],
@@ -29,6 +31,8 @@ describe('ConstructionNoteNode', () => {
         targetOffset: [0.2, -0.1],
         text: '8x8 COLUMN\nGROUT SOLID',
         terminator: 'dot',
+        leaderStyle: 'curved',
+        curveControl: [0.4, -0.25],
       }).success,
     ).toBe(true)
     expect(
@@ -36,6 +40,13 @@ describe('ConstructionNoteNode', () => {
         id: 'construction-note_empty',
         type: 'construction-note',
         text: '   ',
+      }).success,
+    ).toBe(false)
+    expect(
+      ConstructionNoteNode.safeParse({
+        id: 'construction-note_invalid-control',
+        type: 'construction-note',
+        curveControl: [1.2, 0.25],
       }).success,
     ).toBe(false)
   })

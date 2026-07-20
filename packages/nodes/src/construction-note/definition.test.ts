@@ -6,6 +6,7 @@ describe('constructionNoteDefinition', () => {
     expect(constructionNoteDefinition.kind).toBe('construction-note')
     expect(constructionNoteDefinition.category).toBe('analysis')
     expect(constructionNoteDefinition.bake).toBe('strip')
+    expect(constructionNoteDefinition.schemaVersion).toBe(2)
     expect(constructionNoteDefinition.dirtyTracking).toBe(false)
     expect(constructionNoteDefinition.capabilities).toMatchObject({
       selectable: { hitVolume: 'bbox' },
@@ -16,6 +17,9 @@ describe('constructionNoteDefinition', () => {
     expect(typeof constructionNoteDefinition.tool).toBe('function')
     expect(constructionNoteDefinition.floorplanAffordances).toHaveProperty(
       'move-construction-note-anchor',
+    )
+    expect(constructionNoteDefinition.floorplanAffordances).toHaveProperty(
+      'move-construction-note-curve',
     )
     expect(constructionNoteDefinition.floorplanAffordances).toHaveProperty(
       'move-construction-note-text',

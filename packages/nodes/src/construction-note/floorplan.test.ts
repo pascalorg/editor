@@ -133,4 +133,32 @@ describe('buildConstructionNoteFloorplan', () => {
       selected && flatten(selected).filter((entry) => entry.kind === 'endpoint-handle'),
     ).toHaveLength(2)
   })
+
+  test('builds an editable quadratic curved leader with a tangent arrow', () => {
+    const note = ConstructionNoteNode.parse({
+      id: 'construction-note_curved',
+      type: 'construction-note',
+      anchor: [0, 0],
+      textPosition: [4, 0],
+      leaderStyle: 'curved',
+      curveControl: [0.5, 0.5],
+    })
+
+    const geometry = buildConstructionNoteFloorplan(note, context({}, true))
+    const entries = geometry ? flatten(geometry) : []
+    const leader = entries.find((entry) => entry.kind === 'path')
+    const handles = entries.filter((entry) => entry.kind === 'endpoint-handle')
+
+    expect(leader?.kind).toBe('path')
+    if (leader?.kind === 'path') {
+      expect(leader.d).toMatch(/^M 0 0 Q /)
+      expect(leader.d).toContain('L 3.9 0')
+    }
+    expect(entries.filter((entry) => entry.kind === 'hit-line')).toHaveLength(11)
+    expect(handles).toHaveLength(3)
+    expect(handles).toContainEqual(
+      expect.objectContaining({ affordance: 'move-construction-note-curve' }),
+    )
+    expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(2)
+  })
 })

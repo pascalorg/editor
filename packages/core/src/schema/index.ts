@@ -52,6 +52,7 @@ export {
   ColumnSupportStyle,
 } from './nodes/column'
 export {
+  ConstructionNoteLeaderStyle,
   ConstructionNoteNode,
   ConstructionNoteTerminator,
 } from './nodes/construction-note'

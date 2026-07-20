@@ -60,6 +60,19 @@ export default function ConstructionNotePanel() {
 
       <PanelSection title="Leader">
         <label className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">Style</span>
+          <select
+            className="rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
+            onChange={(event) =>
+              update({ leaderStyle: event.target.value as ConstructionNoteNode['leaderStyle'] })
+            }
+            value={note.leaderStyle}
+          >
+            <option value="straight">Straight</option>
+            <option value="curved">Curved</option>
+          </select>
+        </label>
+        <label className="flex items-center justify-between gap-3 text-sm">
           <span className="text-muted-foreground">Terminator</span>
           <select
             className="rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
@@ -84,7 +97,10 @@ export default function ConstructionNotePanel() {
           value={note.shoulderLength}
         />
         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          {note.targetId ? 'Attached to scene element' : 'Free leader anchor'}
+          <div>{note.targetId ? 'Attached to scene element' : 'Free leader anchor'}</div>
+          {note.leaderStyle === 'curved' ? (
+            <div className="mt-1">Drag the teal handle to reshape the curve.</div>
+          ) : null}
         </div>
       </PanelSection>
 

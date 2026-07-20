@@ -17,11 +17,11 @@ import {
 
 export { formatConstructionLength } from '../shared/construction-length'
 
-const OPENING_CHAIN_OFFSET = 0.45
-const WALL_SPAN_OFFSET = 0.82
-const FIRST_OPENING_WIDTH_OFFSET = 0.18
-const FIRST_GENERAL_TIER_OFFSET = 0.45
-const TIER_SPACING = 0.48
+const OPENING_CHAIN_OFFSET = 0.55
+const WALL_SPAN_OFFSET = 1.05
+const FIRST_OPENING_WIDTH_OFFSET = 0.28
+const FIRST_GENERAL_TIER_OFFSET = 0.55
+const TIER_SPACING = 0.62
 const EXTENSION_OVERSHOOT = 0.12
 const MIN_SEGMENT_LENGTH = 0.02
 const FACADE_LINE_TOLERANCE = 0.03
@@ -38,6 +38,8 @@ export type ConstructionDimensionTier =
   | 'jogs'
   | 'overall'
   | 'structural-overall'
+  | 'interior'
+  | 'interior-overall'
 
 const TIER_ORDER: readonly ConstructionDimensionTier[] = [
   'opening-widths',
@@ -199,7 +201,66 @@ export function buildLevelWallConstructionDimensionPlan(
     }
   }
 
+  for (const wall of walls) {
+    if (isCurvedWall(wall)) continue
+    const openings = hostedOpeningsForWall(wall, nodes)
+    if (!shouldDimensionInteriorWall(wall, walls, openings)) continue
+    const planned = buildInteriorWallDimensions(wall, walls, openings)
+    if (planned.length > 0) dimensionsByWallId.set(wall.id, planned)
+  }
+
   return dimensionsByWallId
+}
+
+function buildInteriorWallDimensions(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+  openings: readonly OpeningNode[],
+): PlannedConstructionDimension[] {
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const wallLength = Math.hypot(dx, dz)
+  if (wallLength < MIN_SEGMENT_LENGTH) return []
+
+  const tangent: FloorplanPoint = [dx / wallLength, dz / wallLength]
+  const normal = resolveInteriorDimensionNormal(wall, walls, tangent)
+  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const pointAt = (along: number): FloorplanPoint => [
+    wall.start[0] + tangent[0] * along + normal[0] * halfThickness,
+    wall.start[1] + tangent[1] * along + normal[1] * halfThickness,
+  ]
+  const openingSpans = openings.flatMap((opening): Array<readonly [number, number]> => {
+    const halfWidth = Math.max(0, opening.width) / 2
+    const start = clamp(opening.position[0] - halfWidth, 0, wallLength)
+    const end = clamp(opening.position[0] + halfWidth, 0, wallLength)
+    return end - start >= MIN_SEGMENT_LENGTH ? [[start, end]] : []
+  })
+
+  const planned: PlannedConstructionDimension[] = []
+  if (openingSpans.length > 0) {
+    const breakpoints = uniqueSorted([0, wallLength, ...openingSpans.flat()])
+    for (let index = 0; index < breakpoints.length - 1; index++) {
+      const start = breakpoints[index]
+      const end = breakpoints[index + 1]
+      if (start === undefined || end === undefined || end - start < MIN_SEGMENT_LENGTH) continue
+      planned.push({
+        tier: 'interior',
+        start: pointAt(start),
+        end: pointAt(end),
+        offsetNormal: normal,
+        offsetDistance: OPENING_CHAIN_OFFSET,
+      })
+    }
+  }
+
+  planned.push({
+    tier: 'interior-overall',
+    start: pointAt(0),
+    end: pointAt(wallLength),
+    offsetNormal: normal,
+    offsetDistance: openingSpans.length > 0 ? WALL_SPAN_OFFSET : OPENING_CHAIN_OFFSET,
+  })
+  return planned
 }
 
 export function renderPlannedConstructionDimensions(
@@ -353,6 +414,97 @@ function exteriorNormal(wall: WallNode): FloorplanPoint | null {
   if (wall.frontSide === 'exterior' && wall.backSide !== 'exterior') return front
   if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') return negate(front)
   return null
+}
+
+function isClassifiedInteriorWall(wall: WallNode): boolean {
+  return wall.frontSide === 'interior' && wall.backSide === 'interior'
+}
+
+function hostedOpeningsForWall(wall: WallNode, nodes: Record<string, AnyNode>): OpeningNode[] {
+  return Object.values(nodes).filter(
+    (node): node is OpeningNode =>
+      (node.type === 'door' || node.type === 'window') &&
+      node.visible !== false &&
+      (node.wallId ?? node.parentId) === wall.id,
+  )
+}
+
+function shouldDimensionInteriorWall(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+  openings: readonly OpeningNode[],
+): boolean {
+  if (wall.frontSide === 'exterior' || wall.backSide === 'exterior') return false
+  if (isClassifiedInteriorWall(wall)) return true
+  if (openings.length === 0) return false
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < MIN_SEGMENT_LENGTH) return false
+  const tangent: FloorplanPoint = [dx / length, dz / length]
+  const { frontClearance, backClearance } = interiorDimensionClearances(wall, walls, tangent)
+  return frontClearance !== null && backClearance !== null
+}
+
+function resolveInteriorDimensionNormal(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+  tangent: FloorplanPoint,
+): FloorplanPoint {
+  const front: FloorplanPoint = [cleanZero(-tangent[1]), cleanZero(tangent[0])]
+  const back = negate(front)
+  const { frontClearance, backClearance } = interiorDimensionClearances(wall, walls, tangent)
+
+  if (frontClearance !== null && backClearance === null) return front
+  if (backClearance !== null && frontClearance === null) return back
+  if (frontClearance !== null && backClearance !== null) {
+    if (Math.abs(frontClearance - backClearance) > FACADE_LINE_TOLERANCE) {
+      return frontClearance > backClearance ? front : back
+    }
+  }
+
+  const midpoint: FloorplanPoint = [
+    (wall.start[0] + wall.end[0]) / 2,
+    (wall.start[1] + wall.end[1]) / 2,
+  ]
+  const centroid = wallNetworkCentroid(walls)
+  return dot(subtract(centroid, midpoint), front) >= 0 ? front : back
+}
+
+function interiorDimensionClearances(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+  tangent: FloorplanPoint,
+): { frontClearance: number | null; backClearance: number | null } {
+  const front: FloorplanPoint = [cleanZero(-tangent[1]), cleanZero(tangent[0])]
+  const back = negate(front)
+  const midpoint: FloorplanPoint = [
+    (wall.start[0] + wall.end[0]) / 2,
+    (wall.start[1] + wall.end[1]) / 2,
+  ]
+  const clearance = (normal: FloorplanPoint): number | null => {
+    let nearest = Number.POSITIVE_INFINITY
+    for (const candidate of walls) {
+      if (candidate.id === wall.id || isCurvedWall(candidate)) continue
+      const hit = raySegmentDistance(midpoint, normal, candidate.start, candidate.end)
+      if (hit !== null) nearest = Math.min(nearest, hit)
+    }
+    return Number.isFinite(nearest) ? nearest : null
+  }
+  const frontClearance = clearance(front)
+  const backClearance = clearance(back)
+  return { frontClearance, backClearance }
+}
+
+function wallNetworkCentroid(walls: ReadonlyArray<WallNode>): FloorplanPoint {
+  if (walls.length === 0) return [0, 0]
+  let sumX = 0
+  let sumY = 0
+  for (const wall of walls) {
+    sumX += wall.start[0] + wall.end[0]
+    sumY += wall.start[1] + wall.end[1]
+  }
+  return [sumX / (walls.length * 2), sumY / (walls.length * 2)]
 }
 
 function buildWallNetworkIndex(

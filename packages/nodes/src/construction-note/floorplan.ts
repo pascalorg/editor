@@ -5,12 +5,12 @@ import type {
   FloorplanStyle,
   GeometryContext,
 } from '@pascal-app/core'
+import { resolveConstructionNoteLeader } from './leader-geometry'
 import { resolveConstructionNoteAnchor } from './resolve'
 
 const NOTE_STROKE = '#334155'
 const DANGLING_STROKE = '#dc2626'
 const SELECTED_STROKE = '#ea580c'
-const TEXT_GAP = 0.1
 const TEXT_FONT_SIZE = 0.16
 const TEXT_LINE_HEIGHT = 0.21
 const ARROW_LENGTH = 0.16
@@ -29,10 +29,8 @@ export function buildConstructionNoteFloorplan(
     : resolved.dangling
       ? DANGLING_STROKE
       : NOTE_STROKE
-  const side = node.textPosition[0] >= resolved.point[0] ? 1 : -1
-  const textAnchor = side > 0 ? 'start' : 'end'
-  const shoulderEnd: FloorplanPoint = [node.textPosition[0] - side * TEXT_GAP, node.textPosition[1]]
-  const elbow: FloorplanPoint = [shoulderEnd[0] - side * node.shoulderLength, shoulderEnd[1]]
+  const leader = resolveConstructionNoteLeader(node, resolved.point)
+  const textAnchor = leader.side > 0 ? 'start' : 'end'
   const lines = normalizeNoteLines(node.text, resolved.dangling)
   const lineStyle: FloorplanStyle = {
     stroke,
@@ -43,29 +41,13 @@ export function buildConstructionNoteFloorplan(
     pointerEvents: 'none',
   }
   const children: FloorplanGeometry[] = [
-    {
-      kind: 'polyline',
-      points: [resolved.point, elbow, shoulderEnd],
-      fill: 'none',
-      ...lineStyle,
-    },
-    {
-      kind: 'hit-line',
-      x1: resolved.point[0],
-      y1: resolved.point[1],
-      x2: elbow[0],
-      y2: elbow[1],
-      strokeWidthPx: 12,
-    },
-    {
-      kind: 'hit-line',
-      x1: elbow[0],
-      y1: elbow[1],
-      x2: shoulderEnd[0],
-      y2: shoulderEnd[1],
-      strokeWidthPx: 12,
-    },
-    ...buildTerminator(node.terminator, resolved.point, elbow, stroke),
+    ...buildLeader(node, resolved.point, leader, lineStyle),
+    ...buildTerminator(
+      node.terminator,
+      resolved.point,
+      node.leaderStyle === 'curved' ? leader.quadraticControlPoint : leader.elbow,
+      stroke,
+    ),
     ...lines.map(
       (text, index): FloorplanGeometry => ({
         kind: 'text',
@@ -86,7 +68,7 @@ export function buildConstructionNoteFloorplan(
   const textWidth = Math.max(...lines.map((line) => Math.max(1, line.length))) * 0.092
   children.push({
     kind: 'rect',
-    x: side > 0 ? node.textPosition[0] - 0.04 : node.textPosition[0] - textWidth - 0.04,
+    x: leader.side > 0 ? node.textPosition[0] - 0.04 : node.textPosition[0] - textWidth - 0.04,
     y: node.textPosition[1] - TEXT_FONT_SIZE,
     width: textWidth + 0.08,
     height: Math.max(TEXT_LINE_HEIGHT, lines.length * TEXT_LINE_HEIGHT),
@@ -111,10 +93,79 @@ export function buildConstructionNoteFloorplan(
         affordance: 'move-construction-note-text',
         payload: null,
       },
+      ...(node.leaderStyle === 'curved'
+        ? ([
+            {
+              kind: 'endpoint-handle',
+              point: leader.curveHandlePoint,
+              state: 'idle',
+              variant: 'curve',
+              affordance: 'move-construction-note-curve',
+              payload: null,
+            },
+          ] satisfies FloorplanGeometry[])
+        : []),
     )
   }
 
   return { kind: 'group', children }
+}
+
+function buildLeader(
+  node: ConstructionNoteNode,
+  anchor: FloorplanPoint,
+  leader: ReturnType<typeof resolveConstructionNoteLeader>,
+  style: FloorplanStyle,
+): FloorplanGeometry[] {
+  if (node.leaderStyle === 'straight') {
+    return [
+      {
+        kind: 'polyline',
+        points: [anchor, leader.elbow, leader.shoulderEnd],
+        fill: 'none',
+        ...style,
+      },
+      ...buildHitLines([anchor, leader.elbow, leader.shoulderEnd]),
+    ]
+  }
+
+  const curvePoints = sampleQuadraticBezier(anchor, leader.quadraticControlPoint, leader.elbow, 10)
+  return [
+    {
+      kind: 'path',
+      d: `M ${anchor[0]} ${anchor[1]} Q ${leader.quadraticControlPoint[0]} ${leader.quadraticControlPoint[1]} ${leader.elbow[0]} ${leader.elbow[1]} L ${leader.shoulderEnd[0]} ${leader.shoulderEnd[1]}`,
+      fill: 'none',
+      ...style,
+    },
+    ...buildHitLines([...curvePoints, leader.shoulderEnd]),
+  ]
+}
+
+function buildHitLines(points: FloorplanPoint[]): FloorplanGeometry[] {
+  return points.slice(0, -1).map((point, index) => ({
+    kind: 'hit-line',
+    x1: point[0],
+    y1: point[1],
+    x2: points[index + 1]?.[0] ?? point[0],
+    y2: points[index + 1]?.[1] ?? point[1],
+    strokeWidthPx: 12,
+  }))
+}
+
+function sampleQuadraticBezier(
+  start: FloorplanPoint,
+  control: FloorplanPoint,
+  end: FloorplanPoint,
+  segments: number,
+): FloorplanPoint[] {
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const t = index / segments
+    const inverse = 1 - t
+    return [
+      inverse * inverse * start[0] + 2 * inverse * t * control[0] + t * t * end[0],
+      inverse * inverse * start[1] + 2 * inverse * t * control[1] + t * t * end[1],
+    ]
+  })
 }
 
 function normalizeNoteLines(text: string, dangling: boolean): string[] {
