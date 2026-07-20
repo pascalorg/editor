@@ -89,6 +89,7 @@ export type {
   FloorplanSchedule,
   FloorplanStyle,
   GeometryContext,
+  GroupMoveSnapArgs,
   HostableConfig,
   IconRef,
   Issue,

@@ -3,6 +3,7 @@ import { type AnyNode, StructuralGridNode } from '@pascal-app/core'
 import {
   alphabeticGridLabel,
   nextStructuralGridLabel,
+  shouldConsumeStructuralGridPointerEvent,
   snapStructuralGridAngle,
   structuralGridLabelFamily,
 } from './floorplan-structural-grid-tool-layer'
@@ -44,5 +45,15 @@ describe('structural-grid drafting helpers', () => {
     const snapped = snapStructuralGridAngle([0, 0], [4, 0.4])
     expect(snapped[1]).toBeCloseTo(0)
     expect(Math.hypot(snapped[0], snapped[1])).toBeCloseTo(Math.hypot(4, 0.4))
+  })
+
+  test('leaves right-button drag moves available for floor-plan rotation', () => {
+    expect(
+      shouldConsumeStructuralGridPointerEvent({
+        type: 'pointermove',
+        button: -1,
+        buttons: 2,
+      }),
+    ).toBe(false)
   })
 })

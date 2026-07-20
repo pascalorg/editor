@@ -123,6 +123,14 @@ describe('floor-plan annotation visibility', () => {
       y2: 0.1,
       annotationRole: 'column-center',
     } satisfies FloorplanGeometry
+    const gridReference = {
+      kind: 'text',
+      x: 0,
+      y: 0.3,
+      text: 'B-2',
+      fontSize: 0.13,
+      annotationRole: 'column-center',
+    } satisfies FloorplanGeometry
     const footprint = {
       kind: 'rect',
       x: -0.2,
@@ -140,7 +148,7 @@ describe('floor-plan annotation visibility', () => {
         'column',
         {
           kind: 'group',
-          children: [footprint, centerMark],
+          children: [footprint, centerMark, gridReference],
         },
         visibility,
       ),

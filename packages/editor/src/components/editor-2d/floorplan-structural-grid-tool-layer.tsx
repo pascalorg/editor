@@ -30,6 +30,15 @@ const ANGLE_INCREMENT = Math.PI / 4
 type PlanPoint = [number, number]
 export type StructuralGridLabelFamily = 'numeric' | 'alphabetic'
 
+export function shouldConsumeStructuralGridPointerEvent(event: {
+  type: string
+  button: number
+  buttons: number
+}): boolean {
+  if (event.type === 'pointerdown') return event.button === 0
+  return (event.buttons & 0b110) === 0
+}
+
 function snap(value: number, step: number): number {
   return step > 0 ? Math.round(value / step) * step : value
 }
@@ -138,10 +147,10 @@ export function FloorplanStructuralGridToolLayer() {
       return snapped.point
     }
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button === 0) consume(event)
+      if (shouldConsumeStructuralGridPointerEvent(event)) consume(event)
     }
     const onPointerMove = (event: PointerEvent) => {
-      consume(event)
+      if (shouldConsumeStructuralGridPointerEvent(event)) consume(event)
       setHover(resolveEvent(event))
     }
     const onPointerLeave = () => {

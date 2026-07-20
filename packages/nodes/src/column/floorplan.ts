@@ -1,9 +1,12 @@
 import type {
+  AnyNode,
   ColumnNode,
   FloorplanGeometry,
   FloorplanPoint,
   GeometryContext,
+  StructuralGridNode,
 } from '@pascal-app/core'
+import { collectStructuralGridAxes, resolveStructuralGridReference } from '@pascal-app/core'
 import type { ColumnResizePayload } from './floorplan-affordances'
 
 // Offsets for the floor-plan selection arrows. Resize chevrons hug the
@@ -11,12 +14,30 @@ import type { ColumnResizePayload } from './floorplan-affordances'
 // further out so it doesn't crowd the resize arrows.
 const RESIZE_ARROW_OFFSET = 0.12
 const ROTATE_ARROW_CORNER_OFFSET = 0.22
+const GRID_REFERENCE_OFFSET = 0.16
+const GRID_REFERENCE_FONT_SIZE = 0.13
 
 const ROUND_CROSS_SECTIONS = new Set<ColumnNode['crossSection']>([
   'round',
   'octagonal',
   'sixteen-sided',
 ])
+
+export type ColumnFloorplanLevelData = {
+  structuralGrids: StructuralGridNode[]
+}
+
+export function computeColumnFloorplanLevelData({
+  siblings,
+  nodes,
+}: {
+  siblings: readonly ColumnNode[]
+  nodes: Record<string, AnyNode>
+}): ColumnFloorplanLevelData {
+  return {
+    structuralGrids: collectStructuralGridAxes(nodes, siblings[0]?.parentId),
+  }
+}
 
 /**
  * Stage C floor-plan builder for column. Inlined from the legacy
@@ -87,6 +108,27 @@ export function buildColumnFloorplan(
       annotationRole: 'column-center',
     },
   )
+
+  const levelData = ctx.levelData as ColumnFloorplanLevelData | undefined
+  const gridReference = resolveStructuralGridReference(
+    [centerX, centerZ],
+    levelData?.structuralGrids ?? [],
+  )
+  if (gridReference) {
+    children.push({
+      kind: 'text',
+      x: centerX,
+      y: centerZ + halfZ + GRID_REFERENCE_OFFSET,
+      text: gridReference,
+      fontSize: GRID_REFERENCE_FONT_SIZE,
+      fill: stroke,
+      fontWeight: 700,
+      textAnchor: 'middle',
+      dominantBaseline: 'middle',
+      upright: true,
+      annotationRole: 'column-center',
+    })
+  }
 
   // Hatch overlay on selected — same `<defs>` pattern as the wall.
   if (isSelected && palette) {

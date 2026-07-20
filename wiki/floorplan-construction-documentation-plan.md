@@ -54,7 +54,9 @@ Introduce per-view controls for:
 - Local notes.
 - Room labels.
 - Structural grids and column centers. Initial persistent two-point grid axes use automatic
-  numeric/alphabetic identifiers, endpoint bubbles, plan snapping, and derived column-center marks.
+  numeric/alphabetic identifiers, endpoint bubbles, and derived column-center marks. Columns now
+  snap to nearby axes/intersections during placement and 2D/3D movement, display associative grid
+  references such as `B-2`, and structural-grid drafting preserves right-drag plan rotation.
 - Hidden or overhead geometry.
 - Reference dimensions.
 

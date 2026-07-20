@@ -3,9 +3,11 @@ import {
   type AnyNodeId,
   type ColumnNode,
   collectAlignmentAnchors,
+  collectStructuralGridAxes,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   movingFootprintAnchors,
+  resolveStructuralGridSnap,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -46,7 +48,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [columnId],
-    apply({ planPoint }) {
+    apply({ planPoint, modifiers }) {
       const snap = (value: number) => {
         if (!isGridSnapActive()) return value
         const step = useEditor.getState().gridSnapStep
@@ -65,10 +67,15 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
         candidates,
         { applySnap: isMagneticSnapActive() },
       )
-      const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
+      const structuralSnap =
+        !modifiers.altKey && (isGridSnapActive() || isMagneticSnapActive())
+          ? resolveStructuralGridSnap(snapped, collectStructuralGridAxes(nodes, node.parentId))
+          : null
+      const coordinated = structuralSnap?.point ?? snapped
+      const next: [number, number, number] = [coordinated[0], originalPosition[1], coordinated[1]]
       lastPosition = next
 
-      const snapKey = `${snapped[0]},${snapped[1]}`
+      const snapKey = `${coordinated[0]},${coordinated[1]}`
       if (snapKey !== lastSnapKey) {
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey

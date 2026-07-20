@@ -406,6 +406,8 @@ export type FloorplanGeometry =
        * of the floor-plan's scene rotation (default 90°).
        */
       upright?: boolean
+      /** Semantic annotation role used by editor visibility and export filters. */
+      annotationRole?: 'column-center'
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated
