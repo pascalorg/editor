@@ -7,6 +7,8 @@ export type AnnotationLabelRectangle = {
   width: number
   height: number
   priority: number
+  tangentX?: number
+  tangentY?: number
 }
 
 export type AnnotationObstacleRectangle = Pick<
@@ -32,11 +34,14 @@ export function resolveAnnotationLabelRectangles(
     (obstacle) => ({ ...obstacle, dx: 0, dy: 0 }),
   )
   const shifts = new Map<string, AnnotationLabelShift>()
-  const ordered = [...rectangles].sort(
-    (left, right) => right.priority - left.priority || right.width - left.width,
-  )
+  const ordered = rectangles
+    .map((rectangle, order) => ({ order, rectangle }))
+    .sort(
+      (left, right) =>
+        right.rectangle.priority - left.rectangle.priority || left.order - right.order,
+    )
 
-  for (const rectangle of ordered) {
+  for (const { rectangle } of ordered) {
     const candidates = labelShiftCandidates(rectangle, occupied)
     const selected = candidates.find(
       ({ dx, dy }) =>
@@ -70,6 +75,8 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
 
   const rectangles = labels.map((label, index) => {
     const bounds = label.getBoundingClientRect()
+    const matrix = label.getScreenCTM()
+    const tangentLength = matrix ? Math.hypot(matrix.a, matrix.b) : 0
     return {
       id: label.dataset.floorplanAnnotationId ?? `annotation-${index}`,
       x: bounds.x,
@@ -77,6 +84,8 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
       width: bounds.width,
       height: bounds.height,
       priority: Number(label.dataset.floorplanAnnotationPriority ?? 0),
+      tangentX: tangentLength > 1e-9 && matrix ? matrix.a / tangentLength : undefined,
+      tangentY: tangentLength > 1e-9 && matrix ? matrix.b / tangentLength : undefined,
     }
   })
   const obstacles = Array.from(
@@ -132,8 +141,21 @@ function labelShiftCandidates(
   }
 
   return [...candidates.values()].sort(
-    (left, right) => Math.hypot(left.dx, left.dy) - Math.hypot(right.dx, right.dy),
+    (left, right) => candidateCost(left, rectangle) - candidateCost(right, rectangle),
   )
+}
+
+function candidateCost(
+  candidate: { dx: number; dy: number },
+  rectangle: AnnotationLabelRectangle,
+): number {
+  const distance = Math.hypot(candidate.dx, candidate.dy)
+  if (rectangle.tangentX === undefined || rectangle.tangentY === undefined) return distance
+
+  const perpendicularMovement = Math.abs(
+    candidate.dx * -rectangle.tangentY + candidate.dy * rectangle.tangentX,
+  )
+  return distance + perpendicularMovement * 4
 }
 
 export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometry): boolean {

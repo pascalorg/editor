@@ -25,6 +25,35 @@ describe('resolveAnnotationLabelRectangles', () => {
     ])
   })
 
+  test('preserves drawing order for labels on the same dimension string', () => {
+    const shifts = resolveAnnotationLabelRectangles([
+      { id: 'first', x: 0, y: 0, width: 20, height: 12, priority: 10 },
+      { id: 'second', x: 0, y: 0, width: 80, height: 12, priority: 10 },
+    ])
+
+    expect(shifts.find((entry) => entry.id === 'first')).toMatchObject({ dx: 0, dy: 0 })
+    expect(shifts.find((entry) => entry.id === 'second')).not.toMatchObject({ dx: 0, dy: 0 })
+  })
+
+  test('slides a colliding label along its dimension string before crossing tiers', () => {
+    const shifts = resolveAnnotationLabelRectangles([
+      { id: 'datum', x: 0, y: 0, width: 40, height: 12, priority: 20 },
+      {
+        id: 'adjacent',
+        x: 0,
+        y: 0,
+        width: 40,
+        height: 12,
+        priority: 10,
+        tangentX: 1,
+        tangentY: 0,
+      },
+    ])
+
+    expect(shifts.find((entry) => entry.id === 'adjacent')).toMatchObject({ dy: 0, resolved: true })
+    expect(shifts.find((entry) => entry.id === 'adjacent')?.dx).not.toBe(0)
+  })
+
   test('moves a dimension value clear of a fixed door-mark pill', () => {
     const shifts = resolveAnnotationLabelRectangles(
       [{ id: 'door-width', x: 94, y: 88, width: 42, height: 16, priority: 100 }],

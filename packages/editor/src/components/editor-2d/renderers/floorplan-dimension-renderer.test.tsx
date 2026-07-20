@@ -3,6 +3,7 @@ import type { FloorplanGeometry } from '@pascal-app/core'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   computeArchitecturalDimensionLayout,
+  floorplanDimensionAnnotationPriority,
   FloorplanDimensionRenderer,
 } from './floorplan-dimension-renderer'
 
@@ -92,6 +93,13 @@ describe('architectural floor-plan dimensions', () => {
     expect(markup).toContain('13&#x27;-1 1/2&quot;')
     expect(markup).toContain('paint-order="stroke"')
     expect(markup).toContain('stroke="#ffffff"')
+    expect(markup).toContain('data-floorplan-annotation-priority="145"')
+  })
+
+  test('keeps farther-out architectural strings fixed before inner strings', () => {
+    expect(floorplanDimensionAnnotationPriority(1.67)).toBeGreaterThan(
+      floorplanDimensionAnnotationPriority(0.55),
+    )
   })
 
   test('keeps labels readable after the scene rotates', () => {

@@ -33,6 +33,10 @@ export type ArchitecturalDimensionLayout = {
   labelPlacement: 'inside' | 'outside-end'
 }
 
+export function floorplanDimensionAnnotationPriority(offsetDistance: number): number {
+  return 100 + Math.round(Math.abs(offsetDistance) * 100)
+}
+
 export function computeArchitecturalDimensionLayout(
   geometry: DimensionGeometry,
   sceneRotationDeg: number,
@@ -207,7 +211,9 @@ export function FloorplanDimensionRenderer({
       <g
         data-floorplan-annotation-default-transform={labelTransform}
         data-floorplan-annotation-label=""
-        data-floorplan-annotation-priority="100"
+        data-floorplan-annotation-priority={floorplanDimensionAnnotationPriority(
+          geometry.offsetDistance,
+        )}
         data-floorplan-dimension-label-placement={layout.labelPlacement}
         transform={labelTransform}
       >
