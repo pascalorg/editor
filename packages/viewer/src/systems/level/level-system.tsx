@@ -33,6 +33,7 @@ export const LevelSystem = () => {
       buildingId: string | null
       index: number
       height: number
+      baseElevation: number
       obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
     }
     const entries: LevelEntry[] = []
@@ -52,6 +53,7 @@ export const LevelSystem = () => {
             nodes,
             (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
           ),
+          baseElevation: level.baseElevation,
           obj,
         })
       }

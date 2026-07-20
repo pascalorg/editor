@@ -11,6 +11,20 @@ import { PipeSegmentNode } from './pipe-segment'
 import { PipeTrapNode } from './pipe-trap'
 
 describe('LevelNode', () => {
+  test('defaults baseElevation to 0', () => {
+    expect(LevelNode.parse({ level: 0, name: 'Ground' }).baseElevation).toBe(0)
+  })
+
+  test('accepts a custom baseElevation', () => {
+    expect(
+      LevelNode.parse({
+        baseElevation: 1.25,
+        level: 1,
+        name: 'Split level',
+      }).baseElevation,
+    ).toBe(1.25)
+  })
+
   test('accepts every level-hosted MEP node ID', () => {
     const nodes = [
       DuctSegmentNode.parse({

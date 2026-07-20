@@ -64,4 +64,76 @@ describe('getLevelStackPositions', () => {
       level_1: 2.7,
     })
   })
+
+  test('applies an offset to its level and every higher level in the same building', () => {
+    const entries: LevelStackEntry[] = [
+      {
+        levelId: 'level_a0',
+        buildingId: 'building_a',
+        index: 0,
+        height: 2.5,
+        baseElevation: 0,
+      },
+      {
+        levelId: 'level_b0',
+        buildingId: 'building_b',
+        index: 0,
+        height: 3,
+        baseElevation: 0,
+      },
+      {
+        levelId: 'level_a1',
+        buildingId: 'building_a',
+        index: 1,
+        height: 3,
+        baseElevation: 1.25,
+      },
+      {
+        levelId: 'level_b1',
+        buildingId: 'building_b',
+        index: 1,
+        height: 3,
+        baseElevation: 0,
+      },
+      {
+        levelId: 'level_a2',
+        buildingId: 'building_a',
+        index: 2,
+        height: 2.8,
+        baseElevation: 0,
+      },
+    ]
+
+    expect(Object.fromEntries(getLevelStackPositions(entries))).toEqual({
+      level_a0: 0,
+      level_b0: 0,
+      level_a1: 3.75,
+      level_b1: 3,
+      level_a2: 6.75,
+    })
+  })
+
+  test('allows negative offsets', () => {
+    const entries: LevelStackEntry[] = [
+      {
+        levelId: 'level_ground',
+        buildingId: 'building_a',
+        index: 0,
+        height: 2.5,
+        baseElevation: -0.75,
+      },
+      {
+        levelId: 'level_first',
+        buildingId: 'building_a',
+        index: 1,
+        height: 3,
+        baseElevation: 0,
+      },
+    ]
+
+    expect(Object.fromEntries(getLevelStackPositions(entries))).toEqual({
+      level_ground: -0.75,
+      level_first: 1.75,
+    })
+  })
 })
