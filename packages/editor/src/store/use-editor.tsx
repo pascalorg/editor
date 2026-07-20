@@ -61,6 +61,8 @@ import {
   type PaintScope,
 } from '../lib/paint-scope'
 import {
+  COMPOSITE_TOOL_DRAFT_DIRECTIONAL,
+  COMPOSITE_TOOL_SNAP_PROFILES,
   cycleSnappingModeIn,
   defaultSnappingModeFor,
   resolveSnapFlags,
@@ -151,6 +153,8 @@ export type StructureTool =
   | 'column'
   | 'elevator'
   | 'stair'
+  | 'mezzanine'
+  | 'balcony'
   | 'item'
   | 'zone'
   | 'spawn'
@@ -1377,12 +1381,16 @@ export function getActiveSnapContext(): SnapContext | null {
     scope: useInteractionScope.getState().scope,
     mode: editor.mode,
     tool: editor.tool,
-    profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
+    profileOf: (typeOrTool) =>
+      nodeRegistry.get(typeOrTool)?.snapProfile ?? COMPOSITE_TOOL_SNAP_PROFILES[typeOrTool],
     profileOfNode: (nodeId) => {
       const node = useScene.getState().nodes[nodeId as AnyNodeId]
       return node ? nodeRegistry.get(node.type)?.snapProfile : undefined
     },
-    draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
+    draftDirectionalOf: (typeOrTool) =>
+      nodeRegistry.get(typeOrTool)?.snapDraftDirectional ??
+      COMPOSITE_TOOL_DRAFT_DIRECTIONAL[typeOrTool] ??
+      true,
   })
 }
 

@@ -108,6 +108,20 @@ export function cycleSnappingModeIn(context: SnapContext, mode: SnappingMode): S
   return modes[(index + 1) % modes.length] ?? modes[0] ?? DEFAULT_SNAPPING_MODE
 }
 
+// Composite editor tools (mezzanine / balcony deck drawing) have no registry
+// kind to declare a `snapProfile` on, yet draft with the same polygon-on-a-
+// level snap pipeline as slab. `getActiveSnapContext` falls back to these maps
+// after the registry lookup so the tools get the no-angle 'polygon' mode set.
+export const COMPOSITE_TOOL_SNAP_PROFILES: Record<string, SnapProfile> = {
+  mezzanine: 'structural',
+  balcony: 'structural',
+}
+
+export const COMPOSITE_TOOL_DRAFT_DIRECTIONAL: Record<string, boolean> = {
+  mezzanine: false,
+  balcony: false,
+}
+
 // The kind's declared `snapProfile` (from the registry) → the active mode-set
 // context. The only behaviour difference is the angle lock, which a `structural`
 // kind gets while SETTING DIRECTION (drafting a run/polygon, dragging an endpoint

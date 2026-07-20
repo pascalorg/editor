@@ -24,6 +24,8 @@ type BuildToolKind =
   | 'ceiling'
   | 'roof'
   | 'stair'
+  | 'mezzanine'
+  | 'balcony'
   | 'elevator'
   | 'door'
   | 'window'
@@ -74,6 +76,10 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'ceiling', label: 'Ceiling', iconSrc: '/icons/ceiling.webp', kind: 'ceiling' },
   { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof' },
   { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair' },
+  // No dedicated artwork yet — the level / floor tiles are the closest fits
+  // for a raised deck (+stair) and a floor-flush deck respectively.
+  { id: 'mezzanine', label: 'Mezzanine', iconSrc: '/icons/level.webp', kind: 'mezzanine' },
+  { id: 'balcony', label: 'Balcony', iconSrc: '/icons/floor.webp', kind: 'balcony' },
   { id: 'elevator', label: 'Elevator', iconSrc: '/icons/elevator.webp', kind: 'elevator' },
   { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door' },
   { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window' },
