@@ -176,11 +176,8 @@ export function remapMeasurementReferences(
   measurement: MeasurementPayload,
   idMap: ReadonlyMap<string, string>,
 ): MeasurementPayload {
-  const remap = (anchor: MeasurementAnchor): MeasurementAnchor => {
-    if (Array.isArray(anchor)) return anchor
-    const nodeId = idMap.get(anchor.reference.nodeId)
-    return nodeId ? { ...anchor, reference: { ...anchor.reference, nodeId } } : anchor
-  }
+  const remap = (anchor: MeasurementAnchor): MeasurementAnchor =>
+    remapMeasurementAnchors([anchor], idMap)[0]!
 
   switch (measurement.kind) {
     case 'distance':
@@ -205,16 +202,33 @@ export function remapMeasurementReferences(
   }
 }
 
-export function measurementReferenceNodeIds(measurement: MeasurementPayload): AnyNodeId[] {
-  const anchors =
-    measurement.kind === 'distance' || measurement.kind === 'angle'
-      ? measurement.points
-      : measurement.base
+export function remapMeasurementAnchors(
+  anchors: readonly MeasurementAnchor[],
+  idMap: ReadonlyMap<string, string>,
+): MeasurementAnchor[] {
+  return anchors.map((anchor) => {
+    if (Array.isArray(anchor)) return anchor
+    const nodeId = idMap.get(anchor.reference.nodeId)
+    return nodeId ? { ...anchor, reference: { ...anchor.reference, nodeId } } : anchor
+  })
+}
+
+export function measurementAnchorReferenceNodeIds(
+  anchors: readonly MeasurementAnchor[],
+): AnyNodeId[] {
   const ids = new Set<string>()
   for (const anchor of anchors) {
     if (!Array.isArray(anchor)) ids.add(anchor.reference.nodeId)
   }
   return [...ids] as AnyNodeId[]
+}
+
+export function measurementReferenceNodeIds(measurement: MeasurementPayload): AnyNodeId[] {
+  const anchors =
+    measurement.kind === 'distance' || measurement.kind === 'angle'
+      ? measurement.points
+      : measurement.base
+  return measurementAnchorReferenceNodeIds(anchors)
 }
 
 export function measurementAreaVector(points: readonly MeasurementPoint[]): MeasurementPoint {

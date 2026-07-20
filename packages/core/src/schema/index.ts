@@ -53,6 +53,7 @@ export {
 } from './nodes/column'
 export {
   ConstructionDimensionBaseline,
+  ConstructionDimensionChainMode,
   ConstructionDimensionNode,
 } from './nodes/construction-dimension'
 export {

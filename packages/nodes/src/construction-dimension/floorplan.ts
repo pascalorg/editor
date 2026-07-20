@@ -14,57 +14,60 @@ export function buildConstructionDimensionFloorplan(
 ): FloorplanGeometry | null {
   if (node.visible === false) return null
 
-  const start = resolveMeasurementAnchor(node.anchors[0], (id) => ctx.resolve(id))
-  const end = resolveMeasurementAnchor(node.anchors[1], (id) => ctx.resolve(id))
-  const anchors: [MeasurementPoint, MeasurementPoint] = [start.point, end.point]
-  const layout = resolveConstructionDimensionLayout(node, anchors)
-  const dangling = Boolean(start.dangling || end.dangling)
+  const resolved = node.anchors.map((anchor) =>
+    resolveMeasurementAnchor(anchor, (id) => ctx.resolve(id)),
+  )
+  const layout = resolveConstructionDimensionLayout(
+    node,
+    resolved.map((anchor) => anchor.point) as MeasurementPoint[],
+  )
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
-  const stroke = dangling
-    ? '#dc2626'
-    : selected
-      ? (ctx.viewState?.palette.selectedStroke ?? '#2563eb')
-      : (ctx.viewState?.palette.measurementStroke ?? '#334155')
+  const stroke = selected
+    ? (ctx.viewState?.palette.selectedStroke ?? '#2563eb')
+    : (ctx.viewState?.palette.measurementStroke ?? '#334155')
   const editable = ctx.viewState?.selected === true
+  const children: FloorplanGeometry[] = []
 
-  return {
-    kind: 'group',
-    children: [
+  for (let index = 0; index < layout.segments.length; index += 1) {
+    const segment = layout.segments[index]!
+    const dangling = Boolean(resolved[index]?.dangling || resolved[index + 1]?.dangling)
+    children.push(
       {
         kind: 'dimension',
-        start: layout.witnessStart,
-        end: layout.witnessEnd,
-        dimensionStart: layout.dimensionStart,
-        dimensionEnd: layout.dimensionEnd,
+        start: segment.witnessStart,
+        end: segment.witnessEnd,
+        dimensionStart: segment.dimensionStart,
+        dimensionEnd: segment.dimensionEnd,
         offsetNormal: layout.normal,
         offsetDistance: 0,
         extensionOvershoot: 0.12,
         text: `${dangling ? 'UNLINKED · ' : ''}${formatConstructionLength(
-          layout.value,
+          segment.value,
           ctx.viewState?.unit ?? 'metric',
         )}`,
-        stroke,
+        stroke: dangling ? '#dc2626' : stroke,
       },
       {
         kind: 'hit-line',
-        x1: layout.dimensionStart[0],
-        y1: layout.dimensionStart[1],
-        x2: layout.dimensionEnd[0],
-        y2: layout.dimensionEnd[1],
+        x1: segment.dimensionStart[0],
+        y1: segment.dimensionStart[1],
+        x2: segment.dimensionEnd[0],
+        y2: segment.dimensionEnd[1],
         strokeWidthPx: 12,
       },
-      ...(editable
-        ? [
-            {
-              kind: 'endpoint-handle' as const,
-              point: layout.midpoint,
-              state: 'idle' as const,
-              variant: 'curve' as const,
-              affordance: 'move-construction-dimension-baseline',
-              payload: null,
-            },
-          ]
-        : []),
-    ],
+    )
   }
+
+  if (editable) {
+    children.push({
+      kind: 'endpoint-handle',
+      point: layout.midpoint,
+      state: 'idle',
+      variant: 'curve',
+      affordance: 'move-construction-dimension-baseline',
+      payload: null,
+    })
+  }
+
+  return { kind: 'group', children }
 }

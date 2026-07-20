@@ -78,6 +78,7 @@ export {
   closestMeasurementFeatureBinding,
   MEASUREMENT_PLANAR_TOLERANCE,
   measurementAnchorFallback,
+  measurementAnchorReferenceNodeIds,
   measurementAngle,
   measurementArea,
   measurementAreaVector,
@@ -88,6 +89,7 @@ export {
   measurementPerimeter,
   measurementPrismVolume,
   measurementReferenceNodeIds,
+  remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
 export {

@@ -20,22 +20,30 @@ export const ConstructionDimensionBaseline = z
     }
   })
 
+export const ConstructionDimensionChainMode = z.enum(['point-to-point', 'continuous'])
+
 export const ConstructionDimensionNode = BaseNode.extend({
   id: objectId('construction-dimension'),
   type: nodeType('construction-dimension'),
-  anchors: z.tuple([MeasurementAnchor, MeasurementAnchor]).default([
-    [0, 0, 0],
-    [1, 0, 0],
-  ]),
+  anchors: z
+    .array(MeasurementAnchor)
+    .min(2)
+    .default([
+      [0, 0, 0],
+      [1, 0, 0],
+    ]),
   baseline: ConstructionDimensionBaseline.default({ origin: [0, 0.6], direction: [1, 0] }),
+  chainMode: ConstructionDimensionChainMode.default('point-to-point'),
 }).describe(
   dedent`
   Construction dimension node - an associative linear floor-plan dimension
-  - anchors: two free or semantic feature anchors that supply the witness origins
+  - anchors: two or more free or semantic feature anchors that supply the witness origins
   - baseline.origin: a point on the independently placed dimension line
   - baseline.direction: the fixed plan direction used to project the witness origins
+  - chainMode: point-to-point for one segment or continuous for adjacent dimension strings
   `,
 )
 
 export type ConstructionDimensionBaseline = z.infer<typeof ConstructionDimensionBaseline>
+export type ConstructionDimensionChainMode = z.infer<typeof ConstructionDimensionChainMode>
 export type ConstructionDimensionNode = z.infer<typeof ConstructionDimensionNode>

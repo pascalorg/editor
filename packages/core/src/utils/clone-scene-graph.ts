@@ -1,4 +1,4 @@
-import { remapMeasurementReferences } from '../lib/measurement-geometry'
+import { remapMeasurementAnchors, remapMeasurementReferences } from '../lib/measurement-geometry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -89,11 +89,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
     }
     if (clonedNode.type === 'construction-dimension') {
-      const remapped = remapMeasurementReferences(
-        { kind: 'distance', points: clonedNode.anchors },
-        idMap,
-      )
-      clonedNode.anchors = remapped.kind === 'distance' ? remapped.points : clonedNode.anchors
+      clonedNode.anchors = remapMeasurementAnchors(clonedNode.anchors, idMap)
     }
 
     clonedNodes[newId] = clonedNode
@@ -251,11 +247,7 @@ export function cloneLevelSubtree(
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
     if (cloned.type === 'construction-dimension') {
-      const remapped = remapMeasurementReferences(
-        { kind: 'distance', points: cloned.anchors },
-        idMap,
-      )
-      cloned.anchors = remapped.kind === 'distance' ? remapped.points : cloned.anchors
+      cloned.anchors = remapMeasurementAnchors(cloned.anchors, idMap)
     }
 
     clonedNodes.push(cloned)

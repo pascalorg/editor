@@ -1,1 +1,5 @@
-export { ConstructionDimensionBaseline, ConstructionDimensionNode } from '@pascal-app/core'
+export {
+  ConstructionDimensionBaseline,
+  ConstructionDimensionChainMode,
+  ConstructionDimensionNode,
+} from '@pascal-app/core'

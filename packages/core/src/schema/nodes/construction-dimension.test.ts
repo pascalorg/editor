@@ -12,6 +12,7 @@ describe('ConstructionDimensionNode', () => {
       [1, 0, 0],
     ])
     expect(node.baseline).toEqual({ origin: [0, 0.6], direction: [1, 0] })
+    expect(node.chainMode).toBe('point-to-point')
   })
 
   test('accepts semantic anchors and rejects a collapsed baseline direction', () => {
@@ -31,6 +32,23 @@ describe('ConstructionDimensionNode', () => {
       ConstructionDimensionNode.safeParse({
         baseline: { origin: [0, 0], direction: [0, 0] },
       }).success,
+    ).toBe(false)
+  })
+
+  test('accepts continuous strings with three or more anchors', () => {
+    expect(
+      ConstructionDimensionNode.safeParse({
+        anchors: [
+          [0, 0, 0],
+          [2, 0, 0],
+          [5, 0, 0],
+        ],
+        chainMode: 'continuous',
+      }).success,
+    ).toBe(true)
+    expect(
+      ConstructionDimensionNode.safeParse({ anchors: [[0, 0, 0]], chainMode: 'continuous' })
+        .success,
     ).toBe(false)
   })
 })

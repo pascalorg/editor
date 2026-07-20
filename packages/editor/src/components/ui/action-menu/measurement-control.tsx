@@ -1,5 +1,6 @@
 'use client'
 
+import type { ConstructionDimensionChainMode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   Box,
@@ -43,6 +44,9 @@ export function MeasurementControl() {
   const tool = useEditor((state) => state.tool)
   const selectedKind = useEditor((state) => state.lastMeasurementKind)
   const activeToolKind = useEditor((state) => state.toolDefaults.measurement?.kind)
+  const constructionDimensionChainMode = useEditor(
+    (state) => state.toolDefaults['construction-dimension']?.chainMode,
+  )
   const setMode = useEditor((state) => state.setMode)
   const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
@@ -57,11 +61,19 @@ export function MeasurementControl() {
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
   const isActive = mode === 'build' && tool === 'measurement'
   const isConstructionDimensionActive = mode === 'build' && tool === 'construction-dimension'
+  const isContinuousDimensionActive =
+    isConstructionDimensionActive && constructionDimensionChainMode === 'continuous'
   const isControlActive = isActive || isConstructionDimensionActive
   const isSmartActive = isActive && activeToolKind === 'smart'
-  const SelectedIcon = isSmartActive ? ScanSearch : selectedOption.icon
+  const SelectedIcon = isContinuousDimensionActive
+    ? Waypoints
+    : isSmartActive
+      ? ScanSearch
+      : selectedOption.icon
   const selectedLabel = isConstructionDimensionActive
-    ? 'Construction dimension'
+    ? isContinuousDimensionActive
+      ? 'Continuous dimension'
+      : 'Construction dimension'
     : isSmartActive
       ? 'Smart'
       : selectedOption.label
@@ -91,10 +103,11 @@ export function MeasurementControl() {
     setTool('measurement')
   }
 
-  const activateConstructionDimension = () => {
+  const activateConstructionDimension = (chainMode: ConstructionDimensionChainMode) => {
     setPhase('structure')
     setStructureLayer('elements')
     setViewMode('2d')
+    setToolDefaults('construction-dimension', { chainMode })
     setMode('build')
     setTool('construction-dimension')
   }
@@ -153,7 +166,7 @@ export function MeasurementControl() {
             const isSmart = option.kind === 'smart'
             const isSelected = isSmart
               ? isSmartActive
-              : !isSmartActive && option.kind === selectedKind
+              : !isConstructionDimensionActive && !isSmartActive && option.kind === selectedKind
             return (
               <button
                 aria-checked={isSelected}
@@ -182,15 +195,15 @@ export function MeasurementControl() {
           <div className="my-1.5 h-px bg-border/60" />
 
           <button
-            aria-checked={isConstructionDimensionActive}
+            aria-checked={isConstructionDimensionActive && !isContinuousDimensionActive}
             className={cn(
               'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
-              isConstructionDimensionActive
+              isConstructionDimensionActive && !isContinuousDimensionActive
                 ? 'bg-white/10 text-foreground'
                 : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
             )}
             onClick={() => {
-              activateConstructionDimension()
+              activateConstructionDimension('point-to-point')
               setIsOpen(false)
             }}
             role="menuitemradio"
@@ -198,7 +211,29 @@ export function MeasurementControl() {
           >
             <Ruler aria-hidden="true" className="h-4 w-4" />
             <span>Construction dimension</span>
-            {isConstructionDimensionActive ? (
+            {isConstructionDimensionActive && !isContinuousDimensionActive ? (
+              <Check aria-hidden="true" className="ml-auto h-4 w-4" />
+            ) : null}
+          </button>
+
+          <button
+            aria-checked={isContinuousDimensionActive}
+            className={cn(
+              'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
+              isContinuousDimensionActive
+                ? 'bg-white/10 text-foreground'
+                : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+            )}
+            onClick={() => {
+              activateConstructionDimension('continuous')
+              setIsOpen(false)
+            }}
+            role="menuitemradio"
+            type="button"
+          >
+            <Waypoints aria-hidden="true" className="h-4 w-4" />
+            <span>Continuous dimension</span>
+            {isContinuousDimensionActive ? (
               <Check aria-hidden="true" className="ml-auto h-4 w-4" />
             ) : null}
           </button>

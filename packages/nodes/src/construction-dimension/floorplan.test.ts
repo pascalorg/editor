@@ -111,6 +111,35 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
   })
 
+  test('renders a continuous string as adjacent associative segments', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [5, 0, 0],
+        [9, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      chainMode: 'continuous',
+    })
+
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const dimensions = geometry
+      ? flatten(geometry).filter((entry) => entry.kind === 'dimension')
+      : []
+
+    expect(dimensions).toHaveLength(3)
+    expect(
+      dimensions.map((dimension) => (dimension.kind === 'dimension' ? dimension.text : '')),
+    ).toEqual(['2m', '3m', '4m'])
+    expect(dimensions[1]).toMatchObject({
+      start: [2, 0],
+      end: [5, 0],
+      dimensionStart: [2, 1],
+      dimensionEnd: [5, 1],
+    })
+  })
+
   test('shows one baseline handle only while selected', () => {
     const node = ConstructionDimensionNode.parse({})
     const idle = buildConstructionDimensionFloorplan(node, context())

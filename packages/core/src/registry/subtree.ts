@@ -1,4 +1,4 @@
-import { remapMeasurementReferences } from '../lib/measurement-geometry'
+import { remapMeasurementAnchors, remapMeasurementReferences } from '../lib/measurement-geometry'
 import { generateId } from '../schema/base'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
@@ -170,11 +170,7 @@ export function cloneNodesInto(
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
     if (cloned.type === 'construction-dimension') {
-      const remapped = remapMeasurementReferences(
-        { kind: 'distance', points: cloned.anchors },
-        idMap,
-      )
-      cloned.anchors = remapped.kind === 'distance' ? remapped.points : cloned.anchors
+      cloned.anchors = remapMeasurementAnchors(cloned.anchors, idMap)
     }
 
     if (original.id === opts.rootId) {

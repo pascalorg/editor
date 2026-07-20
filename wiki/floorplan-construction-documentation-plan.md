@@ -87,12 +87,13 @@ Status: deferred to a future preflight surface. The former orange/red dashed ove
 
 ## Phase 2: manual associative construction dimensions
 
-Status: the first linear two-point slice is implemented. A dedicated Core node stores two free or
-semantic measurement anchors and an independent baseline. The 2D three-click tool creates one
-undoable node, supports Escape step-back and Alt magnetic bypass, follows referenced geometry,
-reports dangling references, and exposes a selected baseline drag handle. Continuous and
-point-to-point strings, witness reassociation/detachment, additional dimension modes, and the shared
-dimension-string primitive remain.
+Status: linear point-to-point and continuous authoring are implemented. A dedicated Core node stores
+two or more free or semantic measurement anchors and an independent baseline. The point-to-point
+workflow retains its three clicks; continuous mode collects any number of witnesses and uses Enter or
+double-click to advance to baseline placement. Both create one undoable node, support step-back and
+Alt magnetic bypass, follow referenced geometry, report dangling references, and expose a selected
+baseline drag handle. Witness reassociation/detachment, point-to-point multi-segment strings,
+additional dimension modes, and the shared dimension-string primitive remain.
 
 ### 2.1 Add a construction-dimension schema
 
