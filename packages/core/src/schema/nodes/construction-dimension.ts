@@ -31,6 +31,23 @@ export const ConstructionDimensionMode = z.enum([
   'angular',
   'coordinate',
 ])
+export const ConstructionDrawingType = z.enum([
+  'floor-plan',
+  'foundation-plan',
+  'reflected-ceiling-plan',
+  'roof-plan',
+  'site-plan',
+])
+export const ConstructionDimensionDrawingPresentation = z.enum([
+  'shown',
+  'omit',
+  'reference',
+  'controlled',
+])
+export const ConstructionDimensionDrawingOverride = z.object({
+  drawingType: ConstructionDrawingType,
+  presentation: ConstructionDimensionDrawingPresentation,
+})
 
 export const ConstructionDimensionNode = BaseNode.extend({
   id: objectId('construction-dimension'),
@@ -51,6 +68,9 @@ export const ConstructionDimensionNode = BaseNode.extend({
   prefix: z.string().max(40).default(''),
   suffix: z.string().max(40).default(''),
   textOverride: z.string().trim().min(1).max(120).nullable().default(null),
+  drawingType: ConstructionDrawingType.default('floor-plan'),
+  drawingOverrides: z.array(ConstructionDimensionDrawingOverride).max(5).default([]),
+  controllingDimensionId: objectId('construction-dimension').nullable().default(null),
 }).describe(
   dedent`
   Construction dimension node - an associative floor-plan construction dimension
@@ -62,13 +82,48 @@ export const ConstructionDimensionNode = BaseNode.extend({
   - featureCount: repeated-feature multiplier used by diameter/radius and other notation
   - showCenterMark: displays the resolved circle/angle center where applicable
   - reference/prefix/suffix/textOverride: document notation overrides without changing geometry
+  - drawingType: the primary persistent drawing that owns the dimension
+  - drawingOverrides: omit, show, reference, or foundation-control presentation per drawing type
+  - controllingDimensionId: foundation dimension whose associative geometry controls this dimension
   `,
 )
 
 export type ConstructionDimensionBaseline = z.infer<typeof ConstructionDimensionBaseline>
 export type ConstructionDimensionChainMode = z.infer<typeof ConstructionDimensionChainMode>
 export type ConstructionDimensionMode = z.infer<typeof ConstructionDimensionMode>
+export type ConstructionDrawingType = z.infer<typeof ConstructionDrawingType>
+export type ConstructionDimensionDrawingPresentation = z.infer<
+  typeof ConstructionDimensionDrawingPresentation
+>
+export type ConstructionDimensionDrawingOverride = z.infer<
+  typeof ConstructionDimensionDrawingOverride
+>
 export type ConstructionDimensionNode = z.infer<typeof ConstructionDimensionNode>
+
+export const CONSTRUCTION_DRAWING_TYPES = ConstructionDrawingType.options
+
+export function resolveConstructionDimensionDrawingPresentation(
+  node: Pick<ConstructionDimensionNode, 'drawingType' | 'drawingOverrides'>,
+  drawingType: ConstructionDrawingType,
+): ConstructionDimensionDrawingPresentation {
+  let override: ConstructionDimensionDrawingOverride | undefined
+  for (const entry of node.drawingOverrides) {
+    if (entry.drawingType === drawingType) override = entry
+  }
+  return override?.presentation ?? (node.drawingType === drawingType ? 'shown' : 'omit')
+}
+
+export function setConstructionDimensionDrawingPresentation(
+  node: Pick<ConstructionDimensionNode, 'drawingType' | 'drawingOverrides'>,
+  drawingType: ConstructionDrawingType,
+  presentation: ConstructionDimensionDrawingPresentation,
+): ConstructionDimensionDrawingOverride[] {
+  const defaultPresentation = node.drawingType === drawingType ? 'shown' : 'omit'
+  const withoutDrawing = node.drawingOverrides.filter((entry) => entry.drawingType !== drawingType)
+  return presentation === defaultPresentation
+    ? withoutDrawing
+    : [...withoutDrawing, { drawingType, presentation }]
+}
 
 export function constructionDimensionRequiredAnchorCount(mode: ConstructionDimensionMode): number {
   return mode === 'arc-length' || mode === 'angular' ? 3 : 2

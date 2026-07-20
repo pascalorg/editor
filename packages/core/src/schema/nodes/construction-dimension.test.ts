@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { ConstructionDimensionNode } from './construction-dimension'
+import {
+  ConstructionDimensionNode,
+  resolveConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingPresentation,
+} from './construction-dimension'
 
 describe('ConstructionDimensionNode', () => {
   test('creates valid free-anchor defaults', () => {
@@ -21,6 +25,9 @@ describe('ConstructionDimensionNode', () => {
       prefix: '',
       suffix: '',
       textOverride: null,
+      drawingType: 'floor-plan',
+      drawingOverrides: [],
+      controllingDimensionId: null,
     })
   })
 
@@ -75,5 +82,34 @@ describe('ConstructionDimensionNode', () => {
     expect(ConstructionDimensionNode.safeParse({ mode: 'angular' }).success).toBe(true)
     expect(ConstructionDimensionNode.safeParse({ featureCount: 0 }).success).toBe(false)
     expect(ConstructionDimensionNode.safeParse({ textOverride: '' }).success).toBe(false)
+  })
+
+  test('coordinates one associative dimension across persistent drawing types', () => {
+    const node = ConstructionDimensionNode.parse({
+      drawingType: 'foundation-plan',
+      drawingOverrides: [
+        { drawingType: 'floor-plan', presentation: 'controlled' },
+        { drawingType: 'roof-plan', presentation: 'reference' },
+      ],
+      controllingDimensionId: 'construction-dimension_foundation',
+    })
+
+    expect(resolveConstructionDimensionDrawingPresentation(node, 'foundation-plan')).toBe('shown')
+    expect(resolveConstructionDimensionDrawingPresentation(node, 'floor-plan')).toBe('controlled')
+    expect(resolveConstructionDimensionDrawingPresentation(node, 'roof-plan')).toBe('reference')
+    expect(resolveConstructionDimensionDrawingPresentation(node, 'site-plan')).toBe('omit')
+  })
+
+  test('stores only drawing presentations that differ from the primary defaults', () => {
+    const node = ConstructionDimensionNode.parse({})
+    const referenced = setConstructionDimensionDrawingPresentation(node, 'roof-plan', 'reference')
+    expect(referenced).toEqual([{ drawingType: 'roof-plan', presentation: 'reference' }])
+    expect(
+      setConstructionDimensionDrawingPresentation(
+        { ...node, drawingOverrides: referenced },
+        'roof-plan',
+        'omit',
+      ),
+    ).toEqual([])
   })
 })

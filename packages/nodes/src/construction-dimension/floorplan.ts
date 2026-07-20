@@ -37,7 +37,14 @@ export function buildConstructionDimensionFloorplan(
   const dangling = resolved.some((anchor) => anchor.dangling)
   const stroke = dangling ? DANGLING_STROKE : baseStroke
   const unit = ctx.viewState?.unit ?? 'metric'
-  const editable = ctx.viewState?.selected === true
+  const editable =
+    ctx.viewState?.selected === true &&
+    !(
+      typeof node.metadata === 'object' &&
+      node.metadata !== null &&
+      !Array.isArray(node.metadata) &&
+      node.metadata.drawingCoordinationLocked === true
+    )
 
   switch (node.mode) {
     case 'linear':

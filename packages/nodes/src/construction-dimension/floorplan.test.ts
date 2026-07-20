@@ -153,6 +153,17 @@ describe('buildConstructionDimensionFloorplan', () => {
     ).toEqual([expect.objectContaining({ affordance: 'move-construction-dimension-baseline' })])
   })
 
+  test('keeps linked or reference geometry read-only in a dependent drawing', () => {
+    const node = ConstructionDimensionNode.parse({
+      metadata: { drawingCoordinationLocked: true },
+    })
+    const geometry = buildConstructionDimensionFloorplan(node, context({}, true))
+
+    expect(
+      geometry && flatten(geometry).filter((entry) => entry.kind === 'endpoint-handle'),
+    ).toHaveLength(0)
+  })
+
   test('renders radius notation with a leader and center mark', () => {
     const node = ConstructionDimensionNode.parse({
       mode: 'radius',

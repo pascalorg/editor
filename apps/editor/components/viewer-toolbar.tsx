@@ -2,6 +2,7 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
+  DRAWING_TYPE_OPTIONS,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -10,6 +11,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  useDrawingView,
   useEditor,
   useFloorplanAnnotationVisibility,
   useSidebarStore,
@@ -178,6 +180,49 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
+    </div>
+  )
+}
+
+function DrawingTypeControl() {
+  const viewMode = useEditor((state) => state.viewMode)
+  const drawingType = useDrawingView((state) => state.drawingType)
+  const setDrawingType = useDrawingView((state) => state.setDrawingType)
+  if (viewMode === '3d') return null
+
+  const active =
+    DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType) ?? DRAWING_TYPE_OPTIONS[0]
+
+  return (
+    <div className={TOOLBAR_CONTAINER}>
+      <DropdownMenu>
+        <ToolbarTooltip label="Select coordinated drawing">
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label={`Drawing type: ${active.label}`}
+              className="flex items-center gap-1.5 px-2.5 font-medium text-foreground/90 text-xs transition-colors hover:bg-white/8"
+              type="button"
+            >
+              <Layers3 className="h-3.5 w-3.5" />
+              <span>{active.label}</span>
+            </button>
+          </DropdownMenuTrigger>
+        </ToolbarTooltip>
+        <DropdownMenuContent
+          align="start"
+          className="w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+          side="bottom"
+          sideOffset={8}
+        >
+          {DRAWING_TYPE_OPTIONS.map((option) => (
+            <DropdownMenuItem key={option.id} onSelect={() => setDrawingType(option.id)}>
+              <Layers3 className="h-4 w-4" />
+              <span>{option.label}</span>
+              {drawingType === option.id ? <Check className="ml-auto h-4 w-4" /> : null}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -571,6 +616,7 @@ export function CommunityViewerToolbarLeft() {
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
+      <DrawingTypeControl />
     </>
   )
 }

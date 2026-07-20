@@ -171,6 +171,11 @@ export function cloneNodesInto(
     }
     if (cloned.type === 'construction-dimension') {
       cloned.anchors = remapMeasurementAnchors(cloned.anchors, idMap)
+      if (cloned.controllingDimensionId) {
+        cloned.controllingDimensionId =
+          (idMap.get(cloned.controllingDimensionId) as typeof cloned.controllingDimensionId) ??
+          cloned.controllingDimensionId
+      }
     }
 
     if (original.id === opts.rootId) {

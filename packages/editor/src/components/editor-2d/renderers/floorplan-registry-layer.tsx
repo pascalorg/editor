@@ -52,6 +52,7 @@ import {
   type FloorplanAnnotationVisibility,
   filterFloorplanAnnotationGeometry,
 } from '../../../lib/floorplan/annotation-visibility'
+import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordination'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -65,6 +66,7 @@ import {
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
+import useDrawingView from '../../../store/use-drawing-view'
 import useEditor from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useInteractionScope, {
@@ -433,6 +435,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // selectors freeze to `undefined` so drag publishes do not re-render the
   // hidden floor-plan tree.
   const floorplanVisible = useEditor((s) => s.viewMode !== '3d')
+  const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
   // Elevator builders read runtime state imperatively, so entries include this
   // rare-changing ref in their cache deps.
@@ -849,14 +852,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     const pushEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
       if (!isNodeKindEnabled(node.type, installedPlugins)) return
-      const def = nodeRegistry.get(node.type)
+      const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
+      if (!drawingNode) return
+      const def = nodeRegistry.get(drawingNode.type)
       if (!def?.floorplan) return
       const dependsOnSiblingInputs = !!(
         def.floorplanDependsOnSiblings ||
         def.floorplanSiblingOverrides ||
         def.floorplanAffectedIds
       )
-      const descriptor: FloorplanEntryDescriptor = { id, node, dependsOnSiblingInputs }
+      const descriptor: FloorplanEntryDescriptor = { id, node: drawingNode, dependsOnSiblingInputs }
       if (ctxOverrides) descriptor.ctxOverrides = ctxOverrides
       out.push(descriptor)
     }
@@ -932,7 +937,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [installedPlugins, levelId, nodes])
+  }, [drawingType, installedPlugins, levelId, nodes])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //

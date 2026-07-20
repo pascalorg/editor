@@ -52,11 +52,17 @@ export {
   ColumnSupportStyle,
 } from './nodes/column'
 export {
+  CONSTRUCTION_DRAWING_TYPES,
   ConstructionDimensionBaseline,
   ConstructionDimensionChainMode,
+  ConstructionDimensionDrawingOverride,
+  ConstructionDimensionDrawingPresentation,
   ConstructionDimensionMode,
   ConstructionDimensionNode,
+  ConstructionDrawingType,
   constructionDimensionRequiredAnchorCount,
+  resolveConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingPresentation,
 } from './nodes/construction-dimension'
 export {
   ConstructionNoteContractScope,

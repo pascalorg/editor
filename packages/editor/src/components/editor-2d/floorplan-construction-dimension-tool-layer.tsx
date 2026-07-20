@@ -25,6 +25,7 @@ import {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,
 } from '../../lib/surface-plan-snap'
+import useDrawingView from '../../store/use-drawing-view'
 import useEditor from '../../store/use-editor'
 import { useFloorplanRender } from './floorplan-render-context'
 import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
@@ -210,6 +211,7 @@ export function FloorplanConstructionDimensionToolLayer() {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const unit = useViewer((state) => state.unit)
   const renderContext = useFloorplanRender()
+  const drawingType = useDrawingView((state) => state.drawingType)
 
   const updateDraft = useCallback((next: Draft) => {
     draftRef.current = next
@@ -262,6 +264,7 @@ export function FloorplanConstructionDimensionToolLayer() {
         },
         chainMode,
         mode: dimensionMode,
+        drawingType,
       })
       useScene.getState().createNode(node, activeLevelId)
       useViewer.getState().setSelection({ selectedIds: [node.id] })
@@ -391,7 +394,16 @@ export function FloorplanConstructionDimensionToolLayer() {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [active, activeLevelId, chainMode, collectsMany, dimensionMode, updateDraft, usesBaseline])
+  }, [
+    active,
+    activeLevelId,
+    chainMode,
+    collectsMany,
+    dimensionMode,
+    drawingType,
+    updateDraft,
+    usesBaseline,
+  ])
 
   const preview = useMemo(
     () =>

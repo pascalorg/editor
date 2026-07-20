@@ -7,7 +7,7 @@ import { ConstructionDimensionNode } from './schema'
 export const constructionDimensionDefinition: NodeDefinition<typeof ConstructionDimensionNode> = {
   kind: 'construction-dimension',
   bake: 'strip',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: ConstructionDimensionNode,
   category: 'analysis',
   snapProfile: 'structural',
@@ -30,6 +30,9 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     prefix: '',
     suffix: '',
     textOverride: null,
+    drawingType: 'floor-plan',
+    drawingOverrides: [],
+    controllingDimensionId: null,
   }),
 
   capabilities: {
@@ -42,7 +45,10 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   dirtyTracking: false,
   parametrics: constructionDimensionParametrics,
   floorplan: buildConstructionDimensionFloorplan,
-  floorplanDependencies: (node) => measurementAnchorReferenceNodeIds(node.anchors),
+  floorplanDependencies: (node) => [
+    ...measurementAnchorReferenceNodeIds(node.anchors),
+    ...(node.controllingDimensionId ? [node.controllingDimensionId] : []),
+  ],
   floorplanAffordances: {
     'move-construction-dimension-baseline': moveConstructionDimensionBaselineAffordance,
   },
@@ -65,6 +71,6 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
 
   mcp: {
     description:
-      'An associative construction dimension with linear, curved, circular, angular, and coordinate modes, semantic witness anchors, and document notation overrides.',
+      'An associative construction dimension with linear, curved, circular, angular, and coordinate modes, semantic witness anchors, document notation overrides, and coordinated plan-view presentation.',
   },
 }

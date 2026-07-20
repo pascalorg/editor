@@ -403,15 +403,24 @@ overrides. All modes render through the live/PDF floor-plan pipeline with unit-a
 
 ### 7.2 Drawing-type coordination
 
-Add persistent views for:
+Status: implemented with a persistent 2D drawing selector, one shared physical scene, and
+per-dimension drawing coordination stored on associative construction-dimension nodes. The live
+floor-plan registry and PDF exporter resolve the same active drawing type. Dimensions are created
+in the active drawing and may be shown, omitted, or presented as references elsewhere. A floor-plan
+dimension can link to a foundation-plan controller and derives its anchors, baseline, and mode from
+that controller; linked/reference geometry remains read-only in the dependent drawing and reports a
+visible unlinked-control state if its controller is unavailable.
 
-- Floor plans.
-- Foundation plans.
-- Reflected ceiling plans.
-- Roof plans.
-- Site plans.
+Persistent views:
 
-Allow a floor-plan dimension to be omitted, shown as reference, or linked to a controlling foundation-plan dimension without duplicating physical model data.
+- [x] Floor plans.
+- [x] Foundation plans.
+- [x] Reflected ceiling plans.
+- [x] Roof plans.
+- [x] Site plans.
+
+- [x] Allow a floor-plan dimension to be omitted, shown as reference, or linked to a controlling
+  foundation-plan dimension without duplicating physical model data.
 
 ## Phase 8: advisory and completeness analysis
 
@@ -461,7 +470,7 @@ Detect and report:
 9. Add architectural spaces and reliable room-clear dimensions.
 10. Add stair, access, firewall, equipment, and contract-scope annotations.
 11. Add curved/circular dimensions and construction-system-specific rules.
-12. Add foundation coordination and configurable completeness/advisory checks.
+12. Add configurable completeness and advisory checks.
 
 ## Principal implementation locations
 

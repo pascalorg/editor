@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type ConstructionDrawingType,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanSchedule,
@@ -26,11 +27,13 @@ import {
   isFloorplanNodeVisible,
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
+import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import {
   type FloorplanAnnotationVisibility,
   filterFloorplanAnnotationGeometry,
 } from './annotation-visibility'
+import { resolveNodeForDrawingType } from './drawing-coordination'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
@@ -93,6 +96,9 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const annotationVisibility = useFloorplanAnnotationVisibility.getState().visibility
+  const drawingType = useDrawingView.getState().drawingType
+  const drawingLabel =
+    DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
   const levels = resolveExportLevels(nodes)
   if (levels.length === 0) {
     console.warn('[floorplan-export] no level to export')
@@ -118,6 +124,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         scope,
         unit,
         annotationVisibility,
+        drawingType,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
@@ -138,7 +145,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             pageCount++
 
             doc.setFontSize(14)
-            doc.text(level.label, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
+            doc.text(`${level.label} - ${drawingLabel}`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
 
             // Fit the plan into the page below the title band, preserving aspect.
             const boxX = PAGE_MARGIN_PT
@@ -182,7 +189,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     }
 
     const date = new Date().toISOString().split('T')[0]
-    doc.save(`floorplan_${scope}_${date}.pdf`)
+    doc.save(`${drawingType}_${scope}_${date}.pdf`)
   } finally {
     host.remove()
   }
@@ -506,6 +513,7 @@ function collectFloorplanGeometry(
   scope: FloorplanExportScope,
   unit: 'metric' | 'imperial',
   annotationVisibility: FloorplanAnnotationVisibility,
+  drawingType: ConstructionDrawingType,
 ): { id: AnyNodeId; base: FloorplanGeometry }[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -525,7 +533,8 @@ function collectFloorplanGeometry(
       isFloorplanNodeVisible(node) &&
       (scope === 'full' || def.category === 'structure')
     ) {
-      entries.push({ id, node })
+      const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
+      if (drawingNode) entries.push({ id, node: drawingNode })
     }
     const childIds = (node as { children?: AnyNodeId[] }).children
     if (Array.isArray(childIds)) for (const cid of childIds) visit(cid)
@@ -541,7 +550,10 @@ function collectFloorplanGeometry(
         isFloorplanNodeVisible(linked.node) &&
         (scope === 'full' || definition?.category === 'structure')
       ) {
-        entries.push({ id: linked.id, node: linked.node, parentOverride: activeLevelNode })
+        const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
+        if (drawingNode) {
+          entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })
+        }
       }
     }
   }
