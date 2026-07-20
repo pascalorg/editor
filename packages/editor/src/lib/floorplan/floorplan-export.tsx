@@ -5,12 +5,14 @@ import {
   type AnyNodeId,
   type FloorplanGeometry,
   type FloorplanPalette,
+  type FloorplanSchedule,
   type LiveNodeOverrides,
   nodeRegistry,
   resolveBuildingForLevel,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import type { jsPDF as JsPdfDocument } from 'jspdf'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
@@ -101,52 +103,59 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   try {
     for (const level of levels) {
       const geometries = collectFloorplanGeometry(nodes, level.id, scope, unit)
-      if (geometries.length === 0) continue
+      const schedules = collectFloorplanSchedules(nodes, level.id, unit)
+      if (geometries.length === 0 && schedules.length === 0) continue
 
-      // Rotate the exported plan to the same north-up orientation the on-screen
-      // 2D view uses when aligned to north (user rotation offset = 0), so a PDF
-      // points north instead of drawing raw plan-local axes.
-      const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
-      const building = buildingId ? nodes[buildingId] : undefined
-      const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
-      const rotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - (buildingRotationY * 180) / Math.PI
+      if (geometries.length > 0) {
+        // Rotate the exported plan to the same north-up orientation the on-screen
+        // 2D view uses when aligned to north (user rotation offset = 0), so a PDF
+        // points north instead of drawing raw plan-local axes.
+        const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
+        const building = buildingId ? nodes[buildingId] : undefined
+        const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
+        const rotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - (buildingRotationY * 180) / Math.PI
 
-      const mounted = await mountFloorplanSvg(host, geometries, rotationDeg)
-      if (!mounted) continue
+        const mounted = await mountFloorplanSvg(host, geometries, rotationDeg)
+        if (mounted) {
+          try {
+            if (pageCount > 0) doc.addPage()
+            pageCount++
 
-      try {
-        if (pageCount > 0) doc.addPage()
-        pageCount++
+            doc.setFontSize(14)
+            doc.text(level.label, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
 
-        doc.setFontSize(14)
-        doc.text(level.label, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
+            // Fit the plan into the page below the title band, preserving aspect.
+            const boxX = PAGE_MARGIN_PT
+            const boxY = PAGE_MARGIN_PT + TITLE_BAND_PT
+            const boxW = pageW - PAGE_MARGIN_PT * 2
+            const boxH = pageH - PAGE_MARGIN_PT * 2 - TITLE_BAND_PT
+            const aspect = mounted.width / mounted.height
+            let w = boxW
+            let h = w / aspect
+            if (h > boxH) {
+              h = boxH
+              w = h * aspect
+            }
+            const x = boxX + (boxW - w) / 2
+            const y = boxY + (boxH - h) / 2
 
-        // Fit the plan into the page below the title band, preserving aspect.
-        const boxX = PAGE_MARGIN_PT
-        const boxY = PAGE_MARGIN_PT + TITLE_BAND_PT
-        const boxW = pageW - PAGE_MARGIN_PT * 2
-        const boxH = pageH - PAGE_MARGIN_PT * 2 - TITLE_BAND_PT
-        const aspect = mounted.width / mounted.height
-        let w = boxW
-        let h = w / aspect
-        if (h > boxH) {
-          h = boxH
-          w = h * aspect
+            // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
+            // many builders use to keep door/window/stair line weights constant
+            // on screen). Left as-is, those pixel-sized widths render as
+            // metre-wide strokes — huge grey blobs. Convert them to the real-unit
+            // width that lands at the intended point weight once svg2pdf scales
+            // the plan onto the page.
+            inlineNonScalingStrokes(mounted.svg, w / mounted.width)
+
+            await svg2pdf(mounted.svg, doc, { x, y, width: w, height: h })
+          } finally {
+            mounted.cleanup()
+          }
         }
-        const x = boxX + (boxW - w) / 2
-        const y = boxY + (boxH - h) / 2
+      }
 
-        // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
-        // many builders use to keep door/window/stair line weights constant
-        // on screen). Left as-is, those pixel-sized widths render as
-        // metre-wide strokes — huge grey blobs. Convert them to the real-unit
-        // width that lands at the intended point weight once svg2pdf scales
-        // the plan onto the page.
-        inlineNonScalingStrokes(mounted.svg, w / mounted.width)
-
-        await svg2pdf(mounted.svg, doc, { x, y, width: w, height: h })
-      } finally {
-        mounted.cleanup()
+      if (schedules.length > 0) {
+        pageCount = drawFloorplanSchedulePages(doc, level.label, schedules, pageCount)
       }
     }
 
@@ -160,6 +169,158 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   } finally {
     host.remove()
   }
+}
+
+export function collectFloorplanSchedules(
+  nodes: Record<string, AnyNode>,
+  levelId: AnyNodeId,
+  unit: 'metric' | 'imperial',
+): FloorplanSchedule[] {
+  const siblingsByType = new Map<string, AnyNode[]>()
+  const visit = (id: AnyNodeId) => {
+    const node = nodes[id]
+    if (!node) return
+    if (node.visible !== false) {
+      const siblings = siblingsByType.get(node.type)
+      if (siblings) siblings.push(node)
+      else siblingsByType.set(node.type, [node])
+    }
+    const children = (node as { children?: AnyNodeId[] }).children
+    if (Array.isArray(children)) for (const childId of children) visit(childId)
+  }
+  visit(levelId)
+
+  const schedules: FloorplanSchedule[] = []
+  for (const [kind, definition] of nodeRegistry.entries()) {
+    if (!definition.floorplanSchedule) continue
+    const siblings = siblingsByType.get(kind) ?? []
+    const schedule = definition.floorplanSchedule({ siblings, nodes, levelId, unit })
+    if (schedule && schedule.rows.length > 0) schedules.push(schedule)
+  }
+  return schedules
+}
+
+function drawFloorplanSchedulePages(
+  doc: JsPdfDocument,
+  levelLabel: string,
+  schedules: readonly FloorplanSchedule[],
+  initialPageCount: number,
+): number {
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const tableWidth = pageW - PAGE_MARGIN_PT * 2
+  const bottom = pageH - PAGE_MARGIN_PT
+  const headerHeight = 22
+  const rowHeight = 20
+  let pageCount = initialPageCount
+  let y = 0
+
+  const startPage = () => {
+    if (pageCount > 0) doc.addPage()
+    pageCount++
+    doc.setTextColor('#111827')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setLineWidth(0.5)
+    doc.text(`${levelLabel} - Opening Schedules`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
+    y = PAGE_MARGIN_PT + TITLE_BAND_PT + 8
+  }
+
+  const drawHeader = (schedule: FloorplanSchedule, continued: boolean) => {
+    doc.setTextColor('#111827')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.text(`${schedule.title}${continued ? ' (CONTINUED)' : ''}`, PAGE_MARGIN_PT, y + 11)
+    y += 18
+    doc.setFillColor('#334155')
+    doc.rect(PAGE_MARGIN_PT, y, tableWidth, headerHeight, 'F')
+    doc.setTextColor('#ffffff')
+    doc.setFontSize(8)
+    const widths = scheduleColumnWidths(schedule, tableWidth)
+    doc.setDrawColor('#64748b')
+    drawScheduleColumnDividers(doc, widths, y, headerHeight)
+    let x = PAGE_MARGIN_PT
+    schedule.columns.forEach((column, index) => {
+      const width = widths[index] ?? 0
+      doc.text(column.label, x + 4, y + 14, { maxWidth: Math.max(0, width - 8) })
+      x += width
+    })
+    y += headerHeight
+  }
+
+  startPage()
+  for (const schedule of schedules) {
+    const issueHeight = (schedule.issues?.length ?? 0) * 13
+    const minimumTableHeight = 18 + issueHeight + headerHeight + rowHeight
+    if (y + minimumTableHeight > bottom) startPage()
+
+    if (schedule.issues?.length) {
+      doc.setTextColor('#b45309')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      for (const issue of schedule.issues) {
+        doc.text(`WARNING: ${issue}`, PAGE_MARGIN_PT, y + 9)
+        y += 13
+      }
+    }
+
+    drawHeader(schedule, false)
+    const widths = scheduleColumnWidths(schedule, tableWidth)
+    schedule.rows.forEach((row, rowIndex) => {
+      if (y + rowHeight > bottom) {
+        startPage()
+        drawHeader(schedule, true)
+      }
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor('#f1f5f9')
+        doc.rect(PAGE_MARGIN_PT, y, tableWidth, rowHeight, 'F')
+      }
+      doc.setDrawColor('#cbd5e1')
+      doc.rect(PAGE_MARGIN_PT, y, tableWidth, rowHeight)
+      drawScheduleColumnDividers(doc, widths, y, rowHeight)
+      doc.setTextColor('#111827')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      let x = PAGE_MARGIN_PT
+      schedule.columns.forEach((column, columnIndex) => {
+        const width = widths[columnIndex] ?? 0
+        const text = truncatePdfText(doc, row.cells[column.key] ?? '', Math.max(0, width - 8))
+        doc.text(text, x + 4, y + 13)
+        x += width
+      })
+      y += rowHeight
+    })
+    y += 20
+  }
+
+  return pageCount
+}
+
+function scheduleColumnWidths(schedule: FloorplanSchedule, tableWidth: number): number[] {
+  const totalWeight = schedule.columns.reduce((sum, column) => sum + (column.weight ?? 1), 0)
+  return schedule.columns.map((column) => (tableWidth * (column.weight ?? 1)) / totalWeight)
+}
+
+function drawScheduleColumnDividers(
+  doc: JsPdfDocument,
+  widths: readonly number[],
+  y: number,
+  height: number,
+) {
+  let x = PAGE_MARGIN_PT
+  for (const width of widths.slice(0, -1)) {
+    x += width
+    doc.line(x, y, x, y + height)
+  }
+}
+
+function truncatePdfText(doc: JsPdfDocument, value: string, maxWidth: number): string {
+  if (doc.getTextWidth(value) <= maxWidth) return value
+  let truncated = value
+  while (truncated.length > 0 && doc.getTextWidth(`${truncated}...`) > maxWidth) {
+    truncated = truncated.slice(0, -1)
+  }
+  return `${truncated}...`
 }
 
 type MountedFloorplan = {

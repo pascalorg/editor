@@ -6,6 +6,10 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import {
+  buildDoorFloorplanSchedule,
+  computeDoorFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
@@ -169,7 +173,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DoorNode,
   category: 'structure',
   surfaceRole: 'joinery',
@@ -226,6 +230,8 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  computeFloorplanLevelData: computeDoorFloorplanLevelData,
+  floorplanSchedule: buildDoorFloorplanSchedule,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

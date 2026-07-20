@@ -86,6 +86,7 @@ export type {
   FloorplanMoveTargetSession,
   FloorplanPalette,
   FloorplanPoint,
+  FloorplanSchedule,
   FloorplanStyle,
   GeometryContext,
   HostableConfig,

@@ -848,6 +848,23 @@ export type ExportAnimationContext<N = AnyNode> = {
   object: Object3D
 }
 
+export type FloorplanSchedule = {
+  id: string
+  title: string
+  columns: ReadonlyArray<{
+    key: string
+    label: string
+    /** Relative share of the available table width. Defaults to 1. */
+    weight?: number
+  }>
+  rows: ReadonlyArray<{
+    id: string
+    cells: Readonly<Record<string, string>>
+  }>
+  /** Non-blocking document-quality warnings, such as duplicate explicit marks. */
+  issues?: readonly string[]
+}
+
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
@@ -1017,6 +1034,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
+  /**
+   * Optional construction schedule contribution for one level. The export
+   * layer renders the generic table; the node kind owns its terminology,
+   * mark allocation, and row values.
+   */
+  floorplanSchedule?: (args: {
+    siblings: ReadonlyArray<z.infer<S>>
+    nodes: Readonly<Record<string, AnyNode>>
+    levelId: AnyNodeId
+    unit: 'metric' | 'imperial'
+  }) => FloorplanSchedule | null
   /** Extra node IDs whose committed changes invalidate this node's floor-plan cache. */
   floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
   /** Stable semantic geometry that associative measurement anchors may reference. */

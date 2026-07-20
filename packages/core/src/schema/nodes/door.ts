@@ -63,6 +63,14 @@ export const DoorNode = BaseNode.extend({
   width: z.number().default(0.9),
   height: z.number().default(2.1),
 
+  // Construction-document identity. `mark` overrides the deterministic
+  // level fallback (101, 102, ...). Rough-opening dimensions stay optional
+  // because they are manufacturer/framing inputs, not safe derivations from
+  // the nominal modeled size.
+  mark: z.string().trim().max(16).optional(),
+  roughOpeningWidth: z.number().positive().optional(),
+  roughOpeningHeight: z.number().positive().optional(),
+
   // Door family
   doorCategory: DoorCategory.default('interior'),
   doorType: DoorType.default('hinged'),

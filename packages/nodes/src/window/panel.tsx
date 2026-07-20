@@ -22,6 +22,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef } from 'react'
+import { OpeningDocumentationFields } from '../shared/opening-documentation-fields'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -220,6 +221,8 @@ export default function WindowPanel() {
       parentId: node.parentId,
       width: node.width,
       height: node.height,
+      roughOpeningWidth: node.roughOpeningWidth,
+      roughOpeningHeight: node.roughOpeningHeight,
       windowType: node.windowType,
       operationState: node.operationState,
       awningDirection: node.awningDirection,
@@ -410,6 +413,15 @@ export default function WindowPanel() {
             { value: 'opening', label: 'Opening' },
           ]}
           value={node.openingKind ?? 'window'}
+        />
+      </PanelSection>
+
+      <PanelSection title="Documentation">
+        <OpeningDocumentationFields
+          mark={node.mark}
+          onChange={handleUpdate}
+          roughOpeningHeight={node.roughOpeningHeight}
+          roughOpeningWidth={node.roughOpeningWidth}
         />
       </PanelSection>
 

@@ -6,6 +6,10 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import {
+  buildWindowFloorplanSchedule,
+  computeWindowFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
@@ -166,7 +170,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   kind: 'window',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: WindowNode,
   category: 'structure',
 
@@ -215,6 +219,8 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // Stage C: floor-plan polygon. ctx.parent gives the wall for direction
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
+  computeFloorplanLevelData: computeWindowFloorplanLevelData,
+  floorplanSchedule: buildWindowFloorplanSchedule,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

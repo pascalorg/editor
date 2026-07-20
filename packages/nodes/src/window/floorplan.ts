@@ -5,8 +5,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
-import { buildOpeningSizeAnnotation } from '../shared/opening-size-annotation'
 
 /**
  * Stage C floor-plan builder for window. Mirrors the legacy
@@ -170,11 +173,13 @@ export function buildWindowFloorplan(
     }
   }
 
-  const sizeAnnotation = buildOpeningSizeAnnotation(node, wall, {
-    unit: view?.unit ?? 'metric',
-    fill: showSelectedChrome ? '#f97316' : '#334155',
-  })
-  if (sizeAnnotation) children.push(sizeAnnotation)
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    { stroke: showSelectedChrome ? '#f97316' : '#334155' },
+  )
+  if (markAnnotation) children.push(markAnnotation)
 
   return { kind: 'group', children }
 }

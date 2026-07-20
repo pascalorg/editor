@@ -54,7 +54,7 @@ export function computeWallFloorplanLevelData({
   const walls = siblings.map(exaggerateWallThickness)
   return {
     miters: calculateLevelMiters(walls),
-    constructionDimensionsByWallId: buildLevelWallConstructionDimensionPlan(walls, nodes),
+    constructionDimensionsByWallId: buildLevelWallConstructionDimensionPlan(siblings, nodes),
   }
 }
 
@@ -140,15 +140,11 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       children.push(
         ...renderPlannedConstructionDimensions(planned, view?.unit ?? 'metric', dimensionStroke),
       )
-    } else if (
-      !levelData ||
-      (isSelected && node.frontSide !== 'exterior' && node.backSide !== 'exterior')
-    ) {
+    } else if (!levelData) {
       children.push(
         ...buildWallConstructionDimensions(self, ctx, {
           unit: view?.unit ?? 'metric',
           stroke: dimensionStroke,
-          force: isSelected,
         }),
       )
     }

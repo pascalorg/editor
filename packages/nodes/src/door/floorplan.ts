@@ -5,8 +5,11 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
-import { buildOpeningSizeAnnotation } from '../shared/opening-size-annotation'
 
 /**
  * Stage C floor-plan builder for door. 1:1 visual port of the legacy
@@ -723,12 +726,16 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     }
   }
 
-  const sizeAnnotation = buildOpeningSizeAnnotation(node, wall, {
-    unit: view?.unit ?? 'metric',
-    preferredSide: swingSign === 1 ? -1 : 1,
-    fill: showSelectedChrome ? '#f97316' : '#334155',
-  })
-  if (sizeAnnotation) children.push(sizeAnnotation)
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    {
+      preferredSide: swingSign === 1 ? -1 : 1,
+      stroke: showSelectedChrome ? '#f97316' : '#334155',
+    },
+  )
+  if (markAnnotation) children.push(markAnnotation)
 
   return { kind: 'group', children }
 }

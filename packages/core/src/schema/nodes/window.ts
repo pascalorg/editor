@@ -45,6 +45,12 @@ export const WindowNode = BaseNode.extend({
   width: z.number().default(1.5),
   height: z.number().default(1.5),
 
+  // Construction-document identity and optional manufacturer rough opening.
+  // Legacy scenes omit these fields and continue to parse unchanged.
+  mark: z.string().trim().max(16).optional(),
+  roughOpeningWidth: z.number().positive().optional(),
+  roughOpeningHeight: z.number().positive().optional(),
+
   // Opening mode - when set to "opening", the window is only a shaped cutout
   openingKind: z.enum(['window', 'opening']).default('window'),
 

@@ -148,12 +148,7 @@ export function buildLevelWallConstructionDimensionPlan(
       for (const candidate of walls) {
         if (memberIds.has(candidate.id) || isCurvedWall(candidate)) continue
         for (const { wall } of members) {
-          const intersection = segmentIntersection(
-            wall.start,
-            wall.end,
-            candidate.start,
-            candidate.end,
-          )
+          const intersection = facadeInsideFaceIntersection(wall, candidate, normal)
           if (!intersection) continue
           const projection = dot(intersection, tangent)
           if (
@@ -227,11 +222,9 @@ export function buildWallConstructionDimensions(
   {
     unit,
     stroke,
-    force = false,
   }: {
     unit: ConstructionLinearUnit
     stroke?: string
-    force?: boolean
   },
 ): FloorplanGeometry[] {
   if (isCurvedWall(wall)) return []
@@ -243,7 +236,7 @@ export function buildWallConstructionDimensions(
 
   const sideIsClassified = wall.frontSide !== 'unknown' || wall.backSide !== 'unknown'
   const isExterior = wall.frontSide === 'exterior' || wall.backSide === 'exterior'
-  if (!force && sideIsClassified && !isExterior) return []
+  if (sideIsClassified && !isExterior) return []
 
   const dirX = dx / wallLength
   const dirZ = dz / wallLength
@@ -373,6 +366,23 @@ function splitFacadeRuns(members: FacadeMember[]): FacadeMember[][] {
   return runs
 }
 
+function facadeInsideFaceIntersection(
+  facade: WallNode,
+  candidate: WallNode,
+  outwardNormal: FloorplanPoint,
+): FloorplanPoint | null {
+  const halfThickness = (facade.thickness ?? 0.1) / 2
+  const insideStart: FloorplanPoint = [
+    facade.start[0] - outwardNormal[0] * halfThickness,
+    facade.start[1] - outwardNormal[1] * halfThickness,
+  ]
+  const insideEnd: FloorplanPoint = [
+    facade.end[0] - outwardNormal[0] * halfThickness,
+    facade.end[1] - outwardNormal[1] * halfThickness,
+  ]
+  return segmentIntersection(insideStart, insideEnd, candidate.start, candidate.end)
+}
+
 function appendTier(
   out: PlannedConstructionDimension[],
   references: number[],
@@ -387,7 +397,29 @@ function appendTier(
     (value) => value > extentStart + MIN_SEGMENT_LENGTH && value < extentEnd - MIN_SEGMENT_LENGTH,
   )
   if (interiorReferences.length === 0) return
-  const breakpoints = uniqueSorted([extentStart, ...interiorReferences, extentEnd])
+  appendDimensionChain(
+    out,
+    interiorReferences,
+    extentStart,
+    extentEnd,
+    pointAt,
+    offsetNormal,
+    tier,
+    offsetDistance,
+  )
+}
+
+function appendDimensionChain(
+  out: PlannedConstructionDimension[],
+  references: number[],
+  extentStart: number,
+  extentEnd: number,
+  pointAt: (projection: number) => FloorplanPoint,
+  offsetNormal: FloorplanPoint,
+  tier: Exclude<ConstructionDimensionTier, 'overall'>,
+  offsetDistance: number,
+): void {
+  const breakpoints = uniqueSorted([extentStart, ...references, extentEnd])
   for (let index = 0; index < breakpoints.length - 1; index++) {
     const start = breakpoints[index]
     const end = breakpoints[index + 1]

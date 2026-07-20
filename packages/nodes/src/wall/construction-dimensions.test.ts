@@ -108,12 +108,9 @@ describe('buildWallConstructionDimensions', () => {
     })
   })
 
-  test('suppresses classified interior walls until explicitly requested', () => {
+  test('never dimensions a classified interior wall', () => {
     const interior = wall({ frontSide: 'interior', backSide: 'interior' })
     expect(buildWallConstructionDimensions(interior, context(), { unit: 'metric' })).toEqual([])
-    expect(
-      buildWallConstructionDimensions(interior, context(), { unit: 'metric', force: true }),
-    ).toHaveLength(1)
   })
 
   test('does not invent straight strings for curved walls', () => {
@@ -149,7 +146,8 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
 
     const plan = buildLevelWallConstructionDimensionPlan([exterior, partition], nodes)
     const planned = plan.get(exterior.id)
-    expect(planned?.map((entry) => entry.tier)).toEqual([
+    const exteriorPlanned = planned ?? []
+    expect(exteriorPlanned.map((entry) => entry.tier)).toEqual([
       'opening-widths',
       'opening-widths',
       'openings',
@@ -159,15 +157,15 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'partitions',
       'overall',
     ])
-    expect(planned?.map((entry) => entry.offsetDistance)).toEqual([
+    expect(exteriorPlanned.map((entry) => entry.offsetDistance)).toEqual([
       0.18, 0.18, 0.45, 0.45, 0.45, 0.93, 0.93, 1.41,
     ])
     expect(
-      renderPlannedConstructionDimensions(planned ?? [], 'metric').map((entry) =>
+      renderPlannedConstructionDimensions(exteriorPlanned, 'metric').map((entry) =>
         entry.kind === 'dimension' ? entry.text : null,
       ),
     ).toEqual(['1m', '2m', '2m', '4m', '4m', '4m', '6m', '10m'])
-    expect(planned?.at(-1)).toMatchObject({
+    expect(exteriorPlanned.at(-1)).toMatchObject({
       start: [0, 0.1],
       end: [10, 0.1],
       offsetNormal: [0, 1],
@@ -185,32 +183,72 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     })
 
     const plan = buildLevelWallConstructionDimensionPlan([second, first], { [opening.id]: opening })
+    const exteriorPlanned = plan.get(first.id) ?? []
 
     expect([...plan.keys()]).toEqual([first.id])
     expect(
-      renderPlannedConstructionDimensions(plan.get(first.id) ?? [], 'metric').map((entry) =>
+      renderPlannedConstructionDimensions(exteriorPlanned, 'metric').map((entry) =>
         entry.kind === 'dimension' ? entry.text : null,
       ),
     ).toEqual(['1m', '7m', '3m', '10m'])
   })
 
+  test('omits interior measurements from the level plan', () => {
+    const exterior = wall()
+    const partition = wall({
+      id: 'wall_partition',
+      start: [4, 0],
+      end: [4, -4],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
+
+    const plan = buildLevelWallConstructionDimensionPlan([exterior, partition], {})
+    const tiers = [...plan.values()].flat().map((entry) => entry.tier)
+
+    expect(tiers).toEqual(['partitions', 'partitions', 'overall'])
+    expect(tiers).not.toContain('interior')
+  })
+
   test('keeps disconnected collinear facade runs independent', () => {
     const first = wall({ id: 'wall_a', end: [4, 0] })
     const second = wall({ id: 'wall_b', start: [8, 0], end: [12, 0] })
+    const firstPartition = wall({
+      id: 'wall_partition_a',
+      start: [2, 0],
+      end: [2, -2],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
+    const secondPartition = wall({
+      id: 'wall_partition_b',
+      start: [10, 0],
+      end: [10, -2],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
 
-    const plan = buildLevelWallConstructionDimensionPlan([first, second], {})
+    const plan = buildLevelWallConstructionDimensionPlan(
+      [first, second, firstPartition, secondPartition],
+      {},
+    )
 
     expect([...plan.keys()]).toEqual([first.id, second.id])
-    expect(plan.get(first.id)?.at(-1)).toMatchObject({ start: [0, 0.1], end: [4, 0.1] })
-    expect(plan.get(second.id)?.at(-1)).toMatchObject({ start: [8, 0.1], end: [12, 0.1] })
+    expect(plan.get(first.id)?.find((entry) => entry.tier === 'overall')).toMatchObject({
+      start: [0, 0.1],
+      end: [4, 0.1],
+    })
+    expect(plan.get(second.id)?.find((entry) => entry.tier === 'overall')).toMatchObject({
+      start: [8, 0.1],
+      end: [12, 0.1],
+    })
   })
 
   test('places a back-side exterior facade beyond the back face', () => {
     const exterior = wall({ frontSide: 'interior', backSide: 'exterior' })
     const planned = buildLevelWallConstructionDimensionPlan([exterior], {}).get(exterior.id)
 
-    expect(planned).toHaveLength(1)
-    expect(planned?.[0]).toMatchObject({
+    expect(planned?.find((entry) => entry.tier === 'overall')).toMatchObject({
       start: [10, -0.1],
       end: [0, -0.1],
       offsetNormal: [0, -1],
