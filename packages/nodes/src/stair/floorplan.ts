@@ -124,6 +124,7 @@ export function buildStairFloorplan(
           strokeDasharray: isOverhead ? '0.08 0.08' : undefined,
           vectorEffect: isOverhead ? 'non-scaling-stroke' : undefined,
           opacity: showSelectedChrome ? 0.88 : 0.6,
+          annotationRole: isOverhead ? 'overhead-geometry' : undefined,
         })
       }
 
@@ -295,6 +296,7 @@ export function buildStairFloorplan(
         strokeWidth: stepWidth,
         strokeDasharray: index >= dashedFromIndex && !isLast ? '0.1 0.08' : undefined,
         vectorEffect: 'non-scaling-stroke',
+        annotationRole: index >= dashedFromIndex && !isLast ? 'overhead-geometry' : undefined,
       })
     }
 

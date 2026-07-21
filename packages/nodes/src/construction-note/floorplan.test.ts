@@ -244,6 +244,7 @@ describe('buildConstructionNoteFloorplan', () => {
       kind: 'polygon',
       fill: 'none',
       annotationObstacle: 'outline',
+      annotationRole: 'overhead-geometry',
     })
     if (outline?.kind === 'polygon') {
       expect(outline.points[0]?.[0]).toBeCloseTo(3)

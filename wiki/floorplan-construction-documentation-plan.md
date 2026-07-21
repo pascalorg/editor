@@ -20,7 +20,7 @@ assessment.
   one shared dimension-string presentation primitive.
 - [x] Add project/drawing dimension standards for datum policy, terminators, text position,
   imperial precision, metric notation, tier spacing, extension lines, and reference style.
-- [ ] Add independent visibility controls for hidden/overhead geometry and reference dimensions.
+- [x] Add independent visibility controls for hidden/overhead geometry and reference dimensions.
 - [ ] Support segment suppression and other view-specific dimension overrides without changing the
   physical model.
 
@@ -114,10 +114,10 @@ Status: implemented without new sidebar UI. Full export honors the existing meas
 
 ### 1.3 Add construction-annotation visibility controls
 
-Status: initial editor controls are implemented for automatic dimensions, manual construction
+Status: implemented. Editor controls are implemented for automatic dimensions, manual construction
 dimensions, generic measurements, door/window marks, construction notes, structural grids, column
-centers, and architectural room labels. The persisted settings apply to both the live 2D plan and
-PDF export. Categories that do not yet have an implementation remain deferred.
+centers, architectural room labels, stair annotations, hidden/overhead geometry, and reference
+dimensions. The persisted settings apply to both the live 2D plan and PDF export.
 
 Introduce per-view controls for:
 
@@ -131,8 +131,8 @@ Introduce per-view controls for:
   numeric/alphabetic identifiers, endpoint bubbles, and derived column-center marks. Columns now
   snap to nearby axes/intersections during placement and 2D/3D movement, display associative grid
   references such as `B-2`, and structural-grid drafting preserves right-drag plan rotation.
-- Hidden or overhead geometry.
-- Reference dimensions.
+- [x] Hidden or overhead geometry.
+- [x] Reference dimensions.
 
 Do not overload the existing `showMeasurements` preference with every documentation category.
 

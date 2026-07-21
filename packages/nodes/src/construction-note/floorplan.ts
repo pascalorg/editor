@@ -275,6 +275,7 @@ function buildOverheadOutline(
       vectorEffect: 'non-scaling-stroke',
       pointerEvents: 'none',
       annotationObstacle: 'outline',
+      annotationRole: 'overhead-geometry',
     },
   ]
 }

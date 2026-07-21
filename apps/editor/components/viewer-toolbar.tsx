@@ -148,6 +148,8 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
   { id: 'constructionNotes', name: 'Construction notes', icon: StickyNote },
   { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
+  { id: 'hiddenOverheadGeometry', name: 'Hidden/overhead geometry', icon: EyeOff },
+  { id: 'referenceDimensions', name: 'Reference dimensions', icon: Ruler },
   { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
   { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
 ] as const

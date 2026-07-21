@@ -208,6 +208,17 @@ describe('buildConstructionDimensionFloorplan', () => {
     expect(dimensionSegments(geometry)[0]?.text).toBe('2000 REF')
   })
 
+  test('marks reference dimensions for independent visibility filtering', () => {
+    const node = ConstructionDimensionNode.parse({
+      reference: true,
+    })
+
+    expect(buildConstructionDimensionFloorplan(node, context())).toMatchObject({
+      kind: 'group',
+      annotationRole: 'reference-dimension',
+    })
+  })
+
   test('shows witness and baseline handles only while selected', () => {
     const node = ConstructionDimensionNode.parse({})
     const idle = buildConstructionDimensionFloorplan(node, context())

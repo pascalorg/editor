@@ -50,7 +50,10 @@ describe('buildStairFloorplan documentation', () => {
     ).toBe(true)
     expect(
       geometry.children.some(
-        (child) => child.kind === 'polygon' && child.strokeDasharray === '0.08 0.08',
+        (child) =>
+          child.kind === 'polygon' &&
+          child.strokeDasharray === '0.08 0.08' &&
+          child.annotationRole === 'overhead-geometry',
       ),
     ).toBe(true)
   })

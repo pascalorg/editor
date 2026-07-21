@@ -59,7 +59,7 @@ export function buildConstructionDimensionFloorplan(
     case 'diameter':
       return buildDiameter(node, points, stroke, dangling, unit, editable)
     case 'center-mark':
-      return buildCenterMarkOnly(points, stroke, editable)
+      return buildCenterMarkOnly(node, points, stroke, editable)
     case 'arc-length':
       return buildArcLength(node, points, stroke, dangling, unit, editable)
     case 'angular':
@@ -104,7 +104,7 @@ function buildLinearOrChord(
   )
   if (editable)
     children.push(...witnessHandles(layout.witnessPoints), baselineHandle(layout.midpoint))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
 }
 
 function buildRadius(
@@ -133,7 +133,7 @@ function buildRadius(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
 }
 
 function buildDiameter(
@@ -168,10 +168,11 @@ function buildDiameter(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
 }
 
 function buildCenterMarkOnly(
+  node: ConstructionDimensionNode,
   points: MeasurementPoint[],
   stroke: string,
   editable: boolean,
@@ -180,10 +181,7 @@ function buildCenterMarkOnly(
   if (!layout) return null
   const children: FloorplanGeometry[] = centerMark(layout.center, layout.radius, stroke, true)
   if (editable) children.push(...anchorHandles(points))
-  return {
-    kind: 'group',
-    children,
-  }
+  return dimensionGroup(node, children)
 }
 
 function buildArcLength(
@@ -228,7 +226,7 @@ function buildArcLength(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
 }
 
 function buildAngular(
@@ -261,7 +259,7 @@ function buildAngular(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, arcRadius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(node.baseline.origin))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
 }
 
 function buildCoordinate(
@@ -292,7 +290,18 @@ function buildCoordinate(
     )
   })
   if (editable) children.push(...anchorHandles(points))
-  return { kind: 'group', children }
+  return dimensionGroup(node, children)
+}
+
+function dimensionGroup(
+  node: ConstructionDimensionNode,
+  children: FloorplanGeometry[],
+): FloorplanGeometry {
+  return {
+    kind: 'group',
+    children,
+    annotationRole: node.reference ? 'reference-dimension' : undefined,
+  }
 }
 
 function lengthFormatOptions(node: ConstructionDimensionNode): ConstructionLengthFormatOptions {

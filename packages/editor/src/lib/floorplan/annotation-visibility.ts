@@ -7,6 +7,8 @@ export type FloorplanAnnotationCategory =
   | 'openingMarks'
   | 'constructionNotes'
   | 'structuralGrids'
+  | 'hiddenOverheadGeometry'
+  | 'referenceDimensions'
   | 'roomLabels'
   | 'stairAnnotations'
 
@@ -19,6 +21,8 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   openingMarks: true,
   constructionNotes: true,
   structuralGrids: true,
+  hiddenOverheadGeometry: true,
+  referenceDimensions: true,
   roomLabels: true,
   stairAnnotations: true,
 }
@@ -53,6 +57,14 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.structuralGrids === 'boolean'
         ? persisted.structuralGrids
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.structuralGrids,
+    hiddenOverheadGeometry:
+      typeof persisted.hiddenOverheadGeometry === 'boolean'
+        ? persisted.hiddenOverheadGeometry
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.hiddenOverheadGeometry,
+    referenceDimensions:
+      typeof persisted.referenceDimensions === 'boolean'
+        ? persisted.referenceDimensions
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.referenceDimensions,
     roomLabels:
       typeof persisted.roomLabels === 'boolean'
         ? persisted.roomLabels
@@ -91,6 +103,20 @@ export function filterFloorplanAnnotationGeometry(
     !visibility.stairAnnotations &&
     'annotationRole' in geometry &&
     geometry.annotationRole === 'stair-annotation'
+  ) {
+    return null
+  }
+  if (
+    !visibility.hiddenOverheadGeometry &&
+    'annotationRole' in geometry &&
+    geometry.annotationRole === 'overhead-geometry'
+  ) {
+    return null
+  }
+  if (
+    !visibility.referenceDimensions &&
+    'annotationRole' in geometry &&
+    geometry.annotationRole === 'reference-dimension'
   ) {
     return null
   }

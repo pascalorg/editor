@@ -227,6 +227,8 @@ export type FloorplanDimensionTextPosition = 'above' | 'centered'
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
   | 'column-center'
+  | 'overhead-geometry'
+  | 'reference-dimension'
   | 'room-label'
   | 'stair-annotation'
 
