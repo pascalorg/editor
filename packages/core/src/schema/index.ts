@@ -251,6 +251,8 @@ export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
 export type {
+  WallAssemblyDatumReference,
+  WallAssemblyDatumSide,
   WallAssemblyLayer,
   WallBandSurfaceSlotId,
   WallFaceBand,
@@ -264,6 +266,7 @@ export {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
+  getWallAssemblyDatumReferenceId,
   getWallAssemblyLayers,
   getWallAssemblyThickness,
   getWallBandSlotId,
@@ -272,6 +275,8 @@ export {
   getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
   getWallSurfaceSideFromBandSlot,
+  resolveWallAssemblyDatumReference,
+  resolveWallAssemblyDatumReferences,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,

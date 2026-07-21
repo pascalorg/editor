@@ -159,6 +159,16 @@ export const WallAssemblyLayer = z.object({
 })
 export type WallAssemblyLayer = z.infer<typeof WallAssemblyLayer>
 
+export type WallAssemblyDatumSide = 'center' | 'interior' | 'exterior'
+
+export type WallAssemblyDatumReference = {
+  id: string
+  datum: WallDimensionDatum
+  side: WallAssemblyDatumSide
+  layerId?: string
+  offset: number
+}
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -239,6 +249,175 @@ export function getWallDatumEligibleLayers(
   datum: WallDimensionDatum,
 ): WallAssemblyLayer[] {
   return (wall.assemblyLayers ?? []).filter((layer) => layer.datumEligible.includes(datum))
+}
+
+export function getWallAssemblyDatumReferenceId(
+  datum: WallDimensionDatum,
+  side: WallAssemblyDatumSide,
+  layerId?: string,
+): string {
+  return ['wall', datum, side, layerId].filter(Boolean).join(':')
+}
+
+type WallAssemblyLayerSpan = {
+  layer: WallAssemblyLayer
+  interiorOffset: number
+  exteriorOffset: number
+}
+
+function getWallAssemblyLayerSpans(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): WallAssemblyLayerSpan[] {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return []
+
+  const coreLayers = layers.filter((layer) => layer.side === 'core')
+  const coreThickness =
+    coreLayers.length > 0
+      ? coreLayers.reduce((sum, layer) => sum + layer.thickness, 0)
+      : (wall.thickness ?? 0.1)
+  const coreInteriorFace = -coreThickness / 2
+  const coreExteriorFace = coreThickness / 2
+  const spans: WallAssemblyLayerSpan[] = []
+
+  let coreOffset = coreInteriorFace
+  for (const layer of coreLayers) {
+    const interiorOffset = coreOffset
+    const exteriorOffset = coreOffset + layer.thickness
+    spans.push({ layer, interiorOffset, exteriorOffset })
+    coreOffset = exteriorOffset
+  }
+
+  let interiorOffset = coreInteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'interior')) {
+    const exteriorOffset = interiorOffset
+    const nextInteriorOffset = exteriorOffset - layer.thickness
+    spans.push({ layer, interiorOffset: nextInteriorOffset, exteriorOffset })
+    interiorOffset = nextInteriorOffset
+  }
+
+  let exteriorOffset = coreExteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'exterior')) {
+    const interiorFaceOffset = exteriorOffset
+    const nextExteriorOffset = interiorFaceOffset + layer.thickness
+    spans.push({ layer, interiorOffset: interiorFaceOffset, exteriorOffset: nextExteriorOffset })
+    exteriorOffset = nextExteriorOffset
+  }
+
+  return spans
+}
+
+function createWallAssemblyDatumReference(
+  datum: WallDimensionDatum,
+  side: WallAssemblyDatumSide,
+  offset: number,
+  layerId?: string,
+): WallAssemblyDatumReference {
+  return {
+    id: getWallAssemblyDatumReferenceId(datum, side, layerId),
+    datum,
+    side,
+    ...(layerId ? { layerId } : {}),
+    offset,
+  }
+}
+
+export function resolveWallAssemblyDatumReferences(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): WallAssemblyDatumReference[] {
+  const layers = wall.assemblyLayers ?? []
+  const references: WallAssemblyDatumReference[] = [
+    createWallAssemblyDatumReference('centerline', 'center', 0),
+  ]
+
+  if (layers.length === 0) {
+    const halfThickness = (wall.thickness ?? 0.1) / 2
+    return [
+      ...references,
+      createWallAssemblyDatumReference('structural-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('structural-face', 'exterior', halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'exterior', halfThickness),
+    ]
+  }
+
+  const spans = getWallAssemblyLayerSpans(wall)
+
+  for (const span of spans) {
+    if (span.layer.datumEligible.includes('structural-face')) {
+      if (span.layer.side === 'core') {
+        references.push(
+          createWallAssemblyDatumReference(
+            'structural-face',
+            'interior',
+            span.interiorOffset,
+            span.layer.id,
+          ),
+          createWallAssemblyDatumReference(
+            'structural-face',
+            'exterior',
+            span.exteriorOffset,
+            span.layer.id,
+          ),
+        )
+      } else {
+        const side = span.layer.side
+        references.push(
+          createWallAssemblyDatumReference(
+            'structural-face',
+            side,
+            side === 'interior' ? span.interiorOffset : span.exteriorOffset,
+            span.layer.id,
+          ),
+        )
+      }
+    }
+
+    if (span.layer.datumEligible.includes('finish-face')) {
+      const side = span.layer.side === 'core' ? 'center' : span.layer.side
+      const offset =
+        span.layer.side === 'interior'
+          ? span.interiorOffset
+          : span.layer.side === 'exterior'
+            ? span.exteriorOffset
+            : (span.interiorOffset + span.exteriorOffset) / 2
+      references.push(createWallAssemblyDatumReference('finish-face', side, offset, span.layer.id))
+    }
+
+    if (span.layer.datumEligible.includes('veneer-face')) {
+      const side = span.layer.side === 'interior' ? 'interior' : 'exterior'
+      const offset = side === 'interior' ? span.interiorOffset : span.exteriorOffset
+      references.push(createWallAssemblyDatumReference('veneer-face', side, offset, span.layer.id))
+    }
+  }
+
+  if (!references.some((reference) => reference.datum === 'structural-face')) {
+    const halfThickness = getWallAssemblyThickness(wall) / 2
+    references.push(
+      createWallAssemblyDatumReference('structural-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('structural-face', 'exterior', halfThickness),
+    )
+  }
+
+  if (!references.some((reference) => reference.datum === 'finish-face')) {
+    const halfThickness = getWallAssemblyThickness(wall) / 2
+    references.push(
+      createWallAssemblyDatumReference('finish-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'exterior', halfThickness),
+    )
+  }
+
+  return references
+}
+
+export function resolveWallAssemblyDatumReference(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+  referenceId: string,
+): WallAssemblyDatumReference | null {
+  return (
+    resolveWallAssemblyDatumReferences(wall).find((reference) => reference.id === referenceId) ??
+    null
+  )
 }
 
 // Declared default appearance for an unpainted wall face in colored mode —

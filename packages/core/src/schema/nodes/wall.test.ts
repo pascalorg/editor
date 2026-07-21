@@ -2,9 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
+  getWallAssemblyDatumReferenceId,
   getWallAssemblyThickness,
   getWallDatumEligibleLayers,
   getWallFaceBandConfig,
+  resolveWallAssemblyDatumReference,
+  resolveWallAssemblyDatumReferences,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,
@@ -310,5 +313,149 @@ describe('wall assembly layers', () => {
     expect(getWallDatumEligibleLayers(wall, 'structural-face')).toMatchObject([
       { id: 'stud-core', role: 'structure', side: 'core' },
     ])
+  })
+
+  test('resolves stable datum references for legacy single-thickness walls', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.14,
+    })
+
+    expect(resolveWallAssemblyDatumReferences(wall)).toEqual([
+      { id: 'wall:centerline:center', datum: 'centerline', side: 'center', offset: 0 },
+      {
+        id: 'wall:structural-face:interior',
+        datum: 'structural-face',
+        side: 'interior',
+        offset: -0.07,
+      },
+      {
+        id: 'wall:structural-face:exterior',
+        datum: 'structural-face',
+        side: 'exterior',
+        offset: 0.07,
+      },
+      {
+        id: 'wall:finish-face:interior',
+        datum: 'finish-face',
+        side: 'interior',
+        offset: -0.07,
+      },
+      {
+        id: 'wall:finish-face:exterior',
+        datum: 'finish-face',
+        side: 'exterior',
+        offset: 0.07,
+      },
+    ])
+  })
+
+  test('resolves layer-owned centerline, structural, finish, and veneer datum references', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      assemblyLayers: [
+        {
+          id: 'stud-core',
+          role: 'structure',
+          side: 'core',
+          thickness: 0.09,
+          materialRef: 'library:wood-framing',
+          datumEligible: ['centerline', 'structural-face'],
+        },
+        {
+          id: 'interior-gwb',
+          role: 'interior-finish',
+          side: 'interior',
+          thickness: 0.016,
+          materialRef: 'library:gypsum-board',
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'exterior-sheathing',
+          role: 'exterior-sheathing',
+          side: 'exterior',
+          thickness: 0.012,
+          materialRef: 'library:sheathing',
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'brick-veneer',
+          role: 'masonry-veneer',
+          side: 'exterior',
+          thickness: 0.09,
+          materialRef: 'library:brick',
+          datumEligible: ['veneer-face'],
+        },
+      ],
+    })
+
+    const references = resolveWallAssemblyDatumReferences(wall)
+
+    expect(references).toContainEqual({
+      id: 'wall:centerline:center',
+      datum: 'centerline',
+      side: 'center',
+      offset: 0,
+    })
+    expect(references).toContainEqual({
+      id: 'wall:structural-face:interior:stud-core',
+      datum: 'structural-face',
+      side: 'interior',
+      layerId: 'stud-core',
+      offset: -0.045,
+    })
+    expect(references).toContainEqual({
+      id: 'wall:structural-face:exterior:stud-core',
+      datum: 'structural-face',
+      side: 'exterior',
+      layerId: 'stud-core',
+      offset: 0.045,
+    })
+    expect(references).toContainEqual({
+      id: 'wall:finish-face:interior:interior-gwb',
+      datum: 'finish-face',
+      side: 'interior',
+      layerId: 'interior-gwb',
+      offset: -0.061,
+    })
+    expect(
+      references.find(
+        (reference) => reference.id === 'wall:finish-face:exterior:exterior-sheathing',
+      ),
+    ).toMatchObject({
+      datum: 'finish-face',
+      side: 'exterior',
+      layerId: 'exterior-sheathing',
+    })
+    expect(
+      references.find(
+        (reference) => reference.id === 'wall:finish-face:exterior:exterior-sheathing',
+      )?.offset,
+    ).toBeCloseTo(0.057)
+
+    expect(
+      references.find((reference) => reference.id === 'wall:veneer-face:exterior:brick-veneer'),
+    ).toMatchObject({
+      datum: 'veneer-face',
+      side: 'exterior',
+      layerId: 'brick-veneer',
+    })
+    expect(
+      references.find((reference) => reference.id === 'wall:veneer-face:exterior:brick-veneer')
+        ?.offset,
+    ).toBeCloseTo(0.147)
+    expect(
+      resolveWallAssemblyDatumReference(
+        wall,
+        getWallAssemblyDatumReferenceId('veneer-face', 'exterior', 'brick-veneer'),
+      ),
+    ).toMatchObject({
+      datum: 'veneer-face',
+      side: 'exterior',
+      layerId: 'brick-veneer',
+      offset: 0.147,
+    })
   })
 })

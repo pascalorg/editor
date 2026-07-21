@@ -56,7 +56,7 @@ assessment.
 
 - [x] Model wall layers and their roles, thicknesses, materials, and eligibility as dimension
   datums.
-- [ ] Resolve stable centerline, structural-face, finish-face, veneer-face, and other
+- [x] Resolve stable centerline, structural-face, finish-face, veneer-face, and other
   assembly-aware references.
 - [ ] Add assembly-aware poche, hatches, cut weights, finish graphics, masonry/air-space graphics,
   concrete-block and structural-masonry graphics, and concrete/furring graphics.
@@ -415,14 +415,18 @@ Each layer should declare thickness, role, material reference, and whether it ca
 
 ### 5.2 Resolve true dimension faces
 
+Status: implemented as reusable Core datum-resolution helpers. Wall assemblies now resolve stable
+reference IDs for legacy single-thickness walls and modeled layers, with signed offsets from the wall
+centerline for centerline, structural-face, finish-face, and veneer-face datums.
+
 Once wall layers exist, the construction-dimension resolver can provide stable semantic features such as:
 
-- Wall centerline.
-- Exterior structural face.
-- Interior structural face.
-- Interior finish face.
-- Exterior finish face.
-- Veneer face.
+- [x] Wall centerline.
+- [x] Exterior structural face.
+- [x] Interior structural face.
+- [x] Interior finish face.
+- [x] Exterior finish face.
+- [x] Veneer face.
 
 Automatic strings should select one face consistently for the complete string.
 
