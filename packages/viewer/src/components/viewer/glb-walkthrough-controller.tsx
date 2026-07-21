@@ -365,10 +365,16 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       if (event.code === 'Escape' && document.pointerLockElement !== canvas) {
         useViewer.getState().setWalkthroughMode(false)
       }
-      // P frees the cursor without leaving the walkthrough (e.g. to take an OS
-      // screenshot, which needs a movable pointer); clicking re-locks.
-      if (event.code === 'KeyP' && document.pointerLockElement === canvas) {
+      // ⌘ (or PrintScreen) frees the cursor without leaving the walkthrough:
+      // macOS swallows the full ⇧⌘4 but the ⌘-down still reaches the page, so
+      // the native screenshot flow gets a movable pointer with zero ceremony.
+      // Clicking the canvas re-locks.
+      if (
+        (event.code === 'MetaLeft' || event.code === 'MetaRight' || event.code === 'PrintScreen') &&
+        document.pointerLockElement === canvas
+      ) {
         suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
         document.exitPointerLock()
       }
       if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
@@ -387,6 +393,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       if (document.pointerLockElement === canvas) {
         wasLocked = true
         suspendRef.current = false
+        useViewer.getState().setWalkthroughSuspended(false)
       } else if (suspendRef.current) {
         // Deliberately released (screenshot pause) — stay in walkthrough.
       } else if (wasLocked) {
@@ -406,6 +413,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       document.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
       document.removeEventListener('pointerlockchange', onPointerLockChange)
+      useViewer.getState().setWalkthroughSuspended(false)
       if (document.pointerLockElement === canvas) document.exitPointerLock()
     }
   }, [gl])

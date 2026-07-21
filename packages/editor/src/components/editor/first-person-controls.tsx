@@ -1163,10 +1163,11 @@ export const FirstPersonControls = () => {
       if (isLocked) {
         hadPointerLockRef.current = true
         suspendRef.current = false
+        useViewer.getState().setWalkthroughSuspended(false)
         return
       }
 
-      // Deliberately released via P (screenshot pause) — stay in first person;
+      // Deliberately released (screenshot pause) — stay in first person;
       // clicking the canvas re-locks.
       if (suspendRef.current) return
 
@@ -1186,6 +1187,7 @@ export const FirstPersonControls = () => {
       document.removeEventListener('click', handleClick)
       document.removeEventListener('mousedown', handleMouseDown, true)
       document.removeEventListener('pointerlockchange', handlePointerLockChange)
+      useViewer.getState().setWalkthroughSuspended(false)
       if (document.pointerLockElement === canvas) {
         document.exitPointerLock()
       }
@@ -1234,12 +1236,16 @@ export const FirstPersonControls = () => {
         event.preventDefault()
         event.stopPropagation()
         closeInteractableTarget()
-      } else if (event.code === 'KeyP' && document.pointerLockElement === canvas) {
-        // P frees the cursor without leaving first person (e.g. to take an OS
-        // screenshot, which needs a movable pointer); clicking re-locks.
-        event.preventDefault()
-        event.stopPropagation()
+      } else if (
+        (event.code === 'MetaLeft' || event.code === 'MetaRight' || event.code === 'PrintScreen') &&
+        document.pointerLockElement === canvas
+      ) {
+        // ⌘ (or PrintScreen) frees the cursor without leaving first person:
+        // macOS swallows the full ⇧⌘4 but the ⌘-down still reaches the page,
+        // so the native screenshot flow gets a movable pointer with zero
+        // ceremony. Clicking the canvas re-locks.
         suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
         document.exitPointerLock()
       }
     }
@@ -1628,6 +1634,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   const floorLabel = useFirstPersonHud((state) => state.floorLabel)
   const zoneLabel = useFirstPersonHud((state) => state.zoneLabel)
   const interact = useFirstPersonHud((state) => state.interact)
+  const suspended = useViewer((state) => state.walkthroughSuspended)
 
   const handleExit = useCallback(() => {
     if (document.pointerLockElement) {
@@ -1641,6 +1648,7 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
       floorLabel={floorLabel}
       interact={interact}
       onExit={handleExit}
+      suspended={suspended}
       zoneLabel={zoneLabel}
     >
       {!hasPlacedSpawn && (

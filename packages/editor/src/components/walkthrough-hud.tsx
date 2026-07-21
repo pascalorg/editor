@@ -10,6 +10,9 @@ export type WalkthroughHudProps = {
   floorLabel?: string | null
   zoneLabel?: string | null
   interact?: WalkthroughInteract
+  /** Pointer lock temporarily released (OS screenshot) — the pill flips to
+   *  "Click to resume" and lets clicks fall through to the canvas. */
+  suspended?: boolean
   onExit?: () => void
   children?: ReactNode
 }
@@ -18,6 +21,7 @@ export function WalkthroughHud({
   floorLabel,
   zoneLabel,
   interact = null,
+  suspended = false,
   onExit,
   children,
 }: WalkthroughHudProps) {
@@ -58,7 +62,13 @@ export function WalkthroughHud({
       </div>
 
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-        {onExit ? (
+        {suspended ? (
+          <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl">
+            <span className="font-medium text-foreground">Click to resume</span>
+            <span className="text-muted-foreground/60">·</span>
+            {exitContent}
+          </div>
+        ) : onExit ? (
           <button
             className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl"
             onClick={onExit}
