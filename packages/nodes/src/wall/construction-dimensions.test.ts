@@ -173,6 +173,48 @@ describe('buildWallConstructionDimensions', () => {
     })
   })
 
+  test('places witness origins on centerline, structural, finish, or assembly faces', () => {
+    const assemblyWall = wall({
+      assemblyLayers: [
+        {
+          id: 'stud-core',
+          role: 'structure',
+          side: 'core',
+          thickness: 0.1,
+          datumEligible: ['structural-face'],
+        },
+        {
+          id: 'interior-finish',
+          role: 'interior-finish',
+          side: 'interior',
+          thickness: 0.02,
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'exterior-finish',
+          role: 'exterior-finish',
+          side: 'exterior',
+          thickness: 0.03,
+          datumEligible: ['finish-face'],
+        },
+      ],
+    })
+    const witnessY = (
+      datumPolicy: 'centerline' | 'wall-face' | 'structural-face' | 'finish-face',
+    ) => {
+      const entry = buildWallConstructionDimensions(assemblyWall, context(), {
+        unit: 'metric',
+        standard: constructionDimensionStandard({ datumPolicy }),
+      })[0]
+      return entry ? firstDimensionSegment(entry)?.start[1] : Number.NaN
+    }
+
+    expect(witnessY('centerline')).toBe(0)
+    expect(witnessY('structural-face')).toBeCloseTo(0.05)
+    expect(witnessY('finish-face')).toBeCloseTo(0.08)
+    expect(witnessY('wall-face')).toBeCloseTo(0.08)
+  })
+
   test('never dimensions a classified interior wall', () => {
     const interior = wall({ frontSide: 'interior', backSide: 'interior' })
     expect(buildWallConstructionDimensions(interior, context(), { unit: 'metric' })).toEqual([])

@@ -1,4 +1,11 @@
-import { clearSceneHistory, emitter, useScene, validateBuildJson } from '@pascal-app/core'
+import {
+  clearSceneHistory,
+  type DrawingSheetNode,
+  DrawingSheetNode as DrawingSheetNodeSchema,
+  emitter,
+  useScene,
+  validateBuildJson,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { AlertTriangle, Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
@@ -13,6 +20,7 @@ import {
 import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
 import useDrawingView, {
   DRAWING_SCALE_OPTIONS,
+  DRAWING_TYPE_OPTIONS,
   normalizeDrawingScale,
 } from '../../../../../store/use-drawing-view'
 import useFloorplanPreflight from '../../../../../store/use-floorplan-preflight'
@@ -190,16 +198,47 @@ export function SettingsPanel({
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
   const exportScene = useViewer((state) => state.exportScene)
+  const activeLevelId = useViewer((state) => state.selection.levelId)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const drawingScale = useDrawingView((state) => state.drawingScale)
   const setDrawingScale = useDrawingView((state) => state.setDrawingScale)
+  const drawingType = useDrawingView((state) => state.drawingType)
   const floorplanPreflightIssues = useFloorplanPreflight((state) => state.issues)
+  const clearanceChecksEnabled = useFloorplanPreflight(
+    (state) => state.clearanceChecksEnabled,
+  )
+  const moduleChecksEnabled = useFloorplanPreflight((state) => state.moduleChecksEnabled)
+  const setClearanceChecksEnabled = useFloorplanPreflight(
+    (state) => state.setClearanceChecksEnabled,
+  )
+  const setModuleChecksEnabled = useFloorplanPreflight(
+    (state) => state.setModuleChecksEnabled,
+  )
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
     [nodes, rootNodeIds],
+  )
+  const drawingSheet = useMemo(() => {
+    if (!activeLevelId) return null
+    return (
+      Object.values(nodes).find(
+        (node): node is DrawingSheetNode =>
+          node.type === 'drawing-sheet' &&
+          node.placedViews.some(
+            (view) =>
+              (view.levelId === null || view.levelId === activeLevelId) &&
+              view.drawingType === drawingType,
+          ),
+      ) ?? null
+    )
+  }, [activeLevelId, drawingType, nodes])
+  const activePlacedView = drawingSheet?.placedViews.find(
+    (view) =>
+      (view.levelId === null || view.levelId === activeLevelId) &&
+      view.drawingType === drawingType,
   )
   const blockSceneGraphMutations = useCallback((event: SyntheticEvent) => {
     event.preventDefault()
@@ -311,6 +350,51 @@ export function SettingsPanel({
     setTimeout(() => setIsGeneratingThumbnail(false), 3000)
   }
 
+  const createDrawingSheet = () => {
+    if (!activeLevelId) return
+    const drawingLabel =
+      DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
+    const sheet = DrawingSheetNodeSchema.parse({
+      id: `drawing-sheet_${crypto.randomUUID()}`,
+      sheetTitle: drawingLabel,
+      placedViews: [
+        {
+          id: `drawing-view_${crypto.randomUUID()}`,
+          drawingType,
+          title: drawingLabel,
+          levelId: activeLevelId,
+          scale: drawingScale,
+        },
+      ],
+    })
+    useScene.getState().createNode(sheet)
+  }
+
+  const updateDrawingSheet = (patch: Partial<DrawingSheetNode>) => {
+    if (!drawingSheet) return
+    useScene.getState().updateNode(drawingSheet.id, patch)
+  }
+
+  const updateTitleBlockField = (
+    field: keyof DrawingSheetNode['titleBlock'],
+    value: string,
+  ) => {
+    if (!drawingSheet) return
+    updateDrawingSheet({
+      titleBlock: { ...drawingSheet.titleBlock, [field]: value.trim() },
+    })
+  }
+
+  const updatePlacedViewScale = (scale: DrawingSheetNode['placedViews'][number]['scale']) => {
+    setDrawingScale(scale)
+    if (!(drawingSheet && activePlacedView)) return
+    updateDrawingSheet({
+      placedViews: drawingSheet.placedViews.map((view) =>
+        view.id === activePlacedView.id ? { ...view, scale } : view,
+      ),
+    })
+  }
+
   const handleVisibilityChange = async (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
@@ -409,8 +493,8 @@ export function SettingsPanel({
             </span>
             <select
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              onChange={(event) => setDrawingScale(normalizeDrawingScale(event.target.value))}
-              value={drawingScale}
+              onChange={(event) => updatePlacedViewScale(normalizeDrawingScale(event.target.value))}
+              value={activePlacedView?.scale ?? drawingScale}
             >
               {DRAWING_SCALE_OPTIONS.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -419,6 +503,184 @@ export function SettingsPanel({
               ))}
             </select>
           </label>
+          <div className="space-y-2 rounded-md border border-border p-3">
+            <div className="font-medium text-xs">Drawing sheet</div>
+            {drawingSheet ? (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="space-y-1 text-[11px] text-muted-foreground">
+                    Sheet number
+                    <input
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-foreground text-xs"
+                      defaultValue={drawingSheet.sheetNumber}
+                      key={`sheet-number:${drawingSheet.sheetNumber}`}
+                      onBlur={(event) => {
+                        const sheetNumber = event.currentTarget.value.trim()
+                        if (sheetNumber && sheetNumber !== drawingSheet.sheetNumber) {
+                          updateDrawingSheet({ sheetNumber })
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="space-y-1 text-[11px] text-muted-foreground">
+                    Paper
+                    <select
+                      className="h-8 w-full rounded-md border border-input bg-background px-2 text-foreground text-xs"
+                      onChange={(event) =>
+                        updateDrawingSheet({
+                          paperSize: event.currentTarget.value as DrawingSheetNode['paperSize'],
+                        })
+                      }
+                      value={drawingSheet.paperSize}
+                    >
+                      <option value="letter">Letter</option>
+                      <option value="tabloid">Tabloid</option>
+                      <option value="arch-a">ARCH A</option>
+                      <option value="arch-b">ARCH B</option>
+                      <option value="arch-c">ARCH C</option>
+                      <option value="a4">A4</option>
+                      <option value="a3">A3</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="block space-y-1 text-[11px] text-muted-foreground">
+                  Sheet title
+                  <input
+                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-foreground text-xs"
+                    defaultValue={drawingSheet.sheetTitle}
+                    key={`sheet-title:${drawingSheet.sheetTitle}`}
+                    onBlur={(event) => {
+                      const sheetTitle = event.currentTarget.value.trim()
+                      if (sheetTitle && sheetTitle !== drawingSheet.sheetTitle) {
+                        updateDrawingSheet({ sheetTitle })
+                      }
+                    }}
+                  />
+                </label>
+                <label className="block space-y-1 text-[11px] text-muted-foreground">
+                  Orientation
+                  <select
+                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-foreground text-xs"
+                    onChange={(event) =>
+                      updateDrawingSheet({
+                        orientation: event.currentTarget
+                          .value as DrawingSheetNode['orientation'],
+                      })
+                    }
+                    value={drawingSheet.orientation}
+                  >
+                    <option value="landscape">Landscape</option>
+                    <option value="portrait">Portrait</option>
+                  </select>
+                </label>
+                <label className="block space-y-1 text-[11px] text-muted-foreground">
+                  General notes (one per line)
+                  <textarea
+                    className="min-h-20 w-full rounded-md border border-input bg-background p-2 text-foreground text-xs"
+                    defaultValue={drawingSheet.generalNotes.map((note) => note.text).join('\n')}
+                    key={`sheet-notes:${drawingSheet.generalNotes.map((note) => note.id).join(':')}`}
+                    onBlur={(event) => {
+                      const generalNotes = event.currentTarget.value
+                        .split(/\r?\n/)
+                        .map((text) => text.trim())
+                        .filter(Boolean)
+                        .map((text, index) => ({
+                          id: `sheet-note_${crypto.randomUUID()}` as `sheet-note_${string}`,
+                          number: index + 1,
+                          text,
+                        }))
+                      updateDrawingSheet({ generalNotes })
+                    }}
+                  />
+                </label>
+                <label className="block space-y-1 text-[11px] text-muted-foreground">
+                  Keyed-note legend (KEY | note)
+                  <textarea
+                    className="min-h-20 w-full rounded-md border border-input bg-background p-2 text-foreground text-xs"
+                    defaultValue={drawingSheet.keyedNoteDefinitions
+                      .map((note) => `${note.key} | ${note.text}`)
+                      .join('\n')}
+                    key={`sheet-keyed-notes:${drawingSheet.keyedNoteDefinitions
+                      .map((note) => `${note.id}:${note.key}:${note.text}`)
+                      .join('|')}`}
+                    onBlur={(event) => {
+                      const existingByKey = new Map(
+                        drawingSheet.keyedNoteDefinitions.map((note) => [note.key, note]),
+                      )
+                      const keyedNoteDefinitions = event.currentTarget.value
+                        .split(/\r?\n/)
+                        .map((line) => {
+                          const separator = line.indexOf('|')
+                          if (separator < 0) return null
+                          const key = line.slice(0, separator).trim()
+                          const text = line.slice(separator + 1).trim()
+                          if (!(key && text)) return null
+                          return {
+                            id:
+                              existingByKey.get(key)?.id ??
+                              (`keyed-note_${crypto.randomUUID()}` as `keyed-note_${string}`),
+                            key,
+                            text,
+                          }
+                        })
+                        .filter(
+                          (note): note is NonNullable<typeof note> => note !== null,
+                        )
+                      updateDrawingSheet({
+                        keyedNoteDefinitions,
+                        keyedNoteLegend: keyedNoteDefinitions.map(({ key, text }) => ({
+                          key,
+                          text,
+                        })),
+                      })
+                    }}
+                  />
+                </label>
+                <div className="space-y-2 border-border border-t pt-2">
+                  <div className="font-medium text-[11px] text-muted-foreground uppercase">
+                    Title block
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ['projectName', 'Project name'],
+                        ['projectNumber', 'Project number'],
+                        ['clientName', 'Client'],
+                        ['drawnBy', 'Drawn by'],
+                        ['checkedBy', 'Checked by'],
+                        ['issueDate', 'Issue date'],
+                        ['revision', 'Revision'],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <label
+                        className="space-y-1 text-[11px] text-muted-foreground"
+                        key={field}
+                      >
+                        {label}
+                        <input
+                          className="h-8 w-full rounded-md border border-input bg-background px-2 text-foreground text-xs"
+                          defaultValue={drawingSheet.titleBlock[field]}
+                          key={`${field}:${drawingSheet.titleBlock[field]}`}
+                          onBlur={(event) =>
+                            updateTitleBlockField(field, event.currentTarget.value)
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <Button
+                className="w-full"
+                disabled={!activeLevelId}
+                onClick={createDrawingSheet}
+                variant="outline"
+              >
+                Create sheet for active level
+              </Button>
+            )}
+          </div>
           <Button
             className="w-full justify-start gap-2"
             onClick={() => exportFloorplanPdf('full')}
@@ -455,6 +717,22 @@ export function SettingsPanel({
               Annotation diagnostics are shown here only; they are not painted on the plan or added
               to PDF output.
             </p>
+            <div className="mt-3 space-y-2 border-border border-t pt-2">
+              <label className="flex items-center justify-between gap-3 text-xs">
+                <span>Clearance advisories</span>
+                <Switch
+                  checked={clearanceChecksEnabled}
+                  onCheckedChange={setClearanceChecksEnabled}
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 text-xs">
+                <span>Modular coordination advisories</span>
+                <Switch
+                  checked={moduleChecksEnabled}
+                  onCheckedChange={setModuleChecksEnabled}
+                />
+              </label>
+            </div>
             {floorplanPreflightIssues.length > 0 ? (
               <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-muted-foreground text-xs">
                 {floorplanPreflightIssues.slice(0, 6).map((issue) => (

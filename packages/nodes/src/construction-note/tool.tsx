@@ -10,10 +10,13 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  EDITOR_LAYER,
   isGridSnapActive,
   markToolCancelConsumed,
+  NO_RAYCAST,
   triggerSFX,
   useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Line } from '@react-three/drei'
@@ -42,10 +45,19 @@ const ConstructionNoteTool = () => {
   const [anchor, setAnchor] = useState<FloorplanPoint | null>(selectedAttachment?.point ?? null)
 
   useEffect(() => {
+    useInteractionScope.getState().begin({ kind: 'drafting', tool: 'construction-note' })
+    return () =>
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'construction-note')
+  }, [])
+
+  useEffect(() => {
     if (!activeLevelId) return
 
     const resolvePoint = (event: GridEvent): FloorplanPoint => {
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const step =
+        !event.nativeEvent.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       return [snap(event.localPosition[0], step), snap(event.localPosition[2], step)]
     }
 
@@ -109,11 +121,13 @@ const ConstructionNoteTool = () => {
         <Line
           color="#334155"
           depthTest={false}
+          layers={EDITOR_LAYER}
           lineWidth={1.2}
           points={[
             [anchor[0], 0.03, anchor[1]],
             [cursor[0], 0.03, cursor[1]],
           ]}
+          raycast={NO_RAYCAST}
         />
       ) : null}
     </>

@@ -6,7 +6,9 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getWallArcData,
+  getWallAssemblyFaceOffsets,
   isCurvedWall,
+  resolveWallAssemblyDatumReferences,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
@@ -134,21 +136,38 @@ export function buildLevelWallConstructionDimensionPlan(
       if (extentEnd - extentStart < MIN_SEGMENT_LENGTH) continue
 
       const outerFaceCoordinate = Math.max(
-        ...directionMembers.map(({ wall }) => exteriorFaceCoordinate(wall, normal)),
+        ...directionMembers.map(({ wall }) =>
+          exteriorFaceCoordinate(wall, normal, standard.datumPolicy),
+        ),
       )
       const pending: PendingConstructionDimension[] = []
       const lineGroups = groupFacadeMembersByLine(directionMembers, normal)
 
       for (const groupedMembers of lineGroups.values()) {
         for (const run of splitFacadeRuns(groupedMembers)) {
-          appendFacadeRunDimensions(pending, run, walls, nodes, interiorWallIds, normal, tangent)
+          appendFacadeRunDimensions(
+            pending,
+            run,
+            walls,
+            nodes,
+            interiorWallIds,
+            normal,
+            tangent,
+            standard,
+          )
         }
       }
 
       if (lineGroups.size > 1) {
         const jogProjections = uniqueSorted(wallProjections)
         appendProjectedChain(pending, jogProjections, 'jogs', (projection) =>
-          exteriorOriginAtProjection(directionMembers, projection, tangent, normal),
+          exteriorOriginAtProjection(
+            directionMembers,
+            projection,
+            tangent,
+            normal,
+            standard.datumPolicy,
+          ),
         )
       }
 
@@ -169,8 +188,20 @@ export function buildLevelWallConstructionDimensionPlan(
 
       pending.push({
         tier: 'overall',
-        start: exteriorOriginAtProjection(directionMembers, extentStart, tangent, normal),
-        end: exteriorOriginAtProjection(directionMembers, extentEnd, tangent, normal),
+        start: exteriorOriginAtProjection(
+          directionMembers,
+          extentStart,
+          tangent,
+          normal,
+          standard.datumPolicy,
+        ),
+        end: exteriorOriginAtProjection(
+          directionMembers,
+          extentEnd,
+          tangent,
+          normal,
+          standard.datumPolicy,
+        ),
         startProjection: extentStart,
         endProjection: extentEnd,
       })
@@ -190,11 +221,23 @@ export function buildLevelWallConstructionDimensionPlan(
           start:
             structuralStart < extentStart - MIN_SEGMENT_LENGTH
               ? columnOriginAtProjection(structureRow, structuralStart, tangent)
-              : exteriorOriginAtProjection(directionMembers, extentStart, tangent, normal),
+              : exteriorOriginAtProjection(
+                  directionMembers,
+                  extentStart,
+                  tangent,
+                  normal,
+                  standard.datumPolicy,
+                ),
           end:
             structuralEnd > extentEnd + MIN_SEGMENT_LENGTH
               ? columnOriginAtProjection(structureRow, structuralEnd, tangent)
-              : exteriorOriginAtProjection(directionMembers, extentEnd, tangent, normal),
+              : exteriorOriginAtProjection(
+                  directionMembers,
+                  extentEnd,
+                  tangent,
+                  normal,
+                  standard.datumPolicy,
+                ),
           startProjection: structuralStart,
           endProjection: structuralEnd,
         })
@@ -236,13 +279,19 @@ function buildInteriorWallDimensions(
   if (wallLength < MIN_SEGMENT_LENGTH) return []
 
   const tangent: FloorplanPoint = [dx / wallLength, dz / wallLength]
-  const [spanStart, spanEnd] = interiorWallClearSpan(wall, walls, tangent, wallLength)
+  const [spanStart, spanEnd] = interiorWallClearSpan(
+    wall,
+    walls,
+    tangent,
+    wallLength,
+    standard.datumPolicy,
+  )
   if (spanEnd - spanStart < MIN_SEGMENT_LENGTH) return []
   const normal = resolveInteriorDimensionNormal(wall, walls, tangent)
-  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const datumDistance = wallDatumDistanceToward(wall, standard.datumPolicy, normal)
   const pointAt = (along: number): FloorplanPoint => [
-    wall.start[0] + tangent[0] * along + normal[0] * halfThickness,
-    wall.start[1] + tangent[1] * along + normal[1] * halfThickness,
+    wall.start[0] + tangent[0] * along + normal[0] * datumDistance,
+    wall.start[1] + tangent[1] * along + normal[1] * datumDistance,
   ]
   const openingSpans = openings.flatMap((opening): Array<readonly [number, number]> => {
     const halfWidth = Math.max(0, opening.width) / 2
@@ -283,6 +332,7 @@ function interiorWallClearSpan(
   walls: ReadonlyArray<WallNode>,
   tangent: FloorplanPoint,
   wallLength: number,
+  datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
 ): readonly [number, number] {
   const insetAt = (endpoint: FloorplanPoint, inward: FloorplanPoint): number => {
     let inset = 0
@@ -303,7 +353,7 @@ function interiorWallClearSpan(
       ]
       const crossing = Math.abs(dot(inward, candidateNormal))
       if (crossing < FACADE_DIRECTION_TOLERANCE) continue
-      inset = Math.max(inset, (candidate.thickness ?? 0.1) / 2 / crossing)
+      inset = Math.max(inset, maximumWallDatumDistance(candidate, datumPolicy) / crossing)
     }
     return inset
   }
@@ -471,10 +521,10 @@ export function buildWallConstructionDimensions(
   const dirX = dx / wallLength
   const dirZ = dz / wallLength
   const outwardNormal = resolveOutwardNormal(wall, ctx, dirX, dirZ)
-  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const datumDistance = wallDatumDistanceToward(wall, standard.datumPolicy, outwardNormal)
   const pointAt = (along: number): FloorplanPoint => [
-    wall.start[0] + dirX * along + outwardNormal[0] * halfThickness,
-    wall.start[1] + dirZ * along + outwardNormal[1] * halfThickness,
+    wall.start[0] + dirX * along + outwardNormal[0] * datumDistance,
+    wall.start[1] + dirZ * along + outwardNormal[1] * datumDistance,
   ]
 
   const openings = ctx.children
@@ -850,6 +900,7 @@ function appendFacadeRunDimensions(
   interiorWallIds: ReadonlySet<string>,
   normal: FloorplanPoint,
   tangent: FloorplanPoint,
+  standard: ConstructionDimensionDrawingStandard,
 ): void {
   const wallProjections = members.flatMap(({ wall }) => [
     dot(wall.start, tangent),
@@ -860,7 +911,7 @@ function appendFacadeRunDimensions(
   if (extentEnd - extentStart < MIN_SEGMENT_LENGTH) return
 
   const faceCoordinate = Math.max(
-    ...members.map(({ wall }) => exteriorFaceCoordinate(wall, normal)),
+    ...members.map(({ wall }) => exteriorFaceCoordinate(wall, normal, standard.datumPolicy)),
   )
   const pointAt = (projection: number): FloorplanPoint =>
     pointFromCoordinates(projection, faceCoordinate, tangent, normal)
@@ -934,9 +985,12 @@ function appendFacadeRunDimensions(
       continue
     }
     for (const { wall } of members) {
-      const references = facadePartitionFaceIntersections(wall, candidate, normal).map((point) =>
-        dot(point, tangent),
-      )
+      const references = facadePartitionFaceIntersections(
+        wall,
+        candidate,
+        normal,
+        standard.datumPolicy,
+      ).map((point) => dot(point, tangent))
       const faceOfStud = Math.min(...references)
       if (
         Number.isFinite(faceOfStud) &&
@@ -1042,12 +1096,16 @@ function finalizeDimensionTiers(
     })
 }
 
-function exteriorFaceCoordinate(wall: WallNode, normal: FloorplanPoint): number {
+function exteriorFaceCoordinate(
+  wall: WallNode,
+  normal: FloorplanPoint,
+  datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
+): number {
   const midpoint: FloorplanPoint = [
     (wall.start[0] + wall.end[0]) / 2,
     (wall.start[1] + wall.end[1]) / 2,
   ]
-  return dot(midpoint, normal) + (wall.thickness ?? 0.1) / 2
+  return dot(midpoint, normal) + wallDatumDistanceToward(wall, datumPolicy, normal)
 }
 
 function exteriorOriginAtProjection(
@@ -1055,6 +1113,7 @@ function exteriorOriginAtProjection(
   projection: number,
   tangent: FloorplanPoint,
   normal: FloorplanPoint,
+  datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
 ): FloorplanPoint {
   const endpoint = members
     .flatMap(({ wall }) => [
@@ -1067,11 +1126,16 @@ function exteriorOriginAtProjection(
         Math.abs(dot(right.point, tangent) - projection)
       return (
         projectionDelta ||
-        exteriorFaceCoordinate(right.wall, normal) - exteriorFaceCoordinate(left.wall, normal)
+        exteriorFaceCoordinate(right.wall, normal, datumPolicy) -
+          exteriorFaceCoordinate(left.wall, normal, datumPolicy)
       )
     })[0]
   if (!endpoint) return pointFromCoordinates(projection, 0, tangent, normal)
-  return addScaled(endpoint.point, normal, (endpoint.wall.thickness ?? 0.1) / 2)
+  return addScaled(
+    endpoint.point,
+    normal,
+    wallDatumDistanceToward(endpoint.wall, datumPolicy, normal),
+  )
 }
 
 function outermostColumnRow(
@@ -1193,8 +1257,9 @@ function facadePartitionFaceIntersections(
   facade: WallNode,
   candidate: WallNode,
   outwardNormal: FloorplanPoint,
+  datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
 ): FloorplanPoint[] {
-  const halfThickness = (facade.thickness ?? 0.1) / 2
+  const halfThickness = wallDatumDistanceToward(facade, 'wall-face', outwardNormal)
   const insideStart: FloorplanPoint = [
     facade.start[0] - outwardNormal[0] * halfThickness,
     facade.start[1] - outwardNormal[1] * halfThickness,
@@ -1208,14 +1273,60 @@ function facadePartitionFaceIntersections(
   const length = Math.hypot(dx, dz)
   if (length < MIN_SEGMENT_LENGTH) return []
   const candidateNormal: FloorplanPoint = [-dz / length, dx / length]
-  const candidateHalfThickness = (candidate.thickness ?? 0.1) / 2
+  const candidateOffsets = wallDatumOffsets(candidate, datumPolicy)
 
-  return [-1, 1].flatMap((side): FloorplanPoint[] => {
-    const faceStart = addScaled(candidate.start, candidateNormal, side * candidateHalfThickness)
-    const faceEnd = addScaled(candidate.end, candidateNormal, side * candidateHalfThickness)
+  return candidateOffsets.flatMap((offset): FloorplanPoint[] => {
+    const faceStart = addScaled(candidate.start, candidateNormal, offset)
+    const faceEnd = addScaled(candidate.end, candidateNormal, offset)
     const intersection = segmentIntersection(insideStart, insideEnd, faceStart, faceEnd)
     return intersection ? [intersection] : []
   })
+}
+
+function wallDatumOffsets(
+  wall: WallNode,
+  policy: ConstructionDimensionDrawingStandard['datumPolicy'],
+): number[] {
+  if (policy === 'centerline') return [0]
+  return [wallDatumOffsetOnSide(wall, policy, -1), wallDatumOffsetOnSide(wall, policy, 1)]
+}
+
+function wallDatumOffsetOnSide(
+  wall: WallNode,
+  policy: ConstructionDimensionDrawingStandard['datumPolicy'],
+  side: 1 | -1,
+): number {
+  const faces = getWallAssemblyFaceOffsets(wall)
+  if (policy === 'wall-face') return side > 0 ? faces.exterior : faces.interior
+  if (policy === 'centerline') return 0
+
+  const datum = policy === 'finish-face' ? 'finish-face' : 'structural-face'
+  const candidates = resolveWallAssemblyDatumReferences(wall)
+    .filter((reference) => reference.datum === datum && Math.sign(reference.offset) === side)
+    .map((reference) => reference.offset)
+  if (candidates.length === 0) return side > 0 ? faces.exterior : faces.interior
+  return side > 0 ? Math.max(...candidates) : Math.min(...candidates)
+}
+
+function wallDatumDistanceToward(
+  wall: WallNode,
+  policy: ConstructionDimensionDrawingStandard['datumPolicy'],
+  direction: FloorplanPoint,
+): number {
+  if (policy === 'centerline') return 0
+  const wallDirection = subtract(wall.end, wall.start)
+  const length = Math.hypot(wallDirection[0], wallDirection[1])
+  if (length < MIN_SEGMENT_LENGTH) return 0
+  const positiveNormal: FloorplanPoint = [-wallDirection[1] / length, wallDirection[0] / length]
+  const side: 1 | -1 = dot(positiveNormal, direction) >= 0 ? 1 : -1
+  return Math.abs(wallDatumOffsetOnSide(wall, policy, side))
+}
+
+function maximumWallDatumDistance(
+  wall: WallNode,
+  policy: ConstructionDimensionDrawingStandard['datumPolicy'],
+): number {
+  return Math.max(...wallDatumOffsets(wall, policy).map(Math.abs))
 }
 
 function segmentIntersection(

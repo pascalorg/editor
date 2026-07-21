@@ -466,6 +466,11 @@ export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export {
+  default as useFloorplanPreflight,
+  type FloorplanPreflightIssue,
+  type FloorplanPreflightIssueKind,
+} from './store/use-floorplan-preflight'
+export {
   default as useInteractionScope,
   getEditingHole,
   getIsCurveReshape,

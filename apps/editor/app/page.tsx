@@ -5,6 +5,7 @@ import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
+import { FloorplanConstructionPreflight } from '@/components/floorplan-construction-preflight'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -89,6 +90,7 @@ const PROJECT_ID = 'local-editor'
 export default function Home() {
   return (
     <div className="relative h-screen w-screen">
+      <FloorplanConstructionPreflight />
       {PROJECT_ID === 'local-editor' && (
         <div className="pointer-events-none absolute top-3 left-1/2 z-40 -translate-x-1/2">
           <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">

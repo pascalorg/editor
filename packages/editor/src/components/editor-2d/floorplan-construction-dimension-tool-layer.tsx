@@ -30,6 +30,7 @@ import {
 } from '../../lib/surface-plan-snap'
 import useDrawingView from '../../store/use-drawing-view'
 import useEditor from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from './floorplan-render-context'
 import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
 
@@ -270,6 +271,15 @@ export function FloorplanConstructionDimensionToolLayer() {
   const unit = useViewer((state) => state.unit)
   const renderContext = useFloorplanRender()
   const drawingType = useDrawingView((state) => state.drawingType)
+
+  useEffect(() => {
+    if (!active) return
+    useInteractionScope.getState().begin({ kind: 'drafting', tool: 'construction-dimension' })
+    return () =>
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'construction-dimension')
+  }, [active])
 
   const updateDraft = useCallback((next: Draft) => {
     draftRef.current = next

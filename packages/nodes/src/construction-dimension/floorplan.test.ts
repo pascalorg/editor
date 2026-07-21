@@ -29,7 +29,11 @@ const palette = {
   measurementLabelText: '#0f172a',
 }
 
-function context(nodes: Record<string, AnyNode> = {}, selected = false): GeometryContext {
+function context(
+  nodes: Record<string, AnyNode> = {},
+  selected = false,
+  purpose: 'edit' | 'document' = 'edit',
+): GeometryContext {
   return {
     resolve: (id) => nodes[id],
     children: [],
@@ -41,6 +45,7 @@ function context(nodes: Record<string, AnyNode> = {}, selected = false): Geometr
       highlighted: false,
       hovered: false,
       moving: false,
+      purpose,
       palette,
     },
   }
@@ -125,6 +130,65 @@ describe('buildConstructionDimensionFloorplan', () => {
       text: 'UNLINKED · 3m',
       stroke: '#dc2626',
     })
+  })
+
+  test('resolves wall anchors against the selected assembly datum', () => {
+    const wall = WallNode.parse({
+      id: 'wall_assembly',
+      start: [0, 0],
+      end: [4, 0],
+      assemblyLayers: [
+        {
+          id: 'stud-core',
+          role: 'structure',
+          side: 'core',
+          thickness: 0.1,
+          datumEligible: ['structural-face'],
+        },
+        {
+          id: 'exterior-finish',
+          role: 'exterior-finish',
+          side: 'exterior',
+          thickness: 0.03,
+          datumEligible: ['finish-face'],
+        },
+      ],
+    })
+    const anchor = {
+      kind: 'feature' as const,
+      reference: { nodeId: wall.id, featureId: 'wall:centerline', parameters: { t: 0.25 } },
+      fallback: [1, 0, 0] as [number, number, number],
+    }
+    const build = (datumPolicy: 'centerline' | 'wall-face' | 'structural-face' | 'finish-face') =>
+      buildConstructionDimensionFloorplan(
+        ConstructionDimensionNode.parse({
+          anchors: [anchor, [3, 0, 0]],
+          baseline: { origin: [0, 1], direction: [1, 0] },
+          datumPolicy,
+        }),
+        context({ [wall.id]: wall }),
+      )
+
+    expect(dimensionSegments(build('centerline'))[0]?.start).toEqual([1, 0])
+    expect(dimensionSegments(build('structural-face'))[0]?.start[1]).toBeCloseTo(0.05)
+    expect(dimensionSegments(build('finish-face'))[0]?.start[1]).toBeCloseTo(0.08)
+    expect(dimensionSegments(build('wall-face'))[0]?.start[1]).toBeCloseTo(0.08)
+  })
+
+  test('uses millimetre notation in document output', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [3, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+    })
+
+    expect(
+      dimensionSegments(
+        buildConstructionDimensionFloorplan(node, context({}, false, 'document')),
+      )[0]?.text,
+    ).toBe('3000')
   })
 
   test('renders a continuous string as adjacent associative segments', () => {

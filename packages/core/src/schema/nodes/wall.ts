@@ -244,6 +244,34 @@ export function getWallAssemblyThickness(
   return layers.reduce((sum, layer) => sum + layer.thickness, 0)
 }
 
+export function getWallAssemblyFaceOffsets(wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>): {
+  interior: number
+  exterior: number
+} {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) {
+    const halfThickness = (wall.thickness ?? 0.1) / 2
+    return { interior: -halfThickness, exterior: halfThickness }
+  }
+
+  const coreLayers = layers.filter((layer) => layer.side === 'core')
+  const coreThickness =
+    coreLayers.length > 0
+      ? coreLayers.reduce((sum, layer) => sum + layer.thickness, 0)
+      : (wall.thickness ?? 0.1)
+  const interiorFinishThickness = layers
+    .filter((layer) => layer.side === 'interior')
+    .reduce((sum, layer) => sum + layer.thickness, 0)
+  const exteriorFinishThickness = layers
+    .filter((layer) => layer.side === 'exterior')
+    .reduce((sum, layer) => sum + layer.thickness, 0)
+
+  return {
+    interior: -coreThickness / 2 - interiorFinishThickness,
+    exterior: coreThickness / 2 + exteriorFinishThickness,
+  }
+}
+
 export function getWallDatumEligibleLayers(
   wall: Pick<WallNode, 'assemblyLayers'>,
   datum: WallDimensionDatum,

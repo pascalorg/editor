@@ -268,13 +268,10 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
               ...composition.preflightIssues,
               ...resolveSheetPreflightIssues(fitted),
             ]
-            const sheetResult = drawSheetChrome(
-              doc,
-              layout,
-              composition,
-              schedules,
-              preflightIssues,
-            )
+            if (preflightIssues.length > 0) {
+              console.warn('[floorplan-export] preflight', preflightIssues)
+            }
+            const sheetResult = drawSheetChrome(doc, layout, composition, schedules)
             scheduleOverflow = sheetResult.overflowSchedules
 
             // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
@@ -733,7 +730,6 @@ function drawSheetChrome(
   layout: SheetExportLayout,
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
-  preflightIssues: readonly SheetPreflightIssue[],
 ): ScheduleDrawResult {
   doc.setDrawColor('#0f172a')
   doc.setLineWidth(0.6)
@@ -762,7 +758,7 @@ function drawSheetChrome(
   })
   drawSheetDocumentMarkers(doc, composition)
   drawKeyedNoteSymbols(doc, composition)
-  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules, preflightIssues)
+  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules)
 }
 
 function drawSheetDocumentMarkers(doc: JsPdfDocument, composition: SheetComposition): void {
@@ -985,43 +981,15 @@ function drawSheetSidePanel(
   panel: SheetExportLayout['sidePanel'],
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
-  preflightIssues: readonly SheetPreflightIssue[],
 ): ScheduleDrawResult {
   let y = panel.y + 12
   const left = panel.x + 8
   const width = panel.width - 16
   const bottom = panel.y + panel.height - 8
 
-  y = drawSheetPreflightIssues(doc, preflightIssues, left, y, width, bottom)
-  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y + 8, width, bottom)
+  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y, width, bottom)
   y = drawKeyedNoteLegend(doc, composition, left, y + 8, width, bottom)
   return drawInlineSchedules(doc, schedules, left, y + 8, width, bottom)
-}
-
-function drawSheetPreflightIssues(
-  doc: JsPdfDocument,
-  issues: readonly SheetPreflightIssue[],
-  x: number,
-  y: number,
-  width: number,
-  bottom: number,
-) {
-  if (issues.length === 0) return y
-  doc.setTextColor('#92400e')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.text('PREFLIGHT', x, y)
-  y += 9
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  for (const issue of issues) {
-    const lines = doc.splitTextToSize(`WARNING: ${issue.message}`, width)
-    if (y + lines.length * 8 > bottom) break
-    doc.text(lines, x, y)
-    y += lines.length * 8 + 3
-  }
-  doc.setTextColor('#111827')
-  return y
 }
 
 function drawSheetNotes(

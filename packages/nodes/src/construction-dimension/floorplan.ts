@@ -1,15 +1,25 @@
 import type {
+  AnyNodeId,
   ConstructionDimensionNode,
   FloorplanGeometry,
   FloorplanPoint,
   FloorplanStyle,
   GeometryContext,
+  MeasurementAnchor,
   MeasurementPoint,
+  WallNode,
 } from '@pascal-app/core'
-import { constructionDimensionRequiredAnchorCount } from '@pascal-app/core'
+import {
+  constructionDimensionRequiredAnchorCount,
+  getWallAssemblyFaceOffsets,
+  getWallAssemblyThickness,
+  getWallCurveFrameAt,
+  resolveWallAssemblyDatumReferences,
+} from '@pascal-app/core'
 import { resolveMeasurementAnchor } from '../measurement/resolve'
 import {
   type ConstructionLengthFormatOptions,
+  type ConstructionLengthProfile,
   formatConstructionLength,
 } from '../shared/construction-length'
 import { buildDimensionStringGeometry } from '../shared/dimension-string'
@@ -28,9 +38,7 @@ export function buildConstructionDimensionFloorplan(
 ): FloorplanGeometry | null {
   if (node.visible === false) return null
 
-  const resolved = node.anchors.map((anchor) =>
-    resolveMeasurementAnchor(anchor, (id) => ctx.resolve(id)),
-  )
+  const resolved = node.anchors.map((anchor) => resolveDimensionAnchor(node, anchor, ctx))
   const points = resolved.map((anchor) => anchor.point) as MeasurementPoint[]
   if (points.length < constructionDimensionRequiredAnchorCount(node.mode)) return null
 
@@ -41,6 +49,8 @@ export function buildConstructionDimensionFloorplan(
   const dangling = resolved.some((anchor) => anchor.dangling)
   const stroke = dangling ? DANGLING_STROKE : baseStroke
   const unit = ctx.viewState?.unit ?? 'metric'
+  const profile: ConstructionLengthProfile =
+    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
   const editable =
     ctx.viewState?.selected === true &&
     !(
@@ -53,20 +63,106 @@ export function buildConstructionDimensionFloorplan(
   switch (node.mode) {
     case 'linear':
     case 'chord':
-      return buildLinearOrChord(node, points, stroke, dangling, unit, editable)
+      return buildLinearOrChord(node, points, stroke, dangling, unit, profile, editable)
     case 'radius':
-      return buildRadius(node, points, stroke, dangling, unit, editable)
+      return buildRadius(node, points, stroke, dangling, unit, profile, editable)
     case 'diameter':
-      return buildDiameter(node, points, stroke, dangling, unit, editable)
+      return buildDiameter(node, points, stroke, dangling, unit, profile, editable)
     case 'center-mark':
       return buildCenterMarkOnly(node, points, stroke, editable)
     case 'arc-length':
-      return buildArcLength(node, points, stroke, dangling, unit, editable)
+      return buildArcLength(node, points, stroke, dangling, unit, profile, editable)
     case 'angular':
       return buildAngular(node, points, stroke, dangling, editable)
     case 'coordinate':
-      return buildCoordinate(node, points, stroke, dangling, unit, editable)
+      return buildCoordinate(node, points, stroke, dangling, unit, profile, editable)
   }
+}
+
+function resolveDimensionAnchor(
+  node: ConstructionDimensionNode,
+  anchor: MeasurementAnchor,
+  ctx: GeometryContext,
+): ReturnType<typeof resolveMeasurementAnchor> {
+  const resolved = resolveMeasurementAnchor(anchor, (id) => ctx.resolve(id))
+  if (Array.isArray(anchor) || resolved.dangling) return resolved
+  if (!supportsWallDatum(anchor.reference.featureId)) return resolved
+
+  const referenced = ctx.resolve<WallNode>(anchor.reference.nodeId as AnyNodeId)
+  if (referenced?.type !== 'wall') return resolved
+
+  const t = wallFeatureParameter(anchor.reference.featureId, anchor.reference.parameters?.t)
+  const frame = getWallCurveFrameAt(referenced, t)
+  const side = wallDatumSide(node, anchor.reference.featureId, resolved, frame)
+  const offset = wallDatumOffset(referenced, node.datumPolicy, side)
+
+  return {
+    ...resolved,
+    point: [
+      frame.point.x + frame.normal.x * offset,
+      resolved.point[1],
+      frame.point.y + frame.normal.y * offset,
+    ],
+  }
+}
+
+function supportsWallDatum(featureId: string): boolean {
+  return (
+    featureId === 'wall:start' ||
+    featureId === 'wall:end' ||
+    featureId === 'wall:centerline' ||
+    featureId === 'wall:midpoint' ||
+    featureId === 'wall:face:left' ||
+    featureId === 'wall:face:right' ||
+    featureId === 'wall:top-centerline'
+  )
+}
+
+function wallFeatureParameter(featureId: string, parameter: unknown): number {
+  if (featureId === 'wall:start') return 0
+  if (featureId === 'wall:end') return 1
+  return typeof parameter === 'number' ? Math.max(0, Math.min(1, parameter)) : 0.5
+}
+
+function wallDatumSide(
+  node: ConstructionDimensionNode,
+  featureId: string,
+  resolved: ReturnType<typeof resolveMeasurementAnchor>,
+  frame: ReturnType<typeof getWallCurveFrameAt>,
+): 1 | -1 {
+  if (featureId === 'wall:face:left') return 1
+  if (featureId === 'wall:face:right') return -1
+
+  const baselineProjection =
+    (node.baseline.origin[0] - frame.point.x) * frame.normal.x +
+    (node.baseline.origin[1] - frame.point.y) * frame.normal.y
+  if (Math.abs(baselineProjection) > EPSILON) return baselineProjection > 0 ? 1 : -1
+
+  const resolvedNormal = resolved.normal
+  if (resolvedNormal) {
+    const normalProjection = resolvedNormal[0] * frame.normal.x + resolvedNormal[2] * frame.normal.y
+    if (Math.abs(normalProjection) > EPSILON) return normalProjection > 0 ? 1 : -1
+  }
+  return 1
+}
+
+function wallDatumOffset(
+  wall: WallNode,
+  policy: ConstructionDimensionNode['datumPolicy'],
+  side: 1 | -1,
+): number {
+  if (policy === 'centerline') return 0
+  if (policy === 'wall-face') {
+    const faces = getWallAssemblyFaceOffsets(wall)
+    return side > 0 ? faces.exterior : faces.interior
+  }
+
+  const datum = policy === 'finish-face' ? 'finish-face' : 'structural-face'
+  const candidates = resolveWallAssemblyDatumReferences(wall)
+    .filter((reference) => reference.datum === datum && Math.sign(reference.offset) === side)
+    .map((reference) => reference.offset)
+  if (candidates.length === 0) return (getWallAssemblyThickness(wall) / 2) * side
+  return side > 0 ? Math.max(...candidates) : Math.min(...candidates)
 }
 
 function buildLinearOrChord(
@@ -75,6 +171,7 @@ function buildLinearOrChord(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   editable: boolean,
 ): FloorplanGeometry {
   const layout = resolveConstructionDimensionLayout(node, points)
@@ -82,7 +179,7 @@ function buildLinearOrChord(
   const suppressedSegments = suppressedDimensionSegmentIndexes(node)
   const visibleSegments = layout.segments.filter((_, index) => !suppressedSegments.has(index))
   const dimensionSegments = visibleSegments.map((segment) => {
-    const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit, 'editor', lengthFormatOptions(node))}`
+    const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit, profile, lengthFormatOptions(node))}`
     return {
       witnessStart: segment.witnessStart,
       witnessEnd: segment.witnessEnd,
@@ -119,6 +216,7 @@ function buildRadius(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   editable: boolean,
 ): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('radius', points)
@@ -131,7 +229,7 @@ function buildRadius(
       labelPoint,
       notation(
         node,
-        `R ${formatConstructionLength(layout.radius, unit, 'editor', lengthFormatOptions(node))}`,
+        `R ${formatConstructionLength(layout.radius, unit, profile, lengthFormatOptions(node))}`,
         dangling,
       ),
       angle(layout.start, labelPoint),
@@ -148,6 +246,7 @@ function buildDiameter(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   editable: boolean,
 ): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('diameter', points)
@@ -165,7 +264,7 @@ function buildDiameter(
       normal,
       notation(
         node,
-        `Ø ${formatConstructionLength(layout.radius * 2, unit, 'editor', lengthFormatOptions(node))}`,
+        `Ø ${formatConstructionLength(layout.radius * 2, unit, profile, lengthFormatOptions(node))}`,
         dangling,
       ),
       stroke,
@@ -196,6 +295,7 @@ function buildArcLength(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   editable: boolean,
 ): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('arc-length', points)
@@ -223,7 +323,7 @@ function buildArcLength(
       labelPoint,
       notation(
         node,
-        `ARC ${formatConstructionLength(layout.arcLength, unit, 'editor', lengthFormatOptions(node))}`,
+        `ARC ${formatConstructionLength(layout.arcLength, unit, profile, lengthFormatOptions(node))}`,
         dangling,
       ),
       0,
@@ -274,6 +374,7 @@ function buildCoordinate(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   editable: boolean,
 ): FloorplanGeometry | null {
   const datum: FloorplanPoint = [points[0]![0], points[0]![2]]
@@ -285,7 +386,7 @@ function buildCoordinate(
     const dy = feature[1] - datum[1]
     const label = notation(
       node,
-      `P${index + 1} · X ${formatConstructionLength(dx, unit, 'editor', lengthFormatOptions(node))} · Y ${formatConstructionLength(dy, unit, 'editor', lengthFormatOptions(node))}`,
+      `P${index + 1} · X ${formatConstructionLength(dx, unit, profile, lengthFormatOptions(node))} · Y ${formatConstructionLength(dy, unit, profile, lengthFormatOptions(node))}`,
       dangling,
       false,
     )

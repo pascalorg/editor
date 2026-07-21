@@ -20,6 +20,7 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
+import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from './floorplan-render-context'
 
 const MIN_GRID_LENGTH = 0.01
@@ -110,6 +111,15 @@ export function FloorplanStructuralGridToolLayer() {
   const active = mode === 'build' && tool === 'structural-grid'
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const renderContext = useFloorplanRender()
+
+  useEffect(() => {
+    if (!active) return
+    useInteractionScope.getState().begin({ kind: 'drafting', tool: 'structural-grid' })
+    return () =>
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'structural-grid')
+  }, [active])
 
   const updateStart = useCallback((point: PlanPoint | null) => {
     startRef.current = point

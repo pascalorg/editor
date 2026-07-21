@@ -5,14 +5,26 @@ import { useViewer } from '@pascal-app/viewer'
 
 type OpeningDocumentationPatch = {
   mark?: string
+  constructionType?: 'framed' | 'masonry'
+  dimensionReference?: 'nominal' | 'rough-opening' | 'masonry-opening' | 'finish-opening'
   roughOpeningWidth?: number
   roughOpeningHeight?: number
+  masonryOpeningWidth?: number
+  masonryOpeningHeight?: number
+  finishOpeningWidth?: number
+  finishOpeningHeight?: number
 }
 
 export function OpeningDocumentationFields({
   mark,
+  constructionType = 'framed',
+  dimensionReference = 'nominal',
   roughOpeningWidth,
   roughOpeningHeight,
+  masonryOpeningWidth,
+  masonryOpeningHeight,
+  finishOpeningWidth,
+  finishOpeningHeight,
   onChange,
 }: OpeningDocumentationPatch & {
   onChange: (patch: OpeningDocumentationPatch) => void
@@ -43,6 +55,50 @@ export function OpeningDocumentationFields({
         />
       </label>
       <div className="grid grid-cols-2 gap-2">
+        <label className="flex flex-col gap-1">
+          <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+            Construction
+          </span>
+          <select
+            className="h-8 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
+            onChange={(event) => {
+              const next = event.currentTarget.value as 'framed' | 'masonry'
+              onChange({
+                constructionType: next,
+                dimensionReference:
+                  next === 'masonry' && dimensionReference === 'nominal'
+                    ? 'masonry-opening'
+                    : dimensionReference,
+              })
+            }}
+            value={constructionType}
+          >
+            <option value="framed">Framed</option>
+            <option value="masonry">Masonry</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+            Dimension to
+          </span>
+          <select
+            className="h-8 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-foreground text-xs outline-none focus:border-orange-400/60"
+            onChange={(event) =>
+              onChange({
+                dimensionReference: event.currentTarget
+                  .value as OpeningDocumentationPatch['dimensionReference'],
+              })
+            }
+            value={dimensionReference}
+          >
+            <option value="nominal">Nominal</option>
+            <option value="rough-opening">Rough opening</option>
+            <option value="masonry-opening">Masonry opening</option>
+            <option value="finish-opening">Finish opening</option>
+          </select>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <OptionalMeterInput
           label="RO Width"
           onChange={(value) => onChange({ roughOpeningWidth: value })}
@@ -54,8 +110,32 @@ export function OpeningDocumentationFields({
           value={roughOpeningHeight}
         />
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <OptionalMeterInput
+          label="MO Width"
+          onChange={(value) => onChange({ masonryOpeningWidth: value })}
+          value={masonryOpeningWidth}
+        />
+        <OptionalMeterInput
+          label="MO Height"
+          onChange={(value) => onChange({ masonryOpeningHeight: value })}
+          value={masonryOpeningHeight}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <OptionalMeterInput
+          label="FO Width"
+          onChange={(value) => onChange({ finishOpeningWidth: value })}
+          value={finishOpeningWidth}
+        />
+        <OptionalMeterInput
+          label="FO Height"
+          onChange={(value) => onChange({ finishOpeningHeight: value })}
+          value={finishOpeningHeight}
+        />
+      </div>
       <p className="px-0.5 text-[10px] text-muted-foreground/65 leading-4">
-        Leave rough opening blank until confirmed by the manufacturer or framing requirements.
+        Leave RO, MO, and FO values blank until verified by the applicable manufacturer or trade.
       </p>
     </div>
   )

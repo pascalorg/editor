@@ -6,6 +6,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import {
+  type ConstructionLengthProfile,
   type ConstructionLinearUnit,
   formatConstructionLength,
 } from '../shared/construction-length'
@@ -18,6 +19,7 @@ export function buildRoomFloorplanSchedule(args: {
   nodes: Readonly<Record<string, AnyNode>>
   levelId: string
   unit: ConstructionLinearUnit
+  profile?: ConstructionLengthProfile
 }): FloorplanSchedule | null {
   const rooms = args.siblings
     .filter((zone) => zone.spaceRole === 'room')
@@ -53,7 +55,11 @@ export function buildRoomFloorplanSchedule(args: {
         floorFinish: valueOrDash(zone.floorFinish),
         wallFinish: valueOrDash(zone.wallFinish),
         ceilingFinish: valueOrDash(zone.ceilingFinish),
-        ceilingHeight: formatConstructionLength(zone.ceilingHeight, args.unit),
+        ceilingHeight: formatConstructionLength(
+          zone.ceilingHeight,
+          args.unit,
+          args.profile ?? 'document',
+        ),
         occupancy: valueOrDash(zone.occupancy),
         enclosure: resolveEnclosure(zone, report.classification),
       },

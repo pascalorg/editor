@@ -5,7 +5,10 @@ import type {
   FloorplanStyle,
   GeometryContext,
 } from '@pascal-app/core'
-import { formatConstructionLength } from '../shared/construction-length'
+import {
+  type ConstructionLengthProfile,
+  formatConstructionLength,
+} from '../shared/construction-length'
 import { resolveConstructionNoteLeader } from './leader-geometry'
 import { resolveConstructionNoteAnchor } from './resolve'
 
@@ -32,7 +35,12 @@ export function buildConstructionNoteFloorplan(
       : NOTE_STROKE
   const leader = resolveConstructionNoteLeader(node, resolved.point)
   const textAnchor = leader.side > 0 ? 'start' : 'end'
-  const lines = normalizeNoteLines(node, resolved.dangling, ctx.viewState?.unit ?? 'metric')
+  const lines = normalizeNoteLines(
+    node,
+    resolved.dangling,
+    ctx.viewState?.unit ?? 'metric',
+    ctx.viewState?.purpose === 'document' ? 'document' : 'editor',
+  )
   const lineStyle: FloorplanStyle = {
     stroke,
     strokeWidth: selected ? 1.25 : 0.9,
@@ -174,12 +182,13 @@ function normalizeNoteLines(
   node: ConstructionNoteNode,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
 ): string[] {
   const customLines = node.text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-  const specialtyLines = buildSpecialtyLines(node, unit)
+  const specialtyLines = buildSpecialtyLines(node, unit, profile)
   const includeCustom = specialtyLines.length === 0 || node.text !== 'CONSTRUCTION NOTE'
   const normalized = [...specialtyLines, ...(includeCustom ? customLines : [])]
   if (normalized.length === 0) normalized.push('CONSTRUCTION NOTE')
@@ -198,7 +207,11 @@ function normalizeNoteLines(
   return normalized
 }
 
-function buildSpecialtyLines(node: ConstructionNoteNode, unit: 'metric' | 'imperial'): string[] {
+function buildSpecialtyLines(
+  node: ConstructionNoteNode,
+  unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
+): string[] {
   const specialty = node.specialty
   if (!specialty) return []
 
@@ -206,7 +219,7 @@ function buildSpecialtyLines(node: ConstructionNoteNode, unit: 'metric' | 'imper
     case 'access':
       return [
         `${displayLabel(specialty.spaceType)} ${displayLabel(specialty.accessType)} ACCESS`,
-        `OPENING ${formatConstructionLength(specialty.openingWidth, unit)} x ${formatConstructionLength(specialty.openingHeight, unit)}`,
+        `OPENING ${formatConstructionLength(specialty.openingWidth, unit, profile)} x ${formatConstructionLength(specialty.openingHeight, unit, profile)}`,
       ]
     case 'rated-assembly':
       return [
@@ -216,19 +229,19 @@ function buildSpecialtyLines(node: ConstructionNoteNode, unit: 'metric' | 'imper
     case 'plumbing-fixture':
       return [
         `${displayLabel(specialty.fixtureType)} · ${specialty.material.toLocaleUpperCase()}`,
-        `${formatConstructionLength(specialty.width, unit)} x ${formatConstructionLength(specialty.depth, unit)}`,
+        `${formatConstructionLength(specialty.width, unit, profile)} x ${formatConstructionLength(specialty.depth, unit, profile)}`,
       ]
     case 'solid-fuel':
       return [
         displayLabel(specialty.applianceType),
-        `MIN CLR ${formatConstructionLength(specialty.minimumClearance, unit)}`,
+        `MIN CLR ${formatConstructionLength(specialty.minimumClearance, unit, profile)}`,
         ...(specialty.requirement ? [specialty.requirement.toLocaleUpperCase()] : []),
       ]
     case 'closet': {
       const shelfLabel = specialty.shelfCount === 1 ? 'SHELF' : 'SHELVES'
       return [
         `${displayLabel(specialty.closetType)} CLOSET`,
-        `${specialty.shelfCount} ${shelfLabel} @ ${formatConstructionLength(specialty.shelfDepth, unit)}${specialty.hasPole ? ' + POLE' : ''}`,
+        `${specialty.shelfCount} ${shelfLabel} @ ${formatConstructionLength(specialty.shelfDepth, unit, profile)}${specialty.hasPole ? ' + POLE' : ''}`,
       ]
     }
     case 'equipment':
@@ -238,7 +251,7 @@ function buildSpecialtyLines(node: ConstructionNoteNode, unit: 'metric' | 'imper
     case 'overhead':
       return [
         `${displayLabel(specialty.outlineType)} ABOVE`,
-        `${formatConstructionLength(specialty.width, unit)} x ${formatConstructionLength(specialty.depth, unit)}`,
+        `${formatConstructionLength(specialty.width, unit, profile)} x ${formatConstructionLength(specialty.depth, unit, profile)}`,
       ]
   }
 }

@@ -21,7 +21,7 @@ export type ConstructionDimensionDrawingStandard = {
 }
 
 export const DEFAULT_CONSTRUCTION_DIMENSION_STANDARD = {
-  datumPolicy: 'centerline',
+  datumPolicy: 'wall-face',
   terminator: 'architectural-tick',
   textPosition: 'above',
   imperialPrecision: '1/16',

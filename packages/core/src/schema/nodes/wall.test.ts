@@ -3,6 +3,7 @@ import {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getWallAssemblyDatumReferenceId,
+  getWallAssemblyFaceOffsets,
   getWallAssemblyThickness,
   getWallDatumEligibleLayers,
   getWallFaceBandConfig,
@@ -313,6 +314,10 @@ describe('wall assembly layers', () => {
     expect(getWallDatumEligibleLayers(wall, 'structural-face')).toMatchObject([
       { id: 'stud-core', role: 'structure', side: 'core' },
     ])
+    expect(getWallAssemblyFaceOffsets(wall)).toEqual({
+      interior: -0.061,
+      exterior: 0.135,
+    })
   })
 
   test('resolves stable datum references for legacy single-thickness walls', () => {

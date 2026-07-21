@@ -418,7 +418,13 @@ export default function WindowPanel() {
 
       <PanelSection title="Documentation">
         <OpeningDocumentationFields
+          constructionType={node.constructionType}
+          dimensionReference={node.dimensionReference}
+          finishOpeningHeight={node.finishOpeningHeight}
+          finishOpeningWidth={node.finishOpeningWidth}
           mark={node.mark}
+          masonryOpeningHeight={node.masonryOpeningHeight}
+          masonryOpeningWidth={node.masonryOpeningWidth}
           onChange={handleUpdate}
           roughOpeningHeight={node.roughOpeningHeight}
           roughOpeningWidth={node.roughOpeningWidth}

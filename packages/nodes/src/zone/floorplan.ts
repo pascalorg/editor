@@ -5,7 +5,10 @@ import {
   resolveAutoZonePolygon,
   type ZoneNode,
 } from '@pascal-app/core'
-import { formatConstructionLength } from '../shared/construction-length'
+import {
+  type ConstructionLengthProfile,
+  formatConstructionLength,
+} from '../shared/construction-length'
 import { buildRoomClearDimensions } from './room-clear-dimensions'
 
 /**
@@ -97,7 +100,16 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const [cx, cy] = polygonCentroid(ring)
   const name = node.name?.trim()
   if (isRoom) {
-    children.push(...buildRoomLabels(node, cx, cy, view?.unit ?? 'metric', stroke))
+    children.push(
+      ...buildRoomLabels(
+        node,
+        cx,
+        cy,
+        view?.unit ?? 'metric',
+        view?.purpose === 'document' ? 'document' : 'editor',
+        stroke,
+      ),
+    )
     children.push(...buildRoomClearDimensions(node, ctx))
   } else if (name) {
     children.push({
@@ -135,6 +147,7 @@ function buildRoomLabels(
   x: number,
   y: number,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   color: string,
 ): FloorplanGeometry[] {
   const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []
@@ -153,7 +166,7 @@ function buildRoomLabels(
     lines.push({ text: finishes.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
   }
 
-  const roomDetails = [`CH: ${formatConstructionLength(node.ceilingHeight, unit)}`]
+  const roomDetails = [`CH: ${formatConstructionLength(node.ceilingHeight, unit, profile)}`]
   if (node.occupancy) roomDetails.push(node.occupancy)
   lines.push({ text: roomDetails.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
 

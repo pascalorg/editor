@@ -1,4 +1,10 @@
-import type { AnyNode, DoorNode, WallNode, WindowNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type DoorNode,
+  getWallAssemblyFaceOffsets,
+  type WallNode,
+  type WindowNode,
+} from '@pascal-app/core'
 import { formatConstructionLength } from './construction-length'
 
 const INCH = 0.0254
@@ -17,6 +23,8 @@ export type ConstructionModuleProfile = {
 
 export type ConstructionModuleMeasurementKind =
   | 'wall-length'
+  | 'level-overall-width'
+  | 'level-overall-depth'
   | 'opening-width'
   | 'rough-opening-width'
   | 'masonry-opening-width'
@@ -86,7 +94,10 @@ export function buildConstructionModuleAdvisories(
   )
   if (profiles.length === 0) return []
 
-  const measurements = Object.values(nodes).flatMap((node) => constructionModuleMeasurements(node))
+  const measurements = [
+    ...Object.values(nodes).flatMap((node) => constructionModuleMeasurements(node)),
+    ...levelOverallMeasurements(nodes),
+  ]
   const advisories: ConstructionModuleAdvisory[] = []
 
   for (const measurement of measurements) {
@@ -114,6 +125,101 @@ export function buildConstructionModuleAdvisories(
   }
 
   return advisories.sort((left, right) => left.id.localeCompare(right.id))
+}
+
+function levelOverallMeasurements(
+  nodes: Readonly<Record<string, AnyNode>>,
+): ConstructionModuleMeasurement[] {
+  const wallsByLevel = new Map<string, WallNode[]>()
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'wall' || !node.parentId) continue
+    if (node.curveOffset !== undefined && Math.abs(node.curveOffset) > 1e-6) continue
+    const levelWalls = wallsByLevel.get(node.parentId) ?? []
+    levelWalls.push(node)
+    wallsByLevel.set(node.parentId, levelWalls)
+  }
+
+  const measurements: ConstructionModuleMeasurement[] = []
+  for (const [levelId, walls] of wallsByLevel) {
+    const primaryWall = walls.reduce((longest, wall) =>
+      wallLength(wall) > wallLength(longest) ? wall : longest,
+    )
+    const primaryLength = wallLength(primaryWall)
+    if (
+      walls.length < 2 ||
+      !isUsefulLength(primaryLength) ||
+      !walls.some((wall) => !wallsAreParallel(primaryWall, wall))
+    ) {
+      continue
+    }
+
+    const footprintPoints = walls.flatMap(wallFootprintPoints)
+    const direction: [number, number] = [
+      (primaryWall.end[0] - primaryWall.start[0]) / primaryLength,
+      (primaryWall.end[1] - primaryWall.start[1]) / primaryLength,
+    ]
+    const normal: [number, number] = [-direction[1], direction[0]]
+    const along = footprintPoints.map(([x, y]) => x * direction[0] + y * direction[1])
+    const across = footprintPoints.map(([x, y]) => x * normal[0] + y * normal[1])
+    const width = Math.max(...along) - Math.min(...along)
+    const depth = Math.max(...across) - Math.min(...across)
+
+    if (isUsefulLength(width)) {
+      measurements.push({
+        nodeId: levelId,
+        nodeType: 'level',
+        kind: 'level-overall-width',
+        label: 'overall plan width',
+        measured: width,
+      })
+    }
+    if (isUsefulLength(depth)) {
+      measurements.push({
+        nodeId: levelId,
+        nodeType: 'level',
+        kind: 'level-overall-depth',
+        label: 'overall plan depth',
+        measured: depth,
+      })
+    }
+  }
+
+  return measurements
+}
+
+function wallLength(wall: WallNode): number {
+  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+}
+
+function wallsAreParallel(left: WallNode, right: WallNode): boolean {
+  const leftLength = wallLength(left)
+  const rightLength = wallLength(right)
+  if (!(isUsefulLength(leftLength) && isUsefulLength(rightLength))) return true
+  const leftDirection = [
+    (left.end[0] - left.start[0]) / leftLength,
+    (left.end[1] - left.start[1]) / leftLength,
+  ]
+  const rightDirection = [
+    (right.end[0] - right.start[0]) / rightLength,
+    (right.end[1] - right.start[1]) / rightLength,
+  ]
+  return (
+    Math.abs(leftDirection[0]! * rightDirection[1]! - leftDirection[1]! * rightDirection[0]!) < 1e-4
+  )
+}
+
+function wallFootprintPoints(wall: WallNode): [number, number][] {
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const length = wallLength(wall)
+  if (!isUsefulLength(length)) return []
+
+  const normal: [number, number] = [-dy / length, dx / length]
+  const offsets = getWallAssemblyFaceOffsets(wall)
+  return [offsets.interior, offsets.exterior].flatMap((offset) => [
+    [wall.start[0] + normal[0] * offset, wall.start[1] + normal[1] * offset],
+    [wall.end[0] + normal[0] * offset, wall.end[1] + normal[1] * offset],
+  ])
 }
 
 function constructionModuleMeasurements(node: AnyNode): ConstructionModuleMeasurement[] {

@@ -3,12 +3,16 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallAssemblyFaceOffsets,
   resolveWallAssemblyDatumReferences,
   type SpaceBoundaryFace,
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
-import { formatConstructionLength } from '../shared/construction-length'
+import {
+  type ConstructionLengthProfile,
+  formatConstructionLength,
+} from '../shared/construction-length'
 
 const LINE_TOLERANCE = 1e-4
 const ANGLE_TOLERANCE = 1e-3
@@ -70,15 +74,25 @@ export function buildRoomClearDimensions(
   if (!faceLines) return []
 
   const unit = ctx.viewState?.unit ?? 'metric'
+  const profile: ConstructionLengthProfile =
+    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#475569'
   const rectangle = resolveClearFaceRectangle(faceLines)
   const dimensions = rectangle
-    ? buildRectangleClearDimensions(rectangle, unit, stroke)
-    : buildRectilinearClearDimensions(faceLines, unit, stroke)
+    ? buildRectangleClearDimensions(rectangle, unit, profile, stroke)
+    : buildRectilinearClearDimensions(faceLines, unit, profile, stroke)
   if (dimensions.length === 0) return []
   return [
     ...dimensions,
-    ...buildRoomToRoomClearDimensions(node, ctx, space.boundaryFaces, wallsById, unit, stroke),
+    ...buildRoomToRoomClearDimensions(
+      node,
+      ctx,
+      space.boundaryFaces,
+      wallsById,
+      unit,
+      profile,
+      stroke,
+    ),
   ]
 }
 
@@ -137,6 +151,7 @@ function resolveClearFaceRectangle(
 function buildRectangleClearDimensions(
   rectangle: [FloorplanPoint, FloorplanPoint, FloorplanPoint, FloorplanPoint],
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry[] {
   const first = dimensionAcrossOppositeFaces(
@@ -146,6 +161,7 @@ function buildRectangleClearDimensions(
     rectangle[2],
     FIRST_DIMENSION_POSITION,
     unit,
+    profile,
     stroke,
   )
   const second = dimensionAcrossOppositeFaces(
@@ -155,6 +171,7 @@ function buildRectangleClearDimensions(
     rectangle[3],
     SECOND_DIMENSION_POSITION,
     unit,
+    profile,
     stroke,
   )
   return first && second ? [first, second] : []
@@ -163,6 +180,7 @@ function buildRectangleClearDimensions(
 function buildRectilinearClearDimensions(
   faceLines: readonly FaceLine[],
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry[] {
   const vertices = clearFacePolygon(faceLines)
@@ -187,6 +205,7 @@ function buildRectilinearClearDimensions(
         firstDirection,
         vertices,
         unit,
+        profile,
         stroke,
       )
       if (!dimension) continue
@@ -212,10 +231,13 @@ function offsetBoundaryFace(
   if (!wallDirection) return null
   const normal: FloorplanPoint = [-wallDirection[1], wallDirection[0]]
   const side = boundary.face === 'front' ? 1 : -1
+  const faces = getWallAssemblyFaceOffsets(wall)
   const offset =
     policy === 'finish-faces'
       ? resolveFinishFaceOffset(wall, side)
-      : ((wall.thickness ?? 0.2) / 2) * side
+      : side > 0
+        ? faces.exterior
+        : faces.interior
   if (offset === null) return null
   return {
     start: [first[0] + normal[0] * offset, first[1] + normal[1] * offset],
@@ -228,8 +250,11 @@ function resolveFinishFaceOffset(wall: WallNode, side: 1 | -1): number | null {
   const references = resolveWallAssemblyDatumReferences(wall).filter(
     (reference) => reference.datum === 'finish-face',
   )
-  const matching = references.find((reference) => Math.sign(reference.offset) === side)
-  return matching?.offset ?? null
+  const matching = references
+    .filter((reference) => Math.sign(reference.offset) === side)
+    .map((reference) => reference.offset)
+  if (matching.length === 0) return null
+  return side > 0 ? Math.max(...matching) : Math.min(...matching)
 }
 
 function clearFacePolygon(faceLines: readonly FaceLine[]): FloorplanPoint[] | null {
@@ -260,6 +285,7 @@ function dimensionBetweenOverlappingParallelFaces(
   direction: FloorplanPoint,
   polygon: readonly FloorplanPoint[],
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): DimensionGeometry | null {
   const firstStart = dot(first.start, direction)
@@ -288,7 +314,7 @@ function dimensionBetweenOverlappingParallelFaces(
     offsetNormal: [-axis[1], axis[0]],
     offsetDistance: 0,
     extensionOvershoot: EXTENSION_OVERSHOOT,
-    text: formatConstructionLength(length, unit),
+    text: formatConstructionLength(length, unit, profile),
     stroke,
   }
 }
@@ -328,6 +354,7 @@ function buildRoomToRoomClearDimensions(
   boundaryFaces: readonly SpaceBoundaryFace[],
   wallsById: ReadonlyMap<string, WallNode>,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry[] {
   if (node.clearDimensionPolicy !== 'finish-faces') return []
@@ -385,7 +412,13 @@ function buildRoomToRoomClearDimensions(
       const currentLine = offsetBoundaryFace(currentBoundary, wall, 'finish-faces')
       const neighborLine = offsetBoundaryFace(neighborBoundary, wall, 'finish-faces')
       if (!(currentLine && neighborLine)) continue
-      const dimension = dimensionAcrossSharedRoomWall(currentLine, neighborLine, unit, stroke)
+      const dimension = dimensionAcrossSharedRoomWall(
+        currentLine,
+        neighborLine,
+        unit,
+        profile,
+        stroke,
+      )
       if (dimension) dimensions.push(dimension)
     }
   }
@@ -397,6 +430,7 @@ function dimensionAcrossSharedRoomWall(
   currentLine: FaceLine,
   neighborLine: FaceLine,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): DimensionGeometry | null {
   const direction = normalizedDirection(currentLine.start, currentLine.end)
@@ -435,7 +469,7 @@ function dimensionAcrossSharedRoomWall(
     offsetNormal: [-axis[1], axis[0]],
     offsetDistance: 0,
     extensionOvershoot: EXTENSION_OVERSHOOT,
-    text: `R-R ${formatConstructionLength(clear, unit)}`,
+    text: `R-R ${formatConstructionLength(clear, unit, profile)}`,
     stroke,
   }
 }
@@ -506,6 +540,7 @@ function dimensionAcrossOppositeFaces(
   oppositeEnd: FloorplanPoint,
   position: number,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry | null {
   const start = interpolate(firstStart, firstEnd, position)
@@ -521,7 +556,7 @@ function dimensionAcrossOppositeFaces(
     offsetNormal: [-direction[1], direction[0]],
     offsetDistance: 0,
     extensionOvershoot: EXTENSION_OVERSHOOT,
-    text: formatConstructionLength(length, unit),
+    text: formatConstructionLength(length, unit, profile),
     stroke,
   }
 }

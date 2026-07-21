@@ -7,7 +7,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { type ConstructionLinearUnit, formatConstructionLength } from './construction-length'
+import {
+  type ConstructionLengthProfile,
+  type ConstructionLinearUnit,
+  formatConstructionLength,
+} from './construction-length'
 
 type OpeningNode = DoorNode | WindowNode
 type OpeningKind = OpeningNode['type']
@@ -56,6 +60,7 @@ export function buildDoorFloorplanSchedule(args: {
   nodes: Readonly<Record<string, AnyNode>>
   levelId: string
   unit: ConstructionLinearUnit
+  profile?: ConstructionLengthProfile
 }): FloorplanSchedule | null {
   if (args.siblings.length === 0) return null
   const marks = resolveOpeningMarks(args.siblings, args.nodes, 'door', args.levelId)
@@ -76,10 +81,10 @@ export function buildDoorFloorplanSchedule(args: {
       cells: {
         mark: marks.markById.get(door.id) ?? '—',
         type: door.openingKind === 'opening' ? 'Opening' : titleCase(door.doorType),
-        size: formatSize(door.width, door.height, args.unit),
-        roughOpening: formatRoughOpening(door, args.unit),
+        size: formatSize(door.width, door.height, args.unit, args.profile ?? 'document'),
+        roughOpening: formatRoughOpening(door, args.unit, args.profile ?? 'document'),
         operation: doorOperation(door),
-        frame: `${formatConstructionLength(door.frameThickness, args.unit)} / ${formatConstructionLength(door.frameDepth, args.unit)}`,
+        frame: `${formatConstructionLength(door.frameThickness, args.unit, args.profile ?? 'document')} / ${formatConstructionLength(door.frameDepth, args.unit, args.profile ?? 'document')}`,
         hardware: doorHardware(door),
       },
     })),
@@ -92,6 +97,7 @@ export function buildWindowFloorplanSchedule(args: {
   nodes: Readonly<Record<string, AnyNode>>
   levelId: string
   unit: ConstructionLinearUnit
+  profile?: ConstructionLengthProfile
 }): FloorplanSchedule | null {
   if (args.siblings.length === 0) return null
   const marks = resolveOpeningMarks(args.siblings, args.nodes, 'window', args.levelId)
@@ -112,13 +118,18 @@ export function buildWindowFloorplanSchedule(args: {
       cells: {
         mark: marks.markById.get(window.id) ?? '—',
         type: window.openingKind === 'opening' ? 'Opening' : titleCase(window.windowType),
-        size: formatSize(window.width, window.height, args.unit),
-        roughOpening: formatRoughOpening(window, args.unit),
+        size: formatSize(window.width, window.height, args.unit, args.profile ?? 'document'),
+        roughOpening: formatRoughOpening(window, args.unit, args.profile ?? 'document'),
         sill: formatConstructionLength(
           Math.max(0, window.position[1] - window.height / 2),
           args.unit,
+          args.profile ?? 'document',
         ),
-        head: formatConstructionLength(window.position[1] + window.height / 2, args.unit),
+        head: formatConstructionLength(
+          window.position[1] + window.height / 2,
+          args.unit,
+          args.profile ?? 'document',
+        ),
         operation: windowOperation(window),
       },
     })),
@@ -300,15 +311,24 @@ function interiorSide(wall: WallNode, fallback: -1 | 1): -1 | 1 {
   return fallback
 }
 
-function formatSize(width: number, height: number, unit: ConstructionLinearUnit): string {
-  return `${formatConstructionLength(width, unit)} x ${formatConstructionLength(height, unit)}`
+function formatSize(
+  width: number,
+  height: number,
+  unit: ConstructionLinearUnit,
+  profile: ConstructionLengthProfile,
+): string {
+  return `${formatConstructionLength(width, unit, profile)} x ${formatConstructionLength(height, unit, profile)}`
 }
 
-function formatRoughOpening(opening: OpeningNode, unit: ConstructionLinearUnit): string {
+function formatRoughOpening(
+  opening: OpeningNode,
+  unit: ConstructionLinearUnit,
+  profile: ConstructionLengthProfile,
+): string {
   if (opening.roughOpeningWidth === undefined || opening.roughOpeningHeight === undefined) {
     return 'VERIFY'
   }
-  return formatSize(opening.roughOpeningWidth, opening.roughOpeningHeight, unit)
+  return formatSize(opening.roughOpeningWidth, opening.roughOpeningHeight, unit, profile)
 }
 
 function openingDocumentationDimensions(

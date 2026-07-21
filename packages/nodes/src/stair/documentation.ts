@@ -10,7 +10,10 @@ import type {
   FloorplanStairEntry,
   FloorplanStairSegmentEntry,
 } from '@pascal-app/editor'
-import { formatConstructionLength } from '../shared/construction-length'
+import {
+  type ConstructionLengthProfile,
+  formatConstructionLength,
+} from '../shared/construction-length'
 
 const ANNOTATION_OFFSET = 0.28
 const ANNOTATION_FONT_SIZE = 0.125
@@ -80,10 +83,12 @@ export function buildStairDocumentation(
   const activeLevelId = ctx.parent?.type === 'level' ? ctx.parent.id : stair.parentId
   const direction = resolveStairPlanDirection(stair, activeLevelId)
   const unit = ctx.viewState?.unit ?? 'metric'
+  const profile: ConstructionLengthProfile =
+    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#334155'
   return stair.stairType === 'straight'
-    ? buildStraightDocumentation(stair, entry, direction, unit, stroke)
-    : buildCurvedDocumentation(stair, direction, unit, stroke)
+    ? buildStraightDocumentation(stair, entry, direction, unit, profile, stroke)
+    : buildCurvedDocumentation(stair, direction, unit, profile, stroke)
 }
 
 function buildStraightDocumentation(
@@ -91,6 +96,7 @@ function buildStraightDocumentation(
   entry: FloorplanStairEntry,
   direction: StairPlanDirection,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry[] {
   const geometries: FloorplanGeometry[] = []
@@ -126,7 +132,7 @@ function buildStraightDocumentation(
     geometries.push(
       annotationText(
         rightAnchor,
-        `${riserCount} R @ ${formatConstructionLength(riserHeight, unit)} · T ${formatConstructionLength(treadDepth, unit)} · CLR W ${formatConstructionLength(segment.width, unit)}`,
+        `${riserCount} R @ ${formatConstructionLength(riserHeight, unit, profile)} · T ${formatConstructionLength(treadDepth, unit, profile)} · CLR W ${formatConstructionLength(segment.width, unit, profile)}`,
         ANNOTATION_FONT_SIZE,
         stroke,
       ),
@@ -141,7 +147,7 @@ function buildStraightDocumentation(
       geometries.push(
         annotationText(
           leftAnchor,
-          `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit)}`,
+          `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile)}`,
           ANNOTATION_FONT_SIZE,
           stroke,
         ),
@@ -156,6 +162,7 @@ function buildCurvedDocumentation(
   stair: StairNode,
   direction: StairPlanDirection,
   unit: 'metric' | 'imperial',
+  profile: ConstructionLengthProfile,
   stroke: string,
 ): FloorplanGeometry[] {
   const stairType = stair.stairType === 'spiral' ? 'spiral' : 'curved'
@@ -177,7 +184,7 @@ function buildCurvedDocumentation(
   const geometries: FloorplanGeometry[] = [
     annotationText(
       notePoint,
-      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit)} · T(CL) ${formatConstructionLength(treadDepth, unit)} · CLR W ${formatConstructionLength(stair.width, unit)}`,
+      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit, profile)} · T(CL) ${formatConstructionLength(treadDepth, unit, profile)} · CLR W ${formatConstructionLength(stair.width, unit, profile)}`,
       ANNOTATION_FONT_SIZE,
       stroke,
     ),
@@ -188,7 +195,7 @@ function buildCurvedDocumentation(
     geometries.push(
       annotationText(
         arcPoint(center, outerRadius + ANNOTATION_OFFSET * 2, noteAngle),
-        `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit)}`,
+        `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile)}`,
         ANNOTATION_FONT_SIZE,
         stroke,
       ),

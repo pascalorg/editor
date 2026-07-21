@@ -272,6 +272,7 @@ export {
   buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
   getWallAssemblyDatumReferenceId,
+  getWallAssemblyFaceOffsets,
   getWallAssemblyLayers,
   getWallAssemblyThickness,
   getWallBandSlotId,

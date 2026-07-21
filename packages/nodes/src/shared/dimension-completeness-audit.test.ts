@@ -90,6 +90,28 @@ describe('dimension completeness audit', () => {
     )
   })
 
+  test('can count the automatic wall and opening dimension plan as coverage', () => {
+    const exteriorWall = WallNode.parse({
+      id: 'wall_exterior',
+      children: ['door_entry'],
+      start: [0, 0],
+      end: [5, 0],
+      frontSide: 'exterior',
+    })
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: exteriorWall.id,
+      wallId: exteriorWall.id,
+      roughOpeningWidth: 0.96,
+    })
+
+    expect(
+      buildDimensionCompletenessAudit(nodes(exteriorWall, door), {
+        includeAutomaticDimensions: true,
+      }),
+    ).toEqual([])
+  })
+
   test('ignores reference dimensions unless explicitly included', () => {
     const exteriorWall = WallNode.parse({
       id: 'wall_exterior',

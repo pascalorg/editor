@@ -74,7 +74,7 @@ describe('buildRoomFloorplanSchedule', () => {
       floorFinish: '—',
       wallFinish: 'Paint',
       ceilingFinish: 'ACT',
-      ceilingHeight: '2.7m',
+      ceilingHeight: '2700',
       occupancy: 'Business',
       enclosure: 'Open',
     })

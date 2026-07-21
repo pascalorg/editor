@@ -64,6 +64,56 @@ describe('construction module advisories', () => {
     expect(advisories[0]?.message).toContain('100 mm construction module')
   })
 
+  test('checks overall level extents at exterior finish faces', () => {
+    const walls = [
+      WallNode.parse({
+        id: 'wall_bottom',
+        parentId: 'level_main',
+        start: [0, 0],
+        end: [4.03, 0],
+        thickness: 0.2,
+      }),
+      WallNode.parse({
+        id: 'wall_right',
+        parentId: 'level_main',
+        start: [4.03, 0],
+        end: [4.03, 3],
+        thickness: 0.2,
+      }),
+      WallNode.parse({
+        id: 'wall_top',
+        parentId: 'level_main',
+        start: [4.03, 3],
+        end: [0, 3],
+        thickness: 0.2,
+      }),
+      WallNode.parse({
+        id: 'wall_left',
+        parentId: 'level_main',
+        start: [0, 3],
+        end: [0, 0],
+        thickness: 0.2,
+      }),
+    ]
+
+    const advisories = buildConstructionModuleAdvisories(nodes(...walls), {
+      profiles: [metricProfile],
+    })
+
+    expect(advisories).toContainEqual(
+      expect.objectContaining({
+        id: 'construction-module:metric-common:level_main:level-overall-width',
+        nodeId: 'level_main',
+        nodeType: 'level',
+        kind: 'level-overall-width',
+      }),
+    )
+    expect(
+      advisories.find((advisory) => advisory.kind === 'level-overall-width')?.measured,
+    ).toBeCloseTo(4.23)
+    expect(advisories).not.toContainEqual(expect.objectContaining({ kind: 'level-overall-depth' }))
+  })
+
   test('reports imperial opening widths that miss common inch modules', () => {
     const compliantDoor = DoorNode.parse({
       id: 'door_imperial_ok',

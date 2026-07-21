@@ -33,6 +33,7 @@ export type DimensionCompletenessIssue = {
 
 export type BuildDimensionCompletenessAuditOptions = {
   includeReferenceDimensions?: boolean
+  includeAutomaticDimensions?: boolean
   requireRoughOpeningHeights?: boolean
   dimensionValueTolerance?: number
   preflightIssues?: readonly DimensionCompletenessPreflightIssue[]
@@ -106,6 +107,23 @@ function dimensionCoverage(
       (node as ConstructionDimensionNode).anchors,
     )) {
       covered.add(nodeId)
+    }
+  }
+  if (options.includeAutomaticDimensions === true) {
+    for (const node of Object.values(nodes)) {
+      if (
+        node.type === 'wall' &&
+        node.visible !== false &&
+        Math.abs(node.curveOffset ?? 0) <= 1e-6 &&
+        (isExteriorWall(node) || isPartitionWall(node))
+      ) {
+        covered.add(node.id)
+      }
+    }
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'door' && node.type !== 'window') continue
+      const host = openingHostWall(node, nodes)
+      if (host && covered.has(host.id)) covered.add(node.id)
     }
   }
   return covered
