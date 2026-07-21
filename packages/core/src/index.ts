@@ -278,6 +278,7 @@ export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
+  getWallArcData,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,

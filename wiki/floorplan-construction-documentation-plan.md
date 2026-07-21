@@ -390,7 +390,9 @@ workflow. The 2D measurement menu now exposes each mode; radius, chord, arc-leng
 dimensions include explicit label/baseline placement, while diameter and center marks commit from
 their defining points and coordinate mode accepts repeated feature points. The selected-dimension
 panel controls center marks, feature count, reference presentation, prefixes, suffixes, and text
-overrides. All modes render through the live/PDF floor-plan pipeline with unit-aware values.
+overrides. Radius, center-mark, chord, arc-length, and angular modes can bind all defining points
+from one curved-wall click and update when that wall is reshaped. All modes render through the
+live/PDF floor-plan pipeline with unit-aware values.
 
 - [x] Radius dimensions.
 - [x] Diameter dimensions.
@@ -400,6 +402,7 @@ overrides. All modes render through the live/PDF floor-plan pipeline with unit-a
 - [x] Angular dimensions.
 - [x] Coordinate dimensions for repeated circular features.
 - [x] Feature-count notation such as `6 x DIA ...`.
+- [x] Single-click associative curved-wall dimensions that follow host curve edits.
 
 ### 7.2 Drawing-type coordination
 

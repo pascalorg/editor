@@ -184,6 +184,41 @@ describe('buildConstructionDimensionFloorplan', () => {
     expect(entries.filter((entry) => entry.kind === 'line').length).toBeGreaterThanOrEqual(6)
   })
 
+  test('updates an associative curved-wall radius when the host curve changes', () => {
+    const wall = WallNode.parse({
+      id: 'wall_curve',
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+    })
+    const node = ConstructionDimensionNode.parse({
+      mode: 'radius',
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: wall.id, featureId: 'wall:curve:center' },
+          fallback: [2, 0, 1.5],
+        },
+        {
+          kind: 'feature',
+          reference: { nodeId: wall.id, featureId: 'wall:midpoint' },
+          fallback: [2, 0, -1],
+        },
+      ],
+      baseline: { origin: [2, -1.5], direction: [0, -1] },
+    })
+    const reshapedWall = WallNode.parse({ ...wall, curveOffset: 0.5 })
+    const original = buildConstructionDimensionFloorplan(node, context({ [wall.id]: wall }))
+    const reshaped = buildConstructionDimensionFloorplan(node, context({ [wall.id]: reshapedWall }))
+    const originalLabel =
+      original && flatten(original).find((entry) => entry.kind === 'dimension-label')
+    const reshapedLabel =
+      reshaped && flatten(reshaped).find((entry) => entry.kind === 'dimension-label')
+
+    expect(originalLabel).toMatchObject({ text: 'R 2.5m' })
+    expect(reshapedLabel).toMatchObject({ text: 'R 4.25m' })
+  })
+
   test('renders diameter and repeated-feature notation', () => {
     const node = ConstructionDimensionNode.parse({
       mode: 'diameter',

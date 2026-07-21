@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { MeasurementPoint } from '@pascal-app/core'
+import { type MeasurementPoint, WallNode } from '@pascal-app/core'
 import {
   buildConstructionDimensionPreviewGeometries,
+  buildCurvedWallConstructionDimensionDraft,
   constructionDimensionUsesBaseline,
   normalizeConstructionDimensionChainMode,
   normalizeConstructionDimensionMode,
@@ -76,5 +77,44 @@ describe('continuous construction-dimension drafting', () => {
     expect(constructionDimensionUsesBaseline('diameter')).toBe(false)
     expect(constructionDimensionUsesBaseline('center-mark')).toBe(false)
     expect(constructionDimensionUsesBaseline('coordinate')).toBe(false)
+  })
+
+  test('derives associative radius, chord, arc, and center drafts from one curved wall', () => {
+    const wall = WallNode.parse({
+      id: 'wall_curve',
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+    })
+
+    expect(buildCurvedWallConstructionDimensionDraft(wall, 'radius')).toMatchObject({
+      anchors: [
+        { reference: { nodeId: wall.id, featureId: 'wall:curve:center' } },
+        { reference: { nodeId: wall.id, featureId: 'wall:midpoint' } },
+      ],
+      points: [
+        [2, 0, 1.5],
+        [2, 0, -1],
+      ],
+    })
+    expect(buildCurvedWallConstructionDimensionDraft(wall, 'chord')?.anchors).toMatchObject([
+      { reference: { featureId: 'wall:start' } },
+      { reference: { featureId: 'wall:end' } },
+    ])
+    expect(buildCurvedWallConstructionDimensionDraft(wall, 'arc-length')?.anchors).toMatchObject([
+      { reference: { featureId: 'wall:curve:center' } },
+      { reference: { featureId: 'wall:start' } },
+      { reference: { featureId: 'wall:end' } },
+    ])
+    expect(buildCurvedWallConstructionDimensionDraft(wall, 'center-mark')?.anchors).toHaveLength(2)
+  })
+
+  test('keeps manual point drafting for straight walls and unsupported modes', () => {
+    const straight = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    const curved = WallNode.parse({ start: [0, 0], end: [4, 0], curveOffset: 1 })
+
+    expect(buildCurvedWallConstructionDimensionDraft(straight, 'radius')).toBeNull()
+    expect(buildCurvedWallConstructionDimensionDraft(curved, 'diameter')).toBeNull()
+    expect(buildCurvedWallConstructionDimensionDraft(curved, 'linear')).toBeNull()
   })
 })

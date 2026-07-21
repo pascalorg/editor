@@ -10,11 +10,14 @@ import {
   constructionDimensionRequiredAnchorCount,
   type FloorplanGeometry,
   type GeometryContext,
+  getWallArcData,
+  getWallCurveFrameAt,
   type MeasurementAnchor,
   type MeasurementFeatureAnchor,
   type MeasurementPoint,
   nodeRegistry,
   useScene,
+  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -44,6 +47,7 @@ type AssociatedPoint = {
   anchor: MeasurementAnchor
   point: MeasurementPoint
   semantic: boolean
+  targetNodeId: string | null
 }
 
 const emptyDraft = (): Draft => ({ anchors: [], points: [], stage: 'witnesses' })
@@ -73,17 +77,17 @@ function associatePoint(
   targetNodeId: string | null,
   maxDistance: number,
 ): AssociatedPoint {
-  if (!targetNodeId) return { anchor: point, point, semantic: false }
+  if (!targetNodeId) return { anchor: point, point, semantic: false, targetNodeId: null }
   const nodes = useScene.getState().nodes
   const node = nodes[targetNodeId as AnyNodeId]
   const contribution = node ? nodeRegistry.get(node.type)?.measurement : undefined
-  if (!(node && contribution)) return { anchor: point, point, semantic: false }
+  if (!(node && contribution)) return { anchor: point, point, semantic: false, targetNodeId }
   const context = geometryContext(node, nodes)
   const features = contribution.features(node, context)
   const match =
     contribution.match?.(node, context, point, maxDistance) ??
     closestMeasurementFeatureBinding(features, point, maxDistance)
-  if (!match) return { anchor: point, point, semantic: false }
+  if (!match) return { anchor: point, point, semantic: false, targetNodeId }
 
   const reference = {
     nodeId: node.id,
@@ -95,7 +99,7 @@ function associatePoint(
     reference,
     fallback: match.point,
   }
-  return { anchor, point: match.point, semantic: true }
+  return { anchor, point: match.point, semantic: true, targetNodeId }
 }
 
 function clientToPlanPoint(group: SVGGElement, clientX: number, clientY: number) {
@@ -189,6 +193,60 @@ export function normalizeConstructionDimensionMode(value: unknown): Construction
 
 export function constructionDimensionUsesBaseline(mode: ConstructionDimensionMode): boolean {
   return ['linear', 'radius', 'chord', 'arc-length', 'angular'].includes(mode)
+}
+
+function wallFeatureAnchor(
+  wall: WallNode,
+  featureId: string,
+  fallback: MeasurementPoint,
+): MeasurementFeatureAnchor {
+  return {
+    kind: 'feature',
+    reference: { nodeId: wall.id, featureId },
+    fallback,
+  }
+}
+
+export function buildCurvedWallConstructionDimensionDraft(
+  wall: WallNode,
+  mode: ConstructionDimensionMode,
+): Pick<Draft, 'anchors' | 'points'> | null {
+  const arc = getWallArcData(wall)
+  if (!arc) return null
+
+  const center: MeasurementPoint = [arc.center.x, 0, arc.center.y]
+  const start: MeasurementPoint = [wall.start[0], 0, wall.start[1]]
+  const end: MeasurementPoint = [wall.end[0], 0, wall.end[1]]
+  const midpointFrame = getWallCurveFrameAt(wall, 0.5)
+  const midpoint: MeasurementPoint = [midpointFrame.point.x, 0, midpointFrame.point.y]
+  const feature = (featureId: string, fallback: MeasurementPoint) =>
+    wallFeatureAnchor(wall, featureId, fallback)
+
+  switch (mode) {
+    case 'radius':
+    case 'center-mark':
+      return {
+        anchors: [feature('wall:curve:center', center), feature('wall:midpoint', midpoint)],
+        points: [center, midpoint],
+      }
+    case 'chord':
+      return {
+        anchors: [feature('wall:start', start), feature('wall:end', end)],
+        points: [start, end],
+      }
+    case 'arc-length':
+    case 'angular':
+      return {
+        anchors: [
+          feature('wall:curve:center', center),
+          feature('wall:start', start),
+          feature('wall:end', end),
+        ],
+        points: [center, start, end],
+      }
+    default:
+      return null
+  }
 }
 
 export function FloorplanConstructionDimensionToolLayer() {
@@ -318,6 +376,21 @@ export function FloorplanConstructionDimensionToolLayer() {
       const current = draftRef.current
       if (current.stage === 'baseline') {
         commitAt(associated)
+        return
+      }
+      const targetNode = associated.targetNodeId
+        ? useScene.getState().nodes[associated.targetNodeId as AnyNodeId]
+        : undefined
+      const curvedWallDraft =
+        current.points.length === 0 && targetNode?.type === 'wall'
+          ? buildCurvedWallConstructionDimensionDraft(targetNode, dimensionMode)
+          : null
+      if (curvedWallDraft) {
+        const next: Draft = { ...curvedWallDraft, stage: 'witnesses' }
+        updateDraft(next)
+        triggerSFX('sfx:grid-snap')
+        if (usesBaseline) updateDraft({ ...next, stage: 'baseline' })
+        else commitDraft(next)
         return
       }
       const previous = current.points.at(-1)
