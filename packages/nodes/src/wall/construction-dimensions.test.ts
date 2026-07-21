@@ -8,6 +8,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
@@ -117,6 +118,43 @@ describe('buildWallConstructionDimensions', () => {
     })
   })
 
+  test('applies drawing dimension standards to automatic wall strings', () => {
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: 'wall_main',
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const standard = constructionDimensionStandard({
+      openingChainOffset: 0.7,
+      wallSpanOffset: 1.4,
+      extensionStartGap: 0.03,
+      extensionOvershoot: 0.18,
+      terminator: 'dot',
+      textPosition: 'centered',
+      metricNotation: 'millimeters',
+    })
+
+    const dimensions = buildWallConstructionDimensions(wall(), context([door]), {
+      unit: 'metric',
+      standard,
+    })
+
+    expect(dimensionTexts(dimensions)).toEqual(['1500', '1000', '7500', '10000'])
+    expect(dimensions[0]).toMatchObject({
+      kind: 'dimension-string',
+      offsetDistance: 0.7,
+      extensionStartGap: 0.03,
+      extensionOvershoot: 0.18,
+      terminator: 'dot',
+      textPosition: 'centered',
+    })
+    expect(dimensions.at(-1)).toMatchObject({
+      kind: 'dimension-string',
+      offsetDistance: 1.4,
+    })
+  })
+
   test('uses the exterior wall face as the dimension side', () => {
     const dimensions = buildWallConstructionDimensions(
       wall({ frontSide: 'interior', backSide: 'exterior' }),
@@ -201,6 +239,53 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       start: [0, 0.1],
       end: [10, 0.1],
       offsetNormal: [0, 1],
+    })
+  })
+
+  test('uses drawing standard tier spacing for coordinated facade dimensions', () => {
+    const exterior = wall()
+    const partition = wall({
+      id: 'wall_partition',
+      start: [4, 0],
+      end: [4, -4],
+      frontSide: 'interior',
+      backSide: 'interior',
+    })
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: exterior.id,
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const standard = constructionDimensionStandard({
+      firstOpeningWidthOffset: 0.4,
+      firstGeneralTierOffset: 0.6,
+      tierSpacing: 0.5,
+      extensionOvershoot: 0.2,
+      terminator: 'open-arrow',
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan(
+        [exterior, partition],
+        { [door.id]: door },
+        standard,
+      ).get(exterior.id) ?? []
+    const rendered = renderPlannedConstructionDimensions(
+      planned,
+      'metric',
+      undefined,
+      'editor',
+      standard,
+    )
+
+    expect(planned.map((entry) => Number(entry.offsetDistance.toFixed(2)))).toEqual([
+      0.4, 0.9, 0.9, 1.4, 1.4, 1.9,
+    ])
+    expect(rendered[0]).toMatchObject({
+      kind: 'dimension-string',
+      extensionOvershoot: 0.2,
+      terminator: 'open-arrow',
     })
   })
 

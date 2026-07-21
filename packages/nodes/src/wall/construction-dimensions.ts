@@ -12,6 +12,10 @@ import {
 } from '@pascal-app/core'
 import { getColumnFloorplanFootprint } from '../column/floorplan'
 import {
+  type ConstructionDimensionDrawingStandard,
+  DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
+} from '../shared/construction-dimension-standards'
+import {
   type ConstructionLengthProfile,
   type ConstructionLinearUnit,
   formatConstructionLength,
@@ -20,12 +24,6 @@ import { buildDimensionStringGeometry } from '../shared/dimension-string'
 
 export { formatConstructionLength } from '../shared/construction-length'
 
-const OPENING_CHAIN_OFFSET = 0.55
-const WALL_SPAN_OFFSET = 1.05
-const FIRST_OPENING_WIDTH_OFFSET = 0.28
-const FIRST_GENERAL_TIER_OFFSET = 0.55
-const TIER_SPACING = 0.62
-const EXTENSION_OVERSHOOT = 0.12
 const MIN_SEGMENT_LENGTH = 0.02
 const FACADE_LINE_TOLERANCE = 0.03
 const FACADE_DIRECTION_TOLERANCE = 0.001
@@ -86,6 +84,7 @@ type PendingConstructionDimension = {
 export function buildLevelWallConstructionDimensionPlan(
   walls: ReadonlyArray<WallNode>,
   nodes: Record<string, AnyNode>,
+  standard: ConstructionDimensionDrawingStandard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
 ): WallConstructionDimensionPlan {
   const dimensionsByWallId = new Map<string, PlannedConstructionDimension[]>()
   const wallNetworkById = buildWallNetworkIndex(walls)
@@ -206,7 +205,7 @@ export function buildLevelWallConstructionDimensionPlan(
       )
       dimensionsByWallId.set(
         representative.wall.id,
-        finalizeDimensionTiers(pending, tangent, normal, structuralFaceCoordinate),
+        finalizeDimensionTiers(pending, tangent, normal, structuralFaceCoordinate, standard),
       )
     }
   }
@@ -215,7 +214,7 @@ export function buildLevelWallConstructionDimensionPlan(
     if (isCurvedWall(wall)) continue
     if (!interiorWallIds.has(wall.id)) continue
     const openings = hostedOpeningsForWall(wall, nodes)
-    const planned = buildInteriorWallDimensions(wall, walls, openings)
+    const planned = buildInteriorWallDimensions(wall, walls, openings, standard)
     if (planned.length > 0) dimensionsByWallId.set(wall.id, planned)
   }
 
@@ -226,6 +225,7 @@ function buildInteriorWallDimensions(
   wall: WallNode,
   walls: ReadonlyArray<WallNode>,
   openings: readonly OpeningNode[],
+  standard: ConstructionDimensionDrawingStandard,
 ): PlannedConstructionDimension[] {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -260,7 +260,7 @@ function buildInteriorWallDimensions(
         start: pointAt(start),
         end: pointAt(end),
         offsetNormal: normal,
-        offsetDistance: OPENING_CHAIN_OFFSET,
+        offsetDistance: standard.openingChainOffset,
       })
     }
   }
@@ -270,7 +270,7 @@ function buildInteriorWallDimensions(
     start: pointAt(spanStart),
     end: pointAt(spanEnd),
     offsetNormal: normal,
-    offsetDistance: openingSpans.length > 0 ? WALL_SPAN_OFFSET : OPENING_CHAIN_OFFSET,
+    offsetDistance: openingSpans.length > 0 ? standard.wallSpanOffset : standard.openingChainOffset,
   })
   return planned
 }
@@ -315,6 +315,7 @@ export function renderPlannedConstructionDimensions(
   unit: ConstructionLinearUnit,
   stroke?: string,
   profile: ConstructionLengthProfile = 'editor',
+  standard: ConstructionDimensionDrawingStandard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
 ): FloorplanGeometry[] {
   return planned.map((entry) =>
     dimension(
@@ -327,6 +328,7 @@ export function renderPlannedConstructionDimensions(
       entry.dimensionStart,
       entry.dimensionEnd,
       profile,
+      standard,
     ),
   )
 }
@@ -337,10 +339,12 @@ export function buildCurvedWallConstructionDimensions(
     unit,
     stroke = '#334155',
     profile = 'editor',
+    standard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
   }: {
     unit: ConstructionLinearUnit
     stroke?: string
     profile?: ConstructionLengthProfile
+    standard?: ConstructionDimensionDrawingStandard
   },
 ): FloorplanGeometry[] {
   const arc = getWallArcData(wall)
@@ -422,7 +426,10 @@ export function buildCurvedWallConstructionDimensions(
           kind: 'dimension-label',
           cx: labelPoint[0],
           cy: labelPoint[1],
-          text: `R ${formatConstructionLength(arc.radius, unit, profile)}`,
+          text: `R ${formatConstructionLength(arc.radius, unit, profile, {
+            imperialPrecision: standard.imperialPrecision,
+            metricNotation: standard.metricNotation,
+          })}`,
           angle: radiusAngle,
           appearance: 'outlined',
         },
@@ -438,10 +445,12 @@ export function buildWallConstructionDimensions(
     unit,
     stroke,
     profile = 'editor',
+    standard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
   }: {
     unit: ConstructionLinearUnit
     stroke?: string
     profile?: ConstructionLengthProfile
+    standard?: ConstructionDimensionDrawingStandard
   },
 ): FloorplanGeometry[] {
   if (isCurvedWall(wall)) return []
@@ -485,12 +494,13 @@ export function buildWallConstructionDimensions(
           pointAt(start),
           pointAt(end),
           outwardNormal,
-          OPENING_CHAIN_OFFSET,
+          standard.openingChainOffset,
           unit,
           stroke,
           undefined,
           undefined,
           profile,
+          standard,
         ),
       )
     }
@@ -501,12 +511,13 @@ export function buildWallConstructionDimensions(
       pointAt(0),
       pointAt(wallLength),
       outwardNormal,
-      openings.length > 0 ? WALL_SPAN_OFFSET : OPENING_CHAIN_OFFSET,
+      openings.length > 0 ? standard.wallSpanOffset : standard.openingChainOffset,
       unit,
       stroke,
       undefined,
       undefined,
       profile,
+      standard,
     ),
   )
 
@@ -523,6 +534,7 @@ function dimension(
   dimensionStart?: FloorplanPoint,
   dimensionEnd?: FloorplanPoint,
   profile: ConstructionLengthProfile = 'editor',
+  standard: ConstructionDimensionDrawingStandard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
 ): FloorplanGeometry {
   const measurementStart = dimensionStart ?? start
   const measurementEnd = dimensionEnd ?? end
@@ -540,12 +552,19 @@ function dimension(
           ),
           unit,
           profile,
+          {
+            imperialPrecision: standard.imperialPrecision,
+            metricNotation: standard.metricNotation,
+          },
         ),
       },
     ],
     offsetNormal,
     offsetDistance,
-    extensionOvershoot: EXTENSION_OVERSHOOT,
+    extensionStartGap: standard.extensionStartGap,
+    extensionOvershoot: standard.extensionOvershoot,
+    terminator: standard.terminator,
+    textPosition: standard.textPosition,
     stroke,
   })
 }
@@ -971,13 +990,16 @@ function finalizeDimensionTiers(
   tangent: FloorplanPoint,
   normal: FloorplanPoint,
   outerCoordinate: number,
+  standard: ConstructionDimensionDrawingStandard,
 ): PlannedConstructionDimension[] {
   const activeTiers = TIER_ORDER.filter((tier) => pending.some((entry) => entry.tier === tier))
   const offsets = new Map<ConstructionDimensionTier, number>()
   activeTiers.forEach((tier, index) => {
     const firstOffset =
-      activeTiers[0] === 'opening-widths' ? FIRST_OPENING_WIDTH_OFFSET : FIRST_GENERAL_TIER_OFFSET
-    offsets.set(tier, firstOffset + index * TIER_SPACING)
+      activeTiers[0] === 'opening-widths'
+        ? standard.firstOpeningWidthOffset
+        : standard.firstGeneralTierOffset
+    offsets.set(tier, firstOffset + index * standard.tierSpacing)
   })
 
   return [...pending]
@@ -986,7 +1008,7 @@ function finalizeDimensionTiers(
       return tierDelta || left.startProjection - right.startProjection
     })
     .map((entry) => {
-      const offset = offsets.get(entry.tier) ?? FIRST_GENERAL_TIER_OFFSET
+      const offset = offsets.get(entry.tier) ?? standard.firstGeneralTierOffset
       const baselineCoordinate = outerCoordinate + offset
       const dimensionStart = pointFromCoordinates(
         entry.startProjection,
