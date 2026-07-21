@@ -72,7 +72,7 @@ assessment.
 
 ### Advisory and completeness analysis
 
-- [ ] Add optional imperial and metric construction-module advisories.
+- [x] Add optional imperial and metric construction-module advisories.
 - [ ] Add jurisdiction/profile-based clearance advisories for circulation, doors, fixtures,
   cabinets, appliances, closets, and stairs, with explicit code provenance.
 - [ ] Audit missing overall, opening, partition, and verified rough-opening dimensions.
@@ -587,10 +587,16 @@ Persistent views:
 
 ### 8.1 Construction module advisories
 
+Status: implemented as an optional shared analyzer. Default imperial and metric profiles stay
+disabled until a caller explicitly enables them, so existing projects do not receive unsolicited
+warnings. The analyzer reports straight wall lengths and documented door/window width fields that
+fall outside the configured tolerance for the selected profile, including verified rough, masonry,
+and finish opening widths when those values exist.
+
 Provide optional checks for project-selected modules such as:
 
-- 12-inch, 16-inch, and 24-inch modules.
-- 100 mm, 200 mm, 400 mm, and 600 mm metric modules.
+- [x] 12-inch, 16-inch, and 24-inch modules.
+- [x] 100 mm, 200 mm, 400 mm, and 600 mm metric modules.
 
 ### 8.2 Clearance advisories
 

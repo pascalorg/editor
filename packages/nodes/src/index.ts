@@ -166,6 +166,16 @@ export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
+export {
+  type BuildConstructionModuleAdvisoriesOptions,
+  buildConstructionModuleAdvisories,
+  type ConstructionModuleAdvisory,
+  type ConstructionModuleAdvisorySeverity,
+  type ConstructionModuleMeasurementKind,
+  type ConstructionModuleProfile,
+  type ConstructionModuleSystem,
+  DEFAULT_CONSTRUCTION_MODULE_PROFILES,
+} from './shared/construction-module-advisories'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
