@@ -31,6 +31,7 @@ import { applySlabElevationPreset, applySlabTopChange, clampSlabElevation } from
  */
 export function SlabPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -190,6 +191,23 @@ export function SlabPanel() {
 
   const area = calculateArea(node.polygon)
 
+  // Clean preset values per display system; imperial stores exact meters
+  // for whole-inch offsets.
+  const elevationPresets =
+    unit === 'imperial'
+      ? [
+          { label: 'Sunken (-6")', elevation: -0.1524 },
+          { label: 'Ground (0")', elevation: 0 },
+          { label: 'Raised (+2")', elevation: 0.0508 },
+          { label: 'Step (+6")', elevation: 0.1524 },
+        ]
+      : [
+          { label: 'Sunken (-15cm)', elevation: -0.15 },
+          { label: 'Ground (0m)', elevation: 0 },
+          { label: 'Raised (+5cm)', elevation: 0.05 },
+          { label: 'Step (+15cm)', elevation: 0.15 },
+        ]
+
   return (
     <PanelWrapper
       icon="/icons/floor.webp"
@@ -223,10 +241,13 @@ export function SlabPanel() {
         )}
 
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label="Sunken (-15cm)" onClick={() => handleElevationPreset(-0.15)} />
-          <ActionButton label="Ground (0m)" onClick={() => handleElevationPreset(0)} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleElevationPreset(0.05)} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleElevationPreset(0.15)} />
+          {elevationPresets.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleElevationPreset(preset.elevation)}
+            />
+          ))}
         </div>
       </PanelSection>
 

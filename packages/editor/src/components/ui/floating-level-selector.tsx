@@ -151,11 +151,25 @@ function LevelRow({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
-  const { toDisplay, displayUnit } = useLinearDisplay('m', 2)
+  const { isImperial, toDisplay, displayUnit } = useLinearDisplay('m', 2)
 
   const storeyHeight = getStoredLevelHeight(level)
   // toFixed(2) + strip one trailing zero: "2.50" → "2.5", "2.75" stays.
   const storeyHeightLabel = `${toDisplay(storeyHeight).toFixed(2).replace(/0$/, '')} ${displayUnit}`
+
+  // Clean preset values per display system; imperial stores exact meters
+  // for whole-foot storey heights.
+  const heightPresets = isImperial
+    ? [
+        { label: '8 ft', height: 2.4384 },
+        { label: '9 ft', height: 2.7432 },
+        { label: '10 ft', height: 3.048 },
+      ]
+    : [
+        { label: '2.5 m', height: 2.5 },
+        { label: '3.0 m', height: 3.0 },
+        { label: '3.5 m', height: 3.5 },
+      ]
 
   return (
     <div className="group/level">
@@ -236,21 +250,14 @@ function LevelRow({
                 value={Math.round(storeyHeight * 1000) / 1000}
               />
               <div className="mt-1.5 grid grid-cols-3 gap-1.5">
-                <ActionButton
-                  className="h-7 px-2"
-                  label="2.5 m"
-                  onClick={() => updateNode(level.id, { height: 2.5 })}
-                />
-                <ActionButton
-                  className="h-7 px-2"
-                  label="3.0 m"
-                  onClick={() => updateNode(level.id, { height: 3.0 })}
-                />
-                <ActionButton
-                  className="h-7 px-2"
-                  label="3.5 m"
-                  onClick={() => updateNode(level.id, { height: 3.5 })}
-                />
+                {heightPresets.map((preset) => (
+                  <ActionButton
+                    className="h-7 px-2"
+                    key={preset.label}
+                    label={preset.label}
+                    onClick={() => updateNode(level.id, { height: preset.height })}
+                  />
+                ))}
               </div>
             </PopoverContent>
           </Popover>

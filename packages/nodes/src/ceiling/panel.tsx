@@ -221,6 +221,21 @@ export function CeilingPanel() {
   const area = calculateArea(node.polygon)
   const isFollows = node.height == null
 
+  // Clean preset values per display system; imperial stores exact meters
+  // for 8'0" / 8'6" / 9'0" ceilings.
+  const heightPresets =
+    unit === 'imperial'
+      ? [
+          { label: 'Low (8\'0")', height: 2.4384 },
+          { label: 'Standard (8\'6")', height: 2.5908 },
+          { label: 'High (9\'0")', height: 2.7432 },
+        ]
+      : [
+          { label: 'Low (2.4m)', height: 2.4 },
+          { label: 'Standard (2.5m)', height: 2.5 },
+          { label: 'High (3.0m)', height: 3.0 },
+        ]
+
   return (
     <PanelWrapper
       icon="/icons/ceiling.webp"
@@ -257,9 +272,13 @@ export function CeilingPanel() {
         {/* Presets write an explicit height (clamped to the bound), so
             clicking one on a follows-mode ceiling switches it to custom. */}
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
-          <ActionButton label="Low (2.4m)" onClick={() => handleHeightChange(2.4)} />
-          <ActionButton label="Standard (2.5m)" onClick={() => handleHeightChange(2.5)} />
-          <ActionButton label="High (3.0m)" onClick={() => handleHeightChange(3.0)} />
+          {heightPresets.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleHeightChange(preset.height)}
+            />
+          ))}
         </div>
       </PanelSection>
 
