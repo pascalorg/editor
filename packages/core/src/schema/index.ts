@@ -89,6 +89,19 @@ export {
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export { DownspoutNode } from './nodes/downspout'
+export {
+  DrawingSheetAnnotationProfile,
+  DrawingSheetGeneralNote,
+  DrawingSheetKeyedNote,
+  DrawingSheetNode,
+  DrawingSheetOrientation,
+  DrawingSheetPaperSize,
+  DrawingSheetPlacedView,
+  DrawingSheetRect,
+  DrawingSheetScale,
+  DrawingSheetSchedulePlacement,
+  DrawingSheetTitleBlock,
+} from './nodes/drawing-sheet'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'

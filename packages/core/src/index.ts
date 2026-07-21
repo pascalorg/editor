@@ -13,6 +13,7 @@ export type {
   ConstructionNoteEvent,
   DoorEvent,
   DormerEvent,
+  DrawingSheetEvent,
   ElevatorEvent,
   EventSuffix,
   FenceEvent,

@@ -11,6 +11,7 @@ import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
+import { drawingSheetDefinition } from './drawing-sheet'
 import { ductFittingDefinition } from './duct-fitting'
 import { ductSegmentDefinition } from './duct-segment'
 import { ductTerminalDefinition } from './duct-terminal'
@@ -95,6 +96,7 @@ export const builtinPlugin: Plugin = {
     measurementDefinition as unknown as AnyNodeDefinition,
     constructionDimensionDefinition as unknown as AnyNodeDefinition,
     constructionNoteDefinition as unknown as AnyNodeDefinition,
+    drawingSheetDefinition as unknown as AnyNodeDefinition,
     structuralGridDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
@@ -142,6 +144,7 @@ export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
+export { drawingSheetDefinition } from './drawing-sheet'
 export { ductFittingDefinition } from './duct-fitting'
 export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'

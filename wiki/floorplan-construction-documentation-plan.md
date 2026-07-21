@@ -26,7 +26,7 @@ assessment.
 
 ### Drawing sheets and plotted output
 
-- [ ] Add a persistent Core drawing-sheet model with sheet identity, paper size, orientation,
+- [x] Add a persistent Core drawing-sheet model with sheet identity, paper size, orientation,
   placed views, drawing numbers, fixed scales, annotation profiles, notes, schedules, and title-block
   metadata.
 - [ ] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
@@ -270,25 +270,34 @@ The current architectural tick can remain the default.
 
 ### 3.1 Add a persistent drawing-sheet model
 
+Status: implemented. Core now has a persistent `drawing-sheet` node with sheet identity, paper
+setup, placed drawing views, fixed view scales, annotation profiles, sheet notes, keyed-note legend,
+schedule placement, and title-block metadata. Drawing sheets are building-level project data, are
+accepted by `AnyNode`, are registered in the built-in node plugin as hidden non-geometric document
+nodes, and do not add viewer/editor-only sheet composition behavior.
+
 A drawing sheet should own:
 
-- Sheet ID and number.
-- Sheet title.
-- Paper size and orientation.
-- One or more placed drawing views.
-- View title and drawing number.
-- Fixed drawing scale.
-- Annotation profile.
-- General notes.
-- Keyed-note legend.
-- Schedule placement.
-- Title-block metadata.
+- [x] Sheet ID and number.
+- [x] Sheet title.
+- [x] Paper size and orientation.
+- [x] One or more placed drawing views.
+- [x] View title and drawing number.
+- [x] Fixed drawing scale.
+- [x] Annotation profile.
+- [x] General notes.
+- [x] Keyed-note legend.
+- [x] Schedule placement.
+- [x] Title-block metadata.
 
 The model belongs in Core because it is persistent project data. Interactive sheet composition belongs in the editor application. The Viewer should not acquire editor-only sheet concepts.
 
 ### 3.2 Implement paper-space annotation sizing
 
-Status: initial automatic sizing is implemented for exported construction dimensions and measurement labels. Text height, tick size, extension gaps, overshoot, and label offsets are resolved from page points after the plan is fitted. Fixed user-selectable architectural scales and the remaining annotation categories still require the drawing-sheet work in Phase 3.1.
+Status: initial automatic sizing is implemented for exported construction dimensions and
+measurement labels. Text height, tick size, extension gaps, overshoot, and label offsets are
+resolved from page points after the plan is fitted. Fixed user-selectable architectural scales and
+the remaining annotation categories still require subsequent paper-space work.
 
 Resolve the following from plotted scale:
 
