@@ -38,12 +38,7 @@ export const ConstructionDrawingType = z.enum([
   'roof-plan',
   'site-plan',
 ])
-export const ConstructionDimensionDrawingPresentation = z.enum([
-  'shown',
-  'omit',
-  'reference',
-  'controlled',
-])
+export const ConstructionDimensionDrawingPresentation = z.enum(['shown', 'omit', 'controlled'])
 export const ConstructionDimensionDrawingOverride = z.object({
   drawingType: ConstructionDrawingType,
   presentation: ConstructionDimensionDrawingPresentation,
@@ -64,7 +59,6 @@ export const ConstructionDimensionTerminator = z.enum([
 export const ConstructionDimensionTextPosition = z.enum(['above', 'centered'])
 export const ConstructionDimensionImperialPrecision = z.enum(['1', '1/2', '1/4', '1/8', '1/16'])
 export const ConstructionDimensionMetricNotation = z.enum(['meters', 'millimeters'])
-export const ConstructionDimensionReferenceStyle = z.enum(['parentheses', 'suffix'])
 
 export const ConstructionDimensionNode = BaseNode.extend({
   id: objectId('construction-dimension'),
@@ -81,7 +75,6 @@ export const ConstructionDimensionNode = BaseNode.extend({
   mode: ConstructionDimensionMode.default('linear'),
   featureCount: z.number().int().min(1).max(999).default(1),
   showCenterMark: z.boolean().default(true),
-  reference: z.boolean().default(false),
   prefix: z.string().max(40).default(''),
   suffix: z.string().max(40).default(''),
   textOverride: z.string().trim().min(1).max(120).nullable().default(null),
@@ -92,7 +85,6 @@ export const ConstructionDimensionNode = BaseNode.extend({
   metricNotation: ConstructionDimensionMetricNotation.default('meters'),
   extensionStartGap: z.number().finite().min(0).max(1).default(0.075),
   extensionOvershoot: z.number().finite().min(0).max(1).default(0.12),
-  referenceStyle: ConstructionDimensionReferenceStyle.default('parentheses'),
   drawingType: ConstructionDrawingType.default('floor-plan'),
   drawingOverrides: z.array(ConstructionDimensionDrawingOverride).max(5).default([]),
   controllingDimensionId: objectId('construction-dimension').nullable().default(null),
@@ -106,10 +98,10 @@ export const ConstructionDimensionNode = BaseNode.extend({
   - mode: linear, radius, diameter, center mark, chord, arc length, angular, or coordinate
   - featureCount: repeated-feature multiplier used by diameter/radius and other notation
   - showCenterMark: displays the resolved circle/angle center where applicable
-  - reference/prefix/suffix/textOverride: document notation overrides without changing geometry
-  - datumPolicy/terminator/textPosition/imperialPrecision/metricNotation/extensionStartGap/extensionOvershoot/referenceStyle: dimension-standard overrides
+  - prefix/suffix/textOverride: document notation overrides without changing geometry
+  - datumPolicy/terminator/textPosition/imperialPrecision/metricNotation/extensionStartGap/extensionOvershoot: dimension-standard overrides
   - drawingType: the primary persistent drawing that owns the dimension
-  - drawingOverrides: omit, show, reference, or foundation-control presentation per drawing type
+  - drawingOverrides: omit, show, or foundation-control presentation per drawing type
   - controllingDimensionId: foundation dimension whose associative geometry controls this dimension
   `,
 )
@@ -132,9 +124,6 @@ export type ConstructionDimensionImperialPrecision = z.infer<
 >
 export type ConstructionDimensionMetricNotation = z.infer<
   typeof ConstructionDimensionMetricNotation
->
-export type ConstructionDimensionReferenceStyle = z.infer<
-  typeof ConstructionDimensionReferenceStyle
 >
 export type ConstructionDimensionNode = z.infer<typeof ConstructionDimensionNode>
 

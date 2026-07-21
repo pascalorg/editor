@@ -171,7 +171,7 @@ Exported construction dimensions and measurement labels now resolve their main t
 
 ### Construction dimensions have no independent visibility layer
 
-Measurement visibility is respected by full export, but automatic wall dimensions are still produced as part of wall floor-plan geometry. Automatic dimensions, opening marks, room labels, structural references, and reference dimensions do not yet have independent per-view visibility controls.
+The live floor plan exposes independent visibility controls for automatic dimensions, manual dimensions, measurements, opening marks, structural grids, room labels, and stair annotations. Full export intentionally includes every supported annotation category regardless of the live-view toggles.
 
 ### Automatic collision layout has no persistent manual override
 

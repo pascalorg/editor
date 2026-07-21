@@ -17,7 +17,6 @@ export type ConstructionDimensionDrawingStandard = {
   tierSpacing: number
   extensionStartGap: number
   extensionOvershoot: number
-  referenceStyle: 'parentheses' | 'suffix'
 }
 
 export const DEFAULT_CONSTRUCTION_DIMENSION_STANDARD = {
@@ -28,12 +27,11 @@ export const DEFAULT_CONSTRUCTION_DIMENSION_STANDARD = {
   metricNotation: 'meters',
   openingChainOffset: 0.55,
   wallSpanOffset: 1.05,
-  firstOpeningWidthOffset: 0.28,
+  firstOpeningWidthOffset: 0.62,
   firstGeneralTierOffset: 0.55,
   tierSpacing: 0.62,
   extensionStartGap: 0.075,
   extensionOvershoot: 0.12,
-  referenceStyle: 'parentheses',
 } satisfies ConstructionDimensionDrawingStandard
 
 export function constructionDimensionStandard(

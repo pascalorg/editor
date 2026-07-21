@@ -82,7 +82,7 @@ const BUILD_TYPES: BuildType[] = [
   {
     id: 'structural-grid',
     label: 'Structural Grid',
-    iconSrc: '/icons/blueprint.webp',
+    iconSrc: '/icons/structural-grid.webp',
     kind: 'structural-grid',
   },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },

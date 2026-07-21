@@ -132,6 +132,7 @@ export function buildConstructionDimensionPreviewGeometries(
   baselinePoint: MeasurementPoint,
   unit: 'metric' | 'imperial',
   mode: ConstructionDimensionMode = 'linear',
+  metricNotation: 'meters' | 'millimeters' = 'meters',
 ): Array<Extract<FloorplanGeometry, { kind: 'dimension' }>> {
   if (!['linear', 'chord', 'radius', 'diameter'].includes(mode)) return []
   const direction = resolveConstructionDimensionDraftDirection(points)
@@ -148,7 +149,7 @@ export function buildConstructionDimensionPreviewGeometries(
     const dx = end[0] - start[0]
     const dz = end[2] - start[2]
     const value = Math.abs(dx * direction[0] + dz * direction[1])
-    const rawText = formatLinearMeasurement(value, unit)
+    const rawText = formatLinearMeasurement(value, unit, metricNotation)
     const text =
       mode === 'radius'
         ? `R ${rawText}`
@@ -269,6 +270,7 @@ export function FloorplanConstructionDimensionToolLayer() {
   const active = editorMode === 'build' && tool === 'construction-dimension'
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const renderContext = useFloorplanRender()
   const drawingType = useDrawingView((state) => state.drawingType)
 
@@ -496,9 +498,10 @@ export function FloorplanConstructionDimensionToolLayer() {
             hover.point,
             unit,
             dimensionMode,
+            metricNotation,
           )
         : [],
-    [dimensionMode, draft.points, draft.stage, hover, unit],
+    [dimensionMode, draft.points, draft.stage, hover, metricNotation, unit],
   )
   const witnessDraftPoints =
     draft.stage === 'witnesses' && hover ? [...draft.points, hover.point] : draft.points

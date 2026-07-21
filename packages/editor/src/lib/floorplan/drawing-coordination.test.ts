@@ -22,19 +22,6 @@ describe('resolveNodeForDrawingType', () => {
     ).toBe(foundation)
   })
 
-  test('shows coordinated copies as references without changing their geometry', () => {
-    const node = ConstructionDimensionNode.parse({
-      drawingOverrides: [{ drawingType: 'roof-plan', presentation: 'reference' }],
-    })
-    const resolved = resolveNodeForDrawingType(node, { [node.id]: node }, 'roof-plan')
-    expect(resolved).toMatchObject({
-      id: node.id,
-      anchors: node.anchors,
-      metadata: { drawingCoordinationLocked: true },
-      reference: true,
-    })
-  })
-
   test('applies view-specific suppressed segments without changing physical anchors', () => {
     const node = ConstructionDimensionNode.parse({
       anchors: [
@@ -60,27 +47,6 @@ describe('resolveNodeForDrawingType', () => {
     expect(node.metadata).toEqual({})
   })
 
-  test('retains suppressed segments on reference drawing copies', () => {
-    const node = ConstructionDimensionNode.parse({
-      drawingOverrides: [
-        {
-          drawingType: 'roof-plan',
-          presentation: 'reference',
-          suppressedSegmentIndexes: [0],
-        },
-      ],
-    })
-    const resolved = resolveNodeForDrawingType(node, { [node.id]: node }, 'roof-plan')
-
-    expect(resolved).toMatchObject({
-      reference: true,
-      metadata: {
-        drawingCoordinationLocked: true,
-        suppressedDimensionSegmentIndexes: [0],
-      },
-    })
-  })
-
   test('derives linked floor-plan geometry from a controlling foundation dimension', () => {
     const floor = ConstructionDimensionNode.parse({
       id: 'construction-dimension_floor',
@@ -99,11 +65,10 @@ describe('resolveNodeForDrawingType', () => {
       anchors: foundation.anchors,
       baseline: foundation.baseline,
       metadata: { drawingCoordinationLocked: true },
-      reference: true,
     })
   })
 
-  test('marks a missing foundation controller as an unlinked reference', () => {
+  test('marks a missing foundation controller as unlinked', () => {
     const floor = ConstructionDimensionNode.parse({
       drawingOverrides: [{ drawingType: 'floor-plan', presentation: 'controlled' }],
       controllingDimensionId: 'construction-dimension_missing',
@@ -111,7 +76,6 @@ describe('resolveNodeForDrawingType', () => {
     })
     expect(resolveNodeForDrawingType(floor, { [floor.id]: floor }, 'floor-plan')).toMatchObject({
       prefix: 'UNLINKED CONTROL · TYP · ',
-      reference: true,
     })
   })
 })

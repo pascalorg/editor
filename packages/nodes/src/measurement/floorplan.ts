@@ -46,6 +46,7 @@ export function buildMeasurementFloorplan(
   if (node.visible === false) return null
 
   const unit = ctx.viewState?.unit ?? 'metric'
+  const metricNotation = ctx.viewState?.metricNotation ?? 'meters'
   const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
   const measurement = resolved.payload
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
@@ -112,7 +113,7 @@ export function buildMeasurementFloorplan(
           appearance: 'outlined',
           cx: (x1 + x2) / 2,
           cy: (y1 + y2) / 2,
-          text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit)}`,
+          text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation)}`,
           angle: Math.atan2(y2 - y1, x2 - x1),
           offsetPx: 14,
         },
@@ -163,7 +164,7 @@ export function buildMeasurementFloorplan(
     const label =
       measurement.kind === 'area'
         ? `A ${formatAreaLabel(measurementArea(measurement.base), unit)}`
-        : `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit)}`
+        : `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit, metricNotation)}`
 
     return {
       kind: 'group',

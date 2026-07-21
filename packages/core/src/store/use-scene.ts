@@ -686,6 +686,22 @@ function migrateNodes(nodes: Record<string, any>): {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
     }
 
+    if (node.type === 'construction-dimension') {
+      const {
+        reference: _reference,
+        referenceStyle: _referenceStyle,
+        ...dimension
+      } = patchedNodes[id]
+      const drawingOverrides = Array.isArray(dimension.drawingOverrides)
+        ? dimension.drawingOverrides.map((override: Record<string, unknown>) =>
+            override.presentation === 'reference'
+              ? { ...override, presentation: 'shown' }
+              : override,
+          )
+        : dimension.drawingOverrides
+      patchedNodes[id] = { ...dimension, drawingOverrides }
+    }
+
     // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the
     // per-compartment `doorType`) and was removed from both cabinet schemas;
     // `handlePosition: 'edge'` behaved identically to 'auto' and was dropped

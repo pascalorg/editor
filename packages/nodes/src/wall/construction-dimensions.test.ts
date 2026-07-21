@@ -75,19 +75,30 @@ describe('formatConstructionLength', () => {
 })
 
 describe('buildWallConstructionDimensions', () => {
-  test('calls out a curved wall with a center-to-curve radius leader', () => {
-    const geometry = buildCurvedWallConstructionDimensions(wall({ curveOffset: 1 }), {
+  test('dimensions curved-wall depth orthogonally without a radius leader', () => {
+    const curved = wall({ curveOffset: 1 })
+    const extension = wall({ id: 'wall_extension', start: [10, 0], end: [14, 0] })
+    const geometry = buildCurvedWallConstructionDimensions(curved, {
       unit: 'metric',
+      siblings: [extension],
     })[0]
 
-    expect(geometry).toMatchObject({ kind: 'group', annotationRole: 'automatic-dimension' })
-    if (geometry?.kind !== 'group') return
-    const leader = geometry.children[0]
-    const label = geometry.children.find((entry) => entry.kind === 'dimension-label')
-
-    expect(leader).toMatchObject({ kind: 'line', x1: 5, y1: 12, y2: -1 })
-    expect(leader?.kind === 'line' ? leader.x2 : Number.NaN).toBeCloseTo(5)
-    expect(label).toMatchObject({ kind: 'dimension-label', text: 'R 13m' })
+    expect(geometry).toMatchObject({
+      kind: 'dimension-string',
+      offsetNormal: [1, 0],
+      segments: [
+        {
+          end: [10, -0.1],
+          text: '1m',
+        },
+      ],
+    })
+    if (geometry?.kind !== 'dimension-string') return
+    const segment = geometry.segments[0]
+    expect(segment?.start[0]).toBeCloseTo(5)
+    expect(segment?.start[1]).toBeCloseTo(-1.1)
+    expect(segment?.dimensionStart[0]).toBeCloseTo(14.55)
+    expect(segment?.dimensionEnd[0]).toBeCloseTo(14.55)
   })
 
   test('builds a jamb-by-jamb chain plus a farther wall span', () => {
@@ -228,6 +239,71 @@ describe('buildWallConstructionDimensions', () => {
 })
 
 describe('buildLevelWallConstructionDimensionPlan', () => {
+  test('chains straight facade runs across a curved-wall opening', () => {
+    const upper = wall({
+      id: 'wall_left_upper',
+      start: [0, 0],
+      end: [0, -6],
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    const curved = wall({
+      id: 'wall_left_curve',
+      start: [0, -6],
+      end: [0, -18],
+      curveOffset: 6,
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    const lower = wall({
+      id: 'wall_left_lower',
+      start: [0, -18],
+      end: [0, -24],
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    const top = wall({ id: 'wall_top', start: [0, 0], end: [12, 0] })
+    const right = wall({
+      id: 'wall_right',
+      start: [12, 0],
+      end: [12, -24],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const bottom = wall({
+      id: 'wall_bottom',
+      start: [12, -24],
+      end: [0, -24],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+
+    const plan = buildLevelWallConstructionDimensionPlan(
+      [upper, curved, lower, top, right, bottom],
+      {},
+    )
+    const leftFacade = plan.get(lower.id) ?? []
+
+    expect(leftFacade.map((entry) => entry.tier)).toEqual(['jogs', 'jogs', 'jogs', 'overall'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(leftFacade, 'metric'))).toEqual([
+      '6m',
+      '12m',
+      '6m',
+      '24m',
+    ])
+    const jogs = leftFacade.filter((entry) => entry.tier === 'jogs')
+    const overall = leftFacade.find((entry) => entry.tier === 'overall')
+    expect(jogs[0]?.dimensionStart?.[0]).toBeCloseTo(-6.65)
+    expect(overall?.dimensionStart?.[0]).toBeCloseTo(-7.27)
+    expect(
+      leftFacade.every(
+        (entry) =>
+          (entry.dimensionStart?.[0] ?? Number.POSITIVE_INFINITY) < -6.1 &&
+          (entry.dimensionEnd?.[0] ?? Number.POSITIVE_INFINITY) < -6.1,
+      ),
+    ).toBe(true)
+  })
+
   test('coordinates opening widths, centers, partition references, and overall extent', () => {
     const exterior = wall()
     const partition = wall({
@@ -265,7 +341,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'overall',
     ])
     expect(exteriorPlanned.map((entry) => Number(entry.offsetDistance.toFixed(2)))).toEqual([
-      0.28, 0.28, 0.9, 0.9, 0.9, 1.52, 1.52, 2.14,
+      0.62, 0.62, 1.24, 1.24, 1.24, 1.86, 1.86, 2.48,
     ])
     expect(dimensionTexts(renderPlannedConstructionDimensions(exteriorPlanned, 'metric'))).toEqual([
       '1m',
@@ -282,6 +358,30 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       end: [10, 0.1],
       offsetNormal: [0, 1],
     })
+  })
+
+  test('spaces the opening-width tier from the wall like the following dimension tiers', () => {
+    const exterior = wall()
+    const door = DoorNode.parse({
+      id: 'door_entry',
+      parentId: exterior.id,
+      position: [2, 1.05, 0],
+      width: 1,
+    })
+    const standard = constructionDimensionStandard()
+    const planned =
+      buildLevelWallConstructionDimensionPlan([exterior], { [door.id]: door }, standard).get(
+        exterior.id,
+      ) ?? []
+    const tierOffsets = planned.reduce<number[]>((offsets, entry) => {
+      if (!offsets.includes(entry.offsetDistance)) offsets.push(entry.offsetDistance)
+      return offsets
+    }, [])
+
+    expect(tierOffsets[0]).toBeCloseTo(standard.tierSpacing)
+    for (const [index, offset] of tierOffsets.slice(1).entries()) {
+      expect(offset - tierOffsets[index]!).toBeCloseTo(standard.tierSpacing)
+    }
   })
 
   test('labels verified rough openings while retaining framed centerline locations', () => {
@@ -544,6 +644,132 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       offsetNormal: [0, 1],
       offsetDistance: 1.05,
     })
+    for (const geometry of renderPlannedConstructionDimensions(planned, 'metric')) {
+      expect(geometry.kind).toBe('dimension-string')
+      if (geometry.kind !== 'dimension-string') continue
+      for (const segment of geometry.segments) {
+        const dimensionStart = segment.dimensionStart ?? [
+          segment.start[0] + geometry.offsetNormal[0] * geometry.offsetDistance,
+          segment.start[1] + geometry.offsetNormal[1] * geometry.offsetDistance,
+        ]
+        const clearance =
+          (dimensionStart[0] - segment.start[0]) * geometry.offsetNormal[0] +
+          (dimensionStart[1] - segment.start[1]) * geometry.offsetNormal[1]
+        expect(clearance).toBeCloseTo(geometry.offsetDistance)
+      }
+    }
+  })
+
+  test('dimensions perimeter door widths on the room side in every wall orientation', () => {
+    const top = wall({ id: 'wall_top', end: [6, 0] })
+    const right = wall({
+      id: 'wall_right',
+      start: [6, 0],
+      end: [6, -6],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const bottom = wall({
+      id: 'wall_bottom',
+      start: [6, -6],
+      end: [0, -6],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const left = wall({
+      id: 'wall_left',
+      start: [0, -6],
+      end: [0, 0],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const cases = [
+      { wall: top, normal: [0, -1] as const, width: 1.2 },
+      { wall: right, normal: [-1, 0] as const, width: 1.3 },
+      { wall: bottom, normal: [0, 1] as const, width: 1.4 },
+      { wall: left, normal: [1, 0] as const, width: 1.5 },
+    ]
+    const doors = cases.map(({ wall: host, width }, index) =>
+      DoorNode.parse({
+        id: `door_${index}`,
+        parentId: host.id,
+        position: [3, 1.05, 0],
+        width,
+      }),
+    )
+    const plan = buildLevelWallConstructionDimensionPlan(
+      [top, right, bottom, left],
+      Object.fromEntries(doors.map((door) => [door.id, door])),
+    )
+
+    for (const { wall: host, normal, width } of cases) {
+      const roomSideDimensions = (plan.get(host.id) ?? []).filter(
+        (entry) =>
+          (entry.tier === 'interior' || entry.tier === 'interior-overall') &&
+          entry.offsetNormal[0] * normal[0] + entry.offsetNormal[1] * normal[1] > 0.99,
+      )
+      expect(roomSideDimensions.length).toBeGreaterThan(0)
+      expect(
+        dimensionTexts(renderPlannedConstructionDimensions(roomSideDimensions, 'metric')),
+      ).toContain(`${width}m`)
+    }
+  })
+
+  test('keeps room-side door and window dimensions when the opposite boundary is curved', () => {
+    const top = wall({ id: 'wall_top', end: [6, 0] })
+    const right = wall({
+      id: 'wall_right',
+      start: [6, 0],
+      end: [6, -8],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const bottom = wall({
+      id: 'wall_bottom',
+      start: [6, -8],
+      end: [0, -8],
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const curved = wall({
+      id: 'wall_curved',
+      start: [0, -8],
+      end: [0, 0],
+      curveOffset: 2,
+      frontSide: 'exterior',
+      backSide: 'interior',
+    })
+    const door = DoorNode.parse({
+      id: 'door_right',
+      parentId: right.id,
+      position: [2, 1.05, 0],
+      width: 1.2,
+    })
+    const window = WindowNode.parse({
+      id: 'window_right',
+      parentId: right.id,
+      position: [6, 1.2, 0],
+      width: 1.5,
+    })
+    const straight = WallNode.parse({ ...curved, id: 'wall_straight', curveOffset: 0 })
+    const reverseCurve = WallNode.parse({ ...curved, id: 'wall_reverse_curve', curveOffset: -2 })
+    const roomSideTexts = (oppositeBoundary: WallNode) => {
+      const planned =
+        buildLevelWallConstructionDimensionPlan([top, right, bottom, oppositeBoundary], {
+          [door.id]: door,
+          [window.id]: window,
+        }).get(right.id) ?? []
+      const roomSideDimensions = planned.filter(
+        (entry) =>
+          (entry.tier === 'interior' || entry.tier === 'interior-overall') &&
+          entry.offsetNormal[0] < -0.99,
+      )
+      return dimensionTexts(renderPlannedConstructionDimensions(roomSideDimensions, 'metric'))
+    }
+
+    expect(roomSideTexts(straight)).toEqual(expect.arrayContaining(['1.2m', '1.5m']))
+    expect(roomSideTexts(curved)).toEqual(expect.arrayContaining(['1.2m', '1.5m']))
+    expect(roomSideTexts(reverseCurve)).toEqual(expect.arrayContaining(['1.2m', '1.5m']))
   })
 
   test('starts and ends an interior opening chain at the adjacent wall faces', () => {

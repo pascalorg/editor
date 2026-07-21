@@ -23,7 +23,7 @@ import {
   buildStairDocumentation,
   resolveStairPlanDirection,
   resolveStraightStairDirectionArrow,
-  stairOverheadStartStep,
+  stairPlanBreakStep,
 } from './documentation'
 
 /**
@@ -111,20 +111,16 @@ export function buildStairFloorplan(
       // Tread bars — one per visible step inside the segment.
       // `buildFloorplanStairEntry` already returns the thickened
       // polygons; we emit them as filled polygons.
-      const overheadStartStep = stairOverheadStartStep(segmentEntry.segment.stepCount)
+      const breakStep = stairPlanBreakStep(segmentEntry.segment.stepCount)
       for (let treadIndex = 0; treadIndex < segmentEntry.treadBars.length; treadIndex += 1) {
+        if (treadIndex + 1 >= breakStep) continue
         const treadBar = segmentEntry.treadBars[treadIndex]!
-        const isOverhead = treadIndex + 1 >= overheadStartStep
         children.push({
           kind: 'polygon',
           points: toFloorplanPoints(treadBar),
-          fill: isOverhead ? 'none' : treadStroke,
-          stroke: isOverhead ? treadStroke : 'none',
-          strokeWidth: isOverhead ? 1 : undefined,
-          strokeDasharray: isOverhead ? '0.08 0.08' : undefined,
-          vectorEffect: isOverhead ? 'non-scaling-stroke' : undefined,
+          fill: treadStroke,
+          stroke: 'none',
           opacity: showSelectedChrome ? 0.88 : 0.6,
-          annotationRole: isOverhead ? 'overhead-geometry' : undefined,
         })
       }
 
@@ -269,10 +265,9 @@ export function buildStairFloorplan(
     const stepBase = stairType === 'spiral' ? 6 : 4
     const stepCount = Math.max(stepBase, Math.round(stair.stepCount ?? 10))
     const stepSweep = normalizedSweepAngle / stepCount
-    // Treads above the plan cut are overhead construction, so both curved
-    // and spiral stairs switch to dashed lines after the break position.
-    const dashedFromIndex = stairOverheadStartStep(stepCount)
+    const breakStep = stairPlanBreakStep(stepCount)
     for (let index = 0; index <= stepCount; index += 1) {
+      if (index >= breakStep && index !== stepCount) continue
       const angle = sectorStartAngle + stepSweep * index
       const inner = getArcPlanPoint(stairCenter, innerRadius, angle)
       const outer = getArcPlanPoint(stairCenter, outerRadius, angle)
@@ -281,8 +276,7 @@ export function buildStairFloorplan(
       // Curved: regular stroke everywhere, but both the starting and the
       // ending step lines are bolded (matches the legacy
       // `<FloorplanStairLayer>` curved branch).
-      // Spiral: only the last step is accented + bolded; intermediate
-      // steps past `dashedFromIndex` are dashed.
+      // Spiral: only the last step is accented + bolded.
       const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
       const stepWidth =
         stairType === 'spiral' ? (isEmphasised ? 1.8 : 1.15) : isEmphasised ? 1.5 : 1.1
@@ -294,9 +288,7 @@ export function buildStairFloorplan(
         y2: outer.y,
         stroke: stairType === 'spiral' && isLast ? stairAccent : stairStroke,
         strokeWidth: stepWidth,
-        strokeDasharray: index >= dashedFromIndex && !isLast ? '0.1 0.08' : undefined,
         vectorEffect: 'non-scaling-stroke',
-        annotationRole: index >= dashedFromIndex && !isLast ? 'overhead-geometry' : undefined,
       })
     }
 

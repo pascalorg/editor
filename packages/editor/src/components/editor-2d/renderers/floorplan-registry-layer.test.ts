@@ -7,6 +7,8 @@ import type {
   LiveNodeOverrides,
 } from '@pascal-app/core'
 import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
 import {
   cancelFloorplanAffordanceDrag,
@@ -14,6 +16,7 @@ import {
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanHandleDoubleClickAffordance,
+  InteractiveGeometry,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
@@ -213,6 +216,47 @@ describe('floorplan vertex double-click routing', () => {
 })
 
 describe('floorplan annotation overlay routing', () => {
+  test('keeps automatic dimension strings left-to-right and top-to-bottom after rotation', () => {
+    const noop = () => {}
+    const renderAt180Degrees = (geometry: FloorplanGeometry) =>
+      renderToStaticMarkup(
+        createElement(
+          'svg',
+          null,
+          createElement(InteractiveGeometry, {
+            activeDragId: null,
+            activeRotateNodeId: null,
+            geometry,
+            hatchPatternId: undefined,
+            hoveredHandleId: null,
+            isMarqueeSelectionActive: false,
+            nodeId: 'wall_test' as AnyNodeId,
+            onHandleDoubleClick: noop,
+            onHandleHoverChange: noop,
+            onHandlePointerDown: noop,
+            onMoveHandlePointerDown: noop,
+            palette: undefined,
+            sceneRotationDeg: 180,
+            unitsPerPixel: 0.01,
+          }),
+        ),
+      )
+    const dimensionString = (
+      end: readonly [number, number],
+      offsetNormal: readonly [number, number],
+    ): FloorplanGeometry => ({
+      kind: 'dimension-string',
+      segments: [{ start: [0, 0], end, text: '2m' }],
+      offsetNormal,
+      offsetDistance: 0.55,
+      extensionOvershoot: 0.12,
+      textPosition: 'above',
+    })
+
+    expect(renderAt180Degrees(dimensionString([2, 0], [0, 1]))).toContain('rotate(-180)')
+    expect(renderAt180Degrees(dimensionString([0, 2], [1, 0]))).toContain('rotate(-90)')
+  })
+
   test('keeps a fixed mark pill together in the overlay pass', () => {
     const mark = {
       kind: 'group',

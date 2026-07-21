@@ -45,13 +45,22 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
   pointerEventsOverride,
   sceneRotationDeg = 0,
   annotationUnitsPerPoint,
+  screenUnitsPerPixel,
 }: {
   geometry: FloorplanGeometry
   pointerEventsOverride?: string
   sceneRotationDeg?: number
   annotationUnitsPerPoint?: number
+  screenUnitsPerPixel?: number
 }) {
-  return renderNode(geometry, 0, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint)
+  return renderNode(
+    geometry,
+    0,
+    pointerEventsOverride,
+    sceneRotationDeg,
+    annotationUnitsPerPoint,
+    screenUnitsPerPixel,
+  )
 })
 
 function styleAttrs(
@@ -164,7 +173,6 @@ function documentStrokeWidth(
   geometry: { strokeWidth?: number; annotationRole?: string },
   annotationUnitsPerPoint: number,
 ): number {
-  if (geometry.annotationRole === 'overhead-geometry') return 0.35
   return Math.max(DOCUMENT_DEFAULT_STROKE_WIDTH_PT, Math.min(1.2, geometry.strokeWidth ?? 0.5))
 }
 
@@ -288,6 +296,7 @@ function renderNode(
   pointerEventsOverride?: string,
   sceneRotationDeg = 0,
   annotationUnitsPerPoint?: number,
+  screenUnitsPerPixel?: number,
 ): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
@@ -439,7 +448,8 @@ function renderNode(
       )
 
     case 'dimension-label': {
-      const unitsPerPixel = annotationUnitsPerPoint ?? STATIC_LABEL_UNITS_PER_PIXEL
+      const unitsPerPixel =
+        annotationUnitsPerPoint ?? screenUnitsPerPixel ?? STATIC_LABEL_UNITS_PER_PIXEL
       const documentMode = annotationUnitsPerPoint !== undefined
       const outlined = g.appearance === 'outlined'
       const padX = unitsPerPixel * 6
@@ -525,7 +535,14 @@ function renderNode(
           transform={transform}
         >
           {children.map((child, i) =>
-            renderNode(child, i, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint),
+            renderNode(
+              child,
+              i,
+              pointerEventsOverride,
+              sceneRotationDeg,
+              annotationUnitsPerPoint,
+              screenUnitsPerPixel,
+            ),
           )}
         </g>
       )

@@ -72,6 +72,41 @@ describe('FloorplanGeometryRenderer static labels', () => {
     expect(markup).toContain('font-size="0.08"')
   })
 
+  test('uses live screen sizing without enabling document annotation styles', () => {
+    const geometry = {
+      kind: 'group',
+      children: [
+        {
+          kind: 'text',
+          x: 0,
+          y: 0,
+          text: 'LIVE TEXT',
+          fontSize: 0.16,
+          upright: true,
+        },
+        {
+          kind: 'dimension-label',
+          appearance: 'outlined',
+          cx: 1,
+          cy: 2,
+          text: '2.00m',
+          angle: 0,
+          offsetPx: 14,
+        },
+      ],
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} screenUnitsPerPixel={0.02} />
+      </svg>,
+    )
+
+    expect(markup).toContain('font-size="0.16"')
+    expect(markup).toContain('font-size="0.24"')
+    expect(markup).toContain('translate(0 -0.28)')
+  })
+
   test('resolves generic annotation text from paper points only in document mode', () => {
     const geometry = {
       kind: 'text',

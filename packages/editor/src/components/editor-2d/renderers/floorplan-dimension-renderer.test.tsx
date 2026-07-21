@@ -200,4 +200,24 @@ describe('architectural floor-plan dimensions', () => {
     expect(markup).toContain('2m')
     expect(markup).toContain('3m')
   })
+
+  test('offsets automatic dimension-string lines when no explicit baseline is supplied', () => {
+    const automaticString = {
+      kind: 'dimension-string',
+      segments: [{ start: [0, 0], end: [2, 0], text: '2m' }],
+      offsetNormal: [0, 1],
+      offsetDistance: 0.55,
+      extensionOvershoot: 0.12,
+      textPosition: 'above',
+    } satisfies Extract<FloorplanGeometry, { kind: 'dimension-string' }>
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionStringRenderer geometry={automaticString} />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-dimension-default-y1="0.55"')
+    expect(markup).toContain('data-floorplan-dimension-default-y2="0.55"')
+  })
 })

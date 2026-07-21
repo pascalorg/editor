@@ -12,6 +12,7 @@ import {
   type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
+import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
@@ -147,12 +148,19 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
 
   const dimensionStroke =
     isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
+  const dimensionStandard = constructionDimensionStandard({
+    metricNotation: view?.metricNotation ?? 'meters',
+  })
   if (isCurvedWall(node)) {
     children.push(
       ...buildCurvedWallConstructionDimensions(self, {
         unit: view?.unit ?? 'metric',
         stroke: dimensionStroke,
         profile: documentMode ? 'document' : 'editor',
+        standard: dimensionStandard,
+        siblings: ctx.siblings.filter(
+          (sibling): sibling is AnyNode & WallNode => sibling.type === 'wall',
+        ),
       }),
     )
   } else {
@@ -164,6 +172,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
           view?.unit ?? 'metric',
           dimensionStroke,
           documentMode ? 'document' : 'editor',
+          dimensionStandard,
         ),
       )
     } else if (!levelData) {
@@ -172,6 +181,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
           unit: view?.unit ?? 'metric',
           stroke: dimensionStroke,
           profile: documentMode ? 'document' : 'editor',
+          standard: dimensionStandard,
         }),
       )
     }
@@ -231,19 +241,18 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       const dz = node.end[1] - node.start[1]
       const wallLength = Math.hypot(dx, dz)
       if (wallLength > 1e-6) {
-        const midX = (node.start[0] + node.end[0]) / 2
-        const midZ = (node.start[1] + node.end[1]) / 2
+        const midpoint = getWallMidpointHandlePoint(node)
         const nx = -dz / wallLength
         const nz = dx / wallLength
         const offset = floorplanWallThickness(node) / 2 + 0.05
         children.push({
           kind: 'move-arrow',
-          point: [midX + nx * offset, midZ + nz * offset],
+          point: [midpoint.x + nx * offset, midpoint.y + nz * offset],
           angle: Math.atan2(nz, nx),
         })
         children.push({
           kind: 'move-arrow',
-          point: [midX - nx * offset, midZ - nz * offset],
+          point: [midpoint.x - nx * offset, midpoint.y - nz * offset],
           angle: Math.atan2(-nz, -nx),
         })
       }

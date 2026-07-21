@@ -8,8 +8,8 @@ import type {
 export type DimensionStringSegment = {
   witnessStart: FloorplanPoint
   witnessEnd: FloorplanPoint
-  dimensionStart: FloorplanPoint
-  dimensionEnd: FloorplanPoint
+  dimensionStart?: FloorplanPoint
+  dimensionEnd?: FloorplanPoint
   text: string
 }
 

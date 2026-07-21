@@ -107,6 +107,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         cy,
         view?.unit ?? 'metric',
         view?.purpose === 'document' ? 'document' : 'editor',
+        view?.metricNotation ?? 'meters',
         stroke,
       ),
     )
@@ -148,6 +149,7 @@ function buildRoomLabels(
   y: number,
   unit: 'metric' | 'imperial',
   profile: ConstructionLengthProfile,
+  metricNotation: 'meters' | 'millimeters',
   color: string,
 ): FloorplanGeometry[] {
   const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []
@@ -166,7 +168,9 @@ function buildRoomLabels(
     lines.push({ text: finishes.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
   }
 
-  const roomDetails = [`CH: ${formatConstructionLength(node.ceilingHeight, unit, profile)}`]
+  const roomDetails = [
+    `CH: ${formatConstructionLength(node.ceilingHeight, unit, profile, { metricNotation })}`,
+  ]
   if (node.occupancy) roomDetails.push(node.occupancy)
   lines.push({ text: roomDetails.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
 

@@ -12,6 +12,7 @@ export function QuickMeasurementHud() {
   const viewMode = useEditor((state) => state.viewMode)
   const entry = useQuickMeasurementHud((state) => selectQuickMeasurementHudEntry(state, viewMode))
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
 
   if (!entry) return null
 
@@ -21,7 +22,12 @@ export function QuickMeasurementHud() {
       data-quick-measure-hud
     >
       <div className="w-full max-w-[34rem]">
-        <QuickMeasurementCard lensState={entry.lensState} report={entry.report} unit={unit} />
+        <QuickMeasurementCard
+          lensState={entry.lensState}
+          metricNotation={metricNotation}
+          report={entry.report}
+          unit={unit}
+        />
       </div>
     </div>
   )

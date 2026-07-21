@@ -11,7 +11,7 @@ import {
   buildStairDocumentation,
   resolveStairPlanDirection,
   resolveStraightStairDirectionArrow,
-  stairOverheadStartStep,
+  stairPlanBreakStep,
 } from './documentation'
 
 function context(levelId = 'level_ground', unit: 'metric' | 'imperial' = 'metric') {
@@ -125,8 +125,8 @@ describe('stair construction documentation', () => {
     expect(texts[1]).toContain(`CLR W 3'-11 1/4"`)
   })
 
-  test('starts overhead graphics at the documented break position', () => {
-    expect(stairOverheadStartStep(10)).toBe(7)
-    expect(stairOverheadStartStep(15)).toBe(11)
+  test('aligns tread visibility with the documented break position', () => {
+    expect(stairPlanBreakStep(10)).toBe(7)
+    expect(stairPlanBreakStep(15)).toBe(11)
   })
 })

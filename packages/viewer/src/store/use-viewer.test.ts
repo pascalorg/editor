@@ -9,6 +9,7 @@ const resetMeasurementPreferences = () => {
     projectPreferences: {},
     showMeasurements: true,
     unit: 'metric',
+    metricNotation: 'meters',
   })
 }
 
@@ -47,5 +48,16 @@ describe('measurement display preferences', () => {
     expect(useViewer.getState().unit).toBe('imperial')
     expect(useViewer.getState().projectPreferences).toEqual(preferences)
     expect(useViewer.getState().showMeasurements).toBe(false)
+  })
+
+  test('selects millimeters as a metric display notation', () => {
+    useViewer.getState().setUnit('imperial')
+    useViewer.getState().setMetricNotation('millimeters')
+
+    expect(useViewer.getState()).toMatchObject({
+      unit: 'metric',
+      metricNotation: 'millimeters',
+      unitExplicit: true,
+    })
   })
 })

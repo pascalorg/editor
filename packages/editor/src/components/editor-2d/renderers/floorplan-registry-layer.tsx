@@ -292,6 +292,7 @@ type NodeDeps = {
   node: AnyNode
   live: LiveTransform | undefined
   unit: 'metric' | 'imperial'
+  metricNotation: 'meters' | 'millimeters'
   selected: boolean
   highlighted: boolean
   hovered: boolean
@@ -359,6 +360,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedLevelId = useViewer((s) => s.selection.levelId)
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
@@ -1357,6 +1359,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
+            metricNotation={metricNotation}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1409,6 +1412,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
+            metricNotation={metricNotation}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1604,6 +1608,7 @@ type FloorplanRegistryEntryProps = {
   setMovingNodeOrigin: ReturnType<typeof useEditor.getState>['setMovingNodeOrigin']
   siblingEpoch: number
   unit: 'metric' | 'imperial'
+  metricNotation: 'meters' | 'millimeters'
   unitsPerPixel: number
   visibilityRootId: AnyNodeId | undefined
 }
@@ -1645,6 +1650,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   setMovingNodeOrigin,
   siblingEpoch,
   unit,
+  metricNotation,
   unitsPerPixel,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
@@ -1751,6 +1757,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     selected,
     siblingEpoch,
     unit,
+    metricNotation,
     visibilityRootId,
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
@@ -1819,6 +1826,7 @@ type BuildFloorplanEntryGeometryArgs = {
   selected: boolean
   siblingEpoch: number
   unit: 'metric' | 'imperial'
+  metricNotation: 'meters' | 'millimeters'
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -1862,6 +1870,7 @@ function buildFloorplanEntryGeometry({
   selected,
   siblingEpoch,
   unit,
+  metricNotation,
   visibilityRootId,
 }: BuildFloorplanEntryGeometryArgs): CacheEntry | null {
   const def = nodeRegistry.get(node.type)
@@ -1886,6 +1895,7 @@ function buildFloorplanEntryGeometry({
     node,
     live,
     unit,
+    metricNotation,
     selected,
     highlighted,
     hovered,
@@ -1963,6 +1973,7 @@ function buildFloorplanEntryGeometry({
   const viewState = {
     selected,
     unit,
+    metricNotation,
     highlighted,
     hovered,
     moving,
@@ -1985,6 +1996,7 @@ function buildFloorplanEntryGeometry({
           ? {
               selected,
               unit,
+              metricNotation,
               purpose: 'edit',
               highlighted,
               hovered,
@@ -2081,7 +2093,7 @@ type InteractiveGeometryProps = {
   onMoveHandlePointerDown: (event: ReactPointerEvent<SVGGElement>) => void
 }
 
-const InteractiveGeometry = memo(function InteractiveGeometry({
+export const InteractiveGeometry = memo(function InteractiveGeometry({
   geometry,
   unitsPerPixel,
   palette,
@@ -2812,6 +2824,7 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
             geometry={g}
             key={keyHint}
             pointerEventsOverride={isMarqueeSelectionActive ? 'none' : undefined}
+            sceneRotationDeg={sceneRotationDeg}
           />
         )
     }
@@ -2890,6 +2903,7 @@ export function buildContext(
   viewState: {
     selected: boolean
     unit: 'metric' | 'imperial'
+    metricNotation?: 'meters' | 'millimeters'
     purpose?: 'edit' | 'document'
     highlighted: boolean
     hovered: boolean
@@ -2934,6 +2948,7 @@ export function buildContext(
       ? {
           selected: viewState.selected,
           unit: viewState.unit,
+          metricNotation: viewState.metricNotation,
           purpose: viewState.purpose ?? 'edit',
           highlighted: viewState.highlighted,
           hovered: viewState.hovered,
@@ -3195,6 +3210,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'node',
     'live',
     'unit',
+    'metricNotation',
     'selected',
     'highlighted',
     'hovered',

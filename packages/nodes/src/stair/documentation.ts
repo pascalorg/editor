@@ -12,6 +12,7 @@ import type {
 } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
+  type ConstructionMetricNotation,
   formatConstructionLength,
 } from '../shared/construction-length'
 
@@ -71,7 +72,7 @@ export function resolveStraightStairDirectionArrow(
   }
 }
 
-export function stairOverheadStartStep(stepCount: number): number {
+export function stairPlanBreakStep(stepCount: number): number {
   return Math.max(1, Math.ceil(Math.max(1, Math.round(stepCount)) * BREAK_POSITION))
 }
 
@@ -85,10 +86,11 @@ export function buildStairDocumentation(
   const unit = ctx.viewState?.unit ?? 'metric'
   const profile: ConstructionLengthProfile =
     ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
+  const metricNotation = ctx.viewState?.metricNotation ?? 'meters'
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#334155'
   return stair.stairType === 'straight'
-    ? buildStraightDocumentation(stair, entry, direction, unit, profile, stroke)
-    : buildCurvedDocumentation(stair, direction, unit, profile, stroke)
+    ? buildStraightDocumentation(stair, entry, direction, unit, profile, metricNotation, stroke)
+    : buildCurvedDocumentation(stair, direction, unit, profile, metricNotation, stroke)
 }
 
 function buildStraightDocumentation(
@@ -97,6 +99,7 @@ function buildStraightDocumentation(
   direction: StairPlanDirection,
   unit: 'metric' | 'imperial',
   profile: ConstructionLengthProfile,
+  metricNotation: ConstructionMetricNotation,
   stroke: string,
 ): FloorplanGeometry[] {
   const geometries: FloorplanGeometry[] = []
@@ -132,7 +135,7 @@ function buildStraightDocumentation(
     geometries.push(
       annotationText(
         rightAnchor,
-        `${riserCount} R @ ${formatConstructionLength(riserHeight, unit, profile)} · T ${formatConstructionLength(treadDepth, unit, profile)} · CLR W ${formatConstructionLength(segment.width, unit, profile)}`,
+        `${riserCount} R @ ${formatConstructionLength(riserHeight, unit, profile, { metricNotation })} · T ${formatConstructionLength(treadDepth, unit, profile, { metricNotation })} · CLR W ${formatConstructionLength(segment.width, unit, profile, { metricNotation })}`,
         ANNOTATION_FONT_SIZE,
         stroke,
       ),
@@ -147,7 +150,7 @@ function buildStraightDocumentation(
       geometries.push(
         annotationText(
           leftAnchor,
-          `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile)}`,
+          `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile, { metricNotation })}`,
           ANNOTATION_FONT_SIZE,
           stroke,
         ),
@@ -163,6 +166,7 @@ function buildCurvedDocumentation(
   direction: StairPlanDirection,
   unit: 'metric' | 'imperial',
   profile: ConstructionLengthProfile,
+  metricNotation: ConstructionMetricNotation,
   stroke: string,
 ): FloorplanGeometry[] {
   const stairType = stair.stairType === 'spiral' ? 'spiral' : 'curved'
@@ -184,7 +188,7 @@ function buildCurvedDocumentation(
   const geometries: FloorplanGeometry[] = [
     annotationText(
       notePoint,
-      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit, profile)} · T(CL) ${formatConstructionLength(treadDepth, unit, profile)} · CLR W ${formatConstructionLength(stair.width, unit, profile)}`,
+      `${stepCount} R @ ${formatConstructionLength(riserHeight, unit, profile, { metricNotation })} · T(CL) ${formatConstructionLength(treadDepth, unit, profile, { metricNotation })} · CLR W ${formatConstructionLength(stair.width, unit, profile, { metricNotation })}`,
       ANNOTATION_FONT_SIZE,
       stroke,
     ),
@@ -195,7 +199,7 @@ function buildCurvedDocumentation(
     geometries.push(
       annotationText(
         arcPoint(center, outerRadius + ANNOTATION_OFFSET * 2, noteAngle),
-        `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile)}`,
+        `RAIL ${stair.railingMode.toLocaleUpperCase()} @ ${formatConstructionLength(stair.railingHeight, unit, profile, { metricNotation })}`,
         ANNOTATION_FONT_SIZE,
         stroke,
       ),

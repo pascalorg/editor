@@ -7,7 +7,6 @@ import {
   type ConstructionDimensionImperialPrecision,
   type ConstructionDimensionMetricNotation,
   type ConstructionDimensionNode,
-  type ConstructionDimensionReferenceStyle,
   type ConstructionDimensionTerminator,
   type ConstructionDimensionTextPosition,
   type ConstructionDrawingType,
@@ -77,14 +76,6 @@ const METRIC_NOTATION_OPTIONS: Array<{
 }> = [
   { label: 'Meters', value: 'meters' },
   { label: 'Millimeters', value: 'millimeters' },
-]
-
-const REFERENCE_STYLE_OPTIONS: Array<{
-  label: string
-  value: ConstructionDimensionReferenceStyle
-}> = [
-  { label: 'Parentheses', value: 'parentheses' },
-  { label: 'REF suffix', value: 'suffix' },
 ]
 
 export default function ConstructionDimensionPanel() {
@@ -178,14 +169,6 @@ export default function ConstructionDimensionPanel() {
             />
           </label>
         ) : null}
-        <label className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-muted-foreground">Reference notation</span>
-          <input
-            checked={dimension.reference}
-            onChange={(event) => update({ reference: event.target.checked })}
-            type="checkbox"
-          />
-        </label>
       </PanelSection>
 
       <PanelSection title="Drawing coordination">
@@ -211,7 +194,6 @@ export default function ConstructionDimensionPanel() {
           options={[
             { label: 'Shown', value: 'shown' },
             { label: 'Omitted', value: 'omit' },
-            { label: 'Reference', value: 'reference' },
             ...(activeDrawingType === 'floor-plan'
               ? [{ label: 'Controlled by foundation', value: 'controlled' }]
               : []),
@@ -312,14 +294,6 @@ export default function ConstructionDimensionPanel() {
           }
           options={METRIC_NOTATION_OPTIONS}
           value={dimension.metricNotation}
-        />
-        <SelectField
-          label="Reference style"
-          onChange={(referenceStyle) =>
-            update({ referenceStyle: referenceStyle as ConstructionDimensionReferenceStyle })
-          }
-          options={REFERENCE_STYLE_OPTIONS}
-          value={dimension.referenceStyle}
         />
         <SliderControl
           label="Extension gap"

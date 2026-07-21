@@ -7,6 +7,8 @@ import {
   type GeometryContext,
   getWallArcData,
   getWallAssemblyFaceOffsets,
+  getWallChordFrame,
+  getWallMidpointHandlePoint,
   isCurvedWall,
   resolveWallAssemblyDatumReferences,
   type WallNode,
@@ -139,12 +141,16 @@ export function buildLevelWallConstructionDimensionPlan(
         ...directionMembers.map(({ wall }) =>
           exteriorFaceCoordinate(wall, normal, standard.datumPolicy),
         ),
+        ...curvedFacadeOuterFaceCoordinates(walls, directionMembers, normal, standard.datumPolicy),
       )
       const pending: PendingConstructionDimension[] = []
       const lineGroups = groupFacadeMembersByLine(directionMembers, normal)
+      let facadeRunCount = 0
 
       for (const groupedMembers of lineGroups.values()) {
-        for (const run of splitFacadeRuns(groupedMembers)) {
+        const runs = splitFacadeRuns(groupedMembers)
+        facadeRunCount += runs.length
+        for (const run of runs) {
           appendFacadeRunDimensions(
             pending,
             run,
@@ -158,7 +164,7 @@ export function buildLevelWallConstructionDimensionPlan(
         }
       }
 
-      if (lineGroups.size > 1) {
+      if (lineGroups.size > 1 || facadeRunCount > lineGroups.size) {
         const jogProjections = uniqueSorted(wallProjections)
         appendProjectedChain(pending, jogProjections, 'jogs', (projection) =>
           exteriorOriginAtProjection(
@@ -258,10 +264,16 @@ export function buildLevelWallConstructionDimensionPlan(
 
   for (const wall of walls) {
     if (isCurvedWall(wall)) continue
-    if (!interiorWallIds.has(wall.id)) continue
     const openings = hostedOpeningsForWall(wall, nodes)
-    const planned = buildInteriorWallDimensions(wall, walls, openings, standard)
-    if (planned.length > 0) dimensionsByWallId.set(wall.id, planned)
+    const roomSideNormal = interiorWallIds.has(wall.id)
+      ? undefined
+      : enclosedRoomSideNormal(wall, walls)
+    if (!interiorWallIds.has(wall.id) && (openings.length === 0 || roomSideNormal === null)) {
+      continue
+    }
+    const planned = buildInteriorWallDimensions(wall, walls, openings, standard, roomSideNormal)
+    if (planned.length === 0) continue
+    dimensionsByWallId.set(wall.id, [...(dimensionsByWallId.get(wall.id) ?? []), ...planned])
   }
 
   return dimensionsByWallId
@@ -272,6 +284,7 @@ function buildInteriorWallDimensions(
   walls: ReadonlyArray<WallNode>,
   openings: readonly OpeningNode[],
   standard: ConstructionDimensionDrawingStandard,
+  normalOverride?: FloorplanPoint | null,
 ): PlannedConstructionDimension[] {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
@@ -287,7 +300,7 @@ function buildInteriorWallDimensions(
     standard.datumPolicy,
   )
   if (spanEnd - spanStart < MIN_SEGMENT_LENGTH) return []
-  const normal = resolveInteriorDimensionNormal(wall, walls, tangent)
+  const normal = normalOverride ?? resolveInteriorDimensionNormal(wall, walls, tangent)
   const datumDistance = wallDatumDistanceToward(wall, standard.datumPolicy, normal)
   const pointAt = (along: number): FloorplanPoint => [
     wall.start[0] + tangent[0] * along + normal[0] * datumDistance,
@@ -391,104 +404,63 @@ export function buildCurvedWallConstructionDimensions(
   wall: WallNode,
   {
     unit,
-    stroke = '#334155',
+    stroke,
     profile = 'editor',
     standard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
+    siblings = [],
   }: {
     unit: ConstructionLinearUnit
     stroke?: string
     profile?: ConstructionLengthProfile
     standard?: ConstructionDimensionDrawingStandard
+    siblings?: ReadonlyArray<WallNode>
   },
 ): FloorplanGeometry[] {
-  const arc = getWallArcData(wall)
-  if (!arc) return []
+  const chord = getWallChordFrame(wall)
+  const midpoint = getWallMidpointHandlePoint(wall)
+  const curveVector: FloorplanPoint = [midpoint.x - chord.midpoint.x, midpoint.y - chord.midpoint.y]
+  const curveDepth = Math.hypot(curveVector[0], curveVector[1])
+  if (chord.length < MIN_SEGMENT_LENGTH || curveDepth < MIN_SEGMENT_LENGTH) return []
 
-  const center: FloorplanPoint = [arc.center.x, arc.center.y]
-  const radiusAngle = arc.startAngle + arc.delta / 2
-  const radiusDirection: FloorplanPoint = [Math.cos(radiusAngle), Math.sin(radiusAngle)]
-  const curvePoint: FloorplanPoint = [
-    center[0] + radiusDirection[0] * arc.radius,
-    center[1] + radiusDirection[1] * arc.radius,
-  ]
-  const labelPoint: FloorplanPoint = [
-    center[0] + radiusDirection[0] * arc.radius * 0.58,
-    center[1] + radiusDirection[1] * arc.radius * 0.58,
-  ]
-  const lineStyle = {
-    stroke,
-    strokeWidth: 0.9,
-    vectorEffect: 'non-scaling-stroke' as const,
-    pointerEvents: 'none' as const,
-  }
-  const centerMarkHalf = Math.min(0.22, Math.max(0.1, arc.radius * 0.18))
-  const centerMarkGap = Math.min(0.045, centerMarkHalf * 0.3)
-  const arrowLength = 0.15
-  const arrowHalfWidth = 0.055
-  const arrowBase: FloorplanPoint = [
-    curvePoint[0] - radiusDirection[0] * arrowLength,
-    curvePoint[1] - radiusDirection[1] * arrowLength,
-  ]
-  const arrowNormal: FloorplanPoint = [-radiusDirection[1], radiusDirection[0]]
-  const centerMarkSegments: Array<[number, number, number, number]> = [
-    [center[0] - centerMarkHalf, center[1], center[0] - centerMarkGap, center[1]],
-    [center[0] + centerMarkGap, center[1], center[0] + centerMarkHalf, center[1]],
-    [center[0], center[1] - centerMarkHalf, center[0], center[1] - centerMarkGap],
-    [center[0], center[1] + centerMarkGap, center[0], center[1] + centerMarkHalf],
-  ]
+  const curveDirection: FloorplanPoint = [curveVector[0] / curveDepth, curveVector[1] / curveDepth]
+  const tangent: FloorplanPoint = [chord.tangent.x, chord.tangent.y]
+  const datumDistance = wallDatumDistanceToward(wall, standard.datumPolicy, curveDirection)
+  const curveWitness = addScaled([midpoint.x, midpoint.y], curveDirection, datumDistance)
+  const chordWitness = addScaled(wall.end, curveDirection, datumDistance)
+  const connectedWalls = connectedWallComponent(wall, [wall, ...siblings])
+  const forwardExtent = Math.max(
+    ...connectedWalls.flatMap((candidate) => [
+      dot(candidate.start, tangent),
+      dot(candidate.end, tangent),
+    ]),
+  )
+  const baselineProjection = forwardExtent + standard.firstGeneralTierOffset
+  const dimensionStart = pointFromCoordinates(
+    baselineProjection,
+    dot(curveWitness, curveDirection),
+    tangent,
+    curveDirection,
+  )
+  const dimensionEnd = pointFromCoordinates(
+    baselineProjection,
+    dot(chordWitness, curveDirection),
+    tangent,
+    curveDirection,
+  )
 
   return [
-    {
-      kind: 'group',
-      annotationRole: 'automatic-dimension',
-      children: [
-        {
-          kind: 'line',
-          x1: center[0],
-          y1: center[1],
-          x2: curvePoint[0],
-          y2: curvePoint[1],
-          ...lineStyle,
-        },
-        {
-          kind: 'line',
-          x1: curvePoint[0],
-          y1: curvePoint[1],
-          x2: arrowBase[0] + arrowNormal[0] * arrowHalfWidth,
-          y2: arrowBase[1] + arrowNormal[1] * arrowHalfWidth,
-          ...lineStyle,
-        },
-        {
-          kind: 'line',
-          x1: curvePoint[0],
-          y1: curvePoint[1],
-          x2: arrowBase[0] - arrowNormal[0] * arrowHalfWidth,
-          y2: arrowBase[1] - arrowNormal[1] * arrowHalfWidth,
-          ...lineStyle,
-        },
-        ...centerMarkSegments.map(
-          ([x1, y1, x2, y2]): FloorplanGeometry => ({
-            kind: 'line',
-            x1,
-            y1,
-            x2,
-            y2,
-            ...lineStyle,
-          }),
-        ),
-        {
-          kind: 'dimension-label',
-          cx: labelPoint[0],
-          cy: labelPoint[1],
-          text: `R ${formatConstructionLength(arc.radius, unit, profile, {
-            imperialPrecision: standard.imperialPrecision,
-            metricNotation: standard.metricNotation,
-          })}`,
-          angle: radiusAngle,
-          appearance: 'outlined',
-        },
-      ],
-    },
+    dimension(
+      curveWitness,
+      chordWitness,
+      tangent,
+      Math.max(0, dot(subtract(dimensionStart, curveWitness), tangent)),
+      unit,
+      stroke,
+      dimensionStart,
+      dimensionEnd,
+      profile,
+      standard,
+    ),
   ]
 }
 
@@ -607,8 +579,8 @@ function dimension(
       {
         witnessStart: start,
         witnessEnd: end,
-        dimensionStart: dimensionStart ?? start,
-        dimensionEnd: dimensionEnd ?? end,
+        dimensionStart,
+        dimensionEnd,
         text: textPrefix ? `${textPrefix} ${lengthText}` : lengthText,
       },
     ],
@@ -691,6 +663,24 @@ function shouldDimensionInteriorWall(
   return claimedExteriorNormal === null || isFacadeOccluded(wall, claimedExteriorNormal, network)
 }
 
+function enclosedRoomSideNormal(
+  wall: WallNode,
+  walls: ReadonlyArray<WallNode>,
+): FloorplanPoint | null {
+  const outward = exteriorNormal(wall)
+  if (!outward) return null
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < MIN_SEGMENT_LENGTH) return null
+  const tangent: FloorplanPoint = [dx / length, dz / length]
+  const front: FloorplanPoint = [cleanZero(-tangent[1]), cleanZero(tangent[0])]
+  const { frontClearance, backClearance } = interiorDimensionClearances(wall, walls, tangent)
+  const inward = negate(outward)
+  const inwardClearance = dot(inward, front) >= 0 ? frontClearance : backClearance
+  return inwardClearance === null ? null : inward
+}
+
 function resolveInteriorDimensionNormal(
   wall: WallNode,
   walls: ReadonlyArray<WallNode>,
@@ -730,8 +720,10 @@ function interiorDimensionClearances(
   const clearance = (normal: FloorplanPoint): number | null => {
     let nearest = Number.POSITIVE_INFINITY
     for (const candidate of walls) {
-      if (candidate.id === wall.id || isCurvedWall(candidate)) continue
-      const hit = raySegmentDistance(midpoint, normal, candidate.start, candidate.end)
+      if (candidate.id === wall.id) continue
+      const hit = isCurvedWall(candidate)
+        ? rayArcDistance(midpoint, normal, candidate)
+        : raySegmentDistance(midpoint, normal, candidate.start, candidate.end)
       if (hit !== null) nearest = Math.min(nearest, hit)
     }
     return Number.isFinite(nearest) ? nearest : null
@@ -827,6 +819,43 @@ function raySegmentDistance(
   return alongRay
 }
 
+function rayArcDistance(
+  rayOrigin: FloorplanPoint,
+  rayDirection: FloorplanPoint,
+  wall: WallNode,
+): number | null {
+  const arc = getWallArcData(wall)
+  if (!arc) return null
+  const fromCenter: FloorplanPoint = [rayOrigin[0] - arc.center.x, rayOrigin[1] - arc.center.y]
+  const directionLengthSquared = dot(rayDirection, rayDirection)
+  const linear = 2 * dot(fromCenter, rayDirection)
+  const constant = dot(fromCenter, fromCenter) - arc.radius * arc.radius
+  const discriminant = linear * linear - 4 * directionLengthSquared * constant
+  if (discriminant < 0 || directionLengthSquared < 1e-12) return null
+
+  const root = Math.sqrt(Math.max(0, discriminant))
+  const denominator = 2 * directionLengthSquared
+  const hits = [(-linear - root) / denominator, (-linear + root) / denominator]
+    .filter((distance) => distance > FACADE_LINE_TOLERANCE)
+    .sort((left, right) => left - right)
+  for (const distance of hits) {
+    const point: FloorplanPoint = [
+      rayOrigin[0] + rayDirection[0] * distance,
+      rayOrigin[1] + rayDirection[1] * distance,
+    ]
+    const angle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
+    if (angleFallsOnArc(angle, arc.startAngle, arc.delta)) return distance
+  }
+  return null
+}
+
+function angleFallsOnArc(angle: number, startAngle: number, delta: number): boolean {
+  const fullTurn = Math.PI * 2
+  const positiveTurn = (value: number) => ((value % fullTurn) + fullTurn) % fullTurn
+  const swept = delta >= 0 ? positiveTurn(angle - startAngle) : positiveTurn(startAngle - angle)
+  return swept <= Math.abs(delta) + 1e-8
+}
+
 function splitConnectedFacadeComponents(members: FacadeMember[]): FacadeMember[][] {
   const unvisited = new Set(members)
   const components: FacadeMember[][] = []
@@ -859,6 +888,29 @@ function wallsTouch(left: WallNode, right: WallNode): boolean {
       (rightPoint) => distance(leftPoint, rightPoint) <= FACADE_LINE_TOLERANCE,
     ),
   )
+}
+
+function connectedWallComponent(wall: WallNode, candidates: ReadonlyArray<WallNode>): WallNode[] {
+  const unvisited = new Set(
+    candidates.filter(
+      (candidate) => candidate.id !== wall.id && candidate.parentId === wall.parentId,
+    ),
+  )
+  const component = [wall]
+  const queue = [wall]
+
+  while (queue.length > 0) {
+    const current = queue.shift()
+    if (!current) continue
+    for (const candidate of unvisited) {
+      if (!wallsTouch(current, candidate)) continue
+      unvisited.delete(candidate)
+      component.push(candidate)
+      queue.push(candidate)
+    }
+  }
+
+  return component
 }
 
 function groupFacadeMembersByDirection(
@@ -1106,6 +1158,37 @@ function exteriorFaceCoordinate(
     (wall.start[1] + wall.end[1]) / 2,
   ]
   return dot(midpoint, normal) + wallDatumDistanceToward(wall, datumPolicy, normal)
+}
+
+function curvedFacadeOuterFaceCoordinates(
+  walls: ReadonlyArray<WallNode>,
+  members: readonly FacadeMember[],
+  normal: FloorplanPoint,
+  datumPolicy: ConstructionDimensionDrawingStandard['datumPolicy'],
+): number[] {
+  const parentId = members[0]?.wall.parentId
+  const memberEndpoints = members.flatMap(({ wall }) => [wall.start, wall.end])
+  const touchesFacade = (point: FloorplanPoint) =>
+    memberEndpoints.some((endpoint) => distance(point, endpoint) <= FACADE_LINE_TOLERANCE)
+
+  return walls.flatMap((wall): number[] => {
+    if (
+      wall.parentId !== parentId ||
+      !isCurvedWall(wall) ||
+      !touchesFacade(wall.start) ||
+      !touchesFacade(wall.end)
+    ) {
+      return []
+    }
+
+    const midpoint = getWallMidpointHandlePoint(wall)
+    const outerCenterlineCoordinate = Math.max(
+      dot(wall.start, normal),
+      dot(wall.end, normal),
+      dot([midpoint.x, midpoint.y], normal),
+    )
+    return [outerCenterlineCoordinate + wallDatumDistanceToward(wall, datumPolicy, normal)]
+  })
 }
 
 function exteriorOriginAtProjection(

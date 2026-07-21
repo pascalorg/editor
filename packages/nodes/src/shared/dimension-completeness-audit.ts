@@ -31,7 +31,6 @@ export type DimensionCompletenessIssue = {
 }
 
 export type BuildDimensionCompletenessAuditOptions = {
-  includeReferenceDimensions?: boolean
   includeAutomaticDimensions?: boolean
   requireRoughOpeningHeights?: boolean
   dimensionValueTolerance?: number
@@ -99,7 +98,6 @@ function dimensionCoverage(
   const covered = new Set<string>()
   for (const node of Object.values(nodes)) {
     if (node.type !== 'construction-dimension') continue
-    if (node.reference && options.includeReferenceDimensions !== true) continue
 
     for (const nodeId of measurementAnchorReferenceNodeIds(
       (node as ConstructionDimensionNode).anchors,
@@ -146,7 +144,6 @@ function dimensionStringIssues(
 ): DimensionCompletenessIssue[] {
   const records = Object.values(nodes)
     .filter((node): node is ConstructionDimensionNode => node.type === 'construction-dimension')
-    .filter((dimension) => !dimension.reference || options.includeReferenceDimensions === true)
     .map((dimension) => dimensionRecord(dimension))
   const issues: DimensionCompletenessIssue[] = []
 

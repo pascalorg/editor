@@ -14,18 +14,6 @@ describe('floor-plan annotation visibility', () => {
     })
   })
 
-  test('normalizes hidden-overhead and reference-dimension persisted categories', () => {
-    expect(
-      normalizeFloorplanAnnotationVisibility({
-        hiddenOverheadGeometry: false,
-        referenceDimensions: false,
-      }),
-    ).toMatchObject({
-      hiddenOverheadGeometry: false,
-      referenceDimensions: false,
-    })
-  })
-
   test('removes automatic dimension primitives without removing plan geometry', () => {
     const line = { kind: 'line', x1: 0, y1: 0, x2: 2, y2: 0 } satisfies FloorplanGeometry
     const geometry = {
@@ -239,71 +227,5 @@ describe('floor-plan annotation visibility', () => {
         { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, stairAnnotations: false },
       ),
     ).toEqual({ kind: 'group', children: [footprint] })
-  })
-
-  test('hides overhead geometry without removing regular plan geometry or notes', () => {
-    const body = {
-      kind: 'polygon',
-      points: [
-        [0, 0],
-        [1, 0],
-        [1, 1],
-      ],
-    } satisfies FloorplanGeometry
-    const overhead = {
-      kind: 'polygon',
-      points: [
-        [0, 1],
-        [1, 1],
-        [1, 2],
-      ],
-      annotationRole: 'overhead-geometry',
-    } satisfies FloorplanGeometry
-
-    expect(
-      filterFloorplanAnnotationGeometry(
-        'stair',
-        { kind: 'group', children: [body, overhead] },
-        { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, hiddenOverheadGeometry: false },
-      ),
-    ).toEqual({ kind: 'group', children: [body] })
-  })
-
-  test('hides reference dimensions independently from other manual dimensions', () => {
-    const referenceDimension = {
-      kind: 'group',
-      annotationRole: 'reference-dimension',
-      children: [
-        {
-          kind: 'dimension',
-          start: [0, 0],
-          end: [1, 0],
-          offsetNormal: [0, 1],
-          offsetDistance: 0.5,
-          extensionOvershoot: 0.1,
-          text: '(1m)',
-        },
-      ],
-    } satisfies FloorplanGeometry
-    const regularDimension = {
-      kind: 'dimension',
-      start: [0, 0],
-      end: [2, 0],
-      offsetNormal: [0, 1],
-      offsetDistance: 0.5,
-      extensionOvershoot: 0.1,
-      text: '2m',
-    } satisfies FloorplanGeometry
-    const visibility = {
-      ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
-      referenceDimensions: false,
-    }
-
-    expect(
-      filterFloorplanAnnotationGeometry('construction-dimension', referenceDimension, visibility),
-    ).toBeNull()
-    expect(
-      filterFloorplanAnnotationGeometry('construction-dimension', regularDimension, visibility),
-    ).not.toBeNull()
   })
 })

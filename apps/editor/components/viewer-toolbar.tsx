@@ -146,8 +146,6 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'measurements', name: 'Measurements', icon: ScanLine },
   { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
   { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
-  { id: 'hiddenOverheadGeometry', name: 'Hidden/overhead geometry', icon: EyeOff },
-  { id: 'referenceDimensions', name: 'Reference dimensions', icon: Ruler },
   { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
   { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
 ] as const
@@ -347,6 +345,8 @@ function DisplayMenu() {
   const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
   const unit = useViewer((state) => state.unit)
   const setUnit = useViewer((state) => state.setUnit)
+  const metricNotation = useViewer((state) => state.metricNotation)
+  const setMetricNotation = useViewer((state) => state.setMetricNotation)
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
   const shading = useViewer((state) => state.shading)
@@ -472,17 +472,48 @@ function DisplayMenu() {
             {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => keepOpen(e, () => setUnit(unit === 'metric' ? 'imperial' : 'metric'))}
-        >
-          <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-            {unit === 'metric' ? 'm' : 'ft'}
-          </span>
-          <span>Units</span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {unit === 'metric' ? 'Metric' : 'Imperial'}
-          </span>
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+              {unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'}
+            </span>
+            <span>Units</span>
+            <span className="ml-auto text-muted-foreground text-xs">
+              {unit === 'imperial'
+                ? 'Feet & inches'
+                : metricNotation === 'millimeters'
+                  ? 'Millimeters'
+                  : 'Meters'}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            <DropdownMenuItem onSelect={() => setMetricNotation('meters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                m
+              </span>
+              <span>Meters</span>
+              {unit === 'metric' && metricNotation === 'meters' ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setMetricNotation('millimeters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                mm
+              </span>
+              <span>Millimeters</span>
+              {unit === 'metric' && metricNotation === 'millimeters' ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setUnit('imperial')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                ft
+              </span>
+              <span>Feet & inches</span>
+              {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
 

@@ -16,7 +16,7 @@ function textValues(geometry: FloorplanGeometry | null) {
 }
 
 describe('buildStairFloorplan documentation', () => {
-  test('integrates stair notes, break line, and dashed overhead treads', () => {
+  test('integrates stair notes, break line, and visible treads below the break', () => {
     const segment = StairSegmentNode.parse({
       id: 'sseg_main',
       width: 1.2,
@@ -49,12 +49,8 @@ describe('buildStairFloorplan documentation', () => {
       ),
     ).toBe(true)
     expect(
-      geometry.children.some(
-        (child) =>
-          child.kind === 'polygon' &&
-          child.strokeDasharray === '0.08 0.08' &&
-          child.annotationRole === 'overhead-geometry',
-      ),
-    ).toBe(true)
+      geometry.children.filter((child) => child.kind === 'polygon' && child.fill === '#262626'),
+    ).toHaveLength(6)
+    expect(geometry.children.some((child) => 'strokeDasharray' in child)).toBe(false)
   })
 })

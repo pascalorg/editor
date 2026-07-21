@@ -32,6 +32,7 @@ import {
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
+import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
 import {
   type FloorplanAnnotationVisibility,
@@ -58,8 +59,9 @@ import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 export type FloorplanExportScope = 'full' | 'structure'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
-/** Meters of margin around the plan bounds. */
-const PADDING_M = 1
+/** Minimum and proportional margin around the structural drawing bounds. */
+const MIN_PLAN_PADDING_M = 1
+const PLAN_PADDING_RATIO = 0.2
 /** PDF page margin + title band, in pt. */
 const PAGE_MARGIN_PT = 36
 const TITLE_BAND_PT = 28
@@ -91,14 +93,24 @@ const NEUTRAL_PALETTE: FloorplanPalette = {
 // full view state (including unit preference) available to node builders.
 const NEUTRAL_VIEW_STATE = {
   selected: false,
-  purpose: 'document',
+  purpose: 'edit',
   highlighted: false,
   hovered: false,
   moving: false,
   palette: NEUTRAL_PALETTE,
 } as const
 
+export function resolveFloorplanExportViewState(unit: 'metric' | 'imperial') {
+  return { ...NEUTRAL_VIEW_STATE, unit }
+}
+
 type ExportLevel = { id: AnyNodeId; label: string }
+
+type ExportGeometry = {
+  id: AnyNodeId
+  model: FloorplanGeometry | null
+  annotations: FloorplanGeometry | null
+}
 
 type SheetComposition = {
   sheetNumber: string
@@ -122,6 +134,10 @@ export type SheetExportLayout = {
   planBox: { x: number; y: number; width: number; height: number }
   sidePanel: { x: number; y: number; width: number; height: number }
   titleBlock: { x: number; y: number; width: number; height: number }
+}
+
+export type FloorplanPageLayout = {
+  planBox: { x: number; y: number; width: number; height: number }
 }
 
 type ScheduleDrawResult = {
@@ -170,9 +186,11 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const nodes = useScene.getState().nodes
   const viewer = useViewer.getState()
   const unit = viewer.unit
-  const annotationVisibility = useFloorplanAnnotationVisibility.getState().visibility
+  const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
+    useFloorplanAnnotationVisibility.getState().visibility,
+  )
+  const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
-  const drawingScale = useDrawingView.getState().drawingScale
   const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
@@ -203,26 +221,21 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
-      const composition = resolveSheetComposition(
-        nodes,
-        level.id,
-        level.label,
-        drawingType,
-        drawingLabel,
-        drawingScale,
-      )
-      const pageSetup = resolveSheetPageSetup(composition)
-      const layout = resolveSheetExportLayout(pageSetup.width, pageSetup.height)
+      const pageSetup = resolveSheetPageSetup({
+        paperSize: 'a4',
+        orientation: 'landscape',
+        customPaperWidth: null,
+        customPaperHeight: null,
+      })
+      const layout = resolveFloorplanPageLayout(pageSetup.width, pageSetup.height)
       let scheduleOverflow: FloorplanSchedule[] = [...schedules]
 
       if (geometries.length > 0) {
-        // Rotate the exported plan to the same north-up orientation the on-screen
-        // 2D view uses when aligned to north (user rotation offset = 0), so a PDF
-        // points north instead of drawing raw plan-local axes.
+        // Preserve the live floor-plan orientation rather than forcing north-up.
         const buildingId = resolveBuildingForLevel(level.id, nodes as Record<AnyNodeId, AnyNode>)
         const building = buildingId ? nodes[buildingId] : undefined
         const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
-        const rotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - (buildingRotationY * 180) / Math.PI
+        const rotationDeg = resolveFloorplanExportRotationDeg(buildingRotationY, navigationAzimuth)
 
         const mounted = await mountFloorplanSvg(
           host,
@@ -243,36 +256,22 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             }
             pageCount++
 
-            let fitted = placePlanAtDrawingScale(
+            const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
+              mounted.width,
+              mounted.height,
+              layout.planBox.width,
+              layout.planBox.height,
+            )
+            await mounted.setScreenUnitsPerPixel(screenUnitsPerPixel)
+            const fitted = resolveFloorplanExportPlacement(
               mounted.width,
               mounted.height,
               layout.planBox.x,
               layout.planBox.y,
               layout.planBox.width,
               layout.planBox.height,
-              composition.scale,
             )
-            for (let pass = 0; pass < 2; pass++) {
-              await mounted.setAnnotationUnitsPerPoint(mounted.width / fitted.width)
-              fitted = placePlanAtDrawingScale(
-                mounted.width,
-                mounted.height,
-                layout.planBox.x,
-                layout.planBox.y,
-                layout.planBox.width,
-                layout.planBox.height,
-                composition.scale,
-              )
-            }
-            const preflightIssues = [
-              ...composition.preflightIssues,
-              ...resolveSheetPreflightIssues(fitted),
-            ]
-            if (preflightIssues.length > 0) {
-              console.warn('[floorplan-export] preflight', preflightIssues)
-            }
-            const sheetResult = drawSheetChrome(doc, layout, composition, schedules)
-            scheduleOverflow = sheetResult.overflowSchedules
+            drawFloorplanPageHeader(doc, level.label, drawingLabel)
 
             // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
             // many builders use to keep door/window/stair line weights constant
@@ -281,6 +280,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             // width that lands at the intended point weight once svg2pdf scales
             // the plan onto the page.
             inlineNonScalingStrokes(mounted.svg, fitted.width / mounted.width)
+            normalizeFloorplanPdfFonts(mounted.svg)
 
             await svg2pdf(mounted.svg, doc, {
               x: fitted.x,
@@ -542,16 +542,6 @@ function millimetersToPoints(width: number, height: number): { width: number; he
   return inchesToPoints(width / 25.4, height / 25.4)
 }
 
-export function resolveSheetPreflightIssues(fitted: { clipped: boolean }): SheetPreflightIssue[] {
-  if (!fitted.clipped) return []
-  return [
-    {
-      severity: 'warning',
-      message: 'Scaled plan exceeds the sheet viewport. Review clipped view or annotation content.',
-    },
-  ]
-}
-
 function findDrawingSheetForLevel(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
@@ -600,6 +590,32 @@ export function resolveSheetExportLayout(pageWidth: number, pageHeight: number):
     sidePanel,
     titleBlock,
   }
+}
+
+export function resolveFloorplanPageLayout(
+  pageWidth: number,
+  pageHeight: number,
+): FloorplanPageLayout {
+  const planY = PAGE_MARGIN_PT + TITLE_BAND_PT
+  return {
+    planBox: {
+      x: PAGE_MARGIN_PT,
+      y: planY,
+      width: pageWidth - PAGE_MARGIN_PT * 2,
+      height: pageHeight - planY - PAGE_MARGIN_PT,
+    },
+  }
+}
+
+function drawFloorplanPageHeader(
+  doc: JsPdfDocument,
+  levelLabel: string,
+  drawingLabel: string,
+): void {
+  doc.setTextColor('#111827')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.text(`${levelLabel} - ${drawingLabel}`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
 }
 
 function drawFloorplanSchedulePages(
@@ -1112,8 +1128,15 @@ type MountedFloorplan = {
   /** Padded viewBox dimensions, in meters — used for aspect-preserving fit. */
   width: number
   height: number
-  setAnnotationUnitsPerPoint: (value: number) => Promise<void>
+  setScreenUnitsPerPixel: (value: number) => Promise<void>
   cleanup: () => void
+}
+
+export type FloorplanExportBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export function fitPlanToBox(
@@ -1139,25 +1162,60 @@ export function fitPlanToBox(
   }
 }
 
-export function placePlanAtDrawingScale(
+export function resolveFloorplanExportPlacement(
   planWidth: number,
   planHeight: number,
   boxX: number,
   boxY: number,
   boxWidth: number,
   boxHeight: number,
-  scale: DrawingSheetScale,
 ) {
-  const pointsPerMeter = pointsPerMeterForDrawingScale(scale)
-  const width = planWidth * pointsPerMeter
-  const height = planHeight * pointsPerMeter
+  return fitPlanToBox(planWidth, planHeight, boxX, boxY, boxWidth, boxHeight)
+}
+
+export function resolveFloorplanExportViewport(
+  modelBounds: FloorplanExportBounds,
+): FloorplanExportBounds {
+  const padding = Math.max(
+    MIN_PLAN_PADDING_M,
+    Math.max(modelBounds.width, modelBounds.height) * PLAN_PADDING_RATIO,
+  )
   return {
-    x: boxX + (boxWidth - width) / 2,
-    y: boxY + (boxHeight - height) / 2,
-    width,
-    height,
-    clipped: width > boxWidth || height > boxHeight,
+    x: modelBounds.x - padding,
+    y: modelBounds.y - padding,
+    width: modelBounds.width + padding * 2,
+    height: modelBounds.height + padding * 2,
   }
+}
+
+export function resolveFloorplanScreenUnitsPerPixel(
+  modelWidth: number,
+  modelHeight: number,
+  boxWidth: number,
+  boxHeight: number,
+): number {
+  return Math.max(modelWidth / boxWidth, modelHeight / boxHeight)
+}
+
+export function resolveFloorplanExportAnnotationVisibility(
+  liveVisibility: FloorplanAnnotationVisibility,
+): FloorplanAnnotationVisibility {
+  return { ...liveVisibility }
+}
+
+export function resolveFloorplanExportRotationDeg(
+  buildingRotationY: number,
+  navigationAzimuth?: number,
+): number {
+  const userRotationDeg =
+    navigationAzimuth === undefined
+      ? 0
+      : (navigationAzimuth * 180) / Math.PI - FLOORPLAN_VIEW_ROTATION_DEG
+  return FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - (buildingRotationY * 180) / Math.PI
+}
+
+export function isFloorplanExportAnnotationNode(nodeType: string): boolean {
+  return nodeType === 'measurement' || nodeType === 'construction-dimension'
 }
 
 export function pointsPerMeterForDrawingScale(scale: DrawingSheetScale): number {
@@ -1195,7 +1253,7 @@ function formatDrawingScaleLabel(scale: DrawingSheetScale): string {
 
 async function mountFloorplanSvg(
   parent: HTMLElement,
-  geometries: { id: AnyNodeId; base: FloorplanGeometry }[],
+  geometries: ExportGeometry[],
   rotationDeg: number,
   annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides,
 ): Promise<MountedFloorplan | null> {
@@ -1207,7 +1265,7 @@ async function mountFloorplanSvg(
     container.remove()
   }
 
-  const render = (annotationUnitsPerPoint?: number) => {
+  const render = (screenUnitsPerPixel?: number) => {
     flushSync(() => {
       root.render(
         createElement(
@@ -1219,13 +1277,32 @@ async function mountFloorplanSvg(
             createElement(
               'g',
               { transform: `rotate(${rotationDeg})` },
-              geometries.map(({ id, base }) =>
-                createElement(FloorplanGeometryRenderer, {
-                  key: id,
-                  geometry: base,
-                  sceneRotationDeg: rotationDeg,
-                  annotationUnitsPerPoint,
-                }),
+              createElement(
+                'g',
+                { 'data-floorplan-model': '' },
+                geometries.map(({ id, model }) =>
+                  model
+                    ? createElement(FloorplanGeometryRenderer, {
+                        key: id,
+                        geometry: model,
+                        sceneRotationDeg: rotationDeg,
+                      })
+                    : null,
+                ),
+              ),
+              createElement(
+                'g',
+                { 'data-floorplan-annotations': '' },
+                geometries.map(({ id, annotations }) =>
+                  annotations
+                    ? createElement(FloorplanGeometryRenderer, {
+                        key: id,
+                        geometry: annotations,
+                        sceneRotationDeg: rotationDeg,
+                        screenUnitsPerPixel,
+                      })
+                    : null,
+                ),
               ),
             ),
           ),
@@ -1251,43 +1328,52 @@ async function mountFloorplanSvg(
     width: 0,
     height: 0,
     cleanup,
-    setAnnotationUnitsPerPoint: async (value) => {
+    setScreenUnitsPerPixel: async (value) => {
       render(value)
       await nextFrames(1)
       resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
-      if (!measureMountedFloorplan(mounted)) throw new Error('Unable to measure floor plan export')
+      applyFloorplanViewport(mounted, viewport)
     },
   }
-  if (!measureMountedFloorplan(mounted)) {
+  const modelBounds = measureFloorplanBounds(svg, '[data-floorplan-model]')
+  if (!modelBounds) {
     cleanup()
     return null
   }
+  const viewport = resolveFloorplanExportViewport(modelBounds)
+  applyFloorplanViewport(mounted, viewport)
   return mounted
 }
 
-function measureMountedFloorplan(mounted: MountedFloorplan): boolean {
-  const content = mounted.svg.querySelector('[data-floorplan-content]') as SVGGraphicsElement | null
+function measureFloorplanBounds(
+  svg: SVGSVGElement,
+  selector: string,
+): FloorplanExportBounds | null {
+  const content = svg.querySelector(selector) as SVGGraphicsElement | null
   const bbox = content?.getBBox()
-  if (!bbox || bbox.width === 0 || bbox.height === 0) return false
+  if (!bbox || bbox.width === 0 || bbox.height === 0) return null
+  return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }
+}
 
-  const minX = bbox.x - PADDING_M
-  const minY = bbox.y - PADDING_M
-  mounted.width = bbox.width + PADDING_M * 2
-  mounted.height = bbox.height + PADDING_M * 2
-  mounted.svg.setAttribute('viewBox', `${minX} ${minY} ${mounted.width} ${mounted.height}`)
+function applyFloorplanViewport(mounted: MountedFloorplan, viewport: FloorplanExportBounds): void {
+  mounted.width = viewport.width
+  mounted.height = viewport.height
+  mounted.svg.setAttribute(
+    'viewBox',
+    `${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`,
+  )
   mounted.svg.setAttribute('width', `${mounted.width}`)
   mounted.svg.setAttribute('height', `${mounted.height}`)
 
   mounted.svg.querySelector('[data-floorplan-background]')?.remove()
   const background = document.createElementNS(SVG_NS, 'rect')
   background.setAttribute('data-floorplan-background', '')
-  background.setAttribute('x', `${minX}`)
-  background.setAttribute('y', `${minY}`)
+  background.setAttribute('x', `${viewport.x}`)
+  background.setAttribute('y', `${viewport.y}`)
   background.setAttribute('width', `${mounted.width}`)
   background.setAttribute('height', `${mounted.height}`)
   background.setAttribute('fill', '#ffffff')
   mounted.svg.insertBefore(background, mounted.svg.firstChild)
-  return true
 }
 
 /**
@@ -1322,6 +1408,36 @@ function inlineNonScalingStrokes(svg: SVGSVGElement, ptPerUnit: number) {
   }
 }
 
+export function resolveFloorplanPdfFont(
+  fontFamily: string | null,
+  fontWeight: string | null,
+): { fontFamily: string | null; fontWeight: string | null } {
+  const family = fontFamily?.toLocaleLowerCase() ?? ''
+  const normalizedWeight = fontWeight?.toLocaleLowerCase() ?? ''
+  const numericWeight = Number.parseInt(normalizedWeight, 10)
+  return {
+    fontFamily:
+      family.includes('mono') || family.includes('menlo') || family.includes('courier')
+        ? 'Courier'
+        : 'Helvetica',
+    fontWeight:
+      normalizedWeight === 'bold' || (Number.isFinite(numericWeight) && numericWeight >= 500)
+        ? 'bold'
+        : 'normal',
+  }
+}
+
+function normalizeFloorplanPdfFonts(svg: SVGSVGElement): void {
+  for (const text of svg.querySelectorAll('text')) {
+    const font = resolveFloorplanPdfFont(
+      text.getAttribute('font-family'),
+      text.getAttribute('font-weight'),
+    )
+    if (font.fontFamily !== null) text.setAttribute('font-family', font.fontFamily)
+    if (font.fontWeight !== null) text.setAttribute('font-weight', font.fontWeight)
+  }
+}
+
 function collectFloorplanGeometry(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
@@ -1329,7 +1445,7 @@ function collectFloorplanGeometry(
   unit: 'metric' | 'imperial',
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
-): { id: AnyNodeId; base: FloorplanGeometry }[] {
+): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
   const entries: { id: AnyNodeId; node: AnyNode; parentOverride?: AnyNode }[] = []
@@ -1380,7 +1496,7 @@ function collectFloorplanGeometry(
   // One-shot per-type cache for `computeFloorplanLevelData`; value type is
   // module-private to the registry layer, so let it infer.
   const levelDataCache = new Map()
-  const out: { id: AnyNodeId; base: FloorplanGeometry }[] = []
+  const out: ExportGeometry[] = []
   for (const { id, node, parentOverride } of entries) {
     const builder = nodeRegistry.get(node.type)?.floorplan
     if (!builder) continue
@@ -1391,7 +1507,7 @@ function collectFloorplanGeometry(
       levelNodeIdsByType,
       levelDataCache,
     )
-    const baseContext = buildContext(node, nodes, { ...NEUTRAL_VIEW_STATE, unit }, levelData)
+    const baseContext = buildContext(node, nodes, resolveFloorplanExportViewState(unit), levelData)
     const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext
     const geometry = builder(node, ctx)
     if (!geometry) continue
@@ -1403,8 +1519,15 @@ function collectFloorplanGeometry(
     if (!visibleGeometry) continue
     const { base, overlay } = splitFloorplanOverlay(visibleGeometry)
     const exportOverlay = overlay ? filterFloorplanExportOverlay(overlay) : null
-    const exportGeometry = combineGeometry(base, exportOverlay)
-    if (exportGeometry) out.push({ id, base: exportGeometry })
+    const annotationOnly = isFloorplanExportAnnotationNode(node.type)
+    const partition = exportOverlay
+      ? partitionFloorplanExportOverlay(exportOverlay)
+      : { model: null, annotations: null }
+    const model = annotationOnly ? null : combineGeometry(base, partition.model)
+    const annotations = annotationOnly
+      ? combineGeometry(base, exportOverlay)
+      : partition.annotations
+    if (model || annotations) out.push({ id, model, annotations })
   }
   return out
 }
@@ -1412,21 +1535,78 @@ function collectFloorplanGeometry(
 export function filterFloorplanExportOverlay(
   geometry: FloorplanGeometry,
 ): FloorplanGeometry | null {
-  if (
-    geometry.kind === 'dimension' ||
-    geometry.kind === 'dimension-string' ||
-    geometry.kind === 'dimension-label' ||
-    geometry.kind === 'text'
-  ) {
-    return geometry
-  }
-  if (geometry.kind !== 'group') return null
+  if (FLOORPLAN_EXPORT_EDITING_KINDS.has(geometry.kind)) return null
+  if (geometry.kind !== 'group') return geometry
 
   const children = geometry.children
     .map(filterFloorplanExportOverlay)
     .filter((child): child is FloorplanGeometry => child !== null)
   if (children.length === 0) return null
   return { ...geometry, children }
+}
+
+const FLOORPLAN_EXPORT_EDITING_KINDS = new Set<FloorplanGeometry['kind']>([
+  'endpoint-handle',
+  'midpoint-handle',
+  'edge-handle',
+  'move-handle',
+  'move-arrow',
+  'rotate-arrow',
+])
+
+type FloorplanExportOverlayPartition = {
+  model: FloorplanGeometry | null
+  annotations: FloorplanGeometry | null
+}
+
+export function partitionFloorplanExportOverlay(
+  geometry: FloorplanGeometry,
+): FloorplanExportOverlayPartition {
+  if (FLOORPLAN_EXPORT_EDITING_KINDS.has(geometry.kind)) {
+    return { model: null, annotations: null }
+  }
+  if (isFloorplanExportAnnotationGeometry(geometry)) {
+    return { model: null, annotations: filterFloorplanExportOverlay(geometry) }
+  }
+  if (geometry.kind !== 'group') {
+    return { model: geometry, annotations: null }
+  }
+
+  const modelChildren: FloorplanGeometry[] = []
+  const annotationChildren: FloorplanGeometry[] = []
+  for (const child of geometry.children) {
+    const partition = partitionFloorplanExportOverlay(child)
+    if (partition.model) modelChildren.push(partition.model)
+    if (partition.annotations) annotationChildren.push(partition.annotations)
+  }
+  return {
+    model:
+      modelChildren.length > 0
+        ? { kind: 'group', children: modelChildren, transform: geometry.transform }
+        : null,
+    annotations:
+      annotationChildren.length > 0
+        ? { kind: 'group', children: annotationChildren, transform: geometry.transform }
+        : null,
+  }
+}
+
+function isFloorplanExportAnnotationGeometry(geometry: FloorplanGeometry): boolean {
+  if (
+    geometry.kind === 'text' ||
+    geometry.kind === 'dimension' ||
+    geometry.kind === 'dimension-string' ||
+    geometry.kind === 'dimension-label' ||
+    geometry.kind === 'equal-spacing-badge'
+  ) {
+    return true
+  }
+  if ('annotationRole' in geometry && geometry.annotationRole) return true
+  return (
+    geometry.kind === 'group' &&
+    geometry.children.some((child) => child.kind === 'rect' || child.kind === 'circle') &&
+    geometry.children.some((child) => child.kind === 'text' && child.upright)
+  )
 }
 
 function combineGeometry(

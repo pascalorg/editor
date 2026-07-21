@@ -23,7 +23,6 @@ describe('ConstructionDimensionNode', () => {
       mode: 'linear',
       featureCount: 1,
       showCenterMark: true,
-      reference: false,
       prefix: '',
       suffix: '',
       textOverride: null,
@@ -34,7 +33,6 @@ describe('ConstructionDimensionNode', () => {
       metricNotation: 'meters',
       extensionStartGap: 0.075,
       extensionOvershoot: 0.12,
-      referenceStyle: 'parentheses',
       drawingType: 'floor-plan',
       drawingOverrides: [],
       controllingDimensionId: null,
@@ -85,7 +83,6 @@ describe('ConstructionDimensionNode', () => {
         featureCount: 6,
         prefix: 'TYP · ',
         suffix: ' CLR',
-        reference: true,
       }).success,
     ).toBe(true)
     expect(ConstructionDimensionNode.safeParse({ mode: 'arc-length' }).success).toBe(true)
@@ -103,7 +100,6 @@ describe('ConstructionDimensionNode', () => {
       metricNotation: 'millimeters',
       extensionStartGap: 0.025,
       extensionOvershoot: 0.08,
-      referenceStyle: 'suffix',
     })
 
     expect(node).toMatchObject({
@@ -114,7 +110,6 @@ describe('ConstructionDimensionNode', () => {
       metricNotation: 'millimeters',
       extensionStartGap: 0.025,
       extensionOvershoot: 0.08,
-      referenceStyle: 'suffix',
     })
     expect(ConstructionDimensionNode.safeParse({ extensionStartGap: -0.01 }).success).toBe(false)
     expect(ConstructionDimensionNode.safeParse({ extensionOvershoot: 2 }).success).toBe(false)
@@ -125,26 +120,26 @@ describe('ConstructionDimensionNode', () => {
       drawingType: 'foundation-plan',
       drawingOverrides: [
         { drawingType: 'floor-plan', presentation: 'controlled' },
-        { drawingType: 'roof-plan', presentation: 'reference' },
+        { drawingType: 'roof-plan', presentation: 'shown' },
       ],
       controllingDimensionId: 'construction-dimension_foundation',
     })
 
     expect(resolveConstructionDimensionDrawingPresentation(node, 'foundation-plan')).toBe('shown')
     expect(resolveConstructionDimensionDrawingPresentation(node, 'floor-plan')).toBe('controlled')
-    expect(resolveConstructionDimensionDrawingPresentation(node, 'roof-plan')).toBe('reference')
+    expect(resolveConstructionDimensionDrawingPresentation(node, 'roof-plan')).toBe('shown')
     expect(resolveConstructionDimensionDrawingPresentation(node, 'site-plan')).toBe('omit')
   })
 
   test('stores only drawing presentations that differ from the primary defaults', () => {
     const node = ConstructionDimensionNode.parse({})
-    const referenced = setConstructionDimensionDrawingPresentation(node, 'roof-plan', 'reference')
-    expect(referenced).toEqual([
-      { drawingType: 'roof-plan', presentation: 'reference', suppressedSegmentIndexes: [] },
+    const shown = setConstructionDimensionDrawingPresentation(node, 'roof-plan', 'shown')
+    expect(shown).toEqual([
+      { drawingType: 'roof-plan', presentation: 'shown', suppressedSegmentIndexes: [] },
     ])
     expect(
       setConstructionDimensionDrawingPresentation(
-        { ...node, drawingOverrides: referenced },
+        { ...node, drawingOverrides: shown },
         'roof-plan',
         'omit',
       ),

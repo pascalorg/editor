@@ -33,6 +33,7 @@ function context(
   nodes: Record<string, AnyNode> = {},
   selected = false,
   purpose: 'edit' | 'document' = 'edit',
+  metricNotation?: 'meters' | 'millimeters',
 ): GeometryContext {
   return {
     resolve: (id) => nodes[id],
@@ -42,6 +43,7 @@ function context(
     viewState: {
       selected,
       unit: 'metric',
+      metricNotation,
       highlighted: false,
       hovered: false,
       moving: false,
@@ -275,8 +277,6 @@ describe('buildConstructionDimensionFloorplan', () => {
       metricNotation: 'millimeters',
       extensionStartGap: 0.025,
       extensionOvershoot: 0.08,
-      reference: true,
-      referenceStyle: 'suffix',
     })
 
     const geometry = buildConstructionDimensionFloorplan(node, context())
@@ -290,18 +290,23 @@ describe('buildConstructionDimensionFloorplan', () => {
       extensionStartGap: 0.025,
       extensionOvershoot: 0.08,
     })
-    expect(dimensionSegments(geometry)[0]?.text).toBe('2000 REF')
+    expect(dimensionSegments(geometry)[0]?.text).toBe('2000')
   })
 
-  test('marks reference dimensions for independent visibility filtering', () => {
+  test('uses the live metric notation for manual dimensions in edit mode', () => {
     const node = ConstructionDimensionNode.parse({
-      reference: true,
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
     })
 
-    expect(buildConstructionDimensionFloorplan(node, context())).toMatchObject({
-      kind: 'group',
-      annotationRole: 'reference-dimension',
-    })
+    const geometry = buildConstructionDimensionFloorplan(
+      node,
+      context({}, false, 'edit', 'millimeters'),
+    )
+    expect(dimensionSegments(geometry)[0]?.text).toBe('2000')
   })
 
   test('shows witness and baseline handles only while selected', () => {
@@ -333,7 +338,7 @@ describe('buildConstructionDimensionFloorplan', () => {
     )
   })
 
-  test('keeps linked or reference geometry read-only in a dependent drawing', () => {
+  test('keeps linked geometry read-only in a dependent drawing', () => {
     const node = ConstructionDimensionNode.parse({
       metadata: { drawingCoordinationLocked: true },
     })
@@ -409,13 +414,12 @@ describe('buildConstructionDimensionFloorplan', () => {
       featureCount: 6,
       prefix: 'TYP · ',
       suffix: ' CLR',
-      reference: true,
     })
     const geometry = buildConstructionDimensionFloorplan(node, context())
     const entries = geometry ? flatten(geometry) : []
 
     expect(dimensionSegments(geometry)[0]).toMatchObject({
-      text: '(TYP · 6 x Ø 2m CLR)',
+      text: 'TYP · 6 x Ø 2m CLR',
       start: [-1, 0],
       end: [1, 0],
     })

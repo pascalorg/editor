@@ -64,6 +64,8 @@ export type GeometryContext = {
   viewState?: {
     selected: boolean
     unit: 'metric' | 'imperial'
+    /** Linear notation used when `unit` is metric. Scene values remain metres. */
+    metricNotation?: 'meters' | 'millimeters'
     /** Editing canvas or construction-document output. Defaults to `edit`. */
     purpose?: FloorplanRenderPurpose
     /** Marquee or programmatic highlight — shows selected chrome without keyboard focus. */
@@ -227,8 +229,6 @@ export type FloorplanDimensionTextPosition = 'above' | 'centered'
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
   | 'column-center'
-  | 'overhead-geometry'
-  | 'reference-dimension'
   | 'room-label'
   | 'stair-annotation'
 

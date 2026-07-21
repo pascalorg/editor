@@ -95,6 +95,10 @@ function getFloorplanStairStepCount(stair: StairNode, minimum: number) {
   return Math.max(minimum, Math.round(stair.stepCount ?? 10))
 }
 
+function getFloorplanStairBreakStep(stepCount: number) {
+  return Math.max(1, Math.ceil(Math.max(1, Math.round(stepCount)) * 0.68))
+}
+
 function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
   if (stair.stairType !== 'spiral' || (stair.topLandingMode ?? 'none') !== 'integrated') {
     return 0
@@ -244,14 +248,15 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 const angle = sectorStartAngle + stepSweep * index
                 const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
                 const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
-                const dashedFromIndex = Math.floor(stepCount * 0.68)
+                if (index >= getFloorplanStairBreakStep(stepCount) && index !== stepCount) {
+                  return null
+                }
 
                 return (
                   <line
                     key={`${stair.id}:spiral-step:${index}`}
                     pointerEvents="none"
                     stroke={index === stepCount ? curvedAccent : curvedStroke}
-                    strokeDasharray={index >= dashedFromIndex ? '0.1 0.08' : undefined}
                     strokeWidth={index === stepCount ? '1.8' : '1.15'}
                     vectorEffect="non-scaling-stroke"
                     x1={toSvgX(innerPoint.x)}
@@ -330,6 +335,9 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 const angle = sectorStartAngle + stepSweep * index
                 const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
                 const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
+                if (index >= getFloorplanStairBreakStep(stepCount) && index !== stepCount) {
+                  return null
+                }
 
                 return (
                   <line
@@ -397,14 +405,16 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                     strokeWidth={isSelectionActive ? '2' : '1.35'}
                     vectorEffect="non-scaling-stroke"
                   />
-                  {treadBars.map((treadBar, treadIndex) => (
-                    <polygon
-                      fill={straightTread}
-                      key={`${segment.id}:tread:${treadIndex}`}
-                      pointerEvents="none"
-                      points={segment.segmentType === 'landing' ? '' : treadBar.points}
-                    />
-                  ))}
+                  {treadBars
+                    .slice(0, Math.max(0, getFloorplanStairBreakStep(segment.stepCount) - 1))
+                    .map((treadBar, treadIndex) => (
+                      <polygon
+                        fill={straightTread}
+                        key={`${segment.id}:tread:${treadIndex}`}
+                        pointerEvents="none"
+                        points={segment.segmentType === 'landing' ? '' : treadBar.points}
+                      />
+                    ))}
                 </g>
               ))}
               {arrow?.polyline && arrow.polyline.length >= 2 ? (

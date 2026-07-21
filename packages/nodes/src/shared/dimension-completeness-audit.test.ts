@@ -111,30 +111,6 @@ describe('dimension completeness audit', () => {
     ).toEqual([])
   })
 
-  test('ignores reference dimensions unless explicitly included', () => {
-    const exteriorWall = WallNode.parse({
-      id: 'wall_exterior',
-      start: [0, 0],
-      end: [5, 0],
-      frontSide: 'exterior',
-    })
-    const referenceDimension = ConstructionDimensionNode.parse({
-      id: 'construction-dimension_reference',
-      reference: true,
-      anchors: [
-        featureAnchor(exteriorWall.id, [0, 0, 0]),
-        featureAnchor(exteriorWall.id, [5, 0, 0]),
-      ],
-    })
-
-    expect(buildDimensionCompletenessAudit(nodes(exteriorWall, referenceDimension))).toHaveLength(2)
-    expect(
-      buildDimensionCompletenessAudit(nodes(exteriorWall, referenceDimension), {
-        includeReferenceDimensions: true,
-      }),
-    ).toEqual([])
-  })
-
   test('reports undimensioned exterior openings and missing verified rough openings', () => {
     const exteriorWall = WallNode.parse({
       id: 'wall_exterior',

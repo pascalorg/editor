@@ -21,7 +21,11 @@ const palette = {
   measurementLabelText: '#0f172a',
 }
 
-const context = (unit: 'metric' | 'imperial', selected = false): GeometryContext => ({
+const context = (
+  unit: 'metric' | 'imperial',
+  selected = false,
+  metricNotation: 'meters' | 'millimeters' = 'meters',
+): GeometryContext => ({
   resolve: () => undefined,
   children: [],
   siblings: [],
@@ -29,6 +33,7 @@ const context = (unit: 'metric' | 'imperial', selected = false): GeometryContext
   viewState: {
     selected,
     unit,
+    metricNotation,
     highlighted: false,
     hovered: false,
     moving: false,
@@ -67,6 +72,23 @@ describe('buildMeasurementFloorplan', () => {
     expect(
       metric && flattenGeometry(metric).find((entry) => entry.kind === 'dimension-label'),
     ).toMatchObject({ appearance: 'outlined' })
+  })
+
+  test('formats metric distance labels in millimeters', () => {
+    const node = MeasurementNode.parse({
+      id: 'measurement_distance_mm',
+      type: 'measurement',
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [3.048, 0, 0],
+        ],
+      },
+    })
+
+    const metric = buildMeasurementFloorplan(node, context('metric', false, 'millimeters'))
+    expect(metric && labels(metric)).toEqual(['3048mm'])
   })
 
   test('uses indigo analysis colors in plan view', () => {

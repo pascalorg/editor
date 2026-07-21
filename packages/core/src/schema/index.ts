@@ -62,7 +62,6 @@ export {
   ConstructionDimensionMetricNotation,
   ConstructionDimensionMode,
   ConstructionDimensionNode,
-  ConstructionDimensionReferenceStyle,
   ConstructionDimensionTerminator,
   ConstructionDimensionTextPosition,
   ConstructionDrawingType,

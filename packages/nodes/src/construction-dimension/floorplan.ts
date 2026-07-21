@@ -51,6 +51,10 @@ export function buildConstructionDimensionFloorplan(
   const unit = ctx.viewState?.unit ?? 'metric'
   const profile: ConstructionLengthProfile =
     ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
+  const displayNode =
+    profile === 'editor' && ctx.viewState?.metricNotation
+      ? { ...node, metricNotation: ctx.viewState.metricNotation }
+      : node
   const editable =
     ctx.viewState?.selected === true &&
     !(
@@ -63,19 +67,19 @@ export function buildConstructionDimensionFloorplan(
   switch (node.mode) {
     case 'linear':
     case 'chord':
-      return buildLinearOrChord(node, points, stroke, dangling, unit, profile, editable)
+      return buildLinearOrChord(displayNode, points, stroke, dangling, unit, profile, editable)
     case 'radius':
-      return buildRadius(node, points, stroke, dangling, unit, profile, editable)
+      return buildRadius(displayNode, points, stroke, dangling, unit, profile, editable)
     case 'diameter':
-      return buildDiameter(node, points, stroke, dangling, unit, profile, editable)
+      return buildDiameter(displayNode, points, stroke, dangling, unit, profile, editable)
     case 'center-mark':
-      return buildCenterMarkOnly(node, points, stroke, editable)
+      return buildCenterMarkOnly(displayNode, points, stroke, editable)
     case 'arc-length':
-      return buildArcLength(node, points, stroke, dangling, unit, profile, editable)
+      return buildArcLength(displayNode, points, stroke, dangling, unit, profile, editable)
     case 'angular':
-      return buildAngular(node, points, stroke, dangling, editable)
+      return buildAngular(displayNode, points, stroke, dangling, editable)
     case 'coordinate':
-      return buildCoordinate(node, points, stroke, dangling, unit, profile, editable)
+      return buildCoordinate(displayNode, points, stroke, dangling, unit, profile, editable)
   }
 }
 
@@ -207,7 +211,7 @@ function buildLinearOrChord(
   )
   if (editable)
     children.push(...witnessHandles(layout.witnessPoints), baselineHandle(layout.midpoint))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildRadius(
@@ -237,7 +241,7 @@ function buildRadius(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildDiameter(
@@ -273,7 +277,7 @@ function buildDiameter(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildCenterMarkOnly(
@@ -286,7 +290,7 @@ function buildCenterMarkOnly(
   if (!layout) return null
   const children: FloorplanGeometry[] = centerMark(layout.center, layout.radius, stroke, true)
   if (editable) children.push(...anchorHandles(points))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildArcLength(
@@ -332,7 +336,7 @@ function buildArcLength(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildAngular(
@@ -365,7 +369,7 @@ function buildAngular(
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, arcRadius, stroke))
   if (editable) children.push(...anchorHandles(points), baselineHandle(node.baseline.origin))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function buildCoordinate(
@@ -397,7 +401,7 @@ function buildCoordinate(
     )
   })
   if (editable) children.push(...anchorHandles(points))
-  return dimensionGroup(node, children)
+  return dimensionGroup(children)
 }
 
 function suppressedDimensionSegmentIndexes(node: ConstructionDimensionNode): ReadonlySet<number> {
@@ -415,15 +419,8 @@ function suppressedDimensionSegmentIndexes(node: ConstructionDimensionNode): Rea
   )
 }
 
-function dimensionGroup(
-  node: ConstructionDimensionNode,
-  children: FloorplanGeometry[],
-): FloorplanGeometry {
-  return {
-    kind: 'group',
-    children,
-    annotationRole: node.reference ? 'reference-dimension' : undefined,
-  }
+function dimensionGroup(children: FloorplanGeometry[]): FloorplanGeometry {
+  return { kind: 'group', children }
 }
 
 function lengthFormatOptions(node: ConstructionDimensionNode): ConstructionLengthFormatOptions {
@@ -442,12 +439,7 @@ function notation(
   const repeated = includeFeatureCount && node.featureCount > 1 ? `${node.featureCount} x ` : ''
   const content = node.textOverride ?? `${repeated}${base}`
   const decorated = `${node.prefix}${content}${node.suffix}`
-  const referenced = node.reference
-    ? node.referenceStyle === 'suffix'
-      ? `${decorated} REF`
-      : `(${decorated})`
-    : decorated
-  return dangling ? `UNLINKED · ${referenced}` : referenced
+  return dangling ? `UNLINKED · ${decorated}` : decorated
 }
 
 function dimensionGeometry(

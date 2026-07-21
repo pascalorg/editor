@@ -788,6 +788,7 @@ export function FloorplanMeasurementToolLayer() {
   const draftLevelId = useMeasurementDraft((state) => state.levelId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
 
   useEffect(() => {
     if (active) {
@@ -1226,7 +1227,7 @@ export function FloorplanMeasurementToolLayer() {
         angle: Math.atan2(end[2] - start[2], end[0] - start[0]),
         point: [(start[0] + end[0]) / 2, 0, (start[2] + end[2]) / 2],
         screenUpright: false,
-        text: formatLinearMeasurement(measurementDistance(start, end), unit),
+        text: formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation),
       }
     } else if (kind === 'angle' && livePoints.length >= 3) {
       const anglePoints = livePoints.slice(0, 3) as [
@@ -1250,7 +1251,7 @@ export function FloorplanMeasurementToolLayer() {
           text:
             kind === 'area'
               ? `A ${formatAreaLabel(measurementArea(livePoints), unit)}`
-              : `P ${formatLinearMeasurement(measurementPerimeter(livePoints), unit)}`,
+              : `P ${formatLinearMeasurement(measurementPerimeter(livePoints), unit, metricNotation)}`,
         }
       }
     } else if (kind === 'volume' && center && baseNormal) {
@@ -1282,7 +1283,11 @@ export function FloorplanMeasurementToolLayer() {
             (segmentStart[1] + segmentEnd[1]) / 2,
             (segmentStart[2] + segmentEnd[2]) / 2,
           ],
-          text: formatLinearMeasurement(measurementDistance(segmentStart, segmentEnd), unit),
+          text: formatLinearMeasurement(
+            measurementDistance(segmentStart, segmentEnd),
+            unit,
+            metricNotation,
+          ),
         }
       }
     }
@@ -1300,7 +1305,18 @@ export function FloorplanMeasurementToolLayer() {
       polygonPoints,
       segmentLabel,
     }
-  }, [axisGuide, baseNormal, extrusionHeight, hover, kind, points, stage, unit, vertexDrag])
+  }, [
+    axisGuide,
+    baseNormal,
+    extrusionHeight,
+    hover,
+    kind,
+    metricNotation,
+    points,
+    stage,
+    unit,
+    vertexDrag,
+  ])
 
   if (constructionDimensionActive) return <FloorplanConstructionDimensionToolLayer />
   if (smartActive) return <FloorplanQuickMeasureLayer />
@@ -1598,7 +1614,7 @@ export function FloorplanMeasurementToolLayer() {
           text={`${hover.semantic.label}${
             hover.semantic.length === null
               ? ''
-              : ` · ${formatLinearMeasurement(hover.semantic.length, unit)}`
+              : ` · ${formatLinearMeasurement(hover.semantic.length, unit, metricNotation)}`
           }`}
           textColor={labelText}
           unitsPerPixel={unitsPerPixel}

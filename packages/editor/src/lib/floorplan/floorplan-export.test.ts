@@ -1,18 +1,27 @@
 import { describe, expect, test } from 'bun:test'
 import { DrawingSheetNode, type FloorplanGeometry } from '@pascal-app/core'
+import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import {
   filterFloorplanExportOverlay,
   fitPlanToBox,
-  placePlanAtDrawingScale,
+  isFloorplanExportAnnotationNode,
+  partitionFloorplanExportOverlay,
   pointsPerMeterForDrawingScale,
   resolveDrawingSheetDocumentMarkers,
   resolveDrawingSheetGeneralNotes,
   resolveDrawingSheetKeyedNotes,
+  resolveFloorplanExportAnnotationVisibility,
+  resolveFloorplanExportPlacement,
+  resolveFloorplanExportRotationDeg,
+  resolveFloorplanExportViewport,
+  resolveFloorplanExportViewState,
+  resolveFloorplanPageLayout,
+  resolveFloorplanPdfFont,
+  resolveFloorplanScreenUnitsPerPixel,
   resolveGraphicScaleLength,
   resolveSheetComposition,
   resolveSheetExportLayout,
   resolveSheetPageSetup,
-  resolveSheetPreflightIssues,
 } from './floorplan-export'
 
 describe('filterFloorplanExportOverlay', () => {
@@ -44,6 +53,87 @@ describe('filterFloorplanExportOverlay', () => {
       children: [label],
     })
   })
+
+  test('preserves wall, door, and window shapes used as annotation obstacles', () => {
+    const fixedGeometry = {
+      kind: 'group',
+      children: [
+        {
+          kind: 'polygon',
+          points: [
+            [0, 0],
+            [4, 0],
+            [4, 0.2],
+            [0, 0.2],
+          ],
+          fill: '#374151',
+          stroke: '#1f2937',
+          annotationObstacle: 'outline',
+        },
+        {
+          kind: 'path',
+          d: 'M 1 0 A 1 1 0 0 1 2 1',
+          fill: 'none',
+          stroke: '#64748b',
+          annotationObstacle: 'bounds',
+        },
+        {
+          kind: 'line',
+          x1: 2.5,
+          y1: 0,
+          x2: 3.5,
+          y2: 0,
+          stroke: '#1f2937',
+          annotationObstacle: 'bounds',
+        },
+        { kind: 'move-handle', point: [2, 0.1] },
+      ],
+    } satisfies FloorplanGeometry
+
+    const { overlay } = splitFloorplanOverlay(fixedGeometry)
+    expect(overlay).not.toBeNull()
+    expect(filterFloorplanExportOverlay(overlay!)).toEqual({
+      kind: 'group',
+      children: fixedGeometry.children.slice(0, 3),
+      transform: undefined,
+    })
+  })
+
+  test('keeps structural obstacles in model bounds while leaving marks as annotations', () => {
+    const wall = {
+      kind: 'polygon',
+      points: [
+        [0, 0],
+        [4, 0],
+        [4, 0.2],
+        [0, 0.2],
+      ],
+      fill: '#374151',
+      annotationObstacle: 'outline',
+    } satisfies FloorplanGeometry
+    const openingMark = {
+      kind: 'group',
+      children: [
+        {
+          kind: 'rect',
+          x: 1,
+          y: 1,
+          width: 0.4,
+          height: 0.2,
+          fill: '#ffffff',
+          stroke: '#334155',
+        },
+        { kind: 'text', x: 1.2, y: 1.1, text: 'W01', fontSize: 0.1, upright: true },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(
+      partitionFloorplanExportOverlay({ kind: 'group', children: [wall, openingMark] }),
+    ).toEqual({
+      model: { kind: 'group', children: [wall], transform: undefined },
+      annotations: { kind: 'group', children: [openingMark], transform: undefined },
+    })
+  })
 })
 
 describe('fitPlanToBox', () => {
@@ -53,6 +143,80 @@ describe('fitPlanToBox', () => {
       y: 70,
       width: 400,
       height: 200,
+    })
+  })
+})
+
+describe('floor plan export policy', () => {
+  test('uses the live floor-plan formatting profile for metric and imperial dimensions', () => {
+    expect(resolveFloorplanExportViewState('metric')).toMatchObject({
+      purpose: 'edit',
+      unit: 'metric',
+    })
+    expect(resolveFloorplanExportViewState('imperial')).toMatchObject({
+      purpose: 'edit',
+      unit: 'imperial',
+    })
+  })
+
+  test('fits an oversized plan inside the complete export viewport', () => {
+    const placement = resolveFloorplanExportPlacement(30, 20, 10, 20, 400, 300)
+
+    expect(placement.x).toBe(10)
+    expect(placement.y).toBeCloseTo(36.67, 2)
+    expect(placement.width).toBe(400)
+    expect(placement.height).toBeCloseTo(266.67, 2)
+    expect(placement.x).toBeGreaterThanOrEqual(10)
+    expect(placement.y).toBeGreaterThanOrEqual(20)
+    expect(placement.x + placement.width).toBeLessThanOrEqual(410)
+    expect(placement.y + placement.height).toBeLessThanOrEqual(320)
+  })
+
+  test('exports the same annotation categories that are visible in the live view', () => {
+    const liveVisibility = {
+      automaticDimensions: true,
+      manualDimensions: false,
+      measurements: true,
+      openingMarks: true,
+      structuralGrids: false,
+      roomLabels: false,
+      stairAnnotations: true,
+    }
+
+    expect(resolveFloorplanExportAnnotationVisibility(liveVisibility)).toEqual(liveVisibility)
+  })
+
+  test('matches live screen sizing to the fitted export viewport', () => {
+    expect(resolveFloorplanScreenUnitsPerPixel(7, 4.5, 572, 463)).toBeCloseTo(0.012_237_762, 8)
+  })
+
+  test('keeps the export viewport anchored to the structural drawing bounds', () => {
+    expect(resolveFloorplanExportViewport({ x: -5, y: -6, width: 13, height: 13.5 })).toEqual({
+      x: -7.7,
+      y: -8.7,
+      width: 18.4,
+      height: 18.9,
+    })
+  })
+
+  test('keeps annotation-only nodes out of primary model bounds', () => {
+    expect(isFloorplanExportAnnotationNode('measurement')).toBe(true)
+    expect(isFloorplanExportAnnotationNode('construction-dimension')).toBe(true)
+    expect(isFloorplanExportAnnotationNode('wall')).toBe(false)
+    expect(isFloorplanExportAnnotationNode('door')).toBe(false)
+  })
+
+  test('matches the current floor-plan rotation instead of forcing north-up', () => {
+    expect(resolveFloorplanExportRotationDeg(Math.PI / 6, Math.PI / 2)).toBeCloseTo(60, 8)
+  })
+
+  test('maps editor fonts onto PDF-supported families and weights', () => {
+    expect(
+      resolveFloorplanPdfFont('ui-monospace, SFMono-Regular, Menlo, monospace', '500'),
+    ).toEqual({ fontFamily: 'Courier', fontWeight: 'bold' })
+    expect(resolveFloorplanPdfFont('system-ui, -apple-system, sans-serif', '600')).toEqual({
+      fontFamily: 'Helvetica',
+      fontWeight: 'bold',
     })
   })
 })
@@ -67,32 +231,20 @@ describe('pointsPerMeterForDrawingScale', () => {
   })
 })
 
-describe('placePlanAtDrawingScale', () => {
-  test('centers the plan at the selected fixed scale', () => {
-    expect(placePlanAtDrawingScale(10, 5, 10, 20, 800, 600, '1:100')).toEqual({
-      x: 268.26771653543307,
-      y: 249.13385826771653,
-      width: 283.46456692913387,
-      height: 141.73228346456693,
-      clipped: false,
-    })
-  })
-
-  test('keeps fixed scale when content is larger than the page box', () => {
-    const placed = placePlanAtDrawingScale(30, 20, 10, 20, 400, 300, '1/4"=1\'-0"')
-
-    expect(placed.width).toBeCloseTo(1771.65, 2)
-    expect(placed.height).toBeCloseTo(1181.1, 2)
-    expect(placed.clipped).toBe(true)
-  })
-})
-
 describe('resolveSheetExportLayout', () => {
   test('reserves a plan viewport, side panel, and title block on one sheet page', () => {
     expect(resolveSheetExportLayout(842, 595)).toEqual({
       planBox: { x: 36, y: 36, width: 572, height: 463 },
       sidePanel: { x: 626, y: 36, width: 180, height: 463 },
       titleBlock: { x: 36, y: 517, width: 770, height: 42 },
+    })
+  })
+})
+
+describe('resolveFloorplanPageLayout', () => {
+  test('uses the page for the plan without drawing-sheet sidebars or title blocks', () => {
+    expect(resolveFloorplanPageLayout(842, 595)).toEqual({
+      planBox: { x: 36, y: 64, width: 770, height: 495 },
     })
   })
 })
@@ -350,18 +502,5 @@ describe('resolveSheetPageSetup', () => {
         customPaperHeight: 36,
       }),
     ).toEqual({ width: 1728, height: 2592, orientation: 'portrait' })
-  })
-})
-
-describe('resolveSheetPreflightIssues', () => {
-  test('reports clipped scaled content as a sheet preflight warning', () => {
-    expect(resolveSheetPreflightIssues({ clipped: true })).toEqual([
-      {
-        severity: 'warning',
-        message:
-          'Scaled plan exceeds the sheet viewport. Review clipped view or annotation content.',
-      },
-    ])
-    expect(resolveSheetPreflightIssues({ clipped: false })).toEqual([])
   })
 })

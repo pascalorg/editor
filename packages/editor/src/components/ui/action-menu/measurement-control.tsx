@@ -4,15 +4,12 @@ import type {
   ConstructionDimensionChainMode,
   ConstructionDimensionMode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import {
   Box,
   Check,
   ChevronDown,
   CircleIcon,
   Crosshair,
-  Eye,
-  EyeOff,
   Grid2X2,
   Minus,
   Ruler,
@@ -81,8 +78,6 @@ export function MeasurementControl() {
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
   const setViewMode = useEditor((state) => state.setViewMode)
-  const showMeasurements = useViewer((state) => state.showMeasurements)
-  const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
@@ -252,24 +247,6 @@ export function MeasurementControl() {
               </button>
             )
           })}
-
-          <div className="my-1.5 h-px bg-border/60" />
-
-          <button
-            aria-checked={showMeasurements}
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-muted-foreground text-sm transition-colors hover:bg-white/8 hover:text-foreground"
-            onClick={() => setShowMeasurements(!showMeasurements)}
-            role="menuitemcheckbox"
-            type="button"
-          >
-            {showMeasurements ? (
-              <Eye aria-hidden="true" className="h-4 w-4" />
-            ) : (
-              <EyeOff aria-hidden="true" className="h-4 w-4" />
-            )}
-            <span>Show measurements</span>
-            <span className="ml-auto text-xs">{showMeasurements ? 'On' : 'Off'}</span>
-          </button>
         </div>
       </PopoverContent>
     </Popover>

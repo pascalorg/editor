@@ -15,13 +15,6 @@ export function resolveNodeForDrawingType(
   const presentation = resolveConstructionDimensionDrawingPresentation(node, drawingType)
   if (presentation === 'omit') return null
   if (presentation === 'shown') return applyDrawingOverride(node, drawingType)
-  if (presentation === 'reference') {
-    return {
-      ...applyDrawingOverride(node, drawingType),
-      metadata: lockedMetadata(applyDrawingOverride(node, drawingType)),
-      reference: true,
-    }
-  }
 
   const controller = node.controllingDimensionId ? nodes[node.controllingDimensionId] : undefined
   if (
@@ -33,7 +26,6 @@ export function resolveNodeForDrawingType(
       ...node,
       metadata: lockedMetadata(node),
       prefix: `UNLINKED CONTROL · ${node.prefix}`,
-      reference: true,
     }
   }
 
@@ -53,7 +45,6 @@ function resolveControlledDimension(
     chainMode: controller.chainMode,
     mode: controller.mode,
     showCenterMark: controller.showCenterMark,
-    reference: true,
   }
 }
 

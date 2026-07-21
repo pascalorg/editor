@@ -25,15 +25,20 @@ const palette: FloorplanPalette = {
   measurementLabelText: '#111827',
 }
 
-function context(purpose: 'edit' | 'document'): GeometryContext {
+function context(
+  purpose: 'edit' | 'document',
+  selected = false,
+  metricNotation: 'meters' | 'millimeters' = 'meters',
+): GeometryContext {
   return {
     resolve: () => undefined,
     children: [],
     siblings: [],
     parent: null,
     viewState: {
-      selected: false,
+      selected,
       unit: 'metric',
+      metricNotation,
       purpose,
       highlighted: false,
       hovered: false,
@@ -92,6 +97,17 @@ describe('buildWallFloorplan render purpose', () => {
 
     expect(texts(edit)).toContain('4m')
     expect(texts(document)).toContain('4000')
+  })
+
+  test('uses the live millimeter notation in edit mode', () => {
+    const edit = buildWallFloorplan(wall, context('edit', false, 'millimeters'))
+    const texts = edit
+      ? flatten(edit).flatMap((entry) =>
+          entry.kind === 'dimension-string' ? entry.segments.map((segment) => segment.text) : [],
+        )
+      : []
+
+    expect(texts).toContain('4000')
   })
 
   test('uses total assembly thickness and emits construction graphics for modeled layers', () => {
@@ -190,14 +206,30 @@ describe('buildWallFloorplan render purpose', () => {
     ).toHaveLength(2)
   })
 
-  test('shows a radius leader for a curved wall without requiring selection', () => {
+  test('shows an orthogonal depth dimension for a curved wall without a radius leader', () => {
     const curved = WallNode.parse({ ...wall, curveOffset: 1 })
     const geometry = buildWallFloorplan(curved, context('edit'))
     const entries = geometry ? flatten(geometry) : []
 
-    expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(7)
-    expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
-      text: 'R 2.5m',
+    expect(entries.find((entry) => entry.kind === 'dimension-label')).toBeUndefined()
+    expect(entries.find((entry) => entry.kind === 'dimension-string')).toMatchObject({
+      kind: 'dimension-string',
+      segments: [{ text: '1m' }],
     })
+  })
+
+  test('places selected move arrows on the curved wall midpoint', () => {
+    const curved = WallNode.parse({ ...wall, curveOffset: 1 })
+    const geometry = buildWallFloorplan(curved, context('edit', true))
+    const arrows = geometry ? flatten(geometry).filter((entry) => entry.kind === 'move-arrow') : []
+
+    expect(arrows).toHaveLength(2)
+    expect(arrows[0]).toMatchObject({ kind: 'move-arrow', angle: Math.PI / 2 })
+    expect(arrows[1]).toMatchObject({ kind: 'move-arrow', angle: -Math.PI / 2 })
+    if (arrows[0]?.kind !== 'move-arrow' || arrows[1]?.kind !== 'move-arrow') return
+    expect(arrows[0].point[0]).toBeCloseTo(2)
+    expect(arrows[0].point[1]).toBeCloseTo(-0.885)
+    expect(arrows[1].point[0]).toBeCloseTo(2)
+    expect(arrows[1].point[1]).toBeCloseTo(-1.115)
   })
 })

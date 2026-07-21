@@ -2720,9 +2720,10 @@ function formatMeasurement(
   value: number,
   unit: 'metric' | 'imperial',
   metersPerUnit: number | null = null,
+  metricNotation: 'meters' | 'millimeters' = 'meters',
 ) {
   const measuredValue = metersPerUnit && metersPerUnit > 0 ? value * metersPerUnit : value
-  return formatLinearMeasurement(measuredValue, unit)
+  return formatLinearMeasurement(measuredValue, unit, metricNotation)
 }
 
 function formatNumber(value: number, fractionDigits = 2) {
@@ -3615,6 +3616,7 @@ function FloorplanReferenceScaleDraftLine({
   unitsPerPixel: number
 }) {
   const cursor = useFloorplanDraftPreview((s) => s.cursorPoint)
+  const metricNotation = useViewer((state) => state.metricNotation)
   if (!cursor) {
     return null
   }
@@ -3626,6 +3628,8 @@ function FloorplanReferenceScaleDraftLine({
       label={`Ref ${formatMeasurement(
         Math.hypot(cursor[0] - start[0], cursor[1] - start[1]),
         unit,
+        null,
+        metricNotation,
       )}`}
       palette={palette}
       start={start}
@@ -4007,6 +4011,7 @@ const FloorplanSiteEdgeLabelLayer = memo(function FloorplanSiteEdgeLabelLayer({
   unit: 'metric' | 'imperial'
   unitsPerPixel: number
 }) {
+  const metricNotation = useViewer((state) => state.metricNotation)
   if (!(shouldShow && sitePolygon && sitePolygon.polygon.length >= 2)) {
     return null
   }
@@ -4055,7 +4060,7 @@ const FloorplanSiteEdgeLabelLayer = memo(function FloorplanSiteEdgeLabelLayer({
       labelAngleDeg += 180
     }
 
-    const label = formatMeasurement(length, unit)
+    const label = formatMeasurement(length, unit, null, metricNotation)
     const width = Math.max(label.length * upx * 6.4 + padX * 2, minWidth)
     const height = fontSize + padY * 2
 
@@ -5030,6 +5035,7 @@ function FloorplanLinearDraftLayer({
   unitsPerPixel: number
   sceneRotationDeg: number
 }) {
+  const metricNotation = useViewer((state) => state.metricNotation)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
@@ -5148,7 +5154,7 @@ function FloorplanLinearDraftLayer({
     }
 
     return {
-      lengthLabel: formatMeasurement(length, unit),
+      lengthLabel: formatMeasurement(length, unit, null, metricNotation),
       midpoint: [
         (wallDraftStart[0] + wallDraftEnd[0]) / 2,
         (wallDraftStart[1] + wallDraftEnd[1]) / 2,
@@ -5156,7 +5162,7 @@ function FloorplanLinearDraftLayer({
       direction: [dx / length, dy / length] as WallPlanPoint,
       angleLabels,
     }
-  }, [isWallBuildActive, unit, wallDraftEnd, wallDraftStart, walls])
+  }, [isWallBuildActive, metricNotation, unit, wallDraftEnd, wallDraftStart, walls])
 
   return (
     <>
@@ -5245,6 +5251,7 @@ export function FloorplanPanel({
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const showGrid = useViewer((state) => state.showGrid)
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
@@ -11170,7 +11177,12 @@ export function FloorplanPanel({
                 Drawn line
               </div>
               <div className="mt-1 font-medium text-sm">
-                {formatMeasurement(pendingReferenceScale.measuredLengthUnits, unit)}
+                {formatMeasurement(
+                  pendingReferenceScale.measuredLengthUnits,
+                  unit,
+                  null,
+                  metricNotation,
+                )}
               </div>
             </div>
 
