@@ -153,6 +153,11 @@ type ViewerState = {
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
 
+  /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
+   *  screenshot needs a movable cursor); clicking the canvas re-locks. */
+  walkthroughSuspended: boolean
+  setWalkthroughSuspended: (suspended: boolean) => void
+
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
 
@@ -515,7 +520,10 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
+      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+
+      walkthroughSuspended: false,
+      setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
