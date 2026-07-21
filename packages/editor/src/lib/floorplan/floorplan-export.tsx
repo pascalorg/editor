@@ -114,6 +114,7 @@ type SheetComposition = {
   generalNotes: { number: number; text: string }[]
   keyedNoteLegend: { key: string; text: string }[]
   keyedNoteInstances: { id: string; key: string; x: number; y: number }[]
+  documentMarkers: ResolvedDocumentMarker[]
   preflightIssues: SheetPreflightIssue[]
 }
 
@@ -148,6 +149,21 @@ type ResolvedKeyedNotes = {
   legend: { key: string; text: string }[]
   instances: { id: string; key: string; x: number; y: number }[]
   warnings: SheetPreflightIssue[]
+}
+
+type ResolvedDocumentMarker = {
+  id: string
+  kind: string
+  label: string
+  title: string
+  sheetReference: string
+  drawingReference: string
+  revisionId: string
+  x: number
+  y: number
+  endX: number | null
+  endY: number | null
+  points: { x: number; y: number }[]
 }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
@@ -353,6 +369,9 @@ export function resolveSheetComposition(
   const keyedNotes = sheet
     ? resolveDrawingSheetKeyedNotes(sheet, placedView?.id ?? null)
     : { legend: [], instances: [], warnings: [] }
+  const documentMarkers = sheet
+    ? resolveDrawingSheetDocumentMarkers(sheet, placedView?.id ?? null)
+    : []
   return {
     sheetNumber: sheet?.sheetNumber ?? 'A1.0',
     sheetTitle: sheet?.sheetTitle ?? drawingLabel,
@@ -367,6 +386,7 @@ export function resolveSheetComposition(
     generalNotes: generalNotes.notes,
     keyedNoteLegend: keyedNotes.legend,
     keyedNoteInstances: keyedNotes.instances,
+    documentMarkers,
     preflightIssues: [...generalNotes.duplicateWarnings, ...keyedNotes.warnings],
   }
 }
@@ -454,6 +474,28 @@ export function resolveDrawingSheetKeyedNotes(
     instances: resolvedInstances,
     warnings,
   }
+}
+
+export function resolveDrawingSheetDocumentMarkers(
+  sheet: DrawingSheetNode,
+  placedViewId: string | null = null,
+): ResolvedDocumentMarker[] {
+  return (sheet.documentMarkers ?? [])
+    .filter((marker) => marker.placedViewId === null || marker.placedViewId === placedViewId)
+    .map((marker) => ({
+      id: marker.id,
+      kind: marker.kind,
+      label: marker.label,
+      title: marker.title,
+      sheetReference: marker.sheetReference,
+      drawingReference: marker.drawingReference,
+      revisionId: marker.revisionId,
+      x: marker.position[0],
+      y: marker.position[1],
+      endX: marker.endPosition?.[0] ?? null,
+      endY: marker.endPosition?.[1] ?? null,
+      points: marker.points.map(([x, y]) => ({ x, y })),
+    }))
 }
 
 export function resolveSheetPageSetup(
@@ -718,8 +760,109 @@ function drawSheetChrome(
     scale: composition.scale,
     maxWidth: Math.min(150, layout.planBox.width * 0.3),
   })
+  drawSheetDocumentMarkers(doc, composition)
   drawKeyedNoteSymbols(doc, composition)
   return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules, preflightIssues)
+}
+
+function drawSheetDocumentMarkers(doc: JsPdfDocument, composition: SheetComposition): void {
+  if (composition.documentMarkers.length === 0) return
+  doc.setDrawColor('#111827')
+  doc.setTextColor('#111827')
+  doc.setLineWidth(0.7)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  for (const marker of composition.documentMarkers) {
+    const x = marker.x * 72
+    const y = marker.y * 72
+    const end =
+      marker.endX !== null && marker.endY !== null
+        ? { x: marker.endX * 72, y: marker.endY * 72 }
+        : null
+    switch (marker.kind) {
+      case 'wall-tag':
+      case 'glazing-tag':
+      case 'assembly-tag':
+        drawTagMarker(doc, marker, x, y)
+        break
+      case 'section-callout':
+      case 'elevation-callout':
+      case 'detail-reference':
+        drawCalloutMarker(doc, marker, x, y, end)
+        break
+      case 'delta-marker':
+        drawDeltaMarker(doc, marker, x, y)
+        break
+      case 'revision-cloud':
+        drawRevisionCloudMarker(doc, marker, x, y)
+        break
+    }
+  }
+}
+
+function drawTagMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: number, y: number) {
+  const width = Math.max(20, marker.label.length * 5 + 10)
+  const height = 14
+  if (marker.kind === 'glazing-tag') {
+    doc.roundedRect(x - width / 2, y - height / 2, width, height, 2, 2)
+  } else if (marker.kind === 'assembly-tag') {
+    doc.rect(x - width / 2, y - height / 2, width, height)
+  } else {
+    doc.circle(x, y, Math.max(7, width / 2))
+  }
+  doc.text(marker.label, x, y + 2.4, { align: 'center' })
+}
+
+function drawCalloutMarker(
+  doc: JsPdfDocument,
+  marker: ResolvedDocumentMarker,
+  x: number,
+  y: number,
+  end: { x: number; y: number } | null,
+) {
+  if (end) doc.line(x, y, end.x, end.y)
+  doc.circle(x, y, 8)
+  doc.line(x - 8, y, x + 8, y)
+  doc.text(marker.label, x, y - 1.8, { align: 'center' })
+  const reference = [marker.drawingReference, marker.sheetReference].filter(Boolean).join('/')
+  if (reference) {
+    doc.setFont('helvetica', 'normal')
+    doc.text(reference, x, y + 6, { align: 'center' })
+    doc.setFont('helvetica', 'bold')
+  }
+}
+
+function drawDeltaMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: number, y: number) {
+  const radius = 8
+  const points = [
+    [x, y - radius],
+    [x + radius * 0.87, y + radius / 2],
+    [x - radius * 0.87, y + radius / 2],
+  ] as const
+  doc.triangle(points[0][0], points[0][1], points[1][0], points[1][1], points[2][0], points[2][1])
+  doc.text(marker.revisionId || marker.label, x, y + 3, { align: 'center' })
+}
+
+function drawRevisionCloudMarker(
+  doc: JsPdfDocument,
+  marker: ResolvedDocumentMarker,
+  x: number,
+  y: number,
+) {
+  const points: [number, number][] | null =
+    marker.points.length >= 3 ? marker.points.map((point) => [point.x * 72, point.y * 72]) : null
+  if (points) {
+    for (let index = 0; index < points.length; index += 1) {
+      const current = points[index]!
+      const next = points[(index + 1) % points.length]!
+      const [x1, y1] = current
+      const [x2, y2] = next
+      doc.line(x1, y1, x2, y2)
+    }
+  } else {
+    doc.roundedRect(x - 28, y - 16, 56, 32, 8, 8)
+  }
+  if (marker.revisionId) drawDeltaMarker(doc, marker, x, y)
 }
 
 function drawKeyedNoteSymbols(doc: JsPdfDocument, composition: SheetComposition): void {

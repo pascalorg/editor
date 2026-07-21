@@ -23,6 +23,7 @@ describe('DrawingSheetNode', () => {
       keyedNoteDefinitions: [],
       keyedNoteInstances: [],
       keyedNoteLegend: [],
+      documentMarkers: [],
       schedules: [],
       titleBlock: {
         projectName: '',
@@ -80,6 +81,27 @@ describe('DrawingSheetNode', () => {
         },
       ],
       keyedNoteLegend: [{ key: 'A', text: 'ALIGN WITH EXISTING WALL.' }],
+      documentMarkers: [
+        {
+          id: 'sheet-marker_wall-a',
+          kind: 'wall-tag',
+          label: 'W1',
+          placedViewId: 'drawing-view_main',
+          position: [2, 3],
+        },
+        {
+          id: 'sheet-marker_revision-a',
+          kind: 'revision-cloud',
+          label: '1',
+          revisionId: 'A',
+          points: [
+            [1, 1],
+            [2, 1],
+            [2, 2],
+            [1, 2],
+          ],
+        },
+      ],
       schedules: [
         {
           id: 'sheet-schedule_room',
@@ -125,6 +147,22 @@ describe('DrawingSheetNode', () => {
       position: [3.25, 2.5],
     })
     expect(sheet.keyedNoteInstances[1]?.placedViewId).toBeNull()
+    expect(sheet.documentMarkers).toHaveLength(2)
+    expect(sheet.documentMarkers[0]).toMatchObject({
+      kind: 'wall-tag',
+      label: 'W1',
+      position: [2, 3],
+    })
+    expect(sheet.documentMarkers[1]).toMatchObject({
+      kind: 'revision-cloud',
+      revisionId: 'A',
+      points: [
+        [1, 1],
+        [2, 1],
+        [2, 2],
+        [1, 2],
+      ],
+    })
     expect(sheet.schedules[0]?.title).toBe('Room Schedule')
     expect(sheet.titleBlock).toMatchObject({
       projectName: 'House',

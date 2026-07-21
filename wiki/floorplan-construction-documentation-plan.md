@@ -48,7 +48,7 @@ assessment.
 - [x] Add sheet-level numbered general notes and reusable project note sets with duplicate-note
   warnings.
 - [x] Add stable keyed-note definitions, symbols, legends, and repeated instances.
-- [ ] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
+- [x] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
   markers, revision clouds, and revision IDs.
 - [ ] Expand reusable leader terminators to include filled arrows and slashes.
 
@@ -372,13 +372,19 @@ instances whose stable definition is missing.
 
 ### 4.3 Extend leader and marker vocabulary
 
+Status: document marker vocabulary is implemented in the persistent drawing-sheet model and PDF
+sheet composition. Sheets now store wall, glazing, and assembly tags; section/elevation callouts;
+detail references; delta markers; and revision clouds with revision IDs. PDF composition draws those
+markers in sheet space through one reusable document-marker renderer. Leader terminator expansion
+remains.
+
 - Filled arrowheads.
 - Slash terminators.
-- Delta markers.
-- Wall, glazing, and assembly tags.
-- Section and elevation callouts.
-- Detail references.
-- Revision clouds and revision IDs.
+- [x] Delta markers.
+- [x] Wall, glazing, and assembly tags.
+- [x] Section and elevation callouts.
+- [x] Detail references.
+- [x] Revision clouds and revision IDs.
 
 Extend reusable annotation primitives instead of creating feature-specific SVG implementations.
 

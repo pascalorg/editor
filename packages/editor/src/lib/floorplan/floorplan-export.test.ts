@@ -5,6 +5,7 @@ import {
   fitPlanToBox,
   placePlanAtDrawingScale,
   pointsPerMeterForDrawingScale,
+  resolveDrawingSheetDocumentMarkers,
   resolveDrawingSheetGeneralNotes,
   resolveDrawingSheetKeyedNotes,
   resolveGraphicScaleLength,
@@ -243,6 +244,77 @@ describe('resolveSheetComposition', () => {
         severity: 'warning',
         message:
           'Keyed-note symbol keyed-note-instance_missing references missing definition keyed-note_missing.',
+      },
+    ])
+  })
+
+  test('resolves scoped drawing sheet document markers', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      placedViews: [{ id: 'drawing-view_main', levelId: 'level_main' }],
+      documentMarkers: [
+        {
+          id: 'sheet-marker_wall-a',
+          kind: 'wall-tag',
+          label: 'W1',
+          placedViewId: 'drawing-view_main',
+          position: [2, 3],
+        },
+        {
+          id: 'sheet-marker_revision-a',
+          kind: 'revision-cloud',
+          label: '1',
+          revisionId: 'A',
+          points: [
+            [1, 1],
+            [2, 1],
+            [2, 2],
+            [1, 2],
+          ],
+        },
+        {
+          id: 'sheet-marker_other-view',
+          kind: 'detail-reference',
+          label: '3',
+          placedViewId: 'drawing-view_other',
+          position: [5, 5],
+        },
+      ],
+    })
+
+    expect(resolveDrawingSheetDocumentMarkers(sheet, 'drawing-view_main')).toEqual([
+      {
+        id: 'sheet-marker_wall-a',
+        kind: 'wall-tag',
+        label: 'W1',
+        title: '',
+        sheetReference: '',
+        drawingReference: '',
+        revisionId: '',
+        x: 2,
+        y: 3,
+        endX: null,
+        endY: null,
+        points: [],
+      },
+      {
+        id: 'sheet-marker_revision-a',
+        kind: 'revision-cloud',
+        label: '1',
+        title: '',
+        sheetReference: '',
+        drawingReference: '',
+        revisionId: 'A',
+        x: 0.5,
+        y: 0.5,
+        endX: null,
+        endY: null,
+        points: [
+          { x: 1, y: 1 },
+          { x: 2, y: 1 },
+          { x: 2, y: 2 },
+          { x: 1, y: 2 },
+        ],
       },
     ])
   })

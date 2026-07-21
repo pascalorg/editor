@@ -1,5 +1,7 @@
 export {
   DrawingSheetAnnotationProfile,
+  DrawingSheetDocumentMarker,
+  DrawingSheetDocumentMarkerKind,
   DrawingSheetGeneralNote,
   DrawingSheetGeneralNoteSet,
   DrawingSheetKeyedNote,

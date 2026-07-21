@@ -84,6 +84,34 @@ export const DrawingSheetKeyedNoteInstance = z.object({
   position: z.tuple([SheetCoordinate, SheetCoordinate]).default([0.5, 0.5]),
 })
 
+export const DrawingSheetDocumentMarkerKind = z.enum([
+  'wall-tag',
+  'glazing-tag',
+  'assembly-tag',
+  'section-callout',
+  'elevation-callout',
+  'detail-reference',
+  'delta-marker',
+  'revision-cloud',
+])
+
+export const DrawingSheetDocumentMarker = z.object({
+  id: objectId('sheet-marker'),
+  kind: DrawingSheetDocumentMarkerKind.default('detail-reference'),
+  placedViewId: DrawingSheetPlacedView.shape.id.nullable().default(null),
+  label: z.string().trim().min(1).max(32).default('1'),
+  title: z.string().trim().max(120).default(''),
+  sheetReference: z.string().trim().max(24).default(''),
+  drawingReference: z.string().trim().max(24).default(''),
+  revisionId: z.string().trim().max(16).default(''),
+  position: z.tuple([SheetCoordinate, SheetCoordinate]).default([0.5, 0.5]),
+  endPosition: z.tuple([SheetCoordinate, SheetCoordinate]).nullable().default(null),
+  points: z
+    .array(z.tuple([SheetCoordinate, SheetCoordinate]))
+    .max(64)
+    .default([]),
+})
+
 export const DrawingSheetSchedulePlacement = z.object({
   id: objectId('sheet-schedule'),
   scheduleType: z.enum(['room', 'door', 'window', 'finish', 'custom']).default('room'),
@@ -128,6 +156,7 @@ export const DrawingSheetNode = BaseNode.extend({
   keyedNoteDefinitions: z.array(DrawingSheetKeyedNoteDefinition).max(200).default([]),
   keyedNoteInstances: z.array(DrawingSheetKeyedNoteInstance).max(500).default([]),
   keyedNoteLegend: z.array(DrawingSheetKeyedNote).max(200).default([]),
+  documentMarkers: z.array(DrawingSheetDocumentMarker).max(500).default([]),
   schedules: z.array(DrawingSheetSchedulePlacement).max(32).default([]),
   titleBlock: DrawingSheetTitleBlock.default(DEFAULT_DRAWING_SHEET_TITLE_BLOCK),
 }).describe(
@@ -138,6 +167,7 @@ export const DrawingSheetNode = BaseNode.extend({
   - placedViews: drawing views with numbers, titles, fixed scales, viewport regions, and annotation profiles
   - generalNoteSets/generalNoteSetIds/generalNotes: reusable project notes plus sheet-level numbered notes
   - keyedNoteDefinitions/keyedNoteInstances/keyedNoteLegend: stable keyed notes, repeated symbols, and legacy legend entries
+  - documentMarkers: wall/glazing/assembly tags, callouts, detail references, deltas, and revision clouds
   - schedules/titleBlock: sheet-level documentation content and title-block metadata
   `,
 )
@@ -153,6 +183,8 @@ export type DrawingSheetGeneralNoteSet = z.infer<typeof DrawingSheetGeneralNoteS
 export type DrawingSheetKeyedNote = z.infer<typeof DrawingSheetKeyedNote>
 export type DrawingSheetKeyedNoteDefinition = z.infer<typeof DrawingSheetKeyedNoteDefinition>
 export type DrawingSheetKeyedNoteInstance = z.infer<typeof DrawingSheetKeyedNoteInstance>
+export type DrawingSheetDocumentMarker = z.infer<typeof DrawingSheetDocumentMarker>
+export type DrawingSheetDocumentMarkerKind = z.infer<typeof DrawingSheetDocumentMarkerKind>
 export type DrawingSheetSchedulePlacement = z.infer<typeof DrawingSheetSchedulePlacement>
 export type DrawingSheetTitleBlock = z.infer<typeof DrawingSheetTitleBlock>
 export type DrawingSheetNode = z.infer<typeof DrawingSheetNode>
