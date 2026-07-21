@@ -286,6 +286,40 @@ function getPresetTexture(
   return texture
 }
 
+// three's WebGPU shadow pass copies each object's base-material
+// `displacementMap` onto one shared per-light shadow material, while the
+// per-mesh shadow node graph is cached against that shared override. A mesh
+// whose graph was built with a displacement TextureNode crashes the render
+// pass ("Cannot read properties of null (reading 'matrix')") as soon as a
+// material *without* a displacement texture is swapped onto it — the paint
+// hover preview does exactly that. Standard node materials therefore always
+// carry a displacement texture: a shared 1×1 black texel (zero offset, so
+// shading is unchanged) whenever there is no real height map.
+let neutralDisplacement: THREE.Texture | null = null
+
+function getNeutralDisplacementTexture(): THREE.Texture {
+  if (!neutralDisplacement) {
+    neutralDisplacement = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1)
+    neutralDisplacement.needsUpdate = true
+  }
+  return neutralDisplacement
+}
+
+function ensureDisplacementFallback<T extends THREE.Material>(material: T): T {
+  const textureMaterial = material as THREE.Material as TextureMaterial
+  if (material instanceof MeshStandardNodeMaterial && !textureMaterial.displacementMap) {
+    textureMaterial.displacementMap = getNeutralDisplacementTexture()
+  }
+  return material
+}
+
+/** The value a cleared slot falls back to (never null for displacement). */
+function clearedSlotValue(material: CommonMaterial, slot: TextureSlot): THREE.Texture | null {
+  return slot === 'displacementMap' && material instanceof MeshStandardNodeMaterial
+    ? getNeutralDisplacementTexture()
+    : null
+}
+
 function createAssignedTexture(
   source: THREE.Texture,
   props: MaterialMapProperties,
@@ -360,7 +394,14 @@ function queueTextureAssignment(
   const textureMaterial = material as TextureMaterial
 
   if (!path) {
-    textureMaterial[slot] = null
+    const cleared = clearedSlotValue(material, slot)
+    if (textureMaterial[slot] !== cleared) {
+      // Rebuild the node graph: a cached WebGPU material keeps a TextureNode
+      // for the slot, whose per-frame material reference would pull the null
+      // and crash in TextureNode.update ("null (reading 'matrix')").
+      textureMaterial[slot] = cleared
+      material.needsUpdate = true
+    }
     return
   }
 
@@ -379,7 +420,15 @@ function queueTextureAssignment(
     return
   }
 
-  textureMaterial[slot] = null
+  // Cold load: clear the slot for the fetch window, and rebuild the node
+  // graph if it previously held a texture — reused cached materials otherwise
+  // keep a TextureNode whose reference pulls the null and crashes the render
+  // pass. Cold loads are the norm for freshly generated library materials.
+  const placeholder = clearedSlotValue(material, slot)
+  if (textureMaterial[slot] !== placeholder) {
+    textureMaterial[slot] = placeholder
+    material.needsUpdate = true
+  }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
@@ -496,8 +545,9 @@ export function createMaterialFromPreset(
     return materialCache.get(cacheKey)!
   }
 
-  const material =
-    shading === 'solid' ? new MeshLambertNodeMaterial() : new MeshStandardNodeMaterial()
+  const material = ensureDisplacementFallback(
+    shading === 'solid' ? new MeshLambertNodeMaterial() : new MeshStandardNodeMaterial(),
+  )
   applyMaterialPresetToMaterials(material, preset)
   maybeApplyGlassFresnel(material)
   material.userData.__pascalCachedMaterial = true
@@ -541,14 +591,15 @@ export function createMaterial(
 
   if (map) materialParams.map = map
 
-  const threeMaterial =
+  const threeMaterial = ensureDisplacementFallback(
     shading === 'solid'
       ? new MeshLambertNodeMaterial(materialParams)
       : new MeshStandardNodeMaterial({
           ...materialParams,
           roughness: props.roughness,
           metalness: props.metalness,
-        })
+        }),
+  )
 
   maybeApplyGlassFresnel(threeMaterial)
   threeMaterial.userData.__pascalCachedMaterial = true
@@ -608,12 +659,14 @@ export function createDefaultMaterial(
     })
   }
 
-  return new MeshStandardNodeMaterial({
-    color,
-    roughness,
-    metalness: 0,
-    side: resolvedSide,
-  })
+  return ensureDisplacementFallback(
+    new MeshStandardNodeMaterial({
+      color,
+      roughness,
+      metalness: 0,
+      side: resolvedSide,
+    }),
+  )
 }
 
 function cachedDefaultMaterial(
@@ -704,14 +757,15 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
     transparent: true,
     side: THREE.FrontSide,
   }
-  const material =
+  const material = ensureDisplacementFallback(
     shading === 'solid'
       ? new MeshLambertNodeMaterial(params)
       : new MeshStandardNodeMaterial({
           ...params,
           roughness: 0.1,
           metalness: 0.1,
-        })
+        }),
+  )
   maybeApplyGlassFresnel(material)
   defaultMaterialCache.set(cacheKey, material)
   return material

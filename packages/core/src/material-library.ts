@@ -4,10 +4,14 @@ import {
   MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
 
+export type MaterialSource = 'pascal' | 'community' | 'mine' | 'workspace'
+
 export type MaterialCatalogItem = {
   id: string
   label: string
   category: MaterialCategory
+  /** Origin of the entry. Absent = 'pascal' (all static catalog entries). */
+  source?: MaterialSource
   /**
    * Where this finish is appropriate. Absent = universal (e.g. flat colors).
    * The paint picker may filter by the slot being painted; v1 shows everything.
@@ -69,6 +73,7 @@ export const MATERIAL_CATEGORIES = [
   'roofing',
   'ground',
   'glass',
+  'other',
 ] as const
 export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
 
@@ -4149,13 +4154,64 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
   },
 ]
 
+const STATIC_CATALOG_IDS = new Set(MATERIAL_CATALOG.map((item) => item.id))
+
+// Embedder-registered library materials (user/community/workspace). Core stays
+// passive: hosts push entries in; nothing here fetches. Static catalog entries
+// win on id collision so a registration can never shadow a built-in.
+const dynamicLibraryMaterials = new Map<string, MaterialCatalogItem>()
+const dynamicLibraryListeners = new Set<() => void>()
+let dynamicLibraryVersion = 0
+
+function notifyDynamicLibraryChange(): void {
+  dynamicLibraryVersion += 1
+  for (const listener of [...dynamicLibraryListeners]) {
+    listener()
+  }
+}
+
+export function registerLibraryMaterials(items: MaterialCatalogItem[]): void {
+  if (items.length === 0) return
+  for (const item of items) {
+    dynamicLibraryMaterials.set(item.id, item)
+  }
+  notifyDynamicLibraryChange()
+}
+
+export function unregisterLibraryMaterials(ids: string[]): void {
+  let changed = false
+  for (const id of ids) {
+    changed = dynamicLibraryMaterials.delete(id) || changed
+  }
+  if (changed) notifyDynamicLibraryChange()
+}
+
+export function getDynamicLibraryMaterials(): MaterialCatalogItem[] {
+  return [...dynamicLibraryMaterials.values()]
+}
+
+export function subscribeLibraryMaterials(listener: () => void): () => void {
+  dynamicLibraryListeners.add(listener)
+  return () => {
+    dynamicLibraryListeners.delete(listener)
+  }
+}
+
+export function getLibraryMaterialsVersion(): number {
+  return dynamicLibraryVersion
+}
+
 export function getMaterialsForCategory(category: MaterialCategory): MaterialCatalogItem[] {
-  return MATERIAL_CATALOG.filter((item) => item.category === category)
+  const items = MATERIAL_CATALOG.filter((item) => item.category === category)
+  for (const item of dynamicLibraryMaterials.values()) {
+    if (item.category === category && !STATIC_CATALOG_IDS.has(item.id)) items.push(item)
+  }
+  return items
 }
 
 export function getCatalogMaterialById(id?: string): MaterialCatalogItem | undefined {
   if (!id) return undefined
-  return MATERIAL_CATALOG.find((item) => item.id === id)
+  return MATERIAL_CATALOG.find((item) => item.id === id) ?? dynamicLibraryMaterials.get(id)
 }
 
 export const LIBRARY_MATERIAL_REF_PREFIX = 'library:'

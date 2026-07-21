@@ -157,7 +157,9 @@ export {
 } from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
+  getDynamicLibraryMaterials,
   getLibraryMaterialIdFromRef,
+  getLibraryMaterialsVersion,
   getMaterialPresetByRef,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
@@ -168,12 +170,16 @@ export {
   type MaterialCatalogItem,
   type MaterialCategory,
   type MaterialRef,
+  type MaterialSource,
   type MaterialSurface,
   type ParsedMaterialRef,
   parseMaterialRef,
+  registerLibraryMaterials,
   SCENE_MATERIAL_REF_PREFIX,
+  subscribeLibraryMaterials,
   toLibraryMaterialRef,
   toSceneMaterialRef,
+  unregisterLibraryMaterials,
 } from './material-library'
 export type {
   FloorPlacedFootprint,
