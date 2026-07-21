@@ -16,6 +16,7 @@ import {
   type ConstructionLinearUnit,
   formatConstructionLength,
 } from '../shared/construction-length'
+import { buildDimensionStringGeometry } from '../shared/dimension-string'
 
 export { formatConstructionLength } from '../shared/construction-length'
 
@@ -525,22 +526,28 @@ function dimension(
 ): FloorplanGeometry {
   const measurementStart = dimensionStart ?? start
   const measurementEnd = dimensionEnd ?? end
-  return {
-    kind: 'dimension',
-    start,
-    end,
-    dimensionStart,
-    dimensionEnd,
+  return buildDimensionStringGeometry({
+    segments: [
+      {
+        witnessStart: start,
+        witnessEnd: end,
+        dimensionStart: dimensionStart ?? start,
+        dimensionEnd: dimensionEnd ?? end,
+        text: formatConstructionLength(
+          Math.hypot(
+            measurementEnd[0] - measurementStart[0],
+            measurementEnd[1] - measurementStart[1],
+          ),
+          unit,
+          profile,
+        ),
+      },
+    ],
     offsetNormal,
     offsetDistance,
     extensionOvershoot: EXTENSION_OVERSHOOT,
-    text: formatConstructionLength(
-      Math.hypot(measurementEnd[0] - measurementStart[0], measurementEnd[1] - measurementStart[1]),
-      unit,
-      profile,
-    ),
     stroke,
-  }
+  })
 }
 
 function resolveOutwardNormal(

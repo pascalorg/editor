@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   computeArchitecturalDimensionLayout,
   FloorplanDimensionRenderer,
+  FloorplanDimensionStringRenderer,
   floorplanDimensionAnnotationPriority,
 } from './floorplan-dimension-renderer'
 
@@ -142,5 +143,41 @@ describe('architectural floor-plan dimensions', () => {
     expect(layout?.extensionStartTip[1]).toBeCloseTo(0.49)
     expect(markup).toContain('font-size="0.08"')
     expect(markup).toContain('y="-0.05"')
+  })
+
+  test('renders a dimension string with shared witness extension lines and ticks', () => {
+    const stringGeometry = {
+      kind: 'dimension-string',
+      segments: [
+        {
+          start: [0, 0],
+          end: [2, 0],
+          dimensionStart: [0, 1],
+          dimensionEnd: [2, 1],
+          text: '2m',
+        },
+        {
+          start: [2, 0],
+          end: [5, 0],
+          dimensionStart: [2, 1],
+          dimensionEnd: [5, 1],
+          text: '3m',
+        },
+      ],
+      offsetNormal: [0, 1],
+      offsetDistance: 1,
+      extensionOvershoot: 0.12,
+    } satisfies Extract<FloorplanGeometry, { kind: 'dimension-string' }>
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionStringRenderer geometry={stringGeometry} />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-dimension-string=""')
+    expect(markup.match(/<line/g)).toHaveLength(8)
+    expect(markup).toContain('2m')
+    expect(markup).toContain('3m')
   })
 })

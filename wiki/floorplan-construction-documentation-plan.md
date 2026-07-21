@@ -6,6 +6,80 @@ Turn the current interactive, registry-driven floor plan into a configurable con
 
 The plan is based on the assessment in `wiki/floorplan-chapter-17-assessment.md`.
 
+## Current remaining work
+
+Last consolidated from this branch on 2026-07-21. Completed items remain documented in the phase
+sections below; this checklist is the short, canonical view of what is still missing from the PDF
+assessment.
+
+### Construction dimensions and visibility
+
+- [x] Add witness-point dragging, reassociation, and explicit detachment for manual construction
+  dimensions.
+- [x] Complete point-to-point multi-segment strings and converge manual and automatic dimensions on
+  one shared dimension-string presentation primitive.
+- [ ] Add project/drawing dimension standards for datum policy, terminators, text position,
+  imperial precision, metric notation, tier spacing, extension lines, and reference style.
+- [ ] Add independent visibility controls for hidden/overhead geometry and reference dimensions.
+- [ ] Support segment suppression and other view-specific dimension overrides without changing the
+  physical model.
+
+### Drawing sheets and plotted output
+
+- [ ] Add a persistent Core drawing-sheet model with sheet identity, paper size, orientation,
+  placed views, drawing numbers, fixed scales, annotation profiles, notes, schedules, and title-block
+  metadata.
+- [ ] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
+- [ ] Finish paper-space sizing and line-weight profiles for notes, leaders, marks, room labels, and
+  the remaining annotation categories.
+- [ ] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
+  schedules, and notes on the sheet.
+- [ ] Support multiple paper sizes and preflight clipped view or annotation content.
+
+### Annotation layout and preflight
+
+- [ ] Let users pin label positions and persist layout overrides on the drawing view.
+- [ ] Extend collision avoidance to the remaining fixed symbols and annotation categories.
+- [ ] Add a separate preflight surface for unresolved collisions, short unreadable segments, and
+  plan-geometry conflicts; do not paint diagnostic warnings over the drawing or export them to PDF.
+
+### Notes, callouts, and revisions
+
+- [ ] Add sheet-level numbered general notes and reusable project note sets with duplicate-note
+  warnings.
+- [ ] Add stable keyed-note definitions, symbols, legends, and repeated instances.
+- [ ] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
+  markers, revision clouds, and revision IDs.
+- [ ] Expand reusable leader terminators to include filled arrows and slashes.
+
+### Wall assemblies and construction datums
+
+- [ ] Model wall layers and their roles, thicknesses, materials, and eligibility as dimension
+  datums.
+- [ ] Resolve stable centerline, structural-face, finish-face, veneer-face, and other
+  assembly-aware references.
+- [ ] Add assembly-aware poche, hatches, cut weights, finish graphics, masonry/air-space graphics,
+  concrete-block and structural-masonry graphics, and concrete/furring graphics.
+- [ ] Add explicit rough-opening (`RO`), masonry-opening (`MO`), framed centerline, masonry
+  edge-to-edge, and optional finish-opening documentation policies.
+
+### Room documentation gaps
+
+- [ ] Add finish-face and room-to-room clear dimensions once wall-assembly and inter-room datum
+  evidence exists.
+- [ ] Extend reliable automatic clear dimensions beyond proven straight rectangular enclosures
+  without presenting guessed dimensions for open, irregular, or incomplete rooms.
+
+### Advisory and completeness analysis
+
+- [ ] Add optional imperial and metric construction-module advisories.
+- [ ] Add jurisdiction/profile-based clearance advisories for circulation, doors, fixtures,
+  cabinets, appliances, closets, and stairs, with explicit code provenance.
+- [ ] Audit missing overall, opening, partition, and verified rough-opening dimensions.
+- [ ] Detect duplicate or contradictory strings, segment-total mismatches, and construction-critical
+  nodes that have no dimension, schedule entry, or keyed note.
+- [ ] Include unresolved annotation collisions and clipped sheet content in the completeness audit.
+
 ## Design principles
 
 1. Construction dimensions and generic measurements remain separate concepts.
@@ -94,9 +168,11 @@ Status: linear point-to-point and continuous authoring are implemented. A dedica
 two or more free or semantic measurement anchors and an independent baseline. The point-to-point
 workflow retains its three clicks; continuous mode collects any number of witnesses and uses Enter or
 double-click to advance to baseline placement. Both create one undoable node, support step-back and
-Alt magnetic bypass, follow referenced geometry, report dangling references, and expose a selected
-baseline drag handle. Witness reassociation/detachment, point-to-point multi-segment strings,
-additional dimension modes, and the shared dimension-string primitive remain.
+Alt magnetic bypass, follow referenced geometry, report dangling references, and expose selected
+baseline and witness drag handles. Witness dragging can reassociate to nearby semantic wall features
+or detach to an explicit free point with Alt. Point-to-point strings now support multiple independent
+witness pairs, and manual linear/chord dimensions plus automatic straight-wall dimensions share the
+native dimension-string presentation primitive. Additional dimension modes remain.
 
 ### 2.1 Add a construction-dimension schema
 
@@ -138,16 +214,21 @@ Support:
 
 - Two-point dimensions.
 - Continuous strings.
-- Point-to-point strings.
+- [x] Point-to-point strings.
 - Removing the last point.
 - Dragging the baseline after creation.
-- Dragging or reassociating individual witness points.
-- Detaching dangling references explicitly.
+- [x] Dragging or reassociating individual witness points.
+- [x] Detaching dangling references explicitly.
 - Alt to bypass magnetic attraction while retaining exact contact association.
 
 A 3D authoring tool is not required for plan-only construction dimensions, but selected annotations should remain visible in appropriate 3D/document contexts only when that is meaningful.
 
 ### 2.3 Add a dimension-string geometry primitive
+
+Status: implemented for linear/chord manual dimensions and automatic straight-wall dimensions. Both
+sources emit the native `dimension-string` primitive, and the renderer draws per-segment labels and
+baselines while deduplicating shared witness extension lines and ticks. Point-to-point manual strings
+use independent paired witness segments.
 
 The current wall planner emits one `dimension` primitive per segment. Introduce a higher-level dimension-string representation so the renderer can:
 

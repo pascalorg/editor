@@ -2900,6 +2900,7 @@ const OVERLAY_KINDS = new Set<FloorplanGeometry['kind']>([
   'move-arrow',
   'rotate-arrow',
   'dimension',
+  'dimension-string',
   'dimension-label',
   'equal-spacing-badge',
 ])

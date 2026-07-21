@@ -599,6 +599,7 @@ export function filterFloorplanExportOverlay(
 ): FloorplanGeometry | null {
   if (
     geometry.kind === 'dimension' ||
+    geometry.kind === 'dimension-string' ||
     geometry.kind === 'dimension-label' ||
     geometry.kind === 'text'
   ) {

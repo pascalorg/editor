@@ -3,6 +3,7 @@ import {
   type AnyNode,
   ColumnNode,
   DoorNode,
+  type FloorplanGeometry,
   type GeometryContext,
   WallNode,
   WindowNode,
@@ -38,6 +39,20 @@ function context(
     siblings,
     parent: null,
   } satisfies GeometryContext
+}
+
+function dimensionTexts(entries: readonly FloorplanGeometry[]): string[] {
+  return entries.flatMap((entry) => {
+    if (entry.kind === 'dimension') return [entry.text]
+    if (entry.kind === 'dimension-string') return entry.segments.map((segment) => segment.text)
+    return []
+  })
+}
+
+function firstDimensionSegment(entry: FloorplanGeometry) {
+  if (entry.kind === 'dimension') return entry
+  if (entry.kind === 'dimension-string') return entry.segments[0]
+  return null
 }
 
 describe('formatConstructionLength', () => {
@@ -93,17 +108,10 @@ describe('buildWallConstructionDimensions', () => {
     })
 
     expect(dimensions).toHaveLength(6)
-    expect(dimensions.map((entry) => entry.kind)).toEqual(Array(6).fill('dimension'))
-    expect(dimensions.map((entry) => (entry.kind === 'dimension' ? entry.text : null))).toEqual([
-      '1.5m',
-      '1m',
-      '2.5m',
-      '2m',
-      '3m',
-      '10m',
-    ])
+    expect(dimensions.map((entry) => entry.kind)).toEqual(Array(6).fill('dimension-string'))
+    expect(dimensionTexts(dimensions)).toEqual(['1.5m', '1m', '2.5m', '2m', '3m', '10m'])
     expect(dimensions.at(-1)).toMatchObject({
-      kind: 'dimension',
+      kind: 'dimension-string',
       offsetNormal: [0, 1],
       offsetDistance: 1.05,
     })
@@ -118,8 +126,10 @@ describe('buildWallConstructionDimensions', () => {
 
     expect(dimensions).toHaveLength(1)
     expect(dimensions[0]).toMatchObject({
-      kind: 'dimension',
+      kind: 'dimension-string',
       offsetNormal: [0, -1],
+    })
+    expect(firstDimensionSegment(dimensions[0]!)).toMatchObject({
       start: [0, -0.1],
       end: [10, -0.1],
     })
@@ -177,11 +187,16 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     expect(exteriorPlanned.map((entry) => Number(entry.offsetDistance.toFixed(2)))).toEqual([
       0.28, 0.28, 0.9, 0.9, 0.9, 1.52, 1.52, 2.14,
     ])
-    expect(
-      renderPlannedConstructionDimensions(exteriorPlanned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1m', '2m', '2m', '4m', '4m', '3.9m', '6.1m', '10m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(exteriorPlanned, 'metric'))).toEqual([
+      '1m',
+      '2m',
+      '2m',
+      '4m',
+      '4m',
+      '3.9m',
+      '6.1m',
+      '10m',
+    ])
     expect(exteriorPlanned.at(-1)).toMatchObject({
       start: [0, 0.1],
       end: [10, 0.1],
@@ -203,11 +218,12 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     const exteriorPlanned = plan.get(first.id) ?? []
 
     expect([...plan.keys()]).toEqual([first.id])
-    expect(
-      renderPlannedConstructionDimensions(exteriorPlanned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1m', '7m', '3m', '10m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(exteriorPlanned, 'metric'))).toEqual([
+      '1m',
+      '7m',
+      '3m',
+      '10m',
+    ])
   })
 
   test('adds a wall-local overall dimension for a classified interior partition', () => {
@@ -277,11 +293,14 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'interior',
       'interior-overall',
     ])
-    expect(
-      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1.5m', '1m', '2.5m', '2m', '3m', '10m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '1.5m',
+      '1m',
+      '2.5m',
+      '2m',
+      '3m',
+      '10m',
+    ])
     expect(planned[0]).toMatchObject({
       start: [0, 4.1],
       offsetNormal: [0, 1],
@@ -339,11 +358,14 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       start: [0.2, 4.1],
       end: [9.9, 4.1],
     })
-    expect(
-      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1.3m', '1m', '2.5m', '2m', '2.9m', '9.7m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '1.3m',
+      '1m',
+      '2.5m',
+      '2m',
+      '2.9m',
+      '9.7m',
+    ])
   })
 
   test('dimensions hosted openings on a bounded partition with incomplete side metadata', () => {
@@ -384,11 +406,14 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'interior',
       'interior-overall',
     ])
-    expect(
-      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1.5m', '1m', '2.5m', '2m', '3m', '10m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '1.5m',
+      '1m',
+      '2.5m',
+      '2m',
+      '3m',
+      '10m',
+    ])
   })
 
   test('dimensions hosted openings on a bounded partition with stale exterior metadata', () => {
@@ -448,11 +473,14 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'interior',
       'interior-overall',
     ])
-    expect(
-      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['1.4m', '1m', '2.5m', '2m', '2.9m', '9.8m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '1.4m',
+      '1m',
+      '2.5m',
+      '2m',
+      '2.9m',
+      '9.8m',
+    ])
   })
 
   test('does not treat an unbounded unknown wall with an opening as an interior partition', () => {
@@ -498,10 +526,12 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       ) ?? []
 
     expect(
-      renderPlannedConstructionDimensions(
-        planned.filter((entry) => entry.tier === 'partitions'),
-        'metric',
-      ).map((entry) => (entry.kind === 'dimension' ? entry.text : null)),
+      dimensionTexts(
+        renderPlannedConstructionDimensions(
+          planned.filter((entry) => entry.tier === 'partitions'),
+          'metric',
+        ),
+      ),
     ).toEqual(['2.95m', '3.85m', '3.2m'])
   })
 
@@ -521,11 +551,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     const rendered = renderPlannedConstructionDimensions(planned, 'metric')
 
     expect(planned.map((entry) => entry.tier)).toEqual(['jogs', 'jogs', 'overall'])
-    expect(rendered.map((entry) => (entry.kind === 'dimension' ? entry.text : null))).toEqual([
-      '4m',
-      '6m',
-      '10m',
-    ])
+    expect(dimensionTexts(rendered)).toEqual(['4m', '6m', '10m'])
     const jogs = planned.filter((entry) => entry.tier === 'jogs')
     expect(jogs).toEqual([
       expect.objectContaining({
@@ -586,11 +612,12 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'overall',
       'structural-overall',
     ])
-    expect(
-      renderPlannedConstructionDimensions(planned, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual(['6m', '6m', '10m', '12m'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '6m',
+      '6m',
+      '10m',
+      '12m',
+    ])
     expect(planned[0]).toMatchObject({
       start: [-1, 2],
       end: [5, 2],
@@ -700,9 +727,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       'interior-overall',
     ])
     expect(
-      renderPlannedConstructionDimensions(interiorDimensions, 'metric').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
+      dimensionTexts(renderPlannedConstructionDimensions(interiorDimensions, 'metric')),
     ).toEqual(['1m', '1m', '0.5m', '1m', '2.4m', '5.9m'])
   })
 
@@ -759,11 +784,9 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     const angled = wall({ end: [3, 4] })
     const planned = buildLevelWallConstructionDimensionPlan([angled], {}).get(angled.id) ?? []
 
-    expect(
-      renderPlannedConstructionDimensions(planned, 'imperial').map((entry) =>
-        entry.kind === 'dimension' ? entry.text : null,
-      ),
-    ).toEqual([`16'-4 7/8"`])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'imperial'))).toEqual([
+      `16'-4 7/8"`,
+    ])
     expect(planned[0]).toMatchObject({
       tier: 'overall',
       offsetNormal: [-0.8, 0.6],

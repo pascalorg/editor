@@ -17,6 +17,9 @@ describe('constructionDimensionDefinition', () => {
     expect(constructionDimensionDefinition.floorplanAffordances).toHaveProperty(
       'move-construction-dimension-baseline',
     )
+    expect(constructionDimensionDefinition.floorplanAffordances).toHaveProperty(
+      'move-construction-dimension-witness',
+    )
   })
 
   test('produces schema-valid defaults', () => {

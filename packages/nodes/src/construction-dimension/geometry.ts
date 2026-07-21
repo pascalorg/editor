@@ -95,7 +95,7 @@ function distance(first: FloorplanPoint, second: FloorplanPoint): number {
 }
 
 export function resolveConstructionDimensionLayout(
-  node: Pick<ConstructionDimensionNode, 'baseline'>,
+  node: Pick<ConstructionDimensionNode, 'baseline' | 'chainMode'>,
   anchors: readonly MeasurementPoint[],
 ): ConstructionDimensionLayout {
   if (anchors.length < 2) {
@@ -117,10 +117,18 @@ export function resolveConstructionDimensionLayout(
       node.baseline.origin[1] + distance * direction[1],
     ]
   })
-  const segments = witnessPoints.slice(0, -1).map((witnessStart, index) => {
-    const witnessEnd = witnessPoints[index + 1]!
-    const dimensionStart = dimensionPoints[index]!
-    const dimensionEnd = dimensionPoints[index + 1]!
+  const segmentIndexes =
+    node.chainMode === 'continuous'
+      ? witnessPoints.slice(0, -1).map((_, index) => [index, index + 1] as const)
+      : Array.from(
+          { length: Math.floor(witnessPoints.length / 2) },
+          (_, index) => [index * 2, index * 2 + 1] as const,
+        )
+  const segments = segmentIndexes.map(([startIndex, endIndex]) => {
+    const witnessStart = witnessPoints[startIndex]!
+    const witnessEnd = witnessPoints[endIndex]!
+    const dimensionStart = dimensionPoints[startIndex]!
+    const dimensionEnd = dimensionPoints[endIndex]!
     return {
       dimensionStart,
       dimensionEnd,

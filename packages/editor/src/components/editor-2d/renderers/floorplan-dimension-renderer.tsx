@@ -18,6 +18,7 @@ const TICK_STROKE_WIDTH_PX = 1.35
 const SQRT_ONE_HALF = Math.SQRT1_2
 
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
+type DimensionStringGeometry = Extract<FloorplanGeometry, { kind: 'dimension-string' }>
 
 export type ArchitecturalDimensionLayout = {
   dimensionStart: FloorplanPoint
@@ -284,8 +285,181 @@ export function FloorplanDimensionRenderer({
   )
 }
 
+export function FloorplanDimensionStringRenderer({
+  geometry,
+  sceneRotationDeg = 0,
+  stroke = geometry.stroke ?? '#334155',
+  annotationUnitsPerPoint,
+}: {
+  geometry: DimensionStringGeometry
+  sceneRotationDeg?: number
+  stroke?: string
+  annotationUnitsPerPoint?: number
+}): React.ReactElement | null {
+  const segmentLayouts = geometry.segments.flatMap((segment, index) => {
+    const segmentGeometry: DimensionGeometry = {
+      kind: 'dimension',
+      start: segment.start,
+      end: segment.end,
+      dimensionStart: segment.dimensionStart,
+      dimensionEnd: segment.dimensionEnd,
+      offsetNormal: geometry.offsetNormal,
+      offsetDistance: geometry.offsetDistance,
+      extensionOvershoot: geometry.extensionOvershoot,
+      text: segment.text,
+      stroke: geometry.stroke,
+    }
+    const layout = computeArchitecturalDimensionLayout(
+      segmentGeometry,
+      sceneRotationDeg,
+      annotationUnitsPerPoint,
+    )
+    return layout ? [{ index, layout, segment: segmentGeometry }] : []
+  })
+  if (segmentLayouts.length === 0) return null
+
+  const labelFontSize = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_FONT_SIZE_PT * annotationUnitsPerPoint
+    : LABEL_FONT_SIZE
+  const labelBaselineOffset = annotationUnitsPerPoint
+    ? DOCUMENT_LABEL_BASELINE_OFFSET_PT * annotationUnitsPerPoint
+    : LABEL_BASELINE_OFFSET
+  const lineProps = {
+    stroke,
+    strokeLinecap: 'butt' as const,
+    strokeWidth: LINE_STROKE_WIDTH_PX,
+    vectorEffect: 'non-scaling-stroke' as const,
+  }
+
+  const extensionLines = new Map<string, { start: FloorplanPoint; tip: FloorplanPoint }>()
+  const ticks = new Map<string, { point: FloorplanPoint; tickHalfVector: FloorplanPoint }>()
+  for (const { layout } of segmentLayouts) {
+    extensionLines.set(pointKey(layout.dimensionStart), {
+      start: layout.extensionStart,
+      tip: layout.extensionStartTip,
+    })
+    extensionLines.set(pointKey(layout.dimensionEnd), {
+      start: layout.extensionEnd,
+      tip: layout.extensionEndTip,
+    })
+    ticks.set(pointKey(layout.dimensionStart), {
+      point: layout.dimensionStart,
+      tickHalfVector: layout.tickHalfVector,
+    })
+    ticks.set(pointKey(layout.dimensionEnd), {
+      point: layout.dimensionEnd,
+      tickHalfVector: layout.tickHalfVector,
+    })
+  }
+
+  return (
+    <g data-floorplan-dimension-string="" pointerEvents="none">
+      {[...extensionLines.values()].map((line, index) => (
+        <line
+          {...lineProps}
+          key={`extension-${index}`}
+          x1={line.start[0]}
+          x2={line.tip[0]}
+          y1={line.start[1]}
+          y2={line.tip[1]}
+        />
+      ))}
+      {segmentLayouts.map(({ index, layout }) => (
+        <line
+          {...lineProps}
+          data-floorplan-dimension-default-x1={layout.dimensionLineStart[0]}
+          data-floorplan-dimension-default-x2={layout.dimensionLineEnd[0]}
+          data-floorplan-dimension-default-y1={layout.dimensionLineStart[1]}
+          data-floorplan-dimension-default-y2={layout.dimensionLineEnd[1]}
+          data-floorplan-dimension-line=""
+          data-floorplan-dimension-outside-start-x1={layout.outsideStartDimensionLineStart?.[0]}
+          data-floorplan-dimension-outside-start-x2={layout.dimensionEnd[0]}
+          data-floorplan-dimension-outside-start-y1={layout.outsideStartDimensionLineStart?.[1]}
+          data-floorplan-dimension-outside-start-y2={layout.dimensionEnd[1]}
+          key={`dimension-line-${index}`}
+          x1={layout.dimensionLineStart[0]}
+          x2={layout.dimensionLineEnd[0]}
+          y1={layout.dimensionLineStart[1]}
+          y2={layout.dimensionLineEnd[1]}
+        />
+      ))}
+      {[...ticks.values()].map(({ point, tickHalfVector }, index) => (
+        <line
+          {...lineProps}
+          key={`tick-${index}`}
+          strokeWidth={TICK_STROKE_WIDTH_PX}
+          x1={point[0] - tickHalfVector[0]}
+          x2={point[0] + tickHalfVector[0]}
+          y1={point[1] - tickHalfVector[1]}
+          y2={point[1] + tickHalfVector[1]}
+        />
+      ))}
+      {segmentLayouts.map(({ index, layout, segment }) => {
+        const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
+        const outsideStartLocalShift = layout.outsideStartLabelPoint
+          ? rotateVector(
+              subtract(layout.outsideStartLabelPoint, layout.labelPoint),
+              (-layout.labelAngleDeg * Math.PI) / 180,
+            )
+          : undefined
+        return (
+          <g key={`label-${index}`}>
+            {layout.labelPlacement === 'outside-end' && annotationUnitsPerPoint !== undefined ? (
+              <line
+                {...lineProps}
+                data-floorplan-dimension-leader=""
+                visibility="hidden"
+                x1={layout.dimensionEnd[0]}
+                x2={layout.labelPoint[0]}
+                y1={layout.dimensionEnd[1]}
+                y2={layout.labelPoint[1]}
+              />
+            ) : null}
+            <g
+              data-floorplan-annotation-default-transform={labelTransform}
+              data-floorplan-annotation-label=""
+              data-floorplan-annotation-priority={floorplanDimensionAnnotationPriority(
+                geometry.offsetDistance,
+              )}
+              data-floorplan-dimension-label-placement={layout.labelPlacement}
+              data-floorplan-dimension-outside-start-local-x={outsideStartLocalShift?.[0]}
+              data-floorplan-dimension-outside-start-local-y={outsideStartLocalShift?.[1]}
+              data-floorplan-dimension-start-x={layout.dimensionStart[0]}
+              data-floorplan-dimension-start-y={layout.dimensionStart[1]}
+              data-floorplan-dimension-end-x={layout.dimensionEnd[0]}
+              data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
+              transform={labelTransform}
+            >
+              <text
+                fill={stroke}
+                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                fontSize={labelFontSize}
+                fontWeight={500}
+                paintOrder="stroke"
+                stroke="#ffffff"
+                strokeLinejoin="round"
+                strokeWidth={3}
+                textAnchor="middle"
+                vectorEffect="non-scaling-stroke"
+                x={0}
+                y={-labelBaselineOffset}
+              >
+                {segment.text}
+              </text>
+            </g>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 function rotateVector(vector: FloorplanPoint, radians: number): FloorplanPoint {
   const cosine = Math.cos(radians)
   const sine = Math.sin(radians)
   return [vector[0] * cosine - vector[1] * sine, vector[0] * sine + vector[1] * cosine]
+}
+
+function pointKey(point: FloorplanPoint): string {
+  return `${point[0].toFixed(6)},${point[1].toFixed(6)}`
 }

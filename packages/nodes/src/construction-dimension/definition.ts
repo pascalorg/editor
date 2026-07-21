@@ -1,6 +1,9 @@
 import { measurementAnchorReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
 import { buildConstructionDimensionFloorplan } from './floorplan'
-import { moveConstructionDimensionBaselineAffordance } from './floorplan-affordances'
+import {
+  moveConstructionDimensionBaselineAffordance,
+  moveConstructionDimensionWitnessAffordance,
+} from './floorplan-affordances'
 import { constructionDimensionParametrics } from './parametrics'
 import { ConstructionDimensionNode } from './schema'
 
@@ -51,6 +54,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   ],
   floorplanAffordances: {
     'move-construction-dimension-baseline': moveConstructionDimensionBaselineAffordance,
+    'move-construction-dimension-witness': moveConstructionDimensionWitnessAffordance,
   },
   tool: () => import('./tool'),
   toolHints: [

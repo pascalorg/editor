@@ -50,6 +50,23 @@ function flatten(geometry: FloorplanGeometry): FloorplanGeometry[] {
   return geometry.kind === 'group' ? [geometry, ...geometry.children.flatMap(flatten)] : [geometry]
 }
 
+function dimensionSegments(geometry: FloorplanGeometry | null): Array<{
+  start: readonly [number, number]
+  end: readonly [number, number]
+  dimensionStart?: readonly [number, number]
+  dimensionEnd?: readonly [number, number]
+  text: string
+  stroke?: string
+}> {
+  if (!geometry) return []
+  return flatten(geometry).flatMap((entry) => {
+    if (entry.kind === 'dimension') return [entry]
+    if (entry.kind === 'dimension-string')
+      return entry.segments.map((segment) => ({ ...segment, stroke: entry.stroke }))
+    return []
+  })
+}
+
 describe('buildConstructionDimensionFloorplan', () => {
   beforeEach(() => {
     nodeRegistry._reset()
@@ -68,7 +85,7 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
 
     const geometry = buildConstructionDimensionFloorplan(node, context())
-    const dimension = geometry && flatten(geometry).find((entry) => entry.kind === 'dimension')
+    const dimension = dimensionSegments(geometry)[0]
 
     expect(dimension).toMatchObject({
       start: [1, 1],
@@ -97,10 +114,9 @@ describe('buildConstructionDimensionFloorplan', () => {
     const movedWall = WallNode.parse({ ...wall, start: [2, 0], end: [6, 0] })
     const moved = buildConstructionDimensionFloorplan(node, context({ [wall.id]: movedWall }))
     const dangling = buildConstructionDimensionFloorplan(node, context())
-    const linkedDimension = linked && flatten(linked).find((entry) => entry.kind === 'dimension')
-    const movedDimension = moved && flatten(moved).find((entry) => entry.kind === 'dimension')
-    const danglingDimension =
-      dangling && flatten(dangling).find((entry) => entry.kind === 'dimension')
+    const linkedDimension = dimensionSegments(linked)[0]
+    const movedDimension = dimensionSegments(moved)[0]
+    const danglingDimension = dimensionSegments(dangling)[0]
 
     expect(linkedDimension).toMatchObject({ start: [1, 0], text: '3m' })
     expect(movedDimension).toMatchObject({ start: [3, 0], text: '1m' })
@@ -124,14 +140,10 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
 
     const geometry = buildConstructionDimensionFloorplan(node, context())
-    const dimensions = geometry
-      ? flatten(geometry).filter((entry) => entry.kind === 'dimension')
-      : []
+    const dimensions = dimensionSegments(geometry)
 
     expect(dimensions).toHaveLength(3)
-    expect(
-      dimensions.map((dimension) => (dimension.kind === 'dimension' ? dimension.text : '')),
-    ).toEqual(['2m', '3m', '4m'])
+    expect(dimensions.map((dimension) => dimension.text)).toEqual(['2m', '3m', '4m'])
     expect(dimensions[1]).toMatchObject({
       start: [2, 0],
       end: [5, 0],
@@ -140,7 +152,32 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
   })
 
-  test('shows one baseline handle only while selected', () => {
+  test('renders point-to-point strings as independent witness pairs', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [5, 0, 0],
+        [9, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      chainMode: 'point-to-point',
+    })
+
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const dimensions = dimensionSegments(geometry)
+
+    expect(dimensions).toHaveLength(2)
+    expect(dimensions.map((dimension) => dimension.text)).toEqual(['2m', '4m'])
+    expect(dimensions[1]).toMatchObject({
+      start: [5, 0],
+      end: [9, 0],
+      dimensionStart: [5, 1],
+      dimensionEnd: [9, 1],
+    })
+  })
+
+  test('shows witness and baseline handles only while selected', () => {
     const node = ConstructionDimensionNode.parse({})
     const idle = buildConstructionDimensionFloorplan(node, context())
     const selected = buildConstructionDimensionFloorplan(node, context({}, true))
@@ -148,9 +185,25 @@ describe('buildConstructionDimensionFloorplan', () => {
     expect(idle && flatten(idle).filter((entry) => entry.kind === 'endpoint-handle')).toHaveLength(
       0,
     )
-    expect(
-      selected && flatten(selected).filter((entry) => entry.kind === 'endpoint-handle'),
-    ).toEqual([expect.objectContaining({ affordance: 'move-construction-dimension-baseline' })])
+    const handles = selected
+      ? flatten(selected).filter((entry) => entry.kind === 'endpoint-handle')
+      : []
+    expect(handles).toHaveLength(3)
+    expect(handles).toContainEqual(
+      expect.objectContaining({
+        affordance: 'move-construction-dimension-witness',
+        payload: { witnessIndex: 0 },
+      }),
+    )
+    expect(handles).toContainEqual(
+      expect.objectContaining({
+        affordance: 'move-construction-dimension-witness',
+        payload: { witnessIndex: 1 },
+      }),
+    )
+    expect(handles).toContainEqual(
+      expect.objectContaining({ affordance: 'move-construction-dimension-baseline' }),
+    )
   })
 
   test('keeps linked or reference geometry read-only in a dependent drawing', () => {
@@ -234,7 +287,7 @@ describe('buildConstructionDimensionFloorplan', () => {
     const geometry = buildConstructionDimensionFloorplan(node, context())
     const entries = geometry ? flatten(geometry) : []
 
-    expect(entries.find((entry) => entry.kind === 'dimension')).toMatchObject({
+    expect(dimensionSegments(geometry)[0]).toMatchObject({
       text: '(TYP · 6 x Ø 2m CLR)',
       start: [-1, 0],
       end: [1, 0],
@@ -255,7 +308,7 @@ describe('buildConstructionDimensionFloorplan', () => {
 
     expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(4)
     expect(entries.some((entry) => entry.kind === 'dimension-label')).toBe(false)
-    expect(entries.some((entry) => entry.kind === 'dimension')).toBe(false)
+    expect(dimensionSegments(geometry).length).toBe(0)
   })
 
   test('renders chord and arc-length dimensions', () => {
@@ -281,7 +334,7 @@ describe('buildConstructionDimensionFloorplan', () => {
     const chordEntries = chordGeometry ? flatten(chordGeometry) : []
     const arcEntries = arcGeometry ? flatten(arcGeometry) : []
 
-    expect(chordEntries.find((entry) => entry.kind === 'dimension')).toMatchObject({
+    expect(dimensionSegments(chordGeometry)[0]).toMatchObject({
       text: 'CH 2m',
     })
     expect(arcEntries.some((entry) => entry.kind === 'path')).toBe(true)

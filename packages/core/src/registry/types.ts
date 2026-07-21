@@ -666,6 +666,33 @@ export type FloorplanGeometry =
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
     }
+  | {
+      kind: 'dimension-string'
+      segments: readonly {
+        start: FloorplanPoint
+        end: FloorplanPoint
+        /**
+         * Optional explicit dimension-line endpoints. Use these when the
+         * measured origins sit at different depths, such as stepped facades or
+         * an exterior column row. Extension lines still originate at
+         * `start`/`end`, while the measurement is drawn between these aligned
+         * baseline points.
+         */
+        dimensionStart?: FloorplanPoint
+        dimensionEnd?: FloorplanPoint
+        text: string
+      }[]
+      /** Outward-pointing unit normal shared by every segment in the string. */
+      offsetNormal: FloorplanPoint
+      /** Distance (plan units) from each measured origin to its dimension line. */
+      offsetDistance: number
+      /** How far past each offset point the extension line continues. */
+      extensionOvershoot: number
+      /** Optional override for the line/text colour. Defaults to the palette accent. */
+      stroke?: string
+      /** Semantic annotation role used by editor visibility and export filters. */
+      annotationRole?: FloorplanAnnotationRole
+    }
 
 // ─── FloorplanAffordance ─────────────────────────────────────────────
 //

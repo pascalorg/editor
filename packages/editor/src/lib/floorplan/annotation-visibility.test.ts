@@ -21,13 +21,11 @@ describe('floor-plan annotation visibility', () => {
       children: [
         line,
         {
-          kind: 'dimension',
-          start: [0, 0],
-          end: [2, 0],
+          kind: 'dimension-string',
+          segments: [{ start: [0, 0], end: [2, 0], text: '2.00m' }],
           offsetNormal: [0, 1],
           offsetDistance: 0.3,
           extensionOvershoot: 0.1,
-          text: '2.00m',
         },
       ],
     } satisfies FloorplanGeometry

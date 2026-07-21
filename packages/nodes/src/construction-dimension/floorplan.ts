@@ -9,6 +9,7 @@ import type {
 import { constructionDimensionRequiredAnchorCount } from '@pascal-app/core'
 import { resolveMeasurementAnchor } from '../measurement/resolve'
 import { formatConstructionLength } from '../shared/construction-length'
+import { buildDimensionStringGeometry } from '../shared/dimension-string'
 import {
   resolveCircularConstructionDimensionLayout,
   resolveConstructionDimensionLayout,
@@ -53,15 +54,15 @@ export function buildConstructionDimensionFloorplan(
     case 'radius':
       return buildRadius(node, points, stroke, dangling, unit, editable)
     case 'diameter':
-      return buildDiameter(node, points, stroke, dangling, unit)
+      return buildDiameter(node, points, stroke, dangling, unit, editable)
     case 'center-mark':
-      return buildCenterMarkOnly(points, stroke)
+      return buildCenterMarkOnly(points, stroke, editable)
     case 'arc-length':
       return buildArcLength(node, points, stroke, dangling, unit, editable)
     case 'angular':
       return buildAngular(node, points, stroke, dangling, editable)
     case 'coordinate':
-      return buildCoordinate(node, points, stroke, dangling, unit)
+      return buildCoordinate(node, points, stroke, dangling, unit, editable)
   }
 }
 
@@ -75,22 +76,28 @@ function buildLinearOrChord(
 ): FloorplanGeometry {
   const layout = resolveConstructionDimensionLayout(node, points)
   const children: FloorplanGeometry[] = []
-  for (const segment of layout.segments) {
+  const dimensionSegments = layout.segments.map((segment) => {
     const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit)}`
-    children.push(
-      dimensionGeometry(
-        segment.witnessStart,
-        segment.witnessEnd,
-        segment.dimensionStart,
-        segment.dimensionEnd,
-        layout.normal,
-        notation(node, baseText, dangling),
-        stroke,
-      ),
-      hitLine(segment.dimensionStart, segment.dimensionEnd),
-    )
-  }
-  if (editable) children.push(baselineHandle(layout.midpoint))
+    return {
+      witnessStart: segment.witnessStart,
+      witnessEnd: segment.witnessEnd,
+      dimensionStart: segment.dimensionStart,
+      dimensionEnd: segment.dimensionEnd,
+      text: notation(node, baseText, dangling),
+    }
+  })
+  children.push(
+    buildDimensionStringGeometry({
+      segments: dimensionSegments,
+      offsetNormal: layout.normal,
+      offsetDistance: 0,
+      extensionOvershoot: 0.12,
+      stroke,
+    }),
+    ...layout.segments.map((segment) => hitLine(segment.dimensionStart, segment.dimensionEnd)),
+  )
+  if (editable)
+    children.push(...witnessHandles(layout.witnessPoints), baselineHandle(layout.midpoint))
   return { kind: 'group', children }
 }
 
@@ -115,7 +122,7 @@ function buildRadius(
     ),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
-  if (editable) children.push(baselineHandle(labelPoint))
+  if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
   return { kind: 'group', children }
 }
 
@@ -125,6 +132,7 @@ function buildDiameter(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  editable: boolean,
 ): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('diameter', points)
   if (!layout?.end) return null
@@ -144,15 +152,22 @@ function buildDiameter(
     hitLine(layout.start, layout.end),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
+  if (editable) children.push(...anchorHandles(points))
   return { kind: 'group', children }
 }
 
-function buildCenterMarkOnly(points: MeasurementPoint[], stroke: string): FloorplanGeometry | null {
+function buildCenterMarkOnly(
+  points: MeasurementPoint[],
+  stroke: string,
+  editable: boolean,
+): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('center-mark', points)
   if (!layout) return null
+  const children: FloorplanGeometry[] = centerMark(layout.center, layout.radius, stroke, true)
+  if (editable) children.push(...anchorHandles(points))
   return {
     kind: 'group',
-    children: centerMark(layout.center, layout.radius, stroke, true),
+    children,
   }
 }
 
@@ -193,7 +208,7 @@ function buildArcLength(
     ),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
-  if (editable) children.push(baselineHandle(labelPoint))
+  if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
   return { kind: 'group', children }
 }
 
@@ -226,7 +241,7 @@ function buildAngular(
     labelGeometry(labelPoint, notation(node, `∠ ${formatDegrees(degrees)}`, dangling), 0, true),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, arcRadius, stroke))
-  if (editable) children.push(baselineHandle(node.baseline.origin))
+  if (editable) children.push(...anchorHandles(points), baselineHandle(node.baseline.origin))
   return { kind: 'group', children }
 }
 
@@ -236,6 +251,7 @@ function buildCoordinate(
   stroke: string,
   dangling: boolean,
   unit: 'metric' | 'imperial',
+  editable: boolean,
 ): FloorplanGeometry | null {
   const datum: FloorplanPoint = [points[0]![0], points[0]![2]]
   const features = points.slice(1).map((point): FloorplanPoint => [point[0], point[2]])
@@ -256,6 +272,7 @@ function buildCoordinate(
       ...centerMark(feature, 0.3, stroke, true),
     )
   })
+  if (editable) children.push(...anchorHandles(points))
   return { kind: 'group', children }
 }
 
@@ -405,6 +422,20 @@ function baselineHandle(point: FloorplanPoint): FloorplanGeometry {
     affordance: 'move-construction-dimension-baseline',
     payload: null,
   }
+}
+
+function anchorHandles(points: readonly MeasurementPoint[]): FloorplanGeometry[] {
+  return witnessHandles(points.map((point): FloorplanPoint => [point[0], point[2]]))
+}
+
+function witnessHandles(points: readonly FloorplanPoint[]): FloorplanGeometry[] {
+  return points.map((point, witnessIndex) => ({
+    kind: 'endpoint-handle',
+    point,
+    state: 'idle',
+    affordance: 'move-construction-dimension-witness',
+    payload: { witnessIndex },
+  }))
 }
 
 function hitLine(start: FloorplanPoint, end: FloorplanPoint): FloorplanGeometry {

@@ -105,6 +105,7 @@ export function filterFloorplanAnnotationGeometry(
     !visibility.automaticDimensions &&
     nodeType !== 'construction-dimension' &&
     (geometry.kind === 'dimension' ||
+      geometry.kind === 'dimension-string' ||
       geometry.kind === 'dimension-label' ||
       geometry.kind === 'equal-spacing-badge')
   ) {

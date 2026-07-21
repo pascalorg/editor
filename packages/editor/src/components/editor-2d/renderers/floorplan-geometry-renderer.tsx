@@ -3,7 +3,10 @@
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
 import { isFloorplanAnnotationObstacleGeometry } from './floorplan-annotation-layout'
-import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
+import {
+  FloorplanDimensionRenderer,
+  FloorplanDimensionStringRenderer,
+} from './floorplan-dimension-renderer'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
 const STATIC_LABEL_UNITS_PER_PIXEL = 0.01
@@ -205,6 +208,16 @@ function renderNode(
           key={keyHint}
           sceneRotationDeg={sceneRotationDeg}
           annotationUnitsPerPoint={annotationUnitsPerPoint}
+        />
+      )
+
+    case 'dimension-string':
+      return (
+        <FloorplanDimensionStringRenderer
+          annotationUnitsPerPoint={annotationUnitsPerPoint}
+          geometry={g}
+          key={keyHint}
+          sceneRotationDeg={sceneRotationDeg}
         />
       )
 
