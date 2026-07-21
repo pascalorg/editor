@@ -83,6 +83,7 @@ import {
 } from '../floorplan-group-move'
 import { useFloorplanRender } from '../floorplan-render-context'
 import {
+  floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
   resolveSvgAnnotationCollisions,
   svgAnnotationLabelId,
@@ -2090,7 +2091,8 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
         return (
           <g
             data-floorplan-annotation-obstacle={
-              isFloorplanAnnotationObstacleGeometry(g) ? '' : undefined
+              floorplanAnnotationObstacleMode(g) ??
+              (isFloorplanAnnotationObstacleGeometry(g) ? '' : undefined)
             }
             key={keyHint}
             transform={transform}
@@ -2763,7 +2765,11 @@ const InteractiveGeometry = memo(function InteractiveGeometry({
         // horizontally on screen even when the floor-plan view is
         // rotated (default `sceneRotationDeg` is 90°).
         return (
-          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
+          <g
+            data-floorplan-annotation-obstacle={floorplanAnnotationObstacleMode(g)}
+            key={keyHint}
+            transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}
+          >
             <text
               dominantBaseline={g.dominantBaseline ?? 'middle'}
               fill={g.fill ?? '#171717'}

@@ -39,7 +39,7 @@ assessment.
 ### Annotation layout and preflight
 
 - [x] Let users pin label positions and persist layout overrides on the drawing view.
-- [ ] Extend collision avoidance to the remaining fixed symbols and annotation categories.
+- [x] Extend collision avoidance to the remaining fixed symbols and annotation categories.
 - [ ] Add a separate preflight surface for unresolved collisions, short unreadable segments, and
   plan-geometry conflicts; do not paint diagnostic warnings over the drawing or export them to PDF.
 
@@ -332,11 +332,12 @@ on the sheet; and reports clipped scaled views as sheet preflight warnings.
 
 ### 3.4 Implement collision resolution
 
-Status: initial label-to-label resolution is implemented in the live floor plan and PDF composition. Fixed mark pills and semantic architectural obstacles are registered with the layout resolver, so dimension values avoid door/window identifiers, wall outlines, door symbols and swing envelopes, windows, and columns. Diagonal wall outlines are sampled as short screen-space segments instead of one oversized bounding box. Short segments try outside-end and outside-start positions in order, switch the baseline extension to the clear side, and receive a leader when both architectural outside positions require further relocation. Adjacent facade strings resolve in architectural order: farther-out strings retain their datum position, same-tier labels retain drawing order, and moved labels prefer sliding along their own string before crossing tiers. User-pinned label positions now persist on the drawing view and override automatic layout in both live plans and PDF export. Manual placement for broader annotation categories and broader symbol coverage remain.
+Status: initial label-to-label resolution is implemented in the live floor plan and PDF composition. Fixed mark pills and semantic architectural obstacles are registered with the layout resolver, so dimension values avoid door/window identifiers, wall outlines, door symbols and swing envelopes, windows, and columns. Room labels, column-center marks/references, stair direction graphics, stair break lines, and stair notes now register as fixed annotation obstacles too. Diagonal wall outlines are sampled as short screen-space segments instead of one oversized bounding box. Short segments try outside-end and outside-start positions in order, switch the baseline extension to the clear side, and receive a leader when both architectural outside positions require further relocation. Adjacent facade strings resolve in architectural order: farther-out strings retain their datum position, same-tier labels retain drawing order, and moved labels prefer sliding along their own string before crossing tiers. User-pinned label positions now persist on the drawing view and override automatic layout in both live plans and PDF export. A separate preflight/reporting surface remains.
 
 - [x] Move text outside short segments with a leader or extended dimension line.
 - [x] Preserve string order and datum consistency.
 - [x] Avoid overlaps between adjacent facade strings.
+- [x] Avoid fixed room-label, column-center, and stair-annotation symbols.
 - [x] Allow user-pinned positions to override automatic layout.
 - [x] Record layout overrides on the drawing view, not on the physical building nodes.
 

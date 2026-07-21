@@ -223,4 +223,33 @@ describe('FloorplanGeometryRenderer static labels', () => {
 
     expect(markup).toContain('data-floorplan-annotation-obstacle="outline"')
   })
+
+  test('registers fixed annotation categories as obstacles', () => {
+    const roomLabel = {
+      kind: 'text',
+      x: 0,
+      y: 0,
+      text: 'KITCHEN',
+      fontSize: 0.18,
+      annotationRole: 'room-label',
+    } satisfies FloorplanGeometry
+    const stairArrow = {
+      kind: 'polyline',
+      points: [
+        [0, 0],
+        [0.5, 0.5],
+      ],
+      annotationRole: 'stair-annotation',
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={roomLabel} />
+        <FloorplanGeometryRenderer geometry={stairArrow} />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-annotation-obstacle="bounds"')
+    expect(markup).toContain('data-floorplan-annotation-obstacle="outline"')
+  })
 })

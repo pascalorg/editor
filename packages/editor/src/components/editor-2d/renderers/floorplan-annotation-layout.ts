@@ -465,12 +465,32 @@ function candidateCost(
 }
 
 export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometry): boolean {
+  if (floorplanAnnotationObstacleMode(geometry)) return true
   if (geometry.kind !== 'group') return false
   const hasPlate = geometry.children.some(
     (child) => child.kind === 'rect' || child.kind === 'circle',
   )
   const hasUprightText = geometry.children.some((child) => child.kind === 'text' && child.upright)
   return hasPlate && hasUprightText
+}
+
+export function floorplanAnnotationObstacleMode(
+  geometry: FloorplanGeometry,
+): 'bounds' | 'outline' | '' | undefined {
+  if ('annotationObstacle' in geometry && geometry.annotationObstacle) {
+    return geometry.annotationObstacle
+  }
+  if (!('annotationRole' in geometry)) return undefined
+  switch (geometry.annotationRole) {
+    case 'room-label':
+      return geometry.kind === 'text' ? 'bounds' : undefined
+    case 'column-center':
+      return geometry.kind === 'line' || geometry.kind === 'text' ? 'bounds' : undefined
+    case 'stair-annotation':
+      return geometry.kind === 'polyline' || geometry.kind === 'line' ? 'outline' : 'bounds'
+    default:
+      return undefined
+  }
 }
 
 function rectanglesOverlap(

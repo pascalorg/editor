@@ -1,8 +1,44 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  floorplanAnnotationObstacleMode,
   polylineObstacleRectangles,
   resolveAnnotationLabelRectangles,
 } from './floorplan-annotation-layout'
+
+describe('floorplanAnnotationObstacleMode', () => {
+  test('treats fixed annotation categories as layout obstacles', () => {
+    expect(
+      floorplanAnnotationObstacleMode({
+        kind: 'text',
+        x: 0,
+        y: 0,
+        text: 'BEDROOM',
+        fontSize: 0.18,
+        annotationRole: 'room-label',
+      }),
+    ).toBe('bounds')
+    expect(
+      floorplanAnnotationObstacleMode({
+        kind: 'line',
+        x1: 0,
+        y1: 0,
+        x2: 1,
+        y2: 0,
+        annotationRole: 'column-center',
+      }),
+    ).toBe('bounds')
+    expect(
+      floorplanAnnotationObstacleMode({
+        kind: 'polyline',
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+        annotationRole: 'stair-annotation',
+      }),
+    ).toBe('outline')
+  })
+})
 
 describe('resolveAnnotationLabelRectangles', () => {
   test('keeps the higher-priority label and moves the conflicting label', () => {

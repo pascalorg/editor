@@ -225,6 +225,19 @@ describe('floorplan annotation overlay routing', () => {
 
     expect(splitFloorplanOverlay(mark)).toEqual({ base: null, overlay: mark })
   })
+
+  test('keeps fixed annotation symbols in the overlay pass for collision layout', () => {
+    const columnCenter = {
+      kind: 'line',
+      x1: 0,
+      y1: 0,
+      x2: 1,
+      y2: 0,
+      annotationRole: 'column-center',
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(columnCenter)).toEqual({ base: null, overlay: columnCenter })
+  })
 })
 
 describe('computeAffectedSiblingIds', () => {

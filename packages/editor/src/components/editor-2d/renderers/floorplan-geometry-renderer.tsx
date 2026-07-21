@@ -2,7 +2,10 @@
 
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
-import { isFloorplanAnnotationObstacleGeometry } from './floorplan-annotation-layout'
+import {
+  floorplanAnnotationObstacleMode,
+  isFloorplanAnnotationObstacleGeometry,
+} from './floorplan-annotation-layout'
 import {
   FloorplanDimensionRenderer,
   FloorplanDimensionStringRenderer,
@@ -75,11 +78,11 @@ function styleAttrs(
     pointerEvents?: string
     cursor?: string
     annotationObstacle?: 'bounds' | 'outline'
-    annotationRole?: 'column-center' | 'room-label'
+    annotationRole?: string
   }
   const documentStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
   return {
-    'data-floorplan-annotation-obstacle': s.annotationObstacle,
+    'data-floorplan-annotation-obstacle': floorplanAnnotationObstacleMode(g),
     'data-floorplan-annotation-role': s.annotationRole,
     fill: documentStyle.fill ?? s.fill ?? 'none',
     fillOpacity: s.fillOpacity,
@@ -363,7 +366,11 @@ function renderNode(
       const textStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
       if (g.upright) {
         return (
-          <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
+          <g
+            data-floorplan-annotation-obstacle={floorplanAnnotationObstacleMode(g)}
+            key={keyHint}
+            transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}
+          >
             <text
               dominantBaseline={g.dominantBaseline ?? 'middle'}
               fill={g.fill ?? '#171717'}
@@ -388,6 +395,7 @@ function renderNode(
       }
       return (
         <text
+          data-floorplan-annotation-obstacle={floorplanAnnotationObstacleMode(g)}
           dominantBaseline={g.dominantBaseline ?? 'middle'}
           fill={g.fill ?? '#171717'}
           fontFamily={g.fontFamily}
