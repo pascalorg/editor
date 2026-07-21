@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  CabinetNode,
   ConstructionDimensionNode,
+  ConstructionNoteNode,
   DoorNode,
+  StairNode,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
@@ -41,15 +44,23 @@ describe('dimension completeness audit', () => {
     expect(issues.map((auditIssue) => auditIssue.kind)).toEqual([
       'missing-overall-dimension',
       'missing-partition-reference',
+      'undocumented-critical-node',
+      'undocumented-critical-node',
     ])
-    expect(issues[0]).toMatchObject({
-      nodeId: 'wall_exterior',
-      severity: 'warning',
-    })
-    expect(issues[1]).toMatchObject({
-      nodeId: 'wall_partition',
-      severity: 'info',
-    })
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'missing-overall-dimension',
+        nodeId: 'wall_exterior',
+        severity: 'warning',
+      }),
+    )
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'missing-partition-reference',
+        nodeId: 'wall_partition',
+        severity: 'info',
+      }),
+    )
   })
 
   test('uses associative construction-dimension anchors as dimension coverage', () => {
@@ -95,7 +106,7 @@ describe('dimension completeness audit', () => {
       ],
     })
 
-    expect(buildDimensionCompletenessAudit(nodes(exteriorWall, referenceDimension))).toHaveLength(1)
+    expect(buildDimensionCompletenessAudit(nodes(exteriorWall, referenceDimension))).toHaveLength(2)
     expect(
       buildDimensionCompletenessAudit(nodes(exteriorWall, referenceDimension), {
         includeReferenceDimensions: true,
@@ -131,6 +142,7 @@ describe('dimension completeness audit', () => {
       'missing-verified-rough-opening',
       'undimensioned-exterior-opening',
       'undimensioned-exterior-opening',
+      'undocumented-critical-node',
     ])
     expect(issues.filter((auditIssue) => auditIssue.nodeId === 'window_front')).toHaveLength(1)
   })
@@ -157,7 +169,10 @@ describe('dimension completeness audit', () => {
 
     const issues = buildDimensionCompletenessAudit(nodes(exteriorWall, door, openingDimension))
 
-    expect(issues.map((auditIssue) => auditIssue.kind)).toEqual(['missing-overall-dimension'])
+    expect(issues.map((auditIssue) => auditIssue.kind)).toEqual([
+      'missing-overall-dimension',
+      'undocumented-critical-node',
+    ])
   })
 
   test('can require rough-opening height verification as a stricter profile', () => {
@@ -187,5 +202,100 @@ describe('dimension completeness audit', () => {
     })
 
     expect(buildDimensionCompletenessAudit(nodes(masonryWindow, framelessOpening))).toEqual([])
+  })
+
+  test('detects duplicate and contradictory dimension string overrides', () => {
+    const wall = WallNode.parse({
+      id: 'wall_exterior',
+      start: [0, 0],
+      end: [5, 0],
+      frontSide: 'exterior',
+    })
+    const firstDimension = ConstructionDimensionNode.parse({
+      id: 'construction-dimension_first',
+      textOverride: '5.00m',
+      anchors: [featureAnchor(wall.id, [0, 0, 0]), featureAnchor(wall.id, [5, 0, 0])],
+    })
+    const duplicateDimension = ConstructionDimensionNode.parse({
+      id: 'construction-dimension_duplicate',
+      textOverride: '5.00 m',
+      anchors: [featureAnchor('wall_other', [0, 0, 0]), featureAnchor('wall_other', [5, 0, 0])],
+    })
+    const conflictingDimension = ConstructionDimensionNode.parse({
+      id: 'construction-dimension_conflict',
+      textOverride: '4.80m',
+      anchors: [featureAnchor(wall.id, [0, 0, 0]), featureAnchor(wall.id, [4.8, 0, 0])],
+    })
+
+    const issues = buildDimensionCompletenessAudit(
+      nodes(wall, firstDimension, duplicateDimension, conflictingDimension),
+    )
+
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'duplicate-dimension-string',
+        nodeId: 'construction-dimension_first',
+      }),
+    )
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'contradictory-dimension-string',
+        nodeId: wall.id,
+      }),
+    )
+  })
+
+  test('detects continuous dimension segment totals that disagree with the overall string', () => {
+    const dimension = ConstructionDimensionNode.parse({
+      id: 'construction-dimension_chain',
+      chainMode: 'continuous',
+      textOverride: '3.00m',
+      anchors: [
+        featureAnchor('wall_a', [0, 0, 0]),
+        featureAnchor('wall_b', [1, 0, 0]),
+        featureAnchor('wall_c', [2, 0, 0]),
+      ],
+    })
+
+    const issues = buildDimensionCompletenessAudit(nodes(dimension))
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        kind: 'dimension-segment-total-mismatch',
+        nodeId: 'construction-dimension_chain',
+      }),
+    ])
+  })
+
+  test('reports construction-critical nodes without dimensions, schedules, or keyed notes', () => {
+    const undocumentedCabinet = CabinetNode.parse({
+      id: 'cabinet_undocumented',
+    })
+    const notedCabinet = CabinetNode.parse({
+      id: 'cabinet_noted',
+    })
+    const stair = StairNode.parse({
+      id: 'stair_documented',
+    })
+    const note = ConstructionNoteNode.parse({
+      id: 'construction-note_cabinet',
+      targetId: notedCabinet.id,
+      text: 'VERIFY CABINET CLEARANCE.',
+    })
+    const stairDimension = ConstructionDimensionNode.parse({
+      id: 'construction-dimension_stair',
+      anchors: [featureAnchor(stair.id, [0, 0, 0]), featureAnchor(stair.id, [1, 0, 0])],
+    })
+
+    const issues = buildDimensionCompletenessAudit(
+      nodes(undocumentedCabinet, notedCabinet, stair, note, stairDimension),
+    )
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        kind: 'undocumented-critical-node',
+        nodeId: undocumentedCabinet.id,
+      }),
+    ])
   })
 })

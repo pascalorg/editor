@@ -76,7 +76,7 @@ assessment.
 - [x] Add jurisdiction/profile-based clearance advisories for circulation, doors, fixtures,
   cabinets, appliances, closets, and stairs, with explicit code provenance.
 - [x] Audit missing overall, opening, partition, and verified rough-opening dimensions.
-- [ ] Detect duplicate or contradictory strings, segment-total mismatches, and construction-critical
+- [x] Detect duplicate or contradictory strings, segment-total mismatches, and construction-critical
   nodes that have no dimension, schedule entry, or keyed note.
 - [ ] Include unresolved annotation collisions and clipped sheet content in the completeness audit.
 
@@ -625,9 +625,10 @@ Status: partially implemented. A shared dimension completeness audit now reports
 overall dimensions, undimensioned exterior openings, missing partition reference dimensions, and
 missing verified rough-opening records. Coverage is based on associative construction-dimension
 anchors, with reference dimensions excluded by default unless a caller opts into counting them.
-The remaining completeness work covers duplicate/contradictory dimension strings, segment-total
-mismatches, construction-critical node coverage, unresolved annotation collisions, and clipped sheet
-content.
+The audit also detects duplicate and contradictory dimension string overrides, continuous chain
+segment totals that do not match the stated overall value, and construction-critical nodes with no
+dimension, generated schedule entry, or targeted construction note. The remaining completeness work
+covers unresolved annotation collisions and clipped sheet content.
 
 Detect and report:
 
@@ -635,9 +636,9 @@ Detect and report:
 - [x] Missing overall dimensions.
 - [x] Missing partition references.
 - [x] Missing verified rough openings.
-- Duplicate or contradictory strings.
-- Strings whose segment totals do not match the overall value.
-- Construction-critical nodes with neither a dimension, schedule entry, nor keyed note.
+- [x] Duplicate or contradictory strings.
+- [x] Strings whose segment totals do not match the overall value.
+- [x] Construction-critical nodes with neither a dimension, schedule entry, nor keyed note.
 - Annotation collisions and clipped sheet content.
 
 ## Recommended implementation order
