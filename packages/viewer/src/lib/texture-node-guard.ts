@@ -1,5 +1,5 @@
-import { DataTexture, TextureNode } from 'three/webgpu'
 import type * as THREE from 'three/webgpu'
+import { DataTexture, TextureNode } from 'three/webgpu'
 
 let installed = false
 let reported = 0
