@@ -263,6 +263,14 @@ export {
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
 export {
+  ViewerControlsBar,
+  type ViewerControlsBarProps,
+} from './components/viewer/viewer-controls-bar'
+export {
+  ViewerSceneHeader,
+  type ViewerSceneHeaderProps,
+} from './components/viewer/viewer-scene-header'
+export {
   WalkthroughHud,
   type WalkthroughHudProps,
   type WalkthroughInteract,
