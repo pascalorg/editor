@@ -10,6 +10,14 @@ import {
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
 const STATIC_LABEL_UNITS_PER_PIXEL = 0.01
+const DOCUMENT_DEFAULT_TEXT_SIZE_PT = 8
+const DOCUMENT_ROOM_NAME_TEXT_SIZE_PT = 8
+const DOCUMENT_ROOM_NUMBER_TEXT_SIZE_PT = 7
+const DOCUMENT_ROOM_DETAIL_TEXT_SIZE_PT = 5.5
+const DOCUMENT_COLUMN_MARK_TEXT_SIZE_PT = 7
+const DOCUMENT_DEFAULT_STROKE_WIDTH_PT = 0.5
+const DOCUMENT_TEXT_OUTLINE_MIN_WIDTH_PT = 0.75
+const DOCUMENT_MARK_HEIGHT_PT = 14
 
 /**
  * Pure-data → SVG converter. Walks a `FloorplanGeometry` tree returned by
@@ -46,6 +54,7 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
 function styleAttrs(
   g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> },
   pointerEventsOverride?: string,
+  annotationUnitsPerPoint?: number,
 ) {
   // Shared SVG attribute mapping for any styled primitive. Keeps the per-
   // primitive switch arms terse and ensures new style fields land
@@ -68,22 +77,206 @@ function styleAttrs(
     annotationObstacle?: 'bounds' | 'outline'
     annotationRole?: 'column-center' | 'room-label'
   }
+  const documentStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
   return {
     'data-floorplan-annotation-obstacle': s.annotationObstacle,
     'data-floorplan-annotation-role': s.annotationRole,
-    fill: s.fill ?? 'none',
+    fill: documentStyle.fill ?? s.fill ?? 'none',
     fillOpacity: s.fillOpacity,
-    stroke: s.stroke,
-    strokeWidth: s.strokeWidth,
+    stroke: documentStyle.stroke ?? s.stroke,
+    strokeWidth: documentStyle.strokeWidth ?? s.strokeWidth,
     strokeDasharray: s.strokeDasharray,
     strokeLinecap: s.strokeLinecap,
     strokeLinejoin: s.strokeLinejoin,
     strokeOpacity: s.strokeOpacity,
     opacity: s.opacity,
-    vectorEffect: s.vectorEffect,
+    vectorEffect: documentStyle.vectorEffect ?? s.vectorEffect,
     pointerEvents: pointerEventsOverride ?? s.pointerEvents,
     style: s.cursor ? { cursor: s.cursor } : undefined,
   }
+}
+
+export function resolveDocumentFloorplanAnnotationStyle(
+  geometry: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> },
+  annotationUnitsPerPoint?: number,
+): {
+  fill?: string
+  stroke?: string
+  strokeWidth?: number
+  vectorEffect?: 'non-scaling-stroke'
+} {
+  if (annotationUnitsPerPoint === undefined) return {}
+  const styled = geometry as FloorplanGeometry & {
+    stroke?: string
+    strokeWidth?: number
+    vectorEffect?: 'non-scaling-stroke'
+    annotationRole?: string
+  }
+  if (!styled.stroke && geometry.kind !== 'text') return {}
+
+  if (geometry.kind === 'text') {
+    const sourceFontSize = Math.max(geometry.fontSize, 1e-6)
+    const sourceStrokeWidth = geometry.strokeWidth ?? 0
+    const outlineRatio = sourceStrokeWidth > 0 ? sourceStrokeWidth / sourceFontSize : 0
+    const fontSize = documentTextFontSize(geometry, annotationUnitsPerPoint)
+    return {
+      strokeWidth:
+        geometry.stroke && outlineRatio > 0
+          ? Math.max(
+              DOCUMENT_TEXT_OUTLINE_MIN_WIDTH_PT * annotationUnitsPerPoint,
+              fontSize * outlineRatio,
+            )
+          : undefined,
+    }
+  }
+
+  return {
+    strokeWidth: documentStrokeWidth(styled, annotationUnitsPerPoint),
+    vectorEffect: 'non-scaling-stroke',
+  }
+}
+
+function documentTextFontSize(
+  geometry: Extract<FloorplanGeometry, { kind: 'text' }>,
+  annotationUnitsPerPoint: number,
+): number {
+  return documentTextSizePt(geometry) * annotationUnitsPerPoint
+}
+
+function documentTextSizePt(geometry: Extract<FloorplanGeometry, { kind: 'text' }>): number {
+  switch (geometry.annotationRole) {
+    case 'room-label':
+      if (geometry.fontSize >= 0.18) return DOCUMENT_ROOM_NAME_TEXT_SIZE_PT
+      if (geometry.fontSize >= 0.145) return DOCUMENT_ROOM_NUMBER_TEXT_SIZE_PT
+      return DOCUMENT_ROOM_DETAIL_TEXT_SIZE_PT
+    case 'column-center':
+    case 'stair-annotation':
+      return DOCUMENT_COLUMN_MARK_TEXT_SIZE_PT
+    default:
+      return DOCUMENT_DEFAULT_TEXT_SIZE_PT
+  }
+}
+
+function documentStrokeWidth(
+  geometry: { strokeWidth?: number; annotationRole?: string },
+  annotationUnitsPerPoint: number,
+): number {
+  if (geometry.annotationRole === 'overhead-geometry') return 0.35
+  return Math.max(DOCUMENT_DEFAULT_STROKE_WIDTH_PT, Math.min(1.2, geometry.strokeWidth ?? 0.5))
+}
+
+function documentRectGeometryAttrs(
+  geometry: Extract<FloorplanGeometry, { kind: 'rect' }>,
+  annotationUnitsPerPoint?: number,
+) {
+  if (annotationUnitsPerPoint === undefined || !isAnnotationMarkRect(geometry)) {
+    return {
+      x: geometry.x,
+      y: geometry.y,
+      width: geometry.width,
+      height: geometry.height,
+      rx: geometry.rx,
+      ry: geometry.ry,
+    }
+  }
+
+  const centerX = geometry.x + geometry.width / 2
+  const centerY = geometry.y + geometry.height / 2
+  const height = DOCUMENT_MARK_HEIGHT_PT * annotationUnitsPerPoint
+  const width = Math.max(height * 1.6, (geometry.width / Math.max(geometry.height, 1e-6)) * height)
+  return {
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+    rx: height / 2,
+    ry: height / 2,
+  }
+}
+
+function isAnnotationMarkRect(geometry: Extract<FloorplanGeometry, { kind: 'rect' }>): boolean {
+  return geometry.fill === '#ffffff' && !!geometry.stroke && geometry.height <= 0.5
+}
+
+function documentCircleGeometryAttrs(
+  geometry: Extract<FloorplanGeometry, { kind: 'circle' }>,
+  annotationUnitsPerPoint?: number,
+) {
+  if (annotationUnitsPerPoint === undefined || !isAnnotationMarkCircle(geometry)) {
+    return { r: geometry.r }
+  }
+  return { r: Math.max(geometry.r, (DOCUMENT_MARK_HEIGHT_PT / 2) * annotationUnitsPerPoint) }
+}
+
+function isAnnotationMarkCircle(geometry: Extract<FloorplanGeometry, { kind: 'circle' }>): boolean {
+  return geometry.fill === '#ffffff' && !!geometry.stroke && geometry.r <= 0.25
+}
+
+function resolveDocumentAnnotationGroupChildren(
+  children: FloorplanGeometry[],
+  annotationUnitsPerPoint?: number,
+): FloorplanGeometry[] {
+  if (annotationUnitsPerPoint === undefined) return children
+
+  const next = [...children]
+  let start = 0
+  while (start < next.length) {
+    const first = next[start]
+    if (!isDocumentTextLine(first)) {
+      start++
+      continue
+    }
+
+    let end = start + 1
+    while (end < next.length && isSameDocumentTextRun(first, next[end])) end++
+    if (end - start > 1) {
+      const run = next.slice(start, end) as Extract<FloorplanGeometry, { kind: 'text' }>[]
+      const adjusted = positionDocumentTextRun(run, annotationUnitsPerPoint)
+      for (let index = 0; index < adjusted.length; index++) {
+        const line = adjusted[index]
+        if (line) next[start + index] = line
+      }
+    }
+    start = end
+  }
+
+  return next
+}
+
+function isDocumentTextLine(
+  geometry: FloorplanGeometry | undefined,
+): geometry is Extract<FloorplanGeometry, { kind: 'text' }> {
+  return geometry?.kind === 'text' && geometry.upright === true
+}
+
+function isSameDocumentTextRun(
+  first: Extract<FloorplanGeometry, { kind: 'text' }>,
+  candidate: FloorplanGeometry | undefined,
+): candidate is Extract<FloorplanGeometry, { kind: 'text' }> {
+  return (
+    isDocumentTextLine(candidate) &&
+    Math.abs(candidate.x - first.x) < 1e-6 &&
+    candidate.textAnchor === first.textAnchor &&
+    candidate.annotationRole === first.annotationRole
+  )
+}
+
+function positionDocumentTextRun(
+  run: Extract<FloorplanGeometry, { kind: 'text' }>[],
+  annotationUnitsPerPoint: number,
+): Extract<FloorplanGeometry, { kind: 'text' }>[] {
+  const centerY = run.reduce((sum, line) => sum + line.y, 0) / run.length
+  const steps = run.slice(0, -1).map((line, index) => {
+    const next = run[index + 1] ?? line
+    const largerFontPt = Math.max(documentTextSizePt(line), documentTextSizePt(next))
+    return largerFontPt * 1.25 * annotationUnitsPerPoint
+  })
+  const totalHeight = steps.reduce((sum, step) => sum + step, 0)
+  let y = centerY - totalHeight / 2
+  return run.map((line, index) => {
+    if (index > 0) y += steps[index - 1] ?? 0
+    return { ...line, y }
+  })
 }
 
 function renderNode(
@@ -95,14 +288,20 @@ function renderNode(
 ): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
-      return <path d={g.d} key={keyHint} {...styleAttrs(g, pointerEventsOverride)} />
+      return (
+        <path
+          d={g.d}
+          key={keyHint}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+        />
+      )
 
     case 'polygon':
       return (
         <polygon
           key={keyHint}
           points={pointsToAttr(g.points)}
-          {...styleAttrs(g, pointerEventsOverride)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
         />
       )
 
@@ -111,34 +310,38 @@ function renderNode(
         <polyline
           key={keyHint}
           points={pointsToAttr(g.points)}
-          {...styleAttrs(g, pointerEventsOverride)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
         />
       )
 
-    case 'rect':
+    case 'rect': {
+      const attrs = documentRectGeometryAttrs(g, annotationUnitsPerPoint)
       return (
         <rect
-          height={g.height}
+          height={attrs.height}
           key={keyHint}
-          rx={g.rx}
-          ry={g.ry}
-          width={g.width}
-          x={g.x}
-          y={g.y}
-          {...styleAttrs(g, pointerEventsOverride)}
+          rx={attrs.rx}
+          ry={attrs.ry}
+          width={attrs.width}
+          x={attrs.x}
+          y={attrs.y}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
         />
       )
+    }
 
-    case 'circle':
+    case 'circle': {
+      const attrs = documentCircleGeometryAttrs(g, annotationUnitsPerPoint)
       return (
         <circle
           cx={g.cx}
           cy={g.cy}
           key={keyHint}
-          r={g.r}
-          {...styleAttrs(g, pointerEventsOverride)}
+          r={attrs.r}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
         />
       )
+    }
 
     case 'line':
       return (
@@ -148,11 +351,16 @@ function renderNode(
           x2={g.x2}
           y1={g.y1}
           y2={g.y2}
-          {...styleAttrs(g, pointerEventsOverride)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
         />
       )
 
-    case 'text':
+    case 'text': {
+      const fontSize =
+        annotationUnitsPerPoint !== undefined
+          ? documentTextFontSize(g, annotationUnitsPerPoint)
+          : g.fontSize
+      const textStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
       if (g.upright) {
         return (
           <g key={keyHint} transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}>
@@ -160,7 +368,7 @@ function renderNode(
               dominantBaseline={g.dominantBaseline ?? 'middle'}
               fill={g.fill ?? '#171717'}
               fontFamily={g.fontFamily}
-              fontSize={g.fontSize}
+              fontSize={fontSize}
               fontWeight={g.fontWeight}
               opacity={g.opacity}
               paintOrder={g.paintOrder}
@@ -168,7 +376,7 @@ function renderNode(
               stroke={g.stroke}
               strokeLinecap={g.stroke ? 'round' : undefined}
               strokeLinejoin={g.stroke ? 'round' : undefined}
-              strokeWidth={g.strokeWidth}
+              strokeWidth={textStyle.strokeWidth ?? g.strokeWidth}
               textAnchor={g.textAnchor ?? 'start'}
               x={0}
               y={0}
@@ -183,7 +391,7 @@ function renderNode(
           dominantBaseline={g.dominantBaseline ?? 'middle'}
           fill={g.fill ?? '#171717'}
           fontFamily={g.fontFamily}
-          fontSize={g.fontSize}
+          fontSize={fontSize}
           fontWeight={g.fontWeight}
           key={keyHint}
           opacity={g.opacity}
@@ -191,7 +399,7 @@ function renderNode(
           stroke={g.stroke}
           strokeLinecap={g.stroke ? 'round' : undefined}
           strokeLinejoin={g.stroke ? 'round' : undefined}
-          strokeWidth={g.strokeWidth}
+          strokeWidth={textStyle.strokeWidth ?? g.strokeWidth}
           textAnchor={g.textAnchor ?? 'start'}
           pointerEvents={pointerEventsOverride}
           x={g.x}
@@ -200,6 +408,7 @@ function renderNode(
           {g.text}
         </text>
       )
+    }
 
     case 'dimension':
       return (
@@ -298,6 +507,7 @@ function renderNode(
 
     case 'group': {
       const transform = formatTransform(g.transform)
+      const children = resolveDocumentAnnotationGroupChildren(g.children, annotationUnitsPerPoint)
       return (
         <g
           data-floorplan-annotation-obstacle={
@@ -306,7 +516,7 @@ function renderNode(
           key={keyHint}
           transform={transform}
         >
-          {g.children.map((child, i) =>
+          {children.map((child, i) =>
             renderNode(child, i, pointerEventsOverride, sceneRotationDeg, annotationUnitsPerPoint),
           )}
         </g>

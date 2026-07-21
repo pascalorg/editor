@@ -30,7 +30,7 @@ assessment.
   placed views, drawing numbers, fixed scales, annotation profiles, notes, schedules, and title-block
   metadata.
 - [x] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
-- [ ] Finish paper-space sizing and line-weight profiles for notes, leaders, marks, room labels, and
+- [x] Finish paper-space sizing and line-weight profiles for notes, leaders, marks, room labels, and
   the remaining annotation categories.
 - [ ] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
   schedules, and notes on the sheet.
@@ -294,21 +294,21 @@ The model belongs in Core because it is persistent project data. Interactive she
 
 ### 3.2 Implement paper-space annotation sizing
 
-Status: initial automatic sizing is implemented for exported construction dimensions and
-measurement labels. Text height, tick size, extension gaps, overshoot, and label offsets are
-resolved from page points after the plan is placed at the selected export scale. The remaining
-annotation categories still require subsequent paper-space work.
+Status: implemented. Export/document rendering resolves dimensions, measurement labels, generic
+annotation text, construction-note leaders, opening marks, room labels, column/grid references, and
+other styled annotation primitives from paper-space profiles after the plan is placed at the
+selected export scale. Live edit-mode sizing remains plan/zoom oriented.
 
 Resolve the following from plotted scale:
 
-- Dimension text height.
-- Note text height and line spacing.
-- Tick and arrow size.
-- Dimension-line and extension-line weight.
-- Dimension-string spacing.
-- Leader shoulder and terminator size.
-- Mark bubble size.
-- Room-label size.
+- [x] Dimension text height.
+- [x] Note text height and line spacing.
+- [x] Tick and arrow size.
+- [x] Dimension-line and extension-line weight.
+- [x] Dimension-string spacing.
+- [x] Leader shoulder and terminator size.
+- [x] Mark bubble size.
+- [x] Room-label size.
 
 The same annotation should plot consistently whether the modeled building is 8 metres or 80 metres wide.
 
