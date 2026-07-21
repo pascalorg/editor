@@ -4,7 +4,6 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
 import { ConstructionDimensionNode } from './construction-dimension'
-import { ConstructionNoteNode } from './construction-note'
 import { DuctFittingNode } from './duct-fitting'
 import { DuctSegmentNode } from './duct-segment'
 import { DuctTerminalNode } from './duct-terminal'
@@ -38,7 +37,6 @@ export const LevelNode = BaseNode.extend({
         FenceNode.shape.id,
         ColumnNode.shape.id,
         ConstructionDimensionNode.shape.id,
-        ConstructionNoteNode.shape.id,
         StructuralGridNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,

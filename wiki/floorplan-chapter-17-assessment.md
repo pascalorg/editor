@@ -6,17 +6,14 @@ This document compares the guidance in `Chapter_17_Floor_Plan_Dimensions_and_Not
 
 The review covered the full 19-page chapter and the floor-plan stack across:
 
-- Core floor-plan, wall, opening, measurement, and construction-note schemas.
+- Core floor-plan, wall, opening, and measurement schemas.
 - The registry-owned `FloorplanGeometry` contract.
 - Editor 2D rendering and interaction layers.
 - Node-specific floor-plan builders.
 - Automatic wall and opening dimension planning.
 - Persistent measurements and smart measurement.
-- Construction notes and leaders.
 - Door/window documentation and schedules.
 - Per-level PDF export.
-
-The latest focused floor-plan verification passed 68 tests with no failures. It covered construction strings, architectural dimension rendering and collision layout, plan-geometry rendering, PDF filtering, measurement output, construction notes, columns, and related floor-plan behavior.
 
 ## What the chapter is teaching
 
@@ -116,23 +113,6 @@ The existing measurement system is broader than the chapter's drafting examples.
 
 The architecture is documented in `wiki/architecture/measurements.md`. These measurements are analysis annotations; they are not yet a complete replacement for architectural construction-dimension strings.
 
-### Construction notes
-
-The construction-note implementation in `packages/nodes/src/construction-note/` already supports:
-
-- Multiline local notes.
-- Straight leaders with shoulders.
-- Quadratic curved leaders.
-- Arrow, dot, or no terminator.
-- Free leader anchors.
-- Optional associative attachment to scene nodes.
-- Fallback anchors for missing targets.
-- Editable anchor, text, and curve handles.
-- Adjustable shoulder length.
-- Floor-plan rendering and PDF inclusion.
-
-This is a good foundation for the chapter's specific or local notes.
-
 ### Door and window documentation
 
 `packages/nodes/src/shared/opening-documentation.ts` provides:
@@ -191,15 +171,11 @@ Exported construction dimensions and measurement labels now resolve their main t
 
 ### Construction dimensions have no independent visibility layer
 
-Measurement visibility is respected by full export, but automatic wall dimensions are still produced as part of wall floor-plan geometry. Automatic dimensions, opening marks, local notes, room labels, structural references, and reference dimensions do not yet have independent per-view visibility controls.
+Measurement visibility is respected by full export, but automatic wall dimensions are still produced as part of wall floor-plan geometry. Automatic dimensions, opening marks, room labels, structural references, and reference dimensions do not yet have independent per-view visibility controls.
 
 ### Automatic collision layout has no persistent manual override
 
 Automatic placement now handles adjacent labels, short values, opening marks, and the first set of architectural obstacles. It does not yet let a drafter pin a chosen label position, suppress a segment, or persist a view-specific layout override. Broader fixed-symbol coverage and a separate unresolved-collision preflight also remain.
-
-### Construction notes are local notes only
-
-There is no sheet-level general-note block, keyed-note index, delta marker system, section/detail callout, or revision system.
 
 ### Curved and circular construction dimensions
 

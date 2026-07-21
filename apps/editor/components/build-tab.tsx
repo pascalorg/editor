@@ -29,7 +29,6 @@ type BuildToolKind =
   | 'window'
   | 'column'
   | 'structural-grid'
-  | 'construction-note'
   | 'shelf'
   | 'spawn'
 
@@ -85,12 +84,6 @@ const BUILD_TYPES: BuildType[] = [
     label: 'Structural Grid',
     iconSrc: '/icons/blueprint.webp',
     kind: 'structural-grid',
-  },
-  {
-    id: 'construction-note',
-    label: 'Construction Note',
-    iconSrc: '/icons/blueprint.webp',
-    kind: 'construction-note',
   },
   { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
   { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },

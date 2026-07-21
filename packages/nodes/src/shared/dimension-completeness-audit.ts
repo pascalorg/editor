@@ -1,7 +1,6 @@
 import {
   type AnyNode,
   type ConstructionDimensionNode,
-  type ConstructionNoteNode,
   type DoorNode,
   measurementAnchorReferenceNodeIds,
   type WallNode,
@@ -50,7 +49,6 @@ type DimensionCoverage = ReadonlySet<string>
 type DocumentationCoverage = {
   dimensioned: ReadonlySet<string>
   scheduled: ReadonlySet<string>
-  noted: ReadonlySet<string>
 }
 type OpeningNode = DoorNode | WindowNode
 type DimensionRecord = {
@@ -85,7 +83,7 @@ export function buildDimensionCompletenessAudit(
           'undocumented-critical-node',
           node,
           'warning',
-          `${titleCase(node.type)} ${node.id} has no construction dimension, schedule entry, or keyed construction note.`,
+          `${titleCase(node.type)} ${node.id} has no construction dimension or schedule entry.`,
         ),
       )
     }
@@ -134,17 +132,12 @@ function documentationCoverage(
   dimensioned: DimensionCoverage,
 ): DocumentationCoverage {
   const scheduled = new Set<string>()
-  const noted = new Set<string>()
 
   for (const node of Object.values(nodes)) {
     if (hasGeneratedScheduleEntry(node)) scheduled.add(node.id)
-    if (node.type === 'construction-note') {
-      const targetId = (node as ConstructionNoteNode).targetId
-      if (targetId) noted.add(targetId)
-    }
   }
 
-  return { dimensioned, scheduled, noted }
+  return { dimensioned, scheduled }
 }
 
 function dimensionStringIssues(
@@ -401,11 +394,7 @@ function isPartitionWall(wall: WallNode): boolean {
 }
 
 function hasDocumentationCoverage(node: AnyNode, coverage: DocumentationCoverage): boolean {
-  return (
-    coverage.dimensioned.has(node.id) ||
-    coverage.scheduled.has(node.id) ||
-    coverage.noted.has(node.id)
-  )
+  return coverage.dimensioned.has(node.id) || coverage.scheduled.has(node.id)
 }
 
 function hasGeneratedScheduleEntry(node: AnyNode): boolean {

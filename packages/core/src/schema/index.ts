@@ -72,14 +72,6 @@ export {
   setConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
-export {
-  ConstructionNoteContractScope,
-  ConstructionNoteLeaderStyle,
-  ConstructionNoteNode,
-  ConstructionNoteSpecialty,
-  ConstructionNoteSpecialtyKind,
-  ConstructionNoteTerminator,
-} from './nodes/construction-note'
 export { CupolaNode } from './nodes/cupola'
 export {
   DoorNode,

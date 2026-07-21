@@ -95,7 +95,7 @@ describe('floor-plan annotation visibility', () => {
     ).toEqual({ kind: 'group', children: [body] })
   })
 
-  test('hides manual dimensions, measurements, and construction notes independently', () => {
+  test('hides manual dimensions and measurements independently', () => {
     const geometry = {
       kind: 'text',
       x: 0,
@@ -132,12 +132,6 @@ describe('floor-plan annotation visibility', () => {
       filterFloorplanAnnotationGeometry('measurement', geometry, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         measurements: false,
-      }),
-    ).toBeNull()
-    expect(
-      filterFloorplanAnnotationGeometry('construction-note', geometry, {
-        ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
-        constructionNotes: false,
       }),
     ).toBeNull()
   })

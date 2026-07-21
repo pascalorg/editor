@@ -10,7 +10,6 @@ import type {
   ChimneyNode,
   ColumnNode,
   ConstructionDimensionNode,
-  ConstructionNoteNode,
   CupolaNode,
   DoorNode,
   DormerNode,
@@ -106,7 +105,6 @@ export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
 export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
-export type ConstructionNoteEvent = NodeEvent<ConstructionNoteNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
@@ -304,7 +302,6 @@ type EditorEvents = GridEvents &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
   NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
-  NodeEvents<'construction-note', ConstructionNoteEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &

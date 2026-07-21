@@ -5,7 +5,6 @@ export type FloorplanAnnotationCategory =
   | 'manualDimensions'
   | 'measurements'
   | 'openingMarks'
-  | 'constructionNotes'
   | 'structuralGrids'
   | 'hiddenOverheadGeometry'
   | 'referenceDimensions'
@@ -19,7 +18,6 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   manualDimensions: true,
   measurements: true,
   openingMarks: true,
-  constructionNotes: true,
   structuralGrids: true,
   hiddenOverheadGeometry: true,
   referenceDimensions: true,
@@ -49,10 +47,6 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.openingMarks === 'boolean'
         ? persisted.openingMarks
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.openingMarks,
-    constructionNotes:
-      typeof persisted.constructionNotes === 'boolean'
-        ? persisted.constructionNotes
-        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.constructionNotes,
     structuralGrids:
       typeof persisted.structuralGrids === 'boolean'
         ? persisted.structuralGrids
@@ -83,7 +77,6 @@ export function filterFloorplanAnnotationGeometry(
 ): FloorplanGeometry | null {
   if (nodeType === 'measurement' && !visibility.measurements) return null
   if (nodeType === 'construction-dimension' && !visibility.manualDimensions) return null
-  if (nodeType === 'construction-note' && !visibility.constructionNotes) return null
   if (nodeType === 'structural-grid' && !visibility.structuralGrids) return null
   if (
     !visibility.roomLabels &&

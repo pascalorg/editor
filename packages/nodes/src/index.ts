@@ -6,7 +6,6 @@ import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
 import { constructionDimensionDefinition } from './construction-dimension'
-import { constructionNoteDefinition } from './construction-note'
 import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
@@ -95,7 +94,6 @@ export const builtinPlugin: Plugin = {
     scanDefinition as unknown as AnyNodeDefinition,
     measurementDefinition as unknown as AnyNodeDefinition,
     constructionDimensionDefinition as unknown as AnyNodeDefinition,
-    constructionNoteDefinition as unknown as AnyNodeDefinition,
     drawingSheetDefinition as unknown as AnyNodeDefinition,
     structuralGridDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
@@ -139,7 +137,6 @@ export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
 export { constructionDimensionDefinition } from './construction-dimension'
-export { constructionNoteDefinition } from './construction-note'
 export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'

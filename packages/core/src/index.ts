@@ -10,7 +10,6 @@ export type {
   ChimneyEvent,
   ColumnEvent,
   ConstructionDimensionEvent,
-  ConstructionNoteEvent,
   DoorEvent,
   DormerEvent,
   DrawingSheetEvent,

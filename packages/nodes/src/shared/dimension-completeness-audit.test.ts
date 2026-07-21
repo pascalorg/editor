@@ -3,7 +3,6 @@ import {
   type AnyNode,
   CabinetNode,
   ConstructionDimensionNode,
-  ConstructionNoteNode,
   DoorNode,
   StairNode,
   WallNode,
@@ -289,20 +288,12 @@ describe('dimension completeness audit', () => {
     ])
   })
 
-  test('reports construction-critical nodes without dimensions, schedules, or keyed notes', () => {
+  test('reports construction-critical nodes without dimensions or schedules', () => {
     const undocumentedCabinet = CabinetNode.parse({
       id: 'cabinet_undocumented',
     })
-    const notedCabinet = CabinetNode.parse({
-      id: 'cabinet_noted',
-    })
     const stair = StairNode.parse({
       id: 'stair_documented',
-    })
-    const note = ConstructionNoteNode.parse({
-      id: 'construction-note_cabinet',
-      targetId: notedCabinet.id,
-      text: 'VERIFY CABINET CLEARANCE.',
     })
     const stairDimension = ConstructionDimensionNode.parse({
       id: 'construction-dimension_stair',
@@ -310,7 +301,7 @@ describe('dimension completeness audit', () => {
     })
 
     const issues = buildDimensionCompletenessAudit(
-      nodes(undocumentedCabinet, notedCabinet, stair, note, stairDimension),
+      nodes(undocumentedCabinet, stair, stairDimension),
     )
 
     expect(issues).toEqual([
