@@ -31,7 +31,14 @@ import {
 import {
   BVHEcctrl,
   type BVHEcctrlApi,
+  CROUCH_CAPSULE,
+  CROUCH_EYE_OFFSET,
+  CROUCH_RUN_SPEED,
+  CROUCH_WALK_SPEED,
+  EYE_LERP_SPEED,
   type MovementInput,
+  STAND_CAPSULE,
+  STAND_CLEARANCE,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -133,8 +140,10 @@ function focusFirstPersonCanvas(canvas: HTMLCanvasElement) {
   canvas.focus({ preventScroll: true })
 }
 
-const cameraOffset = new Vector3(0, CAMERA_EYE_OFFSET, 0)
+const cameraOffset = new Vector3()
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
+const standClearanceRaycaster = new Raycaster()
+const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
 const doorInteractionRaycaster = new Raycaster()
 const doorLeafBox = new Box3()
@@ -692,6 +701,10 @@ export const FirstPersonControls = () => {
   const pitchRef = useRef(0)
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
   const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
+  const crouchKeyRef = useRef(false)
+  const suspendRef = useRef(false)
+  const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
+  const [crouched, setCrouched] = useState(false)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -1147,8 +1160,13 @@ export const FirstPersonControls = () => {
       const isLocked = document.pointerLockElement === canvas
       if (isLocked) {
         hadPointerLockRef.current = true
+        suspendRef.current = false
         return
       }
+
+      // Deliberately released via P (screenshot pause) — stay in first person;
+      // clicking the canvas re-locks.
+      if (suspendRef.current) return
 
       if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
         useEditor.getState().setFirstPersonMode(false)
@@ -1197,7 +1215,9 @@ export const FirstPersonControls = () => {
         return
       }
 
-      if (event.code === 'Escape') {
+      if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
+        crouchKeyRef.current = true
+      } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
         if (document.pointerLockElement === canvas) {
@@ -1212,18 +1232,34 @@ export const FirstPersonControls = () => {
         event.preventDefault()
         event.stopPropagation()
         closeInteractableTarget()
+      } else if (event.code === 'KeyP' && document.pointerLockElement === canvas) {
+        // P frees the cursor without leaving first person (e.g. to take an OS
+        // screenshot, which needs a movable pointer); clicking re-locks.
+        event.preventDefault()
+        event.stopPropagation()
+        suspendRef.current = true
+        document.exitPointerLock()
       }
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
+        crouchKeyRef.current = false
+      }
       applyMovementKey(event, false)
+    }
+
+    const handleBlur = () => {
+      crouchKeyRef.current = false
     }
 
     document.addEventListener('keydown', handleKeyDown, true)
     document.addEventListener('keyup', handleKeyUp, true)
+    window.addEventListener('blur', handleBlur)
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
       document.removeEventListener('keyup', handleKeyUp, true)
+      window.removeEventListener('blur', handleBlur)
     }
   }, [closeInteractableTarget, gl, toggleInteractableTarget])
 
@@ -1449,10 +1485,31 @@ export const FirstPersonControls = () => {
     [camera, setElevatorRideLocked],
   )
 
-  useFrame(() => {
+  const hasStandingClearance = useCallback((position: Vector3) => {
+    standClearanceRaycaster.set(position, standClearanceUp)
+    standClearanceRaycaster.far = STAND_CLEARANCE
+    const meshes: Mesh[] = []
+    if (worldRef.current) meshes.push(worldRef.current.mesh)
+    for (const mesh of elevatorColliderMeshesRef.current) {
+      if (mesh.visible) meshes.push(mesh)
+    }
+    return standClearanceRaycaster.intersectObjects(meshes, false).length === 0
+  }, [])
+
+  useFrame((_, delta) => {
     if (!controllerRef.current?.group) return
 
     const group = controllerRef.current.group
+
+    // Crouch follows the held key; standing back up waits for headroom.
+    if (crouchKeyRef.current !== crouched) {
+      if (crouchKeyRef.current) setCrouched(true)
+      else if (hasStandingClearance(group.position)) setCrouched(false)
+    }
+    const targetEyeOffset = crouched ? CROUCH_EYE_OFFSET : CAMERA_EYE_OFFSET
+    eyeOffsetRef.current +=
+      (targetEyeOffset - eyeOffsetRef.current) * Math.min(1, delta * EYE_LERP_SPEED)
+    cameraOffset.set(0, eyeOffsetRef.current, 0)
 
     // The site ground collider is effectively unbounded, but scenes without a
     // site node only have finite fallback floors — if the controller still ends
@@ -1531,7 +1588,7 @@ export const FirstPersonControls = () => {
           <BVHEcctrl
             acceleration={26}
             airDragFactor={0.3}
-            colliderCapsuleArgs={[0.25, 0.8, 4, 8]}
+            colliderCapsuleArgs={crouched ? CROUCH_CAPSULE : STAND_CAPSULE}
             colliderMeshes={firstPersonColliderMeshes}
             collisionCheckIteration={3}
             collisionPushBackDamping={0.1}
@@ -1549,9 +1606,9 @@ export const FirstPersonControls = () => {
             gravity={9.81}
             jumpVel={5}
             key="first-person-controller"
-            maxRunSpeed={5}
+            maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
             maxSlope={1.2}
-            maxWalkSpeed={2}
+            maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
             paused={isElevatorRideLocked}
             position={controllerStart.position}
             ref={setControllerApi}
