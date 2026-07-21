@@ -3,6 +3,8 @@ export {
   DrawingSheetGeneralNote,
   DrawingSheetGeneralNoteSet,
   DrawingSheetKeyedNote,
+  DrawingSheetKeyedNoteDefinition,
+  DrawingSheetKeyedNoteInstance,
   DrawingSheetNode,
   DrawingSheetOrientation,
   DrawingSheetPaperSize,

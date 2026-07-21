@@ -5,7 +5,7 @@ describe('drawingSheetDefinition', () => {
   test('registers persistent drawing sheets as non-geometric document nodes', () => {
     expect(drawingSheetDefinition.kind).toBe('drawing-sheet')
     expect(drawingSheetDefinition.bake).toBe('strip')
-    expect(drawingSheetDefinition.schemaVersion).toBe(2)
+    expect(drawingSheetDefinition.schemaVersion).toBe(3)
     expect(drawingSheetDefinition.dirtyTracking).toBe(false)
     expect(drawingSheetDefinition.capabilities).toMatchObject({
       deletable: true,

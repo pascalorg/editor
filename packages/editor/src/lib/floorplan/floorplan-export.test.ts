@@ -6,6 +6,7 @@ import {
   placePlanAtDrawingScale,
   pointsPerMeterForDrawingScale,
   resolveDrawingSheetGeneralNotes,
+  resolveDrawingSheetKeyedNotes,
   resolveGraphicScaleLength,
   resolveSheetComposition,
   resolveSheetExportLayout,
@@ -144,6 +145,7 @@ describe('resolveSheetComposition', () => {
       scale: '1:50',
       generalNotes: [{ number: 1, text: 'Verify all dimensions.' }],
       keyedNoteLegend: [{ key: 'A', text: 'Patch existing slab.' }],
+      keyedNoteInstances: [],
     })
   })
 
@@ -185,6 +187,62 @@ describe('resolveSheetComposition', () => {
         severity: 'warning',
         message:
           'Duplicate general note: "Verify all dimensions." appears in Project Notes and sheet.',
+      },
+    ])
+  })
+
+  test('derives keyed-note legends from repeated stable instances', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      placedViews: [{ id: 'drawing-view_main', levelId: 'level_main' }],
+      keyedNoteDefinitions: [
+        { id: 'keyed-note_patch', key: 'A', text: 'Patch existing slab.' },
+        { id: 'keyed-note_verify', key: 'B', text: 'Verify bearing.' },
+      ],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_patch-1',
+          definitionId: 'keyed-note_patch',
+          placedViewId: 'drawing-view_main',
+          position: [2, 3],
+        },
+        {
+          id: 'keyed-note-instance_patch-2',
+          definitionId: 'keyed-note_patch',
+          placedViewId: 'drawing-view_main',
+          position: [4, 3],
+        },
+      ],
+      keyedNoteLegend: [{ key: 'Z', text: 'Legacy unused note.' }],
+    })
+
+    expect(resolveDrawingSheetKeyedNotes(sheet, 'drawing-view_main')).toEqual({
+      legend: [{ key: 'A', text: 'Patch existing slab.' }],
+      instances: [
+        { id: 'keyed-note-instance_patch-1', key: 'A', x: 2, y: 3 },
+        { id: 'keyed-note-instance_patch-2', key: 'A', x: 4, y: 3 },
+      ],
+      warnings: [],
+    })
+  })
+
+  test('reports keyed-note instances with missing definitions', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_missing',
+          definitionId: 'keyed-note_missing',
+          position: [2, 3],
+        },
+      ],
+    })
+
+    expect(resolveDrawingSheetKeyedNotes(sheet).warnings).toEqual([
+      {
+        severity: 'warning',
+        message:
+          'Keyed-note symbol keyed-note-instance_missing references missing definition keyed-note_missing.',
       },
     ])
   })

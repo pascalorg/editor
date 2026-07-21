@@ -47,7 +47,7 @@ assessment.
 
 - [x] Add sheet-level numbered general notes and reusable project note sets with duplicate-note
   warnings.
-- [ ] Add stable keyed-note definitions, symbols, legends, and repeated instances.
+- [x] Add stable keyed-note definitions, symbols, legends, and repeated instances.
 - [ ] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
   markers, revision clouds, and revision IDs.
 - [ ] Expand reusable leader terminators to include filled arrows and slashes.
@@ -360,9 +360,15 @@ user-authored contractual language.
 
 ### 4.2 Keyed notes
 
-- Add numbered or lettered symbols linked to a note definition.
-- Support multiple instances of one keyed note.
-- Keep symbol-to-note relationships stable when notes are reordered.
+Status: implemented in the persistent drawing-sheet model and PDF sheet composition. Sheets now
+store stable keyed-note definitions, repeated keyed-note instances that reference those definitions,
+and legacy keyed-note legend entries for fallback. PDF composition draws repeated keyed-note symbols
+at sheet coordinates, derives the plotted legend from the referenced definitions, and reports
+instances whose stable definition is missing.
+
+- [x] Add numbered or lettered symbols linked to a note definition.
+- [x] Support multiple instances of one keyed note.
+- [x] Keep symbol-to-note relationships stable when notes are reordered.
 
 ### 4.3 Extend leader and marker vocabulary
 

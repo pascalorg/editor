@@ -20,6 +20,8 @@ describe('DrawingSheetNode', () => {
       generalNoteSetIds: [],
       generalNoteSets: [],
       generalNotes: [],
+      keyedNoteDefinitions: [],
+      keyedNoteInstances: [],
       keyedNoteLegend: [],
       schedules: [],
       titleBlock: {
@@ -61,6 +63,22 @@ describe('DrawingSheetNode', () => {
         },
       ],
       generalNotes: [{ id: 'sheet-note_1', number: 1, text: 'VERIFY DIMENSIONS.' }],
+      keyedNoteDefinitions: [
+        { id: 'keyed-note_patch-slab', key: 'A', text: 'PATCH EXISTING SLAB.' },
+      ],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_patch-slab-1',
+          definitionId: 'keyed-note_patch-slab',
+          placedViewId: 'drawing-view_main',
+          position: [3.25, 2.5],
+        },
+        {
+          id: 'keyed-note-instance_patch-slab-2',
+          definitionId: 'keyed-note_patch-slab',
+          position: [5, 4],
+        },
+      ],
       keyedNoteLegend: [{ key: 'A', text: 'ALIGN WITH EXISTING WALL.' }],
       schedules: [
         {
@@ -95,6 +113,18 @@ describe('DrawingSheetNode', () => {
       key: 'A',
       text: 'ALIGN WITH EXISTING WALL.',
     })
+    expect(sheet.keyedNoteDefinitions[0]).toEqual({
+      id: 'keyed-note_patch-slab',
+      key: 'A',
+      text: 'PATCH EXISTING SLAB.',
+    })
+    expect(sheet.keyedNoteInstances).toHaveLength(2)
+    expect(sheet.keyedNoteInstances[0]).toMatchObject({
+      definitionId: 'keyed-note_patch-slab',
+      placedViewId: 'drawing-view_main',
+      position: [3.25, 2.5],
+    })
+    expect(sheet.keyedNoteInstances[1]?.placedViewId).toBeNull()
     expect(sheet.schedules[0]?.title).toBe('Room Schedule')
     expect(sheet.titleBlock).toMatchObject({
       projectName: 'House',

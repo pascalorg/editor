@@ -71,6 +71,19 @@ export const DrawingSheetKeyedNote = z.object({
   text: z.string().trim().min(1).max(500).default('KEYED NOTE'),
 })
 
+export const DrawingSheetKeyedNoteDefinition = z.object({
+  id: objectId('keyed-note'),
+  key: z.string().trim().min(1).max(16).default('1'),
+  text: z.string().trim().min(1).max(500).default('KEYED NOTE'),
+})
+
+export const DrawingSheetKeyedNoteInstance = z.object({
+  id: objectId('keyed-note-instance'),
+  definitionId: DrawingSheetKeyedNoteDefinition.shape.id,
+  placedViewId: DrawingSheetPlacedView.shape.id.nullable().default(null),
+  position: z.tuple([SheetCoordinate, SheetCoordinate]).default([0.5, 0.5]),
+})
+
 export const DrawingSheetSchedulePlacement = z.object({
   id: objectId('sheet-schedule'),
   scheduleType: z.enum(['room', 'door', 'window', 'finish', 'custom']).default('room'),
@@ -112,6 +125,8 @@ export const DrawingSheetNode = BaseNode.extend({
   generalNoteSetIds: z.array(DrawingSheetGeneralNoteSet.shape.id).max(32).default([]),
   generalNoteSets: z.array(DrawingSheetGeneralNoteSet).max(64).default([]),
   generalNotes: z.array(DrawingSheetGeneralNote).max(200).default([]),
+  keyedNoteDefinitions: z.array(DrawingSheetKeyedNoteDefinition).max(200).default([]),
+  keyedNoteInstances: z.array(DrawingSheetKeyedNoteInstance).max(500).default([]),
   keyedNoteLegend: z.array(DrawingSheetKeyedNote).max(200).default([]),
   schedules: z.array(DrawingSheetSchedulePlacement).max(32).default([]),
   titleBlock: DrawingSheetTitleBlock.default(DEFAULT_DRAWING_SHEET_TITLE_BLOCK),
@@ -122,7 +137,8 @@ export const DrawingSheetNode = BaseNode.extend({
   - paperSize/orientation/customPaperWidth/customPaperHeight: plotted sheet definition
   - placedViews: drawing views with numbers, titles, fixed scales, viewport regions, and annotation profiles
   - generalNoteSets/generalNoteSetIds/generalNotes: reusable project notes plus sheet-level numbered notes
-  - keyedNoteLegend/schedules/titleBlock: sheet-level documentation content and title-block metadata
+  - keyedNoteDefinitions/keyedNoteInstances/keyedNoteLegend: stable keyed notes, repeated symbols, and legacy legend entries
+  - schedules/titleBlock: sheet-level documentation content and title-block metadata
   `,
 )
 
@@ -135,6 +151,8 @@ export type DrawingSheetPlacedView = z.infer<typeof DrawingSheetPlacedView>
 export type DrawingSheetGeneralNote = z.infer<typeof DrawingSheetGeneralNote>
 export type DrawingSheetGeneralNoteSet = z.infer<typeof DrawingSheetGeneralNoteSet>
 export type DrawingSheetKeyedNote = z.infer<typeof DrawingSheetKeyedNote>
+export type DrawingSheetKeyedNoteDefinition = z.infer<typeof DrawingSheetKeyedNoteDefinition>
+export type DrawingSheetKeyedNoteInstance = z.infer<typeof DrawingSheetKeyedNoteInstance>
 export type DrawingSheetSchedulePlacement = z.infer<typeof DrawingSheetSchedulePlacement>
 export type DrawingSheetTitleBlock = z.infer<typeof DrawingSheetTitleBlock>
 export type DrawingSheetNode = z.infer<typeof DrawingSheetNode>

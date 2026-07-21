@@ -113,6 +113,7 @@ type SheetComposition = {
   scale: DrawingSheetScale
   generalNotes: { number: number; text: string }[]
   keyedNoteLegend: { key: string; text: string }[]
+  keyedNoteInstances: { id: string; key: string; x: number; y: number }[]
   preflightIssues: SheetPreflightIssue[]
 }
 
@@ -141,6 +142,12 @@ export type SheetPreflightIssue = {
 type ResolvedGeneralNotes = {
   notes: { number: number; text: string }[]
   duplicateWarnings: SheetPreflightIssue[]
+}
+
+type ResolvedKeyedNotes = {
+  legend: { key: string; text: string }[]
+  instances: { id: string; key: string; x: number; y: number }[]
+  warnings: SheetPreflightIssue[]
 }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
@@ -343,6 +350,9 @@ export function resolveSheetComposition(
   const generalNotes = sheet
     ? resolveDrawingSheetGeneralNotes(sheet)
     : { notes: [], duplicateWarnings: [] }
+  const keyedNotes = sheet
+    ? resolveDrawingSheetKeyedNotes(sheet, placedView?.id ?? null)
+    : { legend: [], instances: [], warnings: [] }
   return {
     sheetNumber: sheet?.sheetNumber ?? 'A1.0',
     sheetTitle: sheet?.sheetTitle ?? drawingLabel,
@@ -355,8 +365,9 @@ export function resolveSheetComposition(
     drawingLabel,
     scale: placedView?.scale ?? fallbackScale,
     generalNotes: generalNotes.notes,
-    keyedNoteLegend: sheet?.keyedNoteLegend ?? [],
-    preflightIssues: generalNotes.duplicateWarnings,
+    keyedNoteLegend: keyedNotes.legend,
+    keyedNoteInstances: keyedNotes.instances,
+    preflightIssues: [...generalNotes.duplicateWarnings, ...keyedNotes.warnings],
   }
 }
 
@@ -401,6 +412,48 @@ export function resolveDrawingSheetGeneralNotes(sheet: DrawingSheetNode): Resolv
 
 function normalizeGeneralNoteText(text: string): string {
   return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
+
+export function resolveDrawingSheetKeyedNotes(
+  sheet: DrawingSheetNode,
+  placedViewId: string | null = null,
+): ResolvedKeyedNotes {
+  const definitions = sheet.keyedNoteDefinitions ?? []
+  const instances = sheet.keyedNoteInstances ?? []
+  const definitionById = new Map(definitions.map((definition) => [definition.id, definition]))
+  const scopedInstances = instances.filter(
+    (instance) => instance.placedViewId === null || instance.placedViewId === placedViewId,
+  )
+  const warnings: SheetPreflightIssue[] = []
+  const usedDefinitions = new Map<string, { key: string; text: string }>()
+  const resolvedInstances: ResolvedKeyedNotes['instances'] = []
+
+  for (const instance of scopedInstances) {
+    const definition = definitionById.get(instance.definitionId)
+    if (!definition) {
+      warnings.push({
+        severity: 'warning',
+        message: `Keyed-note symbol ${instance.id} references missing definition ${instance.definitionId}.`,
+      })
+      continue
+    }
+    usedDefinitions.set(definition.id, { key: definition.key, text: definition.text })
+    resolvedInstances.push({
+      id: instance.id,
+      key: definition.key,
+      x: instance.position[0],
+      y: instance.position[1],
+    })
+  }
+
+  const derivedLegend = [...usedDefinitions.values()].sort((left, right) =>
+    left.key.localeCompare(right.key, undefined, { numeric: true }),
+  )
+  return {
+    legend: derivedLegend.length > 0 ? derivedLegend : (sheet.keyedNoteLegend ?? []),
+    instances: resolvedInstances,
+    warnings,
+  }
 }
 
 export function resolveSheetPageSetup(
@@ -665,7 +718,22 @@ function drawSheetChrome(
     scale: composition.scale,
     maxWidth: Math.min(150, layout.planBox.width * 0.3),
   })
+  drawKeyedNoteSymbols(doc, composition)
   return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules, preflightIssues)
+}
+
+function drawKeyedNoteSymbols(doc: JsPdfDocument, composition: SheetComposition): void {
+  if (composition.keyedNoteInstances.length === 0) return
+  doc.setDrawColor('#111827')
+  doc.setTextColor('#111827')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  for (const instance of composition.keyedNoteInstances) {
+    const x = instance.x * 72
+    const y = instance.y * 72
+    doc.circle(x, y, 6)
+    doc.text(instance.key, x, y + 2.4, { align: 'center' })
+  }
 }
 
 function drawSheetTitleBlock(
