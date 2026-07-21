@@ -188,6 +188,13 @@ export {
   type ConstructionModuleSystem,
   DEFAULT_CONSTRUCTION_MODULE_PROFILES,
 } from './shared/construction-module-advisories'
+export {
+  type BuildDimensionCompletenessAuditOptions,
+  buildDimensionCompletenessAudit,
+  type DimensionCompletenessIssue,
+  type DimensionCompletenessIssueKind,
+  type DimensionCompletenessIssueSeverity,
+} from './shared/dimension-completeness-audit'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
