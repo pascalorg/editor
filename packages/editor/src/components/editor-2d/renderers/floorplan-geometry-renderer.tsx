@@ -21,6 +21,9 @@ const DOCUMENT_COLUMN_MARK_TEXT_SIZE_PT = 7
 const DOCUMENT_DEFAULT_STROKE_WIDTH_PT = 0.5
 const DOCUMENT_TEXT_OUTLINE_MIN_WIDTH_PT = 0.75
 const DOCUMENT_MARK_HEIGHT_PT = 14
+const PDF_ANNOTATION_STROKE_WIDTH_PT = 0.5
+
+type FloorplanRenderMode = 'screen' | 'pdf'
 
 /**
  * Pure-data → SVG converter. Walks a `FloorplanGeometry` tree returned by
@@ -46,12 +49,14 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
   sceneRotationDeg = 0,
   annotationUnitsPerPoint,
   screenUnitsPerPixel,
+  renderMode = 'screen',
 }: {
   geometry: FloorplanGeometry
   pointerEventsOverride?: string
   sceneRotationDeg?: number
   annotationUnitsPerPoint?: number
   screenUnitsPerPixel?: number
+  renderMode?: FloorplanRenderMode
 }) {
   return renderNode(
     geometry,
@@ -60,6 +65,7 @@ export const FloorplanGeometryRenderer = memo(function FloorplanGeometryRenderer
     sceneRotationDeg,
     annotationUnitsPerPoint,
     screenUnitsPerPixel,
+    renderMode,
   )
 })
 
@@ -67,6 +73,7 @@ function styleAttrs(
   g: FloorplanGeometry & { kind: Exclude<FloorplanGeometry['kind'], 'group'> },
   pointerEventsOverride?: string,
   annotationUnitsPerPoint?: number,
+  renderMode: FloorplanRenderMode = 'screen',
 ) {
   // Shared SVG attribute mapping for any styled primitive. Keeps the per-
   // primitive switch arms terse and ensures new style fields land
@@ -90,19 +97,27 @@ function styleAttrs(
     annotationRole?: string
   }
   const documentStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
+  const vectorEffect = documentStyle.vectorEffect ?? s.vectorEffect
+  const resolvedStrokeWidth = documentStyle.strokeWidth ?? s.strokeWidth
+  const strokeWidth =
+    renderMode === 'pdf' &&
+    vectorEffect === 'non-scaling-stroke' &&
+    resolvedStrokeWidth !== undefined
+      ? Math.min(PDF_ANNOTATION_STROKE_WIDTH_PT, resolvedStrokeWidth)
+      : resolvedStrokeWidth
   return {
     'data-floorplan-annotation-obstacle': floorplanAnnotationObstacleMode(g),
     'data-floorplan-annotation-role': s.annotationRole,
     fill: documentStyle.fill ?? s.fill ?? 'none',
     fillOpacity: s.fillOpacity,
     stroke: documentStyle.stroke ?? s.stroke,
-    strokeWidth: documentStyle.strokeWidth ?? s.strokeWidth,
+    strokeWidth,
     strokeDasharray: s.strokeDasharray,
     strokeLinecap: s.strokeLinecap,
     strokeLinejoin: s.strokeLinejoin,
     strokeOpacity: s.strokeOpacity,
     opacity: s.opacity,
-    vectorEffect: documentStyle.vectorEffect ?? s.vectorEffect,
+    vectorEffect,
     pointerEvents: pointerEventsOverride ?? s.pointerEvents,
     style: s.cursor ? { cursor: s.cursor } : undefined,
   }
@@ -297,6 +312,7 @@ function renderNode(
   sceneRotationDeg = 0,
   annotationUnitsPerPoint?: number,
   screenUnitsPerPixel?: number,
+  renderMode: FloorplanRenderMode = 'screen',
 ): React.ReactElement | null {
   switch (g.kind) {
     case 'path':
@@ -304,7 +320,7 @@ function renderNode(
         <path
           d={g.d}
           key={keyHint}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
 
@@ -313,7 +329,7 @@ function renderNode(
         <polygon
           key={keyHint}
           points={pointsToAttr(g.points)}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
 
@@ -322,7 +338,7 @@ function renderNode(
         <polyline
           key={keyHint}
           points={pointsToAttr(g.points)}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
 
@@ -337,7 +353,7 @@ function renderNode(
           width={attrs.width}
           x={attrs.x}
           y={attrs.y}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
     }
@@ -350,7 +366,7 @@ function renderNode(
           cy={g.cy}
           key={keyHint}
           r={attrs.r}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
     }
@@ -363,7 +379,7 @@ function renderNode(
           x2={g.x2}
           y1={g.y1}
           y2={g.y2}
-          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint)}
+          {...styleAttrs(g, pointerEventsOverride, annotationUnitsPerPoint, renderMode)}
         />
       )
 
@@ -373,6 +389,11 @@ function renderNode(
           ? documentTextFontSize(g, annotationUnitsPerPoint)
           : g.fontSize
       const textStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
+      const pdfOutlinedText = renderMode === 'pdf' && g.paintOrder === 'stroke' && !!g.stroke
+      const fill =
+        pdfOutlinedText && g.fill?.toLocaleLowerCase() === '#ffffff'
+          ? g.stroke
+          : (g.fill ?? '#171717')
       if (g.upright) {
         return (
           <g
@@ -382,17 +403,17 @@ function renderNode(
           >
             <text
               dominantBaseline={g.dominantBaseline ?? 'middle'}
-              fill={g.fill ?? '#171717'}
+              fill={fill}
               fontFamily={g.fontFamily}
               fontSize={fontSize}
               fontWeight={g.fontWeight}
               opacity={g.opacity}
-              paintOrder={g.paintOrder}
+              paintOrder={pdfOutlinedText ? undefined : g.paintOrder}
               pointerEvents={pointerEventsOverride}
-              stroke={g.stroke}
-              strokeLinecap={g.stroke ? 'round' : undefined}
-              strokeLinejoin={g.stroke ? 'round' : undefined}
-              strokeWidth={textStyle.strokeWidth ?? g.strokeWidth}
+              stroke={pdfOutlinedText ? undefined : g.stroke}
+              strokeLinecap={!pdfOutlinedText && g.stroke ? 'round' : undefined}
+              strokeLinejoin={!pdfOutlinedText && g.stroke ? 'round' : undefined}
+              strokeWidth={pdfOutlinedText ? undefined : (textStyle.strokeWidth ?? g.strokeWidth)}
               textAnchor={g.textAnchor ?? 'start'}
               x={0}
               y={0}
@@ -406,17 +427,17 @@ function renderNode(
         <text
           data-floorplan-annotation-obstacle={floorplanAnnotationObstacleMode(g)}
           dominantBaseline={g.dominantBaseline ?? 'middle'}
-          fill={g.fill ?? '#171717'}
+          fill={fill}
           fontFamily={g.fontFamily}
           fontSize={fontSize}
           fontWeight={g.fontWeight}
           key={keyHint}
           opacity={g.opacity}
-          paintOrder={g.paintOrder}
-          stroke={g.stroke}
-          strokeLinecap={g.stroke ? 'round' : undefined}
-          strokeLinejoin={g.stroke ? 'round' : undefined}
-          strokeWidth={textStyle.strokeWidth ?? g.strokeWidth}
+          paintOrder={pdfOutlinedText ? undefined : g.paintOrder}
+          stroke={pdfOutlinedText ? undefined : g.stroke}
+          strokeLinecap={!pdfOutlinedText && g.stroke ? 'round' : undefined}
+          strokeLinejoin={!pdfOutlinedText && g.stroke ? 'round' : undefined}
+          strokeWidth={pdfOutlinedText ? undefined : (textStyle.strokeWidth ?? g.strokeWidth)}
           textAnchor={g.textAnchor ?? 'start'}
           pointerEvents={pointerEventsOverride}
           x={g.x}
@@ -434,6 +455,7 @@ function renderNode(
           key={keyHint}
           sceneRotationDeg={sceneRotationDeg}
           annotationUnitsPerPoint={annotationUnitsPerPoint}
+          renderMode={renderMode}
         />
       )
 
@@ -443,6 +465,7 @@ function renderNode(
           annotationUnitsPerPoint={annotationUnitsPerPoint}
           geometry={g}
           key={keyHint}
+          renderMode={renderMode}
           sceneRotationDeg={sceneRotationDeg}
         />
       )
@@ -452,6 +475,7 @@ function renderNode(
         annotationUnitsPerPoint ?? screenUnitsPerPixel ?? STATIC_LABEL_UNITS_PER_PIXEL
       const documentMode = annotationUnitsPerPoint !== undefined
       const outlined = g.appearance === 'outlined'
+      const pdfOutlined = outlined && renderMode === 'pdf'
       const padX = unitsPerPixel * 6
       const padY = unitsPerPixel * 3
       const fontSize = unitsPerPixel * (documentMode ? 8 : outlined ? 12 : 10)
@@ -470,15 +494,16 @@ function renderNode(
           pointerEvents="none"
           transform={labelTransform}
         >
-          {outlined ? null : (
+          {outlined && !pdfOutlined ? null : (
             <rect
+              data-floorplan-dimension-label-plate={pdfOutlined ? '' : undefined}
               fill="#ffffff"
               height={plateH}
               opacity={0.92}
               rx={unitsPerPixel * 3}
               ry={unitsPerPixel * 3}
-              stroke="#334155"
-              strokeWidth={unitsPerPixel * 0.5}
+              stroke={pdfOutlined ? undefined : '#334155'}
+              strokeWidth={pdfOutlined ? undefined : unitsPerPixel * 0.5}
               width={plateW}
               x={-plateW / 2}
               y={-plateH / 2}
@@ -486,19 +511,19 @@ function renderNode(
           )}
           <text
             dominantBaseline="middle"
-            fill={outlined ? '#ffffff' : '#111827'}
+            fill={pdfOutlined ? '#111827' : outlined ? '#ffffff' : '#111827'}
             fontFamily={
-              outlined
+              outlined && !pdfOutlined
                 ? 'system-ui, -apple-system, sans-serif'
                 : 'ui-monospace, SFMono-Regular, Menlo, monospace'
             }
             fontSize={fontSize}
             fontWeight={outlined ? 500 : 600}
-            paintOrder={outlined ? 'stroke' : undefined}
-            stroke={outlined ? '#334155' : undefined}
-            strokeLinecap={outlined ? 'round' : undefined}
-            strokeLinejoin={outlined ? 'round' : undefined}
-            strokeWidth={outlined ? fontSize * 0.35 : undefined}
+            paintOrder={outlined && !pdfOutlined ? 'stroke' : undefined}
+            stroke={outlined && !pdfOutlined ? '#334155' : undefined}
+            strokeLinecap={outlined && !pdfOutlined ? 'round' : undefined}
+            strokeLinejoin={outlined && !pdfOutlined ? 'round' : undefined}
+            strokeWidth={outlined && !pdfOutlined ? fontSize * 0.35 : undefined}
             textAnchor="middle"
             x={0}
             y={0}
@@ -542,6 +567,7 @@ function renderNode(
               sceneRotationDeg,
               annotationUnitsPerPoint,
               screenUnitsPerPixel,
+              renderMode,
             ),
           )}
         </g>

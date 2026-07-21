@@ -11,6 +11,7 @@ import {
   resolveDrawingSheetGeneralNotes,
   resolveDrawingSheetKeyedNotes,
   resolveFloorplanExportAnnotationVisibility,
+  resolveFloorplanExportNodeGeometry,
   resolveFloorplanExportPlacement,
   resolveFloorplanExportRotationDeg,
   resolveFloorplanExportViewport,
@@ -132,6 +133,37 @@ describe('filterFloorplanExportOverlay', () => {
     ).toEqual({
       model: { kind: 'group', children: [wall], transform: undefined },
       annotations: { kind: 'group', children: [openingMark], transform: undefined },
+    })
+  })
+
+  test('moves automatic dimensions embedded in base wall geometry into the PDF annotation layer', () => {
+    const wall = {
+      kind: 'polygon',
+      points: [
+        [0, 0],
+        [4, 0],
+        [4, 0.2],
+        [0, 0.2],
+      ],
+      fill: '#374151',
+    } satisfies FloorplanGeometry
+    const dimensions = {
+      kind: 'dimension-string',
+      segments: [{ start: [0, 0], end: [4, 0], text: '4m' }],
+      offsetNormal: [0, -1],
+      offsetDistance: 1,
+      extensionOvershoot: 0.12,
+    } satisfies FloorplanGeometry
+
+    expect(
+      resolveFloorplanExportNodeGeometry(
+        { kind: 'group', children: [wall, dimensions] },
+        null,
+        false,
+      ),
+    ).toEqual({
+      model: { kind: 'group', children: [wall], transform: undefined },
+      annotations: { kind: 'group', children: [dimensions], transform: undefined },
     })
   })
 })

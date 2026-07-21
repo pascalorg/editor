@@ -164,6 +164,19 @@ describe('architectural floor-plan dimensions', () => {
     expect(markup).toContain('y="-0.05"')
   })
 
+  test('uses PDF-safe label plates and hairline measurement strokes for export', () => {
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionRenderer geometry={dimension} renderMode="pdf" />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-dimension-label-plate=""')
+    expect(markup).toContain('stroke-width="0.5"')
+    expect(markup).not.toContain('paint-order="stroke"')
+    expect(markup).not.toContain('stroke="#ffffff"')
+  })
+
   test('renders a dimension string with shared witness extension lines and ticks', () => {
     const stringGeometry = {
       kind: 'dimension-string',

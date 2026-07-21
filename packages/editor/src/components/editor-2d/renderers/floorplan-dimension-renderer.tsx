@@ -15,7 +15,11 @@ const DOCUMENT_LABEL_BASELINE_OFFSET_PT = 5
 const DOCUMENT_LABEL_END_GAP_PT = 3
 const LINE_STROKE_WIDTH_PX = 0.9
 const TICK_STROKE_WIDTH_PX = 1.35
+const PDF_LINE_STROKE_WIDTH_PT = 0.5
+const PDF_TICK_STROKE_WIDTH_PT = 0.75
 const SQRT_ONE_HALF = Math.SQRT1_2
+
+type FloorplanDimensionRenderMode = 'screen' | 'pdf'
 
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 type DimensionStringGeometry = Extract<FloorplanGeometry, { kind: 'dimension-string' }>
@@ -156,11 +160,13 @@ export function FloorplanDimensionRenderer({
   sceneRotationDeg = 0,
   stroke = geometry.stroke ?? '#334155',
   annotationUnitsPerPoint,
+  renderMode = 'screen',
 }: {
   geometry: DimensionGeometry
   sceneRotationDeg?: number
   stroke?: string
   annotationUnitsPerPoint?: number
+  renderMode?: FloorplanDimensionRenderMode
 }): React.ReactElement | null {
   const layout = computeArchitecturalDimensionLayout(
     geometry,
@@ -180,9 +186,10 @@ export function FloorplanDimensionRenderer({
   const lineProps = {
     stroke,
     strokeLinecap: 'butt' as const,
-    strokeWidth: LINE_STROKE_WIDTH_PX,
+    strokeWidth: renderMode === 'pdf' ? PDF_LINE_STROKE_WIDTH_PT : LINE_STROKE_WIDTH_PX,
     vectorEffect: 'non-scaling-stroke' as const,
   }
+  const tickStrokeWidth = renderMode === 'pdf' ? PDF_TICK_STROKE_WIDTH_PT : TICK_STROKE_WIDTH_PX
   const terminator = geometry.terminator ?? 'architectural-tick'
   const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
   const outsideStartLocalShift = layout.outsideStartLabelPoint
@@ -224,8 +231,22 @@ export function FloorplanDimensionRenderer({
         y1={layout.dimensionLineStart[1]}
         y2={layout.dimensionLineEnd[1]}
       />
-      {renderTerminator(terminator, layout.dimensionStart, layout.dimensionEnd, layout, lineProps)}
-      {renderTerminator(terminator, layout.dimensionEnd, layout.dimensionStart, layout, lineProps)}
+      {renderTerminator(
+        terminator,
+        layout.dimensionStart,
+        layout.dimensionEnd,
+        layout,
+        lineProps,
+        tickStrokeWidth,
+      )}
+      {renderTerminator(
+        terminator,
+        layout.dimensionEnd,
+        layout.dimensionStart,
+        layout,
+        lineProps,
+        tickStrokeWidth,
+      )}
       {layout.labelPlacement === 'outside-end' && annotationUnitsPerPoint !== undefined ? (
         <line
           {...lineProps}
@@ -252,22 +273,13 @@ export function FloorplanDimensionRenderer({
         data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
         transform={labelTransform}
       >
-        <text
-          fill={stroke}
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        <DimensionLabel
           fontSize={labelFontSize}
-          fontWeight={500}
-          paintOrder="stroke"
-          stroke="#ffffff"
-          strokeLinejoin="round"
-          strokeWidth={3}
-          textAnchor="middle"
-          vectorEffect="non-scaling-stroke"
-          x={0}
+          renderMode={renderMode}
+          stroke={stroke}
+          text={geometry.text}
           y={labelY}
-        >
-          {geometry.text}
-        </text>
+        />
       </g>
     </g>
   )
@@ -278,11 +290,13 @@ export function FloorplanDimensionStringRenderer({
   sceneRotationDeg = 0,
   stroke = geometry.stroke ?? '#334155',
   annotationUnitsPerPoint,
+  renderMode = 'screen',
 }: {
   geometry: DimensionStringGeometry
   sceneRotationDeg?: number
   stroke?: string
   annotationUnitsPerPoint?: number
+  renderMode?: FloorplanDimensionRenderMode
 }): React.ReactElement | null {
   const segmentLayouts = geometry.segments.flatMap((segment, index) => {
     const segmentGeometry: DimensionGeometry = {
@@ -319,9 +333,10 @@ export function FloorplanDimensionStringRenderer({
   const lineProps = {
     stroke,
     strokeLinecap: 'butt' as const,
-    strokeWidth: LINE_STROKE_WIDTH_PX,
+    strokeWidth: renderMode === 'pdf' ? PDF_LINE_STROKE_WIDTH_PT : LINE_STROKE_WIDTH_PX,
     vectorEffect: 'non-scaling-stroke' as const,
   }
+  const tickStrokeWidth = renderMode === 'pdf' ? PDF_TICK_STROKE_WIDTH_PT : TICK_STROKE_WIDTH_PX
 
   const extensionLines = new Map<string, { start: FloorplanPoint; tip: FloorplanPoint }>()
   const ticks = new Map<
@@ -382,7 +397,15 @@ export function FloorplanDimensionStringRenderer({
         />
       ))}
       {[...ticks.values()].map(({ point, toward, tickHalfVector }, index) =>
-        renderTerminator(terminator, point, toward, { tickHalfVector }, lineProps, `tick-${index}`),
+        renderTerminator(
+          terminator,
+          point,
+          toward,
+          { tickHalfVector },
+          lineProps,
+          tickStrokeWidth,
+          `tick-${index}`,
+        ),
       )}
       {segmentLayouts.map(({ index, layout, segment }) => {
         const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
@@ -420,22 +443,13 @@ export function FloorplanDimensionStringRenderer({
               data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
               transform={labelTransform}
             >
-              <text
-                fill={stroke}
-                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+              <DimensionLabel
                 fontSize={labelFontSize}
-                fontWeight={500}
-                paintOrder="stroke"
-                stroke="#ffffff"
-                strokeLinejoin="round"
-                strokeWidth={3}
-                textAnchor="middle"
-                vectorEffect="non-scaling-stroke"
-                x={0}
+                renderMode={renderMode}
+                stroke={stroke}
+                text={segment.text}
                 y={labelY}
-              >
-                {segment.text}
-              </text>
+              />
             </g>
           </g>
         )
@@ -450,6 +464,58 @@ function rotateVector(vector: FloorplanPoint, radians: number): FloorplanPoint {
   return [vector[0] * cosine - vector[1] * sine, vector[0] * sine + vector[1] * cosine]
 }
 
+function DimensionLabel({
+  text,
+  y,
+  fontSize,
+  stroke,
+  renderMode,
+}: {
+  text: string
+  y: number
+  fontSize: number
+  stroke: string
+  renderMode: FloorplanDimensionRenderMode
+}) {
+  const width = Math.max(fontSize, text.length * fontSize * LABEL_CHARACTER_WIDTH_RATIO)
+  const plateWidth = width + fontSize * 0.5
+  const plateHeight = fontSize * 1.2
+  const plateY = y - fontSize * 0.82
+
+  return (
+    <>
+      {renderMode === 'pdf' ? (
+        <rect
+          data-floorplan-dimension-label-plate=""
+          fill="#ffffff"
+          height={plateHeight}
+          rx={fontSize * 0.12}
+          ry={fontSize * 0.12}
+          width={plateWidth}
+          x={-plateWidth / 2}
+          y={plateY}
+        />
+      ) : null}
+      <text
+        fill={stroke}
+        fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+        fontSize={fontSize}
+        fontWeight={500}
+        paintOrder={renderMode === 'pdf' ? undefined : 'stroke'}
+        stroke={renderMode === 'pdf' ? undefined : '#ffffff'}
+        strokeLinejoin={renderMode === 'pdf' ? undefined : 'round'}
+        strokeWidth={renderMode === 'pdf' ? undefined : 3}
+        textAnchor="middle"
+        vectorEffect={renderMode === 'pdf' ? undefined : 'non-scaling-stroke'}
+        x={0}
+        y={y}
+      >
+        {text}
+      </text>
+    </>
+  )
+}
+
 function renderTerminator(
   terminator: DimensionTerminator,
   point: FloorplanPoint,
@@ -461,6 +527,7 @@ function renderTerminator(
     strokeWidth: number
     vectorEffect: 'non-scaling-stroke'
   },
+  tickStrokeWidth: number,
   key?: string,
 ): React.ReactElement | null {
   const direction = normalized(point, toward)
@@ -498,7 +565,7 @@ function renderTerminator(
       <g key={key}>
         <line
           {...lineProps}
-          strokeWidth={TICK_STROKE_WIDTH_PX}
+          strokeWidth={tickStrokeWidth}
           x1={point[0]}
           x2={left[0]}
           y1={point[1]}
@@ -506,7 +573,7 @@ function renderTerminator(
         />
         <line
           {...lineProps}
-          strokeWidth={TICK_STROKE_WIDTH_PX}
+          strokeWidth={tickStrokeWidth}
           x1={point[0]}
           x2={right[0]}
           y1={point[1]}
@@ -520,7 +587,7 @@ function renderTerminator(
     <line
       {...lineProps}
       key={key}
-      strokeWidth={TICK_STROKE_WIDTH_PX}
+      strokeWidth={tickStrokeWidth}
       x1={point[0] - tickX}
       x2={point[0] + tickX}
       y1={point[1] - tickY}

@@ -107,6 +107,83 @@ describe('FloorplanGeometryRenderer static labels', () => {
     expect(markup).toContain('translate(0 -0.28)')
   })
 
+  test('renders outlined measurement labels as PDF-safe dark text on a white plate', () => {
+    const geometry = {
+      kind: 'dimension-label',
+      appearance: 'outlined',
+      cx: 1,
+      cy: 2,
+      text: '2.00m',
+      angle: 0,
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer
+          geometry={geometry}
+          renderMode="pdf"
+          screenUnitsPerPixel={0.02}
+        />
+      </svg>,
+    )
+
+    expect(markup).toContain('data-floorplan-dimension-label-plate=""')
+    expect(markup).toContain('fill="#111827"')
+    expect(markup).not.toContain('paint-order="stroke"')
+    expect(markup).not.toContain('fill="#ffffff" font-family=')
+  })
+
+  test('caps PDF annotation linework without changing live stroke widths', () => {
+    const geometry = {
+      kind: 'line',
+      x1: 0,
+      y1: 0,
+      x2: 2,
+      y2: 0,
+      stroke: '#334155',
+      strokeWidth: 2,
+      vectorEffect: 'non-scaling-stroke',
+    } satisfies FloorplanGeometry
+
+    const liveMarkup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} />
+      </svg>,
+    )
+    const pdfMarkup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} renderMode="pdf" />
+      </svg>,
+    )
+
+    expect(liveMarkup).toContain('stroke-width="2"')
+    expect(pdfMarkup).toContain('stroke-width="0.5"')
+  })
+
+  test('removes unsupported paint-order outlines from generic PDF text', () => {
+    const geometry = {
+      kind: 'text',
+      x: 1,
+      y: 2,
+      text: '101',
+      fontSize: 0.15,
+      fill: '#ffffff',
+      stroke: '#334155',
+      strokeWidth: 0.04,
+      paintOrder: 'stroke',
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} renderMode="pdf" />
+      </svg>,
+    )
+
+    expect(markup).toContain('fill="#334155"')
+    expect(markup).not.toContain('paint-order')
+    expect(markup).not.toContain('stroke=')
+  })
+
   test('resolves generic annotation text from paper points only in document mode', () => {
     const geometry = {
       kind: 'text',

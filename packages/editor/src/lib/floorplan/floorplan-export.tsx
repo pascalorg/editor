@@ -1298,6 +1298,7 @@ async function mountFloorplanSvg(
                     ? createElement(FloorplanGeometryRenderer, {
                         key: id,
                         geometry: annotations,
+                        renderMode: 'pdf',
                         sceneRotationDeg: rotationDeg,
                         screenUnitsPerPixel,
                       })
@@ -1520,13 +1521,11 @@ function collectFloorplanGeometry(
     const { base, overlay } = splitFloorplanOverlay(visibleGeometry)
     const exportOverlay = overlay ? filterFloorplanExportOverlay(overlay) : null
     const annotationOnly = isFloorplanExportAnnotationNode(node.type)
-    const partition = exportOverlay
-      ? partitionFloorplanExportOverlay(exportOverlay)
-      : { model: null, annotations: null }
-    const model = annotationOnly ? null : combineGeometry(base, partition.model)
-    const annotations = annotationOnly
-      ? combineGeometry(base, exportOverlay)
-      : partition.annotations
+    const { model, annotations } = resolveFloorplanExportNodeGeometry(
+      base,
+      exportOverlay,
+      annotationOnly,
+    )
     if (model || annotations) out.push({ id, model, annotations })
   }
   return out
@@ -1557,6 +1556,16 @@ const FLOORPLAN_EXPORT_EDITING_KINDS = new Set<FloorplanGeometry['kind']>([
 type FloorplanExportOverlayPartition = {
   model: FloorplanGeometry | null
   annotations: FloorplanGeometry | null
+}
+
+export function resolveFloorplanExportNodeGeometry(
+  base: FloorplanGeometry | null,
+  overlay: FloorplanGeometry | null,
+  annotationOnly: boolean,
+): FloorplanExportOverlayPartition {
+  const combined = combineGeometry(base, overlay)
+  if (annotationOnly) return { model: null, annotations: combined }
+  return combined ? partitionFloorplanExportOverlay(combined) : { model: null, annotations: null }
 }
 
 export function partitionFloorplanExportOverlay(
