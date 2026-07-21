@@ -5,6 +5,7 @@ import {
   fitPlanToBox,
   placePlanAtDrawingScale,
   pointsPerMeterForDrawingScale,
+  resolveDrawingSheetGeneralNotes,
   resolveGraphicScaleLength,
   resolveSheetComposition,
   resolveSheetExportLayout,
@@ -144,6 +145,48 @@ describe('resolveSheetComposition', () => {
       generalNotes: [{ number: 1, text: 'Verify all dimensions.' }],
       keyedNoteLegend: [{ key: 'A', text: 'Patch existing slab.' }],
     })
+  })
+
+  test('resolves reusable general note sets before sheet-local notes', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      generalNoteSetIds: ['sheet-note-set_project'],
+      generalNoteSets: [
+        {
+          id: 'sheet-note-set_project',
+          name: 'Project Notes',
+          notes: [{ id: 'sheet-note_project-1', number: 7, text: 'Coordinate with structural.' }],
+        },
+      ],
+      generalNotes: [{ id: 'sheet-note_sheet-1', number: 99, text: 'Verify dimensions.' }],
+    })
+
+    expect(resolveDrawingSheetGeneralNotes(sheet).notes).toEqual([
+      { number: 1, text: 'Coordinate with structural.' },
+      { number: 2, text: 'Verify dimensions.' },
+    ])
+  })
+
+  test('reports duplicate reusable and sheet-local general notes', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      generalNoteSets: [
+        {
+          id: 'sheet-note-set_project',
+          name: 'Project Notes',
+          notes: [{ id: 'sheet-note_project-1', number: 1, text: 'Verify all dimensions.' }],
+        },
+      ],
+      generalNotes: [{ id: 'sheet-note_sheet-1', number: 1, text: 'VERIFY  ALL DIMENSIONS.' }],
+    })
+
+    expect(resolveDrawingSheetGeneralNotes(sheet).duplicateWarnings).toEqual([
+      {
+        severity: 'warning',
+        message:
+          'Duplicate general note: "Verify all dimensions." appears in Project Notes and sheet.',
+      },
+    ])
   })
 })
 

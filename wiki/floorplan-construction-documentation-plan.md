@@ -45,7 +45,7 @@ assessment.
 
 ### Notes, callouts, and revisions
 
-- [ ] Add sheet-level numbered general notes and reusable project note sets with duplicate-note
+- [x] Add sheet-level numbered general notes and reusable project note sets with duplicate-note
   warnings.
 - [ ] Add stable keyed-note definitions, symbols, legends, and repeated instances.
 - [ ] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
@@ -347,9 +347,15 @@ Status: initial label-to-label resolution is implemented in the live floor plan 
 
 ### 4.1 General notes
 
-- Add numbered sheet-level note blocks.
-- Support reusable project note sets.
-- Warn about exact duplicate notes.
+Status: implemented in the persistent drawing-sheet model. Sheets now store reusable project
+general-note sets, selected note-set IDs, and sheet-local general notes. PDF composition resolves
+selected reusable notes before sheet-local notes, renumbers the combined note block for the plotted
+sheet, and reports duplicate normalized note text as a sheet preflight warning without rewriting
+user-authored contractual language.
+
+- [x] Add numbered sheet-level note blocks.
+- [x] Support reusable project note sets.
+- [x] Warn about exact duplicate notes.
 - Keep notes concise but do not rewrite user-authored contractual language automatically.
 
 ### 4.2 Keyed notes

@@ -1,6 +1,7 @@
 export {
   DrawingSheetAnnotationProfile,
   DrawingSheetGeneralNote,
+  DrawingSheetGeneralNoteSet,
   DrawingSheetKeyedNote,
   DrawingSheetNode,
   DrawingSheetOrientation,

@@ -60,6 +60,12 @@ export const DrawingSheetGeneralNote = z.object({
   text: z.string().trim().min(1).max(500).default('GENERAL NOTE'),
 })
 
+export const DrawingSheetGeneralNoteSet = z.object({
+  id: objectId('sheet-note-set'),
+  name: z.string().trim().min(1).max(80).default('General Notes'),
+  notes: z.array(DrawingSheetGeneralNote).max(200).default([]),
+})
+
 export const DrawingSheetKeyedNote = z.object({
   key: z.string().trim().min(1).max(16).default('1'),
   text: z.string().trim().min(1).max(500).default('KEYED NOTE'),
@@ -103,6 +109,8 @@ export const DrawingSheetNode = BaseNode.extend({
   customPaperHeight: PositiveFinite.nullable().default(null),
   placedViews: z.array(DrawingSheetPlacedView).max(32).default([]),
   annotationProfile: DrawingSheetAnnotationProfile.default('architectural-default'),
+  generalNoteSetIds: z.array(DrawingSheetGeneralNoteSet.shape.id).max(32).default([]),
+  generalNoteSets: z.array(DrawingSheetGeneralNoteSet).max(64).default([]),
   generalNotes: z.array(DrawingSheetGeneralNote).max(200).default([]),
   keyedNoteLegend: z.array(DrawingSheetKeyedNote).max(200).default([]),
   schedules: z.array(DrawingSheetSchedulePlacement).max(32).default([]),
@@ -113,7 +121,8 @@ export const DrawingSheetNode = BaseNode.extend({
   - sheetNumber/sheetTitle: sheet identity in the drawing set
   - paperSize/orientation/customPaperWidth/customPaperHeight: plotted sheet definition
   - placedViews: drawing views with numbers, titles, fixed scales, viewport regions, and annotation profiles
-  - generalNotes/keyedNoteLegend/schedules/titleBlock: sheet-level documentation content and title-block metadata
+  - generalNoteSets/generalNoteSetIds/generalNotes: reusable project notes plus sheet-level numbered notes
+  - keyedNoteLegend/schedules/titleBlock: sheet-level documentation content and title-block metadata
   `,
 )
 
@@ -124,6 +133,7 @@ export type DrawingSheetAnnotationProfile = z.infer<typeof DrawingSheetAnnotatio
 export type DrawingSheetRect = z.infer<typeof DrawingSheetRect>
 export type DrawingSheetPlacedView = z.infer<typeof DrawingSheetPlacedView>
 export type DrawingSheetGeneralNote = z.infer<typeof DrawingSheetGeneralNote>
+export type DrawingSheetGeneralNoteSet = z.infer<typeof DrawingSheetGeneralNoteSet>
 export type DrawingSheetKeyedNote = z.infer<typeof DrawingSheetKeyedNote>
 export type DrawingSheetSchedulePlacement = z.infer<typeof DrawingSheetSchedulePlacement>
 export type DrawingSheetTitleBlock = z.infer<typeof DrawingSheetTitleBlock>

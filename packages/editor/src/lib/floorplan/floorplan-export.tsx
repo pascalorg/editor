@@ -113,6 +113,7 @@ type SheetComposition = {
   scale: DrawingSheetScale
   generalNotes: { number: number; text: string }[]
   keyedNoteLegend: { key: string; text: string }[]
+  preflightIssues: SheetPreflightIssue[]
 }
 
 export type SheetExportLayout = {
@@ -135,6 +136,11 @@ export type SheetPageSetup = {
 export type SheetPreflightIssue = {
   severity: 'warning'
   message: string
+}
+
+type ResolvedGeneralNotes = {
+  notes: { number: number; text: string }[]
+  duplicateWarnings: SheetPreflightIssue[]
 }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
@@ -235,7 +241,10 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
                 composition.scale,
               )
             }
-            const preflightIssues = resolveSheetPreflightIssues(fitted)
+            const preflightIssues = [
+              ...composition.preflightIssues,
+              ...resolveSheetPreflightIssues(fitted),
+            ]
             const sheetResult = drawSheetChrome(
               doc,
               layout,
@@ -331,6 +340,9 @@ export function resolveSheetComposition(
     (view) =>
       (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
   )
+  const generalNotes = sheet
+    ? resolveDrawingSheetGeneralNotes(sheet)
+    : { notes: [], duplicateWarnings: [] }
   return {
     sheetNumber: sheet?.sheetNumber ?? 'A1.0',
     sheetTitle: sheet?.sheetTitle ?? drawingLabel,
@@ -342,9 +354,53 @@ export function resolveSheetComposition(
     viewTitle: placedView?.title ?? `${levelLabel} ${drawingLabel}`,
     drawingLabel,
     scale: placedView?.scale ?? fallbackScale,
-    generalNotes: sheet?.generalNotes ?? [],
+    generalNotes: generalNotes.notes,
     keyedNoteLegend: sheet?.keyedNoteLegend ?? [],
+    preflightIssues: generalNotes.duplicateWarnings,
   }
+}
+
+export function resolveDrawingSheetGeneralNotes(sheet: DrawingSheetNode): ResolvedGeneralNotes {
+  const generalNoteSets = sheet.generalNoteSets ?? []
+  const generalNoteSetIds = sheet.generalNoteSetIds ?? []
+  const sheetNotes = sheet.generalNotes ?? []
+  const selectedSetIds =
+    generalNoteSetIds.length > 0
+      ? new Set(generalNoteSetIds)
+      : new Set(generalNoteSets.map((set) => set.id))
+  const noteSources = [
+    ...generalNoteSets
+      .filter((set) => selectedSetIds.has(set.id))
+      .flatMap((set) => set.notes.map((note) => ({ text: note.text, source: set.name }))),
+    ...sheetNotes.map((note) => ({ text: note.text, source: 'sheet' })),
+  ]
+  const notes = noteSources.map((note, index) => ({ number: index + 1, text: note.text }))
+  const duplicateWarnings: SheetPreflightIssue[] = []
+  const seen = new Map<string, { text: string; count: number; sources: Set<string> }>()
+  for (const note of noteSources) {
+    const key = normalizeGeneralNoteText(note.text)
+    const existing = seen.get(key)
+    if (existing) {
+      existing.count += 1
+      existing.sources.add(note.source)
+      continue
+    }
+    seen.set(key, { text: note.text, count: 1, sources: new Set([note.source]) })
+  }
+  for (const duplicate of seen.values()) {
+    if (duplicate.count < 2) continue
+    duplicateWarnings.push({
+      severity: 'warning',
+      message: `Duplicate general note: "${duplicate.text}" appears in ${[
+        ...duplicate.sources,
+      ].join(' and ')}.`,
+    })
+  }
+  return { notes, duplicateWarnings }
+}
+
+function normalizeGeneralNoteText(text: string): string {
+  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
 }
 
 export function resolveSheetPageSetup(

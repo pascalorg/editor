@@ -17,6 +17,8 @@ describe('DrawingSheetNode', () => {
       customPaperHeight: null,
       annotationProfile: 'architectural-default',
       placedViews: [],
+      generalNoteSetIds: [],
+      generalNoteSets: [],
       generalNotes: [],
       keyedNoteLegend: [],
       schedules: [],
@@ -50,6 +52,14 @@ describe('DrawingSheetNode', () => {
           viewport: { x: 1, y: 1, width: 12, height: 8 },
         },
       ],
+      generalNoteSetIds: ['sheet-note-set_project'],
+      generalNoteSets: [
+        {
+          id: 'sheet-note-set_project',
+          name: 'Project Notes',
+          notes: [{ id: 'sheet-note_project-1', number: 1, text: 'COORDINATE WITH OWNER.' }],
+        },
+      ],
       generalNotes: [{ id: 'sheet-note_1', number: 1, text: 'VERIFY DIMENSIONS.' }],
       keyedNoteLegend: [{ key: 'A', text: 'ALIGN WITH EXISTING WALL.' }],
       schedules: [
@@ -75,6 +85,12 @@ describe('DrawingSheetNode', () => {
       showGraphicScale: true,
     })
     expect(sheet.generalNotes[0]?.text).toBe('VERIFY DIMENSIONS.')
+    expect(sheet.generalNoteSetIds).toEqual(['sheet-note-set_project'])
+    expect(sheet.generalNoteSets[0]).toMatchObject({
+      id: 'sheet-note-set_project',
+      name: 'Project Notes',
+      notes: [{ text: 'COORDINATE WITH OWNER.' }],
+    })
     expect(sheet.keyedNoteLegend[0]).toEqual({
       key: 'A',
       text: 'ALIGN WITH EXISTING WALL.',

@@ -92,6 +92,7 @@ export { DownspoutNode } from './nodes/downspout'
 export {
   DrawingSheetAnnotationProfile,
   DrawingSheetGeneralNote,
+  DrawingSheetGeneralNoteSet,
   DrawingSheetKeyedNote,
   DrawingSheetNode,
   DrawingSheetOrientation,

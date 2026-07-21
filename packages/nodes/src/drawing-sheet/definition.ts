@@ -4,7 +4,7 @@ import { DrawingSheetNode } from './schema'
 export const drawingSheetDefinition: NodeDefinition<typeof DrawingSheetNode> = {
   kind: 'drawing-sheet',
   bake: 'strip',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DrawingSheetNode,
   category: 'analysis',
 
