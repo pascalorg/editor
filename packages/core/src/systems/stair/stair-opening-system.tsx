@@ -12,7 +12,7 @@ import {
   hasLiveStairOpeningInputs,
 } from './stair-opening-preview'
 import { syncAutoStairOpenings } from './stair-opening-sync'
-import { syncDeckAttachedStairRises } from './stair-rise'
+import { syncStairRises } from './stair-rise'
 
 function isOpeningRelevantNode(node: AnyNode | undefined) {
   return (
@@ -105,10 +105,11 @@ export const StairOpeningSystem = () => {
     }
 
     const runAutoSync = () => {
-      // Rise first: deck-attached straight stairs write their flight heights
-      // from the deck's elevation, and the opening pass reads those segment
-      // heights — so it must run against the post-rise nodes.
-      applyUpdates(syncDeckAttachedStairRises(useScene.getState().nodes))
+      // Rise first: straight stairs converge their flight heights to the
+      // resolved rise (level height or deck elevation), and the opening pass
+      // reads those segment heights — so it must run against the post-rise
+      // nodes.
+      applyUpdates(syncStairRises(useScene.getState().nodes))
       applyUpdates(syncAutoStairOpenings(useScene.getState().nodes))
     }
 

@@ -9,7 +9,7 @@ import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, StairNode as StairNodeType } from '../../schema'
 import { LevelNode, SlabNode, StairNode, StairSegmentNode } from '../../schema'
-import { resolveStairTotalRise, syncDeckAttachedStairRises } from './stair-rise'
+import { resolveStairTotalRise, syncStairRises } from './stair-rise'
 
 // The deck branch elects the stair's floor-stack base through the node
 // registry + spatial grid singletons — reset them so tests are hermetic
@@ -95,6 +95,42 @@ function buildDeckScene(options: {
   return { deck, stair, nodes }
 }
 
+function buildLevelSceneWithSegments(options: {
+  levelHeight: number
+  totalRise?: number
+  segments: Array<{ id: string; segmentType: 'stair' | 'landing'; height: number }>
+}) {
+  const segments = options.segments.map((segment) =>
+    StairSegmentNode.parse({
+      id: segment.id,
+      type: 'stair-segment',
+      segmentType: segment.segmentType,
+      width: 1,
+      length: 2,
+      height: segment.height,
+      stepCount: 8,
+      parentId: 'stair_1',
+    }),
+  )
+  const stair = StairNode.parse({
+    id: 'stair_1',
+    type: 'stair',
+    position: [0, 0, 0],
+    children: segments.map((segment) => segment.id),
+    ...(options.totalRise !== undefined ? { totalRise: options.totalRise } : {}),
+  })
+  const level = LevelNode.parse({
+    id: 'level_1',
+    type: 'level',
+    level: 0,
+    height: options.levelHeight,
+    children: ['stair_1'],
+  })
+  const nodes: Record<string, AnyNode> = { level_1: level, stair_1: stair }
+  for (const segment of segments) nodes[segment.id] = segment
+  return { level, stair, nodes }
+}
+
 describe('resolveStairTotalRise', () => {
   it('derives the rise from the containing level stored height when absent', () => {
     const { stair, nodes } = buildScene(3.2, undefined)
@@ -142,15 +178,13 @@ describe('resolveStairTotalRise', () => {
   })
 })
 
-describe('syncDeckAttachedStairRises', () => {
+describe('syncStairRises', () => {
   it('writes the deck elevation into a single flight segment', () => {
     const { nodes } = buildDeckScene({
       deckElevation: 1.6,
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    expect(syncDeckAttachedStairRises(nodes)).toEqual([
-      { id: 'sseg_1' as never, data: { height: 1.6 } },
-    ])
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 1.6 } }])
   })
 
   it('is a no-op when the flights already match the deck elevation', () => {
@@ -158,7 +192,7 @@ describe('syncDeckAttachedStairRises', () => {
       deckElevation: 1.25,
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    expect(syncDeckAttachedStairRises(nodes)).toEqual([])
+    expect(syncStairRises(nodes)).toEqual([])
   })
 
   it('scales multiple flights proportionally and leaves landings alone', () => {
@@ -170,7 +204,7 @@ describe('syncDeckAttachedStairRises', () => {
         { id: 'sseg_3', segmentType: 'stair', height: 0.5 },
       ],
     })
-    const updates = syncDeckAttachedStairRises(nodes)
+    const updates = syncStairRises(nodes)
     expect(updates).toHaveLength(2)
     expect(updates[0]).toEqual({ id: 'sseg_1' as never, data: { height: 1.0 } })
     expect(updates[1]).toEqual({ id: 'sseg_3' as never, data: { height: 1.0 } })
@@ -182,47 +216,82 @@ describe('syncDeckAttachedStairRises', () => {
       totalRise: 2.0,
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    expect(syncDeckAttachedStairRises(nodes)).toEqual([
-      { id: 'sseg_1' as never, data: { height: 2.0 } },
-    ])
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 2.0 } }])
   })
 
-  it('leaves stairs with a stale deckSlabId untouched', () => {
+  it('falls a stale deckSlabId back to the storey height', () => {
     const { nodes } = buildDeckScene({
       deckElevation: 1.6,
       deckSlabId: 'slab_gone',
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    expect(syncDeckAttachedStairRises(nodes)).toEqual([])
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 2.5 } }])
   })
 
-  it('ignores unattached stairs', () => {
-    const stair = StairNode.parse({
-      id: 'stair_1',
-      type: 'stair',
-      position: [0, 0, 0],
-      children: ['sseg_1'],
+  it('leaves a stale-deck stair with an explicit rise untouched', () => {
+    const { nodes } = buildDeckScene({
+      deckElevation: 1.6,
+      deckSlabId: 'slab_gone',
+      totalRise: 2.0,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    const segment = StairSegmentNode.parse({
-      id: 'sseg_1',
-      type: 'stair-segment',
-      segmentType: 'stair',
-      width: 1,
-      length: 2,
-      height: 1.0,
-      stepCount: 8,
-      parentId: 'stair_1',
+    expect(syncStairRises(nodes)).toEqual([])
+  })
+
+  it('converges a level-following straight stair to the storey height', () => {
+    const { nodes } = buildLevelSceneWithSegments({
+      levelHeight: 2.5,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.0 }],
     })
-    const level = LevelNode.parse({
-      id: 'level_1',
-      type: 'level',
-      level: 0,
-      height: 2.5,
-      children: ['stair_1'],
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 2.5 } }])
+  })
+
+  it('converges a level-following stair after a storey height change', () => {
+    const scene = buildLevelSceneWithSegments({
+      levelHeight: 2.5,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 2.5 }],
     })
-    expect(syncDeckAttachedStairRises({ level_1: level, stair_1: stair, sseg_1: segment })).toEqual(
-      [],
-    )
+    expect(syncStairRises(scene.nodes)).toEqual([])
+    const nodes = { ...scene.nodes, level_1: { ...scene.level, height: 3.0 } as AnyNode }
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 3.0 } }])
+  })
+
+  it('rescales level-following flights proportionally, landings untouched', () => {
+    const { nodes } = buildLevelSceneWithSegments({
+      levelHeight: 2.1,
+      segments: [
+        { id: 'sseg_1', segmentType: 'stair', height: 0.5 },
+        { id: 'sseg_2', segmentType: 'landing', height: 0.1 },
+        { id: 'sseg_3', segmentType: 'stair', height: 0.5 },
+      ],
+    })
+    const updates = syncStairRises(nodes)
+    expect(updates).toHaveLength(2)
+    expect(updates[0]).toEqual({ id: 'sseg_1' as never, data: { height: 1.0 } })
+    expect(updates[1]).toEqual({ id: 'sseg_3' as never, data: { height: 1.0 } })
+  })
+
+  it('converges back to the storey height after a deck detach', () => {
+    const scene = buildDeckScene({
+      deckElevation: 1.25,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
+    })
+    expect(syncStairRises(scene.nodes)).toEqual([])
+    const { deckSlabId: _deckSlabId, ...detached } = scene.stair
+    const nodes = { ...scene.nodes, stair_1: detached as AnyNode }
+    expect(syncStairRises(nodes)).toEqual([{ id: 'sseg_1' as never, data: { height: 2.5 } }])
+  })
+
+  it('leaves a detached explicit-rise stair with hand-set segments untouched', () => {
+    const { nodes } = buildLevelSceneWithSegments({
+      levelHeight: 2.5,
+      totalRise: 2.0,
+      segments: [
+        { id: 'sseg_1', segmentType: 'stair', height: 0.9 },
+        { id: 'sseg_2', segmentType: 'stair', height: 0.6 },
+      ],
+    })
+    expect(syncStairRises(nodes)).toEqual([])
   })
 })
 
@@ -324,7 +393,7 @@ describe('deck-attached rise with a floor-lifted base', () => {
       deckElevation: 1.25,
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.25 }],
     })
-    const updates = syncDeckAttachedStairRises(nodes)
+    const updates = syncStairRises(nodes)
     expect(updates).toHaveLength(1)
     expect(updates[0]?.id).toBe('sseg_1' as never)
     expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(1.2)
@@ -346,11 +415,11 @@ describe('deck-attached rise with a floor-lifted base', () => {
       deckElevation: 1.25,
       segments: [{ id: 'sseg_1', segmentType: 'stair', height: 1.2 }],
     })
-    expect(syncDeckAttachedStairRises(scene.nodes)).toEqual([])
+    expect(syncStairRises(scene.nodes)).toEqual([])
     const movedDeck = { ...scene.deck, elevation: 1.6 }
     const nodes = { ...scene.nodes, [scene.deck.id]: movedDeck as AnyNode }
     spatialGridManager.handleNodeUpdated(movedDeck as AnyNode, 'level_1')
-    const updates = syncDeckAttachedStairRises(nodes)
+    const updates = syncStairRises(nodes)
     expect(updates).toHaveLength(1)
     expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(1.55)
   })
@@ -363,7 +432,7 @@ describe('deck-attached rise with a floor-lifted base', () => {
     const movedFloor = { ...scene.floor, elevation: 0.3 }
     const nodes = { ...scene.nodes, [scene.floor.id]: movedFloor as AnyNode }
     spatialGridManager.handleNodeUpdated(movedFloor as AnyNode, 'level_1')
-    const updates = syncDeckAttachedStairRises(nodes)
+    const updates = syncStairRises(nodes)
     expect(updates).toHaveLength(1)
     expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(0.95)
   })
@@ -378,7 +447,7 @@ describe('deck-attached rise with a floor-lifted base', () => {
       ],
     })
     // Target flight rise = 2.15 − 0.05 (base) − 0.1 (landing) = 2.0 → 1.0 each.
-    const updates = syncDeckAttachedStairRises(nodes)
+    const updates = syncStairRises(nodes)
     expect(updates).toHaveLength(2)
     expect(updates[0]?.id).toBe('sseg_1' as never)
     expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(1.0)

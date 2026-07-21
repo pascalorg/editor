@@ -37,6 +37,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getStairDestinationUpdates } from './destination'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'None', value: 'none' },
@@ -155,16 +156,11 @@ export default function StairPanel() {
 
   const handleDestinationChange = useCallback(
     (value: string) => {
+      if (!node) return
       const target = useScene.getState().nodes[value as AnyNodeId]
-      if (target?.type === 'slab') {
-        // Attaching to a deck: the rise follows the deck's elevation from
-        // now on, so any explicit custom rise is cleared.
-        handleUpdate({ deckSlabId: value, totalRise: undefined })
-        return
-      }
-      handleUpdate({ toLevelId: value, deckSlabId: undefined })
+      handleUpdate(getStairDestinationUpdates(node, target, value))
     },
-    [handleUpdate],
+    [node, handleUpdate],
   )
 
   const getLastSegmentFillDefaults = useCallback(() => {
@@ -288,11 +284,13 @@ export default function StairPanel() {
 
       <PanelSection title="Opening">
         <div className="space-y-3">
-          <ToggleControl
-            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
-            label="Auto Cutout"
-            onChange={handleAutoCutoutChange}
-          />
+          {attachedDeck ? null : (
+            <ToggleControl
+              checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+              label="Auto Cutout"
+              onChange={handleAutoCutoutChange}
+            />
+          )}
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
@@ -369,24 +367,28 @@ export default function StairPanel() {
             </div>
           ) : null}
 
-          <SegmentedControl
-            onChange={(value) => handleAutoCutoutChange(value === 'destination')}
-            options={STAIR_SLAB_OPENING_OPTIONS}
-            value={node.slabOpeningMode ?? 'none'}
-          />
+          {attachedDeck ? null : (
+            <>
+              <SegmentedControl
+                onChange={(value) => handleAutoCutoutChange(value === 'destination')}
+                options={STAIR_SLAB_OPENING_OPTIONS}
+                value={node.slabOpeningMode ?? 'none'}
+              />
 
-          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-            <MetricControl
-              label="Opening Offset"
-              max={0.5}
-              min={0}
-              onChange={(value) => handleUpdate({ openingOffset: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={Math.round((node.openingOffset ?? 0) * 100) / 100}
-            />
-          ) : null}
+              {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+                <MetricControl
+                  label="Opening Offset"
+                  max={0.5}
+                  min={0}
+                  onChange={(value) => handleUpdate({ openingOffset: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                />
+              ) : null}
+            </>
+          )}
 
           {node.stairType === 'spiral' && (
             <>

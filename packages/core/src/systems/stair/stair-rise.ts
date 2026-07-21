@@ -39,23 +39,29 @@ export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, An
 const RISE_SYNC_EPSILON = 1e-4
 
 /**
- * Keeps deck-attached straight stairs' flight segments in step with the
- * resolved rise. Straight-stair geometry derives from per-segment heights
- * (not from `resolveStairTotalRise`), so a deck elevation change must write
- * through to the flight segments — curved/spiral stairs read the resolved
- * rise directly and need no sync. Flight heights scale proportionally
+ * Keeps straight stairs' flight segments in step with the resolved rise.
+ * Straight-stair geometry derives from per-segment heights (not from
+ * `resolveStairTotalRise`), so level-height and deck-elevation changes must
+ * write through to the flight segments — curved/spiral stairs read the
+ * resolved rise directly and need no sync.
+ *
+ * Scope: stairs whose total the system owns — follows-mode stairs (absent
+ * `totalRise`, tracking their level or their deck) and deck-attached stairs
+ * (an explicit rise converges to the typed value). A detached stair with an
+ * explicit `totalRise` is the one place hand-edited segment chains are
+ * legitimate, so it is never touched. Flight heights scale proportionally
  * (landings keep theirs); returns `updateNodes` patches, empty when every
  * stair is already in step.
  */
-export function syncDeckAttachedStairRises(
+export function syncStairRises(
   nodes: Record<string, AnyNode>,
 ): Array<{ id: AnyNodeId; data: Partial<AnyNode> }> {
   const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
 
   for (const node of Object.values(nodes)) {
-    if (node.type !== 'stair' || node.stairType !== 'straight' || !node.deckSlabId) continue
-    const deck = nodes[node.deckSlabId]
-    if (deck?.type !== 'slab') continue
+    if (node.type !== 'stair' || node.stairType !== 'straight') continue
+    const deck = node.deckSlabId ? nodes[node.deckSlabId] : undefined
+    if (node.totalRise !== undefined && deck?.type !== 'slab') continue
 
     const segments = (node.children ?? [])
       .map((childId) => nodes[childId])
