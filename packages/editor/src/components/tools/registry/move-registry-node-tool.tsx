@@ -56,7 +56,7 @@ import { DragBoundingBox } from '../shared/drag-bounding-box'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import { useFreshPlacementVisibility } from '../shared/fresh-placement-visibility'
 import { PlacementBox } from '../shared/placement-box'
-import { resolvePointerSupportElevation } from '../shared/pointer-support-cap'
+import { resolvePointerSupportSurface } from '../shared/pointer-support-cap'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
  *  / 0.1 / 0.05), read live so changing the step mid-drag takes effect. */
@@ -607,14 +607,21 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const rawX = event.localPosition[0]
-      const rawZ = event.localPosition[2]
-      // The pointer decides the target surface: cap the floor-support
-      // election at the elevation of the surface the camera ray actually
-      // hits (deck top when aiming at the deck, floor/ground when aiming
-      // beneath it). The event's own Y rides the grid plane at the ghost's
-      // last height, so it can't be used directly.
-      supportCapRef.current = resolvePointerSupportElevation(cameraRef.current, event.position)
+      // The pointer decides the target surface AND the cursor plan point,
+      // both resolved from the true camera ray in one place. The event's
+      // own hit can't be used directly: its plane rides at the ghost's
+      // last height, so whenever that plane sits on a different storey
+      // than the aimed-at surface the hit XZ is perspective-skewed along
+      // the ray — electing at that skewed point is what made a drag over
+      // a deck-above-a-floor hop between the two surfaces (each hop moved
+      // the plane, which re-skewed the next hit, which flipped the
+      // election back). Cap and XZ from the same ray ∩ pointed-surface
+      // test are plane-height independent, so the elected surface is a
+      // single fixed point per pointer ray.
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      supportCapRef.current = pointed?.elevation ?? null
+      const rawX = pointed?.localPoint?.[0] ?? event.localPosition[0]
+      const rawZ = pointed?.localPoint?.[2] ?? event.localPosition[2]
       revealFreshPlacement()
 
       const resolved = resolvePlanarCursorPosition({

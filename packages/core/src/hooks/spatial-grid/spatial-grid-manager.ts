@@ -306,6 +306,19 @@ export type ItemSlabSupport = {
   slabId: string | null
 }
 
+export type PointedSupportSurface = ItemSlabSupport & {
+  /**
+   * Level-local XZ where the ray meets the pointed surface's plane, or
+   * null when the ray never reaches it (grazing / aimed above the base).
+   * This is the plan point the pointer actually indicates: unlike a grid
+   * event-plane hit — whose XZ shifts with whatever height the event
+   * plane currently rides at — it depends only on the ray and the
+   * aimed-at surface, so election/preview at this point cannot flip when
+   * the event plane changes storey.
+   */
+  point: [number, number] | null
+}
+
 export class SpatialGridManager {
   private readonly floorGrids = new Map<string, SpatialGrid>() // levelId -> grid
   private readonly wallGrids = new Map<string, WallSpatialGrid>() // levelId -> wall grid
@@ -840,46 +853,60 @@ export class SpatialGridManager {
   /**
    * The walking surface the pointer actually points at: the nearest slab
    * plane the ray crosses INSIDE that slab's rendered polygon (hole veto
-   * applies), or the level base (`{ elevation: 0, slabId: null }`) when it
+   * applies), or the level base (`elevation: 0, slabId: null`) when it
    * crosses none. Ray origin/direction are level-local. Deliberately a
    * point test, not a footprint test — it answers "which surface is under
    * the cursor", which then caps the footprint election so a deck hanging
-   * above the aimed-at floor never lifts the placement.
+   * above the aimed-at floor never lifts the placement. `point` is the
+   * ray's crossing of that surface's plane — the stable plan point
+   * callers should elect/preview at (see {@link PointedSupportSurface}).
    */
   getPointedSupportSurface(
     levelId: string,
     rayOrigin: [number, number, number],
     rayDirection: [number, number, number],
-  ): ItemSlabSupport {
+  ): PointedSupportSurface {
     const slabMap = this.slabsByLevel.get(levelId)
     const [ox, oy, oz] = rayOrigin
     const [dx, dy, dz] = rayDirection
-    if (!slabMap || Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null }
+    if (Math.abs(dy) < 1e-9) return { elevation: 0, slabId: null, point: null }
 
     let best: { t: number; elevation: number; slabId: string } | null = null
-    for (const slab of slabMap.values()) {
-      if (slab.polygon.length < 3) continue
-      const elevation = slab.elevation ?? 0.05
-      const t = (elevation - oy) / dy
-      if (t <= 0) continue
-      if (best && t >= best.t) continue
-      const x = ox + dx * t
-      const z = oz + dz * t
-      const rendered = this.getRenderedSlabPolygon(levelId, slab)
-      if (rendered.length < 3 || !pointInPolygon(x, z, rendered)) continue
-      let inHole = false
-      for (const hole of slab.holes || []) {
-        if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
-          inHole = true
-          break
+    if (slabMap) {
+      for (const slab of slabMap.values()) {
+        if (slab.polygon.length < 3) continue
+        const elevation = slab.elevation ?? 0.05
+        const t = (elevation - oy) / dy
+        if (t <= 0) continue
+        if (best && t >= best.t) continue
+        const x = ox + dx * t
+        const z = oz + dz * t
+        const rendered = this.getRenderedSlabPolygon(levelId, slab)
+        if (rendered.length < 3 || !pointInPolygon(x, z, rendered)) continue
+        let inHole = false
+        for (const hole of slab.holes || []) {
+          if (hole.length >= 3 && pointInPolygon(x, z, hole)) {
+            inHole = true
+            break
+          }
         }
+        if (inHole) continue
+        best = { t, elevation, slabId: slab.id }
       }
-      if (inHole) continue
-      best = { t, elevation, slabId: slab.id }
     }
-    return best
-      ? { elevation: best.elevation, slabId: best.slabId }
-      : { elevation: 0, slabId: null }
+    if (best) {
+      return {
+        elevation: best.elevation,
+        slabId: best.slabId,
+        point: [ox + dx * best.t, oz + dz * best.t],
+      }
+    }
+    const tBase = -oy / dy
+    return {
+      elevation: 0,
+      slabId: null,
+      point: tBase > 0 ? [ox + dx * tBase, oz + dz * tBase] : null,
+    }
   }
 
   /**

@@ -53,6 +53,7 @@ export {
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
   getWallEffectiveHeightForNodes,
+  type PointedSupportSurface,
   pointInPolygon,
   SUPPORT_ELEVATION_EPSILON,
   spatialGridManager,

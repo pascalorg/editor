@@ -197,7 +197,7 @@ describe('getPointedSupportSurface (ray → aimed-at walking surface)', () => {
       0 - origin[2],
     ]
     expect(spatialGridManager.getPointedSupportSurface(LEVEL_ID, origin, toFloorUnderDeck)).toEqual(
-      { elevation: FLOOR_ELEVATION, slabId: 'slab_floor' },
+      { elevation: FLOOR_ELEVATION, slabId: 'slab_floor', point: [0, 0] },
     )
 
     // Aiming at the deck's top surface: the deck plane crossing lands
@@ -210,6 +210,7 @@ describe('getPointedSupportSurface (ray → aimed-at walking surface)', () => {
     expect(spatialGridManager.getPointedSupportSurface(LEVEL_ID, origin, toDeckTop)).toEqual({
       elevation: DECK_ELEVATION,
       slabId: 'slab_deck',
+      point: [0, 0.5],
     })
   })
 
@@ -232,15 +233,136 @@ describe('getPointedSupportSurface (ray → aimed-at walking surface)', () => {
     expect(spatialGridManager.getPointedSupportSurface(LEVEL_ID, [0, 5, 0], [0, -1, 0])).toEqual({
       elevation: FLOOR_ELEVATION,
       slabId: 'slab_floor',
+      point: [0, 0],
     })
   })
 
-  test('no slab crossing resolves the level base', () => {
+  test('no slab crossing resolves the level base (with the base-plane point)', () => {
     addSlab(makeSlab('slab_deck', DECK_POLYGON, DECK_ELEVATION))
     expect(spatialGridManager.getPointedSupportSurface(LEVEL_ID, [3, 5, 3], [0, -1, 0])).toEqual({
       elevation: 0,
       slabId: null,
+      point: [3, 3],
     })
+  })
+
+  test('a ray that cannot reach any surface has no point', () => {
+    addDeckAndFloor()
+    expect(spatialGridManager.getPointedSupportSurface(LEVEL_ID, [0, 5, 0], [0, 1, 0])).toEqual({
+      elevation: 0,
+      slabId: null,
+      point: null,
+    })
+  })
+})
+
+describe('pointed point — stacked-deck hop repro (ray ∩ pointed-surface plane)', () => {
+  // Manual repro this pins down: deck slab stacked above a floor slab,
+  // move an item over the deck near its far edge with an angled camera.
+  // The grid event plane rides at the ghost's LAST surface height, so the
+  // same screen ray produces hit points whose XZ differ by metres
+  // depending on which storey the plane rode at. The cap (ray → pointed
+  // surface) is plane-height independent, but electing at the RAW hit XZ
+  // is not: the floor-height hit is perspective-skewed past the deck, its
+  // footprint misses the deck polygon, and the capped election falls to
+  // the floor — dropping the ghost, which drops the plane, which keeps
+  // the hit skewed (a second self-consistent state). Transitions between
+  // the two states are the hop. Electing at the ray-derived `point`
+  // leaves a single fixed point per pointer ray.
+  const origin: [number, number, number] = [0, 5, -10]
+  /** Aimed at the deck top near its far edge: (0, DECK_ELEVATION, 0.8). */
+  const aimAtDeck: [number, number, number] = [
+    0 - origin[0],
+    DECK_ELEVATION - origin[1],
+    0.8 - origin[2],
+  ]
+
+  test('same ray reconstructed from either plane-height hit: pointed point elects the deck every time', () => {
+    addDeckAndFloor()
+
+    // The two grid hits the SAME screen ray produces — one per event-plane
+    // height (plane riding at the deck vs at the floor slab).
+    const tDeck = (DECK_ELEVATION - origin[1]) / aimAtDeck[1]
+    const tFloor = (FLOOR_ELEVATION - origin[1]) / aimAtDeck[1]
+    const planeHits = [tDeck, tFloor].map((t): [number, number, number] => [
+      origin[0] + aimAtDeck[0] * t,
+      origin[1] + aimAtDeck[1] * t,
+      origin[2] + aimAtDeck[2] * t,
+    ])
+
+    for (const hit of planeHits) {
+      const direction: [number, number, number] = [
+        hit[0] - origin[0],
+        hit[1] - origin[1],
+        hit[2] - origin[2],
+      ]
+      const pointed = spatialGridManager.getPointedSupportSurface(LEVEL_ID, origin, direction)
+      expect(pointed.slabId).toBe('slab_deck')
+      expect(pointed.elevation).toBe(DECK_ELEVATION)
+      expect(pointed.point?.[0]).toBeCloseTo(0, 10)
+      expect(pointed.point?.[1]).toBeCloseTo(0.8, 10)
+
+      expect(
+        spatialGridManager.getSlabSupportForItem(
+          LEVEL_ID,
+          [pointed.point![0], 0, pointed.point![1]],
+          [1, 1, 1],
+          [0, 0, 0],
+          pointed.elevation,
+        ),
+      ).toEqual({ elevation: DECK_ELEVATION, slabId: 'slab_deck' })
+    }
+  })
+
+  test('electing at the raw floor-height hit flips to the floor — the hop mechanism, kept as documentation', () => {
+    addDeckAndFloor()
+
+    const tFloor = (FLOOR_ELEVATION - origin[1]) / aimAtDeck[1]
+    const floorPlaneHit: [number, number, number] = [
+      origin[0] + aimAtDeck[0] * tFloor,
+      0,
+      origin[2] + aimAtDeck[2] * tFloor,
+    ]
+    // The skew carries the hit metres past the deck's far edge (z = 1)…
+    expect(floorPlaneHit[2]).toBeGreaterThan(2)
+    // …so the same pointer ray, elected at the raw hit XZ, picks the
+    // FLOOR while the cap says the pointer is on the deck.
+    expect(
+      spatialGridManager.getSlabSupportForItem(
+        LEVEL_ID,
+        floorPlaneHit,
+        [1, 1, 1],
+        [0, 0, 0],
+        DECK_ELEVATION,
+      ),
+    ).toEqual({ elevation: FLOOR_ELEVATION, slabId: 'slab_floor' })
+  })
+
+  test('pointer past the deck edge: pointed point lands on the floor and elects it', () => {
+    addDeckAndFloor()
+
+    // Aimed at a floor point far enough out that the deck-plane crossing
+    // falls outside the deck polygon (the floor there is actually visible).
+    const aimPastDeck: [number, number, number] = [
+      0 - origin[0],
+      FLOOR_ELEVATION - origin[1],
+      4 - origin[2],
+    ]
+    const pointed = spatialGridManager.getPointedSupportSurface(LEVEL_ID, origin, aimPastDeck)
+    expect(pointed).toEqual({
+      elevation: FLOOR_ELEVATION,
+      slabId: 'slab_floor',
+      point: [0, 4],
+    })
+    expect(
+      spatialGridManager.getSlabSupportForItem(
+        LEVEL_ID,
+        [0, 0, 4],
+        [1, 1, 1],
+        [0, 0, 0],
+        pointed.elevation,
+      ),
+    ).toEqual({ elevation: FLOOR_ELEVATION, slabId: 'slab_floor' })
   })
 })
 

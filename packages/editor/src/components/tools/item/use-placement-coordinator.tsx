@@ -62,7 +62,10 @@ import {
   type PreviewBounds,
   updateLineGeometry,
 } from '../shared/placement-box-geometry'
-import { resolvePointerSupportElevation } from '../shared/pointer-support-cap'
+import {
+  resolvePointerSupportElevation,
+  resolvePointerSupportSurface,
+} from '../shared/pointer-support-cap'
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
@@ -860,15 +863,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       has3DPointerDrivenMoveRef.current = true
 
-      // The pointer decides the target surface: cap the floor-support
-      // election at the elevation of the surface the camera ray actually
-      // hits. The grid event's own Y can't be used directly — its plane
-      // rides at the ghost's last height, which is exactly the feedback
-      // loop that made the ghost blink under an elevated deck.
-      pointerSupportCapRef.current = resolvePointerSupportElevation(
-        cameraRef.current,
-        event.position,
-      )
+      // The pointer decides the target surface AND the floor point: cap
+      // the floor-support election at the elevation of the surface the
+      // camera ray actually hits, and re-aim the event at the ray's
+      // crossing of that surface's plane. The grid event's own hit can't
+      // be used directly — its plane rides at the ghost's last height, so
+      // its Y is a feedback loop (the under-deck blink) and its XZ is
+      // perspective-skewed along the ray whenever the plane sits on a
+      // different storey than the pointed surface (the skew is what made
+      // a drag over a deck-above-a-floor hop between the two surfaces).
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      pointerSupportCapRef.current = pointed?.elevation ?? null
+      const surfaceEvent: GridEvent =
+        pointed?.worldPoint && pointed.localPoint
+          ? { ...event, position: pointed.worldPoint, localPosition: pointed.localPoint }
+          : event
 
       // Shelf stickiness: while hosting on a shelf, ignore floor events while
       // the cursor ray still points at the shelf volume (the ray merely slipped
@@ -877,10 +886,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item oscillates between the shelf row and the floor on every micro-move.
       if (placementState.current.surface === 'shelf-surface') {
         if (cursorRayIntersectsActiveShelf(event.position)) return
-        detachItemSurfaceToFloor(event as unknown as ItemEvent)
+        // Land at the pointed surface's plan point — the raw grid hit is
+        // still skewed by the plane riding at the shelf-surface height.
+        detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
       }
 
-      const floorEvent = applyFloorGrabOffset(event)
+      const floorEvent = applyFloorGrabOffset(surfaceEvent)
 
       lastRawPos.current.set(
         floorEvent.localPosition[0],
