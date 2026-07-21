@@ -40,6 +40,24 @@ describe('floor-plan annotation visibility', () => {
     ).toEqual({ kind: 'group', children: [line] })
   })
 
+  test('removes a complete curved automatic dimension group', () => {
+    const curvedDimension = {
+      kind: 'group',
+      annotationRole: 'automatic-dimension',
+      children: [
+        { kind: 'path', d: 'M 0 0 A 2 2 0 0 1 2 2' },
+        { kind: 'dimension-label', cx: 1, cy: 1, text: 'ARC 3.14m', angle: 0 },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(
+      filterFloorplanAnnotationGeometry('wall', curvedDimension, {
+        ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        automaticDimensions: false,
+      }),
+    ).toBeNull()
+  })
+
   test('removes only the opening mark from door geometry', () => {
     const body = {
       kind: 'polygon',

@@ -4,7 +4,6 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
-  getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   isCurvedWall,
@@ -12,9 +11,9 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
-  formatConstructionLength,
   renderPlannedConstructionDimensions,
   type WallConstructionDimensionPlan,
 } from './construction-dimensions'
@@ -136,10 +135,18 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     },
   ]
 
-  if (!isCurvedWall(node)) {
+  const dimensionStroke =
+    isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
+  if (isCurvedWall(node)) {
+    children.push(
+      ...buildCurvedWallConstructionDimensions(self, {
+        unit: view?.unit ?? 'metric',
+        stroke: dimensionStroke,
+        profile: documentMode ? 'document' : 'editor',
+      }),
+    )
+  } else {
     const planned = levelData?.constructionDimensionsByWallId.get(node.id)
-    const dimensionStroke =
-      isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
     if (planned) {
       children.push(
         ...renderPlannedConstructionDimensions(
@@ -246,23 +253,6 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         variant: 'curve',
         affordance: 'curve',
         payload: { wallId: node.id },
-      })
-    }
-
-    // Curved walls cannot express their arc length through a straight
-    // construction string, so selection keeps the compact arc-length label.
-    const length = getWallCurveLength(node)
-    if (length >= 0.1 && isCurvedWall(node)) {
-      const dx = node.end[0] - node.start[0]
-      const dz = node.end[1] - node.start[1]
-      const midX = (node.start[0] + node.end[0]) / 2
-      const midZ = (node.start[1] + node.end[1]) / 2
-      children.push({
-        kind: 'dimension-label',
-        cx: midX,
-        cy: midZ,
-        text: formatConstructionLength(length, view?.unit ?? 'metric'),
-        angle: Math.atan2(dz, dx),
       })
     }
   }

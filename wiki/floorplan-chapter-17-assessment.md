@@ -201,9 +201,9 @@ Automatic placement now handles adjacent labels, short values, opening marks, an
 
 There is no sheet-level general-note block, keyed-note index, delta marker system, section/detail callout, or revision system.
 
-### Curved and circular construction dimensions are incomplete
+### Curved and circular construction dimensions
 
-Automatic wall construction dimensions intentionally skip curved walls. The generic measurement system can display angles and distances, but the construction-document layer lacks radius, diameter, center, chord, coordinate-pattern, and angular-pattern dimensions.
+Curved walls emit an automatic concentric arc-length dimension in live plans and document output. Manual associative construction dimensions cover radius, diameter, center, chord, arc-length, coordinate-pattern, and angular-pattern workflows, with curved-wall defining geometry resolved from stable semantic host features.
 
 ### Construction systems are not semantically modeled
 

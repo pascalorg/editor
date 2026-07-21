@@ -96,6 +96,13 @@ export function filterFloorplanAnnotationGeometry(
   }
   if (
     !visibility.automaticDimensions &&
+    'annotationRole' in geometry &&
+    geometry.annotationRole === 'automatic-dimension'
+  ) {
+    return null
+  }
+  if (
+    !visibility.automaticDimensions &&
     nodeType !== 'construction-dimension' &&
     (geometry.kind === 'dimension' ||
       geometry.kind === 'dimension-label' ||

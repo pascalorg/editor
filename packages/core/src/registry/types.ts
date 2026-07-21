@@ -216,7 +216,11 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
-export type FloorplanAnnotationRole = 'column-center' | 'room-label' | 'stair-annotation'
+export type FloorplanAnnotationRole =
+  | 'automatic-dimension'
+  | 'column-center'
+  | 'room-label'
+  | 'stair-annotation'
 
 export type FloorplanStyle = {
   stroke?: string
@@ -438,6 +442,8 @@ export type FloorplanGeometry =
       children: FloorplanGeometry[]
       /** Optional transform applied to all children. Rotation in radians. */
       transform?: { translate?: FloorplanPoint; rotate?: number }
+      /** Semantic annotation role used by editor visibility and export filters. */
+      annotationRole?: FloorplanAnnotationRole
     }
   /**
    * Hatched fill overlay — same polygon shape as the kind's main fill but

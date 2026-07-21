@@ -114,7 +114,7 @@ describe('buildWallConstructionDimensions', () => {
     expect(buildWallConstructionDimensions(interior, context(), { unit: 'metric' })).toEqual([])
   })
 
-  test('does not invent straight strings for curved walls', () => {
+  test('keeps curved walls out of the straight-string builder', () => {
     expect(
       buildWallConstructionDimensions(wall({ curveOffset: 1 }), context(), { unit: 'metric' }),
     ).toEqual([])

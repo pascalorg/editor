@@ -5,6 +5,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallArcData,
   isCurvedWall,
   type WallNode,
   type WindowNode,
@@ -327,6 +328,80 @@ export function renderPlannedConstructionDimensions(
       profile,
     ),
   )
+}
+
+export function buildCurvedWallConstructionDimensions(
+  wall: WallNode,
+  {
+    unit,
+    stroke = '#334155',
+    profile = 'editor',
+  }: {
+    unit: ConstructionLinearUnit
+    stroke?: string
+    profile?: ConstructionLengthProfile
+  },
+): FloorplanGeometry[] {
+  const arc = getWallArcData(wall)
+  if (!arc) return []
+
+  const dimensionRadius = arc.radius + (wall.thickness ?? 0.1) / 2 + OPENING_CHAIN_OFFSET
+  const pointAt = (radius: number, angle: number): FloorplanPoint => [
+    arc.center.x + Math.cos(angle) * radius,
+    arc.center.y + Math.sin(angle) * radius,
+  ]
+  const startAngle = arc.startAngle
+  const endAngle = arc.startAngle + arc.delta
+  const arcStart = pointAt(dimensionRadius, startAngle)
+  const arcEnd = pointAt(dimensionRadius, endAngle)
+  const extensionRadius = dimensionRadius + EXTENSION_OVERSHOOT
+  const labelPoint = pointAt(dimensionRadius, startAngle + arc.delta / 2)
+  const lineStyle = {
+    stroke,
+    strokeWidth: 0.9,
+    vectorEffect: 'non-scaling-stroke' as const,
+    pointerEvents: 'none' as const,
+  }
+
+  return [
+    {
+      kind: 'group',
+      annotationRole: 'automatic-dimension',
+      children: [
+        {
+          kind: 'line',
+          x1: wall.start[0],
+          y1: wall.start[1],
+          x2: pointAt(extensionRadius, startAngle)[0],
+          y2: pointAt(extensionRadius, startAngle)[1],
+          ...lineStyle,
+        },
+        {
+          kind: 'line',
+          x1: wall.end[0],
+          y1: wall.end[1],
+          x2: pointAt(extensionRadius, endAngle)[0],
+          y2: pointAt(extensionRadius, endAngle)[1],
+          ...lineStyle,
+        },
+        {
+          kind: 'path',
+          d: `M ${arcStart[0]} ${arcStart[1]} A ${dimensionRadius} ${dimensionRadius} 0 ${Math.abs(arc.delta) > Math.PI ? 1 : 0} ${arc.delta >= 0 ? 1 : 0} ${arcEnd[0]} ${arcEnd[1]}`,
+          fill: 'none',
+          ...lineStyle,
+        },
+        {
+          kind: 'dimension-label',
+          cx: labelPoint[0],
+          cy: labelPoint[1],
+          text: `ARC ${formatConstructionLength(Math.abs(arc.delta) * arc.radius, unit, profile)}`,
+          angle: 0,
+          screenUpright: true,
+          appearance: 'outlined',
+        },
+      ],
+    },
+  ]
 }
 
 export function buildWallConstructionDimensions(
