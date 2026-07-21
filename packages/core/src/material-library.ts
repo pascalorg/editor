@@ -73,6 +73,7 @@ export const MATERIAL_CATEGORIES = [
   'roofing',
   'ground',
   'glass',
+  'other',
 ] as const
 export type MaterialCategory = (typeof MATERIAL_CATEGORIES)[number]
 
