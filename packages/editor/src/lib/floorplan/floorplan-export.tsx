@@ -5,6 +5,8 @@ import {
   type AnyNodeId,
   type ConstructionDrawingType,
   type DrawingSheetNode,
+  type DrawingSheetOrientation,
+  type DrawingSheetPaperSize,
   type DrawingSheetScale,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -101,6 +103,10 @@ type ExportLevel = { id: AnyNodeId; label: string }
 type SheetComposition = {
   sheetNumber: string
   sheetTitle: string
+  paperSize: DrawingSheetPaperSize
+  orientation: DrawingSheetOrientation
+  customPaperWidth: number | null
+  customPaperHeight: number | null
   drawingNumber: string
   viewTitle: string
   drawingLabel: string
@@ -120,6 +126,17 @@ type ScheduleDrawResult = {
   overflowSchedules: FloorplanSchedule[]
 }
 
+export type SheetPageSetup = {
+  width: number
+  height: number
+  orientation: DrawingSheetOrientation
+}
+
+export type SheetPreflightIssue = {
+  severity: 'warning'
+  message: string
+}
+
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
   const nodes = useScene.getState().nodes
   const viewer = useViewer.getState()
@@ -136,9 +153,6 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   }
 
   const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')])
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()
-  const pageH = doc.internal.pageSize.getHeight()
 
   const host = document.createElement('div')
   host.style.cssText =
@@ -146,6 +160,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   document.body.appendChild(host)
 
   let pageCount = 0
+  let doc: JsPdfDocument | null = null
   try {
     for (const level of levels) {
       const geometries = collectFloorplanGeometry(
@@ -166,7 +181,8 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         drawingLabel,
         drawingScale,
       )
-      const layout = resolveSheetExportLayout(pageW, pageH)
+      const pageSetup = resolveSheetPageSetup(composition)
+      const layout = resolveSheetExportLayout(pageSetup.width, pageSetup.height)
       let scheduleOverflow: FloorplanSchedule[] = [...schedules]
 
       if (geometries.length > 0) {
@@ -181,15 +197,17 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         const mounted = await mountFloorplanSvg(host, geometries, rotationDeg)
         if (mounted) {
           try {
-            if (pageCount > 0) doc.addPage()
+            if (!doc) {
+              doc = new jsPDF({
+                orientation: pageSetup.orientation,
+                unit: 'pt',
+                format: [pageSetup.width, pageSetup.height],
+              })
+            } else {
+              doc.addPage([pageSetup.width, pageSetup.height], pageSetup.orientation)
+            }
             pageCount++
 
-            const sheetResult = drawSheetChrome(doc, layout, composition, schedules)
-            scheduleOverflow = sheetResult.overflowSchedules
-
-            // Place the plan at the selected architectural drawing scale. If
-            // the scaled plan exceeds the available box it intentionally clips
-            // for now; clipped-content preflight is a later sheet-output slice.
             let fitted = placePlanAtDrawingScale(
               mounted.width,
               mounted.height,
@@ -211,6 +229,15 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
                 composition.scale,
               )
             }
+            const preflightIssues = resolveSheetPreflightIssues(fitted)
+            const sheetResult = drawSheetChrome(
+              doc,
+              layout,
+              composition,
+              schedules,
+              preflightIssues,
+            )
+            scheduleOverflow = sheetResult.overflowSchedules
 
             // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
             // many builders use to keep door/window/stair line weights constant
@@ -233,6 +260,13 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
       }
 
       if (scheduleOverflow.length > 0) {
+        if (!doc) {
+          doc = new jsPDF({
+            orientation: pageSetup.orientation,
+            unit: 'pt',
+            format: [pageSetup.width, pageSetup.height],
+          })
+        }
         pageCount = drawFloorplanSchedulePages(doc, level.label, scheduleOverflow, pageCount)
       }
     }
@@ -243,7 +277,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     }
 
     const date = new Date().toISOString().split('T')[0]
-    doc.save(`${drawingType}_${scope}_${date}.pdf`)
+    doc?.save(`${drawingType}_${scope}_${date}.pdf`)
   } finally {
     host.remove()
   }
@@ -294,6 +328,10 @@ export function resolveSheetComposition(
   return {
     sheetNumber: sheet?.sheetNumber ?? 'A1.0',
     sheetTitle: sheet?.sheetTitle ?? drawingLabel,
+    paperSize: sheet?.paperSize ?? 'a4',
+    orientation: sheet?.orientation ?? 'landscape',
+    customPaperWidth: sheet?.customPaperWidth ?? null,
+    customPaperHeight: sheet?.customPaperHeight ?? null,
     drawingNumber: placedView?.drawingNumber ?? '1',
     viewTitle: placedView?.title ?? `${levelLabel} ${drawingLabel}`,
     drawingLabel,
@@ -301,6 +339,63 @@ export function resolveSheetComposition(
     generalNotes: sheet?.generalNotes ?? [],
     keyedNoteLegend: sheet?.keyedNoteLegend ?? [],
   }
+}
+
+export function resolveSheetPageSetup(
+  sheet: Pick<
+    SheetComposition,
+    'paperSize' | 'orientation' | 'customPaperWidth' | 'customPaperHeight'
+  >,
+): SheetPageSetup {
+  const base = paperSizePoints(sheet.paperSize, sheet.customPaperWidth, sheet.customPaperHeight)
+  const [width, height] =
+    sheet.orientation === 'landscape'
+      ? [Math.max(base.width, base.height), Math.min(base.width, base.height)]
+      : [Math.min(base.width, base.height), Math.max(base.width, base.height)]
+  return { width, height, orientation: sheet.orientation }
+}
+
+function paperSizePoints(
+  paperSize: DrawingSheetPaperSize,
+  customPaperWidth: number | null,
+  customPaperHeight: number | null,
+): { width: number; height: number } {
+  switch (paperSize) {
+    case 'letter':
+      return inchesToPoints(8.5, 11)
+    case 'tabloid':
+      return inchesToPoints(11, 17)
+    case 'arch-a':
+      return inchesToPoints(9, 12)
+    case 'arch-b':
+      return inchesToPoints(12, 18)
+    case 'arch-c':
+      return inchesToPoints(18, 24)
+    case 'a3':
+      return millimetersToPoints(297, 420)
+    case 'custom':
+      return inchesToPoints(customPaperWidth ?? 18, customPaperHeight ?? 12)
+    case 'a4':
+      return millimetersToPoints(210, 297)
+  }
+}
+
+function inchesToPoints(width: number, height: number): { width: number; height: number } {
+  return { width: width * POINTS_PER_INCH, height: height * POINTS_PER_INCH }
+}
+
+function millimetersToPoints(width: number, height: number): { width: number; height: number } {
+  return inchesToPoints(width / 25.4, height / 25.4)
+}
+
+export function resolveSheetPreflightIssues(fitted: { clipped: boolean }): SheetPreflightIssue[] {
+  if (!fitted.clipped) return []
+  return [
+    {
+      severity: 'warning',
+      message: 'Scaled plan exceeds the sheet viewport. Review clipped view or annotation content.',
+    },
+  ]
 }
 
 function findDrawingSheetForLevel(
@@ -481,6 +576,7 @@ function drawSheetChrome(
   layout: SheetExportLayout,
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
+  preflightIssues: readonly SheetPreflightIssue[],
 ): ScheduleDrawResult {
   doc.setDrawColor('#0f172a')
   doc.setLineWidth(0.6)
@@ -507,7 +603,7 @@ function drawSheetChrome(
     scale: composition.scale,
     maxWidth: Math.min(150, layout.planBox.width * 0.3),
   })
-  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules)
+  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules, preflightIssues)
 }
 
 function drawSheetTitleBlock(
@@ -616,15 +712,43 @@ function drawSheetSidePanel(
   panel: SheetExportLayout['sidePanel'],
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
+  preflightIssues: readonly SheetPreflightIssue[],
 ): ScheduleDrawResult {
   let y = panel.y + 12
   const left = panel.x + 8
   const width = panel.width - 16
   const bottom = panel.y + panel.height - 8
 
-  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y, width, bottom)
+  y = drawSheetPreflightIssues(doc, preflightIssues, left, y, width, bottom)
+  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y + 8, width, bottom)
   y = drawKeyedNoteLegend(doc, composition, left, y + 8, width, bottom)
   return drawInlineSchedules(doc, schedules, left, y + 8, width, bottom)
+}
+
+function drawSheetPreflightIssues(
+  doc: JsPdfDocument,
+  issues: readonly SheetPreflightIssue[],
+  x: number,
+  y: number,
+  width: number,
+  bottom: number,
+) {
+  if (issues.length === 0) return y
+  doc.setTextColor('#92400e')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('PREFLIGHT', x, y)
+  y += 9
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  for (const issue of issues) {
+    const lines = doc.splitTextToSize(`WARNING: ${issue.message}`, width)
+    if (y + lines.length * 8 > bottom) break
+    doc.text(lines, x, y)
+    y += lines.length * 8 + 3
+  }
+  doc.setTextColor('#111827')
+  return y
 }
 
 function drawSheetNotes(

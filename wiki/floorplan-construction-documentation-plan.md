@@ -34,7 +34,7 @@ assessment.
   the remaining annotation categories.
 - [x] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
   schedules, and notes on the sheet.
-- [ ] Support multiple paper sizes and preflight clipped view or annotation content.
+- [x] Support multiple paper sizes and preflight clipped view or annotation content.
 
 ### Annotation layout and preflight
 
@@ -314,11 +314,11 @@ The same annotation should plot consistently whether the modeled building is 8 m
 
 ### 3.3 Improve PDF composition
 
-Status: sheet composition is implemented for floorplan PDF export. Each plan page now reserves a
-sheet viewport, side notes/schedules panel, and title block; draws north arrow, graphic scale, view
-title, scale notation, drawing number, sheet number/reference, sheet notes, keyed-note legend, and
-compact schedule tables on the sheet. Oversized plans intentionally clip until the later
-clipped-content preflight work lands.
+Status: sheet composition is implemented for floorplan PDF export. Each plan page now resolves its
+paper size and orientation from drawing-sheet metadata, reserves a sheet viewport, side
+notes/schedules panel, and title block; draws north arrow, graphic scale, view title, scale notation,
+drawing number, sheet number/reference, sheet notes, keyed-note legend, and compact schedule tables
+on the sheet; and reports clipped scaled views as sheet preflight warnings.
 
 - [x] Export at fixed architectural scales.
 - [x] Add north arrow.
@@ -327,8 +327,8 @@ clipped-content preflight work lands.
 - [x] Add scale notation.
 - [x] Add drawing and sheet reference.
 - [x] Compose schedules and notes intentionally rather than always placing schedules on separate pages.
-- Support multiple paper sizes.
-- Validate that no view or annotation is clipped.
+- [x] Support multiple paper sizes.
+- [x] Validate that no view or annotation is clipped.
 
 ### 3.4 Implement collision resolution
 

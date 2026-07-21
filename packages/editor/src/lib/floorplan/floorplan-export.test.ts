@@ -8,6 +8,8 @@ import {
   resolveGraphicScaleLength,
   resolveSheetComposition,
   resolveSheetExportLayout,
+  resolveSheetPageSetup,
+  resolveSheetPreflightIssues,
 } from './floorplan-export'
 
 describe('filterFloorplanExportOverlay', () => {
@@ -134,11 +136,59 @@ describe('resolveSheetComposition', () => {
     ).toMatchObject({
       sheetNumber: 'A1.1',
       sheetTitle: 'Plans',
+      paperSize: 'arch-b',
+      orientation: 'landscape',
       drawingNumber: '2',
       viewTitle: 'Main Floor Plan',
       scale: '1:50',
       generalNotes: [{ number: 1, text: 'Verify all dimensions.' }],
       keyedNoteLegend: [{ key: 'A', text: 'Patch existing slab.' }],
     })
+  })
+})
+
+describe('resolveSheetPageSetup', () => {
+  test('resolves supported paper sizes and orientation to page points', () => {
+    expect(
+      resolveSheetPageSetup({
+        paperSize: 'arch-b',
+        orientation: 'landscape',
+        customPaperWidth: null,
+        customPaperHeight: null,
+      }),
+    ).toEqual({ width: 1296, height: 864, orientation: 'landscape' })
+
+    const a3 = resolveSheetPageSetup({
+      paperSize: 'a3',
+      orientation: 'portrait',
+      customPaperWidth: null,
+      customPaperHeight: null,
+    })
+    expect(a3.width).toBeCloseTo(841.89, 2)
+    expect(a3.height).toBeCloseTo(1190.55, 2)
+  })
+
+  test('uses custom paper dimensions in inches', () => {
+    expect(
+      resolveSheetPageSetup({
+        paperSize: 'custom',
+        orientation: 'portrait',
+        customPaperWidth: 24,
+        customPaperHeight: 36,
+      }),
+    ).toEqual({ width: 1728, height: 2592, orientation: 'portrait' })
+  })
+})
+
+describe('resolveSheetPreflightIssues', () => {
+  test('reports clipped scaled content as a sheet preflight warning', () => {
+    expect(resolveSheetPreflightIssues({ clipped: true })).toEqual([
+      {
+        severity: 'warning',
+        message:
+          'Scaled plan exceeds the sheet viewport. Review clipped view or annotation content.',
+      },
+    ])
+    expect(resolveSheetPreflightIssues({ clipped: false })).toEqual([])
   })
 })
