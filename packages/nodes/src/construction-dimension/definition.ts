@@ -10,7 +10,7 @@ import { ConstructionDimensionNode } from './schema'
 export const constructionDimensionDefinition: NodeDefinition<typeof ConstructionDimensionNode> = {
   kind: 'construction-dimension',
   bake: 'strip',
-  schemaVersion: 5,
+  schemaVersion: 6,
   schema: ConstructionDimensionNode,
   category: 'analysis',
   snapProfile: 'structural',

@@ -67,8 +67,10 @@ export {
   ConstructionDimensionTextPosition,
   ConstructionDrawingType,
   constructionDimensionRequiredAnchorCount,
+  resolveConstructionDimensionDrawingOverride,
   resolveConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
 } from './nodes/construction-dimension'
 export {
   ConstructionNoteContractScope,

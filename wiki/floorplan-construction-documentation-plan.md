@@ -21,7 +21,7 @@ assessment.
 - [x] Add project/drawing dimension standards for datum policy, terminators, text position,
   imperial precision, metric notation, tier spacing, extension lines, and reference style.
 - [x] Add independent visibility controls for hidden/overhead geometry and reference dimensions.
-- [ ] Support segment suppression and other view-specific dimension overrides without changing the
+- [x] Support segment suppression and other view-specific dimension overrides without changing the
   physical model.
 
 ### Drawing sheets and plotted output
@@ -228,7 +228,9 @@ A 3D authoring tool is not required for plan-only construction dimensions, but s
 Status: implemented for linear/chord manual dimensions and automatic straight-wall dimensions. Both
 sources emit the native `dimension-string` primitive, and the renderer draws per-segment labels and
 baselines while deduplicating shared witness extension lines and ticks. Point-to-point manual strings
-use independent paired witness segments.
+use independent paired witness segments. Construction dimensions now support per-drawing suppressed
+segment indexes through drawing overrides; the active drawing applies the override at render time,
+so anchors and the physical measured model remain unchanged.
 
 The current wall planner emits one `dimension` primitive per segment. Introduce a higher-level dimension-string representation so the renderer can:
 
@@ -237,7 +239,7 @@ The current wall planner emits one `dimension` primitive per segment. Introduce 
 - Apply one terminator policy consistently.
 - Relocate short-segment labels.
 - Break or continue the baseline consistently.
-- Support user overrides without mutating model geometry.
+- [x] Support user overrides without mutating model geometry.
 
 The automatic wall planner and manual construction-dimension node should converge on this shared presentation model.
 

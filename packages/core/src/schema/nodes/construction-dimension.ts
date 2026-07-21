@@ -47,6 +47,7 @@ export const ConstructionDimensionDrawingPresentation = z.enum([
 export const ConstructionDimensionDrawingOverride = z.object({
   drawingType: ConstructionDrawingType,
   presentation: ConstructionDimensionDrawingPresentation,
+  suppressedSegmentIndexes: z.array(z.number().int().min(0).max(999)).max(200).default([]),
 })
 export const ConstructionDimensionDatumPolicy = z.enum([
   'centerline',
@@ -150,18 +151,66 @@ export function resolveConstructionDimensionDrawingPresentation(
   return override?.presentation ?? (node.drawingType === drawingType ? 'shown' : 'omit')
 }
 
+export function resolveConstructionDimensionDrawingOverride(
+  node: Pick<ConstructionDimensionNode, 'drawingOverrides'>,
+  drawingType: ConstructionDrawingType,
+): ConstructionDimensionDrawingOverride | null {
+  let override: ConstructionDimensionDrawingOverride | undefined
+  for (const entry of node.drawingOverrides) {
+    if (entry.drawingType === drawingType) override = entry
+  }
+  return override ?? null
+}
+
 export function setConstructionDimensionDrawingPresentation(
   node: Pick<ConstructionDimensionNode, 'drawingType' | 'drawingOverrides'>,
   drawingType: ConstructionDrawingType,
   presentation: ConstructionDimensionDrawingPresentation,
 ): ConstructionDimensionDrawingOverride[] {
   const defaultPresentation = node.drawingType === drawingType ? 'shown' : 'omit'
+  const existing = resolveConstructionDimensionDrawingOverride(node, drawingType)
   const withoutDrawing = node.drawingOverrides.filter((entry) => entry.drawingType !== drawingType)
-  return presentation === defaultPresentation
+  const next = {
+    drawingType,
+    presentation,
+    suppressedSegmentIndexes: existing?.suppressedSegmentIndexes ?? [],
+  }
+  return isDefaultConstructionDimensionDrawingOverride(next, defaultPresentation)
     ? withoutDrawing
-    : [...withoutDrawing, { drawingType, presentation }]
+    : [...withoutDrawing, next]
+}
+
+export function setConstructionDimensionDrawingSuppressedSegments(
+  node: Pick<ConstructionDimensionNode, 'drawingType' | 'drawingOverrides'>,
+  drawingType: ConstructionDrawingType,
+  suppressedSegmentIndexes: readonly number[],
+): ConstructionDimensionDrawingOverride[] {
+  const defaultPresentation = node.drawingType === drawingType ? 'shown' : 'omit'
+  const existing = resolveConstructionDimensionDrawingOverride(node, drawingType)
+  const presentation = existing?.presentation ?? defaultPresentation
+  const suppressed = normalizeSuppressedSegmentIndexes(suppressedSegmentIndexes)
+  const withoutDrawing = node.drawingOverrides.filter((entry) => entry.drawingType !== drawingType)
+  const next = { drawingType, presentation, suppressedSegmentIndexes: suppressed }
+  return isDefaultConstructionDimensionDrawingOverride(next, defaultPresentation)
+    ? withoutDrawing
+    : [...withoutDrawing, next]
 }
 
 export function constructionDimensionRequiredAnchorCount(mode: ConstructionDimensionMode): number {
   return mode === 'arc-length' || mode === 'angular' ? 3 : 2
+}
+
+function isDefaultConstructionDimensionDrawingOverride(
+  override: ConstructionDimensionDrawingOverride,
+  defaultPresentation: ConstructionDimensionDrawingPresentation,
+): boolean {
+  return (
+    override.presentation === defaultPresentation && override.suppressedSegmentIndexes.length === 0
+  )
+}
+
+function normalizeSuppressedSegmentIndexes(indexes: readonly number[]): number[] {
+  return [...new Set(indexes.filter((index) => Number.isInteger(index) && index >= 0))].sort(
+    (left, right) => left - right,
+  )
 }

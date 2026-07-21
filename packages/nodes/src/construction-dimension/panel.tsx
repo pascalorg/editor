@@ -11,8 +11,10 @@ import {
   type ConstructionDimensionTerminator,
   type ConstructionDimensionTextPosition,
   type ConstructionDrawingType,
+  resolveConstructionDimensionDrawingOverride,
   resolveConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -112,6 +114,13 @@ export default function ConstructionDimensionPanel() {
     dimension,
     activeDrawingType,
   )
+  const activeDrawingOverride = resolveConstructionDimensionDrawingOverride(
+    dimension,
+    activeDrawingType,
+  )
+  const suppressedSegmentsText = formatSuppressedSegments(
+    activeDrawingOverride?.suppressedSegmentIndexes ?? [],
+  )
   const updateDrawingPresentation = (
     drawingType: ConstructionDrawingType,
     presentation: ConstructionDimensionDrawingPresentation,
@@ -126,6 +135,15 @@ export default function ConstructionDimensionPanel() {
       ...(presentation === 'controlled' && !dimension.controllingDimensionId
         ? { controllingDimensionId: foundationControllers[0]?.id ?? null }
         : {}),
+    })
+  }
+  const updateSuppressedSegments = (value: string) => {
+    update({
+      drawingOverrides: setConstructionDimensionDrawingSuppressedSegments(
+        dimension,
+        activeDrawingType,
+        parseSuppressedSegments(value),
+      ),
     })
   }
 
@@ -221,6 +239,15 @@ export default function ConstructionDimensionPanel() {
         ) : null}
         <p className="text-muted-foreground text-xs">
           Linked dimensions reuse the controller's associative anchors and update with it.
+        </p>
+        <TextField
+          label={`${activeDrawingLabel} suppressed segments`}
+          onCommit={updateSuppressedSegments}
+          placeholder="e.g. 2, 4"
+          value={suppressedSegmentsText}
+        />
+        <p className="text-muted-foreground text-xs">
+          Segment numbers are one-based and apply only in this drawing view.
         </p>
       </PanelSection>
 
@@ -330,6 +357,22 @@ export default function ConstructionDimensionPanel() {
       </PanelSection>
     </PanelWrapper>
   )
+}
+
+function parseSuppressedSegments(value: string): number[] {
+  return [
+    ...new Set(
+      value
+        .split(/[,\s]+/)
+        .map((part) => Number.parseInt(part, 10))
+        .filter((index) => Number.isInteger(index) && index > 0)
+        .map((index) => index - 1),
+    ),
+  ].sort((left, right) => left - right)
+}
+
+function formatSuppressedSegments(indexes: readonly number[]): string {
+  return indexes.map((index) => index + 1).join(', ')
 }
 
 function SelectField({

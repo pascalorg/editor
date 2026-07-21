@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   ConstructionDimensionNode,
+  resolveConstructionDimensionDrawingOverride,
   resolveConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
 } from './construction-dimension'
 
 describe('ConstructionDimensionNode', () => {
@@ -137,12 +139,42 @@ describe('ConstructionDimensionNode', () => {
   test('stores only drawing presentations that differ from the primary defaults', () => {
     const node = ConstructionDimensionNode.parse({})
     const referenced = setConstructionDimensionDrawingPresentation(node, 'roof-plan', 'reference')
-    expect(referenced).toEqual([{ drawingType: 'roof-plan', presentation: 'reference' }])
+    expect(referenced).toEqual([
+      { drawingType: 'roof-plan', presentation: 'reference', suppressedSegmentIndexes: [] },
+    ])
     expect(
       setConstructionDimensionDrawingPresentation(
         { ...node, drawingOverrides: referenced },
         'roof-plan',
         'omit',
+      ),
+    ).toEqual([])
+  })
+
+  test('stores view-specific suppressed segment indexes without changing default presentation', () => {
+    const node = ConstructionDimensionNode.parse({})
+    const drawingOverrides = setConstructionDimensionDrawingSuppressedSegments(
+      node,
+      'floor-plan',
+      [3, 1, 1, -1],
+    )
+
+    expect(drawingOverrides).toEqual([
+      {
+        drawingType: 'floor-plan',
+        presentation: 'shown',
+        suppressedSegmentIndexes: [1, 3],
+      },
+    ])
+    expect(
+      resolveConstructionDimensionDrawingOverride({ ...node, drawingOverrides }, 'floor-plan')
+        ?.suppressedSegmentIndexes,
+    ).toEqual([1, 3])
+    expect(
+      setConstructionDimensionDrawingSuppressedSegments(
+        { ...node, drawingOverrides },
+        'floor-plan',
+        [],
       ),
     ).toEqual([])
   })

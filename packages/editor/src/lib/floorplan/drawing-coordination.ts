@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type ConstructionDimensionNode,
   type ConstructionDrawingType,
+  resolveConstructionDimensionDrawingOverride,
   resolveConstructionDimensionDrawingPresentation,
 } from '@pascal-app/core'
 
@@ -13,9 +14,13 @@ export function resolveNodeForDrawingType(
   if (node.type !== 'construction-dimension') return node
   const presentation = resolveConstructionDimensionDrawingPresentation(node, drawingType)
   if (presentation === 'omit') return null
-  if (presentation === 'shown') return node
+  if (presentation === 'shown') return applyDrawingOverride(node, drawingType)
   if (presentation === 'reference') {
-    return { ...node, metadata: lockedMetadata(node), reference: true }
+    return {
+      ...applyDrawingOverride(node, drawingType),
+      metadata: lockedMetadata(applyDrawingOverride(node, drawingType)),
+      reference: true,
+    }
   }
 
   const controller = node.controllingDimensionId ? nodes[node.controllingDimensionId] : undefined
@@ -39,15 +44,35 @@ function resolveControlledDimension(
   node: ConstructionDimensionNode,
   controller: ConstructionDimensionNode,
 ): ConstructionDimensionNode {
+  const overridden = applyDrawingOverride(node, 'floor-plan')
   return {
-    ...node,
-    metadata: lockedMetadata(node),
+    ...overridden,
+    metadata: lockedMetadata(overridden),
     anchors: controller.anchors,
     baseline: controller.baseline,
     chainMode: controller.chainMode,
     mode: controller.mode,
     showCenterMark: controller.showCenterMark,
     reference: true,
+  }
+}
+
+function applyDrawingOverride(
+  node: ConstructionDimensionNode,
+  drawingType: ConstructionDrawingType,
+): ConstructionDimensionNode {
+  const override = resolveConstructionDimensionDrawingOverride(node, drawingType)
+  if (!override || override.suppressedSegmentIndexes.length === 0) return node
+  return {
+    ...node,
+    metadata: {
+      ...(typeof node.metadata === 'object' &&
+      node.metadata !== null &&
+      !Array.isArray(node.metadata)
+        ? node.metadata
+        : {}),
+      suppressedDimensionSegmentIndexes: override.suppressedSegmentIndexes,
+    },
   }
 }
 

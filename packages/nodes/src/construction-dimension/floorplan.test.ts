@@ -177,6 +177,27 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
   })
 
+  test('suppresses view-specific string segments without mutating physical anchors', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [5, 0, 0],
+        [9, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      chainMode: 'continuous',
+      metadata: { suppressedDimensionSegmentIndexes: [1] },
+    })
+
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const dimensions = dimensionSegments(geometry)
+
+    expect(node.anchors).toHaveLength(4)
+    expect(dimensions).toHaveLength(2)
+    expect(dimensions.map((dimension) => dimension.text)).toEqual(['2m', '4m'])
+  })
+
   test('passes persistent dimension standards to linear dimension strings', () => {
     const node = ConstructionDimensionNode.parse({
       anchors: [

@@ -35,6 +35,52 @@ describe('resolveNodeForDrawingType', () => {
     })
   })
 
+  test('applies view-specific suppressed segments without changing physical anchors', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+        [5, 0, 0],
+      ],
+      drawingOverrides: [
+        {
+          drawingType: 'floor-plan',
+          presentation: 'shown',
+          suppressedSegmentIndexes: [1],
+        },
+      ],
+    })
+    const resolved = resolveNodeForDrawingType(node, { [node.id]: node }, 'floor-plan')
+
+    expect(resolved).toMatchObject({
+      id: node.id,
+      anchors: node.anchors,
+      metadata: { suppressedDimensionSegmentIndexes: [1] },
+    })
+    expect(node.metadata).toEqual({})
+  })
+
+  test('retains suppressed segments on reference drawing copies', () => {
+    const node = ConstructionDimensionNode.parse({
+      drawingOverrides: [
+        {
+          drawingType: 'roof-plan',
+          presentation: 'reference',
+          suppressedSegmentIndexes: [0],
+        },
+      ],
+    })
+    const resolved = resolveNodeForDrawingType(node, { [node.id]: node }, 'roof-plan')
+
+    expect(resolved).toMatchObject({
+      reference: true,
+      metadata: {
+        drawingCoordinationLocked: true,
+        suppressedDimensionSegmentIndexes: [0],
+      },
+    })
+  })
+
   test('derives linked floor-plan geometry from a controlling foundation dimension', () => {
     const floor = ConstructionDimensionNode.parse({
       id: 'construction-dimension_floor',

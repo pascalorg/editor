@@ -79,7 +79,9 @@ function buildLinearOrChord(
 ): FloorplanGeometry {
   const layout = resolveConstructionDimensionLayout(node, points)
   const children: FloorplanGeometry[] = []
-  const dimensionSegments = layout.segments.map((segment) => {
+  const suppressedSegments = suppressedDimensionSegmentIndexes(node)
+  const visibleSegments = layout.segments.filter((_, index) => !suppressedSegments.has(index))
+  const dimensionSegments = visibleSegments.map((segment) => {
     const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit, 'editor', lengthFormatOptions(node))}`
     return {
       witnessStart: segment.witnessStart,
@@ -90,17 +92,21 @@ function buildLinearOrChord(
     }
   })
   children.push(
-    buildDimensionStringGeometry({
-      segments: dimensionSegments,
-      offsetNormal: layout.normal,
-      offsetDistance: 0,
-      extensionStartGap: node.extensionStartGap,
-      extensionOvershoot: node.extensionOvershoot,
-      terminator: node.terminator,
-      textPosition: node.textPosition,
-      stroke,
-    }),
-    ...layout.segments.map((segment) => hitLine(segment.dimensionStart, segment.dimensionEnd)),
+    ...(dimensionSegments.length > 0
+      ? [
+          buildDimensionStringGeometry({
+            segments: dimensionSegments,
+            offsetNormal: layout.normal,
+            offsetDistance: 0,
+            extensionStartGap: node.extensionStartGap,
+            extensionOvershoot: node.extensionOvershoot,
+            terminator: node.terminator,
+            textPosition: node.textPosition,
+            stroke,
+          }),
+        ]
+      : []),
+    ...visibleSegments.map((segment) => hitLine(segment.dimensionStart, segment.dimensionEnd)),
   )
   if (editable)
     children.push(...witnessHandles(layout.witnessPoints), baselineHandle(layout.midpoint))
@@ -291,6 +297,21 @@ function buildCoordinate(
   })
   if (editable) children.push(...anchorHandles(points))
   return dimensionGroup(node, children)
+}
+
+function suppressedDimensionSegmentIndexes(node: ConstructionDimensionNode): ReadonlySet<number> {
+  const metadata = node.metadata
+  if (!(typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata))) {
+    return new Set()
+  }
+  const value = metadata.suppressedDimensionSegmentIndexes
+  if (!Array.isArray(value)) return new Set()
+  return new Set(
+    value.filter(
+      (entry): entry is number =>
+        typeof entry === 'number' && Number.isInteger(entry) && entry >= 0,
+    ),
+  )
 }
 
 function dimensionGroup(
