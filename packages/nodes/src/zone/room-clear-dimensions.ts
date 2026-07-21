@@ -23,6 +23,8 @@ type FaceLine = {
   end: FloorplanPoint
 }
 
+type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
+
 type ClearDimensionPolicy = Extract<
   ZoneNode['clearDimensionPolicy'],
   'inside-faces' | 'finish-faces'
@@ -64,45 +66,27 @@ export function buildRoomClearDimensions(
   if (!space) return []
 
   const wallsById = new Map(walls.map((wall) => [wall.id, wall]))
-  const rectangle = resolveClearFaceRectangle(
-    space.boundaryFaces,
-    wallsById,
-    node.clearDimensionPolicy,
-  )
-  if (!rectangle) return []
+  const faceLines = resolveClearFaceLines(space.boundaryFaces, wallsById, node.clearDimensionPolicy)
+  if (!faceLines) return []
 
   const unit = ctx.viewState?.unit ?? 'metric'
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#475569'
-  const first = dimensionAcrossOppositeFaces(
-    rectangle[0],
-    rectangle[1],
-    rectangle[3],
-    rectangle[2],
-    FIRST_DIMENSION_POSITION,
-    unit,
-    stroke,
-  )
-  const second = dimensionAcrossOppositeFaces(
-    rectangle[1],
-    rectangle[2],
-    rectangle[0],
-    rectangle[3],
-    SECOND_DIMENSION_POSITION,
-    unit,
-    stroke,
-  )
-  const dimensions = first && second ? [first, second] : []
+  const rectangle = resolveClearFaceRectangle(faceLines)
+  const dimensions = rectangle
+    ? buildRectangleClearDimensions(rectangle, unit, stroke)
+    : buildRectilinearClearDimensions(faceLines, unit, stroke)
+  if (dimensions.length === 0) return []
   return [
     ...dimensions,
     ...buildRoomToRoomClearDimensions(node, ctx, space.boundaryFaces, wallsById, unit, stroke),
   ]
 }
 
-function resolveClearFaceRectangle(
+function resolveClearFaceLines(
   boundaryFaces: readonly SpaceBoundaryFace[],
   wallsById: ReadonlyMap<string, WallNode>,
   policy: ClearDimensionPolicy,
-): [FloorplanPoint, FloorplanPoint, FloorplanPoint, FloorplanPoint] | null {
+): FaceLine[] | null {
   const faceLines: FaceLine[] = []
   for (const boundary of boundaryFaces) {
     const wall = wallsById.get(boundary.wallId)
@@ -113,6 +97,12 @@ function resolveClearFaceRectangle(
   }
 
   const merged = mergeCollinearFaces(faceLines)
+  return merged.length >= 4 ? merged : null
+}
+
+function resolveClearFaceRectangle(
+  merged: readonly FaceLine[],
+): [FloorplanPoint, FloorplanPoint, FloorplanPoint, FloorplanPoint] | null {
   if (merged.length !== 4) return null
 
   const vertices = merged.map((line, index) => {
@@ -142,6 +132,71 @@ function resolveClearFaceRectangle(
     return null
   }
   return rectangle
+}
+
+function buildRectangleClearDimensions(
+  rectangle: [FloorplanPoint, FloorplanPoint, FloorplanPoint, FloorplanPoint],
+  unit: 'metric' | 'imperial',
+  stroke: string,
+): FloorplanGeometry[] {
+  const first = dimensionAcrossOppositeFaces(
+    rectangle[0],
+    rectangle[1],
+    rectangle[3],
+    rectangle[2],
+    FIRST_DIMENSION_POSITION,
+    unit,
+    stroke,
+  )
+  const second = dimensionAcrossOppositeFaces(
+    rectangle[1],
+    rectangle[2],
+    rectangle[0],
+    rectangle[3],
+    SECOND_DIMENSION_POSITION,
+    unit,
+    stroke,
+  )
+  return first && second ? [first, second] : []
+}
+
+function buildRectilinearClearDimensions(
+  faceLines: readonly FaceLine[],
+  unit: 'metric' | 'imperial',
+  stroke: string,
+): FloorplanGeometry[] {
+  const vertices = clearFacePolygon(faceLines)
+  if (!vertices || !isRectilinearPolygon(vertices)) return []
+
+  const dimensions: FloorplanGeometry[] = []
+  const seen = new Set<string>()
+  for (let firstIndex = 0; firstIndex < faceLines.length; firstIndex++) {
+    const first = faceLines[firstIndex]!
+    const firstDirection = normalizedDirection(first.start, first.end)
+    if (!firstDirection) return []
+
+    for (let secondIndex = firstIndex + 1; secondIndex < faceLines.length; secondIndex++) {
+      const second = faceLines[secondIndex]!
+      const secondDirection = normalizedDirection(second.start, second.end)
+      if (!secondDirection) return []
+      if (Math.abs(dot(firstDirection, secondDirection)) < 1 - ANGLE_TOLERANCE) continue
+
+      const dimension = dimensionBetweenOverlappingParallelFaces(
+        first,
+        second,
+        firstDirection,
+        vertices,
+        unit,
+        stroke,
+      )
+      if (!dimension) continue
+      const key = dimensionKey(dimension)
+      if (seen.has(key)) continue
+      seen.add(key)
+      dimensions.push(dimension)
+    }
+  }
+  return dimensions
 }
 
 function offsetBoundaryFace(
@@ -175,6 +230,96 @@ function resolveFinishFaceOffset(wall: WallNode, side: 1 | -1): number | null {
   )
   const matching = references.find((reference) => Math.sign(reference.offset) === side)
   return matching?.offset ?? null
+}
+
+function clearFacePolygon(faceLines: readonly FaceLine[]): FloorplanPoint[] | null {
+  const vertices = faceLines.map((line, index) => {
+    const previous = faceLines[(index + faceLines.length - 1) % faceLines.length]!
+    return intersectLines(previous, line)
+  })
+  return vertices.some((vertex) => vertex === null) ? null : (vertices as FloorplanPoint[])
+}
+
+function isRectilinearPolygon(vertices: readonly FloorplanPoint[]): boolean {
+  if (vertices.length < 4) return false
+  const directions = vertices.map((start, index) =>
+    normalizedDirection(start, vertices[(index + 1) % vertices.length]!),
+  )
+  if (directions.some((direction) => direction === null)) return false
+  for (let index = 0; index < directions.length; index++) {
+    const current = directions[index]!
+    const next = directions[(index + 1) % directions.length]!
+    if (Math.abs(dot(current, next)) > ANGLE_TOLERANCE) return false
+  }
+  return true
+}
+
+function dimensionBetweenOverlappingParallelFaces(
+  first: FaceLine,
+  second: FaceLine,
+  direction: FloorplanPoint,
+  polygon: readonly FloorplanPoint[],
+  unit: 'metric' | 'imperial',
+  stroke: string,
+): DimensionGeometry | null {
+  const firstStart = dot(first.start, direction)
+  const firstEnd = dot(first.end, direction)
+  const secondStart = dot(second.start, direction)
+  const secondEnd = dot(second.end, direction)
+  const overlapStart = Math.max(Math.min(firstStart, firstEnd), Math.min(secondStart, secondEnd))
+  const overlapEnd = Math.min(Math.max(firstStart, firstEnd), Math.max(secondStart, secondEnd))
+  if (overlapEnd - overlapStart < MIN_CLEAR_SPAN) return null
+
+  const projection = (overlapStart + overlapEnd) / 2
+  const start = projectPointToLineProjection(first, direction, projection)
+  const end = projectPointToLineProjection(second, direction, projection)
+  const midpoint: FloorplanPoint = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2]
+  if (!pointInPolygon(midpoint, polygon)) return null
+
+  const axis = normalizedDirection(start, end)
+  if (!axis) return null
+  const length = distance(start, end)
+  if (length < MIN_CLEAR_SPAN) return null
+
+  return {
+    kind: 'dimension',
+    start,
+    end,
+    offsetNormal: [-axis[1], axis[0]],
+    offsetDistance: 0,
+    extensionOvershoot: EXTENSION_OVERSHOOT,
+    text: formatConstructionLength(length, unit),
+    stroke,
+  }
+}
+
+function pointInPolygon(point: FloorplanPoint, polygon: readonly FloorplanPoint[]): boolean {
+  let inside = false
+  for (
+    let index = 0, previousIndex = polygon.length - 1;
+    index < polygon.length;
+    previousIndex = index++
+  ) {
+    const current = polygon[index]!
+    const previous = polygon[previousIndex]!
+    const intersects =
+      current[1] > point[1] !== previous[1] > point[1] &&
+      point[0] <
+        ((previous[0] - current[0]) * (point[1] - current[1])) / (previous[1] - current[1]) +
+          current[0]
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+function dimensionKey(dimension: DimensionGeometry): string {
+  const first = `${roundKey(dimension.start[0])},${roundKey(dimension.start[1])}`
+  const second = `${roundKey(dimension.end[0])},${roundKey(dimension.end[1])}`
+  return first < second ? `${first}|${second}` : `${second}|${first}`
+}
+
+function roundKey(value: number): number {
+  return Math.round(value / LINE_TOLERANCE)
 }
 
 function buildRoomToRoomClearDimensions(
@@ -253,7 +398,7 @@ function dimensionAcrossSharedRoomWall(
   neighborLine: FaceLine,
   unit: 'metric' | 'imperial',
   stroke: string,
-): FloorplanGeometry | null {
+): DimensionGeometry | null {
   const direction = normalizedDirection(currentLine.start, currentLine.end)
   if (!direction) return null
   const neighborDirection = normalizedDirection(neighborLine.start, neighborLine.end)

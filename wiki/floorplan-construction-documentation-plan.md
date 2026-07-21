@@ -67,7 +67,7 @@ assessment.
 
 - [x] Add finish-face and room-to-room clear dimensions once wall-assembly and inter-room datum
   evidence exists.
-- [ ] Extend reliable automatic clear dimensions beyond proven straight rectangular enclosures
+- [x] Extend reliable automatic clear dimensions beyond proven straight rectangular enclosures
   without presenting guessed dimensions for open, irregular, or incomplete rooms.
 
 ### Advisory and completeness analysis
@@ -490,7 +490,9 @@ now render between modeled inside wall faces for proven straight rectangular enc
 rotated rooms. Finish-face clear dimensions now render only when every boundary wall has modeled
 assembly finish-face datums, and adjacent rectangular room zones can emit a room-to-room
 finish-to-finish shared-wall dimension when both rooms prove the same wall datum. Open, irregular,
-and incomplete cases remain suppressed rather than presenting an unproven datum.
+and incomplete cases remain suppressed rather than presenting an unproven datum. Automatic clear
+dimensions now also support proven rectilinear multi-bay rooms by dimensioning only overlapping
+parallel clear-face runs whose connecting span lies inside the detected room polygon.
 
 - Center room name and number.
 - Place finish information below the room name.
@@ -499,6 +501,8 @@ and incomplete cases remain suppressed rather than presenting an unproven datum.
 - [x] Generate finish-face clear dimensions only when wall assembly datum evidence is reliable.
 - [x] Generate room-to-room finish-face dimensions only when adjacent room datum evidence is
   reliable.
+- [x] Extend automatic clear dimensions to proven rectilinear multi-bay rooms without guessing open,
+  irregular, or incomplete rooms.
 
 ### 6.3 Add stair annotations
 

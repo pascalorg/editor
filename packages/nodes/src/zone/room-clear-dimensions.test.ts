@@ -238,6 +238,21 @@ describe('buildRoomClearDimensions', () => {
     expect(result.find((entry) => entry.text.startsWith('R-R'))?.text).toBe('R-R 0.24m')
   })
 
+  test('dimensions proven rectilinear room bays beyond simple rectangles', () => {
+    const { context, zone } = enclosure([
+      [0, 0],
+      [4, 0],
+      [4, 2],
+      [2, 2],
+      [2, 4],
+      [0, 4],
+    ])
+
+    const result = dimensions(buildRoomClearDimensions(zone, context))
+
+    expect(result.map((entry) => entry.text).sort()).toEqual(['1.8m', '1.8m', '3.8m', '3.8m'])
+  })
+
   test('suppresses dimensions when the requested datum cannot be proven', () => {
     const { context, nodes, walls, zone } = enclosure([
       [0, 0],
