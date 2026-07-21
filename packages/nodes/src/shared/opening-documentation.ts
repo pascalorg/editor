@@ -12,6 +12,23 @@ import { type ConstructionLinearUnit, formatConstructionLength } from './constru
 type OpeningNode = DoorNode | WindowNode
 type OpeningKind = OpeningNode['type']
 
+export type OpeningConstructionType = 'framed' | 'masonry'
+export type OpeningDimensionReference =
+  | 'nominal'
+  | 'rough-opening'
+  | 'masonry-opening'
+  | 'finish-opening'
+
+export type OpeningDimensionDocumentation = {
+  constructionType: OpeningConstructionType
+  reference: OpeningDimensionReference
+  locationPolicy: 'centerline' | 'edge-to-edge'
+  width: number | null
+  height: number | null
+  prefix: string
+  verified: boolean
+}
+
 export type OpeningFloorplanLevelData = {
   markById: ReadonlyMap<string, string>
 }
@@ -184,6 +201,30 @@ export function buildOpeningMarkAnnotation(
   }
 }
 
+export function resolveOpeningDimensionDocumentation(
+  opening: OpeningNode,
+): OpeningDimensionDocumentation {
+  const constructionType = opening.constructionType ?? 'framed'
+  const requestedReference =
+    constructionType === 'masonry' &&
+    opening.dimensionReference === 'nominal' &&
+    opening.masonryOpeningWidth !== undefined
+      ? 'masonry-opening'
+      : (opening.dimensionReference ?? 'nominal')
+
+  const dimensions = openingDocumentationDimensions(opening, requestedReference)
+
+  return {
+    constructionType,
+    reference: requestedReference,
+    locationPolicy: constructionType === 'masonry' ? 'edge-to-edge' : 'centerline',
+    width: dimensions.width,
+    height: dimensions.height,
+    prefix: openingDimensionPrefix(requestedReference),
+    verified: requestedReference === 'nominal' || dimensions.width !== null,
+  }
+}
+
 function resolveOpeningMarks<T extends OpeningNode>(
   openings: ReadonlyArray<T>,
   nodes: Readonly<Record<string, AnyNode>>,
@@ -268,6 +309,44 @@ function formatRoughOpening(opening: OpeningNode, unit: ConstructionLinearUnit):
     return 'VERIFY'
   }
   return formatSize(opening.roughOpeningWidth, opening.roughOpeningHeight, unit)
+}
+
+function openingDocumentationDimensions(
+  opening: OpeningNode,
+  reference: OpeningDimensionReference,
+): { width: number | null; height: number | null } {
+  switch (reference) {
+    case 'nominal':
+      return { width: opening.width, height: opening.height }
+    case 'rough-opening':
+      return {
+        width: opening.roughOpeningWidth ?? null,
+        height: opening.roughOpeningHeight ?? null,
+      }
+    case 'masonry-opening':
+      return {
+        width: opening.masonryOpeningWidth ?? null,
+        height: opening.masonryOpeningHeight ?? null,
+      }
+    case 'finish-opening':
+      return {
+        width: opening.finishOpeningWidth ?? null,
+        height: opening.finishOpeningHeight ?? null,
+      }
+  }
+}
+
+function openingDimensionPrefix(reference: OpeningDimensionReference): string {
+  switch (reference) {
+    case 'nominal':
+      return ''
+    case 'rough-opening':
+      return 'RO'
+    case 'masonry-opening':
+      return 'MO'
+    case 'finish-opening':
+      return 'FO'
+  }
 }
 
 function doorOperation(door: DoorNode): string {

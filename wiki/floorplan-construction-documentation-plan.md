@@ -60,7 +60,7 @@ assessment.
   assembly-aware references.
 - [x] Add assembly-aware poche, hatches, cut weights, finish graphics, masonry/air-space graphics,
   concrete-block and structural-masonry graphics, and concrete/furring graphics.
-- [ ] Add explicit rough-opening (`RO`), masonry-opening (`MO`), framed centerline, masonry
+- [x] Add explicit rough-opening (`RO`), masonry-opening (`MO`), framed centerline, masonry
   edge-to-edge, and optional finish-opening documentation policies.
 
 ### Room documentation gaps
@@ -446,11 +446,17 @@ structural masonry, solid concrete, and furring.
 
 ### 5.4 Add opening documentation policies
 
-- `RO` rough-opening notation.
-- `MO` masonry-opening notation.
-- Edge-to-edge opening dimensions for masonry construction.
-- Centerline opening locations for framed construction.
-- Optional finish-opening reference dimensions.
+Status: implemented for opening schema, shared opening-documentation helpers, and coordinated wall
+dimension planning. Doors and windows now declare construction type and requested dimension
+reference, with verified rough-opening, masonry-opening, and finish-opening dimensions. Framed
+openings retain centerline location strings; masonry openings use edge-to-edge strings. Unverified
+rough-opening requests are skipped instead of deriving guessed values from nominal dimensions.
+
+- [x] `RO` rough-opening notation.
+- [x] `MO` masonry-opening notation.
+- [x] Edge-to-edge opening dimensions for masonry construction.
+- [x] Centerline opening locations for framed construction.
+- [x] Optional finish-opening reference dimensions.
 
 Do not derive rough openings from nominal dimensions unless an explicit manufacturer or assembly rule proves the value.
 

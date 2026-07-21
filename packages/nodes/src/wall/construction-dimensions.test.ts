@@ -242,6 +242,113 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     })
   })
 
+  test('labels verified rough openings while retaining framed centerline locations', () => {
+    const exterior = wall()
+    const door = DoorNode.parse({
+      id: 'door_ro',
+      parentId: exterior.id,
+      position: [2, 1.05, 0],
+      width: 1,
+      dimensionReference: 'rough-opening',
+      roughOpeningWidth: 1.2,
+      roughOpeningHeight: 2.2,
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan([exterior], { [door.id]: door }).get(exterior.id) ??
+      []
+
+    expect(planned.map((entry) => entry.tier)).toEqual([
+      'opening-widths',
+      'openings',
+      'openings',
+      'overall',
+    ])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      'RO 1.2m',
+      '2m',
+      '8m',
+      '10m',
+    ])
+  })
+
+  test('uses masonry openings as edge-to-edge dimensions without framed centerline strings', () => {
+    const exterior = wall()
+    const window = WindowNode.parse({
+      id: 'window_mo',
+      parentId: exterior.id,
+      position: [6, 1.5, 0],
+      width: 1,
+      constructionType: 'masonry',
+      masonryOpeningWidth: 1.4,
+      masonryOpeningHeight: 1.6,
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan([exterior], { [window.id]: window }).get(
+        exterior.id,
+      ) ?? []
+
+    expect(planned.map((entry) => entry.tier)).toEqual(['opening-widths', 'overall'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      'MO 1.4m',
+      '10m',
+    ])
+  })
+
+  test('skips unverified rough-opening widths instead of deriving them from nominal size', () => {
+    const exterior = wall()
+    const door = DoorNode.parse({
+      id: 'door_missing_ro',
+      parentId: exterior.id,
+      position: [2, 1.05, 0],
+      width: 1,
+      dimensionReference: 'rough-opening',
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan([exterior], { [door.id]: door }).get(exterior.id) ??
+      []
+
+    expect(planned.map((entry) => entry.tier)).toEqual(['openings', 'openings', 'overall'])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      '2m',
+      '8m',
+      '10m',
+    ])
+  })
+
+  test('labels optional finish-opening reference dimensions when explicitly verified', () => {
+    const exterior = wall()
+    const window = WindowNode.parse({
+      id: 'window_fo',
+      parentId: exterior.id,
+      position: [5, 1.5, 0],
+      width: 1.2,
+      dimensionReference: 'finish-opening',
+      finishOpeningWidth: 0.95,
+      finishOpeningHeight: 1.2,
+    })
+
+    const planned =
+      buildLevelWallConstructionDimensionPlan([exterior], { [window.id]: window }).get(
+        exterior.id,
+      ) ?? []
+
+    expect(planned.map((entry) => entry.tier)).toEqual([
+      'opening-widths',
+      'openings',
+      'openings',
+      'overall',
+    ])
+    expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
+      'FO 0.95m',
+      '5m',
+      '5m',
+      '10m',
+    ])
+  })
+
   test('uses drawing standard tier spacing for coordinated facade dimensions', () => {
     const exterior = wall()
     const partition = wall({

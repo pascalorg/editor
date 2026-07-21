@@ -17,6 +17,16 @@ export const WindowType = z.enum([
 ])
 export type WindowType = z.infer<typeof WindowType>
 
+export const WindowConstructionType = z.enum(['framed', 'masonry'])
+export const WindowDimensionReference = z.enum([
+  'nominal',
+  'rough-opening',
+  'masonry-opening',
+  'finish-opening',
+])
+export type WindowConstructionType = z.infer<typeof WindowConstructionType>
+export type WindowDimensionReference = z.infer<typeof WindowDimensionReference>
+
 export const WindowNode = BaseNode.extend({
   id: objectId('window'),
   type: nodeType('window'),
@@ -48,8 +58,14 @@ export const WindowNode = BaseNode.extend({
   // Construction-document identity and optional manufacturer rough opening.
   // Legacy scenes omit these fields and continue to parse unchanged.
   mark: z.string().trim().max(16).optional(),
+  constructionType: WindowConstructionType.default('framed'),
+  dimensionReference: WindowDimensionReference.default('nominal'),
   roughOpeningWidth: z.number().positive().optional(),
   roughOpeningHeight: z.number().positive().optional(),
+  masonryOpeningWidth: z.number().positive().optional(),
+  masonryOpeningHeight: z.number().positive().optional(),
+  finishOpeningWidth: z.number().positive().optional(),
+  finishOpeningHeight: z.number().positive().optional(),
 
   // Opening mode - when set to "opening", the window is only a shaped cutout
   openingKind: z.enum(['window', 'opening']).default('window'),

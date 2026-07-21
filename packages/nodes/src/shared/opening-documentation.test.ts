@@ -6,6 +6,7 @@ import {
   buildWindowFloorplanSchedule,
   computeDoorFloorplanLevelData,
   computeWindowFloorplanLevelData,
+  resolveOpeningDimensionDocumentation,
 } from './opening-documentation'
 
 const FOOT = 0.3048
@@ -128,6 +129,50 @@ describe('opening construction documentation', () => {
       roughOpening: `4'-1 3/16" x 4'-2 3/8"`,
       sill: `3'-0"`,
       head: `7'-0"`,
+    })
+  })
+
+  test('resolves explicit opening dimension documentation without inventing missing values', () => {
+    const { doorA, windowA } = fixture()
+    const roughDoor = DoorNode.parse({
+      ...doorA,
+      dimensionReference: 'rough-opening',
+      roughOpeningWidth: 3.1 * FOOT,
+      roughOpeningHeight: 7.1 * FOOT,
+    })
+    const missingRoughDoor = DoorNode.parse({
+      ...doorA,
+      id: 'door_missing_ro',
+      dimensionReference: 'rough-opening',
+    })
+    const masonryWindow = WindowNode.parse({
+      ...windowA,
+      constructionType: 'masonry',
+      masonryOpeningWidth: 4.25 * FOOT,
+      masonryOpeningHeight: 4.25 * FOOT,
+    })
+
+    expect(resolveOpeningDimensionDocumentation(roughDoor)).toMatchObject({
+      constructionType: 'framed',
+      reference: 'rough-opening',
+      locationPolicy: 'centerline',
+      prefix: 'RO',
+      verified: true,
+      width: 3.1 * FOOT,
+    })
+    expect(resolveOpeningDimensionDocumentation(missingRoughDoor)).toMatchObject({
+      reference: 'rough-opening',
+      prefix: 'RO',
+      verified: false,
+      width: null,
+    })
+    expect(resolveOpeningDimensionDocumentation(masonryWindow)).toMatchObject({
+      constructionType: 'masonry',
+      reference: 'masonry-opening',
+      locationPolicy: 'edge-to-edge',
+      prefix: 'MO',
+      verified: true,
+      width: 4.25 * FOOT,
     })
   })
 

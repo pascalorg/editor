@@ -21,6 +21,7 @@ import {
   formatConstructionLength,
 } from '../shared/construction-length'
 import { buildDimensionStringGeometry } from '../shared/dimension-string'
+import { resolveOpeningDimensionDocumentation } from '../shared/opening-documentation'
 
 export { formatConstructionLength } from '../shared/construction-length'
 
@@ -60,6 +61,7 @@ export type PlannedConstructionDimension = {
   dimensionEnd?: FloorplanPoint
   offsetNormal: FloorplanPoint
   offsetDistance: number
+  textPrefix?: string
 }
 
 export type WallConstructionDimensionPlan = ReadonlyMap<
@@ -79,6 +81,7 @@ type PendingConstructionDimension = {
   end: FloorplanPoint
   startProjection: number
   endProjection: number
+  textPrefix?: string
 }
 
 export function buildLevelWallConstructionDimensionPlan(
@@ -329,6 +332,7 @@ export function renderPlannedConstructionDimensions(
       entry.dimensionEnd,
       profile,
       standard,
+      entry.textPrefix,
     ),
   )
 }
@@ -535,9 +539,19 @@ function dimension(
   dimensionEnd?: FloorplanPoint,
   profile: ConstructionLengthProfile = 'editor',
   standard: ConstructionDimensionDrawingStandard = DEFAULT_CONSTRUCTION_DIMENSION_STANDARD,
+  textPrefix?: string,
 ): FloorplanGeometry {
   const measurementStart = dimensionStart ?? start
   const measurementEnd = dimensionEnd ?? end
+  const lengthText = formatConstructionLength(
+    Math.hypot(measurementEnd[0] - measurementStart[0], measurementEnd[1] - measurementStart[1]),
+    unit,
+    profile,
+    {
+      imperialPrecision: standard.imperialPrecision,
+      metricNotation: standard.metricNotation,
+    },
+  )
   return buildDimensionStringGeometry({
     segments: [
       {
@@ -545,18 +559,7 @@ function dimension(
         witnessEnd: end,
         dimensionStart: dimensionStart ?? start,
         dimensionEnd: dimensionEnd ?? end,
-        text: formatConstructionLength(
-          Math.hypot(
-            measurementEnd[0] - measurementStart[0],
-            measurementEnd[1] - measurementStart[1],
-          ),
-          unit,
-          profile,
-          {
-            imperialPrecision: standard.imperialPrecision,
-            metricNotation: standard.metricNotation,
-          },
-        ),
+        text: textPrefix ? `${textPrefix} ${lengthText}` : lengthText,
       },
     ],
     offsetNormal,
@@ -862,7 +865,7 @@ function appendFacadeRunDimensions(
   const pointAt = (projection: number): FloorplanPoint =>
     pointFromCoordinates(projection, faceCoordinate, tangent, normal)
   const openingCenters: number[] = []
-  const openingSpans: Array<readonly [number, number]> = []
+  const openingSpans: Array<readonly [number, number, string]> = []
 
   for (const { wall } of members) {
     const dx = wall.end[0] - wall.start[0]
@@ -878,8 +881,10 @@ function appendFacadeRunDimensions(
         wall.start[0] + (dx / length) * along,
         wall.start[1] + (dz / length) * along,
       ]
-      openingCenters.push(dot(center, tangent))
-      const halfWidth = Math.max(0, opening.width) / 2
+      const documentation = resolveOpeningDimensionDocumentation(opening)
+      if (documentation.locationPolicy === 'centerline') openingCenters.push(dot(center, tangent))
+      if (documentation.width === null) continue
+      const halfWidth = Math.max(0, documentation.width) / 2
       const startProjection = dot(
         [
           wall.start[0] + (dx / length) * clamp(along - halfWidth, 0, length),
@@ -898,12 +903,13 @@ function appendFacadeRunDimensions(
         openingSpans.push([
           Math.min(startProjection, endProjection),
           Math.max(startProjection, endProjection),
+          documentation.prefix,
         ])
       }
     }
   }
 
-  for (const [startProjection, endProjection] of openingSpans.sort(
+  for (const [startProjection, endProjection, textPrefix] of openingSpans.sort(
     (left, right) => left[0] - right[0],
   )) {
     pending.push({
@@ -912,6 +918,7 @@ function appendFacadeRunDimensions(
       end: pointAt(endProjection),
       startProjection,
       endProjection,
+      textPrefix,
     })
   }
   appendReferenceTier(pending, openingCenters, extentStart, extentEnd, pointAt, 'openings')
@@ -1030,6 +1037,7 @@ function finalizeDimensionTiers(
         dimensionEnd,
         offsetNormal: normal,
         offsetDistance: Math.max(0, dot(subtract(dimensionStart, entry.start), normal)),
+        textPrefix: entry.textPrefix,
       }
     })
 }

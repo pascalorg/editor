@@ -81,7 +81,12 @@ export {
   ConstructionNoteTerminator,
 } from './nodes/construction-note'
 export { CupolaNode } from './nodes/cupola'
-export { DoorNode, DoorSegment } from './nodes/door'
+export {
+  DoorNode,
+  DoorSegment,
+  OpeningConstructionType,
+  OpeningDimensionReference,
+} from './nodes/door'
 export {
   DormerNode,
   type DormerSurfaceMaterialRole,
@@ -293,7 +298,12 @@ export {
   WallTreatmentSide,
   WallTrimProfile,
 } from './nodes/wall'
-export { WindowNode, WindowType } from './nodes/window'
+export {
+  WindowConstructionType,
+  WindowDimensionReference,
+  WindowNode,
+  WindowType,
+} from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export type { AnyNodeId, AnyNodeType } from './types'
