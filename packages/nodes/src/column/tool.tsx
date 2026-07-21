@@ -163,7 +163,10 @@ const ColumnTool = () => {
         cursorVisibleRef.current = false
         setCursorVisible(false)
         useFacingPose.getState().clear()
+        // Restore select mode with the tool — `mode: 'build'` with no tool is
+        // a dead state where the selection manager ignores every click.
         useEditor.getState().setTool(null)
+        useEditor.getState().setMode('select')
       }
       stopPlacementCommitPropagation(event)
     }
