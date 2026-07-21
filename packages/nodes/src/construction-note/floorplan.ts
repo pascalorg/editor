@@ -321,6 +321,29 @@ function buildTerminator(
     strokeLinecap: 'butt',
     pointerEvents: 'none',
   }
+  if (terminator === 'slash') {
+    return [
+      {
+        kind: 'line',
+        x1: anchor[0] - perpX,
+        y1: anchor[1] - perpY,
+        x2: anchor[0] + perpX,
+        y2: anchor[1] + perpY,
+        ...style,
+      },
+    ]
+  }
+  if (terminator === 'filled-arrow') {
+    return [
+      {
+        kind: 'polygon',
+        points: [anchor, [baseX + perpX, baseY + perpY], [baseX - perpX, baseY - perpY]],
+        fill: stroke,
+        stroke: 'none',
+        pointerEvents: 'none',
+      },
+    ]
+  }
   return [
     {
       kind: 'line',

@@ -50,7 +50,7 @@ assessment.
 - [x] Add stable keyed-note definitions, symbols, legends, and repeated instances.
 - [x] Add wall/glazing/assembly tags, section and elevation callouts, detail references, delta
   markers, revision clouds, and revision IDs.
-- [ ] Expand reusable leader terminators to include filled arrows and slashes.
+- [x] Expand reusable leader terminators to include filled arrows and slashes.
 
 ### Wall assemblies and construction datums
 
@@ -375,11 +375,12 @@ instances whose stable definition is missing.
 Status: document marker vocabulary is implemented in the persistent drawing-sheet model and PDF
 sheet composition. Sheets now store wall, glazing, and assembly tags; section/elevation callouts;
 detail references; delta markers; and revision clouds with revision IDs. PDF composition draws those
-markers in sheet space through one reusable document-marker renderer. Leader terminator expansion
-remains.
+markers in sheet space through one reusable document-marker renderer. Construction-note leaders now
+share expanded terminator vocabulary for open arrows, filled arrows, slashes, dots, and no
+terminator.
 
-- Filled arrowheads.
-- Slash terminators.
+- [x] Filled arrowheads.
+- [x] Slash terminators.
 - [x] Delta markers.
 - [x] Wall, glazing, and assembly tags.
 - [x] Section and elevation callouts.

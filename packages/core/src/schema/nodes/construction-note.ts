@@ -2,7 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 
-export const ConstructionNoteTerminator = z.enum(['arrow', 'dot', 'none'])
+export const ConstructionNoteTerminator = z.enum(['arrow', 'filled-arrow', 'slash', 'dot', 'none'])
 export const ConstructionNoteLeaderStyle = z.enum(['straight', 'curved'])
 export const ConstructionNoteContractScope = z.enum(['contract', 'owner', 'existing', 'nic'])
 export const ConstructionNoteSpecialtyKind = z.enum([
@@ -100,7 +100,7 @@ export const ConstructionNoteNode = BaseNode.extend({
   - anchor: absolute fallback/free target in level-local plan coordinates
   - textPosition: plan position of the multiline note block
   - targetId/targetOffset: optional attachment that follows a referenced scene node
-  - terminator: arrow, dot, or no leader terminator
+  - terminator: open arrow, filled arrow, slash, dot, or no leader terminator
   - leaderStyle: straight or quadratic curved leader
   - curveControl: chord fraction and perpendicular offset for the on-curve leader handle
   - specialty: optional typed access, rated-assembly, fixture, solid-fuel, closet, equipment, or overhead payload

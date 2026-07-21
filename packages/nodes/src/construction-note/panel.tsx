@@ -160,6 +160,8 @@ export default function ConstructionNotePanel() {
             value={note.terminator}
           >
             <option value="arrow">Arrow</option>
+            <option value="filled-arrow">Filled arrow</option>
+            <option value="slash">Slash</option>
             <option value="dot">Dot</option>
             <option value="none">None</option>
           </select>

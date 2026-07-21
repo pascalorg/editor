@@ -54,6 +54,13 @@ describe('ConstructionNoteNode', () => {
     ).toBe(false)
   })
 
+  test('accepts reusable leader terminator vocabulary', () => {
+    expect(ConstructionNoteNode.parse({ terminator: 'filled-arrow' }).terminator).toBe(
+      'filled-arrow',
+    )
+    expect(ConstructionNoteNode.parse({ terminator: 'slash' }).terminator).toBe('slash')
+  })
+
   test('can be hosted by a level', () => {
     const note = ConstructionNoteNode.parse({
       id: 'construction-note_level-child',

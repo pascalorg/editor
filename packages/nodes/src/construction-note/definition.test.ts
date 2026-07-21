@@ -6,7 +6,7 @@ describe('constructionNoteDefinition', () => {
     expect(constructionNoteDefinition.kind).toBe('construction-note')
     expect(constructionNoteDefinition.category).toBe('analysis')
     expect(constructionNoteDefinition.bake).toBe('strip')
-    expect(constructionNoteDefinition.schemaVersion).toBe(3)
+    expect(constructionNoteDefinition.schemaVersion).toBe(4)
     expect(constructionNoteDefinition.dirtyTracking).toBe(false)
     expect(constructionNoteDefinition.capabilities).toMatchObject({
       selectable: { hitVolume: 'bbox' },

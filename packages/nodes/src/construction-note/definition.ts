@@ -11,7 +11,7 @@ import { ConstructionNoteNode } from './schema'
 export const constructionNoteDefinition: NodeDefinition<typeof ConstructionNoteNode> = {
   kind: 'construction-note',
   bake: 'strip',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: ConstructionNoteNode,
   category: 'analysis',
   snapProfile: 'structural',

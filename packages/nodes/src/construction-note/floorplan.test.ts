@@ -83,6 +83,33 @@ describe('buildConstructionNoteFloorplan', () => {
     )
   })
 
+  test('builds filled-arrow and slash leader terminators', () => {
+    const filled = ConstructionNoteNode.parse({
+      id: 'construction-note_filled-arrow',
+      type: 'construction-note',
+      anchor: [1, 1],
+      textPosition: [3, 1],
+      terminator: 'filled-arrow',
+    })
+    const slash = ConstructionNoteNode.parse({
+      id: 'construction-note_slash',
+      type: 'construction-note',
+      anchor: [1, 1],
+      textPosition: [3, 1],
+      terminator: 'slash',
+    })
+
+    const filledEntries = buildConstructionNoteFloorplan(filled, context())
+    const slashEntries = buildConstructionNoteFloorplan(slash, context())
+
+    expect(filledEntries && flatten(filledEntries).some((entry) => entry.kind === 'polygon')).toBe(
+      true,
+    )
+    expect(
+      slashEntries && flatten(slashEntries).filter((entry) => entry.kind === 'line'),
+    ).toHaveLength(1)
+  })
+
   test('follows an attached wall and preserves a fallback when the target disappears', () => {
     const wall = WallNode.parse({
       id: 'wall_target',
