@@ -58,7 +58,7 @@ assessment.
   datums.
 - [x] Resolve stable centerline, structural-face, finish-face, veneer-face, and other
   assembly-aware references.
-- [ ] Add assembly-aware poche, hatches, cut weights, finish graphics, masonry/air-space graphics,
+- [x] Add assembly-aware poche, hatches, cut weights, finish graphics, masonry/air-space graphics,
   concrete-block and structural-masonry graphics, and concrete/furring graphics.
 - [ ] Add explicit rough-opening (`RO`), masonry-opening (`MO`), framed centerline, masonry
   edge-to-edge, and optional finish-opening documentation policies.
@@ -432,12 +432,17 @@ Automatic strings should select one face consistently for the complete string.
 
 ### 5.3 Add construction-system-specific graphics
 
-- Assembly-aware poche and hatches.
-- Heavy wall-cut graphics.
-- Thin finish-layer graphics.
-- Masonry veneer and air-space dimensions.
-- Concrete-block and structural-masonry representation.
-- Solid-concrete and furring representation.
+Status: implemented in the registry wall floor-plan builder. Modeled wall assemblies now plot at
+total assembly thickness and emit non-interactive layer polygons, boundary face lines, and role-based
+hatch graphics for structural poche, finish layers, masonry veneer, air space, concrete block,
+structural masonry, solid concrete, and furring.
+
+- [x] Assembly-aware poche and hatches.
+- [x] Heavy wall-cut graphics.
+- [x] Thin finish-layer graphics.
+- [x] Masonry veneer and air-space dimensions.
+- [x] Concrete-block and structural-masonry representation.
+- [x] Solid-concrete and furring representation.
 
 ### 5.4 Add opening documentation policies
 

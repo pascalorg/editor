@@ -85,11 +85,109 @@ describe('buildWallFloorplan render purpose', () => {
     const document = buildWallFloorplan(wall, context('document'))
     const texts = (geometry: FloorplanGeometry | null) =>
       geometry
-        ? flatten(geometry).flatMap((entry) => (entry.kind === 'dimension' ? [entry.text] : []))
+        ? flatten(geometry).flatMap((entry) =>
+            entry.kind === 'dimension-string' ? entry.segments.map((segment) => segment.text) : [],
+          )
         : []
 
     expect(texts(edit)).toContain('4m')
     expect(texts(document)).toContain('4000')
+  })
+
+  test('uses total assembly thickness and emits construction graphics for modeled layers', () => {
+    const assemblyWall = WallNode.parse({
+      ...wall,
+      thickness: undefined,
+      assemblyLayers: [
+        {
+          id: 'block-core',
+          role: 'concrete-block',
+          side: 'core',
+          thickness: 0.19,
+          materialRef: 'library:cmu',
+          datumEligible: ['structural-face'],
+        },
+        {
+          id: 'interior-furring',
+          role: 'furring',
+          side: 'interior',
+          thickness: 0.025,
+          materialRef: 'library:furring',
+          datumEligible: [],
+        },
+        {
+          id: 'interior-gwb',
+          role: 'interior-finish',
+          side: 'interior',
+          thickness: 0.016,
+          materialRef: 'library:gypsum-board',
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'exterior-air-space',
+          role: 'air-space',
+          side: 'exterior',
+          thickness: 0.025,
+          materialRef: '',
+          datumEligible: [],
+        },
+        {
+          id: 'brick-veneer',
+          role: 'masonry-veneer',
+          side: 'exterior',
+          thickness: 0.09,
+          materialRef: 'library:brick',
+          datumEligible: ['veneer-face'],
+        },
+      ],
+    })
+
+    const document = buildWallFloorplan(assemblyWall, context('document'))
+    const entries = document ? flatten(document) : []
+    const polygons = entries.filter((entry) => entry.kind === 'polygon')
+    const mainPolygon = polygons[0]
+
+    expect(mainPolygon?.kind).toBe('polygon')
+    if (mainPolygon?.kind !== 'polygon') return
+
+    const documentThickness =
+      Math.max(...mainPolygon.points.map((point) => point[1])) -
+      Math.min(...mainPolygon.points.map((point) => point[1]))
+    expect(documentThickness).toBeCloseTo(0.346)
+
+    const layerPolygons = polygons.slice(1)
+    expect(layerPolygons).toHaveLength(5)
+    expect(
+      layerPolygons.every((entry) => entry.kind === 'polygon' && entry.pointerEvents === 'none'),
+    ).toBe(true)
+    expect(
+      layerPolygons.map((entry) => (entry.kind === 'polygon' ? entry.fill : undefined)),
+    ).toEqual(['#cbd5e1', '#fde68a', '#f8fafc', '#ffffff', '#fca5a5'])
+
+    const lines = entries.filter((entry) => entry.kind === 'line')
+    expect(lines.some((entry) => entry.kind === 'line' && entry.stroke === '#991b1b')).toBe(true)
+    expect(
+      lines.some(
+        (entry) =>
+          entry.kind === 'line' &&
+          entry.stroke === '#64748b' &&
+          entry.strokeDasharray === '0.035 0.025',
+      ),
+    ).toBe(true)
+    expect(
+      lines.some(
+        (entry) =>
+          entry.kind === 'line' &&
+          entry.stroke === '#92400e' &&
+          entry.strokeDasharray === '0.04 0.02',
+      ),
+    ).toBe(true)
+    expect(
+      lines.filter(
+        (entry) =>
+          entry.kind === 'line' && entry.stroke === '#111827' && entry.strokeWidth === 0.85,
+      ),
+    ).toHaveLength(2)
   })
 
   test('shows a radius leader for a curved wall without requiring selection', () => {
