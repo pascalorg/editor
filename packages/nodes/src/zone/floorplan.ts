@@ -5,6 +5,7 @@ import {
   resolveAutoZonePolygon,
   type ZoneNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   formatConstructionLength,
@@ -26,6 +27,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   if (!ring || ring.length < 3) return null
 
   const view = ctx.viewState
+  const floorplanContext = readFloorplanContext(ctx)
   const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
@@ -106,8 +108,8 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         cx,
         cy,
         view?.unit ?? 'metric',
-        view?.purpose === 'document' ? 'document' : 'editor',
-        view?.metricNotation ?? 'meters',
+        floorplanContext.purpose === 'document' ? 'document' : 'editor',
+        floorplanContext.metricNotation,
         stroke,
       ),
     )
@@ -190,7 +192,7 @@ function buildRoomLabels(
     textAnchor: 'middle',
     dominantBaseline: 'central',
     upright: true,
-    annotationRole: 'room-label',
+    metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
   }))
 }
 

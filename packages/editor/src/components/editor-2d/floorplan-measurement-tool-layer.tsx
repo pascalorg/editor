@@ -44,7 +44,6 @@ import {
   useMeasurementDraft,
 } from '../../store/use-measurement-draft'
 import { formatAngleRadians } from '../tools/shared/segment-angle'
-import { FloorplanConstructionDimensionToolLayer } from './floorplan-construction-dimension-tool-layer'
 import { FloorplanQuickMeasureLayer } from './floorplan-quick-measure-layer'
 import { useFloorplanRender } from './floorplan-render-context'
 import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
@@ -772,7 +771,6 @@ export function FloorplanMeasurementToolLayer() {
   const storedKind = useEditor((state) => state.toolDefaults.measurement?.kind)
   const kind = isMeasurementKind(storedKind) ? storedKind : 'distance'
   const smartActive = mode === 'build' && tool === 'measurement' && storedKind === 'smart'
-  const constructionDimensionActive = mode === 'build' && tool === 'construction-dimension'
   const active = mode === 'build' && tool === 'measurement' && isMeasurementKind(storedKind)
   const renderContext = useFloorplanRender()
   const points = useMeasurementDraft((state) => state.points)
@@ -1318,7 +1316,6 @@ export function FloorplanMeasurementToolLayer() {
     vertexDrag,
   ])
 
-  if (constructionDimensionActive) return <FloorplanConstructionDimensionToolLayer />
   if (smartActive) return <FloorplanQuickMeasureLayer />
   if (!active || (draftLevelId && draftLevelId !== activeLevelId)) return null
   const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01

@@ -17,6 +17,7 @@ import {
   buildSvgAnnularSectorPath,
   buildSvgArcPath,
   buildSvgArrowHeadPoints,
+  floorplanGeometryMetadata,
   getArcPlanPoint,
 } from '@pascal-app/editor'
 import {
@@ -347,7 +348,7 @@ export function buildStairFloorplan(
       points: headPts.map((p) => [p.x, p.y] as FloorplanPoint),
       fill: stairAccent,
       stroke: 'none',
-      annotationRole: 'stair-annotation',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
     })
 
     // 7. Resize arrows — mirror of the 3D `CurvedStairWidthArrow`,
@@ -428,7 +429,7 @@ export function buildStairFloorplan(
         strokeLinecap: 'round',
         strokeLinejoin: 'round',
         opacity: showSelectedChrome ? 0.92 : 0.72,
-        annotationRole: 'stair-annotation',
+        metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
       })
     }
     if (directionArrow && directionArrow.head.length >= 3) {
@@ -438,7 +439,7 @@ export function buildStairFloorplan(
         fill: stairAccent,
         stroke: 'none',
         opacity: showSelectedChrome ? 0.92 : 0.72,
-        annotationRole: 'stair-annotation',
+        metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
       })
     }
   }

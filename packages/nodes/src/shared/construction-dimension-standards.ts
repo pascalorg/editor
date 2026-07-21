@@ -1,4 +1,4 @@
-import type { FloorplanDimensionTerminator, FloorplanDimensionTextPosition } from '@pascal-app/core'
+import type { DimensionTerminator, DimensionTextPosition } from '@pascal-app/core'
 import type {
   ConstructionImperialPrecision,
   ConstructionMetricNotation,
@@ -6,8 +6,8 @@ import type {
 
 export type ConstructionDimensionDrawingStandard = {
   datumPolicy: 'centerline' | 'wall-face' | 'structural-face' | 'finish-face'
-  terminator: FloorplanDimensionTerminator
-  textPosition: FloorplanDimensionTextPosition
+  terminator: DimensionTerminator
+  textPosition: DimensionTextPosition
   imperialPrecision: ConstructionImperialPrecision
   metricNotation: ConstructionMetricNotation
   openingChainOffset: number

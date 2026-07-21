@@ -5,6 +5,7 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata, withFloorplanGeometryMetadata } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -742,7 +743,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
 
 function markDoorPlanObstacle(geometry: FloorplanGeometry): FloorplanGeometry {
   if (geometry.kind === 'group') {
-    const isOpeningMark = geometry.children.some((child) => child.kind === 'text' && child.upright)
+    const isOpeningMark = readFloorplanGeometryMetadata(geometry).annotationRole === 'opening-mark'
     return isOpeningMark
       ? geometry
       : { ...geometry, children: geometry.children.map(markDoorPlanObstacle) }
@@ -755,7 +756,7 @@ function markDoorPlanObstacle(geometry: FloorplanGeometry): FloorplanGeometry {
     geometry.kind === 'circle' ||
     geometry.kind === 'line'
   ) {
-    return { ...geometry, annotationObstacle: 'bounds' }
+    return withFloorplanGeometryMetadata(geometry, { annotationObstacle: 'bounds' })
   }
   return geometry
 }

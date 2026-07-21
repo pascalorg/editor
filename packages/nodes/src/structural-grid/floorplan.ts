@@ -4,6 +4,7 @@ import type {
   GeometryContext,
   StructuralGridNode,
 } from '@pascal-app/core'
+import { withFloorplanGeometryMetadata } from '@pascal-app/editor'
 
 const GRID_BUBBLE_RADIUS = 0.22
 const GRID_LABEL_SIZE = 0.18
@@ -68,5 +69,8 @@ export function buildStructuralGridFloorplan(
   if (node.showStartBubble) children.push(bubble(node.start, node.label, stroke))
   if (node.showEndBubble) children.push(bubble(node.end, node.label, stroke))
 
-  return { kind: 'group', children }
+  return withFloorplanGeometryMetadata(
+    { kind: 'group', children },
+    { annotationRole: 'structural-grid' },
+  )
 }

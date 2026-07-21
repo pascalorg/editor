@@ -4,6 +4,7 @@ import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
+import { applyNodeMigrations } from '../registry/migrations'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -568,6 +569,11 @@ function migrateNodes(nodes: Record<string, any>): {
   const { nodes: healed } = healSceneNodes(nodes)
   const patchedNodes = { ...healed } as Record<string, any>
 
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    const migrations = nodeRegistry.get(node.type)?.migrate
+    patchedNodes[id] = applyNodeMigrations(node, migrations)
+  }
+
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
   const mintedMaterials: Record<SceneMaterialId, SceneMaterial> = {}
@@ -684,22 +690,6 @@ function migrateNodes(nodes: Record<string, any>): {
 
     if (node.type === 'wall') {
       patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
-    }
-
-    if (node.type === 'construction-dimension') {
-      const {
-        reference: _reference,
-        referenceStyle: _referenceStyle,
-        ...dimension
-      } = patchedNodes[id]
-      const drawingOverrides = Array.isArray(dimension.drawingOverrides)
-        ? dimension.drawingOverrides.map((override: Record<string, unknown>) =>
-            override.presentation === 'reference'
-              ? { ...override, presentation: 'shown' }
-              : override,
-          )
-        : dimension.drawingOverrides
-      patchedNodes[id] = { ...dimension, drawingOverrides }
     }
 
     // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the

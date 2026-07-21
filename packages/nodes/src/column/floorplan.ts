@@ -7,6 +7,7 @@ import type {
   StructuralGridNode,
 } from '@pascal-app/core'
 import { collectStructuralGridAxes, resolveStructuralGridReference } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import type { ColumnResizePayload } from './floorplan-affordances'
 
 // Offsets for the floor-plan selection arrows. Resize chevrons hug the
@@ -75,7 +76,7 @@ export function buildColumnFloorplan(
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
-      annotationObstacle: 'bounds',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
     },
   ]
   const { halfX, halfZ } = columnPlanHalfExtents(node)
@@ -93,7 +94,7 @@ export function buildColumnFloorplan(
       strokeWidth: 0.9,
       vectorEffect: 'non-scaling-stroke',
       pointerEvents: 'none',
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     },
     {
       kind: 'line',
@@ -105,7 +106,7 @@ export function buildColumnFloorplan(
       strokeWidth: 0.9,
       vectorEffect: 'non-scaling-stroke',
       pointerEvents: 'none',
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     },
   )
 
@@ -126,7 +127,7 @@ export function buildColumnFloorplan(
       textAnchor: 'middle',
       dominantBaseline: 'middle',
       upright: true,
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     })
   }
 

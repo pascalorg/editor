@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { floorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 import {
   collectAnnotationLayoutPreflightIssues,
   floorplanAnnotationObstacleMode,
@@ -16,7 +17,7 @@ describe('floorplanAnnotationObstacleMode', () => {
         y: 0,
         text: 'BEDROOM',
         fontSize: 0.18,
-        annotationRole: 'room-label',
+        metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
       }),
     ).toBe('bounds')
     expect(
@@ -26,7 +27,7 @@ describe('floorplanAnnotationObstacleMode', () => {
         y1: 0,
         x2: 1,
         y2: 0,
-        annotationRole: 'column-center',
+        metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
       }),
     ).toBe('bounds')
     expect(
@@ -36,7 +37,7 @@ describe('floorplanAnnotationObstacleMode', () => {
           [0, 0],
           [1, 0],
         ],
-        annotationRole: 'stair-annotation',
+        metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
       }),
     ).toBe('outline')
   })
@@ -335,7 +336,10 @@ describe('resolveAnnotationLabelRectangles', () => {
 describe('observeSvgAnnotationLayoutChanges', () => {
   test('requests a fresh collision pass when floor-plan geometry changes after mount', () => {
     const OriginalMutationObserver = globalThis.MutationObserver
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
     let notify: MutationCallback | undefined
+    let animationFrame: FrameRequestCallback | undefined
     let disconnected = false
     let observedOptions: MutationObserverInit | undefined
 
@@ -358,6 +362,11 @@ describe('observeSvgAnnotationLayoutChanges', () => {
     }
 
     globalThis.MutationObserver = FakeMutationObserver as typeof MutationObserver
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      animationFrame = callback
+      return 1
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
     try {
       let layoutPasses = 0
       const stop = observeSvgAnnotationLayoutChanges({} as SVGSVGElement, () => {
@@ -366,8 +375,15 @@ describe('observeSvgAnnotationLayoutChanges', () => {
 
       notify?.([{ type: 'childList' } as MutationRecord], {} as MutationObserver)
 
+      expect(layoutPasses).toBe(0)
+      animationFrame?.(0)
       expect(layoutPasses).toBe(1)
-      expect(observedOptions).toMatchObject({ attributes: true, childList: true, subtree: true })
+      expect(observedOptions).toMatchObject({
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: expect.any(Array),
+      })
 
       notify?.(
         [
@@ -385,6 +401,8 @@ describe('observeSvgAnnotationLayoutChanges', () => {
       expect(disconnected).toBe(true)
     } finally {
       globalThis.MutationObserver = OriginalMutationObserver
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
     }
   })
 })

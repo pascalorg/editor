@@ -7,7 +7,7 @@ import {
   normalizeConstructionDimensionChainMode,
   normalizeConstructionDimensionMode,
   resolveConstructionDimensionDraftDirection,
-} from './floorplan-construction-dimension-tool-layer'
+} from './floorplan-tool'
 
 describe('continuous construction-dimension drafting', () => {
   test('derives a stable baseline direction from the first witness pair', () => {

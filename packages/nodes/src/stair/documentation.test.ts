@@ -6,7 +6,11 @@ import {
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
-import { buildFloorplanStairEntry } from '@pascal-app/editor'
+import {
+  buildFloorplanStairEntry,
+  createFloorplanContextExtensions,
+  readFloorplanGeometryMetadata,
+} from '@pascal-app/editor'
 import {
   buildStairDocumentation,
   resolveStairPlanDirection,
@@ -26,11 +30,11 @@ function context(levelId = 'level_ground', unit: 'metric' | 'imperial' = 'metric
       hovered: false,
       moving: false,
       unit,
-      purpose: 'edit',
       palette: { measurementStroke: '#123456' } as NonNullable<
         GeometryContext['viewState']
       >['palette'],
     },
+    extensions: createFloorplanContextExtensions({ purpose: 'edit' }),
   } satisfies GeometryContext
 }
 
@@ -59,7 +63,10 @@ function straightFixture() {
 
 function annotationTexts(geometry: FloorplanGeometry[]) {
   return geometry.flatMap((entry) =>
-    entry.kind === 'text' && entry.annotationRole === 'stair-annotation' ? [entry.text] : [],
+    entry.kind === 'text' &&
+    readFloorplanGeometryMetadata(entry).annotationRole === 'stair-annotation'
+      ? [entry.text]
+      : [],
   )
 }
 
@@ -75,7 +82,9 @@ describe('stair construction documentation', () => {
     ])
     expect(
       geometry.some(
-        (entry) => entry.kind === 'polyline' && entry.annotationRole === 'stair-annotation',
+        (entry) =>
+          entry.kind === 'polyline' &&
+          readFloorplanGeometryMetadata(entry).annotationRole === 'stair-annotation',
       ),
     ).toBe(true)
   })

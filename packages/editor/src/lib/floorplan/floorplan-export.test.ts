@@ -4,7 +4,7 @@ import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floo
 import {
   filterFloorplanExportOverlay,
   fitPlanToBox,
-  isFloorplanExportAnnotationNode,
+  isFloorplanExportAnnotationGeometry,
   partitionFloorplanExportOverlay,
   pointsPerMeterForDrawingScale,
   resolveDrawingSheetDocumentMarkers,
@@ -16,14 +16,16 @@ import {
   resolveFloorplanExportRotationDeg,
   resolveFloorplanExportViewport,
   resolveFloorplanExportViewState,
+  resolveFloorplanMeasurementSize,
   resolveFloorplanPageLayout,
-  resolveFloorplanPdfFont,
   resolveFloorplanScreenUnitsPerPixel,
   resolveGraphicScaleLength,
   resolveSheetComposition,
   resolveSheetExportLayout,
   resolveSheetPageSetup,
+  rotateFloorplanExportBounds,
 } from './floorplan-export'
+import { floorplanGeometryMetadata } from './floorplan-extension'
 
 describe('filterFloorplanExportOverlay', () => {
   test('preserves value labels and removes editing handles', () => {
@@ -69,14 +71,14 @@ describe('filterFloorplanExportOverlay', () => {
           ],
           fill: '#374151',
           stroke: '#1f2937',
-          annotationObstacle: 'outline',
+          metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
         },
         {
           kind: 'path',
           d: 'M 1 0 A 1 1 0 0 1 2 1',
           fill: 'none',
           stroke: '#64748b',
-          annotationObstacle: 'bounds',
+          metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
         },
         {
           kind: 'line',
@@ -85,7 +87,7 @@ describe('filterFloorplanExportOverlay', () => {
           x2: 3.5,
           y2: 0,
           stroke: '#1f2937',
-          annotationObstacle: 'bounds',
+          metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
         },
         { kind: 'move-handle', point: [2, 0.1] },
       ],
@@ -110,10 +112,11 @@ describe('filterFloorplanExportOverlay', () => {
         [0, 0.2],
       ],
       fill: '#374151',
-      annotationObstacle: 'outline',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
     } satisfies FloorplanGeometry
     const openingMark = {
       kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'opening-mark' }),
       children: [
         {
           kind: 'rect',
@@ -231,25 +234,35 @@ describe('floor plan export policy', () => {
     })
   })
 
+  test('fits the viewport around the rotated plan instead of clipping its corners', () => {
+    const bounds = rotateFloorplanExportBounds({ x: 0, y: 0, width: 10, height: 5 }, 90)
+
+    expect(bounds.x).toBeCloseTo(-5, 8)
+    expect(bounds.y).toBeCloseTo(0, 8)
+    expect(bounds.width).toBeCloseTo(5, 8)
+    expect(bounds.height).toBeCloseTo(10, 8)
+  })
+
   test('keeps annotation-only nodes out of primary model bounds', () => {
-    expect(isFloorplanExportAnnotationNode('measurement')).toBe(true)
-    expect(isFloorplanExportAnnotationNode('construction-dimension')).toBe(true)
-    expect(isFloorplanExportAnnotationNode('wall')).toBe(false)
-    expect(isFloorplanExportAnnotationNode('door')).toBe(false)
+    expect(
+      isFloorplanExportAnnotationGeometry({
+        kind: 'group',
+        children: [],
+        metadata: { 'pascal:editor/floorplan': { annotationRole: 'measurement' } },
+      }),
+    ).toBe(true)
+    expect(
+      isFloorplanExportAnnotationGeometry({
+        kind: 'group',
+        children: [],
+        metadata: { 'pascal:editor/floorplan': { annotationRole: 'manual-dimension' } },
+      }),
+    ).toBe(true)
+    expect(isFloorplanExportAnnotationGeometry({ kind: 'polygon', points: [] })).toBe(false)
   })
 
   test('matches the current floor-plan rotation instead of forcing north-up', () => {
     expect(resolveFloorplanExportRotationDeg(Math.PI / 6, Math.PI / 2)).toBeCloseTo(60, 8)
-  })
-
-  test('maps editor fonts onto PDF-supported families and weights', () => {
-    expect(
-      resolveFloorplanPdfFont('ui-monospace, SFMono-Regular, Menlo, monospace', '500'),
-    ).toEqual({ fontFamily: 'Courier', fontWeight: 'bold' })
-    expect(resolveFloorplanPdfFont('system-ui, -apple-system, sans-serif', '600')).toEqual({
-      fontFamily: 'Helvetica',
-      fontWeight: 'bold',
-    })
   })
 })
 
@@ -260,6 +273,14 @@ describe('pointsPerMeterForDrawingScale', () => {
 
   test('converts imperial architectural scales to plotted points per metre', () => {
     expect(pointsPerMeterForDrawingScale('1/4"=1\'-0"')).toBeCloseTo(59.0551, 4)
+  })
+})
+
+describe('resolveFloorplanMeasurementSize', () => {
+  test('sizes the hidden SVG in screen pixels before resolving label collisions', () => {
+    expect(
+      resolveFloorplanMeasurementSize({ x: -2, y: -3, width: 18.4, height: 18.9 }, 0.024),
+    ).toEqual({ width: 18.4 / 0.024, height: 18.9 / 0.024 })
   })
 })
 

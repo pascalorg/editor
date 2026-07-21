@@ -5,6 +5,7 @@ import {
   filterFloorplanAnnotationGeometry,
   normalizeFloorplanAnnotationVisibility,
 } from './annotation-visibility'
+import { floorplanGeometryMetadata } from './floorplan-extension'
 
 describe('floor-plan annotation visibility', () => {
   test('fills missing persisted categories with visible defaults', () => {
@@ -31,7 +32,7 @@ describe('floor-plan annotation visibility', () => {
     } satisfies FloorplanGeometry
 
     expect(
-      filterFloorplanAnnotationGeometry('wall', geometry, {
+      filterFloorplanAnnotationGeometry(geometry, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         automaticDimensions: false,
       }),
@@ -41,7 +42,7 @@ describe('floor-plan annotation visibility', () => {
   test('removes a complete curved automatic dimension group', () => {
     const curvedDimension = {
       kind: 'group',
-      annotationRole: 'automatic-dimension',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'automatic-dimension' }),
       children: [
         { kind: 'line', x1: 0, y1: 0, x2: 2, y2: 2 },
         { kind: 'dimension-label', cx: 1, cy: 1, text: 'R 2m', angle: 0 },
@@ -49,7 +50,7 @@ describe('floor-plan annotation visibility', () => {
     } satisfies FloorplanGeometry
 
     expect(
-      filterFloorplanAnnotationGeometry('wall', curvedDimension, {
+      filterFloorplanAnnotationGeometry(curvedDimension, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         automaticDimensions: false,
       }),
@@ -67,6 +68,7 @@ describe('floor-plan annotation visibility', () => {
     } satisfies FloorplanGeometry
     const mark = {
       kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'opening-mark' }),
       children: [
         { kind: 'line', x1: 0.5, y1: 0, x2: 0.5, y2: 0.5 },
         { kind: 'rect', x: 0.3, y: 0.5, width: 0.4, height: 0.3 },
@@ -76,7 +78,7 @@ describe('floor-plan annotation visibility', () => {
     const geometry = { kind: 'group', children: [body, mark] } satisfies FloorplanGeometry
 
     expect(
-      filterFloorplanAnnotationGeometry('door', geometry, {
+      filterFloorplanAnnotationGeometry(geometry, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         openingMarks: false,
       }),
@@ -84,31 +86,41 @@ describe('floor-plan annotation visibility', () => {
   })
 
   test('hides manual dimensions and measurements independently', () => {
-    const geometry = {
+    const manualDimension = {
       kind: 'text',
       x: 0,
       y: 0,
       text: 'Annotation',
       fontSize: 0.15,
+      metadata: floorplanGeometryMetadata({ annotationRole: 'manual-dimension' }),
+    } satisfies FloorplanGeometry
+    const measurement = {
+      ...manualDimension,
+      metadata: floorplanGeometryMetadata({ annotationRole: 'measurement' }),
     } satisfies FloorplanGeometry
 
     expect(
-      filterFloorplanAnnotationGeometry('construction-dimension', geometry, {
+      filterFloorplanAnnotationGeometry(manualDimension, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         manualDimensions: false,
       }),
     ).toBeNull()
     expect(
       filterFloorplanAnnotationGeometry(
-        'construction-dimension',
         {
-          kind: 'dimension',
-          start: [0, 0],
-          end: [1, 0],
-          offsetNormal: [0, 1],
-          offsetDistance: 0.5,
-          extensionOvershoot: 0.1,
-          text: '1m',
+          kind: 'group',
+          metadata: floorplanGeometryMetadata({ annotationRole: 'manual-dimension' }),
+          children: [
+            {
+              kind: 'dimension',
+              start: [0, 0],
+              end: [1, 0],
+              offsetNormal: [0, 1],
+              offsetDistance: 0.5,
+              extensionOvershoot: 0.1,
+              text: '1m',
+            },
+          ],
         },
         {
           ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
@@ -117,7 +129,7 @@ describe('floor-plan annotation visibility', () => {
       ),
     ).not.toBeNull()
     expect(
-      filterFloorplanAnnotationGeometry('measurement', geometry, {
+      filterFloorplanAnnotationGeometry(measurement, {
         ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
         measurements: false,
       }),
@@ -131,7 +143,7 @@ describe('floor-plan annotation visibility', () => {
       y1: -0.1,
       x2: 0.1,
       y2: 0.1,
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     } satisfies FloorplanGeometry
     const gridReference = {
       kind: 'text',
@@ -139,7 +151,7 @@ describe('floor-plan annotation visibility', () => {
       y: 0.3,
       text: 'B-2',
       fontSize: 0.13,
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     } satisfies FloorplanGeometry
     const footprint = {
       kind: 'rect',
@@ -155,7 +167,6 @@ describe('floor-plan annotation visibility', () => {
 
     expect(
       filterFloorplanAnnotationGeometry(
-        'column',
         {
           kind: 'group',
           children: [footprint, centerMark, gridReference],
@@ -163,7 +174,16 @@ describe('floor-plan annotation visibility', () => {
         visibility,
       ),
     ).toEqual({ kind: 'group', children: [footprint] })
-    expect(filterFloorplanAnnotationGeometry('structural-grid', footprint, visibility)).toBeNull()
+    expect(
+      filterFloorplanAnnotationGeometry(
+        {
+          kind: 'group',
+          metadata: floorplanGeometryMetadata({ annotationRole: 'structural-grid' }),
+          children: [footprint],
+        },
+        visibility,
+      ),
+    ).toBeNull()
   })
 
   test('hides room labels without removing the room footprint', () => {
@@ -181,12 +201,11 @@ describe('floor-plan annotation visibility', () => {
       y: 1.5,
       text: 'Office',
       fontSize: 0.2,
-      annotationRole: 'room-label',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
     } satisfies FloorplanGeometry
 
     expect(
       filterFloorplanAnnotationGeometry(
-        'zone',
         { kind: 'group', children: [footprint, roomName] },
         { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, roomLabels: false },
       ),
@@ -209,7 +228,7 @@ describe('floor-plan annotation visibility', () => {
       y: 0.5,
       text: 'UP',
       fontSize: 0.16,
-      annotationRole: 'stair-annotation',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
     } satisfies FloorplanGeometry
     const breakLine = {
       kind: 'polyline',
@@ -217,12 +236,11 @@ describe('floor-plan annotation visibility', () => {
         [0, 2],
         [1, 2],
       ],
-      annotationRole: 'stair-annotation',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
     } satisfies FloorplanGeometry
 
     expect(
       filterFloorplanAnnotationGeometry(
-        'stair',
         { kind: 'group', children: [footprint, direction, breakLine] },
         { ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, stairAnnotations: false },
       ),

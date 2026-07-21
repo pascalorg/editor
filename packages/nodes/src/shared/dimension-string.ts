@@ -1,6 +1,6 @@
 import type {
-  FloorplanDimensionTerminator,
-  FloorplanDimensionTextPosition,
+  DimensionTerminator,
+  DimensionTextPosition,
   FloorplanGeometry,
   FloorplanPoint,
 } from '@pascal-app/core'
@@ -19,8 +19,8 @@ export type DimensionStringGeometryInput = {
   offsetDistance?: number
   extensionStartGap?: number
   extensionOvershoot?: number
-  terminator?: FloorplanDimensionTerminator
-  textPosition?: FloorplanDimensionTextPosition
+  terminator?: DimensionTerminator
+  textPosition?: DimensionTextPosition
   stroke?: string
 }
 

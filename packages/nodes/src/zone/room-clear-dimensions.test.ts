@@ -6,6 +6,7 @@ import {
   WallNode,
   ZoneNode,
 } from '@pascal-app/core'
+import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildRoomClearDimensions } from './room-clear-dimensions'
 
 function enclosure(points: Array<[number, number]>) {
@@ -43,11 +44,11 @@ function enclosure(points: Array<[number, number]>) {
       hovered: false,
       moving: false,
       unit: 'metric',
-      purpose: 'edit',
       palette: {
         measurementStroke: '#123456',
       } as NonNullable<GeometryContext['viewState']>['palette'],
     },
+    extensions: createFloorplanContextExtensions({ purpose: 'edit' }),
   } satisfies GeometryContext
   return { context, nodes, walls, zone }
 }
@@ -225,11 +226,11 @@ describe('buildRoomClearDimensions', () => {
         hovered: false,
         moving: false,
         unit: 'metric',
-        purpose: 'edit',
         palette: {
           measurementStroke: '#123456',
         } as NonNullable<GeometryContext['viewState']>['palette'],
       },
+      extensions: createFloorplanContextExtensions({ purpose: 'edit' }),
     } satisfies GeometryContext
 
     const result = dimensions(buildRoomClearDimensions(zoneA, context))

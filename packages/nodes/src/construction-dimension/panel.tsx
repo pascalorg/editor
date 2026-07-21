@@ -28,6 +28,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
 
 const MODE_LABELS: Record<ConstructionDimensionNode['mode'], string> = {
   linear: 'Linear',
@@ -81,23 +82,28 @@ const METRIC_NOTATION_OPTIONS: Array<{
 export default function ConstructionDimensionPanel() {
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
   const setSelection = useViewer((state) => state.setSelection)
-  const nodes = useScene((state) => state.nodes)
-  const node = selectedId ? nodes[selectedId as AnyNodeId] : undefined
+  const dimension = useScene((state) => {
+    const node = selectedId ? state.nodes[selectedId as AnyNodeId] : undefined
+    return node?.type === 'construction-dimension' ? node : null
+  })
+  const foundationControllers = useScene(
+    useShallow((state) =>
+      Object.values(state.nodes).filter(
+        (candidate): candidate is ConstructionDimensionNode =>
+          candidate.type === 'construction-dimension' &&
+          candidate.id !== dimension?.id &&
+          candidate.drawingType === 'foundation-plan',
+      ),
+    ),
+  )
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
   const activeDrawingType = useDrawingView((state) => state.drawingType)
-  const dimension = node?.type === 'construction-dimension' ? node : null
 
   if (!(dimension && selectedId)) return null
   const update = (patch: Partial<ConstructionDimensionNode>) => updateNode(dimension.id, patch)
   const supportsCenterMark = ['radius', 'diameter', 'arc-length', 'angular'].includes(
     dimension.mode,
-  )
-  const foundationControllers = Object.values(nodes).filter(
-    (candidate): candidate is ConstructionDimensionNode =>
-      candidate.type === 'construction-dimension' &&
-      candidate.id !== dimension.id &&
-      candidate.drawingType === 'foundation-plan',
   )
   const activeDrawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === activeDrawingType)?.label ?? 'Floor plan'

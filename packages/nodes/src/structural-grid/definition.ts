@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildStructuralGridFloorplan } from './floorplan'
 import { StructuralGridNode } from './schema'
 
@@ -8,6 +9,11 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
   schemaVersion: 1,
   schema: StructuralGridNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      tool: () => import('./floorplan-tool'),
+    } satisfies FloorplanNodeExtension<StructuralGridNode>,
+  },
   snapProfile: 'structural',
 
   defaults: () => ({

@@ -11,6 +11,7 @@ import {
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { readFloorplanContext } from '@pascal-app/editor'
 import { formatConstructionLength } from './construction-length'
 
 /**
@@ -66,7 +67,7 @@ export function buildOpeningPlacementDimensions(
   ]
   const centrePoint = (along: number): FloorplanPoint => [x1 + dirX * along, z1 + dirZ * along]
   const unit = ctx.viewState?.unit ?? 'metric'
-  const metricNotation = ctx.viewState?.metricNotation ?? 'meters'
+  const metricNotation = readFloorplanContext(ctx).metricNotation
 
   // This wall's OTHER openings as wall-local spans. `ctx.siblings` only includes
   // same-kind nodes; doors and windows need each other, so resolve the wall's

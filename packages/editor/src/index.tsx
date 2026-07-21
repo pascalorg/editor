@@ -80,7 +80,8 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
-export { FloorplanStructuralGridToolLayer } from './components/editor-2d/floorplan-structural-grid-tool-layer'
+export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
+export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
   FloorplanNodePreview,
   type FloorplanNodePreviewProps,
@@ -308,6 +309,23 @@ export type {
   FloorplanAnnotationCategory,
   FloorplanAnnotationVisibility,
 } from './lib/floorplan/annotation-visibility'
+export {
+  createFloorplanContextExtensions,
+  FLOORPLAN_CONTEXT_EXTENSION_KEY,
+  FLOORPLAN_GEOMETRY_METADATA_KEY,
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  type FloorplanAnnotationRole,
+  type FloorplanMetricNotation,
+  type FloorplanNodeExtension,
+  type FloorplanRenderPurpose,
+  type FloorplanSchedule,
+  floorplanGeometryMetadata,
+  getFloorplanNodeExtension,
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  readFloorplanMetricNotationOverride,
+  withFloorplanGeometryMetadata,
+} from './lib/floorplan/floorplan-extension'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {

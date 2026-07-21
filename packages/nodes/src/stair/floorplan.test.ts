@@ -6,12 +6,16 @@ import {
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildStairFloorplan } from './floorplan'
 
 function textValues(geometry: FloorplanGeometry | null) {
   if (geometry?.kind !== 'group') return []
   return geometry.children.flatMap((child) =>
-    child.kind === 'text' && child.annotationRole === 'stair-annotation' ? [child.text] : [],
+    child.kind === 'text' &&
+    readFloorplanGeometryMetadata(child).annotationRole === 'stair-annotation'
+      ? [child.text]
+      : [],
   )
 }
 
@@ -45,7 +49,9 @@ describe('buildStairFloorplan documentation', () => {
     if (geometry?.kind !== 'group') return
     expect(
       geometry.children.some(
-        (child) => child.kind === 'polyline' && child.annotationRole === 'stair-annotation',
+        (child) =>
+          child.kind === 'polyline' &&
+          readFloorplanGeometryMetadata(child).annotationRole === 'stair-annotation',
       ),
     ).toBe(true)
     expect(

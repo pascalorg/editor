@@ -6,7 +6,7 @@ import {
   shouldConsumeStructuralGridPointerEvent,
   snapStructuralGridAngle,
   structuralGridLabelFamily,
-} from './floorplan-structural-grid-tool-layer'
+} from './floorplan-tool'
 
 describe('structural-grid drafting helpers', () => {
   test('assigns numbers to vertical axes and letters to horizontal axes', () => {

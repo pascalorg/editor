@@ -19,8 +19,6 @@ import type { CloneNodesIntoOptions, Subtree } from './subtree'
 // `levelData` carries level-scoped batch data (wall mitering across an
 // entire level) from registry dispatchers into pure builders.
 
-export type FloorplanRenderPurpose = 'edit' | 'document'
-
 export type GeometryContext = {
   /** Look up any node by ID. Returns undefined if the node doesn't exist. */
   resolve: <N = AnyNode>(id: AnyNodeId) => N | undefined
@@ -53,6 +51,8 @@ export type GeometryContext = {
    * `scene:` refs.
    */
   materials?: Record<SceneMaterialId, SceneMaterial>
+  /** Opaque host/plugin context. Core never interprets extension values. */
+  extensions?: Readonly<Record<string, unknown>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
    * 2D floor-plan layer surfaces selection / hover here so kinds can vary
@@ -64,10 +64,6 @@ export type GeometryContext = {
   viewState?: {
     selected: boolean
     unit: 'metric' | 'imperial'
-    /** Linear notation used when `unit` is metric. Scene values remain metres. */
-    metricNotation?: 'meters' | 'millimeters'
-    /** Editing canvas or construction-document output. Defaults to `edit`. */
-    purpose?: FloorplanRenderPurpose
     /** Marquee or programmatic highlight — shows selected chrome without keyboard focus. */
     highlighted: boolean
     /** Pointer-hovered. */
@@ -218,19 +214,9 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
-export type FloorplanDimensionTerminator =
-  | 'architectural-tick'
-  | 'filled-arrow'
-  | 'open-arrow'
-  | 'dot'
+export type DimensionTerminator = 'architectural-tick' | 'filled-arrow' | 'open-arrow' | 'dot'
 
-export type FloorplanDimensionTextPosition = 'above' | 'centered'
-
-export type FloorplanAnnotationRole =
-  | 'automatic-dimension'
-  | 'column-center'
-  | 'room-label'
-  | 'stair-annotation'
+export type DimensionTextPosition = 'above' | 'centered'
 
 export type FloorplanStyle = {
   stroke?: string
@@ -238,10 +224,8 @@ export type FloorplanStyle = {
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
-  /** Treat this primitive as fixed plan geometry during annotation layout. */
-  annotationObstacle?: 'bounds' | 'outline'
-  /** Semantic annotation role used by editor visibility and export filters. */
-  annotationRole?: FloorplanAnnotationRole
+  /** Opaque renderer/plugin metadata. Core never interprets these values. */
+  metadata?: Readonly<Record<string, unknown>>
   /**
    * When `'non-scaling-stroke'`, the SVG renderer interprets `strokeWidth`
    * as a constant screen-pixel width regardless of viewport zoom. Maps
@@ -422,8 +406,8 @@ export type FloorplanGeometry =
        * of the floor-plan's scene rotation (default 90°).
        */
       upright?: boolean
-      /** Semantic annotation role used by editor visibility and export filters. */
-      annotationRole?: FloorplanAnnotationRole
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
   /**
    * Bitmap overlay — captured top-down asset thumbnail, AI-generated
@@ -452,8 +436,8 @@ export type FloorplanGeometry =
       children: FloorplanGeometry[]
       /** Optional transform applied to all children. Rotation in radians. */
       transform?: { translate?: FloorplanPoint; rotate?: number }
-      /** Semantic annotation role used by editor visibility and export filters. */
-      annotationRole?: FloorplanAnnotationRole
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
   /**
    * Hatched fill overlay — same polygon shape as the kind's main fill but
@@ -675,9 +659,9 @@ export type FloorplanGeometry =
       /** Optional gap before each extension line starts. Defaults to the project/document profile. */
       extensionStartGap?: number
       /** Dimension-line terminator. Defaults to an architectural tick. */
-      terminator?: FloorplanDimensionTerminator
+      terminator?: DimensionTerminator
       /** Dimension text position relative to the baseline. Defaults above the line. */
-      textPosition?: FloorplanDimensionTextPosition
+      textPosition?: DimensionTextPosition
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
@@ -707,13 +691,13 @@ export type FloorplanGeometry =
       /** Optional gap before each extension line starts. Defaults to the project/document profile. */
       extensionStartGap?: number
       /** Dimension-line terminator shared by every segment. Defaults to an architectural tick. */
-      terminator?: FloorplanDimensionTerminator
+      terminator?: DimensionTerminator
       /** Dimension text position shared by every segment. Defaults above the line. */
-      textPosition?: FloorplanDimensionTextPosition
+      textPosition?: DimensionTextPosition
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
-      /** Semantic annotation role used by editor visibility and export filters. */
-      annotationRole?: FloorplanAnnotationRole
+      /** Opaque renderer/plugin metadata. Core never interprets these values. */
+      metadata?: Readonly<Record<string, unknown>>
     }
 
 // ─── FloorplanAffordance ─────────────────────────────────────────────
@@ -924,28 +908,13 @@ export type ExportAnimationContext<N = AnyNode> = {
   object: Object3D
 }
 
-export type FloorplanSchedule = {
-  id: string
-  title: string
-  columns: ReadonlyArray<{
-    key: string
-    label: string
-    /** Relative share of the available table width. Defaults to 1. */
-    weight?: number
-  }>
-  rows: ReadonlyArray<{
-    id: string
-    cells: Readonly<Record<string, string>>
-  }>
-  /** Non-blocking document-quality warnings, such as duplicate explicit marks. */
-  issues?: readonly string[]
-}
-
 export type NodeDefinition<S extends ZodObject<any>> = {
   kind: string
   schemaVersion: number
   schema: S
   category: NodeCategory
+  /** Opaque host/plugin contributions. Core stores but never interprets them. */
+  extensions?: Readonly<Record<string, unknown>>
   surfaceRole?: SurfaceRole
   /**
    * Show a floor direction-triangle while placing/moving — the kind has a
@@ -1110,17 +1079,6 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
-  /**
-   * Optional construction schedule contribution for one level. The export
-   * layer renders the generic table; the node kind owns its terminology,
-   * mark allocation, and row values.
-   */
-  floorplanSchedule?: (args: {
-    siblings: ReadonlyArray<z.infer<S>>
-    nodes: Readonly<Record<string, AnyNode>>
-    levelId: AnyNodeId
-    unit: 'metric' | 'imperial'
-  }) => FloorplanSchedule | null
   /** Extra node IDs whose committed changes invalidate this node's floor-plan cache. */
   floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
   /** Stable semantic geometry that associative measurement anchors may reference. */
@@ -1137,14 +1095,6 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * synthesises a `GeometryContext` whose `parent` is the active level.
    */
   floorplanScope?: 'level' | 'building'
-  /**
-   * Additional levels where this level-owned node contributes floor-plan
-   * geometry. The collector still resolves the node's real children, but
-   * presents the linked level as `ctx.parent` so the builder can derive the
-   * correct per-level representation. Stairs use this to render UP on their
-   * source level and DN on their destination level.
-   */
-  floorplanLinkedLevelIds?: (node: z.infer<S>) => readonly AnyNodeId[]
   /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via

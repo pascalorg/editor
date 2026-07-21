@@ -10,14 +10,13 @@ import {
   type DrawingSheetScale,
   type FloorplanGeometry,
   type FloorplanPalette,
-  type FloorplanSchedule,
+  type FloorplanPoint,
   type LiveNodeOverrides,
   nodeRegistry,
   resolveBuildingForLevel,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import type { jsPDF as JsPdfDocument } from 'jspdf'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
@@ -39,6 +38,13 @@ import {
   filterFloorplanAnnotationGeometry,
 } from './annotation-visibility'
 import { resolveNodeForDrawingType } from './drawing-coordination'
+import {
+  type FloorplanSchedule,
+  getFloorplanNodeExtension,
+  readFloorplanGeometryMetadata,
+} from './floorplan-extension'
+import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
 
 /**
@@ -49,8 +55,9 @@ import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
  * a neutral `viewState` so nodes render in their default, unselected form.
  * Every level of the active building becomes its own page, titled with the
  * level's label, with the plan fit to the page (independent of the live
- * pan/zoom). jsPDF + svg2pdf are dynamically imported so they only load when
- * an export actually runs.
+ * pan/zoom). PDFKit is dynamically imported so it only loads when an export
+ * actually runs. Geometry and labels are emitted as native PDF vectors and
+ * text instead of being reinterpreted from browser SVG.
  *
  * `scope: 'structure'` keeps only `category === 'structure'` nodes (walls,
  * slabs, ceilings, doors, windows, stairs, columns, roofs…); `'full'` keeps
@@ -200,7 +207,16 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     return
   }
 
-  const [{ jsPDF }, { svg2pdf }] = await Promise.all([import('jspdf'), import('svg2pdf.js')])
+  const defaultPageSetup = resolveSheetPageSetup({
+    paperSize: 'a4',
+    orientation: 'landscape',
+    customPaperWidth: null,
+    customPaperHeight: null,
+  })
+  const { doc, save } = await createFloorplanPdfDocument([
+    defaultPageSetup.width,
+    defaultPageSetup.height,
+  ])
 
   const host = document.createElement('div')
   host.style.cssText =
@@ -208,7 +224,6 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   document.body.appendChild(host)
 
   let pageCount = 0
-  let doc: JsPdfDocument | null = null
   try {
     for (const level of levels) {
       const geometries = collectFloorplanGeometry(
@@ -245,15 +260,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         )
         if (mounted) {
           try {
-            if (!doc) {
-              doc = new jsPDF({
-                orientation: pageSetup.orientation,
-                unit: 'pt',
-                format: [pageSetup.width, pageSetup.height],
-              })
-            } else {
-              doc.addPage([pageSetup.width, pageSetup.height], pageSetup.orientation)
-            }
+            doc.addPage([pageSetup.width, pageSetup.height], pageSetup.orientation)
             pageCount++
 
             const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
@@ -272,22 +279,27 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
               layout.planBox.height,
             )
             drawFloorplanPageHeader(doc, level.label, drawingLabel)
-
-            // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
-            // many builders use to keep door/window/stair line weights constant
-            // on screen). Left as-is, those pixel-sized widths render as
-            // metre-wide strokes — huge grey blobs. Convert them to the real-unit
-            // width that lands at the intended point weight once svg2pdf scales
-            // the plan onto the page.
-            inlineNonScalingStrokes(mounted.svg, fitted.width / mounted.width)
-            normalizeFloorplanPdfFonts(mounted.svg)
-
-            await svg2pdf(mounted.svg, doc, {
-              x: fitted.x,
-              y: fitted.y,
-              width: fitted.width,
-              height: fitted.height,
-            })
+            const model = combineGeometryList(geometries.map((geometry) => geometry.model))
+            if (model) {
+              await renderFloorplanGeometryToPdfKit(doc, model, {
+                annotationLayer: false,
+                placement: fitted,
+                rotationDeg,
+                viewport: mounted.viewport,
+              })
+            }
+            const annotations = combineGeometryList(
+              geometries.map((geometry) => geometry.annotations),
+            )
+            if (annotations) {
+              await renderFloorplanGeometryToPdfKit(doc, annotations, {
+                annotationLabelShifts: mounted.annotationLabelShifts,
+                annotationLayer: true,
+                placement: fitted,
+                rotationDeg,
+                viewport: mounted.viewport,
+              })
+            }
           } finally {
             mounted.cleanup()
           }
@@ -295,13 +307,6 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
       }
 
       if (scheduleOverflow.length > 0) {
-        if (!doc) {
-          doc = new jsPDF({
-            orientation: pageSetup.orientation,
-            unit: 'pt',
-            format: [pageSetup.width, pageSetup.height],
-          })
-        }
         pageCount = drawFloorplanSchedulePages(doc, level.label, scheduleOverflow, pageCount)
       }
     }
@@ -312,7 +317,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     }
 
     const date = new Date().toISOString().split('T')[0]
-    doc?.save(`${drawingType}_${scope}_${date}.pdf`)
+    await save(`${drawingType}_${scope}_${date}.pdf`)
   } finally {
     host.remove()
   }
@@ -339,9 +344,10 @@ export function collectFloorplanSchedules(
 
   const schedules: FloorplanSchedule[] = []
   for (const [kind, definition] of nodeRegistry.entries()) {
-    if (!definition.floorplanSchedule) continue
+    const scheduleContribution = getFloorplanNodeExtension(definition)?.schedule
+    if (!scheduleContribution) continue
     const siblings = siblingsByType.get(kind) ?? []
-    const schedule = definition.floorplanSchedule({ siblings, nodes, levelId, unit })
+    const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules
@@ -608,7 +614,7 @@ export function resolveFloorplanPageLayout(
 }
 
 function drawFloorplanPageHeader(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   levelLabel: string,
   drawingLabel: string,
 ): void {
@@ -619,7 +625,7 @@ function drawFloorplanPageHeader(
 }
 
 function drawFloorplanSchedulePages(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   levelLabel: string,
   schedules: readonly FloorplanSchedule[],
   initialPageCount: number,
@@ -634,7 +640,7 @@ function drawFloorplanSchedulePages(
   let y = 0
 
   const startPage = () => {
-    if (pageCount > 0) doc.addPage()
+    doc.addPage([pageW, pageH])
     pageCount++
     doc.setTextColor('#111827')
     doc.setFont('helvetica', 'bold')
@@ -720,7 +726,7 @@ function scheduleColumnWidths(schedule: FloorplanSchedule, tableWidth: number): 
 }
 
 function drawScheduleColumnDividers(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   widths: readonly number[],
   y: number,
   height: number,
@@ -732,7 +738,7 @@ function drawScheduleColumnDividers(
   }
 }
 
-function truncatePdfText(doc: JsPdfDocument, value: string, maxWidth: number): string {
+function truncatePdfText(doc: FloorplanPdfDocument, value: string, maxWidth: number): string {
   if (doc.getTextWidth(value) <= maxWidth) return value
   let truncated = value
   while (truncated.length > 0 && doc.getTextWidth(`${truncated}...`) > maxWidth) {
@@ -742,7 +748,7 @@ function truncatePdfText(doc: JsPdfDocument, value: string, maxWidth: number): s
 }
 
 function drawSheetChrome(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   layout: SheetExportLayout,
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
@@ -777,7 +783,7 @@ function drawSheetChrome(
   return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules)
 }
 
-function drawSheetDocumentMarkers(doc: JsPdfDocument, composition: SheetComposition): void {
+function drawSheetDocumentMarkers(doc: FloorplanPdfDocument, composition: SheetComposition): void {
   if (composition.documentMarkers.length === 0) return
   doc.setDrawColor('#111827')
   doc.setTextColor('#111827')
@@ -812,7 +818,12 @@ function drawSheetDocumentMarkers(doc: JsPdfDocument, composition: SheetComposit
   }
 }
 
-function drawTagMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: number, y: number) {
+function drawTagMarker(
+  doc: FloorplanPdfDocument,
+  marker: ResolvedDocumentMarker,
+  x: number,
+  y: number,
+) {
   const width = Math.max(20, marker.label.length * 5 + 10)
   const height = 14
   if (marker.kind === 'glazing-tag') {
@@ -826,7 +837,7 @@ function drawTagMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: nu
 }
 
 function drawCalloutMarker(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   marker: ResolvedDocumentMarker,
   x: number,
   y: number,
@@ -844,7 +855,12 @@ function drawCalloutMarker(
   }
 }
 
-function drawDeltaMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: number, y: number) {
+function drawDeltaMarker(
+  doc: FloorplanPdfDocument,
+  marker: ResolvedDocumentMarker,
+  x: number,
+  y: number,
+) {
   const radius = 8
   const points = [
     [x, y - radius],
@@ -856,7 +872,7 @@ function drawDeltaMarker(doc: JsPdfDocument, marker: ResolvedDocumentMarker, x: 
 }
 
 function drawRevisionCloudMarker(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   marker: ResolvedDocumentMarker,
   x: number,
   y: number,
@@ -877,7 +893,7 @@ function drawRevisionCloudMarker(
   if (marker.revisionId) drawDeltaMarker(doc, marker, x, y)
 }
 
-function drawKeyedNoteSymbols(doc: JsPdfDocument, composition: SheetComposition): void {
+function drawKeyedNoteSymbols(doc: FloorplanPdfDocument, composition: SheetComposition): void {
   if (composition.keyedNoteInstances.length === 0) return
   doc.setDrawColor('#111827')
   doc.setTextColor('#111827')
@@ -892,7 +908,7 @@ function drawKeyedNoteSymbols(doc: JsPdfDocument, composition: SheetComposition)
 }
 
 function drawSheetTitleBlock(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   layout: SheetExportLayout,
   composition: SheetComposition,
 ) {
@@ -944,7 +960,7 @@ function drawSheetTitleBlock(
   )
 }
 
-function drawNorthArrow(doc: JsPdfDocument, x: number, y: number) {
+function drawNorthArrow(doc: FloorplanPdfDocument, x: number, y: number) {
   doc.setDrawColor('#111827')
   doc.setFillColor('#111827')
   doc.setLineWidth(0.6)
@@ -971,7 +987,7 @@ export function resolveGraphicScaleLength(
 }
 
 function drawGraphicScale(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   x: number,
   y: number,
   options: { scale: DrawingSheetScale; maxWidth: number },
@@ -993,7 +1009,7 @@ function drawGraphicScale(
 }
 
 function drawSheetSidePanel(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   panel: SheetExportLayout['sidePanel'],
   composition: SheetComposition,
   schedules: readonly FloorplanSchedule[],
@@ -1009,7 +1025,7 @@ function drawSheetSidePanel(
 }
 
 function drawSheetNotes(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   title: string,
   notes: readonly { number: number; text: string }[],
   x: number,
@@ -1035,7 +1051,7 @@ function drawSheetNotes(
 }
 
 function drawKeyedNoteLegend(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   composition: SheetComposition,
   x: number,
   y: number,
@@ -1060,7 +1076,7 @@ function drawKeyedNoteLegend(
 }
 
 function drawInlineSchedules(
-  doc: JsPdfDocument,
+  doc: FloorplanPdfDocument,
   schedules: readonly FloorplanSchedule[],
   x: number,
   y: number,
@@ -1125,9 +1141,11 @@ function drawInlineSchedules(
 
 type MountedFloorplan = {
   svg: SVGSVGElement
+  annotationLabelShifts: readonly FloorplanPoint[]
   /** Padded viewBox dimensions, in meters — used for aspect-preserving fit. */
   width: number
   height: number
+  viewport: FloorplanExportBounds
   setScreenUnitsPerPixel: (value: number) => Promise<void>
   cleanup: () => void
 }
@@ -1188,6 +1206,30 @@ export function resolveFloorplanExportViewport(
   }
 }
 
+export function rotateFloorplanExportBounds(
+  bounds: FloorplanExportBounds,
+  rotationDeg: number,
+): FloorplanExportBounds {
+  const radians = (rotationDeg * Math.PI) / 180
+  const cosine = Math.cos(radians)
+  const sine = Math.sin(radians)
+  const corners = [
+    [bounds.x, bounds.y],
+    [bounds.x + bounds.width, bounds.y],
+    [bounds.x + bounds.width, bounds.y + bounds.height],
+    [bounds.x, bounds.y + bounds.height],
+  ] as const
+  const rotated = corners.map(([x, y]) => ({
+    x: x * cosine - y * sine,
+    y: x * sine + y * cosine,
+  }))
+  const minX = Math.min(...rotated.map((point) => point.x))
+  const minY = Math.min(...rotated.map((point) => point.y))
+  const maxX = Math.max(...rotated.map((point) => point.x))
+  const maxY = Math.max(...rotated.map((point) => point.y))
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
 export function resolveFloorplanScreenUnitsPerPixel(
   modelWidth: number,
   modelHeight: number,
@@ -1212,10 +1254,6 @@ export function resolveFloorplanExportRotationDeg(
       ? 0
       : (navigationAzimuth * 180) / Math.PI - FLOORPLAN_VIEW_ROTATION_DEG
   return FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - (buildingRotationY * 180) / Math.PI
-}
-
-export function isFloorplanExportAnnotationNode(nodeType: string): boolean {
-  return nodeType === 'measurement' || nodeType === 'construction-dimension'
 }
 
 export function pointsPerMeterForDrawingScale(scale: DrawingSheetScale): number {
@@ -1324,26 +1362,41 @@ async function mountFloorplanSvg(
     return null
   }
 
-  const mounted: MountedFloorplan = {
-    svg,
-    width: 0,
-    height: 0,
-    cleanup,
-    setScreenUnitsPerPixel: async (value) => {
-      render(value)
-      await nextFrames(1)
-      resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
-      applyFloorplanViewport(mounted, viewport)
-    },
-  }
   const modelBounds = measureFloorplanBounds(svg, '[data-floorplan-model]')
   if (!modelBounds) {
     cleanup()
     return null
   }
-  const viewport = resolveFloorplanExportViewport(modelBounds)
+  const viewport = resolveFloorplanExportViewport(
+    rotateFloorplanExportBounds(modelBounds, rotationDeg),
+  )
+  const mounted: MountedFloorplan = {
+    svg,
+    annotationLabelShifts: [],
+    width: viewport.width,
+    height: viewport.height,
+    viewport,
+    cleanup,
+    setScreenUnitsPerPixel: async (value) => {
+      render(value)
+      applyFloorplanViewport(mounted, viewport, value)
+      await nextFrames(1)
+      resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
+      mounted.annotationLabelShifts = readSvgAnnotationLabelShifts(svg)
+    },
+  }
   applyFloorplanViewport(mounted, viewport)
   return mounted
+}
+
+function readSvgAnnotationLabelShifts(svg: SVGSVGElement): FloorplanPoint[] {
+  return Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]')).map(
+    (label) => {
+      const x = Number(label.dataset.floorplanAnnotationLayoutDx ?? 0)
+      const y = Number(label.dataset.floorplanAnnotationLayoutDy ?? 0)
+      return [Number.isFinite(x) ? x : 0, Number.isFinite(y) ? y : 0]
+    },
+  )
 }
 
 function measureFloorplanBounds(
@@ -1356,15 +1409,32 @@ function measureFloorplanBounds(
   return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }
 }
 
-function applyFloorplanViewport(mounted: MountedFloorplan, viewport: FloorplanExportBounds): void {
+export function resolveFloorplanMeasurementSize(
+  viewport: FloorplanExportBounds,
+  screenUnitsPerPixel: number,
+): { width: number; height: number } {
+  return {
+    width: viewport.width / screenUnitsPerPixel,
+    height: viewport.height / screenUnitsPerPixel,
+  }
+}
+
+function applyFloorplanViewport(
+  mounted: MountedFloorplan,
+  viewport: FloorplanExportBounds,
+  screenUnitsPerPixel?: number,
+): void {
   mounted.width = viewport.width
   mounted.height = viewport.height
   mounted.svg.setAttribute(
     'viewBox',
     `${viewport.x} ${viewport.y} ${viewport.width} ${viewport.height}`,
   )
-  mounted.svg.setAttribute('width', `${mounted.width}`)
-  mounted.svg.setAttribute('height', `${mounted.height}`)
+  const measurementSize = screenUnitsPerPixel
+    ? resolveFloorplanMeasurementSize(viewport, screenUnitsPerPixel)
+    : { width: mounted.width, height: mounted.height }
+  mounted.svg.setAttribute('width', `${measurementSize.width}`)
+  mounted.svg.setAttribute('height', `${measurementSize.height}`)
 
   mounted.svg.querySelector('[data-floorplan-background]')?.remove()
   const background = document.createElementNS(SVG_NS, 'rect')
@@ -1375,68 +1445,6 @@ function applyFloorplanViewport(mounted: MountedFloorplan, viewport: FloorplanEx
   background.setAttribute('height', `${mounted.height}`)
   background.setAttribute('fill', '#ffffff')
   mounted.svg.insertBefore(background, mounted.svg.firstChild)
-}
-
-/**
- * Bake `vector-effect: non-scaling-stroke` widths into real user units.
- *
- * svg2pdf ignores the non-scaling hint, so a `stroke-width="1.25"` meant as
- * "1.25 screen px" would otherwise render as 1.25 metres on the page. We
- * rewrite each such width (and any dash pattern) to `px / ptPerUnit` so it
- * lands at ~`px` points once svg2pdf scales the plan by `ptPerUnit`, then drop
- * the now-misleading attribute.
- */
-function inlineNonScalingStrokes(svg: SVGSVGElement, ptPerUnit: number) {
-  if (!Number.isFinite(ptPerUnit) || ptPerUnit <= 0) return
-  for (const el of svg.querySelectorAll('[vector-effect="non-scaling-stroke"]')) {
-    const sw = el.getAttribute('stroke-width')
-    if (sw) {
-      const px = Number.parseFloat(sw)
-      if (Number.isFinite(px)) el.setAttribute('stroke-width', `${px / ptPerUnit}`)
-    }
-    const dash = el.getAttribute('stroke-dasharray')
-    if (dash) {
-      const scaled = dash
-        .split(/[\s,]+/)
-        .map((v) => {
-          const n = Number.parseFloat(v)
-          return Number.isFinite(n) ? `${n / ptPerUnit}` : v
-        })
-        .join(' ')
-      el.setAttribute('stroke-dasharray', scaled)
-    }
-    el.removeAttribute('vector-effect')
-  }
-}
-
-export function resolveFloorplanPdfFont(
-  fontFamily: string | null,
-  fontWeight: string | null,
-): { fontFamily: string | null; fontWeight: string | null } {
-  const family = fontFamily?.toLocaleLowerCase() ?? ''
-  const normalizedWeight = fontWeight?.toLocaleLowerCase() ?? ''
-  const numericWeight = Number.parseInt(normalizedWeight, 10)
-  return {
-    fontFamily:
-      family.includes('mono') || family.includes('menlo') || family.includes('courier')
-        ? 'Courier'
-        : 'Helvetica',
-    fontWeight:
-      normalizedWeight === 'bold' || (Number.isFinite(numericWeight) && numericWeight >= 500)
-        ? 'bold'
-        : 'normal',
-  }
-}
-
-function normalizeFloorplanPdfFonts(svg: SVGSVGElement): void {
-  for (const text of svg.querySelectorAll('text')) {
-    const font = resolveFloorplanPdfFont(
-      text.getAttribute('font-family'),
-      text.getAttribute('font-weight'),
-    )
-    if (font.fontFamily !== null) text.setAttribute('font-family', font.fontFamily)
-    if (font.fontWeight !== null) text.setAttribute('font-weight', font.fontWeight)
-  }
 }
 
 function collectFloorplanGeometry(
@@ -1512,15 +1520,11 @@ function collectFloorplanGeometry(
     const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext
     const geometry = builder(node, ctx)
     if (!geometry) continue
-    const visibleGeometry = filterFloorplanAnnotationGeometry(
-      node.type,
-      geometry,
-      annotationVisibility,
-    )
+    const visibleGeometry = filterFloorplanAnnotationGeometry(geometry, annotationVisibility)
     if (!visibleGeometry) continue
     const { base, overlay } = splitFloorplanOverlay(visibleGeometry)
     const exportOverlay = overlay ? filterFloorplanExportOverlay(overlay) : null
-    const annotationOnly = isFloorplanExportAnnotationNode(node.type)
+    const annotationOnly = isFloorplanExportAnnotationGeometry(visibleGeometry)
     const { model, annotations } = resolveFloorplanExportNodeGeometry(
       base,
       exportOverlay,
@@ -1600,7 +1604,7 @@ export function partitionFloorplanExportOverlay(
   }
 }
 
-function isFloorplanExportAnnotationGeometry(geometry: FloorplanGeometry): boolean {
+export function isFloorplanExportAnnotationGeometry(geometry: FloorplanGeometry): boolean {
   if (
     geometry.kind === 'text' ||
     geometry.kind === 'dimension' ||
@@ -1610,12 +1614,8 @@ function isFloorplanExportAnnotationGeometry(geometry: FloorplanGeometry): boole
   ) {
     return true
   }
-  if ('annotationRole' in geometry && geometry.annotationRole) return true
-  return (
-    geometry.kind === 'group' &&
-    geometry.children.some((child) => child.kind === 'rect' || child.kind === 'circle') &&
-    geometry.children.some((child) => child.kind === 'text' && child.upright)
-  )
+  if (readFloorplanGeometryMetadata(geometry).annotationRole) return true
+  return false
 }
 
 function combineGeometry(
@@ -1625,6 +1625,15 @@ function combineGeometry(
   if (!base) return overlay
   if (!overlay) return base
   return { kind: 'group', children: [base, overlay] }
+}
+
+function combineGeometryList(
+  geometries: readonly (FloorplanGeometry | null)[],
+): FloorplanGeometry | null {
+  const children = geometries.filter((geometry): geometry is FloorplanGeometry => geometry !== null)
+  if (children.length === 0) return null
+  if (children.length === 1) return children[0] ?? null
+  return { kind: 'group', children }
 }
 
 /**

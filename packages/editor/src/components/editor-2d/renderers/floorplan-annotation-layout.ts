@@ -1,4 +1,5 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 
 export type AnnotationLabelRectangle = {
   id: string
@@ -230,16 +231,55 @@ export function observeSvgAnnotationLayoutChanges(
   svg: SVGSVGElement,
   onChange: () => void,
 ): () => void {
+  let scheduledFrame: number | null = null
+  const schedule = () => {
+    if (scheduledFrame !== null) return
+    const requestFrame = globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 0))
+    scheduledFrame = requestFrame(() => {
+      scheduledFrame = null
+      onChange()
+    })
+  }
   const observer = new MutationObserver((mutations) => {
-    if (mutations.some(isAnnotationLayoutMutation)) onChange()
+    if (mutations.some(isAnnotationLayoutMutation)) schedule()
   })
   observer.observe(svg, {
     attributes: true,
+    attributeFilter: [
+      'cx',
+      'cy',
+      'd',
+      'dominant-baseline',
+      'font-family',
+      'font-size',
+      'font-weight',
+      'height',
+      'points',
+      'r',
+      'rx',
+      'ry',
+      'stroke-width',
+      'text-anchor',
+      'transform',
+      'visibility',
+      'width',
+      'x',
+      'x1',
+      'x2',
+      'y',
+      'y1',
+      'y2',
+    ],
     characterData: true,
     childList: true,
     subtree: true,
   })
-  return () => observer.disconnect()
+  return () => {
+    observer.disconnect()
+    if (scheduledFrame === null) return
+    if (globalThis.cancelAnimationFrame) globalThis.cancelAnimationFrame(scheduledFrame)
+    else clearTimeout(scheduledFrame)
+  }
 }
 
 function isAnnotationLayoutMutation(mutation: MutationRecord): boolean {
@@ -612,11 +652,9 @@ export function isFloorplanAnnotationObstacleGeometry(geometry: FloorplanGeometr
 export function floorplanAnnotationObstacleMode(
   geometry: FloorplanGeometry,
 ): 'bounds' | 'outline' | '' | undefined {
-  if ('annotationObstacle' in geometry && geometry.annotationObstacle) {
-    return geometry.annotationObstacle
-  }
-  if (!('annotationRole' in geometry)) return undefined
-  switch (geometry.annotationRole) {
+  const metadata = readFloorplanGeometryMetadata(geometry)
+  if (metadata.annotationObstacle) return metadata.annotationObstacle
+  switch (metadata.annotationRole) {
     case 'room-label':
       return geometry.kind === 'text' ? 'bounds' : undefined
     case 'column-center':

@@ -12,6 +12,7 @@ import {
   type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildCurvedWallConstructionDimensions,
@@ -84,7 +85,7 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const purpose = ctx.viewState?.purpose ?? 'edit'
+  const { metricNotation, purpose } = readFloorplanContext(ctx)
   const documentMode = purpose === 'document'
   const wallForPurpose = (wall: WallNode) =>
     documentMode ? wallWithModeledAssemblyThickness(wall) : exaggerateWallThickness(wall)
@@ -134,7 +135,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
-      annotationObstacle: 'outline',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
       // so the cursor stays neutral (no drag/pointer affordance from
       // the slab below leaking through), but only the side-arrows and
@@ -149,7 +150,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   const dimensionStroke =
     isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
   const dimensionStandard = constructionDimensionStandard({
-    metricNotation: view?.metricNotation ?? 'meters',
+    metricNotation,
   })
   if (isCurvedWall(node)) {
     children.push(

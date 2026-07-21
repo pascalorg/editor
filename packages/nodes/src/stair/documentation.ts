@@ -10,6 +10,7 @@ import type {
   FloorplanStairEntry,
   FloorplanStairSegmentEntry,
 } from '@pascal-app/editor'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,
@@ -84,9 +85,10 @@ export function buildStairDocumentation(
   const activeLevelId = ctx.parent?.type === 'level' ? ctx.parent.id : stair.parentId
   const direction = resolveStairPlanDirection(stair, activeLevelId)
   const unit = ctx.viewState?.unit ?? 'metric'
+  const floorplanContext = readFloorplanContext(ctx)
   const profile: ConstructionLengthProfile =
-    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
-  const metricNotation = ctx.viewState?.metricNotation ?? 'meters'
+    floorplanContext.purpose === 'document' ? 'document' : 'editor'
+  const metricNotation = floorplanContext.metricNotation
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#334155'
   return stair.stairType === 'straight'
     ? buildStraightDocumentation(stair, entry, direction, unit, profile, metricNotation, stroke)
@@ -232,7 +234,7 @@ function buildStraightBreakLine(
     stroke,
     strokeWidth: 1.5,
     vectorEffect: 'non-scaling-stroke',
-    annotationRole: 'stair-annotation',
+    metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
   }
 }
 
@@ -265,7 +267,7 @@ function buildCurvedBreakLine(
     stroke,
     strokeWidth: 1.5,
     vectorEffect: 'non-scaling-stroke',
-    annotationRole: 'stair-annotation',
+    metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
   }
 }
 
@@ -290,7 +292,7 @@ function annotationText(
     textAnchor: 'middle',
     dominantBaseline: 'central',
     upright: true,
-    annotationRole: 'stair-annotation',
+    metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
   }
 }
 

@@ -1,4 +1,5 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { type FloorplanAnnotationRole, readFloorplanGeometryMetadata } from './floorplan-extension'
 
 export type FloorplanAnnotationCategory =
   | 'automaticDimensions'
@@ -59,44 +60,15 @@ export function normalizeFloorplanAnnotationVisibility(
 }
 
 export function filterFloorplanAnnotationGeometry(
-  nodeType: string,
   geometry: FloorplanGeometry,
   visibility: FloorplanAnnotationVisibility,
+  inheritedRole?: FloorplanAnnotationRole,
 ): FloorplanGeometry | null {
-  if (nodeType === 'measurement' && !visibility.measurements) return null
-  if (nodeType === 'construction-dimension' && !visibility.manualDimensions) return null
-  if (nodeType === 'structural-grid' && !visibility.structuralGrids) return null
-  if (
-    !visibility.roomLabels &&
-    'annotationRole' in geometry &&
-    geometry.annotationRole === 'room-label'
-  ) {
-    return null
-  }
-  if (
-    !visibility.structuralGrids &&
-    'annotationRole' in geometry &&
-    geometry.annotationRole === 'column-center'
-  ) {
-    return null
-  }
-  if (
-    !visibility.stairAnnotations &&
-    'annotationRole' in geometry &&
-    geometry.annotationRole === 'stair-annotation'
-  ) {
-    return null
-  }
+  const role = readFloorplanGeometryMetadata(geometry).annotationRole ?? inheritedRole
+  if (role && !isAnnotationRoleVisible(role, visibility)) return null
   if (
     !visibility.automaticDimensions &&
-    'annotationRole' in geometry &&
-    geometry.annotationRole === 'automatic-dimension'
-  ) {
-    return null
-  }
-  if (
-    !visibility.automaticDimensions &&
-    nodeType !== 'construction-dimension' &&
+    role !== 'manual-dimension' &&
     (geometry.kind === 'dimension' ||
       geometry.kind === 'dimension-string' ||
       geometry.kind === 'dimension-label' ||
@@ -104,18 +76,35 @@ export function filterFloorplanAnnotationGeometry(
   ) {
     return null
   }
-  if (!visibility.openingMarks && isOpeningMark(nodeType, geometry)) return null
   if (geometry.kind !== 'group') return geometry
 
   const children = geometry.children
-    .map((child) => filterFloorplanAnnotationGeometry(nodeType, child, visibility))
+    .map((child) => filterFloorplanAnnotationGeometry(child, visibility, role))
     .filter((child): child is FloorplanGeometry => child !== null)
   if (children.length === 0) return null
   if (children.length === geometry.children.length) return geometry
   return { ...geometry, children }
 }
 
-function isOpeningMark(nodeType: string, geometry: FloorplanGeometry): boolean {
-  if ((nodeType !== 'door' && nodeType !== 'window') || geometry.kind !== 'group') return false
-  return geometry.children.some((child) => child.kind === 'text' && child.upright === true)
+function isAnnotationRoleVisible(
+  role: FloorplanAnnotationRole,
+  visibility: FloorplanAnnotationVisibility,
+): boolean {
+  switch (role) {
+    case 'automatic-dimension':
+      return visibility.automaticDimensions
+    case 'manual-dimension':
+      return visibility.manualDimensions
+    case 'measurement':
+      return visibility.measurements
+    case 'opening-mark':
+      return visibility.openingMarks
+    case 'structural-grid':
+    case 'column-center':
+      return visibility.structuralGrids
+    case 'room-label':
+      return visibility.roomLabels
+    case 'stair-annotation':
+      return visibility.stairAnnotations
+  }
 }

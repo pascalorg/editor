@@ -1,81 +1,46 @@
-import { describe, expect, test } from 'bun:test'
-import { type AnyNode, ConstructionDimensionNode } from '@pascal-app/core'
+import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  type ConstructionDrawingType,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
+import { z } from 'zod'
 import { resolveNodeForDrawingType } from './drawing-coordination'
-
-const foundation = ConstructionDimensionNode.parse({
-  id: 'construction-dimension_foundation',
-  drawingType: 'foundation-plan',
-  anchors: [
-    [0, 0, 0],
-    [6, 0, 0],
-  ],
-  baseline: { origin: [0, 2], direction: [1, 0] },
-})
+import { FLOORPLAN_NODE_EXTENSION_KEY } from './floorplan-extension'
 
 describe('resolveNodeForDrawingType', () => {
-  test('omits a dimension outside its primary drawing by default', () => {
-    expect(
-      resolveNodeForDrawingType(foundation, { [foundation.id]: foundation }, 'floor-plan'),
-    ).toBeNull()
-    expect(
-      resolveNodeForDrawingType(foundation, { [foundation.id]: foundation }, 'foundation-plan'),
-    ).toBe(foundation)
-  })
+  afterEach(() => nodeRegistry._reset())
 
-  test('applies view-specific suppressed segments without changing physical anchors', () => {
-    const node = ConstructionDimensionNode.parse({
-      anchors: [
-        [0, 0, 0],
-        [2, 0, 0],
-        [5, 0, 0],
-      ],
-      drawingOverrides: [
-        {
-          drawingType: 'floor-plan',
-          presentation: 'shown',
-          suppressedSegmentIndexes: [1],
+  test('dispatches drawing coordination through the registered extension', () => {
+    const node = {
+      id: 'drawing-test_main',
+      type: 'drawing-test',
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+    } as unknown as AnyNode
+    registerNode({
+      kind: 'drawing-test',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('drawing-test') }) as never,
+      category: 'utility',
+      defaults: () => ({}) as never,
+      extensions: {
+        [FLOORPLAN_NODE_EXTENSION_KEY]: {
+          resolveForDrawing: ({ drawingType }: { drawingType: ConstructionDrawingType }) =>
+            drawingType === 'floor-plan' ? null : node,
         },
-      ],
-    })
-    const resolved = resolveNodeForDrawingType(node, { [node.id]: node }, 'floor-plan')
+      },
+    } as never)
 
-    expect(resolved).toMatchObject({
-      id: node.id,
-      anchors: node.anchors,
-      metadata: { suppressedDimensionSegmentIndexes: [1] },
-    })
-    expect(node.metadata).toEqual({})
+    expect(resolveNodeForDrawingType(node, { [node.id]: node }, 'floor-plan')).toBeNull()
+    expect(resolveNodeForDrawingType(node, { [node.id]: node }, 'foundation-plan')).toBe(node)
   })
 
-  test('derives linked floor-plan geometry from a controlling foundation dimension', () => {
-    const floor = ConstructionDimensionNode.parse({
-      id: 'construction-dimension_floor',
-      drawingOverrides: [{ drawingType: 'floor-plan', presentation: 'controlled' }],
-      controllingDimensionId: foundation.id,
-      anchors: [
-        [1, 0, 1],
-        [2, 0, 1],
-      ],
-    })
-    const nodes = { [floor.id]: floor, [foundation.id]: foundation } as Record<string, AnyNode>
-    const resolved = resolveNodeForDrawingType(floor, nodes, 'floor-plan')
-
-    expect(resolved).toMatchObject({
-      id: floor.id,
-      anchors: foundation.anchors,
-      baseline: foundation.baseline,
-      metadata: { drawingCoordinationLocked: true },
-    })
-  })
-
-  test('marks a missing foundation controller as unlinked', () => {
-    const floor = ConstructionDimensionNode.parse({
-      drawingOverrides: [{ drawingType: 'floor-plan', presentation: 'controlled' }],
-      controllingDimensionId: 'construction-dimension_missing',
-      prefix: 'TYP · ',
-    })
-    expect(resolveNodeForDrawingType(floor, { [floor.id]: floor }, 'floor-plan')).toMatchObject({
-      prefix: 'UNLINKED CONTROL · TYP · ',
-    })
+  test('leaves nodes without a drawing extension unchanged', () => {
+    const node = { id: 'unknown', type: 'unknown' } as unknown as AnyNode
+    expect(resolveNodeForDrawingType(node, { [node.id]: node }, 'floor-plan')).toBe(node)
   })
 })

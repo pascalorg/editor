@@ -2,6 +2,7 @@
 
 import { type FloorplanGeometry, loadAssetUrl } from '@pascal-app/core'
 import { memo, useEffect, useState } from 'react'
+import { readFloorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 import {
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
@@ -93,9 +94,8 @@ function styleAttrs(
     vectorEffect?: 'non-scaling-stroke'
     pointerEvents?: string
     cursor?: string
-    annotationObstacle?: 'bounds' | 'outline'
-    annotationRole?: string
   }
+  const annotationMetadata = readFloorplanGeometryMetadata(g)
   const documentStyle = resolveDocumentFloorplanAnnotationStyle(g, annotationUnitsPerPoint)
   const vectorEffect = documentStyle.vectorEffect ?? s.vectorEffect
   const resolvedStrokeWidth = documentStyle.strokeWidth ?? s.strokeWidth
@@ -107,7 +107,7 @@ function styleAttrs(
       : resolvedStrokeWidth
   return {
     'data-floorplan-annotation-obstacle': floorplanAnnotationObstacleMode(g),
-    'data-floorplan-annotation-role': s.annotationRole,
+    'data-floorplan-annotation-role': annotationMetadata.annotationRole,
     fill: documentStyle.fill ?? s.fill ?? 'none',
     fillOpacity: s.fillOpacity,
     stroke: documentStyle.stroke ?? s.stroke,
@@ -137,7 +137,6 @@ export function resolveDocumentFloorplanAnnotationStyle(
     stroke?: string
     strokeWidth?: number
     vectorEffect?: 'non-scaling-stroke'
-    annotationRole?: string
   }
   if (!styled.stroke && geometry.kind !== 'text') return {}
 
@@ -171,7 +170,7 @@ function documentTextFontSize(
 }
 
 function documentTextSizePt(geometry: Extract<FloorplanGeometry, { kind: 'text' }>): number {
-  switch (geometry.annotationRole) {
+  switch (readFloorplanGeometryMetadata(geometry).annotationRole) {
     case 'room-label':
       if (geometry.fontSize >= 0.18) return DOCUMENT_ROOM_NAME_TEXT_SIZE_PT
       if (geometry.fontSize >= 0.145) return DOCUMENT_ROOM_NUMBER_TEXT_SIZE_PT
@@ -185,13 +184,13 @@ function documentTextSizePt(geometry: Extract<FloorplanGeometry, { kind: 'text' 
 }
 
 function documentStrokeWidth(
-  geometry: { strokeWidth?: number; annotationRole?: string },
+  geometry: { strokeWidth?: number },
   annotationUnitsPerPoint: number,
 ): number {
   return Math.max(DOCUMENT_DEFAULT_STROKE_WIDTH_PT, Math.min(1.2, geometry.strokeWidth ?? 0.5))
 }
 
-function documentRectGeometryAttrs(
+export function documentRectGeometryAttrs(
   geometry: Extract<FloorplanGeometry, { kind: 'rect' }>,
   annotationUnitsPerPoint?: number,
 ) {
@@ -224,7 +223,7 @@ function isAnnotationMarkRect(geometry: Extract<FloorplanGeometry, { kind: 'rect
   return geometry.fill === '#ffffff' && !!geometry.stroke && geometry.height <= 0.5
 }
 
-function documentCircleGeometryAttrs(
+export function documentCircleGeometryAttrs(
   geometry: Extract<FloorplanGeometry, { kind: 'circle' }>,
   annotationUnitsPerPoint?: number,
 ) {
@@ -238,7 +237,7 @@ function isAnnotationMarkCircle(geometry: Extract<FloorplanGeometry, { kind: 'ci
   return geometry.fill === '#ffffff' && !!geometry.stroke && geometry.r <= 0.25
 }
 
-function resolveDocumentAnnotationGroupChildren(
+export function resolveDocumentAnnotationGroupChildren(
   children: FloorplanGeometry[],
   annotationUnitsPerPoint?: number,
 ): FloorplanGeometry[] {
@@ -283,7 +282,8 @@ function isSameDocumentTextRun(
     isDocumentTextLine(candidate) &&
     Math.abs(candidate.x - first.x) < 1e-6 &&
     candidate.textAnchor === first.textAnchor &&
-    candidate.annotationRole === first.annotationRole
+    readFloorplanGeometryMetadata(candidate).annotationRole ===
+      readFloorplanGeometryMetadata(first).annotationRole
   )
 }
 

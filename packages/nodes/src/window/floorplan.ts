@@ -5,6 +5,7 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -106,7 +107,7 @@ export function buildWindowFloorplan(
       strokeWidth: showSelectedChrome ? 1.9 : 1.25,
       vectorEffect: 'non-scaling-stroke',
       strokeLinejoin: 'round',
-      annotationObstacle: 'bounds',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
     },
     // Inset glass-pane outline.
     {

@@ -9,6 +9,7 @@ import {
   type WallNode,
   type ZoneNode,
 } from '@pascal-app/core'
+import { readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,
@@ -75,9 +76,10 @@ export function buildRoomClearDimensions(
   if (!faceLines) return []
 
   const unit = ctx.viewState?.unit ?? 'metric'
+  const floorplanContext = readFloorplanContext(ctx)
   const profile: ConstructionLengthProfile =
-    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
-  const metricNotation = ctx.viewState?.metricNotation ?? 'meters'
+    floorplanContext.purpose === 'document' ? 'document' : 'editor'
+  const metricNotation = floorplanContext.metricNotation
   const stroke = ctx.viewState?.palette.measurementStroke ?? '#475569'
   const rectangle = resolveClearFaceRectangle(faceLines)
   const dimensions = rectangle

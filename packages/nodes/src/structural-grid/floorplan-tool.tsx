@@ -7,21 +7,20 @@ import {
   type StructuralGridNode as StructuralGridNodeType,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { markToolCancelConsumed } from '../../hooks/use-keyboard'
-import { triggerSFX } from '../../lib/sfx-bus'
 import {
   clearSurfacePlanSnapFeedback,
-  resolveSurfacePlanPointSnap,
-} from '../../lib/surface-plan-snap'
-import useEditor, {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
-} from '../../store/use-editor'
-import useInteractionScope from '../../store/use-interaction-scope'
-import { useFloorplanRender } from './floorplan-render-context'
+  markToolCancelConsumed,
+  resolveSurfacePlanPointSnap,
+  triggerSFX,
+  useEditor,
+  useFloorplanRender,
+  useInteractionScope,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const MIN_GRID_LENGTH = 0.01
 const GRID_BUBBLE_RADIUS = 0.22
@@ -152,7 +151,7 @@ export function FloorplanStructuralGridToolLayer() {
         fallbackPoint: fallback,
         levelId: activeLevelId,
         magnetic: !event.altKey && isMagneticSnapActive(),
-        align: !event.altKey,
+        align: isMagneticSnapActive(),
       })
       return snapped.point
     }
@@ -319,3 +318,5 @@ export function FloorplanStructuralGridToolLayer() {
     </g>
   )
 }
+
+export default FloorplanStructuralGridToolLayer

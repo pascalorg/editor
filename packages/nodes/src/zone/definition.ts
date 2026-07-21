@@ -3,6 +3,7 @@ import {
   resolveAutoZonePolygon,
   ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
@@ -29,6 +30,11 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   schemaVersion: 2,
   schema: ZoneNode,
   category: 'site',
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildRoomFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<ZoneNode>,
+  },
 
   defaults: () => {
     const stub = ZoneNodeSchema.parse({ id: 'zone_default' as never, type: 'zone' })
@@ -68,7 +74,6 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     priority: 4,
   },
   floorplan: buildZoneFloorplan,
-  floorplanSchedule: buildRoomFloorplanSchedule,
   floorplanDependencies: (node) => (node.autoFromWalls ? node.boundaryWallIds : []),
   // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
   // Without this, zone fell through to the overlay's generic free-translate

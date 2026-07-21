@@ -15,6 +15,7 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
+export { applyNodeMigrations } from './migrations'
 export {
   bakePolicyOf,
   discoverPlugins,
@@ -65,6 +66,8 @@ export type {
   Capabilities,
   CapabilityCtx,
   CuttableConfig,
+  DimensionTerminator,
+  DimensionTextPosition,
   DistributionRole,
   DragAction,
   DuplicableConfig,
@@ -81,15 +84,11 @@ export type {
   FloorplanAffordanceModifiers,
   FloorplanAffordancePoint,
   FloorplanAffordanceSession,
-  FloorplanAnnotationRole,
-  FloorplanDimensionTerminator,
-  FloorplanDimensionTextPosition,
   FloorplanGeometry,
   FloorplanMoveTarget,
   FloorplanMoveTargetSession,
   FloorplanPalette,
   FloorplanPoint,
-  FloorplanSchedule,
   FloorplanStyle,
   GeometryContext,
   GroupMoveSnapArgs,

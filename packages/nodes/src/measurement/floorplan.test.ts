@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, MeasurementNode } from '@pascal-app/core'
-import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_FLOORPLAN_COLOR } from '@pascal-app/editor'
+import {
+  createFloorplanContextExtensions,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
+} from '@pascal-app/editor'
 import { buildMeasurementFloorplan } from './floorplan'
 
 const palette = {
@@ -33,12 +37,12 @@ const context = (
   viewState: {
     selected,
     unit,
-    metricNotation,
     highlighted: false,
     hovered: false,
     moving: false,
     palette,
   },
+  extensions: createFloorplanContextExtensions({ metricNotation }),
 })
 
 const labels = (geometry: FloorplanGeometry): string[] => {

@@ -7,10 +7,10 @@ import {
   buildConstructionModuleAdvisories,
   buildDimensionCompletenessAudit,
 } from '@pascal-app/nodes'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export function FloorplanConstructionPreflight() {
-  const nodes = useScene((state) => state.nodes)
+  const nodes = useDebouncedSceneNodes()
   const clearanceChecksEnabled = useFloorplanPreflight((state) => state.clearanceChecksEnabled)
   const moduleChecksEnabled = useFloorplanPreflight((state) => state.moduleChecksEnabled)
   const setAuditIssues = useFloorplanPreflight((state) => state.setAuditIssues)
@@ -49,4 +49,22 @@ export function FloorplanConstructionPreflight() {
   }, [issues, setAuditIssues])
 
   return null
+}
+
+function useDebouncedSceneNodes() {
+  const [nodes, setNodes] = useState(() => useScene.getState().nodes)
+
+  useEffect(() => {
+    let pending: ReturnType<typeof setTimeout> | undefined
+    const unsubscribe = useScene.subscribe((state) => {
+      if (pending) clearTimeout(pending)
+      pending = setTimeout(() => setNodes(state.nodes), 100)
+    })
+    return () => {
+      if (pending) clearTimeout(pending)
+      unsubscribe()
+    }
+  }, [])
+
+  return nodes
 }

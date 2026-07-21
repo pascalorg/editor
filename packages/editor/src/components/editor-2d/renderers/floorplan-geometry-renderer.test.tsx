@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FloorplanGeometry } from '@pascal-app/core'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { floorplanGeometryMetadata } from '../../../lib/floorplan/floorplan-extension'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 
 describe('FloorplanGeometryRenderer static labels', () => {
@@ -219,7 +220,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
           y: 0,
           text: 'KITCHEN',
           fontSize: 0.2,
-          annotationRole: 'room-label',
+          metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
           upright: true,
         },
         {
@@ -228,7 +229,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
           y: 0.18,
           text: '101',
           fontSize: 0.16,
-          annotationRole: 'room-label',
+          metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
           upright: true,
         },
         {
@@ -237,7 +238,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
           y: 0.36,
           text: 'CH: 2700',
           fontSize: 0.11,
-          annotationRole: 'room-label',
+          metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
           upright: true,
         },
       ],
@@ -260,6 +261,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
   test('uses paper stroke profiles for leaders and opening marks in document mode', () => {
     const geometry = {
       kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'opening-mark' }),
       children: [
         {
           kind: 'polyline',
@@ -327,7 +329,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
               [4, 0],
               [4, 0.2],
             ],
-            annotationObstacle: 'outline',
+            metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
           }}
         />
       </svg>,
@@ -343,7 +345,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
       y: 0,
       text: 'KITCHEN',
       fontSize: 0.18,
-      annotationRole: 'room-label',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
     } satisfies FloorplanGeometry
     const stairArrow = {
       kind: 'polyline',
@@ -351,7 +353,7 @@ describe('FloorplanGeometryRenderer static labels', () => {
         [0, 0],
         [0.5, 0.5],
       ],
-      annotationRole: 'stair-annotation',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'stair-annotation' }),
     } satisfies FloorplanGeometry
 
     const markup = renderToStaticMarkup(

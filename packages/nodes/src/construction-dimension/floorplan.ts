@@ -16,6 +16,11 @@ import {
   getWallCurveFrameAt,
   resolveWallAssemblyDatumReferences,
 } from '@pascal-app/core'
+import {
+  readFloorplanContext,
+  readFloorplanMetricNotationOverride,
+  withFloorplanGeometryMetadata,
+} from '@pascal-app/editor'
 import { resolveMeasurementAnchor } from '../measurement/resolve'
 import {
   type ConstructionLengthFormatOptions,
@@ -49,11 +54,13 @@ export function buildConstructionDimensionFloorplan(
   const dangling = resolved.some((anchor) => anchor.dangling)
   const stroke = dangling ? DANGLING_STROKE : baseStroke
   const unit = ctx.viewState?.unit ?? 'metric'
+  const floorplanContext = readFloorplanContext(ctx)
   const profile: ConstructionLengthProfile =
-    ctx.viewState?.purpose === 'document' ? 'document' : 'editor'
+    floorplanContext.purpose === 'document' ? 'document' : 'editor'
+  const metricNotationOverride = readFloorplanMetricNotationOverride(ctx)
   const displayNode =
-    profile === 'editor' && ctx.viewState?.metricNotation
-      ? { ...node, metricNotation: ctx.viewState.metricNotation }
+    profile === 'editor' && metricNotationOverride
+      ? { ...node, metricNotation: metricNotationOverride }
       : node
   const editable =
     ctx.viewState?.selected === true &&
@@ -67,19 +74,40 @@ export function buildConstructionDimensionFloorplan(
   switch (node.mode) {
     case 'linear':
     case 'chord':
-      return buildLinearOrChord(displayNode, points, stroke, dangling, unit, profile, editable)
+      return withFloorplanGeometryMetadata(
+        buildLinearOrChord(displayNode, points, stroke, dangling, unit, profile, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'radius':
-      return buildRadius(displayNode, points, stroke, dangling, unit, profile, editable)
+      return withFloorplanGeometryMetadata(
+        buildRadius(displayNode, points, stroke, dangling, unit, profile, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'diameter':
-      return buildDiameter(displayNode, points, stroke, dangling, unit, profile, editable)
+      return withFloorplanGeometryMetadata(
+        buildDiameter(displayNode, points, stroke, dangling, unit, profile, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'center-mark':
-      return buildCenterMarkOnly(displayNode, points, stroke, editable)
+      return withFloorplanGeometryMetadata(
+        buildCenterMarkOnly(displayNode, points, stroke, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'arc-length':
-      return buildArcLength(displayNode, points, stroke, dangling, unit, profile, editable)
+      return withFloorplanGeometryMetadata(
+        buildArcLength(displayNode, points, stroke, dangling, unit, profile, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'angular':
-      return buildAngular(displayNode, points, stroke, dangling, editable)
+      return withFloorplanGeometryMetadata(
+        buildAngular(displayNode, points, stroke, dangling, editable),
+        { annotationRole: 'manual-dimension' },
+      )
     case 'coordinate':
-      return buildCoordinate(displayNode, points, stroke, dangling, unit, profile, editable)
+      return withFloorplanGeometryMetadata(
+        buildCoordinate(displayNode, points, stroke, dangling, unit, profile, editable),
+        { annotationRole: 'manual-dimension' },
+      )
   }
 }
 

@@ -11,6 +11,10 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
 import {
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  floorplanGeometryMetadata,
+} from '../../../lib/floorplan/floorplan-extension'
+import {
   cancelFloorplanAffordanceDrag,
   collectFloorplanDependencyNodes,
   collectFloorplanLinkedLevelNodes,
@@ -260,6 +264,7 @@ describe('floorplan annotation overlay routing', () => {
   test('keeps a fixed mark pill together in the overlay pass', () => {
     const mark = {
       kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'opening-mark' }),
       children: [
         { kind: 'line', x1: 0, y1: 0, x2: 0, y2: 0.4 },
         { kind: 'rect', x: -0.2, y: 0.4, width: 0.4, height: 0.32 },
@@ -277,7 +282,7 @@ describe('floorplan annotation overlay routing', () => {
       y1: 0,
       x2: 1,
       y2: 0,
-      annotationRole: 'column-center',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
     } satisfies FloorplanGeometry
 
     expect(splitFloorplanOverlay(columnCenter)).toEqual({ base: null, overlay: columnCenter })
@@ -392,7 +397,11 @@ describe('collectFloorplanLinkedLevelNodes', () => {
       category: 'structure',
       defaults: () => ({}) as never,
       floorplan: () => null,
-      floorplanLinkedLevelIds: () => ['level_upper' as AnyNodeId],
+      extensions: {
+        [FLOORPLAN_NODE_EXTENSION_KEY]: {
+          linkedLevelIds: () => ['level_upper' as AnyNodeId],
+        },
+      },
     } as unknown as AnyNodeDefinition)
     const child = {
       id: 'linked_child',

@@ -53,6 +53,10 @@ import {
   filterFloorplanAnnotationGeometry,
 } from '../../../lib/floorplan/annotation-visibility'
 import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordination'
+import {
+  createFloorplanContextExtensions,
+  getFloorplanNodeExtension,
+} from '../../../lib/floorplan/floorplan-extension'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -1775,7 +1779,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
   const visibleGeometry = rawGeometry
-    ? filterFloorplanAnnotationGeometry(node.type, rawGeometry, annotationVisibility)
+    ? filterFloorplanAnnotationGeometry(rawGeometry, annotationVisibility)
     : null
   // Multi-selection shows highlight only: strip this member's edit handles /
   // dimension chrome (all of which live in the overlay pass) while keeping
@@ -2005,12 +2009,11 @@ function buildFloorplanEntryGeometry({
         siblings: ctxOverrides.siblings,
         parent: ctxOverrides.parent,
         levelData,
+        extensions: createFloorplanContextExtensions({ metricNotation, purpose: 'edit' }),
         viewState: palette
           ? {
               selected,
               unit,
-              metricNotation,
-              purpose: 'edit',
               highlighted,
               hovered,
               moving,
@@ -2957,12 +2960,14 @@ export function buildContext(
     siblings,
     parent,
     levelData,
+    extensions: createFloorplanContextExtensions({
+      metricNotation: viewState.metricNotation ?? 'meters',
+      purpose: viewState.purpose ?? 'edit',
+    }),
     viewState: viewState.palette
       ? {
           selected: viewState.selected,
           unit: viewState.unit,
-          metricNotation: viewState.metricNotation,
-          purpose: viewState.purpose ?? 'edit',
           highlighted: viewState.highlighted,
           hovered: viewState.hovered,
           moving: viewState.moving,
@@ -2981,10 +2986,11 @@ export function collectFloorplanLinkedLevelNodes(
   for (const [rawId, node] of Object.entries(nodes)) {
     if (!node) continue
     const definition = nodeRegistry.get(node.type)
-    if (!definition?.floorplan || !definition.floorplanLinkedLevelIds) continue
+    const linkedLevelIds = getFloorplanNodeExtension(definition)?.linkedLevelIds
+    if (!definition?.floorplan || !linkedLevelIds) continue
     const id = rawId as AnyNodeId
     if (excludedIds.has(id)) continue
-    if (!definition.floorplanLinkedLevelIds(node).includes(levelId)) continue
+    if (!linkedLevelIds(node).includes(levelId)) continue
     const childIds = (node as { children?: AnyNodeId[] }).children
     const children = Array.isArray(childIds)
       ? childIds.map((childId) => nodes[childId]).filter((child): child is AnyNode => !!child)

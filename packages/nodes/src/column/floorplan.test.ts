@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { ColumnNode, type GeometryContext, StructuralGridNode } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 
 const context = {
@@ -24,8 +25,8 @@ describe('buildColumnFloorplan', () => {
     expect(geometry?.kind).toBe('group')
     if (geometry?.kind !== 'group') return
 
-    expect(geometry.children[0]).toMatchObject({
-      kind: 'polygon',
+    expect(geometry.children[0]?.kind).toBe('polygon')
+    expect(readFloorplanGeometryMetadata(geometry.children[0]!)).toMatchObject({
       annotationObstacle: 'bounds',
     })
 
@@ -35,7 +36,6 @@ describe('buildColumnFloorplan', () => {
         y1: 2.91,
         x2: 2.09,
         y2: 3.09,
-        annotationRole: 'column-center',
         pointerEvents: 'none',
       }),
       expect.objectContaining({
@@ -43,10 +43,14 @@ describe('buildColumnFloorplan', () => {
         y1: 3.09,
         x2: 2.09,
         y2: 2.91,
-        annotationRole: 'column-center',
         pointerEvents: 'none',
       }),
     ])
+    expect(
+      geometry.children
+        .filter((child) => child.kind === 'line')
+        .every((child) => readFloorplanGeometryMetadata(child).annotationRole === 'column-center'),
+    ).toBe(true)
   })
 
   test('labels a column with its associative structural-grid reference', () => {
@@ -85,13 +89,8 @@ describe('buildColumnFloorplan', () => {
     expect(geometry?.kind).toBe('group')
     if (geometry?.kind !== 'group') return
 
-    expect(geometry.children).toContainEqual(
-      expect.objectContaining({
-        kind: 'text',
-        text: 'B-2',
-        annotationRole: 'column-center',
-        upright: true,
-      }),
-    )
+    const label = geometry.children.find((child) => child.kind === 'text' && child.text === 'B-2')
+    expect(label).toMatchObject({ kind: 'text', text: 'B-2', upright: true })
+    expect(label && readFloorplanGeometryMetadata(label).annotationRole).toBe('column-center')
   })
 })

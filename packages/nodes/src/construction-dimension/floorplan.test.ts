@@ -8,6 +8,7 @@ import {
   registerNode,
   WallNode,
 } from '@pascal-app/core'
+import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { wallDefinition } from '../wall/definition'
 import { buildConstructionDimensionFloorplan } from './floorplan'
 
@@ -43,13 +44,12 @@ function context(
     viewState: {
       selected,
       unit: 'metric',
-      metricNotation,
       highlighted: false,
       hovered: false,
       moving: false,
-      purpose,
       palette,
     },
+    extensions: createFloorplanContextExtensions({ metricNotation, purpose }),
   }
 }
 

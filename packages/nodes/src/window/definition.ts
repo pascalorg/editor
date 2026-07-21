@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -173,6 +174,11 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   schemaVersion: 2,
   schema: WindowNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildWindowFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<WindowNodeType>,
+  },
 
   // Same schema-driven defaults trick as door: parse a stub, strip
   // id/type. Window also has many fields with zod `.default()` set.
@@ -220,7 +226,6 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   // + thickness — same shape as door.
   floorplan: buildWindowFloorplan,
   computeFloorplanLevelData: computeWindowFloorplanLevelData,
-  floorplanSchedule: buildWindowFloorplanSchedule,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

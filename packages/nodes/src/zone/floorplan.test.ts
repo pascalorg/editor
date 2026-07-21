@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, ZoneNode } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildZoneFloorplan } from './floorplan'
 
 const context = {
@@ -58,10 +59,9 @@ describe('buildZoneFloorplan room documentation', () => {
       'FL: Timber · WL: Paint · CL: ACT',
       'CH: 2.7m · Business',
     ])
-    expect(labels).toEqual(
-      labels.map((label) =>
-        expect.objectContaining({ annotationRole: 'room-label', upright: true }),
-      ),
-    )
+    expect(labels.every((label) => label.kind === 'text' && label.upright)).toBe(true)
+    expect(
+      labels.every((label) => readFloorplanGeometryMetadata(label).annotationRole === 'room-label'),
+    ).toBe(true)
   })
 })

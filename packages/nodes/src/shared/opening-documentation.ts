@@ -2,11 +2,11 @@ import type {
   AnyNode,
   DoorNode,
   FloorplanGeometry,
-  FloorplanSchedule,
   LevelNode,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { type FloorplanSchedule, withFloorplanGeometryMetadata } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionLinearUnit,
@@ -171,45 +171,48 @@ export function buildOpeningMarkAnnotation(
   const bubbleHeight = 0.32
   const leaderEndOffset = bubbleOffset - bubbleHeight / 2
 
-  return {
-    kind: 'group',
-    children: [
-      {
-        kind: 'line',
-        x1: openingCenterX + normalX * halfDepth * side,
-        y1: openingCenterZ + normalZ * halfDepth * side,
-        x2: openingCenterX + normalX * leaderEndOffset * side,
-        y2: openingCenterZ + normalZ * leaderEndOffset * side,
-        stroke,
-        strokeWidth: 0.018,
-      },
-      {
-        kind: 'rect',
-        x: bubbleX - bubbleWidth / 2,
-        y: bubbleZ - bubbleHeight / 2,
-        width: bubbleWidth,
-        height: bubbleHeight,
-        rx: bubbleHeight / 2,
-        ry: bubbleHeight / 2,
-        fill: '#ffffff',
-        stroke,
-        strokeWidth: 0.02,
-      },
-      {
-        kind: 'text',
-        x: bubbleX,
-        y: bubbleZ,
-        text: mark,
-        fontSize: 0.15,
-        fill: stroke,
-        fontWeight: 700,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        textAnchor: 'middle',
-        dominantBaseline: 'middle',
-        upright: true,
-      },
-    ],
-  }
+  return withFloorplanGeometryMetadata(
+    {
+      kind: 'group',
+      children: [
+        {
+          kind: 'line',
+          x1: openingCenterX + normalX * halfDepth * side,
+          y1: openingCenterZ + normalZ * halfDepth * side,
+          x2: openingCenterX + normalX * leaderEndOffset * side,
+          y2: openingCenterZ + normalZ * leaderEndOffset * side,
+          stroke,
+          strokeWidth: 0.018,
+        },
+        {
+          kind: 'rect',
+          x: bubbleX - bubbleWidth / 2,
+          y: bubbleZ - bubbleHeight / 2,
+          width: bubbleWidth,
+          height: bubbleHeight,
+          rx: bubbleHeight / 2,
+          ry: bubbleHeight / 2,
+          fill: '#ffffff',
+          stroke,
+          strokeWidth: 0.02,
+        },
+        {
+          kind: 'text',
+          x: bubbleX,
+          y: bubbleZ,
+          text: mark,
+          fontSize: 0.15,
+          fill: stroke,
+          fontWeight: 700,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          textAnchor: 'middle',
+          dominantBaseline: 'middle',
+          upright: true,
+        },
+      ],
+    },
+    { annotationRole: 'opening-mark' },
+  )
 }
 
 export function resolveOpeningDimensionDocumentation(

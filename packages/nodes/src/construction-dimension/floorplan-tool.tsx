@@ -19,20 +19,21 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { markToolCancelConsumed } from '../../hooks/use-keyboard'
-import { formatLinearMeasurement } from '../../lib/measurements'
-import { triggerSFX } from '../../lib/sfx-bus'
 import {
   clearSurfacePlanSnapFeedback,
+  FloorplanDimensionRenderer,
+  formatLinearMeasurement,
+  isMagneticSnapActive,
+  markToolCancelConsumed,
   resolveSurfacePlanPointSnap,
-} from '../../lib/surface-plan-snap'
-import useDrawingView from '../../store/use-drawing-view'
-import useEditor from '../../store/use-editor'
-import useInteractionScope from '../../store/use-interaction-scope'
-import { useFloorplanRender } from './floorplan-render-context'
-import { FloorplanDimensionRenderer } from './renderers/floorplan-dimension-renderer'
+  triggerSFX,
+  useDrawingView,
+  useEditor,
+  useFloorplanRender,
+  useInteractionScope,
+} from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const SEMANTIC_SNAP_DISTANCE = 0.2
 const SEMANTIC_BYPASS_DISTANCE = 0.012
@@ -308,7 +309,7 @@ export function FloorplanConstructionDimensionToolLayer() {
         fallbackPoint: [raw[0], raw[2]],
         levelId: activeLevelId,
         align: false,
-        magnetic: !event.altKey,
+        magnetic: !event.altKey && isMagneticSnapActive(),
       })
       const point: MeasurementPoint = [surface.point[0], 0, surface.point[1]]
       const targetNodeId = surface.wallIds[0] ?? registryTargetNodeId(event.target)
@@ -579,3 +580,5 @@ export function FloorplanConstructionDimensionToolLayer() {
     </g>
   )
 }
+
+export default FloorplanConstructionDimensionToolLayer

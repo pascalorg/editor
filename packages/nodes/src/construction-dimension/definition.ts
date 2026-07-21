@@ -1,9 +1,12 @@
 import { measurementAnchorReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { resolveConstructionDimensionForDrawing } from './drawing-coordination'
 import { buildConstructionDimensionFloorplan } from './floorplan'
 import {
   moveConstructionDimensionBaselineAffordance,
   moveConstructionDimensionWitnessAffordance,
 } from './floorplan-affordances'
+import { migrateConstructionDimensionV6ToV7 } from './migration'
 import { constructionDimensionParametrics } from './parametrics'
 import { ConstructionDimensionNode } from './schema'
 
@@ -13,6 +16,12 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   schemaVersion: 7,
   schema: ConstructionDimensionNode,
   category: 'analysis',
+  extensions: {
+    'pascal:editor/floorplan': {
+      tool: () => import('./floorplan-tool'),
+      resolveForDrawing: resolveConstructionDimensionForDrawing,
+    } satisfies FloorplanNodeExtension<ConstructionDimensionNode>,
+  },
   snapProfile: 'structural',
 
   defaults: () => ({
@@ -43,6 +52,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     drawingOverrides: [],
     controllingDimensionId: null,
   }),
+  migrate: { 6: migrateConstructionDimensionV6ToV7 },
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
@@ -62,7 +72,6 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     'move-construction-dimension-baseline': moveConstructionDimensionBaselineAffordance,
     'move-construction-dimension-witness': moveConstructionDimensionWitnessAffordance,
   },
-  tool: () => import('./tool'),
   toolHints: [
     { key: 'Left click', label: 'Pick witness point' },
     { key: 'Enter', label: 'Finish multi-point witnesses' },

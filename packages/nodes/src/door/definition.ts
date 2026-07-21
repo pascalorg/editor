@@ -6,6 +6,7 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
@@ -176,6 +177,11 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   schemaVersion: 2,
   schema: DoorNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildDoorFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<DoorNodeType>,
+  },
   surfaceRole: 'joinery',
 
   // Leverage the schema's zod `.default()` annotations to compute the
@@ -231,7 +237,6 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
   computeFloorplanLevelData: computeDoorFloorplanLevelData,
-  floorplanSchedule: buildDoorFloorplanSchedule,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in
