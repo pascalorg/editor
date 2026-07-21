@@ -251,6 +251,7 @@ export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
 export type {
+  WallAssemblyLayer,
   WallBandSurfaceSlotId,
   WallFaceBand,
   WallFaceBandConfig,
@@ -263,7 +264,10 @@ export {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
+  getWallAssemblyLayers,
+  getWallAssemblyThickness,
   getWallBandSlotId,
+  getWallDatumEligibleLayers,
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
@@ -278,6 +282,8 @@ export {
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WALL_TRIM_DEFAULTS,
+  WallAssemblyLayerRole,
+  WallDimensionDatum,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,

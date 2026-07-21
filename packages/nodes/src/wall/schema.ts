@@ -8,5 +8,12 @@
  * imports a single canonical type.
  */
 
-export type { WallNode as WallNodeType } from '@pascal-app/core'
-export { WallNode } from '@pascal-app/core'
+export type { WallAssemblyLayer, WallNode as WallNodeType } from '@pascal-app/core'
+export {
+  getWallAssemblyLayers,
+  getWallAssemblyThickness,
+  getWallDatumEligibleLayers,
+  WallAssemblyLayerRole,
+  WallDimensionDatum,
+  WallNode,
+} from '@pascal-app/core'

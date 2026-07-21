@@ -2416,6 +2416,7 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     visible: true,
     metadata: {},
     children: [],
+    assemblyLayers: [],
     start,
     end,
     frontSide: 'unknown',

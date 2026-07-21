@@ -54,7 +54,7 @@ assessment.
 
 ### Wall assemblies and construction datums
 
-- [ ] Model wall layers and their roles, thicknesses, materials, and eligibility as dimension
+- [x] Model wall layers and their roles, thicknesses, materials, and eligibility as dimension
   datums.
 - [ ] Resolve stable centerline, structural-face, finish-face, veneer-face, and other
   assembly-aware references.
@@ -393,18 +393,23 @@ Extend reusable annotation primitives instead of creating feature-specific SVG i
 
 ### 5.1 Add wall assembly data
 
+Status: implemented in the persistent Core wall schema. Walls now support explicit assembly layers
+with role, side, thickness, material reference, and datum eligibility. Existing walls can continue to
+use legacy modeled thickness when no layers are present; helpers expose total assembly thickness and
+datum-eligible layer filtering for the next datum-resolution phase.
+
 Represent wall layers such as:
 
-- Structural framing.
-- Interior finish.
-- Exterior sheathing.
-- Exterior finish or siding.
-- Masonry veneer.
-- Air space.
-- Concrete block.
-- Structural masonry.
-- Solid concrete.
-- Interior furring.
+- [x] Structural framing.
+- [x] Interior finish.
+- [x] Exterior sheathing.
+- [x] Exterior finish or siding.
+- [x] Masonry veneer.
+- [x] Air space.
+- [x] Concrete block.
+- [x] Structural masonry.
+- [x] Solid concrete.
+- [x] Interior furring.
 
 Each layer should declare thickness, role, material reference, and whether it can act as a dimension datum.
 

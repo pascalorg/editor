@@ -127,6 +127,38 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
 
+export const WallAssemblyLayerRole = z.enum([
+  'structure',
+  'interior-finish',
+  'exterior-sheathing',
+  'exterior-finish',
+  'masonry-veneer',
+  'air-space',
+  'concrete-block',
+  'structural-masonry',
+  'solid-concrete',
+  'furring',
+])
+export type WallAssemblyLayerRole = z.infer<typeof WallAssemblyLayerRole>
+
+export const WallDimensionDatum = z.enum([
+  'centerline',
+  'structural-face',
+  'finish-face',
+  'veneer-face',
+])
+export type WallDimensionDatum = z.infer<typeof WallDimensionDatum>
+
+export const WallAssemblyLayer = z.object({
+  id: z.string().trim().min(1).max(80).default('structure'),
+  role: WallAssemblyLayerRole.default('structure'),
+  side: z.enum(['core', 'interior', 'exterior']).default('core'),
+  thickness: z.number().finite().positive().default(0.1),
+  materialRef: z.string().trim().max(120).default(''),
+  datumEligible: z.array(WallDimensionDatum).max(8).default([]),
+})
+export type WallAssemblyLayer = z.infer<typeof WallAssemblyLayer>
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -149,6 +181,7 @@ export const WallNode = BaseNode.extend({
   // in a follow-up once migrated scenes are the norm.
   slots: z.record(z.string(), z.string()).optional(),
   thickness: z.number().optional(),
+  assemblyLayers: z.array(WallAssemblyLayer).max(32).default([]),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
   faceBands: WallFaceBandConfig.optional(),
@@ -165,6 +198,7 @@ export const WallNode = BaseNode.extend({
   dedent`
   Wall node - used to represent a wall in the building
   - thickness: thickness in meters
+  - assemblyLayers: construction layers with role, side, thickness, material reference, and datum eligibility
   - height: height in meters
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
@@ -187,6 +221,25 @@ export type WallBandSurfaceSlotId =
   | 'middleExterior'
   | 'upperExterior'
   | 'topExterior'
+
+export function getWallAssemblyLayers(wall: Pick<WallNode, 'assemblyLayers'>): WallAssemblyLayer[] {
+  return wall.assemblyLayers ?? []
+}
+
+export function getWallAssemblyThickness(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): number {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return wall.thickness ?? 0.1
+  return layers.reduce((sum, layer) => sum + layer.thickness, 0)
+}
+
+export function getWallDatumEligibleLayers(
+  wall: Pick<WallNode, 'assemblyLayers'>,
+  datum: WallDimensionDatum,
+): WallAssemblyLayer[] {
+  return (wall.assemblyLayers ?? []).filter((layer) => layer.datumEligible.includes(datum))
+}
 
 // Declared default appearance for an unpainted wall face in colored mode —
 // visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the

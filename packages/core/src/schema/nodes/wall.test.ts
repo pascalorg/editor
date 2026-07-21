@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
+  getWallAssemblyThickness,
+  getWallDatumEligibleLayers,
   getWallFaceBandConfig,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
@@ -13,7 +15,8 @@ import {
   WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WallFaceBandConfig,
-  type WallNode,
+  WallNode,
+  type WallNode as WallNodeType,
   WallTrimConfig,
 } from './wall'
 
@@ -93,7 +96,7 @@ describe('wall face bands', () => {
         lowerInterior: 'library:stale-lower',
         middleExterior: 'library:stale-middle',
       },
-    } as Pick<WallNode, 'faceBands' | 'slots'>)
+    } as Pick<WallNodeType, 'faceBands' | 'slots'>)
 
     expect(patch.faceBands).toEqual({
       enabled: true,
@@ -129,7 +132,7 @@ describe('wall face bands', () => {
           exterior: 'scene:exterior-finish',
           topInterior: 'library:stale-top',
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       3,
     )
 
@@ -153,7 +156,7 @@ describe('wall face bands', () => {
         middleInterior: 'library:stale-middle',
         upperExterior: 'library:stale-upper',
       },
-    } as Pick<WallNode, 'faceBands' | 'slots'>)
+    } as Pick<WallNodeType, 'faceBands' | 'slots'>)
 
     expect(patch.slots).toEqual({
       lowerInterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
@@ -181,7 +184,7 @@ describe('wall face bands', () => {
           lowerExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower,
           upperExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper,
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       3,
     )
 
@@ -213,7 +216,7 @@ describe('wall face bands', () => {
           middleExterior: WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle,
           upperExterior: 'library:painted-top-exterior',
         },
-      } as Pick<WallNode, 'faceBands' | 'slots'>,
+      } as Pick<WallNodeType, 'faceBands' | 'slots'>,
       4,
     )
 
@@ -252,5 +255,60 @@ describe('wall trim profiles', () => {
     expect(WALL_SURFACE_SLOT_DEFAULTS.crownExterior).toBe(WALL_CROWN_SLOT_DEFAULT)
     expect(WALL_SURFACE_SLOT_DEFAULTS.chairRailInterior).toBe(WALL_CHAIR_RAIL_SLOT_DEFAULT)
     expect(WALL_SURFACE_SLOT_DEFAULTS.chairRailExterior).toBe(WALL_CHAIR_RAIL_SLOT_DEFAULT)
+  })
+})
+
+describe('wall assembly layers', () => {
+  test('defaults to legacy thickness when no assembly layers are modeled', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.14,
+    })
+
+    expect(wall.assemblyLayers).toEqual([])
+    expect(getWallAssemblyThickness(wall)).toBe(0.14)
+  })
+
+  test('stores role, side, thickness, material reference, and datum eligibility', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      assemblyLayers: [
+        {
+          id: 'stud-core',
+          role: 'structure',
+          side: 'core',
+          thickness: 0.09,
+          materialRef: 'library:wood-framing',
+          datumEligible: ['centerline', 'structural-face'],
+        },
+        {
+          id: 'interior-gwb',
+          role: 'interior-finish',
+          side: 'interior',
+          thickness: 0.016,
+          materialRef: 'library:gypsum-board',
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'brick-veneer',
+          role: 'masonry-veneer',
+          side: 'exterior',
+          thickness: 0.09,
+          materialRef: 'library:brick',
+          datumEligible: ['veneer-face', 'finish-face'],
+        },
+      ],
+    })
+
+    expect(getWallAssemblyThickness(wall)).toBeCloseTo(0.196)
+    expect(getWallDatumEligibleLayers(wall, 'finish-face').map((layer) => layer.id)).toEqual([
+      'interior-gwb',
+      'brick-veneer',
+    ])
+    expect(getWallDatumEligibleLayers(wall, 'structural-face')).toMatchObject([
+      { id: 'stud-core', role: 'structure', side: 'core' },
+    ])
   })
 })
