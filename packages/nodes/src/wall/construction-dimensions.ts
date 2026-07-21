@@ -345,23 +345,38 @@ export function buildCurvedWallConstructionDimensions(
   const arc = getWallArcData(wall)
   if (!arc) return []
 
-  const dimensionRadius = arc.radius + (wall.thickness ?? 0.1) / 2 + OPENING_CHAIN_OFFSET
-  const pointAt = (radius: number, angle: number): FloorplanPoint => [
-    arc.center.x + Math.cos(angle) * radius,
-    arc.center.y + Math.sin(angle) * radius,
+  const center: FloorplanPoint = [arc.center.x, arc.center.y]
+  const radiusAngle = arc.startAngle + arc.delta / 2
+  const radiusDirection: FloorplanPoint = [Math.cos(radiusAngle), Math.sin(radiusAngle)]
+  const curvePoint: FloorplanPoint = [
+    center[0] + radiusDirection[0] * arc.radius,
+    center[1] + radiusDirection[1] * arc.radius,
   ]
-  const startAngle = arc.startAngle
-  const endAngle = arc.startAngle + arc.delta
-  const arcStart = pointAt(dimensionRadius, startAngle)
-  const arcEnd = pointAt(dimensionRadius, endAngle)
-  const extensionRadius = dimensionRadius + EXTENSION_OVERSHOOT
-  const labelPoint = pointAt(dimensionRadius, startAngle + arc.delta / 2)
+  const labelPoint: FloorplanPoint = [
+    center[0] + radiusDirection[0] * arc.radius * 0.58,
+    center[1] + radiusDirection[1] * arc.radius * 0.58,
+  ]
   const lineStyle = {
     stroke,
     strokeWidth: 0.9,
     vectorEffect: 'non-scaling-stroke' as const,
     pointerEvents: 'none' as const,
   }
+  const centerMarkHalf = Math.min(0.22, Math.max(0.1, arc.radius * 0.18))
+  const centerMarkGap = Math.min(0.045, centerMarkHalf * 0.3)
+  const arrowLength = 0.15
+  const arrowHalfWidth = 0.055
+  const arrowBase: FloorplanPoint = [
+    curvePoint[0] - radiusDirection[0] * arrowLength,
+    curvePoint[1] - radiusDirection[1] * arrowLength,
+  ]
+  const arrowNormal: FloorplanPoint = [-radiusDirection[1], radiusDirection[0]]
+  const centerMarkSegments: Array<[number, number, number, number]> = [
+    [center[0] - centerMarkHalf, center[1], center[0] - centerMarkGap, center[1]],
+    [center[0] + centerMarkGap, center[1], center[0] + centerMarkHalf, center[1]],
+    [center[0], center[1] - centerMarkHalf, center[0], center[1] - centerMarkGap],
+    [center[0], center[1] + centerMarkGap, center[0], center[1] + centerMarkHalf],
+  ]
 
   return [
     {
@@ -370,33 +385,44 @@ export function buildCurvedWallConstructionDimensions(
       children: [
         {
           kind: 'line',
-          x1: wall.start[0],
-          y1: wall.start[1],
-          x2: pointAt(extensionRadius, startAngle)[0],
-          y2: pointAt(extensionRadius, startAngle)[1],
+          x1: center[0],
+          y1: center[1],
+          x2: curvePoint[0],
+          y2: curvePoint[1],
           ...lineStyle,
         },
         {
           kind: 'line',
-          x1: wall.end[0],
-          y1: wall.end[1],
-          x2: pointAt(extensionRadius, endAngle)[0],
-          y2: pointAt(extensionRadius, endAngle)[1],
+          x1: curvePoint[0],
+          y1: curvePoint[1],
+          x2: arrowBase[0] + arrowNormal[0] * arrowHalfWidth,
+          y2: arrowBase[1] + arrowNormal[1] * arrowHalfWidth,
           ...lineStyle,
         },
         {
-          kind: 'path',
-          d: `M ${arcStart[0]} ${arcStart[1]} A ${dimensionRadius} ${dimensionRadius} 0 ${Math.abs(arc.delta) > Math.PI ? 1 : 0} ${arc.delta >= 0 ? 1 : 0} ${arcEnd[0]} ${arcEnd[1]}`,
-          fill: 'none',
+          kind: 'line',
+          x1: curvePoint[0],
+          y1: curvePoint[1],
+          x2: arrowBase[0] - arrowNormal[0] * arrowHalfWidth,
+          y2: arrowBase[1] - arrowNormal[1] * arrowHalfWidth,
           ...lineStyle,
         },
+        ...centerMarkSegments.map(
+          ([x1, y1, x2, y2]): FloorplanGeometry => ({
+            kind: 'line',
+            x1,
+            y1,
+            x2,
+            y2,
+            ...lineStyle,
+          }),
+        ),
         {
           kind: 'dimension-label',
           cx: labelPoint[0],
           cy: labelPoint[1],
-          text: `ARC ${formatConstructionLength(Math.abs(arc.delta) * arc.radius, unit, profile)}`,
-          angle: 0,
-          screenUpright: true,
+          text: `R ${formatConstructionLength(arc.radius, unit, profile)}`,
+          angle: radiusAngle,
           appearance: 'outlined',
         },
       ],

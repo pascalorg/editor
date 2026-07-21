@@ -203,7 +203,7 @@ There is no sheet-level general-note block, keyed-note index, delta marker syste
 
 ### Curved and circular construction dimensions
 
-Curved walls emit an automatic concentric arc-length dimension in live plans and document output. Manual associative construction dimensions cover radius, diameter, center, chord, arc-length, coordinate-pattern, and angular-pattern workflows, with curved-wall defining geometry resolved from stable semantic host features.
+Curved walls emit an automatic radius leader and center mark in live plans and document output, matching the chapter's curved-wall callout method. Manual associative construction dimensions cover radius, diameter, center, chord, arc-length, coordinate-pattern, and angular-pattern workflows, with curved-wall defining geometry resolved from stable semantic host features.
 
 ### Construction systems are not semantically modeled
 

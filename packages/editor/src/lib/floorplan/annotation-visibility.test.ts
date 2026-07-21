@@ -45,8 +45,8 @@ describe('floor-plan annotation visibility', () => {
       kind: 'group',
       annotationRole: 'automatic-dimension',
       children: [
-        { kind: 'path', d: 'M 0 0 A 2 2 0 0 1 2 2' },
-        { kind: 'dimension-label', cx: 1, cy: 1, text: 'ARC 3.14m', angle: 0 },
+        { kind: 'line', x1: 0, y1: 0, x2: 2, y2: 2 },
+        { kind: 'dimension-label', cx: 1, cy: 1, text: 'R 2m', angle: 0 },
       ],
     } satisfies FloorplanGeometry
 

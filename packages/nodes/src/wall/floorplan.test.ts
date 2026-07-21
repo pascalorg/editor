@@ -92,14 +92,14 @@ describe('buildWallFloorplan render purpose', () => {
     expect(texts(document)).toContain('4000')
   })
 
-  test('shows a visible arc-length dimension for a curved wall without requiring selection', () => {
+  test('shows a radius leader for a curved wall without requiring selection', () => {
     const curved = WallNode.parse({ ...wall, curveOffset: 1 })
     const geometry = buildWallFloorplan(curved, context('edit'))
     const entries = geometry ? flatten(geometry) : []
 
-    expect(entries.some((entry) => entry.kind === 'path')).toBe(true)
+    expect(entries.filter((entry) => entry.kind === 'line')).toHaveLength(7)
     expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
-      text: 'ARC 4.64m',
+      text: 'R 2.5m',
     })
   })
 })

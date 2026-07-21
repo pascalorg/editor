@@ -393,7 +393,7 @@ panel controls center marks, feature count, reference presentation, prefixes, su
 overrides. Radius, center-mark, chord, arc-length, and angular modes can bind all defining points
 from one curved-wall click and update when that wall is reshaped. All modes render through the
 live/PDF floor-plan pipeline with unit-aware values. Curved walls also emit a visible automatic
-arc-length dimension without requiring selection or manual dimension authoring.
+radius leader and center mark without requiring selection or manual dimension authoring.
 
 - [x] Radius dimensions.
 - [x] Diameter dimensions.
@@ -404,7 +404,7 @@ arc-length dimension without requiring selection or manual dimension authoring.
 - [x] Coordinate dimensions for repeated circular features.
 - [x] Feature-count notation such as `6 x DIA ...`.
 - [x] Single-click associative curved-wall dimensions that follow host curve edits.
-- [x] Automatic curved-wall arc-length dimensions in live plans and document output.
+- [x] Automatic curved-wall radius leaders in live plans and document output.
 
 ### 7.2 Drawing-type coordination
 

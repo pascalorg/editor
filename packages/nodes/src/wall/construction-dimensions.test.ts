@@ -8,6 +8,7 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import {
+  buildCurvedWallConstructionDimensions,
   buildLevelWallConstructionDimensionPlan,
   buildWallConstructionDimensions,
   formatConstructionLength,
@@ -58,6 +59,21 @@ describe('formatConstructionLength', () => {
 })
 
 describe('buildWallConstructionDimensions', () => {
+  test('calls out a curved wall with a center-to-curve radius leader', () => {
+    const geometry = buildCurvedWallConstructionDimensions(wall({ curveOffset: 1 }), {
+      unit: 'metric',
+    })[0]
+
+    expect(geometry).toMatchObject({ kind: 'group', annotationRole: 'automatic-dimension' })
+    if (geometry?.kind !== 'group') return
+    const leader = geometry.children[0]
+    const label = geometry.children.find((entry) => entry.kind === 'dimension-label')
+
+    expect(leader).toMatchObject({ kind: 'line', x1: 5, y1: 12, y2: -1 })
+    expect(leader?.kind === 'line' ? leader.x2 : Number.NaN).toBeCloseTo(5)
+    expect(label).toMatchObject({ kind: 'dimension-label', text: 'R 13m' })
+  })
+
   test('builds a jamb-by-jamb chain plus a farther wall span', () => {
     const door = DoorNode.parse({
       id: 'door_entry',
