@@ -65,7 +65,7 @@ assessment.
 
 ### Room documentation gaps
 
-- [ ] Add finish-face and room-to-room clear dimensions once wall-assembly and inter-room datum
+- [x] Add finish-face and room-to-room clear dimensions once wall-assembly and inter-room datum
   evidence exists.
 - [ ] Extend reliable automatic clear dimensions beyond proven straight rectangular enclosures
   without presenting guessed dimensions for open, irregular, or incomplete rooms.
@@ -487,14 +487,18 @@ occupancy/use, with independent live/PDF visibility. Generated room schedules no
 finishes, ceiling height, occupancy/use, resolved enclosure state, unit-aware values, and document
 warnings for missing/duplicate room numbers or unproven enclosure claims. Reliable clear dimensions
 now render between modeled inside wall faces for proven straight rectangular enclosures, including
-rotated rooms. Open, irregular, incomplete, and finish-face cases remain suppressed rather than
-presenting an unproven datum; finish-face dimensions remain dependent on Phase 5 wall assemblies.
+rotated rooms. Finish-face clear dimensions now render only when every boundary wall has modeled
+assembly finish-face datums, and adjacent rectangular room zones can emit a room-to-room
+finish-to-finish shared-wall dimension when both rooms prove the same wall datum. Open, irregular,
+and incomplete cases remain suppressed rather than presenting an unproven datum.
 
 - Center room name and number.
 - Place finish information below the room name.
 - [x] Generate room schedules.
-- [x] Generate inside-face clear dimensions only when enclosure evidence is reliable. Finish-face
-  and room-to-room dimensions remain dependent on wall-assembly and inter-room datum evidence.
+- [x] Generate inside-face clear dimensions only when enclosure evidence is reliable.
+- [x] Generate finish-face clear dimensions only when wall assembly datum evidence is reliable.
+- [x] Generate room-to-room finish-face dimensions only when adjacent room datum evidence is
+  reliable.
 
 ### 6.3 Add stair annotations
 

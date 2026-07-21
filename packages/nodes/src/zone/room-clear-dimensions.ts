@@ -3,6 +3,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  resolveWallAssemblyDatumReferences,
   type SpaceBoundaryFace,
   type WallNode,
   type ZoneNode,
@@ -12,6 +13,7 @@ import { formatConstructionLength } from '../shared/construction-length'
 const LINE_TOLERANCE = 1e-4
 const ANGLE_TOLERANCE = 1e-3
 const MIN_CLEAR_SPAN = 0.3
+const MIN_ROOM_TO_ROOM_SPAN = 0.03
 const FIRST_DIMENSION_POSITION = 0.32
 const SECOND_DIMENSION_POSITION = 0.68
 const EXTENSION_OVERSHOOT = 0.08
@@ -21,13 +23,19 @@ type FaceLine = {
   end: FloorplanPoint
 }
 
+type ClearDimensionPolicy = Extract<
+  ZoneNode['clearDimensionPolicy'],
+  'inside-faces' | 'finish-faces'
+>
+
 export function buildRoomClearDimensions(
   node: ZoneNode,
   ctx: GeometryContext,
 ): FloorplanGeometry[] {
   if (
     node.spaceRole !== 'room' ||
-    node.clearDimensionPolicy !== 'inside-faces' ||
+    (node.clearDimensionPolicy !== 'inside-faces' &&
+      node.clearDimensionPolicy !== 'finish-faces') ||
     node.enclosureStatus === 'open' ||
     !node.autoFromWalls ||
     !node.parentId ||
@@ -56,7 +64,11 @@ export function buildRoomClearDimensions(
   if (!space) return []
 
   const wallsById = new Map(walls.map((wall) => [wall.id, wall]))
-  const rectangle = resolveInsideFaceRectangle(space.boundaryFaces, wallsById)
+  const rectangle = resolveClearFaceRectangle(
+    space.boundaryFaces,
+    wallsById,
+    node.clearDimensionPolicy,
+  )
   if (!rectangle) return []
 
   const unit = ctx.viewState?.unit ?? 'metric'
@@ -79,18 +91,23 @@ export function buildRoomClearDimensions(
     unit,
     stroke,
   )
-  return first && second ? [first, second] : []
+  const dimensions = first && second ? [first, second] : []
+  return [
+    ...dimensions,
+    ...buildRoomToRoomClearDimensions(node, ctx, space.boundaryFaces, wallsById, unit, stroke),
+  ]
 }
 
-function resolveInsideFaceRectangle(
+function resolveClearFaceRectangle(
   boundaryFaces: readonly SpaceBoundaryFace[],
   wallsById: ReadonlyMap<string, WallNode>,
+  policy: ClearDimensionPolicy,
 ): [FloorplanPoint, FloorplanPoint, FloorplanPoint, FloorplanPoint] | null {
   const faceLines: FaceLine[] = []
   for (const boundary of boundaryFaces) {
     const wall = wallsById.get(boundary.wallId)
     if (!wall || Math.abs(wall.curveOffset ?? 0) > LINE_TOLERANCE) return null
-    const line = offsetBoundaryFace(boundary, wall)
+    const line = offsetBoundaryFace(boundary, wall, policy)
     if (!line) return null
     faceLines.push(line)
   }
@@ -127,7 +144,11 @@ function resolveInsideFaceRectangle(
   return rectangle
 }
 
-function offsetBoundaryFace(boundary: SpaceBoundaryFace, wall: WallNode): FaceLine | null {
+function offsetBoundaryFace(
+  boundary: SpaceBoundaryFace,
+  wall: WallNode,
+  policy: ClearDimensionPolicy,
+): FaceLine | null {
   const first = boundary.points[0]
   const last = boundary.points[boundary.points.length - 1]
   if (!(first && last)) return null
@@ -136,11 +157,154 @@ function offsetBoundaryFace(boundary: SpaceBoundaryFace, wall: WallNode): FaceLi
   if (!wallDirection) return null
   const normal: FloorplanPoint = [-wallDirection[1], wallDirection[0]]
   const side = boundary.face === 'front' ? 1 : -1
-  const offset = ((wall.thickness ?? 0.2) / 2) * side
+  const offset =
+    policy === 'finish-faces'
+      ? resolveFinishFaceOffset(wall, side)
+      : ((wall.thickness ?? 0.2) / 2) * side
+  if (offset === null) return null
   return {
     start: [first[0] + normal[0] * offset, first[1] + normal[1] * offset],
     end: [last[0] + normal[0] * offset, last[1] + normal[1] * offset],
   }
+}
+
+function resolveFinishFaceOffset(wall: WallNode, side: 1 | -1): number | null {
+  if ((wall.assemblyLayers ?? []).length === 0) return null
+  const references = resolveWallAssemblyDatumReferences(wall).filter(
+    (reference) => reference.datum === 'finish-face',
+  )
+  const matching = references.find((reference) => Math.sign(reference.offset) === side)
+  return matching?.offset ?? null
+}
+
+function buildRoomToRoomClearDimensions(
+  node: ZoneNode,
+  ctx: GeometryContext,
+  boundaryFaces: readonly SpaceBoundaryFace[],
+  wallsById: ReadonlyMap<string, WallNode>,
+  unit: 'metric' | 'imperial',
+  stroke: string,
+): FloorplanGeometry[] {
+  if (node.clearDimensionPolicy !== 'finish-faces') return []
+
+  const neighboringRooms = ctx.siblings.filter(
+    (sibling): sibling is ZoneNode =>
+      sibling.type === 'zone' &&
+      sibling.id !== node.id &&
+      String(node.id) < String(sibling.id) &&
+      sibling.spaceRole === 'room' &&
+      sibling.clearDimensionPolicy === 'finish-faces' &&
+      sibling.enclosureStatus !== 'open' &&
+      sibling.autoFromWalls &&
+      sibling.parentId === node.parentId,
+  )
+  if (neighboringRooms.length === 0) return []
+
+  const dimensions: FloorplanGeometry[] = []
+  const currentBoundaryByWallId = new Map(
+    boundaryFaces.map((boundary) => [boundary.wallId, boundary]),
+  )
+
+  for (const neighbor of neighboringRooms) {
+    const sharedWallIds = neighbor.boundaryWallIds.filter((wallId) =>
+      currentBoundaryByWallId.has(wallId),
+    )
+    if (sharedWallIds.length === 0) continue
+
+    const neighborWalls = neighbor.boundaryWallIds.flatMap((id) => {
+      const resolved = ctx.resolve(id)
+      return resolved &&
+        typeof resolved === 'object' &&
+        'type' in resolved &&
+        resolved.type === 'wall'
+        ? [resolved as WallNode]
+        : []
+    })
+    if (neighborWalls.length !== neighbor.boundaryWallIds.length) continue
+    const neighborWallIds = new Set(neighbor.boundaryWallIds)
+    const neighborSpace = detectSpacesForLevel(neighbor.parentId ?? '', neighborWalls).spaces.find(
+      (candidate) =>
+        candidate.wallIds.length === neighborWallIds.size &&
+        candidate.wallIds.every((id) => neighborWallIds.has(id)),
+    )
+    if (!neighborSpace) continue
+    const neighborBoundaryByWallId = new Map(
+      neighborSpace.boundaryFaces.map((boundary) => [boundary.wallId, boundary]),
+    )
+
+    for (const wallId of sharedWallIds) {
+      const wall = wallsById.get(wallId)
+      const currentBoundary = currentBoundaryByWallId.get(wallId)
+      const neighborBoundary = neighborBoundaryByWallId.get(wallId)
+      if (!(wall && currentBoundary && neighborBoundary)) continue
+      const currentLine = offsetBoundaryFace(currentBoundary, wall, 'finish-faces')
+      const neighborLine = offsetBoundaryFace(neighborBoundary, wall, 'finish-faces')
+      if (!(currentLine && neighborLine)) continue
+      const dimension = dimensionAcrossSharedRoomWall(currentLine, neighborLine, unit, stroke)
+      if (dimension) dimensions.push(dimension)
+    }
+  }
+
+  return dimensions
+}
+
+function dimensionAcrossSharedRoomWall(
+  currentLine: FaceLine,
+  neighborLine: FaceLine,
+  unit: 'metric' | 'imperial',
+  stroke: string,
+): FloorplanGeometry | null {
+  const direction = normalizedDirection(currentLine.start, currentLine.end)
+  if (!direction) return null
+  const neighborDirection = normalizedDirection(neighborLine.start, neighborLine.end)
+  if (!neighborDirection || Math.abs(dot(direction, neighborDirection)) < 1 - ANGLE_TOLERANCE) {
+    return null
+  }
+
+  const currentStart = dot(currentLine.start, direction)
+  const currentEnd = dot(currentLine.end, direction)
+  const neighborStart = dot(neighborLine.start, direction)
+  const neighborEnd = dot(neighborLine.end, direction)
+  const overlapStart = Math.max(
+    Math.min(currentStart, currentEnd),
+    Math.min(neighborStart, neighborEnd),
+  )
+  const overlapEnd = Math.min(
+    Math.max(currentStart, currentEnd),
+    Math.max(neighborStart, neighborEnd),
+  )
+  if (overlapEnd - overlapStart < MIN_CLEAR_SPAN) return null
+
+  const projection = (overlapStart + overlapEnd) / 2
+  const start = projectPointToLineProjection(currentLine, direction, projection)
+  const end = projectPointToLineProjection(neighborLine, direction, projection)
+  const clear = distance(start, end)
+  if (clear < MIN_ROOM_TO_ROOM_SPAN) return null
+  const axis = normalizedDirection(start, end)
+  if (!axis) return null
+
+  return {
+    kind: 'dimension',
+    start,
+    end,
+    offsetNormal: [-axis[1], axis[0]],
+    offsetDistance: 0,
+    extensionOvershoot: EXTENSION_OVERSHOOT,
+    text: `R-R ${formatConstructionLength(clear, unit)}`,
+    stroke,
+  }
+}
+
+function projectPointToLineProjection(
+  line: FaceLine,
+  direction: FloorplanPoint,
+  projection: number,
+): FloorplanPoint {
+  const originProjection = dot(line.start, direction)
+  return [
+    line.start[0] + direction[0] * (projection - originProjection),
+    line.start[1] + direction[1] * (projection - originProjection),
+  ]
 }
 
 function mergeCollinearFaces(lines: readonly FaceLine[]): FaceLine[] {
