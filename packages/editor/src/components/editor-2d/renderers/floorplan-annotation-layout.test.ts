@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  collectAnnotationLayoutPreflightIssues,
   floorplanAnnotationObstacleMode,
   polylineObstacleRectangles,
   resolveAnnotationLabelRectangles,
@@ -37,6 +38,66 @@ describe('floorplanAnnotationObstacleMode', () => {
         annotationRole: 'stair-annotation',
       }),
     ).toBe('outline')
+  })
+})
+
+describe('collectAnnotationLayoutPreflightIssues', () => {
+  test('reports unresolved collisions, short labels, and plan geometry conflicts separately', () => {
+    const issues = collectAnnotationLayoutPreflightIssues(
+      [
+        {
+          id: 'short',
+          x: 0,
+          y: 0,
+          width: 40,
+          height: 10,
+          priority: 10,
+          text: '1"',
+          labelPlacement: 'outside-end',
+        },
+        {
+          id: 'blocked',
+          x: 100,
+          y: 0,
+          width: 40,
+          height: 10,
+          priority: 10,
+          text: 'Blocked',
+        },
+        {
+          id: 'overlap-a',
+          x: 200,
+          y: 0,
+          width: 40,
+          height: 10,
+          priority: 10,
+          text: 'A',
+        },
+        {
+          id: 'overlap-b',
+          x: 205,
+          y: 0,
+          width: 40,
+          height: 10,
+          priority: 10,
+          text: 'B',
+        },
+      ],
+      [
+        { id: 'short', dx: 0, dy: 0, resolved: true },
+        { id: 'blocked', dx: 0, dy: 0, resolved: true },
+        { id: 'overlap-a', dx: 0, dy: 0, resolved: false },
+        { id: 'overlap-b', dx: 0, dy: 0, resolved: true },
+      ],
+      [{ x: 96, y: -2, width: 48, height: 14 }],
+    )
+
+    expect(issues.map((issue) => issue.kind)).toEqual([
+      'short-unreadable-segment',
+      'plan-geometry-conflict',
+      'unresolved-collision',
+    ])
+    expect(issues.every((issue) => issue.severity === 'warning')).toBe(true)
   })
 })
 

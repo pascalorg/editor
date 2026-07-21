@@ -1,7 +1,7 @@
 import { clearSceneHistory, emitter, useScene, validateBuildJson } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
+import { AlertTriangle, Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -15,6 +15,7 @@ import useDrawingView, {
   DRAWING_SCALE_OPTIONS,
   normalizeDrawingScale,
 } from '../../../../../store/use-drawing-view'
+import useFloorplanPreflight from '../../../../../store/use-floorplan-preflight'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -193,6 +194,7 @@ export function SettingsPanel({
   const setPhase = useEditor((state) => state.setPhase)
   const drawingScale = useDrawingView((state) => state.drawingScale)
   const setDrawingScale = useDrawingView((state) => state.setDrawingScale)
+  const floorplanPreflightIssues = useFloorplanPreflight((state) => state.issues)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -433,6 +435,37 @@ export function SettingsPanel({
             <MapIcon className="size-4" />
             Structure only
           </Button>
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-medium text-sm">
+                <AlertTriangle
+                  className={`size-4 ${
+                    floorplanPreflightIssues.length > 0
+                      ? 'text-amber-600'
+                      : 'text-muted-foreground'
+                  }`}
+                />
+                Drawing preflight
+              </div>
+              <span className="rounded-full bg-background px-2 py-0.5 text-muted-foreground text-xs">
+                {floorplanPreflightIssues.length}
+              </span>
+            </div>
+            <p className="mt-1 text-muted-foreground text-xs">
+              Annotation diagnostics are shown here only; they are not painted on the plan or added
+              to PDF output.
+            </p>
+            {floorplanPreflightIssues.length > 0 ? (
+              <ul className="mt-2 max-h-28 space-y-1 overflow-auto text-muted-foreground text-xs">
+                {floorplanPreflightIssues.slice(0, 6).map((issue) => (
+                  <li key={`${issue.kind}:${issue.id}`}>• {issue.message}</li>
+                ))}
+                {floorplanPreflightIssues.length > 6 ? (
+                  <li>• {floorplanPreflightIssues.length - 6} more issue(s)</li>
+                ) : null}
+              </ul>
+            ) : null}
+          </div>
         </div>
       </div>
 

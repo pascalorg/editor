@@ -7,6 +7,8 @@ export type AnnotationLabelRectangle = {
   width: number
   height: number
   priority: number
+  text?: string
+  labelPlacement?: 'inside' | 'outside-end'
   pinnedShift?: { dx: number; dy: number }
   tangentX?: number
   tangentY?: number
@@ -76,6 +78,16 @@ class AnnotationObstacleIndex {
 
 export type AnnotationLayoutOverride = { dx: number; dy: number; pinned?: boolean }
 export type AnnotationLayoutOverrides = Readonly<Record<string, AnnotationLayoutOverride>>
+export type AnnotationPreflightIssueKind =
+  | 'unresolved-collision'
+  | 'short-unreadable-segment'
+  | 'plan-geometry-conflict'
+export type AnnotationPreflightIssue = {
+  id: string
+  kind: AnnotationPreflightIssueKind
+  severity: 'warning'
+  message: string
+}
 
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
@@ -115,9 +127,9 @@ export function resolveAnnotationLabelRectangles(
 export function resolveSvgAnnotationCollisions(
   svg: SVGSVGElement,
   options: { layoutOverrides?: AnnotationLayoutOverrides } = {},
-): void {
+): AnnotationPreflightIssue[] {
   const labels = Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
-  if (labels.length === 0) return
+  if (labels.length === 0) return []
 
   for (const label of labels) {
     const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform
@@ -129,7 +141,7 @@ export function resolveSvgAnnotationCollisions(
   resetDimensionConnectors(svg)
 
   const pinnedLocalById = new Map<string, { x: number; y: number }>()
-  const rectangles = labels.map((label, index) => {
+  const rectangles: AnnotationLabelRectangle[] = labels.map((label, index) => {
     const bounds = label.getBoundingClientRect()
     const matrix = label.getScreenCTM()
     const id = svgAnnotationLabelId(label, index)
@@ -170,6 +182,9 @@ export function resolveSvgAnnotationCollisions(
       width: bounds.width,
       height: bounds.height,
       priority: Number(label.dataset.floorplanAnnotationPriority ?? 0),
+      text: label.textContent?.trim() ?? '',
+      labelPlacement:
+        label.dataset.floorplanDimensionLabelPlacement === 'outside-end' ? 'outside-end' : 'inside',
       pinnedShift,
       tangentX: tangentLength > 1e-9 && matrix ? matrix.a / tangentLength : undefined,
       tangentY: tangentLength > 1e-9 && matrix ? matrix.b / tangentLength : undefined,
@@ -180,6 +195,7 @@ export function resolveSvgAnnotationCollisions(
     svg.querySelectorAll<SVGGraphicsElement>('[data-floorplan-annotation-obstacle]'),
   ).flatMap(svgAnnotationObstacleRectangles)
   const shifts = resolveAnnotationLabelRectangles(rectangles, obstacles)
+  const preflightIssues = collectAnnotationLayoutPreflightIssues(rectangles, shifts, obstacles)
 
   labels.forEach((label, index) => {
     const rectangle = rectangles[index]
@@ -207,6 +223,76 @@ export function resolveSvgAnnotationCollisions(
     }
     if (!shift.resolved) label.dataset.floorplanLayoutUnresolved = 'true'
   })
+  return preflightIssues
+}
+
+export function collectAnnotationLayoutPreflightIssues(
+  rectangles: readonly AnnotationLabelRectangle[],
+  shifts: readonly AnnotationLabelShift[],
+  obstacles: readonly AnnotationObstacleRectangle[] = [],
+): AnnotationPreflightIssue[] {
+  const shiftsById = new Map(shifts.map((shift) => [shift.id, shift]))
+  const finalRectangles = rectangles.map((rectangle) => {
+    const shift = shiftsById.get(rectangle.id) ?? {
+      id: rectangle.id,
+      dx: 0,
+      dy: 0,
+      resolved: false,
+    }
+    return {
+      source: rectangle,
+      shift,
+      bounds: {
+        x: rectangle.x + shift.dx,
+        y: rectangle.y + shift.dy,
+        width: rectangle.width,
+        height: rectangle.height,
+      },
+    }
+  })
+  const issues: AnnotationPreflightIssue[] = []
+  const addIssue = (id: string, kind: AnnotationPreflightIssueKind, message: string): void => {
+    if (issues.some((issue) => issue.id === id && issue.kind === kind)) return
+    issues.push({ id, kind, severity: 'warning', message })
+  }
+
+  for (const entry of finalRectangles) {
+    const label = preflightLabel(entry.source)
+    if (entry.source.labelPlacement === 'outside-end') {
+      addIssue(
+        entry.source.id,
+        'short-unreadable-segment',
+        `${label} is too short for inline text and uses an outside label or leader.`,
+      )
+    }
+    if (obstacles.some((obstacle) => rectanglesOverlap(entry.bounds, obstacle))) {
+      addIssue(
+        entry.source.id,
+        'plan-geometry-conflict',
+        `${label} still conflicts with fixed plan geometry after automatic layout.`,
+      )
+    }
+    if (!entry.shift.resolved) {
+      const collidesWithLabel = finalRectangles.some(
+        (candidate) =>
+          candidate.source.id !== entry.source.id &&
+          rectanglesOverlap(entry.bounds, candidate.bounds),
+      )
+      if (collidesWithLabel) {
+        addIssue(
+          entry.source.id,
+          'unresolved-collision',
+          `${label} still overlaps another annotation after automatic layout.`,
+        )
+      }
+    }
+  }
+  return issues
+}
+
+function preflightLabel(rectangle: AnnotationLabelRectangle): string {
+  const text = rectangle.text?.trim()
+  return text ? `Annotation "${text}"` : `Annotation ${rectangle.id}`
 }
 
 export function svgAnnotationLabelId(label: SVGGElement, index: number): string {

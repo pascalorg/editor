@@ -69,6 +69,7 @@ import useDirectManipulationFeedback from '../../../store/use-direct-manipulatio
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
+import useFloorplanPreflight from '../../../store/use-floorplan-preflight'
 import useInteractionScope, {
   useEndpointReshape,
   useMovingNode,
@@ -1442,11 +1443,19 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
+  const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
+  const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
   useLayoutEffect(() => {
-    if (!active) return
+    if (!active) {
+      resetPreflightIssues()
+      return
+    }
     const svg = markerRef.current?.ownerSVGElement
     if (!svg) return
-    resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
+    const preflightIssues = resolveSvgAnnotationCollisions(svg, {
+      layoutOverrides: annotationLayoutOverrides,
+    })
+    setPreflightIssues(preflightIssues)
 
     const labels = Array.from(
       svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
@@ -1516,7 +1525,13 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     return () => {
       for (const fn of cleanup) fn()
     }
-  }, [active, annotationLayoutOverrides, setAnnotationLayoutOverride])
+  }, [
+    active,
+    annotationLayoutOverrides,
+    resetPreflightIssues,
+    setAnnotationLayoutOverride,
+    setPreflightIssues,
+  ])
   return <g pointerEvents="none" ref={markerRef} />
 }
 
