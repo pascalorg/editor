@@ -111,7 +111,7 @@ export default function WallPanel() {
   // renders at. `undefined` for walls with an explicit custom height.
   const planeBoundHeightMeters = useScene((s) => {
     const wall = selectedId ? (s.nodes[selectedId as AnyNodeId] as WallNode | undefined) : undefined
-    if (!wall || wall.type !== 'wall' || wall.height != null) return undefined
+    if (wall?.type !== 'wall' || wall.height != null) return undefined
     return resolveWallOpeningCeiling(wall, s.nodes)
   })
 

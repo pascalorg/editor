@@ -79,7 +79,11 @@ export function WalkthroughHud({
               free cursor
             </div>
             {onExit ? (
-              <button className={cn(pillClass, 'pointer-events-auto')} onClick={onExit} type="button">
+              <button
+                className={cn(pillClass, 'pointer-events-auto')}
+                onClick={onExit}
+                type="button"
+              >
                 {exitContent}
               </button>
             ) : (

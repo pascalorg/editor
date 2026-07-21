@@ -1256,10 +1256,7 @@ export const FirstPersonControls = () => {
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (
-        (event.code === 'ControlLeft' || event.code === 'ControlRight') &&
-        !suspendRef.current
-      ) {
+      if ((event.code === 'ControlLeft' || event.code === 'ControlRight') && !suspendRef.current) {
         crouchKeyRef.current = false
       }
       applyMovementKey(event, false)
