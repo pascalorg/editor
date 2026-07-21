@@ -226,6 +226,55 @@ export function resolveSvgAnnotationCollisions(
   return preflightIssues
 }
 
+export function observeSvgAnnotationLayoutChanges(
+  svg: SVGSVGElement,
+  onChange: () => void,
+): () => void {
+  const observer = new MutationObserver((mutations) => {
+    if (mutations.some(isAnnotationLayoutMutation)) onChange()
+  })
+  observer.observe(svg, {
+    attributes: true,
+    characterData: true,
+    childList: true,
+    subtree: true,
+  })
+  return () => observer.disconnect()
+}
+
+function isAnnotationLayoutMutation(mutation: MutationRecord): boolean {
+  if (mutation.type !== 'attributes') return true
+  const attribute = mutation.attributeName ?? ''
+  const target = mutation.target as Element
+  const closest = typeof target.closest === 'function' ? target.closest.bind(target) : null
+
+  if (
+    attribute === 'data-floorplan-annotation-id' ||
+    attribute === 'data-floorplan-annotation-layout-dx' ||
+    attribute === 'data-floorplan-annotation-layout-dy' ||
+    attribute === 'data-floorplan-layout-unresolved'
+  ) {
+    return false
+  }
+  if (
+    closest?.('[data-floorplan-annotation-label]') &&
+    (attribute === 'style' || attribute === 'transform')
+  ) {
+    return false
+  }
+  if (
+    closest?.('[data-floorplan-dimension-line], [data-floorplan-dimension-leader]') &&
+    (attribute === 'x1' ||
+      attribute === 'x2' ||
+      attribute === 'y1' ||
+      attribute === 'y2' ||
+      attribute === 'visibility')
+  ) {
+    return false
+  }
+  return true
+}
+
 export function collectAnnotationLayoutPreflightIssues(
   rectangles: readonly AnnotationLabelRectangle[],
   shifts: readonly AnnotationLabelShift[],

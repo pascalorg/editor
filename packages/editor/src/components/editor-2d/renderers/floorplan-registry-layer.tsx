@@ -86,6 +86,7 @@ import { useFloorplanRender } from '../floorplan-render-context'
 import {
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
+  observeSvgAnnotationLayoutChanges,
   resolveSvgAnnotationCollisions,
   svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
@@ -1445,11 +1446,22 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
 function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
+  const [layoutEpoch, setLayoutEpoch] = useState(0)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
   const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
   const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
   useLayoutEffect(() => {
+    if (!active) return
+    const svg = markerRef.current?.ownerSVGElement
+    if (!svg) return
+    return observeSvgAnnotationLayoutChanges(svg, () => {
+      setLayoutEpoch((epoch) => epoch + 1)
+    })
+  }, [active])
+  useLayoutEffect(() => {
+    // The epoch is only a trigger; collision inputs are measured from the live SVG below.
+    void layoutEpoch
     if (!active) {
       resetPreflightIssues()
       return
@@ -1532,6 +1544,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   }, [
     active,
     annotationLayoutOverrides,
+    layoutEpoch,
     resetPreflightIssues,
     setAnnotationLayoutOverride,
     setPreflightIssues,

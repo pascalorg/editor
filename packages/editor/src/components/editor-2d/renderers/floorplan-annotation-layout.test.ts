@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   collectAnnotationLayoutPreflightIssues,
   floorplanAnnotationObstacleMode,
+  observeSvgAnnotationLayoutChanges,
   polylineObstacleRectangles,
   resolveAnnotationLabelRectangles,
 } from './floorplan-annotation-layout'
@@ -328,5 +329,62 @@ describe('resolveAnnotationLabelRectangles', () => {
     expect(shifts).toHaveLength(labels.length)
     expect(shifts.every((entry) => entry.resolved)).toBe(true)
     expect(elapsedMs).toBeLessThan(500)
+  })
+})
+
+describe('observeSvgAnnotationLayoutChanges', () => {
+  test('requests a fresh collision pass when floor-plan geometry changes after mount', () => {
+    const OriginalMutationObserver = globalThis.MutationObserver
+    let notify: MutationCallback | undefined
+    let disconnected = false
+    let observedOptions: MutationObserverInit | undefined
+
+    class FakeMutationObserver {
+      constructor(callback: MutationCallback) {
+        notify = callback
+      }
+
+      observe(_target: Node, options?: MutationObserverInit): void {
+        observedOptions = options
+      }
+
+      disconnect(): void {
+        disconnected = true
+      }
+
+      takeRecords(): MutationRecord[] {
+        return []
+      }
+    }
+
+    globalThis.MutationObserver = FakeMutationObserver as typeof MutationObserver
+    try {
+      let layoutPasses = 0
+      const stop = observeSvgAnnotationLayoutChanges({} as SVGSVGElement, () => {
+        layoutPasses += 1
+      })
+
+      notify?.([{ type: 'childList' } as MutationRecord], {} as MutationObserver)
+
+      expect(layoutPasses).toBe(1)
+      expect(observedOptions).toMatchObject({ attributes: true, childList: true, subtree: true })
+
+      notify?.(
+        [
+          {
+            attributeName: 'style',
+            target: { closest: () => ({}) },
+            type: 'attributes',
+          } as unknown as MutationRecord,
+        ],
+        {} as MutationObserver,
+      )
+      expect(layoutPasses).toBe(1)
+
+      stop()
+      expect(disconnected).toBe(true)
+    } finally {
+      globalThis.MutationObserver = OriginalMutationObserver
+    }
   })
 })
