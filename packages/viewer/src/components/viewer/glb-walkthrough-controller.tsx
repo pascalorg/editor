@@ -378,17 +378,25 @@ export function GlbWalkthroughController({ url }: { url: string }) {
           if (result && typeof result.catch === 'function') result.catch(() => {})
         }
       }
-      if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
+      // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard screenshot)
+      // must not toggle it under the user.
+      if (
+        (event.code === 'ControlLeft' || event.code === 'ControlRight') &&
+        !suspendRef.current
+      ) {
         crouchKeyRef.current = true
       }
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
+      if (
+        (event.code === 'ControlLeft' || event.code === 'ControlRight') &&
+        !suspendRef.current
+      ) {
         crouchKeyRef.current = false
       }
     }
     const onBlur = () => {
-      crouchKeyRef.current = false
+      if (!suspendRef.current) crouchKeyRef.current = false
     }
     const onPointerLockChange = () => {
       if (document.pointerLockElement === canvas) {
@@ -454,7 +462,8 @@ export function GlbWalkthroughController({ url }: { url: string }) {
     }
 
     // Crouch follows the held key; standing back up waits for headroom.
-    if (crouchKeyRef.current !== crouched) {
+    // Frozen while the cursor pause is active.
+    if (!suspendRef.current && crouchKeyRef.current !== crouched) {
       if (crouchKeyRef.current) setCrouched(true)
       else if (hasStandingClearance(group.position)) setCrouched(false)
     }

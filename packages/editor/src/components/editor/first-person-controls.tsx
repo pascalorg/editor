@@ -1220,7 +1220,9 @@ export const FirstPersonControls = () => {
       }
 
       if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
-        crouchKeyRef.current = true
+        // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard
+        // screenshot) must not toggle it under the user.
+        if (!suspendRef.current) crouchKeyRef.current = true
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
@@ -1254,14 +1256,17 @@ export const FirstPersonControls = () => {
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.code === 'ControlLeft' || event.code === 'ControlRight') {
+      if (
+        (event.code === 'ControlLeft' || event.code === 'ControlRight') &&
+        !suspendRef.current
+      ) {
         crouchKeyRef.current = false
       }
       applyMovementKey(event, false)
     }
 
     const handleBlur = () => {
-      crouchKeyRef.current = false
+      if (!suspendRef.current) crouchKeyRef.current = false
     }
 
     document.addEventListener('keydown', handleKeyDown, true)
@@ -1513,7 +1518,8 @@ export const FirstPersonControls = () => {
     const group = controllerRef.current.group
 
     // Crouch follows the held key; standing back up waits for headroom.
-    if (crouchKeyRef.current !== crouched) {
+    // Frozen while the cursor pause is active.
+    if (!suspendRef.current && crouchKeyRef.current !== crouched) {
       if (crouchKeyRef.current) setCrouched(true)
       else if (hasStandingClearance(group.position)) setCrouched(false)
     }
