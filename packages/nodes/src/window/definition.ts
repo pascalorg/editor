@@ -203,6 +203,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
   system: {
     module: () => import('./system'),
     priority: 3,

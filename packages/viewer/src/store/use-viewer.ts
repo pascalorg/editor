@@ -27,6 +27,10 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  /** Host-owned selection highlights rendered through the viewer's native
+   * selection paths without changing the local user's editable selection. */
+  externalSelectedIds: BaseNode['id'][]
+  setExternalSelectedIds: (ids: BaseNode['id'][]) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -314,6 +318,17 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      externalSelectedIds: [],
+      setExternalSelectedIds: (ids) =>
+        set((state) => {
+          if (
+            state.externalSelectedIds.length === ids.length &&
+            state.externalSelectedIds.every((id, index) => id === ids[index])
+          ) {
+            return state
+          }
+          return { externalSelectedIds: ids }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),

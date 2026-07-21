@@ -173,7 +173,7 @@ export {
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
 } from './components/tools/stair/stair-defaults'
-export { ToolManager } from './components/tools/tool-manager'
+export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
@@ -261,6 +261,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
   clearPlacementSurface,
@@ -398,6 +399,7 @@ export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { triggerSFX } from './lib/sfx-bus'
+export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
   clearSlabSnapFeedback,
   resolveSlabEdgeBandSnap,

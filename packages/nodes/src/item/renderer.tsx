@@ -20,6 +20,7 @@ import {
 } from '@pascal-app/core'
 import {
   type ColorPreset,
+  configureKtx2Support,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
   ErrorBoundary,
@@ -34,7 +35,7 @@ import {
 } from '@pascal-app/viewer'
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
-import { useFrame, useLoader } from '@react-three/fiber'
+import { useFrame, useLoader, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AnimationAction, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils } from 'three'
@@ -209,7 +210,8 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
 
 let itemDracoLoader: DRACOLoader | null = null
 
-const configureItemModelLoader = (loader: ItemGLTFLoader) => {
+const configureItemModelLoader = (loader: ItemGLTFLoader, renderer: unknown) => {
+  configureKtx2Support(loader, renderer)
   if (!itemDracoLoader) {
     itemDracoLoader = new DRACOLoader(loader.manager)
     itemDracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/')
@@ -223,8 +225,12 @@ type LoadedItemGltf = GLTF & {
   nodes: Record<string, Object3D>
 }
 
-const useItemGltf = (url: string): LoadedItemGltf =>
-  useLoader(ItemGLTFLoader, url, configureItemModelLoader) as LoadedItemGltf
+const useItemGltf = (url: string): LoadedItemGltf => {
+  const renderer = useThree((state) => state.gl)
+  return useLoader(ItemGLTFLoader, url, (loader) =>
+    configureItemModelLoader(loader, renderer),
+  ) as LoadedItemGltf
+}
 
 type DeferredUnavailableCleanup = {
   consumers: number
@@ -413,14 +419,41 @@ function getPreviewMaterial(shading: RenderShading): Material {
 const PreviewModel = ({ node }: { node: ItemNode }) => {
   const shading = useViewer((s) => s.shading)
   const isExporting = useViewer((s) => s.isExporting)
+  const [w, h, d] = getScaledDimensions(node)
   // Loading placeholder — must never land in an exported GLB.
   if (isExporting) return null
   return (
-    <mesh material={getPreviewMaterial(shading)} position-y={node.asset.dimensions[1] / 2}>
-      <boxGeometry
-        args={[node.asset.dimensions[0], node.asset.dimensions[1], node.asset.dimensions[2]]}
-      />
+    <mesh material={getPreviewMaterial(shading)} position-y={h / 2}>
+      <boxGeometry args={[w, h, d]} />
     </mesh>
+  )
+}
+
+const LoadedItemPreview = ({ node }: { node: ItemNode }) => {
+  const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
+  if (getUnavailableItemAsset(gltf)) return <PreviewModel node={node} />
+  return (
+    <group rotation={node.rotation} scale={node.scale}>
+      <Clone
+        dispose={null}
+        object={gltf.scene}
+        position={node.asset.offset}
+        rotation={node.asset.rotation}
+        scale={node.asset.scale || [1, 1, 1]}
+      />
+    </group>
+  )
+}
+
+export const ItemPreview = ({ node }: { node: ItemNode }) => {
+  const url = resolveCdnUrl(node.asset.src) || ''
+  if (!url) return <PreviewModel node={node} />
+  return (
+    <Suspense fallback={<PreviewModel node={node} />}>
+      <ErrorBoundary fallback={<PreviewModel node={node} />} scope="item-preview-model">
+        <LoadedItemPreview node={node} />
+      </ErrorBoundary>
+    </Suspense>
   )
 }
 
@@ -443,11 +476,6 @@ const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
     </mesh>
   )
 }
-
-const multiplyScales = (
-  a: [number, number, number],
-  b: [number, number, number],
-): [number, number, number] => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
 
 const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
   const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
@@ -581,15 +609,17 @@ const LoadedModelRenderer = ({
   // Undo can unmount one item while another clone of the same asset still needs them.
   return (
     <>
-      <Clone
-        dispose={null}
-        object={scene}
-        position={node.asset.offset}
-        ref={ref}
-        rotation={node.asset.rotation}
-        scale={multiplyScales(node.asset.scale || [1, 1, 1], node.scale || [1, 1, 1])}
-        {...handlers}
-      />
+      <group scale={node.scale}>
+        <Clone
+          dispose={null}
+          object={scene}
+          position={node.asset.offset}
+          ref={ref}
+          rotation={node.asset.rotation}
+          scale={node.asset.scale || [1, 1, 1]}
+          {...handlers}
+        />
+      </group>
       {animations.length > 0 && (
         <ItemAnimation
           actions={actions}

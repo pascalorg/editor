@@ -290,6 +290,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}
+          userData={{ pascalExport: 'strip' }}
         />
       )}
 

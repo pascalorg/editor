@@ -9,6 +9,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
+import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
 
 interface OriginalState {
@@ -87,6 +88,9 @@ export function useDraftNode(): DraftNodeHandle {
       })
 
       useScene.getState().createNode(node, currentLevelId)
+      usePlacementPreview
+        .getState()
+        .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
       draftRef.current = node
       adoptedRef.current = false
       originalStateRef.current = null
@@ -119,6 +123,12 @@ export function useDraftNode(): DraftNodeHandle {
     useScene.getState().updateNode(node.id, {
       metadata: { ...meta, isTransient: true },
     })
+    usePlacementPreview
+      .getState()
+      .set(
+        node,
+        node.parentId ? (useScene.getState().nodes[node.parentId as AnyNodeId] ?? null) : null,
+      )
   }, [])
 
   const commit = useCallback(
@@ -182,6 +192,9 @@ export function useDraftNode(): DraftNodeHandle {
         useScene.temporal.getState().pause()
 
         const id = draft.id
+        if (usePlacementPreview.getState().node?.id === id) {
+          usePlacementPreview.getState().clear()
+        }
         draftRef.current = null
         adoptedRef.current = false
         originalStateRef.current = null
@@ -227,6 +240,9 @@ export function useDraftNode(): DraftNodeHandle {
         ),
       })
       useScene.getState().createNode(committedNode, parentId)
+      if (usePlacementPreview.getState().node?.id === draft.id) {
+        usePlacementPreview.getState().clear()
+      }
 
       // Re-pause for next draft cycle
       useScene.temporal.getState().pause()
@@ -240,6 +256,8 @@ export function useDraftNode(): DraftNodeHandle {
 
   const destroy = useCallback(() => {
     if (!draftRef.current) return
+
+    const draftId = draftRef.current.id
 
     if (adoptedRef.current && originalStateRef.current) {
       // Move mode: restore original state instead of deleting — but only
@@ -262,6 +280,9 @@ export function useDraftNode(): DraftNodeHandle {
         draftRef.current = null
         adoptedRef.current = false
         originalStateRef.current = null
+        if (usePlacementPreview.getState().node?.id === draftId) {
+          usePlacementPreview.getState().clear()
+        }
         return
       }
 
@@ -292,6 +313,9 @@ export function useDraftNode(): DraftNodeHandle {
     draftRef.current = null
     adoptedRef.current = false
     originalStateRef.current = null
+    if (usePlacementPreview.getState().node?.id === draftId) {
+      usePlacementPreview.getState().clear()
+    }
   }, [])
 
   return useMemo(

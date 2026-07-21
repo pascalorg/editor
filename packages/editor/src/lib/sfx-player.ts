@@ -108,6 +108,12 @@ export const SFX: Record<string, SFXConfig> = {
 
 export type SFXName = keyof typeof SFX
 
+export type SFXPlaybackOptions = {
+  source?: 'local' | 'remote'
+  stereo?: number
+  volumeMultiplier?: number
+}
+
 function randomInRange([min, max]: [number, number]): number {
   return min + Math.random() * (max - min)
 }
@@ -172,7 +178,7 @@ export function disposeSFX() {
 /**
  * Play a sound effect with volume based on audio settings
  */
-export function playSFX(name: SFXName) {
+export function playSFX(name: SFXName, options: SFXPlaybackOptions = {}) {
   const config = SFX[name]!
   const { masterVolume, sfxVolume, muted } = useAudio.getState()
 
@@ -183,9 +189,15 @@ export function playSFX(name: SFXName) {
   const now = performance.now()
   if (now < sfxRetryAfter) return
   const minInterval = config.minIntervalMs ?? DEFAULT_MIN_INTERVAL_MS
-  const last = lastPlayedAt.get(name)
+  const source = options.source ?? 'local'
+  const playbackKey = `${source}:${name}`
+  const last = lastPlayedAt.get(playbackKey)
   if (last !== undefined && now - last < minInterval) return
-  lastPlayedAt.set(name, now)
+  // Local feedback stays legible when a collaborator makes the same kind of
+  // change at nearly the same time; the quieter remote cue yields instead.
+  const lastLocal = lastPlayedAt.get(`local:${name}`)
+  if (source === 'remote' && lastLocal !== undefined && now - lastLocal < 120) return
+  lastPlayedAt.set(playbackKey, now)
 
   try {
     preloadSFX()
@@ -200,11 +212,21 @@ export function playSFX(name: SFXName) {
     }
     lastVariation.set(name, index)
     const sound = sounds[index]!
+    // Howler queues per-play mutations while a sound is loading. If its global
+    // AudioContext is replaced before that queue drains, stereo setup can try
+    // to connect nodes from different contexts and throw asynchronously.
+    if (sound.state() !== 'loaded') return
     const baseVolume = (masterVolume / 100) * (sfxVolume / 100)
     const volumeJitter = config.volumeRange ? randomInRange(config.volumeRange) : 1
+    const volumeMultiplier = Number.isFinite(options.volumeMultiplier)
+      ? Math.max(0, Math.min(2, options.volumeMultiplier!))
+      : 1
     const rate = config.rateRange ? randomInRange(config.rateRange) : 1
     const id = sound.play()
-    sound.volume(baseVolume * volumeJitter, id)
+    sound.volume(baseVolume * volumeJitter * volumeMultiplier, id)
+    if (Number.isFinite(options.stereo)) {
+      sound.stereo(Math.max(-1, Math.min(1, options.stereo!)), id)
+    }
     if (rate !== 1) sound.rate(rate, id)
   } catch {
     // Optional audio must never abort an editor input callback. Rebuild from
