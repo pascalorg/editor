@@ -2,7 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, DoorNode, registerNode, sceneRegistry } from '@pascal-app/core'
 import { buildDoorPreviewMesh } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { prepareSceneForExport } from './glb-export'
+import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { prepareSceneForExport, writeTextureReferenceExtras } from './glb-export'
+
+// The reference module reads the storage origin lazily on first use, so
+// setting the env here (before any validation call) pins it for the file.
+process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'https://test-storage.supabase.co'
+const STORAGE_ORIGIN = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
 
 afterEach(() => {
   sceneRegistry.clear()
@@ -60,6 +66,79 @@ describe('prepareSceneForExport', () => {
 
     const meshes = scene.children as THREE.Mesh[]
     expect(meshes[0]!.material).toBe(meshes[1]!.material)
+  })
+
+  test('reference mode swaps stamped compressed textures and leaves unstamped textures embedded', () => {
+    const root = new THREE.Group()
+    const stamped = new THREE.CompressedTexture([], 4, 4)
+    stamped.wrapS = THREE.MirroredRepeatWrapping
+    stamped.wrapT = THREE.ClampToEdgeWrapping
+    stamped.repeat.set(2, 3)
+    stamped.offset.set(0.25, 0.5)
+    stamped.center.set(0.5, 0.5)
+    stamped.rotation = 0.75
+    stamped.flipY = false
+    stamped.colorSpace = THREE.SRGBColorSpace
+    stamped.updateMatrix()
+    stamped.userData.pascalTextureRef = {
+      v: 1,
+      kind: 'library-material',
+      src: `${STORAGE_ORIGIN}/storage/v1/object/public/materials/user/material/oak_basecolor_512.ktx2`,
+      map: 'basecolor',
+      colorSpace: 'srgb',
+    }
+    const unstamped = new THREE.DataTexture(new Uint8Array([128, 128, 255, 255]), 1, 1)
+    root.add(
+      meshWithNodeMaterial(nodeMaterial({ map: stamped, normalMap: unstamped })),
+      meshWithNodeMaterial(nodeMaterial({ map: stamped })),
+    )
+
+    const { scene } = prepareSceneForExport(root, {}, { textures: 'reference' })
+
+    const material = (scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
+    const placeholder = material.map as THREE.DataTexture
+    expect(placeholder).not.toBe(stamped)
+    expect(placeholder.isDataTexture).toBe(true)
+    expect(
+      (placeholder as THREE.DataTexture & { isCompressedTexture?: boolean }).isCompressedTexture,
+    ).toBeUndefined()
+    expect(placeholder.image.width).toBe(1)
+    expect(placeholder.image.height).toBe(1)
+    expect(Array.from(placeholder.image.data!)).toEqual([255, 255, 255, 255])
+    expect(placeholder.wrapS).toBe(stamped.wrapS)
+    expect(placeholder.wrapT).toBe(stamped.wrapT)
+    expect(placeholder.repeat.toArray()).toEqual(stamped.repeat.toArray())
+    expect(placeholder.offset.toArray()).toEqual(stamped.offset.toArray())
+    expect(placeholder.center.toArray()).toEqual(stamped.center.toArray())
+    expect(placeholder.rotation).toBe(stamped.rotation)
+    expect(placeholder.flipY).toBe(stamped.flipY)
+    expect(placeholder.colorSpace).toBe(stamped.colorSpace)
+    expect(placeholder.userData.pascalTextureRef).toEqual(stamped.userData.pascalTextureRef)
+    expect(material.normalMap).toBe(unstamped)
+    const sharedMaterial = (scene.children[1] as THREE.Mesh).material as THREE.MeshStandardMaterial
+    expect(sharedMaterial.map).toBe(placeholder)
+  })
+
+  test('writes identical texture-reference extras to the texture and image definitions', () => {
+    const texture = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1)
+    const ref = {
+      v: 1,
+      kind: 'item-glb',
+      src: `${STORAGE_ORIGIN}/storage/v1/object/public/items/system/chair/models/chair.glb`,
+      imageIndex: 3,
+      map: 'normal',
+      colorSpace: 'linear',
+    }
+    texture.userData.pascalTextureRef = ref
+    const imageDef: { extras?: Record<string, unknown> } = {}
+    const textureDef: { source: number; extras?: Record<string, unknown> } = { source: 0 }
+    const writer = { json: { images: [imageDef] } } as unknown as GLTFWriter
+
+    writeTextureReferenceExtras(writer, texture, textureDef)
+
+    expect(textureDef.extras?.pascalTextureRef).toEqual(ref)
+    expect(imageDef.extras?.pascalTextureRef).toEqual(ref)
+    expect(textureDef.extras?.pascalTextureRef).toEqual(imageDef.extras?.pascalTextureRef)
   })
 
   test('strips editor overlays that live off the scene layer', () => {
