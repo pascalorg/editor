@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import type { FloorplanGeometry } from '@pascal-app/core'
+import { DrawingSheetNode, type FloorplanGeometry } from '@pascal-app/core'
 import {
   filterFloorplanExportOverlay,
   fitPlanToBox,
   placePlanAtDrawingScale,
   pointsPerMeterForDrawingScale,
+  resolveGraphicScaleLength,
+  resolveSheetComposition,
+  resolveSheetExportLayout,
 } from './floorplan-export'
 
 describe('filterFloorplanExportOverlay', () => {
@@ -76,5 +79,66 @@ describe('placePlanAtDrawingScale', () => {
     expect(placed.width).toBeCloseTo(1771.65, 2)
     expect(placed.height).toBeCloseTo(1181.1, 2)
     expect(placed.clipped).toBe(true)
+  })
+})
+
+describe('resolveSheetExportLayout', () => {
+  test('reserves a plan viewport, side panel, and title block on one sheet page', () => {
+    expect(resolveSheetExportLayout(842, 595)).toEqual({
+      planBox: { x: 36, y: 36, width: 572, height: 463 },
+      sidePanel: { x: 626, y: 36, width: 180, height: 463 },
+      titleBlock: { x: 36, y: 517, width: 770, height: 42 },
+    })
+  })
+})
+
+describe('resolveGraphicScaleLength', () => {
+  test('chooses a model length that fits the available paper width', () => {
+    const scale = resolveGraphicScaleLength('1:50', 150)
+
+    expect(scale.modelMeters).toBe(2)
+    expect(scale.widthPt).toBeCloseTo(113.39, 2)
+    expect(scale.label).toBe('2 m')
+  })
+})
+
+describe('resolveSheetComposition', () => {
+  test('uses drawing-sheet metadata for view titles, references, notes, and scale', () => {
+    const sheet = DrawingSheetNode.parse({
+      id: 'drawing-sheet_a101',
+      sheetNumber: 'A1.1',
+      sheetTitle: 'Plans',
+      placedViews: [
+        {
+          id: 'drawing-view_main',
+          levelId: 'level_main',
+          drawingType: 'floor-plan',
+          drawingNumber: '2',
+          title: 'Main Floor Plan',
+          scale: '1:50',
+        },
+      ],
+      generalNotes: [{ id: 'sheet-note_1', number: 1, text: 'Verify all dimensions.' }],
+      keyedNoteLegend: [{ key: 'A', text: 'Patch existing slab.' }],
+    })
+
+    expect(
+      resolveSheetComposition(
+        { [sheet.id]: sheet },
+        'level_main',
+        'Main Level',
+        'floor-plan',
+        'Floor plan',
+        '1/4"=1\'-0"',
+      ),
+    ).toMatchObject({
+      sheetNumber: 'A1.1',
+      sheetTitle: 'Plans',
+      drawingNumber: '2',
+      viewTitle: 'Main Floor Plan',
+      scale: '1:50',
+      generalNotes: [{ number: 1, text: 'Verify all dimensions.' }],
+      keyedNoteLegend: [{ key: 'A', text: 'Patch existing slab.' }],
+    })
   })
 })

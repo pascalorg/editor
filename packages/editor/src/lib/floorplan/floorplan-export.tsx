@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDrawingType,
+  type DrawingSheetNode,
   type DrawingSheetScale,
   type FloorplanGeometry,
   type FloorplanPalette,
@@ -60,6 +61,9 @@ const PADDING_M = 1
 /** PDF page margin + title band, in pt. */
 const PAGE_MARGIN_PT = 36
 const TITLE_BAND_PT = 28
+const SHEET_GAP_PT = 18
+const SHEET_SIDE_PANEL_WIDTH_PT = 180
+const TITLE_BLOCK_HEIGHT_PT = 42
 const POINTS_PER_INCH = 72
 const METERS_PER_INCH = 0.0254
 
@@ -93,6 +97,28 @@ const NEUTRAL_VIEW_STATE = {
 } as const
 
 type ExportLevel = { id: AnyNodeId; label: string }
+
+type SheetComposition = {
+  sheetNumber: string
+  sheetTitle: string
+  drawingNumber: string
+  viewTitle: string
+  drawingLabel: string
+  scale: DrawingSheetScale
+  generalNotes: { number: number; text: string }[]
+  keyedNoteLegend: { key: string; text: string }[]
+}
+
+export type SheetExportLayout = {
+  planBox: { x: number; y: number; width: number; height: number }
+  sidePanel: { x: number; y: number; width: number; height: number }
+  titleBlock: { x: number; y: number; width: number; height: number }
+}
+
+type ScheduleDrawResult = {
+  drawnSchedules: number
+  overflowSchedules: FloorplanSchedule[]
+}
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
   const nodes = useScene.getState().nodes
@@ -132,6 +158,16 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
+      const composition = resolveSheetComposition(
+        nodes,
+        level.id,
+        level.label,
+        drawingType,
+        drawingLabel,
+        drawingScale,
+      )
+      const layout = resolveSheetExportLayout(pageW, pageH)
+      let scheduleOverflow: FloorplanSchedule[] = [...schedules]
 
       if (geometries.length > 0) {
         // Rotate the exported plan to the same north-up orientation the on-screen
@@ -148,39 +184,31 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             if (pageCount > 0) doc.addPage()
             pageCount++
 
-            doc.setFontSize(14)
-            doc.text(
-              `${level.label} - ${drawingLabel} - ${formatDrawingScaleLabel(drawingScale)}`,
-              PAGE_MARGIN_PT,
-              PAGE_MARGIN_PT + 12,
-            )
+            const sheetResult = drawSheetChrome(doc, layout, composition, schedules)
+            scheduleOverflow = sheetResult.overflowSchedules
 
             // Place the plan at the selected architectural drawing scale. If
             // the scaled plan exceeds the available box it intentionally clips
             // for now; clipped-content preflight is a later sheet-output slice.
-            const boxX = PAGE_MARGIN_PT
-            const boxY = PAGE_MARGIN_PT + TITLE_BAND_PT
-            const boxW = pageW - PAGE_MARGIN_PT * 2
-            const boxH = pageH - PAGE_MARGIN_PT * 2 - TITLE_BAND_PT
             let fitted = placePlanAtDrawingScale(
               mounted.width,
               mounted.height,
-              boxX,
-              boxY,
-              boxW,
-              boxH,
-              drawingScale,
+              layout.planBox.x,
+              layout.planBox.y,
+              layout.planBox.width,
+              layout.planBox.height,
+              composition.scale,
             )
             for (let pass = 0; pass < 2; pass++) {
               await mounted.setAnnotationUnitsPerPoint(mounted.width / fitted.width)
               fitted = placePlanAtDrawingScale(
                 mounted.width,
                 mounted.height,
-                boxX,
-                boxY,
-                boxW,
-                boxH,
-                drawingScale,
+                layout.planBox.x,
+                layout.planBox.y,
+                layout.planBox.width,
+                layout.planBox.height,
+                composition.scale,
               )
             }
 
@@ -204,8 +232,8 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         }
       }
 
-      if (schedules.length > 0) {
-        pageCount = drawFloorplanSchedulePages(doc, level.label, schedules, pageCount)
+      if (scheduleOverflow.length > 0) {
+        pageCount = drawFloorplanSchedulePages(doc, level.label, scheduleOverflow, pageCount)
       }
     }
 
@@ -248,6 +276,81 @@ export function collectFloorplanSchedules(
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules
+}
+
+export function resolveSheetComposition(
+  nodes: Record<string, AnyNode>,
+  levelId: AnyNodeId,
+  levelLabel: string,
+  drawingType: ConstructionDrawingType,
+  drawingLabel: string,
+  fallbackScale: DrawingSheetScale,
+): SheetComposition {
+  const sheet = findDrawingSheetForLevel(nodes, levelId, drawingType)
+  const placedView = sheet?.placedViews.find(
+    (view) =>
+      (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
+  )
+  return {
+    sheetNumber: sheet?.sheetNumber ?? 'A1.0',
+    sheetTitle: sheet?.sheetTitle ?? drawingLabel,
+    drawingNumber: placedView?.drawingNumber ?? '1',
+    viewTitle: placedView?.title ?? `${levelLabel} ${drawingLabel}`,
+    drawingLabel,
+    scale: placedView?.scale ?? fallbackScale,
+    generalNotes: sheet?.generalNotes ?? [],
+    keyedNoteLegend: sheet?.keyedNoteLegend ?? [],
+  }
+}
+
+function findDrawingSheetForLevel(
+  nodes: Record<string, AnyNode>,
+  levelId: AnyNodeId,
+  drawingType: ConstructionDrawingType,
+): DrawingSheetNode | null {
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'drawing-sheet') continue
+    const sheet = node as DrawingSheetNode
+    if (
+      sheet.placedViews.some(
+        (view) =>
+          (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
+      )
+    ) {
+      return sheet
+    }
+  }
+  return null
+}
+
+export function resolveSheetExportLayout(pageWidth: number, pageHeight: number): SheetExportLayout {
+  const contentX = PAGE_MARGIN_PT
+  const contentY = PAGE_MARGIN_PT
+  const contentWidth = pageWidth - PAGE_MARGIN_PT * 2
+  const contentHeight = pageHeight - PAGE_MARGIN_PT * 2
+  const titleBlock = {
+    x: contentX,
+    y: contentY + contentHeight - TITLE_BLOCK_HEIGHT_PT,
+    width: contentWidth,
+    height: TITLE_BLOCK_HEIGHT_PT,
+  }
+  const upperHeight = contentHeight - TITLE_BLOCK_HEIGHT_PT - SHEET_GAP_PT
+  const sidePanel = {
+    x: contentX + contentWidth - SHEET_SIDE_PANEL_WIDTH_PT,
+    y: contentY,
+    width: SHEET_SIDE_PANEL_WIDTH_PT,
+    height: upperHeight,
+  }
+  return {
+    planBox: {
+      x: contentX,
+      y: contentY,
+      width: contentWidth - SHEET_SIDE_PANEL_WIDTH_PT - SHEET_GAP_PT,
+      height: upperHeight,
+    },
+    sidePanel,
+    titleBlock,
+  }
 }
 
 function drawFloorplanSchedulePages(
@@ -371,6 +474,272 @@ function truncatePdfText(doc: JsPdfDocument, value: string, maxWidth: number): s
     truncated = truncated.slice(0, -1)
   }
   return `${truncated}...`
+}
+
+function drawSheetChrome(
+  doc: JsPdfDocument,
+  layout: SheetExportLayout,
+  composition: SheetComposition,
+  schedules: readonly FloorplanSchedule[],
+): ScheduleDrawResult {
+  doc.setDrawColor('#0f172a')
+  doc.setLineWidth(0.6)
+  doc.rect(
+    PAGE_MARGIN_PT,
+    PAGE_MARGIN_PT,
+    doc.internal.pageSize.getWidth() - PAGE_MARGIN_PT * 2,
+    doc.internal.pageSize.getHeight() - PAGE_MARGIN_PT * 2,
+  )
+  doc.setDrawColor('#cbd5e1')
+  doc.setLineWidth(0.4)
+  doc.rect(layout.planBox.x, layout.planBox.y, layout.planBox.width, layout.planBox.height)
+  doc.rect(layout.sidePanel.x, layout.sidePanel.y, layout.sidePanel.width, layout.sidePanel.height)
+  doc.rect(
+    layout.titleBlock.x,
+    layout.titleBlock.y,
+    layout.titleBlock.width,
+    layout.titleBlock.height,
+  )
+
+  drawSheetTitleBlock(doc, layout, composition)
+  drawNorthArrow(doc, layout.planBox.x + layout.planBox.width - 26, layout.planBox.y + 38)
+  drawGraphicScale(doc, layout.planBox.x + 18, layout.planBox.y + layout.planBox.height - 22, {
+    scale: composition.scale,
+    maxWidth: Math.min(150, layout.planBox.width * 0.3),
+  })
+  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules)
+}
+
+function drawSheetTitleBlock(
+  doc: JsPdfDocument,
+  layout: SheetExportLayout,
+  composition: SheetComposition,
+) {
+  const title = layout.titleBlock
+  const sheetNumberWidth = 86
+  const drawingRefWidth = 72
+  doc.setDrawColor('#cbd5e1')
+  doc.line(
+    title.x + title.width - sheetNumberWidth,
+    title.y,
+    title.x + title.width - sheetNumberWidth,
+    title.y + title.height,
+  )
+  doc.line(
+    title.x + title.width - sheetNumberWidth - drawingRefWidth,
+    title.y,
+    title.x + title.width - sheetNumberWidth - drawingRefWidth,
+    title.y + title.height,
+  )
+
+  doc.setTextColor('#111827')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.text(composition.viewTitle.toLocaleUpperCase(), title.x + 10, title.y + 16)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8)
+  doc.text(`Scale: ${formatDrawingScaleLabel(composition.scale)}`, title.x + 10, title.y + 30)
+  doc.text(
+    `Drawing: ${composition.drawingNumber}`,
+    title.x + title.width - sheetNumberWidth - drawingRefWidth + 10,
+    title.y + 16,
+  )
+  doc.text(
+    composition.drawingLabel,
+    title.x + title.width - sheetNumberWidth - drawingRefWidth + 10,
+    title.y + 30,
+  )
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.text(composition.sheetNumber, title.x + title.width - sheetNumberWidth + 10, title.y + 25)
+  doc.setFontSize(7)
+  doc.text(
+    composition.sheetTitle.toLocaleUpperCase(),
+    title.x + title.width - sheetNumberWidth + 10,
+    title.y + 36,
+    {
+      maxWidth: sheetNumberWidth - 20,
+    },
+  )
+}
+
+function drawNorthArrow(doc: JsPdfDocument, x: number, y: number) {
+  doc.setDrawColor('#111827')
+  doc.setFillColor('#111827')
+  doc.setLineWidth(0.6)
+  doc.triangle(x, y - 24, x - 6, y - 5, x + 6, y - 5, 'F')
+  doc.line(x, y - 5, x, y + 14)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('N', x, y - 28, { align: 'center' })
+}
+
+export function resolveGraphicScaleLength(
+  scale: DrawingSheetScale,
+  maxWidthPt: number,
+): { modelMeters: number; widthPt: number; label: string } {
+  const pointsPerMeter = pointsPerMeterForDrawingScale(scale)
+  const maxMeters = Math.max(0.1, maxWidthPt / pointsPerMeter)
+  const candidates = [50, 20, 10, 5, 2, 1, 0.5, 0.25]
+  const modelMeters = candidates.find((candidate) => candidate <= maxMeters) ?? 0.1
+  return {
+    modelMeters,
+    widthPt: modelMeters * pointsPerMeter,
+    label: `${modelMeters >= 1 ? modelMeters : modelMeters * 1000}${modelMeters >= 1 ? ' m' : ' mm'}`,
+  }
+}
+
+function drawGraphicScale(
+  doc: JsPdfDocument,
+  x: number,
+  y: number,
+  options: { scale: DrawingSheetScale; maxWidth: number },
+) {
+  const resolved = resolveGraphicScaleLength(options.scale, options.maxWidth)
+  const half = resolved.widthPt / 2
+  doc.setDrawColor('#111827')
+  doc.setFillColor('#111827')
+  doc.setLineWidth(0.6)
+  doc.rect(x, y, half, 5, 'F')
+  doc.rect(x + half, y, half, 5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.text('0', x, y + 15, { align: 'center' })
+  doc.text(resolved.label, x + resolved.widthPt, y + 15, { align: 'center' })
+  doc.text(formatDrawingScaleLabel(options.scale), x + resolved.widthPt / 2, y - 4, {
+    align: 'center',
+  })
+}
+
+function drawSheetSidePanel(
+  doc: JsPdfDocument,
+  panel: SheetExportLayout['sidePanel'],
+  composition: SheetComposition,
+  schedules: readonly FloorplanSchedule[],
+): ScheduleDrawResult {
+  let y = panel.y + 12
+  const left = panel.x + 8
+  const width = panel.width - 16
+  const bottom = panel.y + panel.height - 8
+
+  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y, width, bottom)
+  y = drawKeyedNoteLegend(doc, composition, left, y + 8, width, bottom)
+  return drawInlineSchedules(doc, schedules, left, y + 8, width, bottom)
+}
+
+function drawSheetNotes(
+  doc: JsPdfDocument,
+  title: string,
+  notes: readonly { number: number; text: string }[],
+  x: number,
+  y: number,
+  width: number,
+  bottom: number,
+) {
+  if (notes.length === 0) return y
+  doc.setTextColor('#111827')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text(title, x, y)
+  y += 9
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  for (const note of notes) {
+    const lines = doc.splitTextToSize(`${note.number}. ${note.text}`, width)
+    if (y + lines.length * 8 > bottom) break
+    doc.text(lines, x, y)
+    y += lines.length * 8 + 3
+  }
+  return y
+}
+
+function drawKeyedNoteLegend(
+  doc: JsPdfDocument,
+  composition: SheetComposition,
+  x: number,
+  y: number,
+  width: number,
+  bottom: number,
+) {
+  if (composition.keyedNoteLegend.length === 0) return y
+  doc.setTextColor('#111827')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('KEYED NOTES', x, y)
+  y += 9
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  for (const note of composition.keyedNoteLegend) {
+    const lines = doc.splitTextToSize(`${note.key}. ${note.text}`, width)
+    if (y + lines.length * 8 > bottom) break
+    doc.text(lines, x, y)
+    y += lines.length * 8 + 3
+  }
+  return y
+}
+
+function drawInlineSchedules(
+  doc: JsPdfDocument,
+  schedules: readonly FloorplanSchedule[],
+  x: number,
+  y: number,
+  width: number,
+  bottom: number,
+): ScheduleDrawResult {
+  const overflowSchedules: FloorplanSchedule[] = []
+  let drawnSchedules = 0
+  for (const schedule of schedules) {
+    const rowHeight = 12
+    const tableHeight = 18 + rowHeight * Math.min(schedule.rows.length, 6)
+    if (y + tableHeight > bottom) {
+      overflowSchedules.push(schedule)
+      continue
+    }
+    drawnSchedules++
+    doc.setTextColor('#111827')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.text(schedule.title.toLocaleUpperCase(), x, y)
+    y += 10
+    const widths = scheduleColumnWidths(schedule, width)
+    doc.setFillColor('#334155')
+    doc.rect(x, y, width, rowHeight, 'F')
+    doc.setTextColor('#ffffff')
+    doc.setFontSize(6)
+    let colX = x
+    schedule.columns.forEach((column, index) => {
+      doc.text(column.label, colX + 2, y + 8, { maxWidth: Math.max(0, (widths[index] ?? 0) - 4) })
+      colX += widths[index] ?? 0
+    })
+    y += rowHeight
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor('#111827')
+    const inlineRows = schedule.rows.slice(0, 6)
+    for (const row of inlineRows) {
+      colX = x
+      schedule.columns.forEach((column, index) => {
+        const colWidth = widths[index] ?? 0
+        doc.text(
+          truncatePdfText(doc, row.cells[column.key] ?? '', Math.max(0, colWidth - 4)),
+          colX + 2,
+          y + 8,
+        )
+        colX += colWidth
+      })
+      doc.setDrawColor('#cbd5e1')
+      doc.rect(x, y, width, rowHeight)
+      y += rowHeight
+    }
+    if (schedule.rows.length > inlineRows.length) {
+      overflowSchedules.push({
+        ...schedule,
+        title: `${schedule.title} Continued`,
+        rows: schedule.rows.slice(inlineRows.length),
+      })
+    }
+    y += 12
+  }
+  return { drawnSchedules, overflowSchedules }
 }
 
 type MountedFloorplan = {

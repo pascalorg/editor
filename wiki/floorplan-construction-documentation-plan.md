@@ -32,7 +32,7 @@ assessment.
 - [x] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
 - [x] Finish paper-space sizing and line-weight profiles for notes, leaders, marks, room labels, and
   the remaining annotation categories.
-- [ ] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
+- [x] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
   schedules, and notes on the sheet.
 - [ ] Support multiple paper sizes and preflight clipped view or annotation content.
 
@@ -314,17 +314,19 @@ The same annotation should plot consistently whether the modeled building is 8 m
 
 ### 3.3 Improve PDF composition
 
-Status: fixed architectural-scale plotting is implemented. Floorplan PDF export now uses a
-persisted user-selected drawing scale rather than fitting every plan to the A4 page box. Oversized
-plans intentionally clip until the later clipped-content preflight work lands.
+Status: sheet composition is implemented for floorplan PDF export. Each plan page now reserves a
+sheet viewport, side notes/schedules panel, and title block; draws north arrow, graphic scale, view
+title, scale notation, drawing number, sheet number/reference, sheet notes, keyed-note legend, and
+compact schedule tables on the sheet. Oversized plans intentionally clip until the later
+clipped-content preflight work lands.
 
 - [x] Export at fixed architectural scales.
-- Add north arrow.
-- Add graphic scale.
-- Add view title.
-- Add scale notation.
-- Add drawing and sheet reference.
-- Compose schedules and notes intentionally rather than always placing schedules on separate pages.
+- [x] Add north arrow.
+- [x] Add graphic scale.
+- [x] Add view title.
+- [x] Add scale notation.
+- [x] Add drawing and sheet reference.
+- [x] Compose schedules and notes intentionally rather than always placing schedules on separate pages.
 - Support multiple paper sizes.
 - Validate that no view or annotation is clipped.
 
