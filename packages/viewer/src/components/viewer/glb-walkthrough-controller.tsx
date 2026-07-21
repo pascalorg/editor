@@ -46,15 +46,20 @@ const VOID_FALL_RESPAWN_DEPTH = 12
 // Crouch (hold Ctrl): swap to a short capsule — it shrinks around the centre,
 // so a crouch mid-jump also lowers the head AND raises the feet, letting the
 // player thread window openings. Standing back up is gated on headroom.
+// The float gap counts toward the effective obstacle height (the capsule rides
+// floatHeight above the ground), so crouching also lowers it: crouched span is
+// CROUCH_FLOAT_HEIGHT + capsule = 0.25 + 0.7 = 0.95 m — fits a 1 m opening.
 export const STAND_CAPSULE: [number, number, number, number] = [0.25, 0.8, 4, 8]
-export const CROUCH_CAPSULE: [number, number, number, number] = [0.25, 0.3, 4, 8]
+export const CROUCH_CAPSULE: [number, number, number, number] = [0.25, 0.2, 4, 8]
+export const STAND_FLOAT_HEIGHT = 0.5
+export const CROUCH_FLOAT_HEIGHT = 0.25
 export const CROUCH_EYE_OFFSET = 0.1
 export const CROUCH_WALK_SPEED = 1
 export const CROUCH_RUN_SPEED = 1.4
-// Headroom (from the capsule centre, upward) required before uncrouching: the
-// centre floats back up by half the length delta and the standing capsule top
-// sits standLength/2 + radius above it.
-export const STAND_CLEARANCE = 0.95
+// Headroom (from the capsule centre, upward) required before uncrouching:
+// standing raises the centre by half the length delta plus the float delta,
+// and the standing capsule top sits standLength/2 + radius above the centre.
+export const STAND_CLEARANCE = 1.25
 export const EYE_LERP_SPEED = 12
 
 const standClearanceRaycaster = new Raycaster()
@@ -472,7 +477,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         fallGravityFactor={4}
         floatCheckType="BOTH"
         floatDampingC={36}
-        floatHeight={0.5}
+        floatHeight={crouched ? CROUCH_FLOAT_HEIGHT : STAND_FLOAT_HEIGHT}
         floatPullBackHeight={0.35}
         floatSensorRadius={0.15}
         floatSpringK={1200}

@@ -33,12 +33,14 @@ import {
   type BVHEcctrlApi,
   CROUCH_CAPSULE,
   CROUCH_EYE_OFFSET,
+  CROUCH_FLOAT_HEIGHT,
   CROUCH_RUN_SPEED,
   CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   type MovementInput,
   STAND_CAPSULE,
   STAND_CLEARANCE,
+  STAND_FLOAT_HEIGHT,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -1599,7 +1601,7 @@ export const FirstPersonControls = () => {
             fallGravityFactor={4}
             floatCheckType="BOTH"
             floatDampingC={36}
-            floatHeight={0.5}
+            floatHeight={crouched ? CROUCH_FLOAT_HEIGHT : STAND_FLOAT_HEIGHT}
             floatPullBackHeight={0.35}
             floatSensorRadius={0.15}
             floatSpringK={1200}

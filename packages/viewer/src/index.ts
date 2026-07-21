@@ -37,12 +37,14 @@ export {
 export {
   CROUCH_CAPSULE,
   CROUCH_EYE_OFFSET,
+  CROUCH_FLOAT_HEIGHT,
   CROUCH_RUN_SPEED,
   CROUCH_WALK_SPEED,
   EYE_LERP_SPEED,
   GlbWalkthroughController,
   STAND_CAPSULE,
   STAND_CLEARANCE,
+  STAND_FLOAT_HEIGHT,
   WALKTHROUGH_FOV,
 } from './components/viewer/glb-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
