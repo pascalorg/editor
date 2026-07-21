@@ -25,11 +25,12 @@ export function WalkthroughHud({
   onExit,
   children,
 }: WalkthroughHudProps) {
+  const kbdClass = 'rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]'
+  const pillClass =
+    'flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl'
   const exitContent = (
     <>
-      <kbd className="rounded border border-border/60 bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">
-        Esc
-      </kbd>
+      <kbd className={kbdClass}>Esc</kbd>
       to exit
     </>
   )
@@ -61,25 +62,30 @@ export function WalkthroughHud({
         />
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+      <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
         {suspended ? (
-          <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl">
-            <span className="font-medium text-foreground">Click to resume</span>
+          <div className={pillClass}>
+            <span className="font-medium text-foreground">Click</span>
+            <span>or</span>
+            <kbd className={kbdClass}>P</kbd>
+            <span>to resume</span>
             <span className="text-muted-foreground/60">·</span>
             {exitContent}
           </div>
-        ) : onExit ? (
-          <button
-            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl"
-            onClick={onExit}
-            type="button"
-          >
-            {exitContent}
-          </button>
         ) : (
-          <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-background/70 px-3 py-1 text-muted-foreground text-xs backdrop-blur-xl">
-            {exitContent}
-          </div>
+          <>
+            <div className={pillClass}>
+              <kbd className={kbdClass}>P</kbd>
+              free cursor
+            </div>
+            {onExit ? (
+              <button className={cn(pillClass, 'pointer-events-auto')} onClick={onExit} type="button">
+                {exitContent}
+              </button>
+            ) : (
+              <div className={pillClass}>{exitContent}</div>
+            )}
+          </>
         )}
       </div>
 
