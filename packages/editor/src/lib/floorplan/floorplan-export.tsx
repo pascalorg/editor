@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDrawingType,
+  type DrawingSheetScale,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanSchedule,
@@ -59,6 +60,8 @@ const PADDING_M = 1
 /** PDF page margin + title band, in pt. */
 const PAGE_MARGIN_PT = 36
 const TITLE_BAND_PT = 28
+const POINTS_PER_INCH = 72
+const METERS_PER_INCH = 0.0254
 
 const NEUTRAL_PALETTE: FloorplanPalette = {
   selectedStroke: '#334155',
@@ -97,6 +100,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const unit = viewer.unit
   const annotationVisibility = useFloorplanAnnotationVisibility.getState().visibility
   const drawingType = useDrawingView.getState().drawingType
+  const drawingScale = useDrawingView.getState().drawingScale
   const drawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
   const levels = resolveExportLevels(nodes)
@@ -145,17 +149,39 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
             pageCount++
 
             doc.setFontSize(14)
-            doc.text(`${level.label} - ${drawingLabel}`, PAGE_MARGIN_PT, PAGE_MARGIN_PT + 12)
+            doc.text(
+              `${level.label} - ${drawingLabel} - ${formatDrawingScaleLabel(drawingScale)}`,
+              PAGE_MARGIN_PT,
+              PAGE_MARGIN_PT + 12,
+            )
 
-            // Fit the plan into the page below the title band, preserving aspect.
+            // Place the plan at the selected architectural drawing scale. If
+            // the scaled plan exceeds the available box it intentionally clips
+            // for now; clipped-content preflight is a later sheet-output slice.
             const boxX = PAGE_MARGIN_PT
             const boxY = PAGE_MARGIN_PT + TITLE_BAND_PT
             const boxW = pageW - PAGE_MARGIN_PT * 2
             const boxH = pageH - PAGE_MARGIN_PT * 2 - TITLE_BAND_PT
-            let fitted = fitPlanToBox(mounted.width, mounted.height, boxX, boxY, boxW, boxH)
+            let fitted = placePlanAtDrawingScale(
+              mounted.width,
+              mounted.height,
+              boxX,
+              boxY,
+              boxW,
+              boxH,
+              drawingScale,
+            )
             for (let pass = 0; pass < 2; pass++) {
               await mounted.setAnnotationUnitsPerPoint(mounted.width / fitted.width)
-              fitted = fitPlanToBox(mounted.width, mounted.height, boxX, boxY, boxW, boxH)
+              fitted = placePlanAtDrawingScale(
+                mounted.width,
+                mounted.height,
+                boxX,
+                boxY,
+                boxW,
+                boxH,
+                drawingScale,
+              )
             }
 
             // svg2pdf doesn't honour `vector-effect: non-scaling-stroke` (which
@@ -377,6 +403,60 @@ export function fitPlanToBox(
     width,
     height,
   }
+}
+
+export function placePlanAtDrawingScale(
+  planWidth: number,
+  planHeight: number,
+  boxX: number,
+  boxY: number,
+  boxWidth: number,
+  boxHeight: number,
+  scale: DrawingSheetScale,
+) {
+  const pointsPerMeter = pointsPerMeterForDrawingScale(scale)
+  const width = planWidth * pointsPerMeter
+  const height = planHeight * pointsPerMeter
+  return {
+    x: boxX + (boxWidth - width) / 2,
+    y: boxY + (boxHeight - height) / 2,
+    width,
+    height,
+    clipped: width > boxWidth || height > boxHeight,
+  }
+}
+
+export function pointsPerMeterForDrawingScale(scale: DrawingSheetScale): number {
+  if (scale.startsWith('1:')) {
+    const denominator = Number.parseFloat(scale.slice(2))
+    if (Number.isFinite(denominator) && denominator > 0) {
+      return POINTS_PER_INCH / METERS_PER_INCH / denominator
+    }
+  }
+
+  const imperial = scale.match(/^(.+)"=1'-0"$/)
+  if (imperial) {
+    const paperInchesPerFoot = parseImperialPaperInches(imperial[1] ?? '')
+    if (paperInchesPerFoot > 0) {
+      return (paperInchesPerFoot / 12) * (POINTS_PER_INCH / METERS_PER_INCH)
+    }
+  }
+
+  return pointsPerMeterForDrawingScale('1/4"=1\'-0"')
+}
+
+function parseImperialPaperInches(value: string): number {
+  const trimmed = value.trim()
+  if (trimmed.includes('/')) {
+    const [numerator, denominator] = trimmed.split('/').map((part) => Number.parseFloat(part))
+    return numerator && denominator ? numerator / denominator : 0
+  }
+  const parsed = Number.parseFloat(trimmed)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatDrawingScaleLabel(scale: DrawingSheetScale): string {
+  return scale.replace('=', ' = ')
 }
 
 async function mountFloorplanSvg(

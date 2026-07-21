@@ -11,6 +11,10 @@ import {
   useState,
 } from 'react'
 import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
+import useDrawingView, {
+  DRAWING_SCALE_OPTIONS,
+  normalizeDrawingScale,
+} from '../../../../../store/use-drawing-view'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -187,6 +191,8 @@ export function SettingsPanel({
   const exportScene = useViewer((state) => state.exportScene)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
+  const drawingScale = useDrawingView((state) => state.drawingScale)
+  const setDrawingScale = useDrawingView((state) => state.setDrawingScale)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -395,6 +401,22 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">Floorplan</div>
+          <label className="block space-y-1">
+            <span className="font-medium text-muted-foreground text-[11px] uppercase">
+              Drawing scale
+            </span>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              onChange={(event) => setDrawingScale(normalizeDrawingScale(event.target.value))}
+              value={drawingScale}
+            >
+              {DRAWING_SCALE_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             className="w-full justify-start gap-2"
             onClick={() => exportFloorplanPdf('full')}

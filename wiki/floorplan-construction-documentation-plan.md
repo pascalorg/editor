@@ -29,7 +29,7 @@ assessment.
 - [x] Add a persistent Core drawing-sheet model with sheet identity, paper size, orientation,
   placed views, drawing numbers, fixed scales, annotation profiles, notes, schedules, and title-block
   metadata.
-- [ ] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
+- [x] Plot views at fixed user-selectable architectural scales instead of fitting every plan to A4.
 - [ ] Finish paper-space sizing and line-weight profiles for notes, leaders, marks, room labels, and
   the remaining annotation categories.
 - [ ] Compose north arrows, graphic scales, view titles, scale notation, drawing/sheet references,
@@ -296,8 +296,8 @@ The model belongs in Core because it is persistent project data. Interactive she
 
 Status: initial automatic sizing is implemented for exported construction dimensions and
 measurement labels. Text height, tick size, extension gaps, overshoot, and label offsets are
-resolved from page points after the plan is fitted. Fixed user-selectable architectural scales and
-the remaining annotation categories still require subsequent paper-space work.
+resolved from page points after the plan is placed at the selected export scale. The remaining
+annotation categories still require subsequent paper-space work.
 
 Resolve the following from plotted scale:
 
@@ -314,7 +314,11 @@ The same annotation should plot consistently whether the modeled building is 8 m
 
 ### 3.3 Improve PDF composition
 
-- Export at fixed architectural scales.
+Status: fixed architectural-scale plotting is implemented. Floorplan PDF export now uses a
+persisted user-selected drawing scale rather than fitting every plan to the A4 page box. Oversized
+plans intentionally clip until the later clipped-content preflight work lands.
+
+- [x] Export at fixed architectural scales.
 - Add north arrow.
 - Add graphic scale.
 - Add view title.
