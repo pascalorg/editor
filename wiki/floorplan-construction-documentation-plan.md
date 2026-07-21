@@ -73,7 +73,7 @@ assessment.
 ### Advisory and completeness analysis
 
 - [x] Add optional imperial and metric construction-module advisories.
-- [ ] Add jurisdiction/profile-based clearance advisories for circulation, doors, fixtures,
+- [x] Add jurisdiction/profile-based clearance advisories for circulation, doors, fixtures,
   cabinets, appliances, closets, and stairs, with explicit code provenance.
 - [ ] Audit missing overall, opening, partition, and verified rough-opening dimensions.
 - [ ] Detect duplicate or contradictory strings, segment-total mismatches, and construction-critical
@@ -600,14 +600,22 @@ Provide optional checks for project-selected modules such as:
 
 ### 8.2 Clearance advisories
 
+Status: implemented as an optional shared analyzer. Clearance checks are grouped into disabled-by-default
+profiles with explicit provenance on each rule. The U.S. ADA 2010 advisory profile covers accessible
+route, entry, door clear-opening, and fixture clear-floor-space checks. The office residential
+advisory profile covers cabinet/appliance working clearances, closet depth, and stair width plus
+tread/riser checks. Measured geometry produces warnings when it misses the configured rule; clearance
+areas that require surrounding free-space evidence produce informational verification advisories
+instead of guessed pass/fail results.
+
 When configured with a current jurisdiction or office standard, check:
 
-- Hallways and entries.
-- Door approaches.
-- Fixture clearances.
-- Cabinet and appliance clearances.
-- Closet depth.
-- Stair width and tread/riser relationships.
+- [x] Hallways and entries.
+- [x] Door approaches.
+- [x] Fixture clearances.
+- [x] Cabinet and appliance clearances.
+- [x] Closet depth.
+- [x] Stair width and tread/riser relationships.
 
 These checks must be presented as advisory unless the exact governing code and edition are known.
 

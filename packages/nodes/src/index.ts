@@ -167,6 +167,18 @@ export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export {
+  type BuildClearanceAdvisoriesOptions,
+  buildClearanceAdvisories,
+  type ClearanceAdvisory,
+  type ClearanceAdvisoryCategory,
+  type ClearanceAdvisorySeverity,
+  type ClearanceEvidence,
+  type ClearanceProfile,
+  type ClearanceRule,
+  type ClearanceRuleSource,
+  DEFAULT_CLEARANCE_PROFILES,
+} from './shared/clearance-advisories'
+export {
   type BuildConstructionModuleAdvisoriesOptions,
   buildConstructionModuleAdvisories,
   type ConstructionModuleAdvisory,
