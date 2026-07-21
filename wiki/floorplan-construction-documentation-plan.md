@@ -78,7 +78,7 @@ assessment.
 - [x] Audit missing overall, opening, partition, and verified rough-opening dimensions.
 - [x] Detect duplicate or contradictory strings, segment-total mismatches, and construction-critical
   nodes that have no dimension, schedule entry, or keyed note.
-- [ ] Include unresolved annotation collisions and clipped sheet content in the completeness audit.
+- [x] Include unresolved annotation collisions and clipped sheet content in the completeness audit.
 
 ## Design principles
 
@@ -627,8 +627,9 @@ missing verified rough-opening records. Coverage is based on associative constru
 anchors, with reference dimensions excluded by default unless a caller opts into counting them.
 The audit also detects duplicate and contradictory dimension string overrides, continuous chain
 segment totals that do not match the stated overall value, and construction-critical nodes with no
-dimension, generated schedule entry, or targeted construction note. The remaining completeness work
-covers unresolved annotation collisions and clipped sheet content.
+dimension, generated schedule entry, or targeted construction note. Editor annotation-layout and
+sheet-export preflight evidence can now be passed into the shared audit, which reports unresolved
+annotation collisions and clipped sheet/view content as completeness issues.
 
 Detect and report:
 
@@ -639,7 +640,7 @@ Detect and report:
 - [x] Duplicate or contradictory strings.
 - [x] Strings whose segment totals do not match the overall value.
 - [x] Construction-critical nodes with neither a dimension, schedule entry, nor keyed note.
-- Annotation collisions and clipped sheet content.
+- [x] Annotation collisions and clipped sheet content.
 
 ## Recommended implementation order
 

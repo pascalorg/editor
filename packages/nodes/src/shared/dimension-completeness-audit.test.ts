@@ -298,4 +298,54 @@ describe('dimension completeness audit', () => {
       }),
     ])
   })
+
+  test('includes unresolved annotation collisions from preflight evidence', () => {
+    const issues = buildDimensionCompletenessAudit(nodes(), {
+      preflightIssues: [
+        {
+          id: 'dimension-label_wall_a',
+          kind: 'unresolved-collision',
+          severity: 'warning',
+          message:
+            'Wall A dimension label still overlaps another annotation after automatic layout.',
+        },
+        {
+          id: 'dimension-label_wall_b',
+          kind: 'short-unreadable-segment',
+          severity: 'warning',
+          message: 'Wall B uses an outside label.',
+        },
+      ],
+    })
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        id: 'dimension-completeness:unresolved-annotation-collision:dimension-label_wall_a',
+        kind: 'unresolved-annotation-collision',
+        nodeId: 'dimension-label_wall_a',
+        nodeType: 'annotation',
+      }),
+    ])
+  })
+
+  test('includes clipped sheet content from sheet preflight evidence', () => {
+    const issues = buildDimensionCompletenessAudit(nodes(), {
+      preflightIssues: [
+        {
+          message:
+            'Scaled plan exceeds the sheet viewport. Review clipped view or annotation content.',
+        },
+      ],
+    })
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        id: 'dimension-completeness:clipped-sheet-content:sheet',
+        kind: 'clipped-sheet-content',
+        nodeId: 'sheet',
+        nodeType: 'sheet',
+        severity: 'warning',
+      }),
+    ])
+  })
 })

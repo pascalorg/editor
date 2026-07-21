@@ -17,6 +17,8 @@ export type DimensionCompletenessIssueKind =
   | 'contradictory-dimension-string'
   | 'dimension-segment-total-mismatch'
   | 'undocumented-critical-node'
+  | 'unresolved-annotation-collision'
+  | 'clipped-sheet-content'
 
 export type DimensionCompletenessIssueSeverity = 'info' | 'warning'
 
@@ -33,6 +35,14 @@ export type BuildDimensionCompletenessAuditOptions = {
   includeReferenceDimensions?: boolean
   requireRoughOpeningHeights?: boolean
   dimensionValueTolerance?: number
+  preflightIssues?: readonly DimensionCompletenessPreflightIssue[]
+}
+
+export type DimensionCompletenessPreflightIssue = {
+  id?: string
+  kind?: string
+  severity?: DimensionCompletenessIssueSeverity
+  message: string
 }
 
 type DimensionCoverage = ReadonlySet<string>
@@ -59,6 +69,7 @@ export function buildDimensionCompletenessAudit(
   const issues: DimensionCompletenessIssue[] = []
 
   issues.push(...dimensionStringIssues(nodes, options))
+  issues.push(...preflightCompletenessIssues(options.preflightIssues ?? []))
 
   for (const node of Object.values(nodes)) {
     if (node.type === 'wall') {
@@ -226,6 +237,56 @@ function segmentTotalMismatchIssues(
       ),
     ]
   })
+}
+
+function preflightCompletenessIssues(
+  preflightIssues: readonly DimensionCompletenessPreflightIssue[],
+): DimensionCompletenessIssue[] {
+  const issues: DimensionCompletenessIssue[] = []
+  for (const preflightIssue of preflightIssues) {
+    const normalizedKind = preflightIssue.kind?.trim().toLowerCase()
+    const normalizedMessage = preflightIssue.message.trim().toLowerCase()
+
+    if (normalizedKind === 'unresolved-collision') {
+      issues.push(
+        preflightIssueCompletenessIssue(
+          'unresolved-annotation-collision',
+          preflightIssue,
+          'annotation',
+        ),
+      )
+      continue
+    }
+
+    if (
+      normalizedKind === 'clipped-content' ||
+      normalizedKind === 'clipped-sheet-content' ||
+      normalizedMessage.includes('clipped') ||
+      normalizedMessage.includes('exceeds the sheet viewport')
+    ) {
+      issues.push(preflightIssueCompletenessIssue('clipped-sheet-content', preflightIssue, 'sheet'))
+    }
+  }
+  return issues
+}
+
+function preflightIssueCompletenessIssue(
+  kind: Extract<
+    DimensionCompletenessIssueKind,
+    'unresolved-annotation-collision' | 'clipped-sheet-content'
+  >,
+  preflightIssue: DimensionCompletenessPreflightIssue,
+  fallbackNodeId: string,
+): DimensionCompletenessIssue {
+  const nodeId = preflightIssue.id?.trim() || fallbackNodeId
+  return {
+    id: ['dimension-completeness', kind, nodeId].join(':'),
+    kind,
+    nodeId,
+    nodeType: fallbackNodeId,
+    severity: preflightIssue.severity ?? 'warning',
+    message: preflightIssue.message,
+  }
 }
 
 function wallDimensionIssues(
