@@ -7,6 +7,7 @@ export type AnnotationLabelRectangle = {
   width: number
   height: number
   priority: number
+  pinnedShift?: { dx: number; dy: number }
   tangentX?: number
   tangentY?: number
   preferredShifts?: readonly { dx: number; dy: number }[]
@@ -73,6 +74,9 @@ class AnnotationObstacleIndex {
   }
 }
 
+export type AnnotationLayoutOverride = { dx: number; dy: number; pinned?: boolean }
+export type AnnotationLayoutOverrides = Readonly<Record<string, AnnotationLayoutOverride>>
+
 export function resolveAnnotationLabelRectangles(
   rectangles: readonly AnnotationLabelRectangle[],
   obstacles: readonly AnnotationObstacleRectangle[] = [],
@@ -84,13 +88,16 @@ export function resolveAnnotationLabelRectangles(
     .map((rectangle, order) => ({ order, rectangle }))
     .sort(
       (left, right) =>
-        right.rectangle.priority - left.rectangle.priority || left.order - right.order,
+        Number(Boolean(right.rectangle.pinnedShift)) -
+          Number(Boolean(left.rectangle.pinnedShift)) ||
+        right.rectangle.priority - left.rectangle.priority ||
+        left.order - right.order,
     )
 
   for (const { rectangle } of ordered) {
-    const selected = resolveLabelShift(rectangle, occupied)
+    const selected = rectangle.pinnedShift ?? resolveLabelShift(rectangle, occupied)
     const shift = selected ?? { dx: 0, dy: 0 }
-    const resolved = selected !== undefined
+    const resolved = rectangle.pinnedShift !== undefined || selected !== undefined
     occupied.add({
       x: rectangle.x + shift.dx,
       y: rectangle.y + shift.dy,
@@ -105,7 +112,10 @@ export function resolveAnnotationLabelRectangles(
   )
 }
 
-export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
+export function resolveSvgAnnotationCollisions(
+  svg: SVGSVGElement,
+  options: { layoutOverrides?: AnnotationLayoutOverrides } = {},
+): void {
   const labels = Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
   if (labels.length === 0) return
 
@@ -113,12 +123,30 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
     const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform
     if (defaultTransform !== undefined) label.setAttribute('transform', defaultTransform)
     label.removeAttribute('data-floorplan-layout-unresolved')
+    delete label.dataset.floorplanAnnotationLayoutDx
+    delete label.dataset.floorplanAnnotationLayoutDy
   }
   resetDimensionConnectors(svg)
 
+  const pinnedLocalById = new Map<string, { x: number; y: number }>()
   const rectangles = labels.map((label, index) => {
     const bounds = label.getBoundingClientRect()
     const matrix = label.getScreenCTM()
+    const id = svgAnnotationLabelId(label, index)
+    label.dataset.floorplanAnnotationId = id
+    const override = options.layoutOverrides?.[id]
+    const pinnedLocal =
+      override?.pinned === true && Number.isFinite(override.dx) && Number.isFinite(override.dy)
+        ? { dx: override.dx, dy: override.dy }
+        : undefined
+    if (pinnedLocal) pinnedLocalById.set(id, { x: pinnedLocal.dx, y: pinnedLocal.dy })
+    const pinnedShift =
+      pinnedLocal && matrix
+        ? {
+            dx: matrix.a * pinnedLocal.dx + matrix.c * pinnedLocal.dy,
+            dy: matrix.b * pinnedLocal.dx + matrix.d * pinnedLocal.dy,
+          }
+        : undefined
     const tangentLength = matrix ? Math.hypot(matrix.a, matrix.b) : 0
     const outsideStartLocalX = Number(
       label.dataset.floorplanDimensionOutsideStartLocalX ?? Number.NaN,
@@ -136,12 +164,13 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
           ]
         : undefined
     return {
-      id: label.dataset.floorplanAnnotationId ?? `annotation-${index}`,
+      id,
       x: bounds.x,
       y: bounds.y,
       width: bounds.width,
       height: bounds.height,
       priority: Number(label.dataset.floorplanAnnotationPriority ?? 0),
+      pinnedShift,
       tangentX: tangentLength > 1e-9 && matrix ? matrix.a / tangentLength : undefined,
       tangentY: tangentLength > 1e-9 && matrix ? matrix.b / tangentLength : undefined,
       preferredShifts,
@@ -156,12 +185,16 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
     const rectangle = rectangles[index]
     const shift = rectangle && shifts.find((candidate) => candidate.id === rectangle.id)
     if (!shift || (shift.dx === 0 && shift.dy === 0)) {
+      label.dataset.floorplanAnnotationLayoutDx = '0'
+      label.dataset.floorplanAnnotationLayoutDy = '0'
       if (shift && !shift.resolved) label.dataset.floorplanLayoutUnresolved = 'true'
       return
     }
     const matrix = label.getScreenCTM()
     if (!matrix) return
-    const local = screenVectorToLocal(matrix, shift.dx, shift.dy)
+    const local = pinnedLocalById.get(shift.id) ?? screenVectorToLocal(matrix, shift.dx, shift.dy)
+    label.dataset.floorplanAnnotationLayoutDx = String(local.x)
+    label.dataset.floorplanAnnotationLayoutDy = String(local.y)
     const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
     label.setAttribute('transform', `${defaultTransform} translate(${local.x} ${local.y})`.trim())
     const preferredShift = rectangle.preferredShifts?.[0]
@@ -174,6 +207,14 @@ export function resolveSvgAnnotationCollisions(svg: SVGSVGElement): void {
     }
     if (!shift.resolved) label.dataset.floorplanLayoutUnresolved = 'true'
   })
+}
+
+export function svgAnnotationLabelId(label: SVGGElement, index: number): string {
+  const explicit = label.dataset.floorplanAnnotationId?.trim()
+  if (explicit) return explicit
+  const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
+  const text = label.textContent?.trim() ?? ''
+  return `annotation:${index}:${text}:${defaultTransform}`
 }
 
 function resetDimensionConnectors(svg: SVGSVGElement): void {

@@ -85,6 +85,7 @@ import { useFloorplanRender } from '../floorplan-render-context'
 import {
   isFloorplanAnnotationObstacleGeometry,
   resolveSvgAnnotationCollisions,
+  svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -1438,12 +1439,102 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
 function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
+  const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
+  const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
   useLayoutEffect(() => {
     if (!active) return
     const svg = markerRef.current?.ownerSVGElement
-    if (svg) resolveSvgAnnotationCollisions(svg)
-  })
+    if (!svg) return
+    resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
+
+    const labels = Array.from(
+      svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
+    )
+    const cleanup: Array<() => void> = []
+    for (const [index, label] of labels.entries()) {
+      const id = svgAnnotationLabelId(label, index)
+      label.dataset.floorplanAnnotationId = id
+      label.style.pointerEvents = 'all'
+      label.style.cursor = annotationLayoutOverrides[id]?.pinned ? 'grab' : 'move'
+
+      const onPointerDown = (event: PointerEvent) => {
+        if (event.button !== 0) return
+        event.preventDefault()
+        event.stopPropagation()
+        label.style.cursor = 'grabbing'
+        const matrix = label.getScreenCTM()
+        if (!matrix) return
+        const start = { x: event.clientX, y: event.clientY }
+        const existing = annotationLayoutOverrides[id] ?? {
+          ...readFloorplanAnnotationLayoutOffset(label),
+          pinned: true,
+        }
+        let latest = existing
+        let moved = false
+        const onPointerMove = (moveEvent: PointerEvent) => {
+          moved = true
+          const local = screenVectorToFloorplanAnnotationLocal(
+            matrix,
+            moveEvent.clientX - start.x,
+            moveEvent.clientY - start.y,
+          )
+          latest = {
+            dx: existing.dx + local.x,
+            dy: existing.dy + local.y,
+            pinned: true,
+          }
+          const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
+          label.setAttribute(
+            'transform',
+            `${defaultTransform} translate(${latest.dx} ${latest.dy})`.trim(),
+          )
+        }
+        const onPointerUp = () => {
+          label.style.cursor = annotationLayoutOverrides[id]?.pinned ? 'grab' : 'move'
+          window.removeEventListener('pointermove', onPointerMove)
+          window.removeEventListener('pointerup', onPointerUp)
+          if (moved) setAnnotationLayoutOverride(id, latest)
+        }
+        window.addEventListener('pointermove', onPointerMove)
+        window.addEventListener('pointerup', onPointerUp)
+      }
+      const onDoubleClick = (event: MouseEvent) => {
+        event.preventDefault()
+        event.stopPropagation()
+        setAnnotationLayoutOverride(id, null)
+      }
+      label.addEventListener('pointerdown', onPointerDown)
+      label.addEventListener('dblclick', onDoubleClick)
+      cleanup.push(() => {
+        label.removeEventListener('pointerdown', onPointerDown)
+        label.removeEventListener('dblclick', onDoubleClick)
+        label.style.pointerEvents = ''
+        label.style.cursor = ''
+      })
+    }
+    return () => {
+      for (const fn of cleanup) fn()
+    }
+  }, [active, annotationLayoutOverrides, setAnnotationLayoutOverride])
   return <g pointerEvents="none" ref={markerRef} />
+}
+
+function screenVectorToFloorplanAnnotationLocal(matrix: DOMMatrix, dx: number, dy: number) {
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c
+  if (Math.abs(determinant) < 1e-9) return { x: 0, y: 0 }
+  return {
+    x: (matrix.d * dx - matrix.c * dy) / determinant,
+    y: (-matrix.b * dx + matrix.a * dy) / determinant,
+  }
+}
+
+function readFloorplanAnnotationLayoutOffset(label: SVGGElement) {
+  const dx = Number(label.dataset.floorplanAnnotationLayoutDx ?? 0)
+  const dy = Number(label.dataset.floorplanAnnotationLayoutDy ?? 0)
+  return {
+    dx: Number.isFinite(dx) ? dx : 0,
+    dy: Number.isFinite(dy) ? dy : 0,
+  }
 }
 
 type FloorplanRegistryEntryProps = {

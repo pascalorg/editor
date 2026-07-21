@@ -16,6 +16,32 @@ describe('resolveAnnotationLabelRectangles', () => {
     expect(shifts.every((entry) => entry.resolved)).toBe(true)
   })
 
+  test('keeps pinned labels at their drawing-view override and routes other labels around them', () => {
+    const shifts = resolveAnnotationLabelRectangles([
+      {
+        id: 'pinned',
+        x: 0,
+        y: 0,
+        width: 80,
+        height: 12,
+        priority: 1,
+        pinnedShift: { dx: 30, dy: 0 },
+      },
+      { id: 'automatic', x: 30, y: 0, width: 80, height: 12, priority: 100 },
+    ])
+
+    expect(shifts.find((entry) => entry.id === 'pinned')).toEqual({
+      id: 'pinned',
+      dx: 30,
+      dy: 0,
+      resolved: true,
+    })
+    expect(shifts.find((entry) => entry.id === 'automatic')).not.toMatchObject({
+      dx: 0,
+      dy: 0,
+    })
+  })
+
   test('does not move labels that are already clear', () => {
     expect(
       resolveAnnotationLabelRectangles([

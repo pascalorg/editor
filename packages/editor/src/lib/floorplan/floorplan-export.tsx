@@ -144,6 +144,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const annotationVisibility = useFloorplanAnnotationVisibility.getState().visibility
   const drawingType = useDrawingView.getState().drawingType
   const drawingScale = useDrawingView.getState().drawingScale
+  const annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides
   const drawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType)?.label ?? 'Floor plan'
   const levels = resolveExportLevels(nodes)
@@ -194,7 +195,12 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         const buildingRotationY = building?.type === 'building' ? (building.rotation[1] ?? 0) : 0
         const rotationDeg = FLOORPLAN_VIEW_ROTATION_DEG - (buildingRotationY * 180) / Math.PI
 
-        const mounted = await mountFloorplanSvg(host, geometries, rotationDeg)
+        const mounted = await mountFloorplanSvg(
+          host,
+          geometries,
+          rotationDeg,
+          annotationLayoutOverrides,
+        )
         if (mounted) {
           try {
             if (!doc) {
@@ -956,6 +962,7 @@ async function mountFloorplanSvg(
   parent: HTMLElement,
   geometries: { id: AnyNodeId; base: FloorplanGeometry }[],
   rotationDeg: number,
+  annotationLayoutOverrides = useDrawingView.getState().annotationLayoutOverrides,
 ): Promise<MountedFloorplan | null> {
   const container = document.createElement('div')
   parent.appendChild(container)
@@ -1012,7 +1019,7 @@ async function mountFloorplanSvg(
     setAnnotationUnitsPerPoint: async (value) => {
       render(value)
       await nextFrames(1)
-      resolveSvgAnnotationCollisions(svg)
+      resolveSvgAnnotationCollisions(svg, { layoutOverrides: annotationLayoutOverrides })
       if (!measureMountedFloorplan(mounted)) throw new Error('Unable to measure floor plan export')
     },
   }
