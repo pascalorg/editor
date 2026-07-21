@@ -1,6 +1,12 @@
 'use client'
 
-import { emitter, type GridEvent, HvacEquipmentNode, useScene } from '@pascal-app/core'
+import {
+  emitter,
+  type GridEvent,
+  HvacEquipmentNode,
+  resolveSupportSlabPatch,
+  useScene,
+} from '@pascal-app/core'
 import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -76,9 +82,14 @@ const HvacEquipmentTool = () => {
         name: 'Furnace',
         position,
         rotation: yawRef.current,
+        parentId: activeLevelId,
       })
-      useScene.getState().createNode(unit, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [unit.id] })
+      const committedUnit = HvacEquipmentNode.parse({
+        ...unit,
+        ...resolveSupportSlabPatch(unit, useScene.getState().nodes),
+      })
+      useScene.getState().createNode(committedUnit, activeLevelId)
+      useViewer.getState().setSelection({ selectedIds: [committedUnit.id] })
       triggerSFX('sfx:item-place')
     }
 

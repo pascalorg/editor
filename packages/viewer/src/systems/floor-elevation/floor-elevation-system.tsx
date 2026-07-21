@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   getEffectiveNode,
   getFloorStackedPosition,
+  type LiveTransform,
   nodeRegistry,
   sceneRegistry,
   useLiveTransforms,
@@ -16,8 +17,7 @@ type PositionedNode = AnyNode & {
   rotation?: [number, number, number] | number
 }
 
-function withLiveTransform(node: AnyNode, id: string): AnyNode {
-  const liveTransform = useLiveTransforms.getState().get(id)
+function withLiveTransform(node: AnyNode, liveTransform: LiveTransform | undefined): AnyNode {
   if (!liveTransform) return node
 
   const currentRotation = (node as PositionedNode).rotation
@@ -75,7 +75,8 @@ export const FloorElevationSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D | undefined
       if (!mesh) return
 
-      const effectiveNode = withLiveTransform(getEffectiveNode(node as AnyNode), id)
+      const liveTransform = useLiveTransforms.getState().get(id)
+      const effectiveNode = withLiveTransform(getEffectiveNode(node as AnyNode), liveTransform)
       const position = (effectiveNode as PositionedNode).position
       if (!position) return
 
@@ -91,6 +92,10 @@ export const FloorElevationSystem = () => {
         node: effectiveNode,
         nodes: resolverNodes,
         position,
+        // 3D drags publish the pointer-decided surface cap with their live
+        // transform; honoring it here keeps this system's per-frame Y in
+        // agreement with the tool's preview (no deck/floor flicker).
+        maxElevation: liveTransform?.supportElevationCap,
       })
       mesh.position.y = visualPosition[1]
 

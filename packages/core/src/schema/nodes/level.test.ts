@@ -48,4 +48,9 @@ describe('LevelNode', () => {
       nodes.map((node) => node.id),
     )
   })
+
+  test('does not materialize height on parse — absence marks unmigrated legacy data', () => {
+    expect('height' in LevelNode.parse({})).toBe(false)
+    expect(LevelNode.parse({ height: 3 }).height).toBe(3)
+  })
 })

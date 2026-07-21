@@ -15,6 +15,7 @@ import {
   movingFootprintAnchors,
   nodeRegistry,
   resolveAlignment,
+  resolveSupportSlabPatch,
   spatialGridManager,
   useScene,
   type WallEvent,
@@ -797,6 +798,7 @@ const CabinetTool = () => {
         name: island ? 'Kitchen Island' : 'Modular Cabinet',
         position,
         rotation: yaw,
+        parentId: activeLevelId,
         depth: patch.depth ?? cabinetDefinition.defaults().depth,
         carcassHeight: patch.carcassHeight ?? cabinetDefinition.defaults().carcassHeight,
         ...(island && {
@@ -841,11 +843,16 @@ const CabinetTool = () => {
             buildModule(m.x, m.width, index),
           )
           for (const module of modules) sceneApi.upsert(module, cabinet.id as AnyNodeId)
+          const liveRun = sceneApi.get<CabinetNode>(cabinet.id as AnyNodeId) ?? cabinet
+          sceneApi.update(
+            liveRun.id as AnyNodeId,
+            resolveSupportSlabPatch(liveRun, sceneApi.nodes()),
+          )
           bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
           sceneApi.resumeHistory()
           return {
             endModule: modules[modules.length - 1]!,
-            run: sceneApi.get<CabinetNode>(cabinet.id as AnyNodeId) ?? cabinet,
+            run: sceneApi.get<CabinetNode>(cabinet.id as AnyNodeId) ?? liveRun,
           }
         }
 
@@ -889,6 +896,19 @@ const CabinetTool = () => {
         }
 
         bumpCabinetRunsNearNewRun(nextRun.id as AnyNodeId)
+        const liveNextRun = sceneApi.get<CabinetNode>(nextRun.id as AnyNodeId) ?? nextRun
+        sceneApi.update(
+          liveNextRun.id as AnyNodeId,
+          resolveSupportSlabPatch(liveNextRun, sceneApi.nodes()),
+        )
+        const rootRun = chainRootRunRef.current
+        if (rootRun) {
+          const liveRoot = sceneApi.get<CabinetNode>(rootRun.id as AnyNodeId) ?? rootRun
+          sceneApi.update(
+            liveRoot.id as AnyNodeId,
+            resolveSupportSlabPatch(liveRoot, sceneApi.nodes()),
+          )
+        }
         sceneApi.resumeHistory()
         return {
           endModule: anchorModule,
@@ -996,11 +1016,16 @@ const CabinetTool = () => {
       }
       const { cabinet, buildModule } = buildRunNodes(next.position, next.yaw)
       const module = buildModule(0, previewNode.width, 0)
+      const nodes = { ...useScene.getState().nodes, [cabinet.id]: cabinet, [module.id]: module }
+      const committedCabinet = CabinetNode.parse({
+        ...cabinet,
+        ...resolveSupportSlabPatch(cabinet, nodes),
+      })
       useScene.getState().createNodes([
-        { node: cabinet, parentId: activeLevelId },
-        { node: module, parentId: cabinet.id },
+        { node: committedCabinet, parentId: activeLevelId },
+        { node: module, parentId: committedCabinet.id },
       ])
-      bumpCabinetRunsNearNewRun(cabinet.id as AnyNodeId)
+      bumpCabinetRunsNearNewRun(committedCabinet.id as AnyNodeId)
       useViewer.getState().setSelection({ selectedIds: [module.id] })
       useEditor.getState().setMode('select')
       triggerSFX('sfx:item-place')

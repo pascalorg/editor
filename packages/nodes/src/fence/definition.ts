@@ -261,8 +261,13 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   // Stage B: pure geometry function. Generic <GeometrySystem> rebuilds
   // on dirtyNodes; <ParametricNodeRenderer> mounts the empty group.
-  // `renderer` + `system` fields dropped along with their files.
   geometry: buildFenceGeometry,
+  // Dependency tracker only — a hosted railing (`supportSlabId`) renders at
+  // its slab's elevation, so host elevation edits must re-dirty the fence.
+  system: {
+    module: () => import('./system'),
+    priority: 4,
+  },
   // Stage C: floor-plan rendering. FloorplanRegistryLayer iterates kinds
   // with `floorplan` set and renders via FloorplanGeometryRenderer.
   // Legacy `floorplanFenceEntries` short-circuits to [] when fence is

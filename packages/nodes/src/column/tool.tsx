@@ -7,6 +7,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  resolveSupportSlabPatch,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -142,9 +143,16 @@ const ColumnTool = () => {
           !isGridSnapActive(),
         )
 
-      const column = createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position)
-      useScene.getState().createNode(column, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [column.id] })
+      const column = ColumnNode.parse({
+        ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),
+        parentId: activeLevelId,
+      })
+      const committedColumn = ColumnNode.parse({
+        ...column,
+        ...resolveSupportSlabPatch(column, useScene.getState().nodes),
+      })
+      useScene.getState().createNode(committedColumn, activeLevelId)
+      useViewer.getState().setSelection({ selectedIds: [committedColumn.id] })
       triggerSFX('sfx:structure-build')
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
@@ -155,7 +163,10 @@ const ColumnTool = () => {
         cursorVisibleRef.current = false
         setCursorVisible(false)
         useFacingPose.getState().clear()
+        // Restore select mode with the tool — `mode: 'build'` with no tool is
+        // a dead state where the selection manager ignores every click.
         useEditor.getState().setTool(null)
+        useEditor.getState().setMode('select')
       }
       stopPlacementCommitPropagation(event)
     }

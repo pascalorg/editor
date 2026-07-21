@@ -8,12 +8,29 @@ import type {
 import type { AnyNode, AnyNodeId } from '../../schema'
 import { spatialGridManager } from './spatial-grid-manager'
 
+/**
+ * Sentinel `supportSlabId` meaning "hosted by the level base (ground)".
+ * Persisted when a pointer-capped commit elects the ground while one or
+ * more slabs (e.g. an elevated deck) still overlap the footprint above the
+ * cap — without it, the uncapped per-frame election would lift the
+ * committed node back onto the deck.
+ */
+export const GROUND_SUPPORT_ID = 'ground'
+
 export type FloorPlacedElevationArgs = {
   node: AnyNode
   nodes: Record<string, AnyNode>
   position: [number, number, number]
   rotation?: unknown
   levelId?: string | null
+  /**
+   * Pointer-decided support cap (level-local Y): only slabs whose walking
+   * surface sits at or below `maxElevation + SUPPORT_ELEVATION_EPSILON`
+   * may be elected, and the persisted `supportSlabId` is bypassed — during
+   * a drag the pointer, not the stored host, decides the target surface.
+   * Omit (or pass null) for the uncapped committed-read behavior.
+   */
+  maxElevation?: number | null
 }
 
 function finiteSlabElevation(elevation: number): number {
@@ -50,6 +67,7 @@ export function getFloorPlacedElevation({
   position,
   rotation,
   levelId,
+  maxElevation,
 }: FloorPlacedElevationArgs): number {
   const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
   if (!floorPlaced) return 0
@@ -66,8 +84,31 @@ export function getFloorPlacedElevation({
   const resolvedLevelId = parent?.type === 'level' ? parent.id : levelId
   if (!resolvedLevelId) return 0
 
-  let maxElevation = Number.NEGATIVE_INFINITY
-  for (const footprint of getFloorPlacedFootprints(floorPlaced, effectiveNode, { nodes })) {
+  const footprints = getFloorPlacedFootprints(floorPlaced, effectiveNode, { nodes })
+
+  // A persisted support host pins the elevation while it still exists and
+  // overlaps a footprint — deterministic across stacked slabs. A stale
+  // host (deleted or reshaped away) silently falls through to the
+  // election below; this per-frame read path never writes the field.
+  // Skipped entirely under a pointer cap: the cursor, not the stored
+  // host, decides the target surface during a drag.
+  const supportSlabId = (effectiveNode as { supportSlabId?: string | null }).supportSlabId
+  if (maxElevation == null && supportSlabId) {
+    if (supportSlabId === GROUND_SUPPORT_ID) return 0
+    for (const footprint of footprints) {
+      const hosted = spatialGridManager.getHostSlabElevationForFootprint(
+        resolvedLevelId,
+        supportSlabId,
+        footprint.position ?? position,
+        footprint.dimensions,
+        footprint.rotation,
+      )
+      if (hosted !== null) return finiteSlabElevation(hosted)
+    }
+  }
+
+  let elected = Number.NEGATIVE_INFINITY
+  for (const footprint of footprints) {
     const footprintPosition = footprint.position ?? position
     const elevation = finiteSlabElevation(
       spatialGridManager.getSlabElevationForItem(
@@ -75,14 +116,15 @@ export function getFloorPlacedElevation({
         footprintPosition,
         footprint.dimensions,
         footprint.rotation,
+        maxElevation,
       ),
     )
-    if (elevation > maxElevation) {
-      maxElevation = elevation
+    if (elevation > elected) {
+      elected = elevation
     }
   }
 
-  return maxElevation === Number.NEGATIVE_INFINITY ? 0 : maxElevation
+  return elected === Number.NEGATIVE_INFINITY ? 0 : elected
 }
 
 export function getFloorStackedPosition(args: FloorPlacedElevationArgs): [number, number, number] {

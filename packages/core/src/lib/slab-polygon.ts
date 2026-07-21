@@ -38,6 +38,13 @@ import { getWallThickness } from '../systems/wall/wall-footprint'
  *    render offsets.
  *  - FREE — no neighbour, no wall. Rendered exactly as drawn.
  *
+ * The whole machinery exists to make ROOM FLOORS tile with the walls
+ * standing on them, so it only applies to GROUNDED slabs (underside on
+ * the level plane) and recessed pools. A floating deck keeps its drawn
+ * polygon exactly — it must not grow into a wall it happens to float
+ * beside — and is symmetrically ignored as a seam target by its
+ * grounded siblings.
+ *
  * Sub-edges of one edge with different projections are joined by a
  * perpendicular STEP connector at the breakpoint. Breakpoints sit on
  * candidate span boundaries — wall junctions — so the step's vertical
@@ -74,8 +81,27 @@ const WALL_LATERAL_TIE_EPSILON = 0.02
 const CURVED_WALL_SAMPLE_SEGMENTS = 32
 const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
 const DEFAULT_SLAB_ELEVATION = 0.05
+const DEFAULT_SLAB_THICKNESS = 0.05
+/**
+ * A non-recessed slab whose underside (`elevation − thickness`) rises
+ * above the level plane by more than this is a floating deck: it keeps
+ * its drawn polygon (no wall adoption, no seam projection) and grounded
+ * siblings don't seam toward it.
+ */
+const GROUNDED_SLAB_UNDERSIDE_EPSILON = 0.01
 /** Prevent near-parallel offset lines from producing unbounded corner spikes. */
 const MAX_CORNER_MITER_RATIO = 10
+
+/**
+ * Floating deck test — see the module header. Recessed pools are never
+ * floating: their negative elevation encodes depth, not placement.
+ */
+function isFloatingSlab(slab: SlabNode): boolean {
+  if (slab.recessed) return false
+  const elevation = slab.elevation ?? DEFAULT_SLAB_ELEVATION
+  const thickness = slab.thickness ?? DEFAULT_SLAB_THICKNESS
+  return elevation - thickness > GROUNDED_SLAB_UNDERSIDE_EPSILON
+}
 
 export type SlabPolygonContext = {
   /** Walls on the slab's level. */
@@ -138,7 +164,7 @@ export function getRenderableSlabPolygon(
   context: SlabPolygonContext,
 ): Array<[number, number]> {
   const polygon = slabNode.polygon
-  if (polygon.length < 3) {
+  if (polygon.length < 3 || isFloatingSlab(slabNode)) {
     return polygon.map(([x, z]) => [x, z] as [number, number])
   }
 
@@ -368,6 +394,11 @@ function computeEdgeSubSpans(
 
   const neighborSegments: NeighborSegment[] = []
   for (const sibling of context.siblingSlabs) {
+    // A floating deck keeps its drawn polygon, so it can't be a seam
+    // partner: projecting toward it would move this slab's edge while the
+    // deck's stays put (asymmetric seam), and the higher/lower band rules
+    // only describe room floors meeting under a wall.
+    if (isFloatingSlab(sibling)) continue
     const siblingPolygon = sibling.polygon
     if (siblingPolygon.length < 2) continue
     const elevation = sibling.elevation ?? DEFAULT_SLAB_ELEVATION

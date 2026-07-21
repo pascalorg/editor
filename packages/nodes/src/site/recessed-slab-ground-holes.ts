@@ -36,10 +36,7 @@ export function getRecessedSlabGroundHoles(
   return nodeList
     .filter(
       (node): node is SlabNode =>
-        node.type === 'slab' &&
-        node.visible &&
-        node.polygon.length >= 3 &&
-        (node.elevation ?? 0.05) < 0,
+        node.type === 'slab' && node.visible && node.polygon.length >= 3 && node.recessed === true,
     )
     .filter((slab) => {
       if (!Number.isFinite(lowestLevelIndex)) return true

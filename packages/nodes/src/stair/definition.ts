@@ -1,11 +1,13 @@
 import {
   type HandleDescriptor,
   type NodeDefinition,
+  resolveStairTotalRise,
   type SceneApi,
   StairNode as StairNodeSchema,
   type StairNode as StairNodeType,
   type StairSegmentNode,
   stairFootprintAABB,
+  useScene,
 } from '@pascal-app/core'
 
 const MIN_CURVED_RISE = 0.3
@@ -53,10 +55,14 @@ type StairMoveBounds = {
   height: number
 }
 
+function readTotalRise(node: StairNodeType): number {
+  return Math.max(resolveStairTotalRise(node, useScene.getState().nodes), 0.1)
+}
+
 function readCurvedStairGeometry(node: StairNodeType): CurvedStairGeom {
   const isSpiral = node.stairType === 'spiral'
   const stepCount = Math.max(2, Math.round(node.stepCount ?? 10))
-  const totalRise = Math.max(node.totalRise ?? 2.5, 0.1)
+  const totalRise = readTotalRise(node)
   const width = Math.max(node.width ?? 1, MIN_CURVED_WIDTH)
   const minInnerRadius = isSpiral ? MIN_CURVED_INNER_RADIUS_SPIRAL : MIN_CURVED_INNER_RADIUS_CURVED
   const innerRadius = Math.max(minInnerRadius, node.innerRadius ?? 0.9)
@@ -96,7 +102,7 @@ function fallbackStraightStairMoveBounds(node: StairNodeType): StairMoveBounds {
     maxX: width / 2,
     minZ: 0,
     maxZ: depth,
-    height: Math.max(node.totalRise ?? 2.5, 0.1),
+    height: readTotalRise(node),
   }
 }
 
@@ -161,7 +167,7 @@ function curvedRiseHandle(): HandleDescriptor<StairNodeType> {
     axis: 'y',
     anchor: 'min',
     min: MIN_CURVED_RISE,
-    currentValue: (n) => Math.max(n.totalRise ?? 2.5, 0.1),
+    currentValue: readTotalRise,
     apply: (_n, newRise) => ({ totalRise: newRise }),
     placement: {
       position: (n) => {
@@ -307,7 +313,7 @@ function stairRotateGizmoPosition(n: StairNodeType): [number, number, number] {
     return [radius * Math.cos(angle), g.totalRise / 2, radius * Math.sin(angle)]
   }
   const width = Math.max(n.width ?? 1, MIN_CURVED_WIDTH)
-  const yMid = Math.max(n.totalRise ?? 2.5, 0.1) / 2
+  const yMid = readTotalRise(n) / 2
   return [width / 2 + STAIR_ROTATE_CORNER_OFFSET, yMid, -STAIR_ROTATE_CORNER_OFFSET]
 }
 
@@ -345,7 +351,7 @@ function stairRotateHandle(): HandleDescriptor<StairNodeType> {
           STAIR_ROTATE_RING_OFFSET
         )
       },
-      y: (n) => Math.max(n.totalRise ?? 2.5, 0.1) / 2,
+      y: (n) => readTotalRise(n) / 2,
     },
   }
 }

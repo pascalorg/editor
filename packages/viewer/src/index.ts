@@ -161,10 +161,9 @@ export {
   type SurfaceFrame,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
-// Slab system follows the wall + fence re-export pattern — composed into
-// the registry-driven slab definition's `def.system`. Removed in Phase 6
-// alongside the legacy slab mount point.
-export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
+// Pure slab geometry generator — composed into the registry-driven slab
+// definition's `def.geometry` in `@pascal-app/nodes`.
+export { generateSlabGeometry } from './systems/slab/slab-system'
 export {
   getStairBodyMaterials,
   getStairRailingMaterial,

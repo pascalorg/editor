@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { CollectionId } from '../schema/collections'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { forkSceneGraph, type SceneGraph } from './clone-scene-graph'
+import {
+  cloneLevelSubtree,
+  cloneSceneGraph,
+  forkSceneGraph,
+  type SceneGraph,
+} from './clone-scene-graph'
 
 function makeNode(id: string, type: string, extra: Record<string, unknown> = {}): AnyNode {
   return {
@@ -69,5 +74,52 @@ describe('forkSceneGraph', () => {
       Object.values(forked.collections ?? {}).flatMap((collection) => collection.nodeIds),
     ).toHaveLength(2)
     expect(forked.installedPlugins).toEqual(['pascal:trees'])
+  })
+})
+
+describe('supportSlabId remap', () => {
+  test('cloneSceneGraph remaps supportSlabId to the cloned slab id', () => {
+    const level = makeNode('level_1', 'level', { children: ['slab_1', 'item_1'] })
+    const slab = makeNode('slab_1', 'slab', { parentId: 'level_1' })
+    const item = makeNode('item_1', 'item', { parentId: 'level_1', supportSlabId: 'slab_1' })
+
+    const cloned = cloneSceneGraph({
+      nodes: {
+        ['level_1' as AnyNodeId]: level,
+        ['slab_1' as AnyNodeId]: slab,
+        ['item_1' as AnyNodeId]: item,
+      },
+      rootNodeIds: ['level_1' as AnyNodeId],
+    })
+
+    const clonedSlab = Object.values(cloned.nodes).find((node) => node.type === 'slab')!
+    const clonedItem = Object.values(cloned.nodes).find((node) => node.type === 'item')!
+    expect(clonedSlab.id).not.toBe('slab_1')
+    expect((clonedItem as { supportSlabId?: string }).supportSlabId).toBe(clonedSlab.id)
+  })
+
+  test('cloneLevelSubtree remaps in-subtree hosts and preserves external references', () => {
+    const level = makeNode('level_1', 'level', { children: ['slab_1', 'item_1', 'item_2'] })
+    const slab = makeNode('slab_1', 'slab', { parentId: 'level_1' })
+    const hosted = makeNode('item_1', 'item', { parentId: 'level_1', supportSlabId: 'slab_1' })
+    const external = makeNode('item_2', 'item', {
+      parentId: 'level_1',
+      supportSlabId: 'slab_external',
+    })
+
+    const { clonedNodes, idMap } = cloneLevelSubtree(
+      {
+        ['level_1' as AnyNodeId]: level,
+        ['slab_1' as AnyNodeId]: slab,
+        ['item_1' as AnyNodeId]: hosted,
+        ['item_2' as AnyNodeId]: external,
+      },
+      'level_1' as AnyNodeId,
+    )
+
+    const clonedHosted = clonedNodes.find((node) => node.id === idMap.get('item_1'))!
+    const clonedExternal = clonedNodes.find((node) => node.id === idMap.get('item_2'))!
+    expect((clonedHosted as { supportSlabId?: string }).supportSlabId).toBe(idMap.get('slab_1')!)
+    expect((clonedExternal as { supportSlabId?: string }).supportSlabId).toBe('slab_external')
   })
 })

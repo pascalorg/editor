@@ -1,4 +1,4 @@
-import { type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -11,6 +11,7 @@ import {
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
+import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
 import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
 
@@ -110,6 +111,14 @@ export function buildFenceGeometry(
   const group = new Group()
   const geometries = generateFenceSlotGeometries(node)
 
+  // A hosted railing (`supportSlabId`) stands on its slab's walking surface.
+  // The builder emits local-space children, so the lift lives on an inner
+  // group rather than the registered (React-transformed) root.
+  const lift = ctx ? resolveFenceLiftElevation(node, (id) => ctx.resolve(id as AnyNodeId)) : 0
+  const meshParent = new Group()
+  meshParent.position.y = lift
+  group.add(meshParent)
+
   for (const slotId of FENCE_SLOT_ORDER) {
     const geometry = geometries[slotId]
     if (geometry.getAttribute('position') === undefined) continue
@@ -126,7 +135,7 @@ export function buildFenceGeometry(
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.slotId = slotId
-    group.add(mesh)
+    meshParent.add(mesh)
   }
 
   return group

@@ -15,6 +15,7 @@ import {
   getElevatorShaftDepth,
   getElevatorShaftWallThickness,
   getElevatorShaftWidth,
+  getLevelElevations,
   getResolvedElevatorDoorStyle,
   openElevatorDoor,
   requestElevatorLevel,
@@ -76,7 +77,6 @@ const ELEVATOR_COLLIDER_HORIZONTAL_PADDING = 0.14
 const ELEVATOR_COLLIDER_FLOOR_THICKNESS = 0.08
 const ELEVATOR_COLLIDER_DOOR_DEPTH = 0.12
 const ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD = 0.72
-const DEFAULT_ELEVATOR_LEVEL_HEIGHT = 2.5
 const VOID_FALL_RESPAWN_DEPTH = 12
 
 type MovementKeyName = Exclude<keyof MovementInput, 'joystick'>
@@ -281,37 +281,17 @@ function isInsideElevatorCab(
   )
 }
 
-function getFirstPersonLevelHeight(levelId: string, nodes: Record<string, AnyNode>) {
-  const level = nodes[levelId as AnyNodeId]
-  if (level?.type !== 'level') return DEFAULT_ELEVATOR_LEVEL_HEIGHT
-
-  let maxTop = 0
-  for (const childId of level.children) {
-    const child = nodes[childId as AnyNodeId]
-    if (!child) continue
-
-    if (child.type === 'ceiling') {
-      maxTop = Math.max(maxTop, child.height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT)
-      continue
-    }
-
-    if (child.type === 'wall') {
-      const meshY = Math.max(sceneRegistry.nodes.get(childId as AnyNodeId)?.position.y ?? 0, 0)
-      maxTop = Math.max(maxTop, meshY + (child.height ?? DEFAULT_ELEVATOR_LEVEL_HEIGHT))
-    }
-  }
-
-  return maxTop > 0 ? maxTop : DEFAULT_ELEVATOR_LEVEL_HEIGHT
-}
-
 function resolveElevatorColliderLevels(elevator: ElevatorNode, nodes: Record<string, AnyNode>) {
   const allLevels = resolveElevatorBuildingLevels(elevator, nodes)
+  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
 
   const baseYByLevelId = new Map<string, number>()
   let cumulativeY = 0
   for (const level of allLevels) {
-    baseYByLevelId.set(level.id, cumulativeY)
-    cumulativeY += getFirstPersonLevelHeight(level.id, nodes)
+    const elevation = levelElevations.get(level.id)
+    const baseY = elevation?.baseY ?? 0
+    baseYByLevelId.set(level.id, baseY)
+    cumulativeY = Math.max(cumulativeY, baseY + (elevation?.height ?? 0))
   }
 
   const serviceLevels = resolveElevatorServiceLevels(elevator, nodes)

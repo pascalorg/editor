@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  DEFAULT_LEVEL_HEIGHT,
   LevelNode,
   type LevelNode as LevelNodeType,
   resolveBuildingForLevel,
@@ -154,6 +155,7 @@ export function resolveStairDestinationLevel({
   if (createMissing && buildingId) {
     const createdLevel = LevelNode.parse({
       children: [],
+      height: DEFAULT_LEVEL_HEIGHT,
       level: fromLevel.level + 1,
       parentId: buildingId,
     })

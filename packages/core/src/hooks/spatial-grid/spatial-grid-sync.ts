@@ -1,6 +1,7 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
-import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, LevelNode, SlabNode, WallNode } from '../../schema'
+import { getLevelBelow } from '../../services/storey'
 import useScene from '../../store/use-scene'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import {
@@ -116,6 +117,7 @@ export function initSpatialGridSync(): () => void {
         // When a slab is added, mark overlapping items/walls dirty
         if (node.type === 'slab') {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+          markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
       }
     }
@@ -129,6 +131,7 @@ export function initSpatialGridSync(): () => void {
         // When a slab is removed, mark items/walls that were on it dirty (using current state)
         if (node.type === 'slab') {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+          markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
       }
     }
@@ -156,17 +159,46 @@ export function initSpatialGridSync(): () => void {
           }
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
-        if (
+        const supportChanged =
           node.polygon !== prev.polygon ||
           node.elevation !== prev.elevation ||
           node.holes !== prev.holes
-        ) {
+        if (supportChanged) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
 
           // Mark nodes overlapping old polygon and new polygon as dirty
           markNodesOverlappingSlab(prev as SlabNode, state.nodes, markDirty)
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+        }
+        if (node.elevation !== prev.elevation) {
+          markDeckAttachedStairs(node.id, state.nodes, markDirty)
+        }
+        // The covering bound over the level below also moves with thickness
+        // (underside = elevation − thickness) and recessed (pools never
+        // cover), which same-level support ignores.
+        if (
+          supportChanged ||
+          node.thickness !== prev.thickness ||
+          node.recessed !== prev.recessed
+        ) {
+          markCoveringDependentsBelow(resolveLevelId(node, state.nodes), state.nodes, markDirty)
+        }
+      } else if (node.type === 'level' && prev.type === 'level') {
+        if (node.height !== prev.height) {
+          markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
+        }
+      } else if (node.type === 'wall' && prev.type === 'wall') {
+        if (
+          node.start !== prev.start ||
+          node.end !== prev.end ||
+          node.curveOffset !== prev.curveOffset ||
+          node.thickness !== prev.thickness
+        ) {
+          // Rendered slab polygons adopt wall bands, so a wall reshape
+          // must reach the manager to refresh its wall map and drop the
+          // level's rendered-polygon cache.
+          spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
         }
       }
     }
@@ -180,6 +212,68 @@ function arraysEqual(a: number[], b: number[]): boolean {
 }
 
 /**
+ * A level's stored height moved: plane-bound walls follow the new plane,
+ * stair rise re-derives, and ceilings/fences re-resolve their clamp — mark
+ * them all so their systems rebuild. Restacking the level containers alone
+ * leaves their geometry stale.
+ */
+export function markLevelHeightDependents(
+  level: LevelNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const childId of level.children) {
+    const child = nodes[childId]
+    if (!child) continue
+    if (
+      child.type === 'wall' ||
+      child.type === 'stair' ||
+      child.type === 'ceiling' ||
+      child.type === 'fence'
+    ) {
+      markDirty(child.id)
+    }
+  }
+}
+
+/**
+ * A deck slab's walking surface moved: stairs attached to it via
+ * `deckSlabId` derive their rise from that elevation, so their geometry
+ * (and rise-derived affordances) must rebuild.
+ */
+export function markDeckAttachedStairs(
+  slabId: string,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'stair' && node.deckSlabId === slabId) {
+      markDirty(node.id)
+    }
+  }
+}
+
+/**
+ * A slab on `slabLevelId` was created/deleted or changed shape/placement:
+ * the covering bound (slab underside) over the level BELOW moved, so that
+ * level's plane-bound walls and clamped ceilings must rebuild.
+ */
+export function markCoveringDependentsBelow(
+  slabLevelId: string,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  const below = getLevelBelow(slabLevelId, nodes)
+  if (!below) return
+  for (const childId of below.children) {
+    const child = nodes[childId]
+    if (child?.type === 'wall' || child?.type === 'ceiling') {
+      markDirty(child.id)
+    }
+  }
+}
+
+/**
  * Mark all floor items and walls that may be affected by a slab change as dirty.
  */
 function markNodesOverlappingSlab(
@@ -190,10 +284,11 @@ function markNodesOverlappingSlab(
   if (slab.polygon.length < 3) return
   const slabLevelId = resolveLevelId(slab, nodes)
 
-  // Walls follow the slab's RENDERED footprint (band-adopted edges reach
-  // the wall's outer face), so the dirty gate must test the same polygon
-  // `getSlabElevationForWall` will re-evaluate — a stored polygon that
-  // stops short of the wall body would otherwise never re-elevate it.
+  // Walls AND floor-placed nodes follow the slab's RENDERED footprint
+  // (band-adopted edges reach the wall's outer face), so the dirty gate
+  // must test the same polygon the support queries re-evaluate — a stored
+  // polygon that stops short of the wall body would otherwise never
+  // re-elevate nodes sitting over the adopted band.
   const levelWalls: WallNode[] = []
   const siblingSlabs: SlabNode[] = []
   for (const node of Object.values(nodes)) {
@@ -249,7 +344,7 @@ function markNodesOverlappingSlab(
           footprint.position ?? position,
           footprint.dimensions,
           footprint.rotation,
-          slab.polygon,
+          renderedPolygon,
           0.01,
         )
       ) {

@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import type { AnyNode, AnyNodeId } from '../schema/types'
+import { resolveCeilingHeight } from '../services/level-height'
+import { getCeilingClampBound } from '../services/storey'
 import {
   detectSpacesForLevel,
+  initSpaceDetectionSync,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
@@ -38,16 +42,35 @@ function slab(elevation: number) {
 }
 
 describe('planAutoCeilingsForLevel', () => {
-  test('creates auto ceilings at the top of the room walls', () => {
+  test('creates auto ceilings height-less so they follow the level top', () => {
     const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      walls: squareWalls(),
-      slabs: [slab(0.05)],
+      storeyHeight: 2.7,
     }).create[0]
 
-    expect(created?.height).toBeCloseTo(2.55)
+    expect(created).toBeDefined()
+    // Follows-mode: no stored height — the effective height derives from
+    // the clamp bound at read time via resolveCeilingHeight.
+    expect('height' in created!).toBe(false)
+    expect(created?.autoFromWalls).toBe(true)
   })
 
-  test('updates existing auto ceiling height when the slab elevation changes', () => {
+  test('never writes a height onto a matched auto ceiling', () => {
+    const ceiling = CeilingNode.parse({
+      polygon: square,
+      autoFromWalls: true,
+    })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
+      storeyHeight: 3,
+    })
+
+    // Same polygon, follows-mode height — nothing to update.
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+  })
+
+  test('a leftover explicit height on a matched auto ceiling is not rewritten', () => {
     const ceiling = CeilingNode.parse({
       polygon: square,
       height: 2.55,
@@ -55,30 +78,12 @@ describe('planAutoCeilingsForLevel', () => {
     })
 
     const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      walls: squareWalls(),
-      slabs: [slab(0.4)],
+      storeyHeight: 3,
     })
 
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.id).toBe(ceiling.id)
-    expect(plan.update[0]?.data.polygon).toBeUndefined()
-    expect(plan.update[0]?.data.height).toBeCloseTo(2.9)
-  })
-
-  test('updates existing auto ceiling height when wall height changes', () => {
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.55,
-      autoFromWalls: true,
-    })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      walls: squareWalls(3),
-      slabs: [slab(0.05)],
-    })
-
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.data.height).toBeCloseTo(3.05)
+    // The sync no longer re-derives auto heights; a user-set explicit
+    // height survives (still under the bound, so no clamp either).
+    expect(plan.update).toHaveLength(0)
   })
 
   test('does not replace a manual ceiling with an auto ceiling', () => {
@@ -88,9 +93,10 @@ describe('planAutoCeilingsForLevel', () => {
       autoFromWalls: false,
     })
 
+    // Storey plane above the stored 2.5 so the stage 3-B manual re-clamp
+    // stays out of this test's scope (suppression only).
     const plan = planAutoCeilingsForLevel([roomPolygon()], [manualCeiling], {
-      walls: squareWalls(),
-      slabs: [slab(0.4)],
+      storeyHeight: 2.7,
     })
 
     expect(plan.create).toHaveLength(0)
@@ -160,14 +166,228 @@ describe('planAutoCeilingsForLevel', () => {
     const demoted = CeilingNode.parse({ ...ceiling, ...demotion?.data })
     expect(demoted.autoFromWalls).toBe(false)
 
+    // Storey plane above the stored 2.55 so the stage 3-B manual re-clamp
+    // stays out of this test's scope (suppression only).
     const plan = planAutoCeilingsForLevel([roomPolygon()], [demoted], {
-      walls: squareWalls(),
-      slabs: [slab(0.05)],
+      storeyHeight: 2.7,
     })
 
     expect(plan.create).toHaveLength(0)
     expect(plan.update).toHaveLength(0)
     expect(plan.delete).toHaveLength(0)
+  })
+})
+
+// Two stacked levels; the deck slab (occupying [-0.3, 0] over the upper
+// level's plane) covers the queried level below, so the clamp bound is
+// 2.5 - 0.3 - 0.01 = 2.19 (scenario gate 11's flush deck).
+function stackedDeckNodes(): Record<AnyNodeId, AnyNode> {
+  const deck = SlabNode.parse({
+    id: 'slab_deck',
+    parentId: 'level_1',
+    polygon: square,
+    elevation: 0,
+    thickness: 0.3,
+  })
+  const list: AnyNode[] = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_0', 'level_1'] }),
+    LevelNode.parse({ id: 'level_0', level: 0, height: 2.5, parentId: 'building_a' }),
+    LevelNode.parse({
+      id: 'level_1',
+      level: 1,
+      height: 2.5,
+      parentId: 'building_a',
+      children: ['slab_deck'],
+    }),
+    deck,
+  ]
+  return Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
+}
+
+describe('stage 3-B ceiling clamp bound', () => {
+  test('height-less auto ceilings resolve under the covering-slab bound at read time', () => {
+    const nodes = stackedDeckNodes()
+    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
+      storeyHeight: 2.5,
+      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
+    }).create[0]
+
+    expect(created).toBeDefined()
+    expect('height' in created!).toBe(false)
+    // Follows-mode: the effective height is the deck-limited bound.
+    expect(resolveCeilingHeight({ ...created!, parentId: 'level_0' }, nodes)).toBeCloseTo(2.19)
+  })
+
+  test('clamps a manual ceiling above the bound down to it (plane-only degradation)', () => {
+    const manual = CeilingNode.parse({ polygon: square, height: 2.6, autoFromWalls: false })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], { storeyHeight: 2.5 })
+
+    expect(plan.update).toHaveLength(1)
+    expect(plan.update[0]?.id).toBe(manual.id)
+    expect(plan.update[0]?.data.polygon).toBeUndefined()
+    expect(plan.update[0]?.data.height).toBeCloseTo(2.49)
+  })
+
+  test('never raises a manual ceiling sitting below the bound', () => {
+    const manual = CeilingNode.parse({ polygon: square, height: 2.0, autoFromWalls: false })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], { storeyHeight: 2.5 })
+
+    expect(plan.update).toHaveLength(0)
+  })
+
+  test('skips follows-mode manual ceilings (never converts them to explicit)', () => {
+    const nodes = stackedDeckNodes()
+    const manual = CeilingNode.parse({ polygon: square, autoFromWalls: false })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
+      storeyHeight: 2.5,
+      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
+    })
+
+    expect(plan.update).toHaveLength(0)
+  })
+
+  test('a flush deck above clamps a manual ceiling at the plane margin to its underside', () => {
+    // Scenario gate 11: manual ceiling at storeyHeight - 0.01 (the no-deck
+    // bound) → deck occupying [-0.3, 0] above → clamps to 2.5 - 0.3 - 0.01.
+    const nodes = stackedDeckNodes()
+    const manual = CeilingNode.parse({ polygon: square, height: 2.49, autoFromWalls: false })
+
+    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
+      storeyHeight: 2.5,
+      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
+    })
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.update).toHaveLength(1)
+    expect(plan.update[0]?.id).toBe(manual.id)
+    expect(plan.update[0]?.data.height).toBeCloseTo(2.19)
+  })
+})
+
+// Minimal store stand-ins for initSpaceDetectionSync: a zustand-shaped
+// scene store (getState/subscribe/temporal) whose write methods mutate the
+// nodes record and re-notify, and an editor store carrying `spaces`.
+function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
+  const listeners = new Set<(state: unknown) => void>()
+  const state: Record<string, unknown> & { nodes: Record<string, AnyNode> } = {
+    nodes: initialNodes,
+  }
+  const notify = () => {
+    for (const listener of [...listeners]) listener(state)
+  }
+  state.updateNodes = (updates: Array<{ id: string; data: Record<string, unknown> }>) => {
+    const next: Record<string, AnyNode> = { ...state.nodes }
+    for (const { id, data } of updates) {
+      const existing = next[id]
+      if (existing) next[id] = { ...existing, ...data } as AnyNode
+    }
+    state.nodes = next
+    notify()
+  }
+  state.deleteNodes = (ids: string[]) => {
+    const next: Record<string, AnyNode> = { ...state.nodes }
+    for (const id of ids) delete next[id]
+    state.nodes = next
+    notify()
+  }
+  state.createNodes = (entries: Array<{ node: AnyNode; parentId: string }>) => {
+    const next: Record<string, AnyNode> = { ...state.nodes }
+    for (const { node, parentId } of entries) {
+      next[node.id] = { ...node, parentId } as AnyNode
+      const parent = next[parentId] as (AnyNode & { children?: string[] }) | undefined
+      if (parent) {
+        next[parentId] = { ...parent, children: [...(parent.children ?? []), node.id] } as AnyNode
+      }
+    }
+    state.nodes = next
+    notify()
+  }
+  return {
+    getState: () => state,
+    subscribe: (listener: (state: unknown) => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    temporal: { getState: () => ({ pause() {}, resume() {} }) },
+    setNodes(next: Record<string, AnyNode>) {
+      state.nodes = next
+      notify()
+    },
+  }
+}
+
+function createEditorStoreStub() {
+  const state = {
+    spaces: {} as Record<string, unknown>,
+    setSpaces(next: Record<string, unknown>) {
+      state.spaces = next
+    },
+  }
+  return { getState: () => state }
+}
+
+describe('reactive ceiling re-clamp through the detection sync', () => {
+  test('a flush deck created on the level above clamps the existing manual ceiling below', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0], parentId: 'level_0' }),
+      WallNode.parse({ start: [4, 0], end: [4, 3], parentId: 'level_0' }),
+      WallNode.parse({ start: [4, 3], end: [0, 3], parentId: 'level_0' }),
+      WallNode.parse({ start: [0, 3], end: [0, 0], parentId: 'level_0' }),
+    ]
+    const manualCeiling = CeilingNode.parse({
+      id: 'ceiling_main',
+      parentId: 'level_0',
+      polygon: square,
+      height: 2.49,
+      autoFromWalls: false,
+    })
+    const initialNodes = Object.fromEntries(
+      [
+        BuildingNode.parse({ id: 'building_a', children: ['level_0', 'level_1'] }),
+        LevelNode.parse({
+          id: 'level_0',
+          level: 0,
+          height: 2.5,
+          parentId: 'building_a',
+          children: [...walls.map((wall) => wall.id), 'ceiling_main'],
+        }),
+        LevelNode.parse({ id: 'level_1', level: 1, height: 2.5, parentId: 'building_a' }),
+        ...walls,
+        manualCeiling,
+      ].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+
+    try {
+      // Scenario gate 11's reactive half: the deck lands on the level
+      // ABOVE, so only the covering-underside part of level_0's structure
+      // snapshot changes — the sync must still re-run and clamp down.
+      const deck = SlabNode.parse({
+        id: 'slab_deck',
+        parentId: 'level_1',
+        polygon: square,
+        elevation: 0,
+        thickness: 0.3,
+      })
+      const current = sceneStore.getState().nodes
+      const levelAbove = current.level_1 as AnyNode
+      sceneStore.setNodes({
+        ...current,
+        slab_deck: deck,
+        level_1: { ...levelAbove, children: ['slab_deck'] } as AnyNode,
+      })
+
+      const ceiling = sceneStore.getState().nodes.ceiling_main as CeilingNode
+      expect(ceiling.height).toBeCloseTo(2.5 - 0.3 - 0.01)
+    } finally {
+      unsubscribe()
+    }
   })
 })
 

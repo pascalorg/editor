@@ -209,7 +209,10 @@ export function buildSlabGeometry(
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.slotId = slotId
-    if (elevation < 0) mesh.position.y = elevation
+    // Solid slabs bake [elevation − thickness, elevation] into the geometry;
+    // recessed shells are authored at local Y=0 and sink so the recess floor
+    // sits at `elevation` (< 0) with the shell rim on the level plane.
+    if (node.recessed) mesh.position.y = elevation
     group.add(mesh)
   }
   return group

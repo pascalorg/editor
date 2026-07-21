@@ -153,6 +153,12 @@ export interface EditorProps {
    * only while a node is selected.
    */
   inspectorFooter?: ReactNode
+  /**
+   * Docked below the multi-selection panel (v2). Hosts mount whole-selection
+   * affordances here (e.g. "Save to my catalog"); shows only while more than
+   * one node is selected.
+   */
+  multiSelectionFooter?: ReactNode
 
   /** Host-owned content mounted inside the editor's React Three Fiber scene. */
   viewerSceneSlot?: ReactNode
@@ -1108,6 +1114,7 @@ export default function Editor({
   viewerToolbarRight,
   stageOverlay,
   inspectorFooter,
+  multiSelectionFooter,
   viewerSceneSlot,
   floorplanSceneSlot,
   projectId,
@@ -1412,7 +1419,10 @@ export default function Editor({
                   )}
                   {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
-                      <PanelManager inspectorFooter={inspectorFooter} />
+                      <PanelManager
+                        inspectorFooter={inspectorFooter}
+                        multiSelectionFooter={multiSelectionFooter}
+                      />
                     </div>
                   )}
                   {!isCaptureMode && (

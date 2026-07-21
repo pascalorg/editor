@@ -143,6 +143,20 @@ export const ItemNode = BaseNode.extend({
   roofSegmentId: z.string().optional(),
   roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
+  // Persisted floor-support host (canonical doc — the same field on other
+  // floor-placed kinds and walls follows these rules). Written at
+  // placement/commit ONLY when overlapping slabs disagree on elevation
+  // (ambiguity); absent/null means "elect the support fresh on every
+  // read", which is the historical behavior. Read paths PREFER this slab
+  // while it still exists and still overlaps the node's footprint, and
+  // silently fall back to election otherwise. Deleting the host slab
+  // strips the field (deleteNodesAction); a host merely reshaped away is
+  // deliberately kept so hosting resumes if the slab's polygon returns.
+  // The sentinel value 'ground' (GROUND_SUPPORT_ID) pins the node to the
+  // level base — written when a pointer-capped commit elected the ground
+  // while a slab (e.g. an elevated deck) still overlapped the footprint.
+  supportSlabId: z.string().optional(),
+
   // Denormalized references to collections this node belongs to
   collectionIds: z.array(z.custom<CollectionId>()).optional(),
 

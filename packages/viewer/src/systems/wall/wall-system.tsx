@@ -2,7 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
   getEffectiveNode,
@@ -11,6 +11,7 @@ import {
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallMiterBoundaryPoints,
+  getWallPlaneTop,
   getWallPlanFootprint,
   getWallSurfacePolygon,
   getWallThickness,
@@ -18,6 +19,7 @@ import {
   type Point2D,
   pointToKey,
   resolveLevelId,
+  resolveWallTop,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -222,15 +224,16 @@ function getWallFaceMaterialIndex(
   wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands'>,
   face: 'front' | 'back',
   y: number,
+  effectiveWallHeight: number,
 ): number {
   const semantic = face === 'front' ? wall.frontSide : wall.backSide
   const fallback: WallSurfaceSide = face === 'front' ? 'interior' : 'exterior'
   const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
 
-  const bands = getWallFaceBandConfig(wall)
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return WALL_BAND_SLOT_MATERIAL_INDEX[side]
 
-  const band = getWallFaceBandForHeight(wall, y)
+  const band = getWallFaceBandForHeight(wall, y, effectiveWallHeight)
   return WALL_BAND_SLOT_MATERIAL_INDEX[getWallBandSlotId(side, band)]
 }
 
@@ -238,6 +241,7 @@ function assignWallMaterialGroups(
   geometry: THREE.BufferGeometry,
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
+  effectiveWallHeight: number,
 ) {
   const position = geometry.getAttribute('position')
   if (!position) return
@@ -317,7 +321,12 @@ function assignWallMaterialGroups(
       continue
     }
 
-    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag, centroid.y)
+    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(
+      wall,
+      nearestTag,
+      centroid.y,
+      effectiveWallHeight,
+    )
   }
 
   geometry.clearGroups()
@@ -445,15 +454,15 @@ function splitGeometryAtHorizontalPlanes(
   return split
 }
 
-function getWallBandSplitPlanes(wall: WallNode): number[] {
-  const bands = getWallFaceBandConfig(wall)
+function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): number[] {
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return []
   const planes = [bands.lowerTop]
   if (bands.count >= 3) planes.push(bands.middleTop)
   if (bands.count >= 4) planes.push(bands.upperTop)
   return planes.filter(
     (plane) =>
-      plane > WALL_BAND_SPLIT_EPSILON && plane < (wall.height ?? 2.5) - WALL_BAND_SPLIT_EPSILON,
+      plane > WALL_BAND_SPLIT_EPSILON && plane < effectiveWallHeight - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -695,12 +704,16 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
+  // Covering-clamped plane: a flush/thick slab on the level above shortens
+  // the plane-bound walls below it (explicit-height walls ignore the value).
+  const planeTop = getWallPlaneTop(node, levelId, nodes)
   const slabSupport = spatialGridManager.getSlabSupportForWall(
     levelId,
     node.start,
     node.end,
     node.curveOffset ?? 0,
     node.thickness,
+    node.supportSlabId,
   )
   const slabElevation = slabSupport.elevation
 
@@ -731,6 +744,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     slabElevation,
     slabSupport.baseElevation,
     slabSupport.baseSegments,
+    planeTop,
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -755,6 +769,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       slabElevation,
       slabSupport.baseElevation,
       slabSupport.baseSegments,
+      planeTop,
     )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
@@ -845,14 +860,20 @@ export function generateExtrudedWall(
   baseSegments: readonly WallSlabSupportSegment[] = [
     { start: 0, end: 1, elevation: baseElevation },
   ],
+  storeyHeight = DEFAULT_LEVEL_HEIGHT,
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const wallHeight = wallNode.height ?? DEFAULT_WALL_HEIGHT
-  const topElevation = slabElevation > 0 ? slabElevation + wallHeight : wallHeight
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const effectiveWallHeight = topElevation - slabElevation
   const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
   const localBottom = effectiveBaseElevation - slabElevation
   const height = topElevation - effectiveBaseElevation
+  // A slab at or above the storey plane leaves a plane-bound wall with no
+  // body — bail before ExtrudeGeometry sees a non-positive depth.
+  if (height <= 1e-9) {
+    return new THREE.BufferGeometry()
+  }
 
   const thickness = getWallThickness(wallNode)
 
@@ -913,7 +934,7 @@ export function generateExtrudedWall(
   geometry.rotateX(-Math.PI / 2)
   if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
   geometry.computeVertexNormals()
-  assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
+  assignWallMaterialGroups(geometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(geometry)
 
   // Start with the lowest required wall prism, then remove the volume below
@@ -1015,10 +1036,10 @@ export function generateExtrudedWall(
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
       geometry,
-      getWallBandSplitPlanes(wallNode),
+      getWallBandSplitPlanes(wallNode, effectiveWallHeight),
     )
     splitGeometry.computeVertexNormals()
-    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges)
+    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, effectiveWallHeight)
     ensureRenderableGeometryAttributes(splitGeometry)
     return splitGeometry
   }
@@ -1052,10 +1073,10 @@ export function generateExtrudedWall(
   const resultGeometry = csgGeometry(resultBrush)
   const splitResultGeometry = splitGeometryAtHorizontalPlanes(
     resultGeometry,
-    getWallBandSplitPlanes(wallNode),
+    getWallBandSplitPlanes(wallNode, effectiveWallHeight),
   )
   splitResultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges)
+  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(splitResultGeometry)
 
   return splitResultGeometry

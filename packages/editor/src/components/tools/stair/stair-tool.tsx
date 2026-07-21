@@ -34,6 +34,7 @@ import useFacingPose from '../../../store/use-facing-pose'
 import { useStairBuildPreview } from '../../../store/use-stair-build-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
+import { createStairCommitGate, swallowFollowUpBrowserClick } from './stair-click-guard'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
   DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
@@ -150,7 +151,6 @@ function createDefaultStairNode({
     slabOpeningMode: 'destination',
     openingOffset: DEFAULT_STAIR_OPENING_OFFSET,
     width: DEFAULT_STAIR_WIDTH,
-    totalRise: DEFAULT_STAIR_HEIGHT,
     stepCount: DEFAULT_STAIR_STEP_COUNT,
     thickness: DEFAULT_STAIR_THICKNESS,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
@@ -231,6 +231,9 @@ export const StairTool: React.FC = () => {
     if (!currentLevelId) return
 
     const openingPreview = createSurfaceOpeningPreviewController()
+    // Refuses the duplicate commit triggers a single physical click produces
+    // — see `stair-click-guard.ts`. Fresh per armed session.
+    const commitGate = createStairCommitGate()
 
     // Reset rotation when tool activates
     rotationRef.current = 0
@@ -441,10 +444,20 @@ export const StairTool: React.FC = () => {
 
     const commitAtCursor = (event: ClickTriggerEvent) => {
       if (!currentLevelId) return
+      // One physical click can reach here twice (node click synthesized on
+      // pointerup + the native browser click driving `grid:click`) — see
+      // `stair-click-guard.ts`. The gate refuses anything after a single-
+      // continuation commit; the swallow below eats the same gesture's
+      // follow-up click while the tool stays armed (repeat continuation).
+      if (!commitGate.shouldCommit()) return
       const nodeEvent = 'node' in event ? (event as NodeEvent<AnyNode>) : null
       if (nodeEvent) {
         nodeEvent.stopPropagation()
         nodeEvent.nativeEvent.stopPropagation()
+        // The canvas-level `grid:click` listener is out of stopPropagation's
+        // reach — without this, the browser click that follows this
+        // pointerup-synthesized node click commits a second stair.
+        swallowFollowUpBrowserClick()
       }
 
       const position = nodeEvent
@@ -465,8 +478,14 @@ export const StairTool: React.FC = () => {
       if (useEditor.getState().getContinuation('point') === 'repeat') {
         alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, '', currentLevelId)
       } else {
+        commitGate.markExited()
         useFacingPose.getState().clear()
         useEditor.getState().setTool(null)
+        // Return to select mode explicitly (matches the spawn tool's exit).
+        // The selection managers route node clicks only while
+        // `mode === 'select'`; exiting with `mode: 'build'` + a null tool
+        // left every click dead until the user pressed Escape.
+        useEditor.getState().setMode('select')
       }
     }
 
