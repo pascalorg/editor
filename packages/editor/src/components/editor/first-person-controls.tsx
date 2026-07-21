@@ -15,9 +15,11 @@ import {
   getElevatorShaftDepth,
   getElevatorShaftWallThickness,
   getElevatorShaftWidth,
+  getLevelDisplayName,
   getLevelElevations,
   getResolvedElevatorDoorStyle,
   openElevatorDoor,
+  pointInPolygon2D,
   requestElevatorLevel,
   resolveElevatorBuildingLevels,
   resolveElevatorDispatchTarget,
@@ -26,7 +28,13 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  BVHEcctrl,
+  type BVHEcctrlApi,
+  type MovementInput,
+  useViewer,
+  WALKTHROUGH_FOV,
+} from '@pascal-app/viewer'
 import { KeyboardControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -39,6 +47,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   type Object3D,
+  type PerspectiveCamera,
   Ray,
   Raycaster,
   Vector2,
@@ -46,19 +55,22 @@ import {
 } from 'three'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import '../../three-types'
-import { BVHEcctrl, type BVHEcctrlApi, type MovementInput } from '@pascal-app/viewer'
 import {
   closeDoorOpenState,
   DOOR_SWING_OPEN_ANGLE,
+  getDisplayedDoorValue,
   isOperationDoorType,
   toggleDoorOpenState,
 } from '../../lib/door-interaction'
 import {
   closeWindowOpenState,
+  getDisplayedWindowValue,
   isOperableWindowType,
   toggleWindowOpenState,
 } from '../../lib/window-interaction'
 import useEditor from '../../store/use-editor'
+import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
+import { WalkthroughHud } from '../walkthrough-hud'
 import {
   buildFirstPersonColliderWorldFromRegistry,
   deriveFirstPersonSpawn,
@@ -78,6 +90,7 @@ const ELEVATOR_COLLIDER_FLOOR_THICKNESS = 0.08
 const ELEVATOR_COLLIDER_DOOR_DEPTH = 0.12
 const ELEVATOR_ENTRY_DOOR_OPEN_THRESHOLD = 0.72
 const VOID_FALL_RESPAWN_DEPTH = 12
+const HUD_LABEL_SAMPLE_FRAMES = 10
 
 type MovementKeyName = Exclude<keyof MovementInput, 'joystick'>
 
@@ -146,6 +159,9 @@ const elevatorColliderMaterial = new MeshBasicMaterial({ visible: false })
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
 const windowInteractionRaycaster = new Raycaster()
+const hudBuildingLocalEyePosition = new Vector3()
+const hudWorldEyePosition = new Vector3()
+const hudLevelBounds = new Box3()
 
 type ElevatorColliderKind =
   | 'cab-back'
@@ -200,6 +216,128 @@ type ElevatorButtonTarget = {
   buttonKind: 'cab' | 'landing'
   elevatorId: AnyNodeId
   levelId?: AnyNodeId
+}
+
+function getLevelChildren(
+  level: Extract<AnyNode, { type: 'level' }>,
+  nodes: Record<string, AnyNode>,
+) {
+  const childIds = new Set<string>(level.children)
+  return Object.values(nodes).filter((node) => node.parentId === level.id || childIds.has(node.id))
+}
+
+function pointIsInLevelFootprint(
+  point: [number, number],
+  worldPoint: Vector3,
+  level: Extract<AnyNode, { type: 'level' }>,
+  nodes: Record<string, AnyNode>,
+) {
+  const children = getLevelChildren(level, nodes)
+  const slabs = children.filter(
+    (node): node is Extract<AnyNode, { type: 'slab' }> =>
+      node.type === 'slab' && node.polygon.length >= 3,
+  )
+  const zones = children.filter(
+    (node): node is Extract<AnyNode, { type: 'zone' }> =>
+      node.type === 'zone' && node.polygon.length >= 3,
+  )
+
+  if (slabs.length > 0) {
+    return slabs.some(
+      (slab) =>
+        pointInPolygon2D(point, slab.polygon) &&
+        !slab.holes.some((hole) => pointInPolygon2D(point, hole)),
+    )
+  }
+
+  if (zones.length > 0) {
+    if (zones.some((zone) => pointInPolygon2D(point, zone.polygon))) return true
+  }
+
+  const levelObject = sceneRegistry.nodes.get(level.id)
+  if (!levelObject) return false
+  hudLevelBounds.setFromObject(levelObject)
+  return (
+    !hudLevelBounds.isEmpty() &&
+    worldPoint.x >= hudLevelBounds.min.x &&
+    worldPoint.x <= hudLevelBounds.max.x &&
+    worldPoint.z >= hudLevelBounds.min.z &&
+    worldPoint.z <= hudLevelBounds.max.z
+  )
+}
+
+function resolveFirstPersonHudLabels(worldPoint: Vector3) {
+  const nodes = useScene.getState().nodes
+  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+
+  for (const building of Object.values(nodes)) {
+    if (building.type !== 'building') continue
+    const buildingObject = sceneRegistry.nodes.get(building.id)
+    if (!buildingObject) continue
+
+    buildingObject.updateWorldMatrix(true, true)
+    hudBuildingLocalEyePosition.copy(worldPoint)
+    buildingObject.worldToLocal(hudBuildingLocalEyePosition)
+
+    const levels = Object.values(nodes)
+      .filter((node) => node.type === 'level')
+      .filter((level) => levelElevations.get(level.id)?.buildingId === building.id)
+      .sort(
+        (left, right) =>
+          (levelElevations.get(left.id)?.baseY ?? 0) - (levelElevations.get(right.id)?.baseY ?? 0),
+      )
+
+    let activeLevel: (typeof levels)[number] | null = null
+    for (const level of levels) {
+      const elevation = levelElevations.get(level.id)
+      if (!elevation) continue
+      if (
+        hudBuildingLocalEyePosition.y >= elevation.baseY - 0.5 &&
+        hudBuildingLocalEyePosition.y < elevation.baseY + elevation.height + 0.5
+      ) {
+        activeLevel = level
+      }
+    }
+    if (!activeLevel) continue
+
+    const point: [number, number] = [hudBuildingLocalEyePosition.x, hudBuildingLocalEyePosition.z]
+    if (!pointIsInLevelFootprint(point, worldPoint, activeLevel, nodes)) continue
+
+    const zone = getLevelChildren(activeLevel, nodes).find(
+      (node) =>
+        node.type === 'zone' && node.polygon.length >= 3 && pointInPolygon2D(point, node.polygon),
+    )
+
+    return {
+      floorLabel: getLevelDisplayName(activeLevel),
+      zoneLabel: zone?.type === 'zone' ? zone.name : null,
+    }
+  }
+
+  return { floorLabel: null, zoneLabel: null }
+}
+
+function resolveHudInteract(target: FirstPersonInteractableTarget | null): WalkthroughInteract {
+  if (!target) return null
+  if (target.type === 'elevator') {
+    return {
+      label: target.action === 'open-door' ? 'door button' : 'elevator button',
+      verb: 'press',
+    }
+  }
+
+  const node = useScene.getState().nodes[target.id]
+  if (target.type === 'window') {
+    if (node?.type !== 'window') return null
+    const isOpen = getDisplayedWindowValue(target.id, node.operationState) > 0
+    return { label: node.name || 'window', verb: isOpen ? 'close' : 'open' }
+  }
+
+  if (node?.type !== 'door') return null
+  const isOpen = isOperationDoorType(node.doorType)
+    ? getDisplayedDoorValue(target.id, 'operationState', node.operationState) > 0
+    : getDisplayedDoorValue(target.id, 'swingAngle', node.swingAngle) > 0
+  return { label: node.name || 'door', verb: isOpen ? 'close' : 'open' }
 }
 
 function resolveElevatorButtonTarget(object: Object3D): ElevatorButtonTarget | null {
@@ -553,6 +691,7 @@ export const FirstPersonControls = () => {
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
+  const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -568,6 +707,35 @@ export const FirstPersonControls = () => {
     position: [number, number, number]
     yaw: number
   } | null>(null)
+
+  useEffect(() => {
+    const previousCameraMode = useViewer.getState().cameraMode
+    if (previousCameraMode === 'orthographic') {
+      useViewer.getState().setCameraMode('perspective')
+    }
+    return () => {
+      if (previousCameraMode === 'orthographic') {
+        useViewer.getState().setCameraMode('orthographic')
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const perspectiveCamera = camera as PerspectiveCamera
+    if (!perspectiveCamera.isPerspectiveCamera) return
+    const previousFov = perspectiveCamera.fov
+    perspectiveCamera.fov = WALKTHROUGH_FOV
+    perspectiveCamera.updateProjectionMatrix()
+    return () => {
+      perspectiveCamera.fov = previousFov
+      perspectiveCamera.updateProjectionMatrix()
+    }
+  }, [camera])
+
+  useEffect(() => {
+    useFirstPersonHud.getState().reset()
+    return () => useFirstPersonHud.getState().reset()
+  }, [])
 
   const replaceColliderWorld = useCallback((nextWorld: FirstPersonColliderWorld | null) => {
     worldRef.current?.dispose()
@@ -1326,6 +1494,17 @@ export const FirstPersonControls = () => {
       interactableTargetRef.current = nextInteractableTarget
       useViewer.getState().setHoveredId(nextInteractableTarget?.id ?? null)
     }
+
+    useFirstPersonHud.getState().setHud({
+      interact: resolveHudInteract(nextInteractableTarget),
+    })
+
+    hudLabelFrameRef.current += 1
+    if (hudLabelFrameRef.current >= HUD_LABEL_SAMPLE_FRAMES) {
+      hudLabelFrameRef.current = 0
+      camera.getWorldPosition(hudWorldEyePosition)
+      useFirstPersonHud.getState().setHud(resolveFirstPersonHudLabels(hudWorldEyePosition))
+    }
   }, 2.5)
 
   useEffect(() => {
@@ -1383,27 +1562,13 @@ export const FirstPersonControls = () => {
   )
 }
 
-/**
- * Overlay UI for first-person mode: crosshair, controls hint, exit button.
- * Rendered as a regular DOM overlay (not inside the Canvas).
- */
 export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
-  const [isLocked, setIsLocked] = useState(false)
   const hasPlacedSpawn = useScene((state) =>
     Object.values(state.nodes).some((node) => node.type === 'spawn'),
   )
-
-  useEffect(() => {
-    const handlePointerLockChange = () => {
-      setIsLocked(document.pointerLockElement != null)
-    }
-
-    handlePointerLockChange()
-    document.addEventListener('pointerlockchange', handlePointerLockChange)
-    return () => {
-      document.removeEventListener('pointerlockchange', handlePointerLockChange)
-    }
-  }, [])
+  const floorLabel = useFirstPersonHud((state) => state.floorLabel)
+  const zoneLabel = useFirstPersonHud((state) => state.zoneLabel)
+  const interact = useFirstPersonHud((state) => state.interact)
 
   const handleExit = useCallback(() => {
     if (document.pointerLockElement) {
@@ -1413,86 +1578,17 @@ export const FirstPersonOverlay = ({ onExit }: { onExit: () => void }) => {
   }, [onExit])
 
   return (
-    <>
-      {isLocked && (
-        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center">
-          <div className="relative h-7 w-7">
-            <div className="absolute top-1/2 left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-white/60" />
-            <div className="absolute top-1/2 left-1/2 h-7 w-px -translate-x-1/2 -translate-y-1/2 bg-white/60" />
-          </div>
-        </div>
-      )}
-
-      <div className="absolute top-4 right-4 z-50">
-        <button
-          className="pointer-events-auto flex items-center gap-2 rounded-xl border border-border/40 bg-background/90 px-4 py-2 font-medium text-foreground text-sm shadow-lg backdrop-blur-xl transition-colors hover:bg-background"
-          onClick={handleExit}
-          type="button"
-        >
-          <kbd className="rounded border border-border/50 bg-accent/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            ESC
-          </kbd>
-          Exit Street View
-        </button>
-      </div>
-
+    <WalkthroughHud
+      floorLabel={floorLabel}
+      interact={interact}
+      onExit={handleExit}
+      zoneLabel={zoneLabel}
+    >
       {!hasPlacedSpawn && (
-        <div className="absolute top-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="rounded-2xl border border-sky-300/35 bg-slate-950/88 px-4 py-2 text-center text-slate-100 text-sm shadow-lg backdrop-blur-xl">
-            Place a Spawn Point from the Build tab to control where walkthrough starts.
-          </div>
+        <div className="corner-smooth rounded-full border border-border/40 bg-background/80 px-3 py-1 text-center text-muted-foreground text-xs shadow-elevation-3 backdrop-blur-xl">
+          Place a spawn point from the Build tab to control where walkthrough starts.
         </div>
       )}
-
-      {isLocked && (
-        <div className="pointer-events-none absolute top-1/2 right-6 z-40 -translate-y-1/2">
-          <div className="flex min-w-[148px] flex-col gap-3 rounded-2xl border border-border/35 bg-background/80 px-4 py-4 shadow-lg backdrop-blur-xl">
-            <ControlHint keys={['W', 'A', 'S', 'D']} label="Move" />
-            <div className="h-px w-full bg-border/30" />
-            <InlineControlHint keyLabel="Space" label="Jump" />
-            <InlineControlHint keyLabel="Shift" label="Sprint" />
-            <InlineControlHint keyLabel="E / R" label="Interact" />
-            <InlineControlHint keyLabel="T" label="Close" />
-            <div className="h-px w-full bg-border/30" />
-            <span className="text-center text-muted-foreground/60 text-xs">
-              Click to look around
-            </span>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
-function ControlHint({ label, keys }: { label: string; keys: string[] }) {
-  return (
-    <div className="flex flex-col items-center gap-1.5 text-center">
-      <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {label}
-      </span>
-      <div className="flex flex-wrap items-center justify-center gap-1">
-        {keys.map((key) => (
-          <kbd
-            className="flex h-5 min-w-5 items-center justify-center rounded border border-border/50 bg-accent/40 px-1 font-mono text-[10px] text-foreground/80 leading-none"
-            key={key}
-          >
-            {key}
-          </kbd>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function InlineControlHint({ label, keyLabel }: { label: string; keyLabel: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="font-medium text-[10px] text-muted-foreground/60 uppercase tracking-[0.03em]">
-        {label}
-      </span>
-      <kbd className="flex h-5 min-w-5 items-center justify-center rounded border border-border/50 bg-accent/40 px-1.5 font-mono text-[10px] text-foreground/80 leading-none">
-        {keyLabel}
-      </kbd>
-    </div>
+    </WalkthroughHud>
   )
 }

@@ -26,6 +26,7 @@ export { default as Editor } from './components/editor'
 // surface uses the shorter, shell-friendly names from the unified
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
+export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
 // authentic selection handles, interactive build tools, and the mover on top
@@ -261,6 +262,11 @@ export {
   SnapTargetBadge,
   SnapTargetIcon,
 } from './components/ui/snap-target-badge'
+export {
+  WalkthroughHud,
+  type WalkthroughHudProps,
+  type WalkthroughInteract,
+} from './components/walkthrough-hud'
 export type { SaveStatus } from './hooks/use-auto-save'
 // useDragAction is the React-side glue for the registry's DragAction
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
@@ -470,6 +476,7 @@ export {
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
+export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export {
   default as useInteractionScope,

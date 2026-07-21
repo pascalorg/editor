@@ -923,7 +923,7 @@ export function GlbScene({
   })
 
   // E or click activates the openable in view. The click also re-locks the
-  // pointer via WalkthroughControls — harmless overlap; no selection happens.
+  // pointer through the walkthrough controller; no selection happens.
   const activateWalkDoor = useCallback(() => {
     if (walkDoorRef.current) toggleOpenable(walkDoorRef.current)
   }, [toggleOpenable])

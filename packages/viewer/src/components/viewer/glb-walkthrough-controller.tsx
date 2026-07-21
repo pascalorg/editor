@@ -25,7 +25,12 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
-import { WALKTHROUGH_FOV } from './walkthrough-controls'
+
+// First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
+// cramped on foot; ~60° vertical (~90° horizontal at 16:9) restores peripheral
+// awareness without wide-angle distortion. Applied only while walking — both
+// walkthrough controllers read this and restore the orbit FOV on exit.
+export const WALKTHROUGH_FOV = 60
 
 // Eye/capsule geometry mirrors the editor's first-person controller so the
 // baked walkthrough feels identical. The capsule centre sits below the eye; the
