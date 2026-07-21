@@ -82,6 +82,8 @@ export type {
   FloorplanAffordancePoint,
   FloorplanAffordanceSession,
   FloorplanAnnotationRole,
+  FloorplanDimensionTerminator,
+  FloorplanDimensionTextPosition,
   FloorplanGeometry,
   FloorplanMoveTarget,
   FloorplanMoveTargetSession,

@@ -177,6 +177,37 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
   })
 
+  test('passes persistent dimension standards to linear dimension strings', () => {
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        [0, 0, 0],
+        [2, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      datumPolicy: 'finish-face',
+      terminator: 'dot',
+      textPosition: 'centered',
+      metricNotation: 'millimeters',
+      extensionStartGap: 0.025,
+      extensionOvershoot: 0.08,
+      reference: true,
+      referenceStyle: 'suffix',
+    })
+
+    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const string = geometry
+      ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
+      : null
+
+    expect(string).toMatchObject({
+      terminator: 'dot',
+      textPosition: 'centered',
+      extensionStartGap: 0.025,
+      extensionOvershoot: 0.08,
+    })
+    expect(dimensionSegments(geometry)[0]?.text).toBe('2000 REF')
+  })
+
   test('shows witness and baseline handles only while selected', () => {
     const node = ConstructionDimensionNode.parse({})
     const idle = buildConstructionDimensionFloorplan(node, context())

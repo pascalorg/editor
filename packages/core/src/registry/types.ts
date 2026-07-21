@@ -216,6 +216,14 @@ export type FloorplanPalette = {
 
 export type FloorplanPoint = readonly [x: number, y: number]
 
+export type FloorplanDimensionTerminator =
+  | 'architectural-tick'
+  | 'filled-arrow'
+  | 'open-arrow'
+  | 'dot'
+
+export type FloorplanDimensionTextPosition = 'above' | 'centered'
+
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
   | 'column-center'
@@ -662,6 +670,12 @@ export type FloorplanGeometry =
       offsetDistance: number
       /** How far past the offset point the extension line continues. */
       extensionOvershoot: number
+      /** Optional gap before each extension line starts. Defaults to the project/document profile. */
+      extensionStartGap?: number
+      /** Dimension-line terminator. Defaults to an architectural tick. */
+      terminator?: FloorplanDimensionTerminator
+      /** Dimension text position relative to the baseline. Defaults above the line. */
+      textPosition?: FloorplanDimensionTextPosition
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
@@ -688,6 +702,12 @@ export type FloorplanGeometry =
       offsetDistance: number
       /** How far past each offset point the extension line continues. */
       extensionOvershoot: number
+      /** Optional gap before each extension line starts. Defaults to the project/document profile. */
+      extensionStartGap?: number
+      /** Dimension-line terminator shared by every segment. Defaults to an architectural tick. */
+      terminator?: FloorplanDimensionTerminator
+      /** Dimension text position shared by every segment. Defaults above the line. */
+      textPosition?: FloorplanDimensionTextPosition
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
       /** Semantic annotation role used by editor visibility and export filters. */

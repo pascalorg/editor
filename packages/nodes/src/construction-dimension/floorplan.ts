@@ -8,7 +8,10 @@ import type {
 } from '@pascal-app/core'
 import { constructionDimensionRequiredAnchorCount } from '@pascal-app/core'
 import { resolveMeasurementAnchor } from '../measurement/resolve'
-import { formatConstructionLength } from '../shared/construction-length'
+import {
+  type ConstructionLengthFormatOptions,
+  formatConstructionLength,
+} from '../shared/construction-length'
 import { buildDimensionStringGeometry } from '../shared/dimension-string'
 import {
   resolveCircularConstructionDimensionLayout,
@@ -77,7 +80,7 @@ function buildLinearOrChord(
   const layout = resolveConstructionDimensionLayout(node, points)
   const children: FloorplanGeometry[] = []
   const dimensionSegments = layout.segments.map((segment) => {
-    const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit)}`
+    const baseText = `${node.mode === 'chord' ? 'CH ' : ''}${formatConstructionLength(segment.value, unit, 'editor', lengthFormatOptions(node))}`
     return {
       witnessStart: segment.witnessStart,
       witnessEnd: segment.witnessEnd,
@@ -91,7 +94,10 @@ function buildLinearOrChord(
       segments: dimensionSegments,
       offsetNormal: layout.normal,
       offsetDistance: 0,
-      extensionOvershoot: 0.12,
+      extensionStartGap: node.extensionStartGap,
+      extensionOvershoot: node.extensionOvershoot,
+      terminator: node.terminator,
+      textPosition: node.textPosition,
       stroke,
     }),
     ...layout.segments.map((segment) => hitLine(segment.dimensionStart, segment.dimensionEnd)),
@@ -117,7 +123,11 @@ function buildRadius(
     ...openArrow(layout.start, layout.center, stroke),
     labelGeometry(
       labelPoint,
-      notation(node, `R ${formatConstructionLength(layout.radius, unit)}`, dangling),
+      notation(
+        node,
+        `R ${formatConstructionLength(layout.radius, unit, 'editor', lengthFormatOptions(node))}`,
+        dangling,
+      ),
       angle(layout.start, labelPoint),
     ),
   ]
@@ -141,12 +151,17 @@ function buildDiameter(
   const normal: FloorplanPoint = [-direction[1], direction[0]]
   const children: FloorplanGeometry[] = [
     dimensionGeometry(
+      node,
       layout.start,
       layout.end,
       layout.start,
       layout.end,
       normal,
-      notation(node, `Ø ${formatConstructionLength(layout.radius * 2, unit)}`, dangling),
+      notation(
+        node,
+        `Ø ${formatConstructionLength(layout.radius * 2, unit, 'editor', lengthFormatOptions(node))}`,
+        dangling,
+      ),
       stroke,
     ),
     hitLine(layout.start, layout.end),
@@ -202,7 +217,11 @@ function buildArcLength(
     ),
     labelGeometry(
       labelPoint,
-      notation(node, `ARC ${formatConstructionLength(layout.arcLength, unit)}`, dangling),
+      notation(
+        node,
+        `ARC ${formatConstructionLength(layout.arcLength, unit, 'editor', lengthFormatOptions(node))}`,
+        dangling,
+      ),
       0,
       true,
     ),
@@ -262,7 +281,7 @@ function buildCoordinate(
     const dy = feature[1] - datum[1]
     const label = notation(
       node,
-      `P${index + 1} · X ${formatConstructionLength(dx, unit)} · Y ${formatConstructionLength(dy, unit)}`,
+      `P${index + 1} · X ${formatConstructionLength(dx, unit, 'editor', lengthFormatOptions(node))} · Y ${formatConstructionLength(dy, unit, 'editor', lengthFormatOptions(node))}`,
       dangling,
       false,
     )
@@ -276,6 +295,13 @@ function buildCoordinate(
   return { kind: 'group', children }
 }
 
+function lengthFormatOptions(node: ConstructionDimensionNode): ConstructionLengthFormatOptions {
+  return {
+    imperialPrecision: node.imperialPrecision,
+    metricNotation: node.metricNotation,
+  }
+}
+
 function notation(
   node: ConstructionDimensionNode,
   base: string,
@@ -285,11 +311,16 @@ function notation(
   const repeated = includeFeatureCount && node.featureCount > 1 ? `${node.featureCount} x ` : ''
   const content = node.textOverride ?? `${repeated}${base}`
   const decorated = `${node.prefix}${content}${node.suffix}`
-  const referenced = node.reference ? `(${decorated})` : decorated
+  const referenced = node.reference
+    ? node.referenceStyle === 'suffix'
+      ? `${decorated} REF`
+      : `(${decorated})`
+    : decorated
   return dangling ? `UNLINKED · ${referenced}` : referenced
 }
 
 function dimensionGeometry(
+  node: ConstructionDimensionNode,
   start: FloorplanPoint,
   end: FloorplanPoint,
   dimensionStart: FloorplanPoint,
@@ -306,7 +337,10 @@ function dimensionGeometry(
     dimensionEnd,
     offsetNormal,
     offsetDistance: 0,
-    extensionOvershoot: 0.12,
+    extensionStartGap: node.extensionStartGap,
+    extensionOvershoot: node.extensionOvershoot,
+    terminator: node.terminator,
+    textPosition: node.textPosition,
     text,
     stroke,
   }

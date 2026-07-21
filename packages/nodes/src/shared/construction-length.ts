@@ -3,16 +3,26 @@ const IMPERIAL_FRACTION_DENOMINATOR = 16
 
 export type ConstructionLinearUnit = 'metric' | 'imperial'
 export type ConstructionLengthProfile = 'editor' | 'document'
+export type ConstructionMetricNotation = 'meters' | 'millimeters'
+export type ConstructionImperialPrecision = '1' | '1/2' | '1/4' | '1/8' | '1/16'
+
+export type ConstructionLengthFormatOptions = {
+  metricNotation?: ConstructionMetricNotation
+  imperialPrecision?: ConstructionImperialPrecision
+}
 
 export function formatConstructionLength(
   meters: number,
   unit: ConstructionLinearUnit,
   profile: ConstructionLengthProfile = 'editor',
+  options: ConstructionLengthFormatOptions = {},
 ): string {
   if (!Number.isFinite(meters)) return '--'
 
   if (unit === 'metric') {
-    if (profile === 'document') return `${Math.round(meters * 1000)}`
+    if (profile === 'document' || options.metricNotation === 'millimeters') {
+      return `${Math.round(meters * 1000)}`
+    }
 
     const rounded = Number.parseFloat(Math.abs(meters).toFixed(2))
     const sign = meters < 0 && rounded !== 0 ? '-' : ''
@@ -20,19 +30,33 @@ export function formatConstructionLength(
   }
 
   const sign = meters < 0 ? '-' : ''
-  const totalFractionUnits = Math.round(
-    Math.abs(meters) * INCHES_PER_METER * IMPERIAL_FRACTION_DENOMINATOR,
-  )
-  const unitsPerFoot = 12 * IMPERIAL_FRACTION_DENOMINATOR
+  const denominator = imperialPrecisionDenominator(options.imperialPrecision)
+  const totalFractionUnits = Math.round(Math.abs(meters) * INCHES_PER_METER * denominator)
+  const unitsPerFoot = 12 * denominator
   const feet = Math.floor(totalFractionUnits / unitsPerFoot)
   const remainder = totalFractionUnits - feet * unitsPerFoot
-  const inches = Math.floor(remainder / IMPERIAL_FRACTION_DENOMINATOR)
-  const numerator = remainder - inches * IMPERIAL_FRACTION_DENOMINATOR
-  const fraction = formatFraction(numerator, IMPERIAL_FRACTION_DENOMINATOR)
+  const inches = Math.floor(remainder / denominator)
+  const numerator = remainder - inches * denominator
+  const fraction = formatFraction(numerator, denominator)
   const inchText = fraction ? `${inches} ${fraction}` : `${inches}`
 
   if (feet === 0) return `${sign}${inchText}"`
   return `${sign}${feet}'-${inchText}"`
+}
+
+function imperialPrecisionDenominator(precision?: ConstructionImperialPrecision): number {
+  switch (precision) {
+    case '1':
+      return 1
+    case '1/2':
+      return 2
+    case '1/4':
+      return 4
+    case '1/8':
+      return 8
+    default:
+      return IMPERIAL_FRACTION_DENOMINATOR
+  }
 }
 
 function formatFraction(numerator: number, denominator: number): string {

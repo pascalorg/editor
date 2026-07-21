@@ -243,16 +243,24 @@ The automatic wall planner and manual construction-dimension node should converg
 
 ### 2.4 Add project and drawing dimension standards
 
+Status: initial persistent standards are implemented on manual construction dimensions and flow
+through the shared dimension-string renderer. Each dimension now stores datum policy, terminator,
+text position, imperial precision, metric notation, extension-line gap/overshoot, and
+reference-dimension style; the selected-dimension panel exposes those controls. Linear/chord and
+diameter dimensions render the stored line standards, and metric/imperial notation uses the stored
+precision. Project-level drawing profiles, automatic wall-string tier spacing, and assembly-aware
+datum resolution remain.
+
 Suggested settings:
 
-- Datum policy: centerline, wall face, structural face, or finish face.
-- Terminator: architectural tick, filled arrow, open arrow, or dot.
-- Text position: above or centered.
-- Imperial precision.
-- Metric notation.
+- [x] Datum policy: centerline, wall face, structural face, or finish face.
+- [x] Terminator: architectural tick, filled arrow, open arrow, or dot.
+- [x] Text position: above or centered.
+- [x] Imperial precision.
+- [x] Metric notation.
 - First-string offset and tier spacing in paper units.
-- Extension-line gap and overshoot.
-- Reference-dimension style.
+- [x] Extension-line gap and overshoot.
+- [x] Reference-dimension style.
 
 The current architectural tick can remain the default.
 

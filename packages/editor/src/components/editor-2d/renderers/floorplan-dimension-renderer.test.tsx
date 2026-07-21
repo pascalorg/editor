@@ -42,6 +42,25 @@ describe('architectural floor-plan dimensions', () => {
     expect(layout?.tickHalfVector[1]).toBeCloseTo(-0.06364, 5)
   })
 
+  test('honors dimension standard overrides for gaps, terminators, and text placement', () => {
+    const customDimension = {
+      ...dimension,
+      extensionStartGap: 0.2,
+      terminator: 'dot',
+      textPosition: 'centered',
+    } satisfies Extract<FloorplanGeometry, { kind: 'dimension' }>
+    const layout = computeArchitecturalDimensionLayout(customDimension, 0)
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanDimensionRenderer geometry={customDimension} />
+      </svg>,
+    )
+
+    expect(layout?.extensionStart).toEqual([0, 0.2])
+    expect(markup).toContain('<circle')
+    expect(markup).toContain('y="0.0525"')
+  })
+
   test('moves a short value beyond its end tick and extends the dimension line', () => {
     const shortDimension = {
       ...dimension,
@@ -167,6 +186,7 @@ describe('architectural floor-plan dimensions', () => {
       offsetNormal: [0, 1],
       offsetDistance: 1,
       extensionOvershoot: 0.12,
+      textPosition: 'above',
     } satisfies Extract<FloorplanGeometry, { kind: 'dimension-string' }>
 
     const markup = renderToStaticMarkup(

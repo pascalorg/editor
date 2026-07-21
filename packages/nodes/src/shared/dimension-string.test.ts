@@ -6,7 +6,10 @@ describe('buildDimensionStringGeometry', () => {
     const geometry = buildDimensionStringGeometry({
       offsetNormal: [0, 1],
       offsetDistance: 0,
+      extensionStartGap: 0.04,
       extensionOvershoot: 0.12,
+      terminator: 'dot',
+      textPosition: 'centered',
       stroke: '#334155',
       segments: [
         {
@@ -31,7 +34,10 @@ describe('buildDimensionStringGeometry', () => {
         kind: 'dimension-string',
         offsetNormal: [0, 1],
         offsetDistance: 0,
+        extensionStartGap: 0.04,
         extensionOvershoot: 0.12,
+        terminator: 'dot',
+        textPosition: 'centered',
         stroke: '#334155',
         segments: [
           {

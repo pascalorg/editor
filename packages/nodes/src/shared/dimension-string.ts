@@ -1,4 +1,9 @@
-import type { FloorplanGeometry, FloorplanPoint } from '@pascal-app/core'
+import type {
+  FloorplanDimensionTerminator,
+  FloorplanDimensionTextPosition,
+  FloorplanGeometry,
+  FloorplanPoint,
+} from '@pascal-app/core'
 
 export type DimensionStringSegment = {
   witnessStart: FloorplanPoint
@@ -12,7 +17,10 @@ export type DimensionStringGeometryInput = {
   segments: readonly DimensionStringSegment[]
   offsetNormal: FloorplanPoint
   offsetDistance?: number
+  extensionStartGap?: number
   extensionOvershoot?: number
+  terminator?: FloorplanDimensionTerminator
+  textPosition?: FloorplanDimensionTextPosition
   stroke?: string
 }
 
@@ -30,7 +38,10 @@ export function buildDimensionStringGeometry(
     })),
     offsetNormal: input.offsetNormal,
     offsetDistance: input.offsetDistance ?? 0,
+    extensionStartGap: input.extensionStartGap,
     extensionOvershoot: input.extensionOvershoot ?? 0,
+    terminator: input.terminator,
+    textPosition: input.textPosition,
     stroke: input.stroke,
   }
 }

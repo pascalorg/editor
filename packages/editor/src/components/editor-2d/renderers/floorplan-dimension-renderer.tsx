@@ -19,6 +19,7 @@ const SQRT_ONE_HALF = Math.SQRT1_2
 
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 type DimensionStringGeometry = Extract<FloorplanGeometry, { kind: 'dimension-string' }>
+type DimensionTerminator = NonNullable<DimensionGeometry['terminator']>
 
 export type ArchitecturalDimensionLayout = {
   dimensionStart: FloorplanPoint
@@ -48,7 +49,7 @@ export function computeArchitecturalDimensionLayout(
 ): ArchitecturalDimensionLayout | null {
   const extensionStartGap = annotationUnitsPerPoint
     ? DOCUMENT_EXTENSION_START_GAP_PT * annotationUnitsPerPoint
-    : EXTENSION_START_GAP
+    : (geometry.extensionStartGap ?? EXTENSION_START_GAP)
   const extensionOvershoot = annotationUnitsPerPoint
     ? DOCUMENT_EXTENSION_OVERSHOOT_PT * annotationUnitsPerPoint
     : geometry.extensionOvershoot
@@ -174,6 +175,7 @@ export function FloorplanDimensionRenderer({
   const labelBaselineOffset = annotationUnitsPerPoint
     ? DOCUMENT_LABEL_BASELINE_OFFSET_PT * annotationUnitsPerPoint
     : LABEL_BASELINE_OFFSET
+  const labelY = geometry.textPosition === 'centered' ? labelFontSize * 0.35 : -labelBaselineOffset
 
   const lineProps = {
     stroke,
@@ -181,7 +183,7 @@ export function FloorplanDimensionRenderer({
     strokeWidth: LINE_STROKE_WIDTH_PX,
     vectorEffect: 'non-scaling-stroke' as const,
   }
-  const [tickX, tickY] = layout.tickHalfVector
+  const terminator = geometry.terminator ?? 'architectural-tick'
   const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
   const outsideStartLocalShift = layout.outsideStartLabelPoint
     ? rotateVector(
@@ -222,22 +224,8 @@ export function FloorplanDimensionRenderer({
         y1={layout.dimensionLineStart[1]}
         y2={layout.dimensionLineEnd[1]}
       />
-      <line
-        {...lineProps}
-        strokeWidth={TICK_STROKE_WIDTH_PX}
-        x1={layout.dimensionStart[0] - tickX}
-        x2={layout.dimensionStart[0] + tickX}
-        y1={layout.dimensionStart[1] - tickY}
-        y2={layout.dimensionStart[1] + tickY}
-      />
-      <line
-        {...lineProps}
-        strokeWidth={TICK_STROKE_WIDTH_PX}
-        x1={layout.dimensionEnd[0] - tickX}
-        x2={layout.dimensionEnd[0] + tickX}
-        y1={layout.dimensionEnd[1] - tickY}
-        y2={layout.dimensionEnd[1] + tickY}
-      />
+      {renderTerminator(terminator, layout.dimensionStart, layout.dimensionEnd, layout, lineProps)}
+      {renderTerminator(terminator, layout.dimensionEnd, layout.dimensionStart, layout, lineProps)}
       {layout.labelPlacement === 'outside-end' && annotationUnitsPerPoint !== undefined ? (
         <line
           {...lineProps}
@@ -276,7 +264,7 @@ export function FloorplanDimensionRenderer({
           textAnchor="middle"
           vectorEffect="non-scaling-stroke"
           x={0}
-          y={-labelBaselineOffset}
+          y={labelY}
         >
           {geometry.text}
         </text>
@@ -306,6 +294,9 @@ export function FloorplanDimensionStringRenderer({
       offsetNormal: geometry.offsetNormal,
       offsetDistance: geometry.offsetDistance,
       extensionOvershoot: geometry.extensionOvershoot,
+      extensionStartGap: geometry.extensionStartGap,
+      terminator: geometry.terminator,
+      textPosition: geometry.textPosition,
       text: segment.text,
       stroke: geometry.stroke,
     }
@@ -324,6 +315,7 @@ export function FloorplanDimensionStringRenderer({
   const labelBaselineOffset = annotationUnitsPerPoint
     ? DOCUMENT_LABEL_BASELINE_OFFSET_PT * annotationUnitsPerPoint
     : LABEL_BASELINE_OFFSET
+  const labelY = geometry.textPosition === 'centered' ? labelFontSize * 0.35 : -labelBaselineOffset
   const lineProps = {
     stroke,
     strokeLinecap: 'butt' as const,
@@ -332,7 +324,10 @@ export function FloorplanDimensionStringRenderer({
   }
 
   const extensionLines = new Map<string, { start: FloorplanPoint; tip: FloorplanPoint }>()
-  const ticks = new Map<string, { point: FloorplanPoint; tickHalfVector: FloorplanPoint }>()
+  const ticks = new Map<
+    string,
+    { point: FloorplanPoint; toward: FloorplanPoint; tickHalfVector: FloorplanPoint }
+  >()
   for (const { layout } of segmentLayouts) {
     extensionLines.set(pointKey(layout.dimensionStart), {
       start: layout.extensionStart,
@@ -344,13 +339,16 @@ export function FloorplanDimensionStringRenderer({
     })
     ticks.set(pointKey(layout.dimensionStart), {
       point: layout.dimensionStart,
+      toward: layout.dimensionEnd,
       tickHalfVector: layout.tickHalfVector,
     })
     ticks.set(pointKey(layout.dimensionEnd), {
       point: layout.dimensionEnd,
+      toward: layout.dimensionStart,
       tickHalfVector: layout.tickHalfVector,
     })
   }
+  const terminator = geometry.terminator ?? 'architectural-tick'
 
   return (
     <g data-floorplan-dimension-string="" pointerEvents="none">
@@ -383,17 +381,9 @@ export function FloorplanDimensionStringRenderer({
           y2={layout.dimensionLineEnd[1]}
         />
       ))}
-      {[...ticks.values()].map(({ point, tickHalfVector }, index) => (
-        <line
-          {...lineProps}
-          key={`tick-${index}`}
-          strokeWidth={TICK_STROKE_WIDTH_PX}
-          x1={point[0] - tickHalfVector[0]}
-          x2={point[0] + tickHalfVector[0]}
-          y1={point[1] - tickHalfVector[1]}
-          y2={point[1] + tickHalfVector[1]}
-        />
-      ))}
+      {[...ticks.values()].map(({ point, toward, tickHalfVector }, index) =>
+        renderTerminator(terminator, point, toward, { tickHalfVector }, lineProps, `tick-${index}`),
+      )}
       {segmentLayouts.map(({ index, layout, segment }) => {
         const labelTransform = `translate(${layout.labelPoint[0]} ${layout.labelPoint[1]}) rotate(${layout.labelAngleDeg})`
         const outsideStartLocalShift = layout.outsideStartLabelPoint
@@ -442,7 +432,7 @@ export function FloorplanDimensionStringRenderer({
                 textAnchor="middle"
                 vectorEffect="non-scaling-stroke"
                 x={0}
-                y={-labelBaselineOffset}
+                y={labelY}
               >
                 {segment.text}
               </text>
@@ -458,6 +448,92 @@ function rotateVector(vector: FloorplanPoint, radians: number): FloorplanPoint {
   const cosine = Math.cos(radians)
   const sine = Math.sin(radians)
   return [vector[0] * cosine - vector[1] * sine, vector[0] * sine + vector[1] * cosine]
+}
+
+function renderTerminator(
+  terminator: DimensionTerminator,
+  point: FloorplanPoint,
+  toward: FloorplanPoint,
+  layout: Pick<ArchitecturalDimensionLayout, 'tickHalfVector'>,
+  lineProps: {
+    stroke: string
+    strokeLinecap: 'butt'
+    strokeWidth: number
+    vectorEffect: 'non-scaling-stroke'
+  },
+  key?: string,
+): React.ReactElement | null {
+  const direction = normalized(point, toward)
+  if (!direction) return null
+  const tickHalfLength = Math.hypot(layout.tickHalfVector[0], layout.tickHalfVector[1])
+  if (terminator === 'dot') {
+    return (
+      <circle
+        fill={lineProps.stroke}
+        key={key}
+        r={tickHalfLength * 0.45}
+        vectorEffect="non-scaling-stroke"
+        cx={point[0]}
+        cy={point[1]}
+      />
+    )
+  }
+  if (terminator === 'filled-arrow' || terminator === 'open-arrow') {
+    const base = addScaled(point, direction, tickHalfLength * 1.7)
+    const normal: FloorplanPoint = [-direction[1], direction[0]]
+    const wing = tickHalfLength * 0.65
+    const left: FloorplanPoint = [base[0] + normal[0] * wing, base[1] + normal[1] * wing]
+    const right: FloorplanPoint = [base[0] - normal[0] * wing, base[1] - normal[1] * wing]
+    if (terminator === 'filled-arrow') {
+      return (
+        <polygon
+          fill={lineProps.stroke}
+          key={key}
+          points={`${point[0]},${point[1]} ${left[0]},${left[1]} ${right[0]},${right[1]}`}
+          vectorEffect="non-scaling-stroke"
+        />
+      )
+    }
+    return (
+      <g key={key}>
+        <line
+          {...lineProps}
+          strokeWidth={TICK_STROKE_WIDTH_PX}
+          x1={point[0]}
+          x2={left[0]}
+          y1={point[1]}
+          y2={left[1]}
+        />
+        <line
+          {...lineProps}
+          strokeWidth={TICK_STROKE_WIDTH_PX}
+          x1={point[0]}
+          x2={right[0]}
+          y1={point[1]}
+          y2={right[1]}
+        />
+      </g>
+    )
+  }
+  const [tickX, tickY] = layout.tickHalfVector
+  return (
+    <line
+      {...lineProps}
+      key={key}
+      strokeWidth={TICK_STROKE_WIDTH_PX}
+      x1={point[0] - tickX}
+      x2={point[0] + tickX}
+      y1={point[1] - tickY}
+      y2={point[1] + tickY}
+    />
+  )
+}
+
+function normalized(start: FloorplanPoint, end: FloorplanPoint): FloorplanPoint | null {
+  const dx = end[0] - start[0]
+  const dy = end[1] - start[1]
+  const magnitude = Math.hypot(dx, dy)
+  return magnitude <= 1e-6 ? null : [dx / magnitude, dy / magnitude]
 }
 
 function pointKey(point: FloorplanPoint): string {

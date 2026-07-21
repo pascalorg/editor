@@ -25,6 +25,14 @@ describe('ConstructionDimensionNode', () => {
       prefix: '',
       suffix: '',
       textOverride: null,
+      datumPolicy: 'centerline',
+      terminator: 'architectural-tick',
+      textPosition: 'above',
+      imperialPrecision: '1/16',
+      metricNotation: 'meters',
+      extensionStartGap: 0.075,
+      extensionOvershoot: 0.12,
+      referenceStyle: 'parentheses',
       drawingType: 'floor-plan',
       drawingOverrides: [],
       controllingDimensionId: null,
@@ -82,6 +90,32 @@ describe('ConstructionDimensionNode', () => {
     expect(ConstructionDimensionNode.safeParse({ mode: 'angular' }).success).toBe(true)
     expect(ConstructionDimensionNode.safeParse({ featureCount: 0 }).success).toBe(false)
     expect(ConstructionDimensionNode.safeParse({ textOverride: '' }).success).toBe(false)
+  })
+
+  test('accepts dimension-standard overrides and rejects invalid drafting distances', () => {
+    const node = ConstructionDimensionNode.parse({
+      datumPolicy: 'finish-face',
+      terminator: 'filled-arrow',
+      textPosition: 'centered',
+      imperialPrecision: '1/8',
+      metricNotation: 'millimeters',
+      extensionStartGap: 0.025,
+      extensionOvershoot: 0.08,
+      referenceStyle: 'suffix',
+    })
+
+    expect(node).toMatchObject({
+      datumPolicy: 'finish-face',
+      terminator: 'filled-arrow',
+      textPosition: 'centered',
+      imperialPrecision: '1/8',
+      metricNotation: 'millimeters',
+      extensionStartGap: 0.025,
+      extensionOvershoot: 0.08,
+      referenceStyle: 'suffix',
+    })
+    expect(ConstructionDimensionNode.safeParse({ extensionStartGap: -0.01 }).success).toBe(false)
+    expect(ConstructionDimensionNode.safeParse({ extensionOvershoot: 2 }).success).toBe(false)
   })
 
   test('coordinates one associative dimension across persistent drawing types', () => {

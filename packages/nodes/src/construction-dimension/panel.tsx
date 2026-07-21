@@ -2,8 +2,14 @@
 
 import {
   type AnyNodeId,
+  type ConstructionDimensionDatumPolicy,
   type ConstructionDimensionDrawingPresentation,
+  type ConstructionDimensionImperialPrecision,
+  type ConstructionDimensionMetricNotation,
   type ConstructionDimensionNode,
+  type ConstructionDimensionReferenceStyle,
+  type ConstructionDimensionTerminator,
+  type ConstructionDimensionTextPosition,
   type ConstructionDrawingType,
   resolveConstructionDimensionDrawingPresentation,
   setConstructionDimensionDrawingPresentation,
@@ -32,6 +38,52 @@ const MODE_LABELS: Record<ConstructionDimensionNode['mode'], string> = {
   angular: 'Angular',
   coordinate: 'Coordinate',
 }
+
+const DATUM_POLICY_OPTIONS: Array<{ label: string; value: ConstructionDimensionDatumPolicy }> = [
+  { label: 'Centerline', value: 'centerline' },
+  { label: 'Wall face', value: 'wall-face' },
+  { label: 'Structural face', value: 'structural-face' },
+  { label: 'Finish face', value: 'finish-face' },
+]
+
+const TERMINATOR_OPTIONS: Array<{ label: string; value: ConstructionDimensionTerminator }> = [
+  { label: 'Architectural tick', value: 'architectural-tick' },
+  { label: 'Filled arrow', value: 'filled-arrow' },
+  { label: 'Open arrow', value: 'open-arrow' },
+  { label: 'Dot', value: 'dot' },
+]
+
+const TEXT_POSITION_OPTIONS: Array<{ label: string; value: ConstructionDimensionTextPosition }> = [
+  { label: 'Above line', value: 'above' },
+  { label: 'Centered on line', value: 'centered' },
+]
+
+const IMPERIAL_PRECISION_OPTIONS: Array<{
+  label: string
+  value: ConstructionDimensionImperialPrecision
+}> = [
+  { label: 'Nearest inch', value: '1' },
+  { label: 'Nearest 1/2 inch', value: '1/2' },
+  { label: 'Nearest 1/4 inch', value: '1/4' },
+  { label: 'Nearest 1/8 inch', value: '1/8' },
+  { label: 'Nearest 1/16 inch', value: '1/16' },
+]
+
+const METRIC_NOTATION_OPTIONS: Array<{
+  label: string
+  value: ConstructionDimensionMetricNotation
+}> = [
+  { label: 'Meters', value: 'meters' },
+  { label: 'Millimeters', value: 'millimeters' },
+]
+
+const REFERENCE_STYLE_OPTIONS: Array<{
+  label: string
+  value: ConstructionDimensionReferenceStyle
+}> = [
+  { label: 'Parentheses', value: 'parentheses' },
+  { label: 'REF suffix', value: 'suffix' },
+]
 
 export default function ConstructionDimensionPanel() {
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
@@ -188,6 +240,77 @@ export default function ConstructionDimensionPanel() {
           onCommit={(textOverride) => update({ textOverride: textOverride || null })}
           placeholder="Use measured value"
           value={dimension.textOverride ?? ''}
+        />
+      </PanelSection>
+
+      <PanelSection title="Standards">
+        <SelectField
+          label="Datum policy"
+          onChange={(datumPolicy) =>
+            update({ datumPolicy: datumPolicy as ConstructionDimensionDatumPolicy })
+          }
+          options={DATUM_POLICY_OPTIONS}
+          value={dimension.datumPolicy}
+        />
+        <SelectField
+          label="Terminator"
+          onChange={(terminator) =>
+            update({ terminator: terminator as ConstructionDimensionTerminator })
+          }
+          options={TERMINATOR_OPTIONS}
+          value={dimension.terminator}
+        />
+        <SelectField
+          label="Text position"
+          onChange={(textPosition) =>
+            update({ textPosition: textPosition as ConstructionDimensionTextPosition })
+          }
+          options={TEXT_POSITION_OPTIONS}
+          value={dimension.textPosition}
+        />
+        <SelectField
+          label="Imperial precision"
+          onChange={(imperialPrecision) =>
+            update({
+              imperialPrecision: imperialPrecision as ConstructionDimensionImperialPrecision,
+            })
+          }
+          options={IMPERIAL_PRECISION_OPTIONS}
+          value={dimension.imperialPrecision}
+        />
+        <SelectField
+          label="Metric notation"
+          onChange={(metricNotation) =>
+            update({ metricNotation: metricNotation as ConstructionDimensionMetricNotation })
+          }
+          options={METRIC_NOTATION_OPTIONS}
+          value={dimension.metricNotation}
+        />
+        <SelectField
+          label="Reference style"
+          onChange={(referenceStyle) =>
+            update({ referenceStyle: referenceStyle as ConstructionDimensionReferenceStyle })
+          }
+          options={REFERENCE_STYLE_OPTIONS}
+          value={dimension.referenceStyle}
+        />
+        <SliderControl
+          label="Extension gap"
+          max={0.5}
+          min={0}
+          onChange={(extensionStartGap) => update({ extensionStartGap })}
+          precision={3}
+          step={0.005}
+          value={dimension.extensionStartGap}
+        />
+        <SliderControl
+          label="Extension overshoot"
+          max={0.5}
+          min={0}
+          onChange={(extensionOvershoot) => update({ extensionOvershoot })}
+          precision={3}
+          step={0.005}
+          value={dimension.extensionOvershoot}
         />
       </PanelSection>
 
