@@ -264,10 +264,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
-    // Last point handed to `applyPreview` — lets the Alt keydown/keyup
-    // handlers re-run the preview immediately on a modifier change instead of
-    // waiting for the next mousemove.
-    let lastMovedPoint: WallPlanPoint | null = null
+    // Last RAW cursor point from `grid:move` — lets the Alt keydown/keyup
+    // handlers re-run the FULL snap pipeline immediately on a modifier change
+    // instead of waiting for the next mousemove. The raw point (not the
+    // snapped one) matters: the snap/alignment candidate set depends on Alt
+    // (stale-junction exclusion above), so a point snapped under the previous
+    // modifier state must not be reused as-is.
+    let lastRawPoint: WallPlanPoint | null = null
     // The first pointer-up is the *grab* of a click-to-move; later ones are
     // drops. See the `!hasChanged` branch in `onPointerUp`.
     let hasReleasedOnce = false
@@ -311,7 +314,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
-      lastMovedPoint = movingPoint
       const nextStart = target.endpoint === 'start' ? movingPoint : fixedPoint
       const nextEnd = target.endpoint === 'end' ? movingPoint : fixedPoint
       const linkedUpdates = detachLinkedWalls
@@ -375,20 +377,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
     }
 
-    const onGridMove = (event: GridEvent) => {
-      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // The keydown listener can't observe an Alt press that predates the
-      // tool mounting; the pointer event can. Sync the shared ref (single Alt
-      // source for snap targets, preview, HUD badge, and commit) before the
-      // snap pipeline reads it.
-      if (event.nativeEvent.altKey !== altPressedRef.current) {
-        altPressedRef.current = event.nativeEvent.altKey
-        setAltPressed(event.nativeEvent.altKey)
-      }
-      // Endpoint move honours the active snapping mode (the HUD chip): grid →
-      // lattice; lines → magnetic corner/alignment snap; angles → lock the
-      // segment to 15° rays from the FIXED corner; off → raw. No Shift bypass —
-      // Shift cycles the mode now, and Off is the bypass.
+    // Full snap pipeline from a RAW cursor point to the applied endpoint —
+    // shared by `grid:move` and the Alt keydown/keyup handlers, since the
+    // candidate set (stale-junction exclusion) flips with the modifier.
+    // Endpoint move honours the active snapping mode (the HUD chip): grid →
+    // lattice; lines → magnetic corner/alignment snap; angles → lock the
+    // segment to 15° rays from the FIXED corner; off → raw. No Shift bypass —
+    // Shift cycles the mode now, and Off is the bypass.
+    const resolveDragPoint = (planPoint: WallPlanPoint): WallPlanPoint => {
       const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
@@ -461,7 +457,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             : null,
         )
 
-      applyPreview(alignedPoint, altPressedRef.current)
+      return alignedPoint
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
+      lastRawPoint = planPoint
+      // The keydown listener can't observe an Alt press that predates the
+      // tool mounting; the pointer event can. Sync the shared ref (single Alt
+      // source for snap targets, preview, HUD badge, and commit) before the
+      // snap pipeline reads it.
+      if (event.nativeEvent.altKey !== altPressedRef.current) {
+        altPressedRef.current = event.nativeEvent.altKey
+        setAltPressed(event.nativeEvent.altKey)
+      }
+      applyPreview(resolveDragPoint(planPoint), altPressedRef.current)
     }
 
     const onPointerUp = () => {
@@ -583,16 +593,17 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       exitMoveMode()
     }
 
-    // Single Alt writer for keyboard transitions. Re-running the preview on
-    // the flip keeps geometry and the HUD badge in lockstep — detach reverts
-    // the linked walls instantly, re-attach snaps them onto the dragged point
-    // — without waiting for the next mousemove.
+    // Single Alt writer for keyboard transitions. Re-running the FULL snap
+    // pipeline from the raw cursor on the flip keeps geometry and the HUD
+    // badge in lockstep — detach reverts the linked walls instantly and
+    // re-snaps against their (now live) corners, re-attach drops them from
+    // the candidate set again — without waiting for the next mousemove.
     const setAltState = (pressed: boolean) => {
       if (altPressedRef.current === pressed) return
       altPressedRef.current = pressed
       setAltPressed(pressed)
-      if (lastMovedPoint) {
-        applyPreview(lastMovedPoint, pressed)
+      if (lastRawPoint) {
+        applyPreview(resolveDragPoint(lastRawPoint), pressed)
       }
     }
 
