@@ -48,7 +48,6 @@ import {
 } from '@pascal-app/editor'
 
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -60,6 +59,14 @@ import {
   type Mesh,
   Vector3,
 } from 'three'
+import {
+  DraftAngleArc,
+  type DraftAngleLabel,
+  type DraftAxisGuideState,
+  DraftAxisGuides,
+  DraftMeasurementLabel,
+  getNearestAxisAngleLabel,
+} from '../shared/draft-axis-guides'
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
@@ -86,20 +93,6 @@ const DRAFT_ANGLE_LABEL_Y_OFFSET = 0.08
 const DRAFT_ANGLE_ARC_Y_OFFSET = 0.012
 const DRAFT_ANGLE_ARC_MIN_RADIUS = 0.32
 const DRAFT_ANGLE_ARC_MAX_RADIUS = 0.72
-const DRAFT_ANGLE_ARC_SEGMENTS = 24
-
-type DraftAngleLabel = {
-  id: string
-  label: string
-  position: [number, number, number]
-  arc: {
-    center: FencePlanPoint
-    radius: number
-    startAngle: number
-    endAngle: number
-    y: number
-  }
-}
 
 type DraftMeasurementState = {
   lengthLabel: string
@@ -498,6 +491,7 @@ const StraightFenceTool: React.FC = () => {
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
@@ -544,6 +538,7 @@ const StraightFenceTool: React.FC = () => {
       buildingState.current = 0
       previewRef.current.visible = false
       setDraftMeasurement(null)
+      setAxisGuide(null)
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setFenceDraftStart(null)
       draftPreview.setFenceDraftEnd(null)
@@ -590,6 +585,16 @@ const StraightFenceTool: React.FC = () => {
         draftPreview.setFenceDraftStart([startingPoint.current.x, startingPoint.current.z])
         draftPreview.setFenceDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
+        setAxisGuide({
+          origin: [startingPoint.current.x, startingPoint.current.z],
+          endOrigin: snappedLocal,
+          y: startingPoint.current.y,
+          angleLabel: getNearestAxisAngleLabel(
+            [startingPoint.current.x, startingPoint.current.z],
+            snappedLocal,
+            startingPoint.current.y,
+          ),
+        })
         const currentFenceEnd: FencePlanPoint = [snappedLocal[0], snappedLocal[1]]
         if (
           previousFenceEnd &&
@@ -627,6 +632,7 @@ const StraightFenceTool: React.FC = () => {
         )
         cursorRef.current.position.set(snappedPoint[0], event.localPosition[1], snappedPoint[1])
         setDraftMeasurement(null)
+        setAxisGuide(null)
       }
     }
 
@@ -658,6 +664,12 @@ const StraightFenceTool: React.FC = () => {
         triggerSFX('sfx:structure-build-start')
         previewRef.current.visible = true
         setDraftMeasurement(null)
+        setAxisGuide({
+          origin: snappedStart,
+          endOrigin: null,
+          y: event.localPosition[1],
+          angleLabel: null,
+        })
       } else {
         const angleLocked = isAngleSnapActive()
         const snappedEnd = alignPoint(
@@ -709,6 +721,12 @@ const StraightFenceTool: React.FC = () => {
         previewRef.current.visible = false
         buildingState.current = 1
         setDraftMeasurement(null)
+        setAxisGuide({
+          origin: nextStart,
+          endOrigin: null,
+          y: event.localPosition[1],
+          angleLabel: null,
+        })
       }
     }
 
@@ -738,6 +756,11 @@ const StraightFenceTool: React.FC = () => {
 
   return (
     <group>
+      <DraftAxisGuides
+        guide={axisGuide}
+        labelColor={measurementColor}
+        labelShadowColor={measurementShadowColor}
+      />
       <CursorSphere height={previewHeight} ref={cursorRef} />
       <mesh layers={EDITOR_LAYER} ref={previewRef} renderOrder={1} visible={false}>
         <shapeGeometry />
@@ -924,73 +947,6 @@ const SplineFenceDraft: React.FC = () => {
         </line>
       )}
     </group>
-  )
-}
-
-function DraftAngleArc({ arc, color }: { arc: DraftAngleLabel['arc']; color: string }) {
-  const geometry = useMemo(() => {
-    const segmentCount = Math.max(
-      8,
-      Math.ceil((Math.abs(arc.endAngle - arc.startAngle) / Math.PI) * DRAFT_ANGLE_ARC_SEGMENTS),
-    )
-
-    const points = Array.from({ length: segmentCount + 1 }, (_, index) => {
-      const t = index / segmentCount
-      const angle = arc.startAngle + (arc.endAngle - arc.startAngle) * t
-
-      return new Vector3(
-        arc.center[0] + Math.cos(angle) * arc.radius,
-        arc.y,
-        arc.center[1] + Math.sin(angle) * arc.radius,
-      )
-    })
-
-    return new BufferGeometry().setFromPoints(points)
-  }, [arc])
-
-  return (
-    // @ts-expect-error - R3F accepts Three line primitives, matching the other editor drawing tools.
-    <line frustumCulled={false} geometry={geometry} layers={EDITOR_LAYER} renderOrder={2}>
-      <lineBasicNodeMaterial
-        color={color}
-        depthTest={false}
-        depthWrite={false}
-        linewidth={2}
-        opacity={0.95}
-        transparent
-      />
-    </line>
-  )
-}
-
-function DraftMeasurementLabel({
-  color,
-  label,
-  position,
-  shadowColor,
-}: {
-  color: string
-  label: string
-  position: [number, number, number]
-  shadowColor: string
-}) {
-  return (
-    <Html
-      center
-      position={position}
-      style={{ pointerEvents: 'none', userSelect: 'none' }}
-      zIndexRange={[100, 0]}
-    >
-      <div
-        className="whitespace-nowrap font-bold font-mono text-[15px]"
-        style={{
-          color,
-          textShadow: `-1.5px -1.5px 0 ${shadowColor}, 1.5px -1.5px 0 ${shadowColor}, -1.5px 1.5px 0 ${shadowColor}, 1.5px 1.5px 0 ${shadowColor}, 0 0 4px ${shadowColor}, 0 0 4px ${shadowColor}`,
-        }}
-      >
-        {label}
-      </div>
-    </Html>
   )
 }
 
