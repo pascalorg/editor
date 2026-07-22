@@ -10,6 +10,7 @@ import type { ColorPreset, RenderShading } from '../lib/materials'
 import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type MetricNotation = 'meters' | 'millimeters'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -83,6 +84,8 @@ type ViewerState = {
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
+  metricNotation: MetricNotation
+  setMetricNotation: (notation: MetricNotation) => void
   /** True once the user explicitly picked a unit. Until then `unit` is a
    * locale-derived default and is not persisted, so the default can keep
    * tracking the browser locale across sessions. */
@@ -186,6 +189,7 @@ type PersistedViewerState = Partial<
     | 'edges'
     | 'shadows'
     | 'unit'
+    | 'metricNotation'
     | 'unitExplicit'
     | 'levelMode'
     | 'wallMode'
@@ -198,6 +202,7 @@ const RENDER_SHADINGS = ['solid', 'rendered'] as const
 const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
 const EDGE_MODES = ['off', 'soft', 'strong'] as const
 const UNITS = ['metric', 'imperial'] as const
+const METRIC_NOTATIONS = ['meters', 'millimeters'] as const
 const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
 const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
 
@@ -309,6 +314,7 @@ function normalizePersistedViewerState(value: unknown): PersistedViewerState {
     edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
     shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
     unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
+    metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
     unitExplicit:
       typeof state.unit === 'string' && UNITS.includes(state.unit as ViewerState['unit']),
     levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
@@ -391,8 +397,11 @@ const useViewer = create<ViewerState>()(
       setShadows: (shadows) => set({ shadows }),
 
       unit: detectDefaultUnit(),
+      metricNotation: 'meters',
       unitExplicit: false,
       setUnit: (unit) => set({ unit, unitExplicit: true }),
+      setMetricNotation: (metricNotation) =>
+        set({ unit: 'metric', metricNotation, unitExplicit: true }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -545,6 +554,7 @@ const useViewer = create<ViewerState>()(
         edges: state.edges,
         shadows: state.shadows,
         ...(state.unitExplicit ? { unit: state.unit } : {}),
+        metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,

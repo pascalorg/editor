@@ -20,6 +20,10 @@ import {
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
 
 /**
  * 2D floor-plan move handler for column. Columns need the same footprint-edge
@@ -65,10 +69,15 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
         candidates,
         { applySnap: isMagneticSnapActive() },
       )
-      const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
+      const structuralSnap =
+        isGridSnapActive() || isMagneticSnapActive()
+          ? resolveStructuralGridSnap(snapped, collectStructuralGridAxes(nodes, node.parentId))
+          : null
+      const coordinated = structuralSnap?.point ?? snapped
+      const next: [number, number, number] = [coordinated[0], originalPosition[1], coordinated[1]]
       lastPosition = next
 
-      const snapKey = `${snapped[0]},${snapped[1]}`
+      const snapKey = `${coordinated[0]},${coordinated[1]}`
       if (snapKey !== lastSnapKey) {
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey

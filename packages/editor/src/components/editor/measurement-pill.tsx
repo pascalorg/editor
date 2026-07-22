@@ -4,7 +4,11 @@ import { type ForwardedRef, Fragment, forwardRef } from 'react'
 
 // Canonical in-world dimension formatter — metric metres or imperial
 // feet/inches. Shared by every measurement readout so they read the same.
-export function formatMeasurement(value: number, unit: 'metric' | 'imperial'): string {
+export function formatMeasurement(
+  value: number,
+  unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters' = 'meters',
+): string {
   if (unit === 'imperial') {
     const feet = value * 3.280_84
     const wholeFeet = Math.floor(feet)
@@ -12,6 +16,7 @@ export function formatMeasurement(value: number, unit: 'metric' | 'imperial'): s
     if (inches === 12) return `${wholeFeet + 1}'0"`
     return `${wholeFeet}'${inches}"`
   }
+  if (metricNotation === 'millimeters') return `${Math.round(value * 1000)}mm`
   return `${Number.parseFloat(value.toFixed(2))}m`
 }
 

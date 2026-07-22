@@ -5,6 +5,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
 
 /**
@@ -102,6 +107,7 @@ export function buildWindowFloorplan(
       strokeWidth: showSelectedChrome ? 1.9 : 1.25,
       vectorEffect: 'non-scaling-stroke',
       strokeLinejoin: 'round',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
     },
     // Inset glass-pane outline.
     {
@@ -168,6 +174,14 @@ export function buildWindowFloorplan(
       children.push(dim)
     }
   }
+
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    { stroke: showSelectedChrome ? '#f97316' : '#334155' },
+  )
+  if (markAnnotation) children.push(markAnnotation)
 
   return { kind: 'group', children }
 }

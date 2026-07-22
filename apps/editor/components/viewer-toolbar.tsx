@@ -2,6 +2,7 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
+  DRAWING_TYPE_OPTIONS,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -10,7 +11,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  useDrawingView,
   useEditor,
+  useFloorplanAnnotationVisibility,
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
@@ -32,12 +35,16 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers3,
   Magnet,
   PenLine,
   Ruler,
+  ScanLine,
   SlidersHorizontal,
   Sparkles,
+  SquareUserRound,
   SwatchBook,
+  Tag,
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
@@ -133,6 +140,22 @@ const SHADING_OPTIONS = [
   { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
 ] as const
 
+const FLOORPLAN_ANNOTATION_OPTIONS = [
+  { id: 'automaticDimensions', name: 'Automatic dimensions', icon: Ruler },
+  { id: 'manualDimensions', name: 'Manual dimensions', icon: Ruler },
+  { id: 'measurements', name: 'Measurements', icon: ScanLine },
+  { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
+  { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
+  { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
+  { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
+] as const
+
+const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
+  { id: 'finished-faces', name: 'Finished faces', detail: 'Full wall thickness' },
+  { id: 'centerline', name: 'Wall centerline', detail: 'Single wall axis' },
+  { id: 'stud-faces', name: 'Face of stud', detail: 'Structural core face' },
+] as const
+
 function ViewModeControl() {
   const viewMode = useEditor((state) => state.viewMode)
   const setViewMode = useEditor((state) => state.setViewMode)
@@ -161,6 +184,49 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
+    </div>
+  )
+}
+
+function DrawingTypeControl() {
+  const viewMode = useEditor((state) => state.viewMode)
+  const drawingType = useDrawingView((state) => state.drawingType)
+  const setDrawingType = useDrawingView((state) => state.setDrawingType)
+  if (viewMode === '3d') return null
+
+  const active =
+    DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType) ?? DRAWING_TYPE_OPTIONS[0]
+
+  return (
+    <div className={TOOLBAR_CONTAINER}>
+      <DropdownMenu>
+        <ToolbarTooltip label="Select coordinated drawing">
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label={`Drawing type: ${active.label}`}
+              className="flex items-center gap-1.5 px-2.5 font-medium text-foreground/90 text-xs transition-colors hover:bg-white/8"
+              type="button"
+            >
+              <Layers3 className="h-3.5 w-3.5" />
+              <span>{active.label}</span>
+            </button>
+          </DropdownMenuTrigger>
+        </ToolbarTooltip>
+        <DropdownMenuContent
+          align="start"
+          className="w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+          side="bottom"
+          sideOffset={8}
+        >
+          {DRAWING_TYPE_OPTIONS.map((option) => (
+            <DropdownMenuItem key={option.id} onSelect={() => setDrawingType(option.id)}>
+              <Layers3 className="h-4 w-4" />
+              <span>{option.label}</span>
+              {drawingType === option.id ? <Check className="ml-auto h-4 w-4" /> : null}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -278,12 +344,15 @@ const EDGE_OPTIONS = [
 const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
 
 function DisplayMenu() {
+  const viewMode = useEditor((state) => state.viewMode)
   const showGrid = useViewer((state) => state.showGrid)
   const setShowGrid = useViewer((state) => state.setShowGrid)
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
   const unit = useViewer((state) => state.unit)
   const setUnit = useViewer((state) => state.setUnit)
+  const metricNotation = useViewer((state) => state.metricNotation)
+  const setMetricNotation = useViewer((state) => state.setMetricNotation)
   const cameraMode = useViewer((state) => state.cameraMode)
   const setCameraMode = useViewer((state) => state.setCameraMode)
   const shading = useViewer((state) => state.shading)
@@ -296,6 +365,14 @@ function DisplayMenu() {
   const setShadows = useViewer((state) => state.setShadows)
   const magneticSnap = useEditor((state) => state.magneticSnap)
   const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+  const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
+  const setAnnotationCategory = useFloorplanAnnotationVisibility((state) => state.setCategory)
+  const wallDimensionReference = useFloorplanAnnotationVisibility(
+    (state) => state.wallDimensionReference,
+  )
+  const setWallDimensionReference = useFloorplanAnnotationVisibility(
+    (state) => state.setWallDimensionReference,
+  )
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -337,17 +414,82 @@ function DisplayMenu() {
             <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
           )}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
-        >
-          <Ruler className="h-4 w-4" />
-          <span>Measurements</span>
-          {showMeasurements ? (
-            <Eye className="ml-auto h-4 w-4 text-foreground" />
-          ) : (
-            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-          )}
-        </DropdownMenuItem>
+        {viewMode !== '2d' ? (
+          <DropdownMenuItem
+            onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+          >
+            <Ruler className="h-4 w-4" />
+            <span>{viewMode === 'split' ? '3D measurements' : 'Measurements'}</span>
+            {showMeasurements ? (
+              <Eye className="ml-auto h-4 w-4 text-foreground" />
+            ) : (
+              <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {viewMode !== '3d' ? (
+          <>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Layers3 className="h-4 w-4" />
+                <span>Floor plan annotations</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
+                  const OptionIcon = option.icon
+                  const visible = annotationVisibility[option.id]
+                  return (
+                    <DropdownMenuItem
+                      key={option.id}
+                      onSelect={(e) =>
+                        keepOpen(e, () => setAnnotationCategory(option.id, !visible))
+                      }
+                    >
+                      <OptionIcon className="h-4 w-4" />
+                      <span>{option.name}</span>
+                      {visible ? (
+                        <Eye className="ml-auto h-4 w-4 text-foreground" />
+                      ) : (
+                        <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+                      )}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Ruler className="h-4 w-4" />
+                <span>Wall dimensions</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {
+                    FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
+                      (option) => option.id === wallDimensionReference,
+                    )?.name
+                  }
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                {FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.id}
+                    onSelect={(event) =>
+                      keepOpen(event, () => setWallDimensionReference(option.id))
+                    }
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-foreground">{option.name}</span>
+                      <span className="text-muted-foreground text-xs">{option.detail}</span>
+                    </div>
+                    {wallDimensionReference === option.id ? (
+                      <Check className="ml-auto h-4 w-4 text-foreground" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        ) : null}
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
           <Magnet className="h-4 w-4" />
           <span>Magnetic snap</span>
@@ -377,17 +519,48 @@ function DisplayMenu() {
             {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
           </span>
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={(e) => keepOpen(e, () => setUnit(unit === 'metric' ? 'imperial' : 'metric'))}
-        >
-          <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
-            {unit === 'metric' ? 'm' : 'ft'}
-          </span>
-          <span>Units</span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {unit === 'metric' ? 'Metric' : 'Imperial'}
-          </span>
-        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+              {unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'}
+            </span>
+            <span>Units</span>
+            <span className="ml-auto text-muted-foreground text-xs">
+              {unit === 'imperial'
+                ? 'Feet & inches'
+                : metricNotation === 'millimeters'
+                  ? 'Millimeters'
+                  : 'Meters'}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            <DropdownMenuItem onSelect={() => setMetricNotation('meters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                m
+              </span>
+              <span>Meters</span>
+              {unit === 'metric' && metricNotation === 'meters' ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setMetricNotation('millimeters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                mm
+              </span>
+              <span>Millimeters</span>
+              {unit === 'metric' && metricNotation === 'millimeters' ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setUnit('imperial')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                ft
+              </span>
+              <span>Feet & inches</span>
+              {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
 
         <DropdownMenuSeparator />
 
@@ -521,6 +694,7 @@ export function CommunityViewerToolbarLeft() {
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
+      <DrawingTypeControl />
     </>
   )
 }

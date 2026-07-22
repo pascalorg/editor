@@ -1,12 +1,17 @@
 'use client'
 
-import { useViewer } from '@pascal-app/viewer'
+import type {
+  ConstructionDimensionChainMode,
+  ConstructionDimensionMode,
+} from '@pascal-app/core'
 import {
   Box,
   Check,
   ChevronDown,
-  Eye,
-  EyeOff,
+  CircleIcon,
+  Crosshair,
+  Grid2X2,
+  Minus,
   Ruler,
   ScanSearch,
   Square,
@@ -37,27 +42,64 @@ const measurementMenuOptions = [
   ...measurementOptions,
 ] as const
 
+const constructionDimensionOptions = [
+  { mode: 'linear', chainMode: 'point-to-point', label: 'Linear dimension', icon: Ruler },
+  { mode: 'linear', chainMode: 'continuous', label: 'Continuous dimension', icon: Waypoints },
+  { mode: 'radius', chainMode: 'point-to-point', label: 'Radius dimension', icon: CircleIcon },
+  { mode: 'diameter', chainMode: 'point-to-point', label: 'Diameter dimension', icon: CircleIcon },
+  { mode: 'center-mark', chainMode: 'point-to-point', label: 'Center mark', icon: Crosshair },
+  { mode: 'chord', chainMode: 'point-to-point', label: 'Chord dimension', icon: Minus },
+  { mode: 'arc-length', chainMode: 'point-to-point', label: 'Arc length', icon: CircleIcon },
+  { mode: 'angular', chainMode: 'point-to-point', label: 'Angular dimension', icon: Triangle },
+  { mode: 'coordinate', chainMode: 'continuous', label: 'Coordinate dimensions', icon: Grid2X2 },
+] as const satisfies readonly {
+  mode: ConstructionDimensionMode
+  chainMode: ConstructionDimensionChainMode
+  label: string
+  icon: typeof Ruler
+}[]
+
 export function MeasurementControl() {
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const selectedKind = useEditor((state) => state.lastMeasurementKind)
   const activeToolKind = useEditor((state) => state.toolDefaults.measurement?.kind)
+  const constructionDimensionChainMode = useEditor(
+    (state) => state.toolDefaults['construction-dimension']?.chainMode,
+  )
+  const constructionDimensionMode = useEditor(
+    (state) => state.toolDefaults['construction-dimension']?.mode,
+  )
   const setMode = useEditor((state) => state.setMode)
   const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
-  const showMeasurements = useViewer((state) => state.showMeasurements)
-  const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
+  const setViewMode = useEditor((state) => state.setViewMode)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
   const isActive = mode === 'build' && tool === 'measurement'
+  const isConstructionDimensionActive = mode === 'build' && tool === 'construction-dimension'
+  const activeConstructionDimensionOption = constructionDimensionOptions.find(
+    (option) =>
+      option.mode === (constructionDimensionMode ?? 'linear') &&
+      option.chainMode === (constructionDimensionChainMode ?? 'point-to-point'),
+  )
+  const isControlActive = isActive || isConstructionDimensionActive
   const isSmartActive = isActive && activeToolKind === 'smart'
-  const SelectedIcon = isSmartActive ? ScanSearch : selectedOption.icon
-  const selectedLabel = isSmartActive ? 'Smart' : selectedOption.label
+  const SelectedIcon = isConstructionDimensionActive
+    ? (activeConstructionDimensionOption?.icon ?? Ruler)
+    : isSmartActive
+      ? ScanSearch
+      : selectedOption.icon
+  const selectedLabel = isConstructionDimensionActive
+    ? (activeConstructionDimensionOption?.label ?? 'Linear dimension')
+    : isSmartActive
+      ? 'Smart'
+      : selectedOption.label
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
     setPhase('structure')
@@ -69,7 +111,7 @@ export function MeasurementControl() {
   }
 
   const handlePrimaryClick = () => {
-    if (isActive) {
+    if (isControlActive) {
       setMode('select')
       return
     }
@@ -84,15 +126,27 @@ export function MeasurementControl() {
     setTool('measurement')
   }
 
+  const activateConstructionDimension = (
+    dimensionMode: ConstructionDimensionMode,
+    chainMode: ConstructionDimensionChainMode,
+  ) => {
+    setPhase('structure')
+    setStructureLayer('elements')
+    setViewMode('2d')
+    setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
+    setMode('build')
+    setTool('construction-dimension')
+  }
+
   return (
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <div className="flex items-center">
         <ActionButton
           aria-label={`Measure: ${selectedLabel}`}
-          aria-pressed={isActive}
+          aria-pressed={isControlActive}
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
-            isActive
+            isControlActive
               ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
               : 'hover:bg-cyan-500/15 hover:text-cyan-400',
           )}
@@ -128,7 +182,7 @@ export function MeasurementControl() {
 
       <PopoverContent
         align="center"
-        className="w-56 rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
+        className="max-h-[70vh] w-64 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
         side="top"
         sideOffset={14}
       >
@@ -138,7 +192,7 @@ export function MeasurementControl() {
             const isSmart = option.kind === 'smart'
             const isSelected = isSmart
               ? isSmartActive
-              : !isSmartActive && option.kind === selectedKind
+              : !isConstructionDimensionActive && !isSmartActive && option.kind === selectedKind
             return (
               <button
                 aria-checked={isSelected}
@@ -165,22 +219,37 @@ export function MeasurementControl() {
           })}
 
           <div className="my-1.5 h-px bg-border/60" />
+          <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+            Floor plan
+          </div>
 
-          <button
-            aria-checked={showMeasurements}
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-muted-foreground text-sm transition-colors hover:bg-white/8 hover:text-foreground"
-            onClick={() => setShowMeasurements(!showMeasurements)}
-            role="menuitemcheckbox"
-            type="button"
-          >
-            {showMeasurements ? (
-              <Eye aria-hidden="true" className="h-4 w-4" />
-            ) : (
-              <EyeOff aria-hidden="true" className="h-4 w-4" />
-            )}
-            <span>Show measurements</span>
-            <span className="ml-auto text-xs">{showMeasurements ? 'On' : 'Off'}</span>
-          </button>
+          {constructionDimensionOptions.map((option) => {
+            const OptionIcon = option.icon
+            const isSelected =
+              isConstructionDimensionActive && activeConstructionDimensionOption === option
+            return (
+              <button
+                aria-checked={isSelected}
+                className={cn(
+                  'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
+                  isSelected
+                    ? 'bg-white/10 text-foreground'
+                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                )}
+                key={`${option.mode}-${option.chainMode}`}
+                onClick={() => {
+                  activateConstructionDimension(option.mode, option.chainMode)
+                  setIsOpen(false)
+                }}
+                role="menuitemradio"
+                type="button"
+              >
+                <OptionIcon aria-hidden="true" className="h-4 w-4" />
+                <span>{option.label}</span>
+                {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
+              </button>
+            )
+          })}
         </div>
       </PopoverContent>
     </Popover>

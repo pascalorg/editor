@@ -570,6 +570,27 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
+function migrateConstructionDimension(node: Record<string, any>) {
+  const drawingOverrides = Array.isArray(node.drawingOverrides) ? node.drawingOverrides : []
+  const hasLegacyDrawingOverride = drawingOverrides.some(
+    (entry) =>
+      entry &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry) &&
+      entry.presentation === 'reference',
+  )
+  if (!('reference' in node || 'referenceStyle' in node || hasLegacyDrawingOverride)) return node
+
+  const { reference: _reference, referenceStyle: _referenceStyle, ...dimension } = node
+  return {
+    ...dimension,
+    drawingOverrides: drawingOverrides.map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry
+      return entry.presentation === 'reference' ? { ...entry, presentation: 'shown' } : entry
+    }),
+  }
+}
+
 // Walls whose top lands within this of the storey plane become plane-bound;
 // ceilings whose stored height lands within this of their clamp bound become
 // follows-mode (step 3f) — same census-backed threshold for both.
@@ -685,6 +706,10 @@ function migrateNodes(nodes: Record<string, any>): {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'construction-dimension') {
+      patchedNodes[id] = migrateConstructionDimension(node)
     }
 
     if (node.type === 'stair') {

@@ -471,7 +471,7 @@ function unavailable(reason: string): ZoneQuantityValue {
 
 export function deriveZoneQuantityReport(
   zone: ZoneNode,
-  sceneNodes: Record<string, AnyNode>,
+  sceneNodes: Readonly<Record<string, AnyNode>>,
 ): ZoneQuantityReport {
   const levelId = zone.parentId
   const levelNodes = levelId

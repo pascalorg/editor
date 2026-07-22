@@ -1,0 +1,1 @@
+export { structuralGridDefinition } from './definition'

@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, MeasurementNode } from '@pascal-app/core'
-import { MEASUREMENT_ACTIVE_COLOR, MEASUREMENT_FLOORPLAN_COLOR } from '@pascal-app/editor'
+import {
+  createFloorplanContextExtensions,
+  MEASUREMENT_ACTIVE_COLOR,
+  MEASUREMENT_FLOORPLAN_COLOR,
+} from '@pascal-app/editor'
 import { buildMeasurementFloorplan } from './floorplan'
 
 const palette = {
@@ -21,7 +25,11 @@ const palette = {
   measurementLabelText: '#0f172a',
 }
 
-const context = (unit: 'metric' | 'imperial', selected = false): GeometryContext => ({
+const context = (
+  unit: 'metric' | 'imperial',
+  selected = false,
+  metricNotation: 'meters' | 'millimeters' = 'meters',
+): GeometryContext => ({
   resolve: () => undefined,
   children: [],
   siblings: [],
@@ -34,6 +42,7 @@ const context = (unit: 'metric' | 'imperial', selected = false): GeometryContext
     moving: false,
     palette,
   },
+  extensions: createFloorplanContextExtensions({ metricNotation }),
 })
 
 const labels = (geometry: FloorplanGeometry): string[] => {
@@ -67,6 +76,23 @@ describe('buildMeasurementFloorplan', () => {
     expect(
       metric && flattenGeometry(metric).find((entry) => entry.kind === 'dimension-label'),
     ).toMatchObject({ appearance: 'outlined' })
+  })
+
+  test('formats metric distance labels in millimeters', () => {
+    const node = MeasurementNode.parse({
+      id: 'measurement_distance_mm',
+      type: 'measurement',
+      measurement: {
+        kind: 'distance',
+        points: [
+          [0, 0, 0],
+          [3.048, 0, 0],
+        ],
+      },
+    })
+
+    const metric = buildMeasurementFloorplan(node, context('metric', false, 'millimeters'))
+    expect(metric && labels(metric)).toEqual(['3048mm'])
   })
 
   test('uses indigo analysis colors in plan view', () => {

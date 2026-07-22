@@ -9,8 +9,10 @@ export type {
   CeilingEvent,
   ChimneyEvent,
   ColumnEvent,
+  ConstructionDimensionEvent,
   DoorEvent,
   DormerEvent,
+  DrawingSheetEvent,
   ElevatorEvent,
   EventSuffix,
   FenceEvent,
@@ -34,6 +36,7 @@ export type {
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
+  StructuralGridEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -88,6 +91,7 @@ export {
   closestMeasurementFeatureBinding,
   MEASUREMENT_PLANAR_TOLERANCE,
   measurementAnchorFallback,
+  measurementAnchorReferenceNodeIds,
   measurementAngle,
   measurementArea,
   measurementAreaVector,
@@ -98,6 +102,7 @@ export {
   measurementPerimeter,
   measurementPrismVolume,
   measurementReferenceNodeIds,
+  remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
 export {
@@ -294,6 +299,7 @@ export { resolveStairTotalRise } from './systems/stair/stair-rise'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
+  getWallArcData,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,

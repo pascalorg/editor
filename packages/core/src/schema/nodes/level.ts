@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { ColumnNode } from './column'
+import { ConstructionDimensionNode } from './construction-dimension'
 import { DuctFittingNode } from './duct-fitting'
 import { DuctSegmentNode } from './duct-segment'
 import { DuctTerminalNode } from './duct-terminal'
@@ -22,6 +23,7 @@ import { ShelfNode } from './shelf'
 import { SlabNode } from './slab'
 import { SpawnNode } from './spawn'
 import { StairNode } from './stair'
+import { StructuralGridNode } from './structural-grid'
 import { WallNode } from './wall'
 import { ZoneNode } from './zone'
 
@@ -34,6 +36,8 @@ export const LevelNode = BaseNode.extend({
         WallNode.shape.id,
         FenceNode.shape.id,
         ColumnNode.shape.id,
+        ConstructionDimensionNode.shape.id,
+        StructuralGridNode.shape.id,
         ItemNode.shape.id,
         ZoneNode.shape.id,
         SlabNode.shape.id,

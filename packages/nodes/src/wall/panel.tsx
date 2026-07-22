@@ -15,6 +15,9 @@ import {
   WALL_CROWN_DEFAULT,
   WALL_FACE_BAND_DEFAULT,
   WALL_SKIRTING_DEFAULT,
+  type WallAssemblyLayer,
+  type WallAssemblyLayerRole,
+  type WallDimensionDatum,
   type WallNode,
   type WallTrimProfile,
 } from '@pascal-app/core'
@@ -34,7 +37,7 @@ import {
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Spline } from 'lucide-react'
+import { Plus, Spline, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
@@ -298,6 +301,8 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
+      <WallAssemblySection node={node} onUpdate={handleUpdate} unit={unit} unitLabel={unitLabel} />
+
       <WallFaceBandSection
         node={node}
         onUpdate={handleUpdate}
@@ -349,6 +354,165 @@ export default function WallPanel() {
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+const WALL_ASSEMBLY_ROLE_OPTIONS: Array<{ label: string; value: WallAssemblyLayerRole }> = [
+  { label: 'Structure', value: 'structure' },
+  { label: 'Interior finish', value: 'interior-finish' },
+  { label: 'Exterior sheathing', value: 'exterior-sheathing' },
+  { label: 'Exterior finish', value: 'exterior-finish' },
+  { label: 'Masonry veneer', value: 'masonry-veneer' },
+  { label: 'Air space', value: 'air-space' },
+  { label: 'Concrete block', value: 'concrete-block' },
+  { label: 'Structural masonry', value: 'structural-masonry' },
+  { label: 'Solid concrete', value: 'solid-concrete' },
+  { label: 'Furring', value: 'furring' },
+]
+
+const WALL_DATUM_OPTIONS: Array<{ label: string; value: WallDimensionDatum }> = [
+  { label: 'Structural', value: 'structural-face' },
+  { label: 'Finish', value: 'finish-face' },
+  { label: 'Veneer', value: 'veneer-face' },
+]
+
+function WallAssemblySection({
+  node,
+  onUpdate,
+  unit,
+  unitLabel,
+}: {
+  node: WallNode
+  onUpdate: (updates: Partial<WallNode>) => void
+  unit: 'metric' | 'imperial'
+  unitLabel: string
+}) {
+  const layers = node.assemblyLayers ?? []
+  const updateLayer = (index: number, patch: Partial<WallAssemblyLayer>) =>
+    onUpdate({
+      assemblyLayers: layers.map((layer, layerIndex) =>
+        layerIndex === index ? { ...layer, ...patch } : layer,
+      ),
+    })
+  const addLayer = () => {
+    const number = layers.length + 1
+    onUpdate({
+      assemblyLayers: [
+        ...layers,
+        {
+          id: `layer-${number}`,
+          role: layers.length === 0 ? 'structure' : 'exterior-finish',
+          side: layers.length === 0 ? 'core' : 'exterior',
+          thickness: 0.1,
+          materialRef: '',
+          datumEligible: layers.length === 0 ? ['structural-face'] : ['finish-face'],
+        },
+      ],
+    })
+  }
+
+  return (
+    <PanelSection title="Wall assembly">
+      <div className="space-y-2 px-1 pb-1">
+        {layers.map((layer, index) => (
+          <div className="space-y-2 rounded-lg border border-border/50 p-2" key={layer.id}>
+            <div className="flex items-center gap-2">
+              <input
+                className="h-7 min-w-0 flex-1 rounded-md border border-border/50 bg-[#2C2C2E] px-2 text-xs outline-none"
+                maxLength={80}
+                onBlur={(event) => {
+                  const id = event.currentTarget.value.trim()
+                  if (id && id !== layer.id) updateLayer(index, { id })
+                }}
+                defaultValue={layer.id}
+              />
+              <button
+                aria-label={`Remove ${layer.id}`}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() =>
+                  onUpdate({
+                    assemblyLayers: layers.filter((_, layerIndex) => layerIndex !== index),
+                  })
+                }
+                type="button"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                className="h-7 rounded-md border border-border/50 bg-[#2C2C2E] px-1.5 text-xs outline-none"
+                onChange={(event) =>
+                  updateLayer(index, { role: event.currentTarget.value as WallAssemblyLayerRole })
+                }
+                value={layer.role}
+              >
+                {WALL_ASSEMBLY_ROLE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-7 rounded-md border border-border/50 bg-[#2C2C2E] px-1.5 text-xs outline-none"
+                onChange={(event) =>
+                  updateLayer(index, {
+                    side: event.currentTarget.value as WallAssemblyLayer['side'],
+                  })
+                }
+                value={layer.side}
+              >
+                <option value="core">Core</option>
+                <option value="interior">Interior</option>
+                <option value="exterior">Exterior</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Thickness</span>
+              <input
+                className="h-7 min-w-0 flex-1 rounded-md border border-border/50 bg-[#2C2C2E] px-2 font-mono outline-none"
+                min={0.001}
+                onBlur={(event) => {
+                  const parsed = Number.parseFloat(event.currentTarget.value)
+                  if (Number.isFinite(parsed) && parsed > 0) {
+                    updateLayer(index, { thickness: linearControlValueToMeters(parsed, unit) })
+                  }
+                }}
+                step={unit === 'imperial' ? 0.01 : 0.001}
+                type="number"
+                defaultValue={Math.round(metersToLinearUnit(layer.thickness, unit) * 1000) / 1000}
+              />
+              <span className="text-muted-foreground">{unitLabel}</span>
+            </label>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {WALL_DATUM_OPTIONS.map((option) => (
+                <label className="flex items-center gap-1 text-[10px]" key={option.value}>
+                  <input
+                    checked={layer.datumEligible.includes(option.value)}
+                    onChange={(event) =>
+                      updateLayer(index, {
+                        datumEligible: event.currentTarget.checked
+                          ? [...layer.datumEligible, option.value]
+                          : layer.datumEligible.filter((datum) => datum !== option.value),
+                      })
+                    }
+                    type="checkbox"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-border/50 text-xs hover:bg-muted"
+          onClick={addLayer}
+          type="button"
+        >
+          <Plus className="size-3.5" /> Add assembly layer
+        </button>
+      </div>
+    </PanelSection>
   )
 }
 
