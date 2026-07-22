@@ -327,4 +327,35 @@ describe('snapWallDraftPointDetailed', () => {
     expect(result.point).toEqual([3.99, 0.03])
     expect(result.snap).toBeNull()
   })
+
+  // Endpoint-move regression: walls attached to the moving corner keep their
+  // pre-drag coordinates in the scene during the drag, so their stale corner
+  // recreates the old junction inside the connect radius. The move tools must
+  // pass those walls in `ignoreWallIds` (attached mode) or a sub-5cm corner
+  // correction — e.g. squaring a scan-imported 91° junction — can never land.
+  test('a stale linked-wall corner swallows a sub-connect-radius correction unless ignored', () => {
+    // `wall_d` shares the dragged corner of `wall_c` at [2, 0.03]; the user
+    // drops 3cm away at [2, 0] to square the junction.
+    const linked = makeWall([2, 0.03], [2, 2], 'wall_d')
+
+    const captured = snapWallDraftPointDetailed({
+      point: [2, 0],
+      walls: [linked],
+      ignoreWallIds: ['wall_c'],
+      magnetic: false,
+      step: 0,
+    })
+    expect(captured.point).toEqual([2, 0.03])
+    expect(captured.snap).toBe('endpoint')
+
+    const freed = snapWallDraftPointDetailed({
+      point: [2, 0],
+      walls: [linked],
+      ignoreWallIds: ['wall_c', 'wall_d'],
+      magnetic: false,
+      step: 0,
+    })
+    expect(freed.point).toEqual([2, 0])
+    expect(freed.snap).toBeNull()
+  })
 })
