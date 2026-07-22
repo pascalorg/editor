@@ -5211,6 +5211,7 @@ export function FloorplanPanel({
 }) {
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const floorplanBackgroundRef = useRef<SVGRectElement>(null)
   const floorplanSceneRef = useRef<SVGGElement>(null)
   const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
@@ -5238,6 +5239,15 @@ export function FloorplanPanel({
   const latestFittedViewportRef = useRef<FloorplanViewport | null>(null)
   const floorplanViewAnimationFrameRef = useRef<number | null>(null)
   const floorplanViewAnimationTargetRef = useRef<FloorplanViewAnimationTarget | null>(null)
+  const floorplanZoomCommitTimerRef = useRef<number | null>(null)
+  const floorplanRenderScaleCommitTimerRef = useRef<number | null>(null)
+  const floorplanZoomInProgressRef = useRef(false)
+  const latestFloorplanRenderUnitsPerPixelRef = useRef(1)
+  const floorplanZoomPoseRef = useRef<{
+    localCenter: SvgPoint
+    userRotationDeg: number
+    viewWidth: number
+  } | null>(null)
   const latestNavigationSyncPoseRef = useRef<NavigationSyncPose | null>(
     useEditor.getState().navigationSyncPose,
   )
@@ -5554,9 +5564,14 @@ export function FloorplanPanel({
   const [isPanelReady, setIsPanelReady] = useState(false)
   const [surfaceSize, setSurfaceSize] = useState({ width: 1, height: 1 })
   const [viewport, setViewport] = useState<FloorplanViewport | null>(null)
-  latestViewportRef.current = viewport
+  const [floorplanRenderUnitsPerPixel, setFloorplanRenderUnitsPerPixel] = useState<number | null>(
+    null,
+  )
+  if (!floorplanZoomInProgressRef.current) {
+    latestViewportRef.current = viewport
+  }
   // Tight bbox of the painted floor-plan scene (the rotation `<g>`'s
-  // children), read via SVG `getBBox()` after each render. The legacy
+  // children), read via SVG `getBBox()` after content changes settle. The legacy
   // polygon arrays (`wallPolygons`, `displaySlabPolygons`, etc.) are now
   // empty stubs because rendering moved to the registry layer, so
   // measuring the DOM is how `fittedViewport` learns where content lives.
@@ -6534,42 +6549,71 @@ export function FloorplanPanel({
   ])
   latestFittedViewportRef.current = fittedViewport
 
-  // Measure the painted floor-plan scene after each render. `getBBox()`
-  // gives us the tight bounds of whatever the registry layer emitted,
-  // even for kinds whose legacy entry arrays are empty stubs. Bail out
-  // when nothing has painted (empty group throws in some browsers).
-  // We measure the content-only sub-group (not the full scene group) to
-  // exclude the grid layer, whose extent tracks the viewBox and would
-  // otherwise create a measure→fit→measure update loop.
+  // Measure the content-only subtree after its geometry settles. ViewBox-only
+  // navigation does not change these bounds and must not force `getBBox()` on
+  // every animation frame.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: visibility remounts the observed SVG subtree.
   useLayoutEffect(() => {
     const el = floorplanContentRef.current
     if (!el) return
-    let bbox: { x: number; y: number; width: number; height: number }
-    try {
-      const measured = el.getBBox()
-      bbox = {
-        x: measured.x,
-        y: measured.y,
-        width: measured.width,
-        height: measured.height,
+    let scheduledFrame: number | null = null
+    let mutationVersion = 0
+    let observedVersion = 0
+    const measure = () => {
+      let bbox: { x: number; y: number; width: number; height: number }
+      try {
+        const measured = el.getBBox()
+        bbox = {
+          x: measured.x,
+          y: measured.y,
+          width: measured.width,
+          height: measured.height,
+        }
+      } catch {
+        return
       }
-    } catch {
-      return
+      if (bbox.width <= 0 && bbox.height <= 0) return
+      setMeasuredSceneBBox((prev) => {
+        if (
+          prev &&
+          prev.x === bbox.x &&
+          prev.y === bbox.y &&
+          prev.width === bbox.width &&
+          prev.height === bbox.height
+        ) {
+          return prev
+        }
+        return bbox
+      })
     }
-    if (bbox.width <= 0 && bbox.height <= 0) return
-    setMeasuredSceneBBox((prev) => {
-      if (
-        prev &&
-        prev.x === bbox.x &&
-        prev.y === bbox.y &&
-        prev.width === bbox.width &&
-        prev.height === bbox.height
-      ) {
-        return prev
+    const flushWhenSettled = () => {
+      if (observedVersion !== mutationVersion) {
+        observedVersion = mutationVersion
+        scheduledFrame = requestAnimationFrame(flushWhenSettled)
+        return
       }
-      return bbox
+      scheduledFrame = null
+      measure()
+    }
+    const observer = new MutationObserver(() => {
+      mutationVersion += 1
+      if (scheduledFrame !== null) return
+      observedVersion = mutationVersion - 1
+      scheduledFrame = requestAnimationFrame(flushWhenSettled)
     })
-  })
+
+    measure()
+    observer.observe(el, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    })
+    return () => {
+      observer.disconnect()
+      if (scheduledFrame !== null) cancelAnimationFrame(scheduledFrame)
+    }
+  }, [isFloorplanOpen])
 
   const applyFloorplanNavigationState = useCallback(
     (nextViewport: FloorplanViewport, userRotationDeg: number) => {
@@ -7285,7 +7329,9 @@ export function FloorplanPanel({
       ),
     [gridBounds, gridSteps.majorStep],
   )
-  const floorplanUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
+  const liveFloorplanUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
+  const floorplanUnitsPerPixel = floorplanRenderUnitsPerPixel ?? liveFloorplanUnitsPerPixel
+  latestFloorplanRenderUnitsPerPixelRef.current = floorplanUnitsPerPixel
 
   useEffect(() => {
     setReferenceScaleUnit(unit === 'imperial' ? 'feet' : 'meters')
@@ -7813,6 +7859,45 @@ export function FloorplanPanel({
     [beginPanelInteraction, panelRect],
   )
 
+  const commitFloorplanZoom = useCallback(() => {
+    if (floorplanZoomCommitTimerRef.current !== null) {
+      window.clearTimeout(floorplanZoomCommitTimerRef.current)
+      floorplanZoomCommitTimerRef.current = null
+    }
+    const nextViewport = latestViewportRef.current
+    const pendingPose = floorplanZoomPoseRef.current
+    floorplanZoomPoseRef.current = null
+    floorplanZoomInProgressRef.current = false
+    if (!nextViewport) return
+    setFloorplanRenderUnitsPerPixel(
+      (current) => current ?? latestFloorplanRenderUnitsPerPixelRef.current,
+    )
+    setViewport((current) =>
+      floorplanViewportEquals(current, nextViewport) ? current : nextViewport,
+    )
+    if (floorplanRenderScaleCommitTimerRef.current !== null) {
+      window.clearTimeout(floorplanRenderScaleCommitTimerRef.current)
+    }
+    floorplanRenderScaleCommitTimerRef.current = window.setTimeout(() => {
+      floorplanRenderScaleCommitTimerRef.current = null
+      setFloorplanRenderUnitsPerPixel(null)
+    }, 350)
+    if (pendingPose) {
+      publishFloorplanNavigationPose(
+        pendingPose.localCenter,
+        pendingPose.userRotationDeg,
+        pendingPose.viewWidth,
+      )
+    }
+  }, [publishFloorplanNavigationPose])
+
+  const scheduleFloorplanZoomCommit = useCallback(() => {
+    if (floorplanZoomCommitTimerRef.current !== null) {
+      window.clearTimeout(floorplanZoomCommitTimerRef.current)
+    }
+    floorplanZoomCommitTimerRef.current = window.setTimeout(commitFloorplanZoom, 300)
+  }, [commitFloorplanZoom])
+
   const zoomViewportAtClientPoint = useCallback(
     (clientX: number, clientY: number, widthFactor: number) => {
       if (!Number.isFinite(widthFactor) || widthFactor <= 0) {
@@ -7830,12 +7915,21 @@ export function FloorplanPanel({
       }
       const svgPoint = rotateSvgPoint(localPoint, floorplanSceneRotationDeg)
 
-      const currentViewport = viewport ?? fittedViewport
-      const currentViewBox = viewBox
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      if (!currentViewport) {
+        return
+      }
+      const currentViewBox = {
+        minX: currentViewport.centerX - currentViewport.width / 2,
+        minY: currentViewport.centerY - currentViewport.width / svgAspectRatio / 2,
+        width: currentViewport.width,
+        height: currentViewport.width / svgAspectRatio,
+      }
+      const fitted = latestFittedViewportRef.current
       const nextWidth = resolveFloorplanViewWidth(
         currentViewport.width * widthFactor,
         currentViewport.width,
-        fittedViewport,
+        fitted,
         true,
       )
       const nextHeight = nextWidth / svgAspectRatio
@@ -7849,28 +7943,56 @@ export function FloorplanPanel({
         y: nextMinY + nextHeight / 2,
       }
       const localCenter = rotateSvgPoint(nextCenterSvg, -floorplanSceneRotationDeg)
+      const nextViewport = {
+        centerX: nextCenterSvg.x,
+        centerY: nextCenterSvg.y,
+        width: nextWidth,
+      }
 
-      smoothFloorplanNavigationView(
-        localCenter,
-        latestFloorplanUserRotationDegRef.current,
-        nextWidth,
-      )
-      publishFloorplanNavigationPose(
-        localCenter,
-        latestFloorplanUserRotationDegRef.current,
-        nextWidth,
-      )
+      stopFloorplanViewAnimation()
+      if (floorplanRenderScaleCommitTimerRef.current !== null) {
+        window.clearTimeout(floorplanRenderScaleCommitTimerRef.current)
+        floorplanRenderScaleCommitTimerRef.current = null
+      }
+      floorplanZoomInProgressRef.current = true
+      hasUserAdjustedViewportRef.current = true
+      latestViewportRef.current = nextViewport
+      svgRef.current?.setAttribute('viewBox', `${nextMinX} ${nextMinY} ${nextWidth} ${nextHeight}`)
+      const background = floorplanBackgroundRef.current
+      if (background) {
+        background.setAttribute('x', String(nextMinX))
+        background.setAttribute('y', String(nextMinY))
+        background.setAttribute('width', String(nextWidth))
+        background.setAttribute('height', String(nextHeight))
+      }
+      scheduleFloorplanZoomCommit()
+      const userRotationDeg = latestFloorplanUserRotationDegRef.current
+      floorplanZoomPoseRef.current = { localCenter, userRotationDeg, viewWidth: nextWidth }
+      if (useEditor.getState().viewMode === 'split') {
+        publishFloorplanNavigationPose(localCenter, userRotationDeg, nextWidth)
+      }
     },
     [
-      fittedViewport,
       floorplanSceneRotationDeg,
       getSvgPointFromClientPoint,
       publishFloorplanNavigationPose,
-      smoothFloorplanNavigationView,
+      scheduleFloorplanZoomCommit,
+      stopFloorplanViewAnimation,
       svgAspectRatio,
-      viewBox,
-      viewport,
     ],
+  )
+
+  useEffect(
+    () => () => {
+      if (floorplanZoomCommitTimerRef.current !== null) {
+        window.clearTimeout(floorplanZoomCommitTimerRef.current)
+      }
+      if (floorplanRenderScaleCommitTimerRef.current !== null) {
+        window.clearTimeout(floorplanRenderScaleCommitTimerRef.current)
+      }
+      floorplanZoomInProgressRef.current = false
+    },
+    [],
   )
 
   const clearWallPlacementDraft = useCallback(() => {
@@ -10954,6 +11076,7 @@ export function FloorplanPanel({
 
     const handleGestureEnd = (event: Event) => {
       gestureScaleRef.current = 1
+      commitFloorplanZoom()
       event.preventDefault()
       event.stopPropagation()
     }
@@ -10973,7 +11096,7 @@ export function FloorplanPanel({
       svg.removeEventListener('gesturechange', handleGestureChange)
       svg.removeEventListener('gestureend', handleGestureEnd)
     }
-  }, [zoomViewportAtClientPoint])
+  }, [commitFloorplanZoom, zoomViewportAtClientPoint])
 
   const restoreGroundLevelStructureSelection = useCallback(() => {
     const sceneNodes = useScene.getState().nodes
@@ -11323,6 +11446,7 @@ export function FloorplanPanel({
             <rect
               fill={palette.surface}
               height={viewBox.height}
+              ref={floorplanBackgroundRef}
               width={viewBox.width}
               x={viewBox.minX}
               y={viewBox.minY}
