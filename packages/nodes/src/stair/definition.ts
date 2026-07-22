@@ -1,4 +1,5 @@
 import {
+  type AnyNodeId,
   type HandleDescriptor,
   type NodeDefinition,
   resolveStairTotalRise,
@@ -9,6 +10,7 @@ import {
   stairFootprintAABB,
   useScene,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 
 const MIN_CURVED_RISE = 0.3
 const MIN_CURVED_WIDTH = 0.4
@@ -427,6 +429,12 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   schemaVersion: 1,
   schema: StairNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      linkedLevelIds: (node) =>
+        node.toLevelId && node.toLevelId !== node.parentId ? [node.toLevelId as AnyNodeId] : [],
+    } satisfies FloorplanNodeExtension<StairNodeType>,
+  },
   snapProfile: 'structural',
   // A footprint with a clear front: you approach a stair from the low end,
   // which sits on the -Z side of the run (the run ascends along +Z). Show the

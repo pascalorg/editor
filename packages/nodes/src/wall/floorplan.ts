@@ -4,13 +4,23 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
-  getWallCurveLength,
+  getWallAssemblyThickness,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   isCurvedWall,
+  type WallAssemblyLayer,
   type WallMiterData,
   type WallNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
+import {
+  buildCurvedWallConstructionDimensions,
+  buildLevelWallConstructionDimensionPlan,
+  buildWallConstructionDimensions,
+  renderPlannedConstructionDimensions,
+  type WallConstructionDimensionPlan,
+} from './construction-dimensions'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
 // Slightly exaggerates thin walls so the 2D plan stays legible without
@@ -18,9 +28,13 @@ import {
 const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
 const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
+const FLOORPLAN_ASSEMBLY_GRAPHIC_MIN_SPACING = 0.06
+const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
+
+type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
 
 function floorplanWallThickness(wall: WallNode): number {
-  const baseThickness = wall.thickness ?? 0.1
+  const baseThickness = getWallAssemblyThickness(wall)
   const scaledThickness = baseThickness * FLOORPLAN_WALL_THICKNESS_SCALE
   return Math.min(
     baseThickness + FLOORPLAN_MAX_EXTRA_THICKNESS,
@@ -32,17 +46,48 @@ function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
 }
 
-function formatLengthMetric(meters: number): string {
-  return `${Number.parseFloat(meters.toFixed(2))}m`
+function wallWithModeledAssemblyThickness(wall: WallNode): WallNode {
+  return { ...wall, thickness: getWallAssemblyThickness(wall) }
+}
+
+export type WallFloorplanLevelData = {
+  miters: WallMiterData
+  documentMiters: WallMiterData
+  constructionDimensionsByReference: Record<WallDimensionReference, WallConstructionDimensionPlan>
 }
 
 export function computeWallFloorplanLevelData({
   siblings,
+  nodes,
 }: {
   siblings: ReadonlyArray<WallNode>
   nodes: Record<string, AnyNode>
-}): WallMiterData {
-  return calculateLevelMiters(siblings.map(exaggerateWallThickness))
+}): WallFloorplanLevelData {
+  const walls = siblings.map(exaggerateWallThickness)
+  return {
+    miters: calculateLevelMiters(walls),
+    documentMiters: calculateLevelMiters([...siblings]),
+    constructionDimensionsByReference: {
+      'finished-faces': buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({
+          datumPolicy: 'wall-face',
+          intersectionReferencePolicy: 'both-faces',
+        }),
+      ),
+      centerline: buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({ datumPolicy: 'centerline' }),
+      ),
+      'stud-faces': buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({ datumPolicy: 'structural-face' }),
+      ),
+    },
+  }
 }
 
 /**
@@ -55,26 +100,29 @@ export function computeWallFloorplanLevelData({
  *      wall body easily.
  *   4. Two endpoint handles (start + end) when selected — the registry
  *      layer hosts the 5-circle stack + hover transitions + 2D drag.
- *   5. A small dimension label at the midpoint when selected.
+ *   5. Exterior facade strings plus interior wall spans and hosted-opening widths.
  *
  * `ctx.levelData` provides the shared level miter graph when the floor-plan
  * dispatcher precomputes it; `ctx.siblings` remains the fallback path for
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const self = exaggerateWallThickness(node)
+  const { metricNotation, purpose, wallDimensionReference } = readFloorplanContext(ctx)
+  const documentMode = purpose === 'document'
+  const wallForPurpose = (wall: WallNode) =>
+    documentMode ? wallWithModeledAssemblyThickness(wall) : exaggerateWallThickness(wall)
+  const self = wallForPurpose(node)
   // Prefer the level-batch miter graph the floor-plan dispatcher precomputes
   // once per pass (`computeWallFloorplanLevelData`). Only the fallback path —
   // a direct builder caller with no shared data — pays the O(N) exaggerate +
   // level-wide miter calc per wall; the dispatcher path is O(1) here, which is
   // what keeps a wall drag from being O(N²) across the level.
+  const levelData = ctx.levelData as WallFloorplanLevelData | undefined
   const miters =
-    (ctx.levelData as WallMiterData | undefined) ??
+    (documentMode ? levelData?.documentMiters : levelData?.miters) ??
     calculateLevelMiters([
       self,
-      ...ctx.siblings
-        .filter((s): s is AnyNode & WallNode => s.type === 'wall')
-        .map(exaggerateWallThickness),
+      ...ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall').map(wallForPurpose),
     ])
 
   const polygon = getWallPlanFootprint(self, miters)
@@ -109,6 +157,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       stroke,
       strokeWidth: showSelectedChrome ? 0.03 : 0.02,
       opacity: 0.92,
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
       // so the cursor stays neutral (no drag/pointer affordance from
       // the slab below leaking through), but only the side-arrows and
@@ -117,6 +166,56 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       cursor: isSelected ? 'default' : undefined,
     },
   ]
+
+  children.push(...buildWallAssemblyFloorplanGraphics(self))
+
+  const dimensionStroke =
+    isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
+  const dimensionStandard = constructionDimensionStandard({
+    datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
+    metricNotation,
+  })
+  const exteriorCornerDimensionStandard = constructionDimensionStandard({
+    datumPolicy: 'structural-face',
+    metricNotation,
+  })
+  if (isCurvedWall(node)) {
+    children.push(
+      ...buildCurvedWallConstructionDimensions(self, {
+        unit: view?.unit ?? 'metric',
+        stroke: dimensionStroke,
+        profile: documentMode ? 'document' : 'editor',
+        standard: exteriorCornerDimensionStandard,
+        siblings: ctx.siblings.filter(
+          (sibling): sibling is AnyNode & WallNode => sibling.type === 'wall',
+        ),
+      }),
+    )
+  } else {
+    const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
+      node.id,
+    )
+    if (planned) {
+      children.push(
+        ...renderPlannedConstructionDimensions(
+          planned,
+          view?.unit ?? 'metric',
+          dimensionStroke,
+          documentMode ? 'document' : 'editor',
+          dimensionStandard,
+        ),
+      )
+    } else if (!levelData) {
+      children.push(
+        ...buildWallConstructionDimensions(self, ctx, {
+          unit: view?.unit ?? 'metric',
+          stroke: dimensionStroke,
+          profile: documentMode ? 'document' : 'editor',
+          standard: exteriorCornerDimensionStandard,
+        }),
+      )
+    }
+  }
 
   // Selection hatch overlay — only when the wall is *the* selected item
   // (not when it's just marquee-highlighted), matching the legacy.
@@ -172,19 +271,18 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       const dz = node.end[1] - node.start[1]
       const wallLength = Math.hypot(dx, dz)
       if (wallLength > 1e-6) {
-        const midX = (node.start[0] + node.end[0]) / 2
-        const midZ = (node.start[1] + node.end[1]) / 2
+        const midpoint = getWallMidpointHandlePoint(node)
         const nx = -dz / wallLength
         const nz = dx / wallLength
         const offset = floorplanWallThickness(node) / 2 + 0.05
         children.push({
           kind: 'move-arrow',
-          point: [midX + nx * offset, midZ + nz * offset],
+          point: [midpoint.x + nx * offset, midpoint.y + nz * offset],
           angle: Math.atan2(nz, nx),
         })
         children.push({
           kind: 'move-arrow',
-          point: [midX - nx * offset, midZ - nz * offset],
+          point: [midpoint.x - nx * offset, midpoint.y - nz * offset],
           angle: Math.atan2(-nz, -nx),
         })
       }
@@ -206,67 +304,438 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         payload: { wallId: node.id },
       })
     }
-
-    // Length measurement. Curved walls use the simple rounded label
-    // (the chord-vs-arc thing is hard to express with a dimension line);
-    // straight walls get the full architect's overlay with extension
-    // marks + ticks, offset to the side facing away from the level
-    // centroid (matches the legacy `getWallMeasurementOverlay`).
-    const length = getWallCurveLength(node)
-    if (length >= 0.1) {
-      const dx = node.end[0] - node.start[0]
-      const dz = node.end[1] - node.start[1]
-      const midX = (node.start[0] + node.end[0]) / 2
-      const midZ = (node.start[1] + node.end[1]) / 2
-
-      if (isCurvedWall(node)) {
-        children.push({
-          kind: 'dimension-label',
-          cx: midX,
-          cy: midZ,
-          text: formatLengthMetric(length),
-          angle: Math.atan2(dz, dx),
-        })
-      } else {
-        // Outward unit normal = perpendicular to (dx, dz), choose the
-        // side facing away from other walls' centroid so the dimension
-        // line sits outside the building.
-        const nx = -dz / length
-        const nz = dx / length
-        const wallSiblings = ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall')
-        const centroid = wallCentroid([node, ...wallSiblings])
-        const cx = midX - centroid[0]
-        const cz = midZ - centroid[1]
-        const facingAway = cx * nx + cz * nz >= 0 ? 1 : -1
-        children.push({
-          kind: 'dimension',
-          start: [node.start[0], node.start[1]],
-          end: [node.end[0], node.end[1]],
-          offsetNormal: [nx * facingAway, nz * facingAway],
-          offsetDistance: 0.75,
-          extensionOvershoot: 0.12,
-          text: formatLengthMetric(length),
-        })
-      }
-    }
   }
 
   return { kind: 'group', children }
 }
 
-function wallCentroid(walls: WallNode[]): [number, number] {
-  // Mean of every wall endpoint — cheap approximation of "where the
-  // building lives" so we can offset the dimension line away from it.
-  let sumX = 0
-  let sumZ = 0
-  let count = 0
-  for (const wall of walls) {
-    sumX += wall.start[0] + wall.end[0]
-    sumZ += wall.start[1] + wall.end[1]
-    count += 2
+function wallDimensionDatumPolicy(reference: WallDimensionReference) {
+  switch (reference) {
+    case 'centerline':
+      return 'centerline' as const
+    case 'stud-faces':
+      return 'structural-face' as const
+    case 'finished-faces':
+      return 'wall-face' as const
   }
-  if (count === 0) return [0, 0]
-  return [sumX / count, sumZ / count]
+}
+
+type WallAssemblyLayerSpan = {
+  layer: WallAssemblyLayer
+  interiorOffset: number
+  exteriorOffset: number
+}
+
+function buildWallAssemblyFloorplanGraphics(wall: WallNode): FloorplanGeometry[] {
+  if (isCurvedWall(wall)) return []
+
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return []
+
+  const spans = getWallAssemblyLayerSpans(wall)
+  if (spans.length === 0) return []
+
+  const dx = wall.end[0] - wall.start[0]
+  const dy = wall.end[1] - wall.start[1]
+  const length = Math.hypot(dx, dy)
+  if (length <= 1e-6) return []
+
+  const tx = dx / length
+  const ty = dy / length
+  const nx = -ty
+  const ny = tx
+  const startX = wall.start[0]
+  const startY = wall.start[1]
+  const endX = wall.end[0]
+  const endY = wall.end[1]
+
+  const graphics: FloorplanGeometry[] = []
+  for (const span of spans) {
+    const style = wallAssemblyLayerGraphicStyle(span.layer)
+    const points = wallLayerPolygon(startX, startY, endX, endY, nx, ny, span)
+    graphics.push({
+      kind: 'polygon',
+      points,
+      fill: style.fill,
+      stroke: style.stroke,
+      strokeWidth: style.strokeWidth,
+      fillOpacity: style.fillOpacity,
+      opacity: style.opacity,
+      pointerEvents: 'none',
+    })
+    graphics.push(
+      ...buildWallAssemblyLayerHatchLines({
+        span,
+        style,
+        startX,
+        startY,
+        endX,
+        endY,
+        tx,
+        ty,
+        nx,
+        ny,
+        length,
+      }),
+    )
+  }
+
+  graphics.push(...buildWallAssemblyFaceLines(startX, startY, endX, endY, nx, ny, spans))
+  return graphics
+}
+
+function getWallAssemblyLayerSpans(wall: WallNode): WallAssemblyLayerSpan[] {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return []
+
+  const coreLayers = layers.filter((layer) => layer.side === 'core')
+  const coreThickness =
+    coreLayers.length > 0
+      ? coreLayers.reduce((sum, layer) => sum + layer.thickness, 0)
+      : (wall.thickness ?? 0.1)
+  const coreInteriorFace = -coreThickness / 2
+  const coreExteriorFace = coreThickness / 2
+  const spans: WallAssemblyLayerSpan[] = []
+
+  let coreOffset = coreInteriorFace
+  for (const layer of coreLayers) {
+    const interiorOffset = coreOffset
+    const exteriorOffset = coreOffset + layer.thickness
+    spans.push({ layer, interiorOffset, exteriorOffset })
+    coreOffset = exteriorOffset
+  }
+
+  let interiorOffset = coreInteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'interior')) {
+    const exteriorOffset = interiorOffset
+    const nextInteriorOffset = exteriorOffset - layer.thickness
+    spans.push({ layer, interiorOffset: nextInteriorOffset, exteriorOffset })
+    interiorOffset = nextInteriorOffset
+  }
+
+  let exteriorOffset = coreExteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'exterior')) {
+    const interiorFaceOffset = exteriorOffset
+    const nextExteriorOffset = interiorFaceOffset + layer.thickness
+    spans.push({ layer, interiorOffset: interiorFaceOffset, exteriorOffset: nextExteriorOffset })
+    exteriorOffset = nextExteriorOffset
+  }
+
+  return spans
+}
+
+type WallAssemblyLayerGraphicStyle = {
+  fill: string
+  stroke: string
+  strokeWidth: number
+  fillOpacity: number
+  opacity?: number
+  hatch?: 'diagonal' | 'cross' | 'brick' | 'air' | 'furring'
+  hatchStroke: string
+  hatchDasharray?: string
+}
+
+function wallAssemblyLayerGraphicStyle(layer: WallAssemblyLayer): WallAssemblyLayerGraphicStyle {
+  switch (layer.role) {
+    case 'structure':
+      return {
+        fill: '#475569',
+        stroke: '#111827',
+        strokeWidth: 0.006,
+        fillOpacity: 0.34,
+        hatch: 'diagonal',
+        hatchStroke: '#0f172a',
+      }
+    case 'concrete-block':
+    case 'structural-masonry':
+      return {
+        fill: '#cbd5e1',
+        stroke: '#334155',
+        strokeWidth: 0.006,
+        fillOpacity: 0.82,
+        hatch: 'cross',
+        hatchStroke: '#475569',
+      }
+    case 'solid-concrete':
+      return {
+        fill: '#94a3b8',
+        stroke: '#334155',
+        strokeWidth: 0.006,
+        fillOpacity: 0.78,
+        hatch: 'diagonal',
+        hatchStroke: '#64748b',
+      }
+    case 'masonry-veneer':
+      return {
+        fill: '#fca5a5',
+        stroke: '#7f1d1d',
+        strokeWidth: 0.004,
+        fillOpacity: 0.45,
+        hatch: 'brick',
+        hatchStroke: '#991b1b',
+      }
+    case 'air-space':
+      return {
+        fill: '#ffffff',
+        stroke: '#94a3b8',
+        strokeWidth: 0.004,
+        fillOpacity: 0.15,
+        hatch: 'air',
+        hatchStroke: '#64748b',
+        hatchDasharray: '0.035 0.025',
+      }
+    case 'furring':
+      return {
+        fill: '#fde68a',
+        stroke: '#92400e',
+        strokeWidth: 0.004,
+        fillOpacity: 0.42,
+        hatch: 'furring',
+        hatchStroke: '#92400e',
+        hatchDasharray: '0.04 0.02',
+      }
+    case 'interior-finish':
+    case 'exterior-finish':
+    case 'exterior-sheathing':
+      return {
+        fill: '#f8fafc',
+        stroke: '#94a3b8',
+        strokeWidth: 0.003,
+        fillOpacity: 0.72,
+        hatch: layer.role === 'exterior-sheathing' ? 'diagonal' : undefined,
+        hatchStroke: '#94a3b8',
+      }
+  }
+}
+
+function wallLayerPolygon(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  nx: number,
+  ny: number,
+  span: WallAssemblyLayerSpan,
+): FloorplanPoint[] {
+  return [
+    [startX + nx * span.interiorOffset, startY + ny * span.interiorOffset],
+    [endX + nx * span.interiorOffset, endY + ny * span.interiorOffset],
+    [endX + nx * span.exteriorOffset, endY + ny * span.exteriorOffset],
+    [startX + nx * span.exteriorOffset, startY + ny * span.exteriorOffset],
+  ]
+}
+
+function buildWallAssemblyLayerHatchLines({
+  span,
+  style,
+  startX,
+  startY,
+  tx,
+  ty,
+  nx,
+  ny,
+  length,
+}: {
+  span: WallAssemblyLayerSpan
+  style: WallAssemblyLayerGraphicStyle
+  startX: number
+  startY: number
+  endX: number
+  endY: number
+  tx: number
+  ty: number
+  nx: number
+  ny: number
+  length: number
+}): FloorplanGeometry[] {
+  if (!style.hatch) return []
+
+  const layerWidth = span.exteriorOffset - span.interiorOffset
+  if (layerWidth <= 1e-6) return []
+
+  const interval = Math.max(FLOORPLAN_ASSEMBLY_GRAPHIC_MIN_SPACING, layerWidth * 1.8)
+  const insetAlong = Math.min(0.035, length * 0.08)
+  const lines: FloorplanGeometry[] = []
+
+  if (style.hatch === 'air') {
+    const midOffset = (span.interiorOffset + span.exteriorOffset) / 2
+    lines.push(
+      wallAssemblyLine(
+        startX + tx * insetAlong,
+        startY + ty * insetAlong,
+        startX + tx * (length - insetAlong),
+        startY + ty * (length - insetAlong),
+        nx,
+        ny,
+        midOffset,
+        style.hatchStroke,
+        style.hatchDasharray,
+      ),
+    )
+    return lines
+  }
+
+  if (style.hatch === 'brick') {
+    for (let along = interval; along < length; along += interval) {
+      lines.push(
+        wallCrossLine(startX, startY, tx, ty, nx, ny, along, span, style.hatchStroke, undefined),
+      )
+    }
+    const thirds = [
+      span.interiorOffset + layerWidth / 3,
+      span.interiorOffset + (layerWidth * 2) / 3,
+    ]
+    for (const offset of thirds) {
+      lines.push(
+        wallAssemblyLine(
+          startX + tx * insetAlong,
+          startY + ty * insetAlong,
+          startX + tx * (length - insetAlong),
+          startY + ty * (length - insetAlong),
+          nx,
+          ny,
+          offset,
+          style.hatchStroke,
+          style.hatchDasharray,
+        ),
+      )
+    }
+    return lines
+  }
+
+  if (style.hatch === 'furring') {
+    for (let along = interval; along < length; along += interval) {
+      lines.push(
+        wallCrossLine(
+          startX,
+          startY,
+          tx,
+          ty,
+          nx,
+          ny,
+          along,
+          span,
+          style.hatchStroke,
+          style.hatchDasharray,
+        ),
+      )
+    }
+    return lines
+  }
+
+  const emitDiagonal = (flip: boolean) => {
+    for (let along = interval / 2; along < length; along += interval) {
+      const centerOffset = (span.interiorOffset + span.exteriorOffset) / 2
+      const halfAlong = Math.min(interval * 0.35, length * 0.08)
+      const halfAcross = layerWidth * 0.42
+      const sign = flip ? -1 : 1
+      lines.push({
+        kind: 'line',
+        x1: startX + tx * Math.max(0, along - halfAlong) + nx * (centerOffset - sign * halfAcross),
+        y1: startY + ty * Math.max(0, along - halfAlong) + ny * (centerOffset - sign * halfAcross),
+        x2:
+          startX +
+          tx * Math.min(length, along + halfAlong) +
+          nx * (centerOffset + sign * halfAcross),
+        y2:
+          startY +
+          ty * Math.min(length, along + halfAlong) +
+          ny * (centerOffset + sign * halfAcross),
+        stroke: style.hatchStroke,
+        strokeWidth: 0.55,
+        strokeDasharray: style.hatchDasharray,
+        vectorEffect: 'non-scaling-stroke',
+        pointerEvents: 'none',
+      })
+    }
+  }
+
+  emitDiagonal(false)
+  if (style.hatch === 'cross') emitDiagonal(true)
+  return lines
+}
+
+function wallAssemblyLine(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  nx: number,
+  ny: number,
+  offset: number,
+  stroke: string,
+  strokeDasharray: string | undefined,
+): FloorplanGeometry {
+  return {
+    kind: 'line',
+    x1: x1 + nx * offset,
+    y1: y1 + ny * offset,
+    x2: x2 + nx * offset,
+    y2: y2 + ny * offset,
+    stroke,
+    strokeWidth: 0.5,
+    strokeDasharray,
+    vectorEffect: 'non-scaling-stroke',
+    pointerEvents: 'none',
+  }
+}
+
+function wallCrossLine(
+  startX: number,
+  startY: number,
+  tx: number,
+  ty: number,
+  nx: number,
+  ny: number,
+  along: number,
+  span: WallAssemblyLayerSpan,
+  stroke: string,
+  strokeDasharray: string | undefined,
+): FloorplanGeometry {
+  return {
+    kind: 'line',
+    x1: startX + tx * along + nx * span.interiorOffset,
+    y1: startY + ty * along + ny * span.interiorOffset,
+    x2: startX + tx * along + nx * span.exteriorOffset,
+    y2: startY + ty * along + ny * span.exteriorOffset,
+    stroke,
+    strokeWidth: 0.5,
+    strokeDasharray,
+    vectorEffect: 'non-scaling-stroke',
+    pointerEvents: 'none',
+  }
+}
+
+function buildWallAssemblyFaceLines(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  nx: number,
+  ny: number,
+  spans: WallAssemblyLayerSpan[],
+): FloorplanGeometry[] {
+  const offsets = new Set<number>()
+  for (const span of spans) {
+    offsets.add(span.interiorOffset)
+    offsets.add(span.exteriorOffset)
+  }
+
+  const sortedOffsets = [...offsets].sort((a, b) => a - b)
+  const minOffset = sortedOffsets[0]
+  const maxOffset = sortedOffsets.at(-1)
+
+  return sortedOffsets.map((offset) => ({
+    kind: 'line',
+    x1: startX + nx * offset,
+    y1: startY + ny * offset,
+    x2: endX + nx * offset,
+    y2: endY + ny * offset,
+    stroke: offset === minOffset || offset === maxOffset ? '#111827' : '#64748b',
+    strokeWidth: offset === minOffset || offset === maxOffset ? 0.85 : 0.45,
+    vectorEffect: 'non-scaling-stroke',
+    pointerEvents: 'none',
+  }))
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import {
+  getPascalTextureRef,
   poseDoorMovingParts,
   poseWindowMovingParts,
   SCENE_LAYER,
@@ -20,7 +21,11 @@ import {
 } from '@pascal-app/viewer'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import {
+  GLTFExporter,
+  type GLTFExporterPlugin,
+  type GLTFWriter,
+} from 'three/examples/jsm/exporters/GLTFExporter.js'
 import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
 
 /**
@@ -41,6 +46,10 @@ export type GlbExport = {
   animations: THREE.AnimationClip[]
 }
 
+export type GlbExportOptions = {
+  textures?: 'embed' | 'reference'
+}
+
 /** Resolve after the next couple of animation frames, giving React/R3F time to
  * commit and mount export-only geometry (e.g. instanced kinds' real meshes)
  * before the exporter clones the scene graph. Callers must set
@@ -51,10 +60,63 @@ export function nextFrames(): Promise<void> {
   })
 }
 
+type GltfExtrasDef = {
+  extras?: Record<string, unknown>
+}
+
+type TextureReferenceWriter = GLTFWriter & {
+  json: {
+    images?: GltfExtrasDef[]
+  }
+}
+
+function getExportedImageIndex(textureDef: Record<string, unknown>): number | null {
+  if (Number.isInteger(textureDef.source)) return textureDef.source as number
+  const extensions = textureDef.extensions as Record<string, { source?: unknown }> | undefined
+  const source = extensions?.EXT_texture_webp?.source ?? extensions?.EXT_texture_avif?.source
+  return Number.isInteger(source) ? (source as number) : null
+}
+
+export function writeTextureReferenceExtras(
+  writer: GLTFWriter,
+  texture: THREE.Texture,
+  textureDef: Record<string, unknown>,
+) {
+  const ref = getPascalTextureRef(texture)
+  if (!ref) return
+
+  const imageIndex = getExportedImageIndex(textureDef)
+  const imageDef =
+    imageIndex === null ? undefined : (writer as TextureReferenceWriter).json.images?.[imageIndex]
+  if (!imageDef) {
+    throw new Error('GLTFExporter did not expose an image for a referenced Pascal texture')
+  }
+
+  const textureWithExtras = textureDef as GltfExtrasDef
+  textureWithExtras.extras = {
+    ...textureWithExtras.extras,
+    pascalTextureRef: ref,
+  }
+  imageDef.extras = {
+    ...imageDef.extras,
+    pascalTextureRef: ref,
+  }
+}
+
+function textureReferencePlugin(writer: GLTFWriter): GLTFExporterPlugin {
+  return {
+    writeTexture: (texture, textureDef) => {
+      writeTextureReferenceExtras(writer, texture, textureDef)
+    },
+  }
+}
+
 export async function exportSceneToGlb(
   sceneGroup: Object3D,
   nodes: Record<string, AnyNode>,
+  options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
+  const textureMode = options.textures ?? 'embed'
   emitter.emit('thumbnail:before-capture', undefined)
   // Snap levels to their true stacked positions (like thumbnail capture) so the
   // export always reflects the clean stacked building, regardless of the live
@@ -63,7 +125,10 @@ export async function exportSceneToGlb(
   const restoreLevels = snapLevelsToTruePositions()
   let prepared: ReturnType<typeof prepareSceneForExport>
   try {
-    prepared = prepareSceneForExport(sceneGroup, nodes)
+    prepared =
+      textureMode === 'reference'
+        ? prepareSceneForExport(sceneGroup, nodes, { textures: 'reference' })
+        : prepareSceneForExport(sceneGroup, nodes)
   } finally {
     restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
@@ -71,6 +136,7 @@ export async function exportSceneToGlb(
   const { scene: exportScene, animations } = prepared
 
   const exporter = new GLTFExporter()
+  if (textureMode === 'reference') exporter.register(textureReferencePlugin)
   // Painted finishes use KTX2 (GPU-compressed) maps; GLTFExporter can't read
   // those directly. WebGPUTextureUtils blits each one to RGBA on its own
   // offscreen renderer (passing the live renderer would resize/draw over the
@@ -112,6 +178,7 @@ export async function exportSceneToGlb(
 export function prepareSceneForExport(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
+  options: GlbExportOptions = {},
 ): GlbExport {
   const scene = source.clone(true)
   const cloneByOriginal = pairClones(source, scene)
@@ -142,7 +209,7 @@ export function prepareSceneForExport(
 
   pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
-  convertMaterials(scene)
+  convertMaterials(scene, options.textures ?? 'embed')
 
   const { clips, clipNamesByNode } = bakeAnimationClips(cloneByOriginal, nodes)
 
@@ -352,14 +419,31 @@ const STANDARD_MAP_SLOTS = [
   'bumpMap',
 ] as const
 
-function convertMaterials(root: THREE.Object3D) {
+const REFERENCE_MAP_SLOTS = [
+  ...STANDARD_MAP_SLOTS,
+  'clearcoatMap',
+  'clearcoatNormalMap',
+  'clearcoatRoughnessMap',
+  'iridescenceMap',
+  'iridescenceThicknessMap',
+  'transmissionMap',
+  'thicknessMap',
+  'specularIntensityMap',
+  'specularColorMap',
+  'sheenRoughnessMap',
+  'sheenColorMap',
+  'anisotropyMap',
+] as const
+
+function convertMaterials(root: THREE.Object3D, textureMode: 'embed' | 'reference') {
   const cache = new Map<THREE.Material, THREE.Material>()
+  const placeholderCache = new Map<THREE.Texture, THREE.Texture>()
   root.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
     const material = mesh.material
     if (Array.isArray(material)) {
-      mesh.material = material.map((m) => convertMaterial(m, cache))
+      mesh.material = material.map((m) => convertMaterial(m, cache, textureMode, placeholderCache))
       return
     }
     // glTF has no BackSide — GLTFExporter renders the *front* face for any
@@ -373,7 +457,7 @@ function convertMaterials(root: THREE.Object3D) {
     ) {
       mesh.geometry = flipGeometryWinding(mesh.geometry)
     }
-    mesh.material = convertMaterial(material, cache)
+    mesh.material = convertMaterial(material, cache, textureMode, placeholderCache)
   })
 }
 
@@ -423,8 +507,19 @@ function flipGeometryWinding(geometry: THREE.BufferGeometry): THREE.BufferGeomet
 function convertMaterial(
   material: THREE.Material,
   cache: Map<THREE.Material, THREE.Material>,
+  textureMode: 'embed' | 'reference',
+  placeholderCache: Map<THREE.Texture, THREE.Texture>,
 ): THREE.Material {
-  if ((material as { isNodeMaterial?: boolean }).isNodeMaterial !== true) return material
+  const isNodeMaterial = (material as { isNodeMaterial?: boolean }).isNodeMaterial === true
+  if (!isNodeMaterial) {
+    if (textureMode === 'embed') return material
+    const cached = cache.get(material)
+    if (cached) return cached
+    const target = material.clone()
+    replaceReferencedTextures(target, placeholderCache)
+    cache.set(material, target)
+    return target
+  }
 
   const cached = cache.get(material)
   if (cached) return cached
@@ -465,8 +560,88 @@ function convertMaterial(
     }
   }
 
+  if (textureMode === 'reference') replaceReferencedTextures(target, placeholderCache)
+
   cache.set(material, target)
   return target
+}
+
+function replaceReferencedTextures(
+  material: THREE.Material,
+  placeholderCache: Map<THREE.Texture, THREE.Texture>,
+) {
+  const textureMaterial = material as THREE.Material & Record<string, unknown>
+  for (const slot of REFERENCE_MAP_SLOTS) {
+    const texture = textureMaterial[slot]
+    if (!(texture instanceof THREE.Texture) || !getPascalTextureRef(texture)) continue
+
+    let placeholder = placeholderCache.get(texture)
+    if (!placeholder) {
+      placeholder = createReferencePlaceholder(texture)
+      placeholderCache.set(texture, placeholder)
+    }
+    textureMaterial[slot] = placeholder
+  }
+}
+
+/** GLTFExporter serializes images via canvas drawImage/createImageBitmap,
+ *  which reject a DataTexture's raw `{data,width,height}` image — so in DOM
+ *  environments the placeholder must be canvas-backed. The DataTexture branch
+ *  covers non-DOM runs (bun tests), where the exporter itself never runs. */
+function createPlaceholderCanvas(): OffscreenCanvas | HTMLCanvasElement | null {
+  const canvas =
+    typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(1, 1)
+      : typeof document !== 'undefined'
+        ? Object.assign(document.createElement('canvas'), { width: 1, height: 1 })
+        : null
+  if (!canvas) return null
+  const ctx = canvas.getContext('2d') as
+    | OffscreenCanvasRenderingContext2D
+    | CanvasRenderingContext2D
+    | null
+  if (!ctx) return null
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, 1, 1)
+  return canvas
+}
+
+function createReferencePlaceholder(texture: THREE.Texture): THREE.Texture {
+  const ref = getPascalTextureRef(texture)
+  if (!ref) throw new Error('Cannot create a placeholder for an invalid Pascal texture reference')
+
+  const canvas = createPlaceholderCanvas()
+  const placeholder = canvas
+    ? new THREE.Texture(canvas)
+    : new THREE.DataTexture(
+        new Uint8Array([255, 255, 255, 255]),
+        1,
+        1,
+        THREE.RGBAFormat,
+        THREE.UnsignedByteType,
+      )
+  placeholder.name = texture.name
+  placeholder.mapping = texture.mapping
+  placeholder.channel = texture.channel
+  placeholder.wrapS = texture.wrapS
+  placeholder.wrapT = texture.wrapT
+  placeholder.magFilter = texture.magFilter
+  placeholder.minFilter = texture.minFilter
+  placeholder.anisotropy = texture.anisotropy
+  placeholder.offset.copy(texture.offset)
+  placeholder.repeat.copy(texture.repeat)
+  placeholder.center.copy(texture.center)
+  placeholder.rotation = texture.rotation
+  placeholder.matrixAutoUpdate = texture.matrixAutoUpdate
+  placeholder.matrix.copy(texture.matrix)
+  placeholder.generateMipmaps = texture.generateMipmaps
+  placeholder.premultiplyAlpha = texture.premultiplyAlpha
+  placeholder.flipY = texture.flipY
+  placeholder.unpackAlignment = texture.unpackAlignment
+  placeholder.colorSpace = texture.colorSpace
+  placeholder.userData = { pascalTextureRef: ref }
+  placeholder.needsUpdate = true
+  return placeholder
 }
 
 // --- Animation clip baking ----------------------------------------------

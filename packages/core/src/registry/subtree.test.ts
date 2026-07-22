@@ -143,9 +143,118 @@ describe('cloneNodesInto', () => {
     ) {
       const anchor = clonedMeasurement.measurement.points[0]
       expect(Array.isArray(anchor)).toBe(false)
-      if (!Array.isArray(anchor)) {
+      if (anchor && !Array.isArray(anchor)) {
         expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
       }
+    }
+  })
+
+  test('remaps associative construction-dimension anchors inside the cloned subtree', () => {
+    const wall = makeNode('wall_1', 'wall', { parentId: 'level_1' })
+    const dimension = makeNode('construction-dimension_1', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: 'wall_1', featureId: 'wall:start' },
+          fallback: [0, 0, 0],
+        },
+        [1, 0, 0],
+        {
+          kind: 'feature',
+          reference: { nodeId: 'wall_1', featureId: 'wall:end' },
+          fallback: [2, 0, 0],
+        },
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      chainMode: 'continuous',
+    })
+    const result = cloneNodesInto([wall, dimension], {
+      rootId: 'wall_1' as AnyNodeId,
+    })
+    const clonedDimension = result.nodes.find((node) => node.type === 'construction-dimension')
+
+    expect(clonedDimension?.type).toBe('construction-dimension')
+    if (clonedDimension?.type === 'construction-dimension') {
+      const anchor = clonedDimension.anchors[0]
+      expect(Array.isArray(anchor)).toBe(false)
+      if (anchor && !Array.isArray(anchor)) {
+        expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+      const lastAnchor = clonedDimension.anchors[2]
+      expect(Array.isArray(lastAnchor)).toBe(false)
+      if (lastAnchor && !Array.isArray(lastAnchor)) {
+        expect(lastAnchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+    }
+  })
+
+  test('remaps a construction dimension foundation controller when both are cloned', () => {
+    const controller = makeNode('construction-dimension_foundation', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [4, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      drawingType: 'foundation-plan',
+    })
+    const dependent = makeNode('construction-dimension_floor', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      controllingDimensionId: controller.id,
+    })
+
+    const result = cloneNodesInto([controller, dependent], {
+      rootId: controller.id as AnyNodeId,
+    })
+    const clonedDependent = result.nodes.find(
+      (node) => node.id === result.idMap.get(dependent.id as AnyNodeId),
+    )
+
+    expect(clonedDependent?.type).toBe('construction-dimension')
+    if (clonedDependent?.type === 'construction-dimension') {
+      expect(clonedDependent.controllingDimensionId).toBe(
+        result.idMap.get(
+          controller.id as AnyNodeId,
+        ) as typeof clonedDependent.controllingDimensionId,
+      )
+    }
+  })
+
+  test('regenerates drawing-sheet identities while preserving external level references', () => {
+    const original = makeNode('drawing-sheet_a101', 'drawing-sheet', {
+      placedViews: [{ id: 'drawing-view_main', levelId: 'level_existing' }],
+      generalNoteSetIds: [],
+      generalNoteSets: [],
+      generalNotes: [],
+      keyedNoteDefinitions: [{ id: 'keyed-note_a', key: 'A', text: 'NOTE' }],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_a',
+          definitionId: 'keyed-note_a',
+          placedViewId: 'drawing-view_main',
+          position: [1, 1],
+        },
+      ],
+      keyedNoteLegend: [],
+      documentMarkers: [],
+      schedules: [],
+    })
+
+    const { nodes } = cloneNodesInto([original], { rootId: original.id as AnyNodeId })
+    const cloned = nodes[0]
+
+    expect(cloned?.type).toBe('drawing-sheet')
+    if (cloned?.type === 'drawing-sheet') {
+      expect(cloned.placedViews[0]?.levelId).toBe('level_existing')
+      expect(cloned.placedViews[0]?.id).not.toBe('drawing-view_main')
+      expect(cloned.keyedNoteInstances[0]?.definitionId).toBe(cloned.keyedNoteDefinitions[0]?.id)
+      expect(cloned.keyedNoteInstances[0]?.placedViewId).toBe(cloned.placedViews[0]?.id)
     }
   })
 

@@ -1,4 +1,5 @@
 import {
+  getWallArcData,
   getWallCurveFrameAt,
   getWallThickness,
   type MeasurementFeature,
@@ -14,6 +15,7 @@ const point = (x: number, y: number, z: number) => [x, y, z] as [number, number,
 
 export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
   const height = resolveWallOpeningCeiling(wall, useScene.getState().nodes)
+  const arc = getWallArcData(wall)
   const centerline = sampleWallCenterline(wall).map(({ x, y }) => point(x, 0, y))
   const midpoint = getWallCurveFrameAt(wall, 0.5).point
   const halfThickness = getWallThickness(wall) / 2
@@ -63,6 +65,17 @@ export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
       priority: 90,
       geometry: { kind: 'point', point: point(midpoint.x, 0, midpoint.y) },
     },
+    ...(arc
+      ? [
+          {
+            id: 'wall:curve:center',
+            label: 'Wall arc center',
+            snapKind: 'center' as const,
+            priority: 90,
+            geometry: { kind: 'point' as const, point: point(arc.center.x, 0, arc.center.y) },
+          },
+        ]
+      : []),
     {
       id: 'wall:face:left',
       label: 'Wall face',

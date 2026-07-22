@@ -12,6 +12,8 @@ import {
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { readFloorplanContext } from '@pascal-app/editor'
+import { formatConstructionLength } from './construction-length'
 import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
 /**
@@ -66,7 +68,8 @@ export function buildOpeningPlacementDimensions(
     z1 + dirZ * along + outwardNormal[1] * halfThickness,
   ]
   const centrePoint = (along: number): FloorplanPoint => [x1 + dirX * along, z1 + dirZ * along]
-  const round = (value: number) => Number.parseFloat(value.toFixed(2))
+  const unit = ctx.viewState?.unit ?? 'metric'
+  const metricNotation = readFloorplanContext(ctx).metricNotation
 
   // This wall's OTHER openings as wall-local spans. `ctx.siblings` only includes
   // same-kind nodes; doors and windows need each other, so resolve the wall's
@@ -118,7 +121,7 @@ export function buildOpeningPlacementDimensions(
       offsetNormal: outwardNormal,
       offsetDistance: FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET,
       extensionOvershoot: 0.12,
-      text: `${round(gap.distance)}m`,
+      text: formatConstructionLength(gap.distance, unit, 'editor', { metricNotation }),
       stroke: '#f97316',
     })
   }
@@ -126,7 +129,9 @@ export function buildOpeningPlacementDimensions(
   // Equal-spacing rhythm — a "=" badge per equal gap, on the wall centreline.
   if (guides.equalSpacing) {
     const wallAngle = Math.atan2(dz, dx)
-    const text = `${round(guides.equalSpacing.gap)}m`
+    const text = formatConstructionLength(guides.equalSpacing.gap, unit, 'editor', {
+      metricNotation,
+    })
     for (const seg of guides.equalSpacing.segments) {
       out.push({
         kind: 'equal-spacing-badge',

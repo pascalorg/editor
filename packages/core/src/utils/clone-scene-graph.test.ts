@@ -77,6 +77,119 @@ describe('forkSceneGraph', () => {
   })
 })
 
+describe('construction-dimension clone references', () => {
+  function sceneWithControlledDimensions(): SceneGraph {
+    const site = makeNode('site_1', 'site', { children: ['level_1'] })
+    const level = makeNode('level_1', 'level', {
+      parentId: 'site_1',
+      children: ['construction-dimension_foundation', 'construction-dimension_floor'],
+    })
+    const controller = makeNode('construction-dimension_foundation', 'construction-dimension', {
+      name: 'Foundation controller',
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [4, 0, 0],
+      ],
+      controllingDimensionId: null,
+    })
+    const dependent = makeNode('construction-dimension_floor', 'construction-dimension', {
+      name: 'Floor dependent',
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [4, 0, 0],
+      ],
+      controllingDimensionId: controller.id,
+    })
+    return {
+      nodes: {
+        [site.id]: site,
+        [level.id]: level,
+        [controller.id]: controller,
+        [dependent.id]: dependent,
+      },
+      rootNodeIds: [site.id],
+    }
+  }
+
+  test('remaps controller IDs in whole-scene clones', () => {
+    const cloned = cloneSceneGraph(sceneWithControlledDimensions())
+    const dimensions = Object.values(cloned.nodes).filter(
+      (node) => node.type === 'construction-dimension',
+    )
+    const controller = dimensions.find((node) => node.name === 'Foundation controller')
+    const dependent = dimensions.find((node) => node.name === 'Floor dependent')
+
+    expect(controller?.type).toBe('construction-dimension')
+    expect(dependent?.type).toBe('construction-dimension')
+    if (
+      controller?.type === 'construction-dimension' &&
+      dependent?.type === 'construction-dimension'
+    ) {
+      expect(dependent.controllingDimensionId).toBe(controller.id)
+    }
+  })
+
+  test('remaps controller IDs in level-subtree clones', () => {
+    const scene = sceneWithControlledDimensions()
+    const cloned = cloneLevelSubtree(scene.nodes, 'level_1' as AnyNodeId)
+    const dimensions = cloned.clonedNodes.filter((node) => node.type === 'construction-dimension')
+    const controller = dimensions.find((node) => node.name === 'Foundation controller')
+    const dependent = dimensions.find((node) => node.name === 'Floor dependent')
+
+    expect(controller?.type).toBe('construction-dimension')
+    expect(dependent?.type).toBe('construction-dimension')
+    if (
+      controller?.type === 'construction-dimension' &&
+      dependent?.type === 'construction-dimension'
+    ) {
+      expect(dependent.controllingDimensionId).toBe(controller.id)
+    }
+  })
+})
+
+describe('drawing-sheet clone references', () => {
+  test('remaps placed levels and nested sheet identities in whole-scene clones', () => {
+    const level = makeNode('level_main', 'level')
+    const sheet = makeNode('drawing-sheet_a101', 'drawing-sheet', {
+      placedViews: [{ id: 'drawing-view_main', levelId: level.id }],
+      generalNoteSetIds: [],
+      generalNoteSets: [],
+      generalNotes: [],
+      keyedNoteDefinitions: [{ id: 'keyed-note_a', key: 'A', text: 'NOTE' }],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_a',
+          definitionId: 'keyed-note_a',
+          placedViewId: 'drawing-view_main',
+          position: [1, 1],
+        },
+      ],
+      keyedNoteLegend: [],
+      documentMarkers: [],
+      schedules: [],
+    })
+    const cloned = cloneSceneGraph({
+      nodes: { [level.id]: level, [sheet.id]: sheet },
+      rootNodeIds: [level.id, sheet.id] as AnyNodeId[],
+    })
+    const clonedLevel = Object.values(cloned.nodes).find((node) => node.type === 'level')
+    const clonedSheet = Object.values(cloned.nodes).find((node) => node.type === 'drawing-sheet')
+
+    expect(clonedLevel).toBeDefined()
+    expect(clonedSheet?.type).toBe('drawing-sheet')
+    if (clonedLevel && clonedSheet?.type === 'drawing-sheet') {
+      expect(clonedSheet.placedViews[0]?.levelId).toBe(clonedLevel.id)
+      expect(clonedSheet.placedViews[0]?.id).not.toBe('drawing-view_main')
+      expect(clonedSheet.keyedNoteInstances[0]?.definitionId).toBe(
+        clonedSheet.keyedNoteDefinitions[0]?.id,
+      )
+      expect(clonedSheet.keyedNoteInstances[0]?.placedViewId).toBe(clonedSheet.placedViews[0]?.id)
+    }
+  })
+})
+
 describe('supportSlabId remap', () => {
   test('cloneSceneGraph remaps supportSlabId to the cloned slab id', () => {
     const level = makeNode('level_1', 'level', { children: ['slab_1', 'item_1'] })

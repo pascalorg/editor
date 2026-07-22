@@ -32,6 +32,10 @@ import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
 import { ColumnPreview } from './renderer'
 
 const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
@@ -87,7 +91,7 @@ const ColumnTool = () => {
         setCursorVisible(true)
       }
 
-      const { position, guides } = resolveAlignedFloorPlacement({
+      const { position: alignedPosition, guides } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
         rawZ: event.localPosition[2],
@@ -97,7 +101,18 @@ const ColumnTool = () => {
         applyAlignmentSnap: isMagneticSnapActive(),
         bypassGrid: !isGridSnapActive(),
       })
-      useAlignmentGuides.getState().set(guides)
+      const structuralSnap =
+        isGridSnapActive() || isMagneticSnapActive()
+          ? resolveStructuralGridSnap(
+              [alignedPosition[0], alignedPosition[2]],
+              collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
+            )
+          : null
+      const position: [number, number, number] = structuralSnap
+        ? [structuralSnap.point[0], alignedPosition[1], structuralSnap.point[1]]
+        : alignedPosition
+      if (structuralSnap) useAlignmentGuides.getState().clear()
+      else useAlignmentGuides.getState().set(guides)
 
       const visualPosition = getFloorStackPreviewPosition({
         node: previewNode,
@@ -134,7 +149,7 @@ const ColumnTool = () => {
     }
 
     const commitAtCursor = (event: FloorPlacementClickTriggerEvent) => {
-      const position =
+      const fallbackPosition =
         lastCursorRef.current ??
         getLevelLocalSnappedPosition(
           activeLevelId,
@@ -142,6 +157,16 @@ const ColumnTool = () => {
           useEditor.getState().gridSnapStep,
           !isGridSnapActive(),
         )
+      const structuralSnap =
+        isGridSnapActive() || isMagneticSnapActive()
+          ? resolveStructuralGridSnap(
+              [fallbackPosition[0], fallbackPosition[2]],
+              collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
+            )
+          : null
+      const position: [number, number, number] = structuralSnap
+        ? [structuralSnap.point[0], fallbackPosition[1], structuralSnap.point[1]]
+        : fallbackPosition
 
       const column = ColumnNode.parse({
         ...createColumnFromPreset(DEFAULT_COLUMN_PRESET_ID, position),

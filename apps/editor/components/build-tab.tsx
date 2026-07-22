@@ -1,7 +1,12 @@
 'use client'
 
 import { nodeRegistry } from '@pascal-app/core'
-import { MaterialPaintPanel, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  getFloorplanNodeExtension,
+  MaterialPaintPanel,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -12,24 +17,6 @@ import {
   TooltipTrigger,
 } from '@/components/toolbar-tooltip'
 import { cn } from '@/lib/utils'
-
-/**
- * Raw structure-tool kinds the Build tab can activate. These map 1:1 to the
- * editor's `StructureTool` ids.
- */
-type BuildToolKind =
-  | 'wall'
-  | 'fence'
-  | 'slab'
-  | 'ceiling'
-  | 'roof'
-  | 'stair'
-  | 'elevator'
-  | 'door'
-  | 'window'
-  | 'column'
-  | 'shelf'
-  | 'spawn'
 
 /**
  * MEP (mechanical / plumbing) tool kinds surfaced under the Build tab's "MEP"
@@ -53,7 +40,8 @@ type BuildType = {
   /** Raster asset tile (legacy Build sidebar artwork). */
   iconSrc: string
   /** Present for structure-tool types (absent for paint mode and the MEP group). */
-  kind?: BuildToolKind
+  kind?: string
+  paletteOrder?: number
   /** Non-placement special mode. */
   mode?: 'material-paint'
 }
@@ -67,7 +55,7 @@ type MepItem = {
 }
 
 // Same icons + ordering as the community Build sidebar, minus presets.
-const BUILD_TYPES: BuildType[] = [
+const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
   { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence' },
   { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab' },
@@ -84,6 +72,37 @@ const BUILD_TYPES: BuildType[] = [
   { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
 ]
+
+function collectBuildTypes(): BuildType[] {
+  const baseKinds = new Set(BASE_BUILD_TYPES.flatMap((type) => (type.kind ? [type.kind] : [])))
+  const tools = BASE_BUILD_TYPES.filter((type) => type.kind).map((type, index) => ({
+    ...type,
+    paletteOrder:
+      nodeRegistry.get(type.kind!)?.presentation?.paletteOrder ?? type.paletteOrder ?? index * 10,
+  }))
+  for (const [kind, definition] of nodeRegistry.entries()) {
+    const presentation = definition.presentation
+    const extension = getFloorplanNodeExtension(definition)
+    if (
+      baseKinds.has(kind) ||
+      !extension?.tool ||
+      !presentation ||
+      presentation.hidden ||
+      presentation.paletteSection !== 'structure'
+    ) {
+      continue
+    }
+    tools.push({
+      id: kind,
+      kind,
+      label: presentation.label,
+      iconSrc: presentation.icon.kind === 'url' ? presentation.icon.src : '/icons/spawn-point.webp',
+      paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
+    })
+  }
+  tools.sort((left, right) => (left.paletteOrder ?? 0) - (right.paletteOrder ?? 0))
+  return [...tools, ...BASE_BUILD_TYPES.filter((type) => !type.kind)]
+}
 
 // MEP sub-grid surfaced under the "MEP" tile — same icons + ordering the MEP
 // tools had in the community Build sidebar.
@@ -105,8 +124,10 @@ const MEP_ITEMS: MepItem[] = [
  * Activate a raw structure draw/cursor tool. Mirrors the editor's own
  * structure-tool activation (`setPhase`/`setStructureLayer`/`setMode`/`setTool`).
  */
-function activateBuildTool(kind: BuildToolKind | MepToolKind): void {
+function activateBuildTool(kind: string): void {
   const ed = useEditor.getState()
+  const preferredView = getFloorplanNodeExtension(nodeRegistry.get(kind))?.preferredView
+  if (preferredView) ed.setViewMode(preferredView)
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)
@@ -142,7 +163,7 @@ function activateRoofFeatureTool(kind: string): void {
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)
   ed.setMode('build')
-  ed.setTool(kind as Parameters<typeof ed.setTool>[0])
+  ed.setTool(kind)
 }
 
 /**
@@ -165,6 +186,7 @@ export function BuildTab() {
   const mode = useEditor((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
+  const buildTypes = useMemo(collectBuildTypes, [])
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays
@@ -245,9 +267,9 @@ export function BuildTab() {
     didInitRef.current = true
     const ed = useEditor.getState()
     if (ed.mode === 'build' && ed.tool) return
-    const firstType = BUILD_TYPES.find((t) => t.kind)
+    const firstType = buildTypes.find((t) => t.kind)
     if (firstType) handleTypeClick(firstType)
-  }, [handleTypeClick])
+  }, [buildTypes, handleTypeClick])
 
   return (
     <div className="flex h-full flex-col gap-3 p-3">
@@ -256,7 +278,7 @@ export function BuildTab() {
           className="grid gap-1.5"
           style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
         >
-          {BUILD_TYPES.map((type) => {
+          {buildTypes.map((type) => {
             const active = isTypeActive(type)
             return (
               <Tooltip key={type.id}>

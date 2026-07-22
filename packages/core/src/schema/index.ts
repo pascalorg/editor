@@ -51,8 +51,33 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
+export {
+  CONSTRUCTION_DRAWING_TYPES,
+  ConstructionDimensionBaseline,
+  ConstructionDimensionChainMode,
+  ConstructionDimensionDatumPolicy,
+  ConstructionDimensionDrawingOverride,
+  ConstructionDimensionDrawingPresentation,
+  ConstructionDimensionImperialPrecision,
+  ConstructionDimensionMetricNotation,
+  ConstructionDimensionMode,
+  ConstructionDimensionNode,
+  ConstructionDimensionTerminator,
+  ConstructionDimensionTextPosition,
+  ConstructionDrawingType,
+  constructionDimensionRequiredAnchorCount,
+  resolveConstructionDimensionDrawingOverride,
+  resolveConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
+} from './nodes/construction-dimension'
 export { CupolaNode } from './nodes/cupola'
-export { DoorNode, DoorSegment } from './nodes/door'
+export {
+  DoorNode,
+  DoorSegment,
+  OpeningConstructionType,
+  OpeningDimensionReference,
+} from './nodes/door'
 export {
   DormerNode,
   type DormerSurfaceMaterialRole,
@@ -60,6 +85,25 @@ export {
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export { DownspoutNode } from './nodes/downspout'
+export {
+  DrawingSheetAnnotationProfile,
+  DrawingSheetDocumentMarker,
+  DrawingSheetDocumentMarkerKind,
+  DrawingSheetGeneralNote,
+  DrawingSheetGeneralNoteSet,
+  DrawingSheetKeyedNote,
+  DrawingSheetKeyedNoteDefinition,
+  DrawingSheetKeyedNoteInstance,
+  DrawingSheetNode,
+  DrawingSheetOrientation,
+  DrawingSheetPaperSize,
+  DrawingSheetPlacedView,
+  DrawingSheetRect,
+  DrawingSheetScale,
+  DrawingSheetSchedulePlacement,
+  DrawingSheetTitleBlock,
+  remapDrawingSheetReferences,
+} from './nodes/drawing-sheet'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
@@ -200,9 +244,13 @@ export {
   StairType,
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
 export type {
+  WallAssemblyDatumReference,
+  WallAssemblyDatumSide,
+  WallAssemblyLayer,
   WallBandSurfaceSlotId,
   WallFaceBand,
   WallFaceBandConfig,
@@ -215,11 +263,18 @@ export {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
+  getWallAssemblyDatumReferenceId,
+  getWallAssemblyFaceOffsets,
+  getWallAssemblyLayers,
+  getWallAssemblyThickness,
   getWallBandSlotId,
+  getWallDatumEligibleLayers,
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
   getWallSurfaceSideFromBandSlot,
+  resolveWallAssemblyDatumReference,
+  resolveWallAssemblyDatumReferences,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,
@@ -230,11 +285,18 @@ export {
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WALL_TRIM_DEFAULTS,
+  WallAssemblyLayerRole,
+  WallDimensionDatum,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
 } from './nodes/wall'
-export { WindowNode, WindowType } from './nodes/window'
+export {
+  WindowConstructionType,
+  WindowDimensionReference,
+  WindowNode,
+  WindowType,
+} from './nodes/window'
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export type { AnyNodeId, AnyNodeType } from './types'

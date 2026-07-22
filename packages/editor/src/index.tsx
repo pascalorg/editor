@@ -81,6 +81,9 @@ export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
+export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
+export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
   type FloorplanNodePreviewProps,
@@ -332,6 +335,28 @@ export {
   type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
 } from './lib/floorplan'
+export type {
+  FloorplanAnnotationCategory,
+  FloorplanAnnotationVisibility,
+} from './lib/floorplan/annotation-visibility'
+export {
+  createFloorplanContextExtensions,
+  FLOORPLAN_CONTEXT_EXTENSION_KEY,
+  FLOORPLAN_GEOMETRY_METADATA_KEY,
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  type FloorplanAnnotationRole,
+  type FloorplanMetricNotation,
+  type FloorplanNodeExtension,
+  type FloorplanRenderPurpose,
+  type FloorplanSchedule,
+  type FloorplanToolContext,
+  floorplanGeometryMetadata,
+  getFloorplanNodeExtension,
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  readFloorplanMetricNotationOverride,
+  withFloorplanGeometryMetadata,
+} from './lib/floorplan/floorplan-extension'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
@@ -462,6 +487,10 @@ export {
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export {
+  DRAWING_TYPE_OPTIONS,
+  default as useDrawingView,
+} from './store/use-drawing-view'
 export type {
   CaptureMode,
   FloorplanSelectionTool,
@@ -485,7 +514,13 @@ export {
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
 export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
+export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
+export {
+  default as useFloorplanPreflight,
+  type FloorplanPreflightIssue,
+  type FloorplanPreflightIssueKind,
+} from './store/use-floorplan-preflight'
 export {
   default as useInteractionScope,
   getEditingHole,

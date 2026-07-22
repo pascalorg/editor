@@ -3,6 +3,7 @@ import {
   resolveAutoZonePolygon,
   ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
@@ -14,6 +15,7 @@ import {
 import { zoneFloorplanMoveTarget } from './floorplan-move'
 import { zoneParametrics } from './parametrics'
 import { zoneQuickMeasurement } from './quick-measurement'
+import { buildRoomFloorplanSchedule } from './room-documentation'
 import { ZoneNode } from './schema'
 
 /**
@@ -25,9 +27,14 @@ import { ZoneNode } from './schema'
 export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   kind: 'zone',
   snapProfile: 'structural',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: ZoneNode,
   category: 'site',
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildRoomFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<ZoneNode>,
+  },
 
   defaults: () => {
     const stub = ZoneNodeSchema.parse({ id: 'zone_default' as never, type: 'zone' })

@@ -11,5 +11,6 @@ export {
   type ResolvedMeasurement,
   type ResolvedMeasurementPayload,
   remapMeasurementReferences,
+  resolveMeasurementAnchor,
   resolveMeasurementNode,
 } from './resolve'

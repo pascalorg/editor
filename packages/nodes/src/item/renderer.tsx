@@ -29,6 +29,7 @@ import {
   type RenderShading,
   resolveCdnUrl,
   resolveMaterialRef,
+  stampPascalTextureRef,
   useItemLightPool,
   useNodeEvents,
   useViewer,
@@ -38,7 +39,7 @@ import { Clone } from '@react-three/drei/core/Clone'
 import { useFrame, useLoader, useThree } from '@react-three/fiber'
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AnimationAction, Group, Material, Mesh, Object3D } from 'three'
-import { MathUtils } from 'three'
+import { MathUtils, Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -225,11 +226,85 @@ type LoadedItemGltf = GLTF & {
   nodes: Record<string, Object3D>
 }
 
+const ITEM_TEXTURE_SLOTS = [
+  'map',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'emissiveMap',
+  'aoMap',
+  'alphaMap',
+  'lightMap',
+  'bumpMap',
+  'displacementMap',
+  'clearcoatMap',
+  'clearcoatNormalMap',
+  'clearcoatRoughnessMap',
+  'iridescenceMap',
+  'iridescenceThicknessMap',
+  'transmissionMap',
+  'thicknessMap',
+  'specularIntensityMap',
+  'specularColorMap',
+  'sheenRoughnessMap',
+  'sheenColorMap',
+  'anisotropyMap',
+] as const
+
+function getItemTextureImageIndex(gltf: LoadedItemGltf, texture: Texture): number | null {
+  const association = gltf.parser?.associations.get(texture)
+  const textureIndex = association?.textures
+  if (!Number.isInteger(textureIndex)) return null
+
+  const textureDef = gltf.parser.json.textures?.[textureIndex as number]
+  const imageIndex =
+    textureDef?.extensions?.KHR_texture_basisu?.source ??
+    textureDef?.extensions?.EXT_texture_webp?.source ??
+    textureDef?.extensions?.EXT_texture_avif?.source ??
+    textureDef?.source
+  return Number.isInteger(imageIndex) && imageIndex >= 0 ? imageIndex : null
+}
+
+function stampItemTextureReferences(gltf: LoadedItemGltf, src: string) {
+  if (!gltf.parser?.associations) return
+
+  const stamped = new Set<Texture>()
+  gltf.scene.traverse((object) => {
+    const mesh = object as Mesh
+    if (!mesh.isMesh) return
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+    for (const material of materials) {
+      const textureMaterial = material as Material & Record<string, unknown>
+      for (const slot of ITEM_TEXTURE_SLOTS) {
+        const texture = textureMaterial[slot]
+        if (!(texture instanceof Texture)) continue
+        if (stamped.has(texture)) continue
+        const imageIndex = getItemTextureImageIndex(gltf, texture)
+        if (imageIndex === null) continue
+        if (
+          stampPascalTextureRef(texture, {
+            kind: 'item-glb',
+            src,
+            slot,
+            imageIndex,
+          })
+        ) {
+          stamped.add(texture)
+        }
+      }
+    }
+  })
+}
+
 const useItemGltf = (url: string): LoadedItemGltf => {
   const renderer = useThree((state) => state.gl)
-  return useLoader(ItemGLTFLoader, url, (loader) =>
+  const gltf = useLoader(ItemGLTFLoader, url, (loader) =>
     configureItemModelLoader(loader, renderer),
   ) as LoadedItemGltf
+  return useMemo(() => {
+    stampItemTextureReferences(gltf, url)
+    return gltf
+  }, [gltf, url])
 }
 
 type DeferredUnavailableCleanup = {

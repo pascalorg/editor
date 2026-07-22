@@ -3,15 +3,25 @@ import type {
   AnyNode,
   AnyNodeId,
   FloorplanAffordanceSession,
+  FloorplanGeometry,
   LiveNodeOverrides,
 } from '@pascal-app/core'
 import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { z } from 'zod'
+import {
+  FLOORPLAN_NODE_EXTENSION_KEY,
+  floorplanGeometryMetadata,
+} from '../../../lib/floorplan/floorplan-extension'
 import {
   cancelFloorplanAffordanceDrag,
   collectFloorplanDependencyNodes,
+  collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanHandleDoubleClickAffordance,
+  InteractiveGeometry,
+  splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
 
@@ -209,6 +219,76 @@ describe('floorplan vertex double-click routing', () => {
   })
 })
 
+describe('floorplan annotation overlay routing', () => {
+  test('keeps automatic dimension strings left-to-right and top-to-bottom after rotation', () => {
+    const noop = () => {}
+    const renderAt180Degrees = (geometry: FloorplanGeometry) =>
+      renderToStaticMarkup(
+        createElement(
+          'svg',
+          null,
+          createElement(InteractiveGeometry, {
+            activeDragId: null,
+            activeRotateNodeId: null,
+            geometry,
+            hatchPatternId: undefined,
+            hoveredHandleId: null,
+            isMarqueeSelectionActive: false,
+            nodeId: 'wall_test' as AnyNodeId,
+            onHandleDoubleClick: noop,
+            onHandleHoverChange: noop,
+            onHandlePointerDown: noop,
+            onMoveHandlePointerDown: noop,
+            palette: undefined,
+            sceneRotationDeg: 180,
+            unitsPerPixel: 0.01,
+          }),
+        ),
+      )
+    const dimensionString = (
+      end: readonly [number, number],
+      offsetNormal: readonly [number, number],
+    ): FloorplanGeometry => ({
+      kind: 'dimension-string',
+      segments: [{ start: [0, 0], end, text: '2m' }],
+      offsetNormal,
+      offsetDistance: 0.55,
+      extensionOvershoot: 0.12,
+      textPosition: 'above',
+    })
+
+    expect(renderAt180Degrees(dimensionString([2, 0], [0, 1]))).toContain('rotate(-180)')
+    expect(renderAt180Degrees(dimensionString([0, 2], [1, 0]))).toContain('rotate(-90)')
+  })
+
+  test('keeps a fixed mark pill together in the overlay pass', () => {
+    const mark = {
+      kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'opening-mark' }),
+      children: [
+        { kind: 'line', x1: 0, y1: 0, x2: 0, y2: 0.4 },
+        { kind: 'rect', x: -0.2, y: 0.4, width: 0.4, height: 0.32 },
+        { kind: 'text', x: 0, y: 0.56, text: '107', fontSize: 0.15, upright: true },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(mark)).toEqual({ base: null, overlay: mark })
+  })
+
+  test('keeps fixed annotation symbols in the overlay pass for collision layout', () => {
+    const columnCenter = {
+      kind: 'line',
+      x1: 0,
+      y1: 0,
+      x2: 1,
+      y2: 0,
+      metadata: floorplanGeometryMetadata({ annotationRole: 'column-center' }),
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(columnCenter)).toEqual({ base: null, overlay: columnCenter })
+  })
+})
+
 describe('computeAffectedSiblingIds', () => {
   beforeEach(() => {
     nodeRegistry._reset()
@@ -304,5 +384,47 @@ describe('collectFloorplanDependencyNodes', () => {
       expect.objectContaining({ id: roof.id, position: [3, 0, 2] }),
       expect.objectContaining({ id: level.id, visible: false }),
     ])
+  })
+})
+
+describe('collectFloorplanLinkedLevelNodes', () => {
+  test('projects a node onto a linked destination level with its real children', () => {
+    nodeRegistry._reset()
+    registerNode({
+      kind: 'linked-floorplan-test',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('linked-floorplan-test') }) as never,
+      category: 'structure',
+      defaults: () => ({}) as never,
+      floorplan: () => null,
+      extensions: {
+        [FLOORPLAN_NODE_EXTENSION_KEY]: {
+          linkedLevelIds: () => ['level_upper' as AnyNodeId],
+        },
+      },
+    } as unknown as AnyNodeDefinition)
+    const child = {
+      id: 'linked_child',
+      type: 'linked-child',
+      parentId: 'linked_parent',
+    } as unknown as AnyNode
+    const parent = {
+      id: 'linked_parent',
+      type: 'linked-floorplan-test',
+      parentId: 'level_lower',
+      children: [child.id],
+    } as unknown as AnyNode
+    const nodes = { [parent.id]: parent, [child.id]: child }
+
+    expect(collectFloorplanLinkedLevelNodes(nodes, 'level_upper' as AnyNodeId)).toEqual([
+      { id: parent.id, node: parent, children: [child] },
+    ])
+    expect(
+      collectFloorplanLinkedLevelNodes(
+        nodes,
+        'level_upper' as AnyNodeId,
+        new Set([parent.id as AnyNodeId]),
+      ),
+    ).toEqual([])
   })
 })

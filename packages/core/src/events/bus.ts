@@ -9,10 +9,12 @@ import type {
   CeilingNode,
   ChimneyNode,
   ColumnNode,
+  ConstructionDimensionNode,
   CupolaNode,
   DoorNode,
   DormerNode,
   DownspoutNode,
+  DrawingSheetNode,
   DuctFittingNode,
   DuctSegmentNode,
   DuctTerminalNode,
@@ -42,6 +44,7 @@ import type {
   SpawnNode,
   StairNode,
   StairSegmentNode,
+  StructuralGridNode,
   TurbineVentNode,
   WallNode,
   WindowNode,
@@ -101,10 +104,12 @@ export type SlabEvent = NodeEvent<SlabNode>
 export type SpawnEvent = NodeEvent<SpawnNode>
 export type CeilingEvent = NodeEvent<CeilingNode>
 export type ColumnEvent = NodeEvent<ColumnNode>
+export type ConstructionDimensionEvent = NodeEvent<ConstructionDimensionNode>
 export type RoofEvent = NodeEvent<RoofNode>
 export type RoofSegmentEvent = NodeEvent<RoofSegmentNode>
 export type StairEvent = NodeEvent<StairNode>
 export type StairSegmentEvent = NodeEvent<StairSegmentNode>
+export type StructuralGridEvent = NodeEvent<StructuralGridNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
@@ -121,6 +126,7 @@ export type SolarPanelEvent = NodeEvent<SolarPanelNode>
 export type SkylightEvent = NodeEvent<SkylightNode>
 export type DormerEvent = NodeEvent<DormerNode>
 export type DownspoutEvent = NodeEvent<DownspoutNode>
+export type DrawingSheetEvent = NodeEvent<DrawingSheetNode>
 export type DuctSegmentEvent = NodeEvent<DuctSegmentNode>
 export type DuctFittingEvent = NodeEvent<DuctFittingNode>
 export type DuctTerminalEvent = NodeEvent<DuctTerminalNode>
@@ -295,10 +301,12 @@ type EditorEvents = GridEvents &
   NodeEvents<'spawn', SpawnEvent> &
   NodeEvents<'ceiling', CeilingEvent> &
   NodeEvents<'column', ColumnEvent> &
+  NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
   NodeEvents<'roof', RoofEvent> &
   NodeEvents<'roof-segment', RoofSegmentEvent> &
   NodeEvents<'stair', StairEvent> &
   NodeEvents<'stair-segment', StairSegmentEvent> &
+  NodeEvents<'structural-grid', StructuralGridEvent> &
   NodeEvents<'window', WindowEvent> &
   NodeEvents<'door', DoorEvent> &
   NodeEvents<'scan', ScanEvent> &
@@ -314,6 +322,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'skylight', SkylightEvent> &
   NodeEvents<'dormer', DormerEvent> &
   NodeEvents<'downspout', DownspoutEvent> &
+  NodeEvents<'drawing-sheet', DrawingSheetEvent> &
   NodeEvents<'duct-segment', DuctSegmentEvent> &
   NodeEvents<'duct-fitting', DuctFittingEvent> &
   NodeEvents<'duct-terminal', DuctTerminalEvent> &
