@@ -446,6 +446,7 @@ export const CustomCameraControls = () => {
 
   const beginLocalCameraInteraction = useCallback(() => {
     cancelPoseApplication()
+    useViewer.getState().setCameraDragging(true)
     emitter.emit('camera-controls:interaction-start', undefined)
   }, [cancelPoseApplication])
 
