@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type ConstructionDimensionDatumPolicy,
   type ConstructionDimensionDrawingPresentation,
@@ -86,16 +87,6 @@ export default function ConstructionDimensionPanel() {
     const node = selectedId ? state.nodes[selectedId as AnyNodeId] : undefined
     return node?.type === 'construction-dimension' ? node : null
   })
-  const foundationControllers = useScene(
-    useShallow((state) =>
-      Object.values(state.nodes).filter(
-        (candidate): candidate is ConstructionDimensionNode =>
-          candidate.type === 'construction-dimension' &&
-          candidate.id !== dimension?.id &&
-          candidate.drawingType === 'foundation-plan',
-      ),
-    ),
-  )
   const updateNode = useScene((state) => state.updateNode)
   const deleteNode = useScene((state) => state.deleteNode)
   const activeDrawingType = useDrawingView((state) => state.drawingType)
@@ -127,10 +118,14 @@ export default function ConstructionDimensionPanel() {
       drawingType,
       presentation,
     )
+    const firstFoundationController =
+      presentation === 'controlled' && !dimension.controllingDimensionId
+        ? selectFoundationControllers(useScene.getState().nodes, dimension.id)[0]
+        : undefined
     update({
       drawingOverrides,
       ...(presentation === 'controlled' && !dimension.controllingDimensionId
-        ? { controllingDimensionId: foundationControllers[0]?.id ?? null }
+        ? { controllingDimensionId: firstFoundationController?.id ?? null }
         : {}),
     })
   }
@@ -207,21 +202,13 @@ export default function ConstructionDimensionPanel() {
           value={activePresentation}
         />
         {activeDrawingType === 'floor-plan' && activePresentation === 'controlled' ? (
-          <SelectField
-            disabled={foundationControllers.length === 0}
-            label="Foundation controller"
+          <FoundationControllerField
+            dimensionId={dimension.id}
             onChange={(controllingDimensionId) =>
               update({
-                controllingDimensionId: controllingDimensionId as NonNullable<
-                  ConstructionDimensionNode['controllingDimensionId']
-                >,
+                controllingDimensionId,
               })
             }
-            options={foundationControllers.map((controller) => ({
-              label: controller.name || 'Foundation dimension',
-              value: controller.id,
-            }))}
-            placeholder="No foundation dimensions"
             value={dimension.controllingDimensionId ?? ''}
           />
         ) : null}
@@ -336,6 +323,51 @@ export default function ConstructionDimensionPanel() {
         </ActionGroup>
       </PanelSection>
     </PanelWrapper>
+  )
+}
+
+function selectFoundationControllers(
+  nodes: Record<string, AnyNode>,
+  excludedId: AnyNodeId,
+): ConstructionDimensionNode[] {
+  return Object.values(nodes).filter(
+    (candidate): candidate is ConstructionDimensionNode =>
+      candidate.type === 'construction-dimension' &&
+      candidate.id !== excludedId &&
+      candidate.drawingType === 'foundation-plan',
+  )
+}
+
+function FoundationControllerField({
+  dimensionId,
+  value,
+  onChange,
+}: {
+  dimensionId: AnyNodeId
+  value: string
+  onChange: (value: NonNullable<ConstructionDimensionNode['controllingDimensionId']>) => void
+}) {
+  const foundationControllers = useScene(
+    useShallow((state) => selectFoundationControllers(state.nodes, dimensionId)),
+  )
+  return (
+    <SelectField
+      disabled={foundationControllers.length === 0}
+      label="Foundation controller"
+      onChange={(controllingDimensionId) =>
+        onChange(
+          controllingDimensionId as NonNullable<
+            ConstructionDimensionNode['controllingDimensionId']
+          >,
+        )
+      }
+      options={foundationControllers.map((controller) => ({
+        label: controller.name || 'Foundation dimension',
+        value: controller.id,
+      }))}
+      placeholder="No foundation dimensions"
+      value={value}
+    />
   )
 }
 

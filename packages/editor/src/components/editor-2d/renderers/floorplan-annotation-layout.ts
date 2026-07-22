@@ -227,23 +227,30 @@ export function resolveSvgAnnotationCollisions(
   return preflightIssues
 }
 
-export function observeSvgAnnotationLayoutChanges(
-  svg: SVGSVGElement,
-  onChange: () => void,
-): () => void {
+export function observeSvgAnnotationLayoutChanges(target: Node, onChange: () => void): () => void {
   let scheduledFrame: number | null = null
+  let mutationVersion = 0
+  let observedVersion = 0
+  const requestFrame = globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 0))
+  const flushWhenSettled = () => {
+    if (observedVersion !== mutationVersion) {
+      observedVersion = mutationVersion
+      scheduledFrame = requestFrame(flushWhenSettled)
+      return
+    }
+    scheduledFrame = null
+    onChange()
+  }
   const schedule = () => {
+    mutationVersion += 1
     if (scheduledFrame !== null) return
-    const requestFrame = globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 0))
-    scheduledFrame = requestFrame(() => {
-      scheduledFrame = null
-      onChange()
-    })
+    observedVersion = mutationVersion - 1
+    scheduledFrame = requestFrame(flushWhenSettled)
   }
   const observer = new MutationObserver((mutations) => {
     if (mutations.some(isAnnotationLayoutMutation)) schedule()
   })
-  observer.observe(svg, {
+  observer.observe(target, {
     attributes: true,
     attributeFilter: [
       'cx',
