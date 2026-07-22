@@ -55,6 +55,7 @@ import {
 import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordination'
 import {
   createFloorplanContextExtensions,
+  type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
 } from '../../../lib/floorplan/floorplan-extension'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
@@ -298,6 +299,7 @@ type NodeDeps = {
   live: LiveTransform | undefined
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
+  wallDimensionReference: FloorplanWallDimensionReference
   selected: boolean
   highlighted: boolean
   hovered: boolean
@@ -447,6 +449,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const floorplanVisible = useEditor((s) => s.viewMode !== '3d')
   const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
+  const wallDimensionReference = useFloorplanAnnotationVisibility((s) => s.wallDimensionReference)
   // Elevator builders read runtime state imperatively, so entries include this
   // rare-changing ref in their cache deps.
   const interactiveElevators = useInteractive((s) => s.elevators)
@@ -1365,6 +1368,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
             metricNotation={metricNotation}
+            wallDimensionReference={wallDimensionReference}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1418,6 +1422,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
             metricNotation={metricNotation}
+            wallDimensionReference={wallDimensionReference}
             unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
@@ -1626,6 +1631,7 @@ type FloorplanRegistryEntryProps = {
   siblingEpoch: number
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
+  wallDimensionReference: FloorplanWallDimensionReference
   unitsPerPixel: number
   visibilityRootId: AnyNodeId | undefined
 }
@@ -1668,6 +1674,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   siblingEpoch,
   unit,
   metricNotation,
+  wallDimensionReference,
   unitsPerPixel,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
@@ -1775,6 +1782,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     siblingEpoch,
     unit,
     metricNotation,
+    wallDimensionReference,
     visibilityRootId,
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
@@ -1844,6 +1852,7 @@ type BuildFloorplanEntryGeometryArgs = {
   siblingEpoch: number
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
+  wallDimensionReference: FloorplanWallDimensionReference
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -1888,6 +1897,7 @@ function buildFloorplanEntryGeometry({
   siblingEpoch,
   unit,
   metricNotation,
+  wallDimensionReference,
   visibilityRootId,
 }: BuildFloorplanEntryGeometryArgs): CacheEntry | null {
   const def = nodeRegistry.get(node.type)
@@ -1913,6 +1923,7 @@ function buildFloorplanEntryGeometry({
     live,
     unit,
     metricNotation,
+    wallDimensionReference,
     selected,
     highlighted,
     hovered,
@@ -1991,6 +2002,7 @@ function buildFloorplanEntryGeometry({
     selected,
     unit,
     metricNotation,
+    wallDimensionReference,
     highlighted,
     hovered,
     moving,
@@ -2009,7 +2021,11 @@ function buildFloorplanEntryGeometry({
         siblings: ctxOverrides.siblings,
         parent: ctxOverrides.parent,
         levelData,
-        extensions: createFloorplanContextExtensions({ metricNotation, purpose: 'edit' }),
+        extensions: createFloorplanContextExtensions({
+          metricNotation,
+          purpose: 'edit',
+          wallDimensionReference,
+        }),
         viewState: palette
           ? {
               selected,
@@ -2921,6 +2937,7 @@ export function buildContext(
     unit: 'metric' | 'imperial'
     metricNotation?: 'meters' | 'millimeters'
     purpose?: 'edit' | 'document'
+    wallDimensionReference?: FloorplanWallDimensionReference
     highlighted: boolean
     hovered: boolean
     moving: boolean
@@ -2963,6 +2980,7 @@ export function buildContext(
     extensions: createFloorplanContextExtensions({
       metricNotation: viewState.metricNotation ?? 'meters',
       purpose: viewState.purpose ?? 'edit',
+      wallDimensionReference: viewState.wallDimensionReference,
     }),
     viewState: viewState.palette
       ? {
@@ -3230,6 +3248,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'live',
     'unit',
     'metricNotation',
+    'wallDimensionReference',
     'selected',
     'highlighted',
     'hovered',

@@ -14,6 +14,8 @@ export const FLOORPLAN_CONTEXT_EXTENSION_KEY = 'pascal:editor/floorplan'
 
 export type FloorplanRenderPurpose = 'edit' | 'document'
 export type FloorplanMetricNotation = 'meters' | 'millimeters'
+export type FloorplanWallDimensionReference = 'finished-faces' | 'centerline' | 'stud-faces'
+export const DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE = 'finished-faces'
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
   | 'manual-dimension'
@@ -63,6 +65,15 @@ type FloorplanGeometryMetadata = {
 type FloorplanContextExtension = {
   purpose: FloorplanRenderPurpose
   metricNotation: FloorplanMetricNotation
+  wallDimensionReference: FloorplanWallDimensionReference
+}
+
+export function normalizeFloorplanWallDimensionReference(
+  value: unknown,
+): FloorplanWallDimensionReference {
+  return value === 'centerline' || value === 'stud-faces'
+    ? value
+    : DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE
 }
 
 export function getFloorplanNodeExtension(
@@ -100,9 +111,17 @@ export function readFloorplanGeometryMetadata(geometry: unknown): FloorplanGeome
 }
 
 export function createFloorplanContextExtensions(
-  values: FloorplanContextExtension,
+  values: Partial<FloorplanContextExtension>,
 ): Readonly<Record<string, unknown>> {
-  return { [FLOORPLAN_CONTEXT_EXTENSION_KEY]: values }
+  return {
+    [FLOORPLAN_CONTEXT_EXTENSION_KEY]: {
+      purpose: values.purpose === 'document' ? 'document' : 'edit',
+      metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
+      wallDimensionReference: normalizeFloorplanWallDimensionReference(
+        values.wallDimensionReference,
+      ),
+    } satisfies FloorplanContextExtension,
+  }
 }
 
 export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExtension {
@@ -112,9 +131,16 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     return {
       purpose: extension.purpose === 'document' ? 'document' : 'edit',
       metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
+      wallDimensionReference: normalizeFloorplanWallDimensionReference(
+        extension.wallDimensionReference,
+      ),
     }
   }
-  return { purpose: 'edit', metricNotation: 'meters' }
+  return {
+    purpose: 'edit',
+    metricNotation: 'meters',
+    wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,
+  }
 }
 
 export function readFloorplanMetricNotationOverride(

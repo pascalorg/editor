@@ -381,7 +381,8 @@ function buildAngular(
   const requestedRadius = distance(layout.center, node.baseline.origin)
   const arcRadius = Math.min(maximumRadius, Math.max(0.25, requestedRadius))
   const midAngle = layout.startAngle + layout.sweep / 2
-  const labelPoint = arcPoint(layout.center, arcRadius, midAngle)
+  const arcMid = arcPoint(layout.center, arcRadius, midAngle)
+  const labelPoint: FloorplanPoint = node.baseline.origin
   const startRayEnd = arcPoint(
     layout.center,
     Math.max(layout.radius, arcRadius + 0.12),
@@ -393,6 +394,7 @@ function buildAngular(
     styledLine(layout.center, startRayEnd, stroke),
     styledLine(layout.center, endRayEnd, stroke),
     arcGeometry(layout.center, arcRadius, layout.startAngle, layout.sweep, stroke),
+    styledLine(arcMid, labelPoint, stroke, '0.08 0.08'),
     labelGeometry(labelPoint, notation(node, `∠ ${formatDegrees(degrees)}`, dangling), 0, true),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, arcRadius, stroke))

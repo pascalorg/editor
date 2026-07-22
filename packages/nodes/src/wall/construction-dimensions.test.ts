@@ -289,7 +289,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
       '6m',
       '12m',
       '6m',
-      '24m',
+      '24.2m',
     ])
     const jogs = leftFacade.filter((entry) => entry.tier === 'jogs')
     const overall = leftFacade.find((entry) => entry.tier === 'overall')
@@ -1075,7 +1075,7 @@ describe('buildLevelWallConstructionDimensionPlan', () => {
     expect(dimensionTexts(renderPlannedConstructionDimensions(planned, 'metric'))).toEqual([
       '6m',
       '6m',
-      '10m',
+      '10.2m',
       '12m',
     ])
     expect(planned[0]).toMatchObject({

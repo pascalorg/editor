@@ -61,8 +61,9 @@ export function resolveCircularConstructionDimensionLayout(
     }
   }
 
-  const center = first
-  const start = second
+  const usesMiddleCenter = mode === 'arc-length' || mode === 'angular'
+  const center = usesMiddleCenter ? second : first
+  const start = usesMiddleCenter ? first : second
   const radius = distance(center, start)
   if (radius <= 1e-9) return null
   const startAngle = Math.atan2(start[1] - center[1], start[0] - center[0])

@@ -219,6 +219,9 @@ export function MeasurementControl() {
           })}
 
           <div className="my-1.5 h-px bg-border/60" />
+          <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+            Floor plan
+          </div>
 
           {constructionDimensionOptions.map((option) => {
             const OptionIcon = option.icon

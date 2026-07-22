@@ -20,9 +20,11 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  buildSvgArcPath,
   clearSurfacePlanSnapFeedback,
-  FloorplanDimensionRenderer,
+  FloorplanGeometryRenderer,
   formatLinearMeasurement,
+  getArcPlanPoint,
   isMagneticSnapActive,
   markToolCancelConsumed,
   resolveSurfacePlanPointSnap,
@@ -34,10 +36,12 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { resolveCircularConstructionDimensionLayout } from './geometry'
 
 const SEMANTIC_SNAP_DISTANCE = 0.2
 const SEMANTIC_BYPASS_DISTANCE = 0.012
 const MIN_DIMENSION_LENGTH = 0.001
+const MIN_ARC_SWEEP = 1e-6
 
 type Draft = {
   anchors: MeasurementAnchor[]
@@ -134,7 +138,146 @@ export function buildConstructionDimensionPreviewGeometries(
   unit: 'metric' | 'imperial',
   mode: ConstructionDimensionMode = 'linear',
   metricNotation: 'meters' | 'millimeters' = 'meters',
-): Array<Extract<FloorplanGeometry, { kind: 'dimension' }>> {
+): FloorplanGeometry[] {
+  if (mode === 'arc-length' || mode === 'angular') {
+    const layout = resolveCircularConstructionDimensionLayout(mode, points)
+    if (!(layout?.end && Math.abs(layout.sweep) > MIN_ARC_SWEEP)) return []
+    const center = { x: layout.center[0], y: layout.center[1] }
+    const end = getArcPlanPoint(center, layout.radius, layout.endAngle)
+    const arcMid = getArcPlanPoint(center, layout.radius, layout.startAngle + layout.sweep / 2)
+    const stroke = '#06b6d4'
+    const lineStyle = {
+      fill: 'none',
+      pointerEvents: 'none' as const,
+      stroke,
+      strokeWidth: 2,
+      vectorEffect: 'non-scaling-stroke' as const,
+    }
+    if (mode === 'angular') {
+      const endRadius = Math.hypot(layout.end[0] - center.x, layout.end[1] - center.y)
+      const maximumRadius = Math.max(0.25, Math.min(layout.radius, endRadius) * 0.9)
+      const requestedRadius = Math.hypot(baselinePoint[0] - center.x, baselinePoint[2] - center.y)
+      const arcRadius = Math.min(maximumRadius, Math.max(0.25, requestedRadius))
+      const midAngle = layout.startAngle + layout.sweep / 2
+      const arcMid = getArcPlanPoint(center, arcRadius, midAngle)
+      const startRayEnd = getArcPlanPoint(
+        center,
+        Math.max(layout.radius, arcRadius + 0.12),
+        layout.startAngle,
+      )
+      const endRayEnd = getArcPlanPoint(
+        center,
+        Math.max(endRadius, arcRadius + 0.12),
+        layout.endAngle,
+      )
+      const degrees = (Math.abs(layout.sweep) * 180) / Math.PI
+      const formattedDegrees = Number.parseFloat(degrees.toFixed(degrees < 10 ? 1 : 0))
+      return [
+        {
+          kind: 'group',
+          children: [
+            {
+              kind: 'line',
+              x1: center.x,
+              y1: center.y,
+              x2: startRayEnd.x,
+              y2: startRayEnd.y,
+              ...lineStyle,
+            },
+            {
+              kind: 'line',
+              x1: center.x,
+              y1: center.y,
+              x2: endRayEnd.x,
+              y2: endRayEnd.y,
+              ...lineStyle,
+            },
+            {
+              kind: 'path',
+              d: buildSvgArcPath(
+                center,
+                arcRadius,
+                layout.startAngle,
+                layout.startAngle + layout.sweep,
+              ),
+              ...lineStyle,
+            },
+            {
+              kind: 'line',
+              x1: arcMid.x,
+              y1: arcMid.y,
+              x2: baselinePoint[0],
+              y2: baselinePoint[2],
+              strokeDasharray: '6 5',
+              ...lineStyle,
+            },
+            {
+              kind: 'dimension-label',
+              cx: baselinePoint[0],
+              cy: baselinePoint[2],
+              text: `∠ ${formattedDegrees}°`,
+              angle: 0,
+              screenUpright: true,
+              appearance: 'outlined',
+            },
+          ],
+        },
+      ]
+    }
+    return [
+      {
+        kind: 'group',
+        children: [
+          {
+            kind: 'path',
+            d: buildSvgArcPath(
+              center,
+              layout.radius,
+              layout.startAngle,
+              layout.startAngle + layout.sweep,
+            ),
+            ...lineStyle,
+          },
+          {
+            kind: 'line',
+            x1: layout.center[0],
+            y1: layout.center[1],
+            x2: layout.start[0],
+            y2: layout.start[1],
+            strokeDasharray: '6 5',
+            ...lineStyle,
+          },
+          {
+            kind: 'line',
+            x1: layout.center[0],
+            y1: layout.center[1],
+            x2: end.x,
+            y2: end.y,
+            strokeDasharray: '6 5',
+            ...lineStyle,
+          },
+          {
+            kind: 'line',
+            x1: arcMid.x,
+            y1: arcMid.y,
+            x2: baselinePoint[0],
+            y2: baselinePoint[2],
+            strokeDasharray: '6 5',
+            ...lineStyle,
+          },
+          {
+            kind: 'dimension-label',
+            cx: baselinePoint[0],
+            cy: baselinePoint[2],
+            text: `ARC ${formatLinearMeasurement(layout.arcLength, unit, metricNotation)}`,
+            angle: 0,
+            screenUpright: true,
+            appearance: 'outlined',
+          },
+        ],
+      },
+    ]
+  }
   if (!['linear', 'chord', 'radius', 'diameter'].includes(mode)) return []
   const direction = resolveConstructionDimensionDraftDirection(points)
   if (!direction) return []
@@ -239,14 +382,7 @@ export function buildCurvedWallConstructionDimensionDraft(
       }
     case 'arc-length':
     case 'angular':
-      return {
-        anchors: [
-          feature('wall:curve:center', center),
-          feature('wall:start', start),
-          feature('wall:end', end),
-        ],
-        points: [center, start, end],
-      }
+      return null
     default:
       return null
   }
@@ -526,10 +662,10 @@ export function FloorplanConstructionDimensionToolLayer() {
         />
       ) : null}
       {preview.map((geometry, index) => (
-        <FloorplanDimensionRenderer
+        <FloorplanGeometryRenderer
           annotationUnitsPerPoint={unitsPerPixel}
           geometry={geometry}
-          key={`${index}-${geometry.dimensionStart?.join('-')}`}
+          key={`${index}-${geometry.kind}`}
           sceneRotationDeg={renderContext?.sceneRotationDeg ?? 0}
         />
       ))}

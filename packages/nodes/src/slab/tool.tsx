@@ -24,6 +24,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
+import { type SlabCompletionTrigger, shouldRegistryCommitSlab } from './placement-ownership'
 import { SlabNode } from './schema'
 
 /**
@@ -140,8 +141,10 @@ export const SlabTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        const slabId = commitSlabDrawing(currentLevelId, points)
-        setSelection({ selectedIds: [slabId] })
+        if (shouldRegistryCommitSlab(useEditor.getState().viewMode, 'grid')) {
+          const slabId = commitSlabDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [slabId] })
+        }
         setPoints([])
         clearSlabSnapFeedback()
       } else {
@@ -154,16 +157,18 @@ export const SlabTool: React.FC = () => {
 
     // Finish the polygon (Enter or double-click): commit once there are enough
     // vertices. Closing near the first vertex (in onGridClick) is the third way.
-    const finishDrawing = () => {
+    const finishDrawing = (trigger: SlabCompletionTrigger) => {
       if (points.length < 3) return
-      const slabId = commitSlabDrawing(currentLevelId, points)
-      setSelection({ selectedIds: [slabId] })
+      if (shouldRegistryCommitSlab(useEditor.getState().viewMode, trigger)) {
+        const slabId = commitSlabDrawing(currentLevelId, points)
+        setSelection({ selectedIds: [slabId] })
+      }
       setPoints([])
       clearSlabSnapFeedback()
     }
 
     const onGridDoubleClick = (_event: GridEvent) => {
-      finishDrawing()
+      finishDrawing('grid')
     }
 
     const onCancel = () => {
@@ -175,7 +180,7 @@ export const SlabTool: React.FC = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        finishDrawing()
+        finishDrawing('keyboard')
       }
     }
     document.addEventListener('keydown', onKeyDown)

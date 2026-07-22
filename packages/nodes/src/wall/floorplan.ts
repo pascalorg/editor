@@ -29,6 +29,9 @@ const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
 const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_ASSEMBLY_GRAPHIC_MIN_SPACING = 0.06
+const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
+
+type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
 
 function floorplanWallThickness(wall: WallNode): number {
   const baseThickness = getWallAssemblyThickness(wall)
@@ -50,7 +53,7 @@ function wallWithModeledAssemblyThickness(wall: WallNode): WallNode {
 export type WallFloorplanLevelData = {
   miters: WallMiterData
   documentMiters: WallMiterData
-  constructionDimensionsByWallId: WallConstructionDimensionPlan
+  constructionDimensionsByReference: Record<WallDimensionReference, WallConstructionDimensionPlan>
 }
 
 export function computeWallFloorplanLevelData({
@@ -64,7 +67,26 @@ export function computeWallFloorplanLevelData({
   return {
     miters: calculateLevelMiters(walls),
     documentMiters: calculateLevelMiters([...siblings]),
-    constructionDimensionsByWallId: buildLevelWallConstructionDimensionPlan(siblings, nodes),
+    constructionDimensionsByReference: {
+      'finished-faces': buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({
+          datumPolicy: 'wall-face',
+          intersectionReferencePolicy: 'both-faces',
+        }),
+      ),
+      centerline: buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({ datumPolicy: 'centerline' }),
+      ),
+      'stud-faces': buildLevelWallConstructionDimensionPlan(
+        siblings,
+        nodes,
+        constructionDimensionStandard({ datumPolicy: 'structural-face' }),
+      ),
+    },
   }
 }
 
@@ -85,7 +107,7 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const { metricNotation, purpose } = readFloorplanContext(ctx)
+  const { metricNotation, purpose, wallDimensionReference } = readFloorplanContext(ctx)
   const documentMode = purpose === 'document'
   const wallForPurpose = (wall: WallNode) =>
     documentMode ? wallWithModeledAssemblyThickness(wall) : exaggerateWallThickness(wall)
@@ -150,6 +172,11 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   const dimensionStroke =
     isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
   const dimensionStandard = constructionDimensionStandard({
+    datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
+    metricNotation,
+  })
+  const exteriorCornerDimensionStandard = constructionDimensionStandard({
+    datumPolicy: 'structural-face',
     metricNotation,
   })
   if (isCurvedWall(node)) {
@@ -158,14 +185,16 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         unit: view?.unit ?? 'metric',
         stroke: dimensionStroke,
         profile: documentMode ? 'document' : 'editor',
-        standard: dimensionStandard,
+        standard: exteriorCornerDimensionStandard,
         siblings: ctx.siblings.filter(
           (sibling): sibling is AnyNode & WallNode => sibling.type === 'wall',
         ),
       }),
     )
   } else {
-    const planned = levelData?.constructionDimensionsByWallId.get(node.id)
+    const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
+      node.id,
+    )
     if (planned) {
       children.push(
         ...renderPlannedConstructionDimensions(
@@ -182,7 +211,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
           unit: view?.unit ?? 'metric',
           stroke: dimensionStroke,
           profile: documentMode ? 'document' : 'editor',
-          standard: dimensionStandard,
+          standard: exteriorCornerDimensionStandard,
         }),
       )
     }
@@ -278,6 +307,17 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   }
 
   return { kind: 'group', children }
+}
+
+function wallDimensionDatumPolicy(reference: WallDimensionReference) {
+  switch (reference) {
+    case 'centerline':
+      return 'centerline' as const
+    case 'stud-faces':
+      return 'structural-face' as const
+    case 'finished-faces':
+      return 'wall-face' as const
+  }
 }
 
 type WallAssemblyLayerSpan = {

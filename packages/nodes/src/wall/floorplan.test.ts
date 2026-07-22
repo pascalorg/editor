@@ -30,6 +30,7 @@ function context(
   purpose: 'edit' | 'document',
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
+  wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
 ): GeometryContext {
   return {
     resolve: () => undefined,
@@ -44,7 +45,11 @@ function context(
       moving: false,
       palette,
     },
-    extensions: createFloorplanContextExtensions({ metricNotation, purpose }),
+    extensions: createFloorplanContextExtensions({
+      metricNotation,
+      purpose,
+      wallDimensionReference,
+    }),
   }
 }
 
@@ -108,6 +113,50 @@ describe('buildWallFloorplan render purpose', () => {
       : []
 
     expect(texts).toContain('4000')
+  })
+
+  test('keeps standalone wall witnesses on the stud face in every intersection mode', () => {
+    const assemblyWall = WallNode.parse({
+      ...wall,
+      thickness: undefined,
+      assemblyLayers: [
+        {
+          id: 'stud-core',
+          role: 'structure',
+          side: 'core',
+          thickness: 0.1,
+          materialRef: 'library:stud',
+          datumEligible: ['structural-face'],
+        },
+        {
+          id: 'interior-finish',
+          role: 'interior-finish',
+          side: 'interior',
+          thickness: 0.02,
+          materialRef: 'library:gypsum-board',
+          datumEligible: ['finish-face'],
+        },
+        {
+          id: 'exterior-finish',
+          role: 'exterior-finish',
+          side: 'exterior',
+          thickness: 0.03,
+          materialRef: 'library:cladding',
+          datumEligible: ['finish-face'],
+        },
+      ],
+    })
+    const witnessY = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
+      const geometry = buildWallFloorplan(assemblyWall, context('edit', false, 'meters', reference))
+      const dimension = geometry
+        ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
+        : undefined
+      return dimension?.kind === 'dimension-string' ? dimension.segments[0]?.start[1] : undefined
+    }
+
+    expect(witnessY('finished-faces')).toBeCloseTo(0.05)
+    expect(witnessY('centerline')).toBeCloseTo(0.05)
+    expect(witnessY('stud-faces')).toBeCloseTo(0.05)
   })
 
   test('uses total assembly thickness and emits construction graphics for modeled layers', () => {

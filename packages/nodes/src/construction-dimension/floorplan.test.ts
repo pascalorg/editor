@@ -454,8 +454,8 @@ describe('buildConstructionDimensionFloorplan', () => {
     const arc = ConstructionDimensionNode.parse({
       mode: 'arc-length',
       anchors: [
-        [0, 0, 0],
         [2, 0, 0],
+        [0, 0, 0],
         [0, 0, 2],
       ],
       baseline: { origin: [2, 2], direction: [1, 0] },
@@ -478,20 +478,23 @@ describe('buildConstructionDimensionFloorplan', () => {
     const node = ConstructionDimensionNode.parse({
       mode: 'angular',
       anchors: [
-        [0, 0, 0],
         [2, 0, 0],
+        [0, 0, 0],
         [0, 0, 2],
       ],
-      baseline: { origin: [0.5, 0.5], direction: [1, 0] },
+      baseline: { origin: [1.5, 0.5], direction: [1, 0] },
     })
     const geometry = buildConstructionDimensionFloorplan(node, context())
     const entries = geometry ? flatten(geometry) : []
 
     expect(entries.some((entry) => entry.kind === 'path')).toBe(true)
     expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
+      cx: 1.5,
+      cy: 0.5,
       text: '∠ 90°',
       screenUpright: true,
     })
+    expect(entries).toContainEqual(expect.objectContaining({ kind: 'line', x2: 1.5, y2: 0.5 }))
   })
 
   test('renders signed coordinate labels for repeated circular features', () => {
