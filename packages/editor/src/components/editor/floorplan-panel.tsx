@@ -320,6 +320,20 @@ type FloorplanRotationState = {
   startClientX: number
   initialUserRotationDeg: number
   viewportCenterLocal: SvgPoint
+  svg: SVGSVGElement
+  svgStyle: {
+    transform: string
+    transformOrigin: string
+    willChange: string
+  }
+  latestUserRotationDeg: number
+  latestViewport: FloorplanViewport
+}
+
+function restoreFloorplanRotationPresentation(rotationState: FloorplanRotationState) {
+  rotationState.svg.style.transform = rotationState.svgStyle.transform
+  rotationState.svg.style.transformOrigin = rotationState.svgStyle.transformOrigin
+  rotationState.svg.style.willChange = rotationState.svgStyle.willChange
 }
 
 type FloorplanScreenSelectionState = {
@@ -5360,7 +5374,7 @@ export function FloorplanPanel({
     FLOORPLAN_VIEW_ROTATION_DEG + floorplanUserRotationDeg - buildingRotationDeg
   // Only sync ref from state when floorplan is open (state is source of truth).
   // When hidden, the imperative 3D path owns the ref and must not be clobbered.
-  if (isFloorplanOpenRef.current) {
+  if (isFloorplanOpenRef.current && !floorplanViewportInteractionInProgressRef.current) {
     latestFloorplanUserRotationDegRef.current = floorplanUserRotationDeg
   }
 
@@ -6961,7 +6975,11 @@ export function FloorplanPanel({
       stopFloorplanViewAnimation()
       floorplanSpacePanPressedRef.current = false
       panStateRef.current = null
+      if (floorplanRotationStateRef.current) {
+        restoreFloorplanRotationPresentation(floorplanRotationStateRef.current)
+      }
       floorplanRotationStateRef.current = null
+      floorplanViewportInteractionInProgressRef.current = false
       setIsSpacePanPressed(false)
       setIsPanning(false)
       setIsRotatingFloorplan(false)
@@ -7886,6 +7904,31 @@ export function FloorplanPanel({
     [svgAspectRatio],
   )
 
+  const applyFloorplanRotationImperatively = useCallback(
+    (rotationState: FloorplanRotationState, nextUserRotationDeg: number) => {
+      const currentViewport = latestViewportRef.current ?? rotationState.latestViewport
+      const nextSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG + nextUserRotationDeg - buildingRotationDeg
+      const nextCenterSvg = rotateSvgPoint(rotationState.viewportCenterLocal, nextSceneRotationDeg)
+      const nextViewport = {
+        centerX: nextCenterSvg.x,
+        centerY: nextCenterSvg.y,
+        width: currentViewport.width,
+      }
+
+      hasUserAdjustedViewportRef.current = true
+      latestFloorplanUserRotationDegRef.current = nextUserRotationDeg
+      latestViewportRef.current = nextViewport
+      // Transform the already-painted SVG as one compositor layer. Mutating the
+      // scene rotation/viewBox here forces the heavy vector plan to rerasterize.
+      rotationState.svg.style.transform = `rotate(${nextUserRotationDeg - rotationState.initialUserRotationDeg}deg)`
+
+      rotationState.latestUserRotationDeg = nextUserRotationDeg
+      rotationState.latestViewport = nextViewport
+    },
+    [buildingRotationDeg],
+  )
+
   const commitFloorplanZoom = useCallback(() => {
     if (floorplanZoomCommitTimerRef.current !== null) {
       window.clearTimeout(floorplanZoomCommitTimerRef.current)
@@ -8032,6 +8075,29 @@ export function FloorplanPanel({
       )
     }
   }, [publishFloorplanNavigationPose])
+
+  const commitFloorplanRotation = useCallback(
+    (rotationState: FloorplanRotationState) => {
+      floorplanViewportInteractionInProgressRef.current = false
+      restoreFloorplanRotationPresentation(rotationState)
+      setFloorplanUserRotationDeg((current) =>
+        current === rotationState.latestUserRotationDeg
+          ? current
+          : rotationState.latestUserRotationDeg,
+      )
+      setViewport((current) =>
+        floorplanViewportEquals(current, rotationState.latestViewport)
+          ? current
+          : rotationState.latestViewport,
+      )
+      publishFloorplanNavigationPose(
+        rotationState.viewportCenterLocal,
+        rotationState.latestUserRotationDeg,
+        rotationState.latestViewport.width,
+      )
+    },
+    [publishFloorplanNavigationPose],
+  )
 
   const clearWallPlacementDraft = useCallback(() => {
     setDraftStart(null)
@@ -9019,17 +9085,35 @@ export function FloorplanPanel({
       event.preventDefault()
       event.stopPropagation()
 
-      const currentViewport = viewport ?? fittedViewport
+      if (floorplanZoomCommitTimerRef.current !== null) commitFloorplanZoom()
+      stopFloorplanViewAnimation()
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      const svg = svgRef.current
+      if (!(currentViewport && svg)) return
+      const currentUserRotationDeg = latestFloorplanUserRotationDegRef.current
+      const currentSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG + currentUserRotationDeg - buildingRotationDeg
       const viewportCenterLocal = rotateSvgPoint(
         { x: currentViewport.centerX, y: currentViewport.centerY },
-        -floorplanSceneRotationDeg,
+        -currentSceneRotationDeg,
       )
-
+      const svgStyle = {
+        transform: svg.style.transform,
+        transformOrigin: svg.style.transformOrigin,
+        willChange: svg.style.willChange,
+      }
+      floorplanViewportInteractionInProgressRef.current = true
+      svg.style.transformOrigin = 'center'
+      svg.style.willChange = 'transform'
       floorplanRotationStateRef.current = {
         pointerId: event.pointerId,
         startClientX: event.clientX,
-        initialUserRotationDeg: floorplanUserRotationDeg,
+        initialUserRotationDeg: currentUserRotationDeg,
         viewportCenterLocal,
+        svg,
+        svgStyle,
+        latestUserRotationDeg: currentUserRotationDeg,
+        latestViewport: currentViewport,
       }
       setIsRotatingFloorplan(true)
       setCursorPoint(null)
@@ -9039,12 +9123,10 @@ export function FloorplanPanel({
     },
     [
       commitFloorplanZoom,
-      fittedViewport,
-      floorplanSceneRotationDeg,
-      floorplanUserRotationDeg,
-      viewport,
+      buildingRotationDeg,
       setFloorplanCursorPosition,
       setCursorPoint,
+      stopFloorplanViewAnimation,
     ],
   )
 
@@ -9087,6 +9169,7 @@ export function FloorplanPanel({
   const endFloorplanNavigation = useCallback(
     (event?: ReactPointerEvent<SVGSVGElement>) => {
       const wasPanning = panStateRef.current !== null
+      const rotationState = floorplanRotationStateRef.current
       if (
         event &&
         (panStateRef.current || floorplanRotationStateRef.current) &&
@@ -9098,6 +9181,7 @@ export function FloorplanPanel({
       panStateRef.current = null
       floorplanRotationStateRef.current = null
       if (wasPanning) commitFloorplanPan()
+      if (rotationState) commitFloorplanRotation(rotationState)
       setIsPanning(false)
       setIsRotatingFloorplan(false)
 
@@ -9105,7 +9189,7 @@ export function FloorplanPanel({
         floorplanNavigationClickSuppressedRef.current = false
       }, 0)
     },
-    [commitFloorplanPan],
+    [commitFloorplanPan, commitFloorplanRotation],
   )
 
   const hoveredWallIdRef = useRef<string | null>(null)
@@ -9306,9 +9390,14 @@ export function FloorplanPanel({
           (rotationState.startClientX - event.clientX) * FLOORPLAN_ROTATION_DEGREES_PER_PIXEL
         const nextUserRotationDeg = rotationState.initialUserRotationDeg + angleDeltaDeg
 
-        smoothFloorplanNavigationView(rotationState.viewportCenterLocal, nextUserRotationDeg)
-        publishFloorplanNavigationPose(rotationState.viewportCenterLocal, nextUserRotationDeg)
-        setCursorPoint(null)
+        applyFloorplanRotationImperatively(rotationState, nextUserRotationDeg)
+        if (useEditor.getState().viewMode === 'split') {
+          publishFloorplanNavigationPose(
+            rotationState.viewportCenterLocal,
+            nextUserRotationDeg,
+            rotationState.latestViewport.width,
+          )
+        }
         return
       }
 
@@ -9687,6 +9776,7 @@ export function FloorplanPanel({
     [
       buildingRotationDeg,
       applyFloorplanViewportImperatively,
+      applyFloorplanRotationImperatively,
       draftStart,
       ceilingDraftPoints,
       emitFloorplanWallLeave,
@@ -9715,7 +9805,6 @@ export function FloorplanPanel({
       isWallBuildActive,
       levelId,
       publishFloorplanNavigationPose,
-      smoothFloorplanNavigationView,
       referenceScaleDraft,
       roofDraftStart,
       elevatorResizeDragState,
