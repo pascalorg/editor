@@ -151,6 +151,8 @@ export const WallNode = BaseNode.extend({
   thickness: z.number().optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
@@ -198,8 +200,11 @@ export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
   exterior: WALL_SURFACE_SLOT_DEFAULTS.exterior,
 }
 
-export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands'>) {
-  const wallHeight = wall.height ?? 2.5
+export function getWallFaceBandConfig(
+  wall: Pick<WallNode, 'height' | 'faceBands'>,
+  effectiveWallHeight: number,
+) {
+  const wallHeight = Math.max(0, effectiveWallHeight)
   const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
   const count = raw.enabled ? Math.max(1, Math.min(4, Math.round(raw.count ?? 3))) : 1
   const lowerHeight = count >= 2 ? Math.max(0, Math.min(wallHeight, raw.lowerHeight)) : 0
@@ -223,8 +228,9 @@ export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands
 export function getWallFaceBandForHeight(
   wall: Pick<WallNode, 'height' | 'faceBands'>,
   y: number,
+  effectiveWallHeight: number,
 ): WallFaceBand {
-  const bands = getWallFaceBandConfig(wall)
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return 'upper'
   if (y < bands.lowerTop) return 'lower'
   if (y < bands.middleTop) return 'middle'

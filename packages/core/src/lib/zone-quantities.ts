@@ -1,6 +1,11 @@
 import type { AnyNode, CeilingNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import type { AnyNodeId } from '../schema/types'
+import { DEFAULT_LEVEL_HEIGHT, resolveCeilingHeight } from '../services/level-height'
+import { getWallPlaneTop } from '../services/storey'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { sampleWallCenterline } from '../systems/wall/wall-curve'
-import { DEFAULT_WALL_HEIGHT, DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
+import { DEFAULT_WALL_THICKNESS } from '../systems/wall/wall-footprint'
+import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { detectSpacesForLevel, type Space } from './space-detection'
 
 type Point2D = readonly [number, number]
@@ -473,6 +478,12 @@ export function deriveZoneQuantityReport(
     ? Object.values(sceneNodes).filter((node) => node.parentId === levelId)
     : []
   const walls = levelNodes.filter((node): node is WallNode => node.type === 'wall')
+  const slabs = levelNodes.filter((node): node is SlabNode => node.type === 'slab')
+  const wallEffectiveHeight = (wall: WallNode) => {
+    const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
+    const planeTop = levelId ? getWallPlaneTop(wall, levelId, sceneNodes) : DEFAULT_LEVEL_HEIGHT
+    return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+  }
   const edgeLengths = zone.polygon.map((start, index) => {
     const end = zone.polygon[(index + 1) % zone.polygon.length]
     return end ? pointDistance(start, end) : 0
@@ -488,7 +499,7 @@ export function deriveZoneQuantityReport(
   const ceilingCoverage = proveSurfaceCoverage(
     zone,
     levelNodes.filter((node): node is CeilingNode => node.type === 'ceiling'),
-    (node) => node.height,
+    (node) => resolveCeilingHeight(node, sceneNodes as Record<AnyNodeId, AnyNode>),
     { singular: 'ceiling', plural: 'Ceilings', datum: 'heights' },
   )
 
@@ -517,7 +528,7 @@ export function deriveZoneQuantityReport(
     ? {
         status: 'available' as const,
         value: wallSpans!.reduce(
-          (sum, span) => sum + span.length * (span.wall.height ?? DEFAULT_WALL_HEIGHT),
+          (sum, span) => sum + span.length * wallEffectiveHeight(span.wall),
           0,
         ),
         note: 'Gross indoor-facing wall surface within this zone, including both sides of interior partitions.',

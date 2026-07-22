@@ -32,6 +32,10 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { deriveLegacyLevelHeight } from '../services/level-height'
+import { getCeilingClampBound } from '../services/storey'
+import { computeWallSlabSupport } from '../systems/slab/slab-support'
+import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import * as nodeActions from './actions/node-actions'
 import {
@@ -91,6 +95,7 @@ function getVector3(value: unknown, fallback: [number, number, number]): [number
 }
 
 function normalizeStairNode(node: Record<string, unknown>) {
+  const hasTotalRise = 'totalRise' in node
   const sanitized = {
     ...node,
     position: getVector3(node.position, [0, 0, 0]),
@@ -101,7 +106,7 @@ function normalizeStairNode(node: Record<string, unknown>) {
     slabOpeningMode: getEnumValue(node.slabOpeningMode, ['none', 'destination'] as const, 'none'),
     openingOffset: getFiniteNumber(node.openingOffset, 0),
     width: getFiniteNumber(node.width, 1),
-    totalRise: getFiniteNumber(node.totalRise, 2.5),
+    totalRise: hasTotalRise ? getFiniteNumber(node.totalRise, 2.5) : undefined,
     stepCount: getFiniteNumber(node.stepCount, 10),
     thickness: getFiniteNumber(node.thickness, 0.25),
     fillToFloor: getBoolean(node.fillToFloor, true),
@@ -117,7 +122,13 @@ function normalizeStairNode(node: Record<string, unknown>) {
   }
 
   const parsed = StairNodeSchema.safeParse(sanitized)
-  return parsed.success ? parsed.data : null
+  if (!parsed.success) return null
+  if (hasTotalRise) return parsed.data
+  // Absent `totalRise` means "rise derives from the storey height" and must
+  // survive the load: safeParse echoes the sanitized explicit-undefined key,
+  // which would flip `'totalRise' in node` checks — strip it back off.
+  const { totalRise: _totalRise, ...rest } = parsed.data
+  return rest
 }
 
 function normalizeStairSegmentNode(node: Record<string, unknown>) {
@@ -559,6 +570,15 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
+// Walls whose top lands within this of the storey plane become plane-bound;
+// ceilings whose stored height lands within this of their clamp bound become
+// follows-mode (step 3f) — same census-backed threshold for both.
+// From a prod census: the 0.15-short "hole pattern" (default 2.5 walls next to
+// a taller wall) must snap to the plane, while intentional 0.20-short walls
+// (2.5 under a 2.7 plane, 2.3 under a 2.5 plane) must keep their explicit
+// height — hence 0.20 with a strictly-less-than comparison.
+const PLANE_BOUND_EPSILON = 0.2
+
 function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>
@@ -886,6 +906,169 @@ function migrateNodes(nodes: Record<string, any>): {
     }
   }
 
+  // Pass 3: vertical building model.
+  // A level without `height` marks a scene saved before the vertical model
+  // landed. Computed before this pass mutates anything: the stair-rise
+  // cleanup below must never run on already-migrated scenes.
+  const isLegacyScene = Object.values(patchedNodes).some(
+    (node) => node?.type === 'level' && !('height' in node),
+  )
+
+  // 3a. Ordinal renumber — always runs, per building (idempotent
+  // self-healing; MCP's create-level historically wrote its elevation PARAM
+  // into the ordinal, so fractional/duplicate ordinals exist in the wild).
+  const buildingNodes = Object.values(patchedNodes).filter((node) => node?.type === 'building')
+  const levelsByBuilding = new Map<string | null, Array<{ id: string; ordinal: number }>>()
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'level') continue
+    // Mirrors the building resolution in services/storey.ts: an explicit
+    // parentId pointing at a building wins, membership in a building's
+    // children array is the legacy fallback, and unresolvable levels share
+    // one orphan bucket.
+    const buildingId =
+      buildingNodes.find((building) => building.id === node.parentId)?.id ??
+      buildingNodes.find((building) => getStringArray(building.children).includes(id))?.id ??
+      null
+    const bucket = levelsByBuilding.get(buildingId) ?? []
+    bucket.push({ id, ordinal: getFiniteNumber(node.level, 0) })
+    levelsByBuilding.set(buildingId, bucket)
+  }
+  for (const bucket of levelsByBuilding.values()) {
+    // Anchored at zero on purpose: ordinals are semantic — `level < 0`
+    // renders "Basement N" and `level === 0` is the ground-floor default —
+    // so negatives compact upward toward −1 and non-negatives compact down
+    // to 0. A blind 0..n renumber would rename basements.
+    const sorted = [...bucket].sort((a, b) => a.ordinal - b.ordinal)
+    const negativeCount = sorted.filter((entry) => entry.ordinal < 0).length
+    sorted.forEach((entry, index) => {
+      const nextOrdinal = index - negativeCount
+      const current = patchedNodes[entry.id]
+      if (current.level !== nextOrdinal) {
+        patchedNodes[entry.id] = { ...current, level: nextOrdinal }
+      }
+    })
+  }
+
+  // 3b. Stored storey heights: materialize the legacy stacked height verbatim
+  // (never rounded or snapped — snapping would move existing buildings).
+  // All planes derive before any wall height below mutates.
+  const legacyLevelIds = Object.entries(patchedNodes)
+    .filter(([, node]) => node?.type === 'level' && !('height' in node))
+    .map(([id]) => id)
+  const derivedHeights = new Map<string, number>()
+  for (const levelId of legacyLevelIds) {
+    derivedHeights.set(
+      levelId,
+      deriveLegacyLevelHeight(levelId, patchedNodes as Record<AnyNodeId, AnyNode>),
+    )
+  }
+
+  for (const levelId of legacyLevelIds) {
+    const plane = derivedHeights.get(levelId)!
+    const level = patchedNodes[levelId]
+    patchedNodes[levelId] = { ...level, height: plane }
+
+    // 3c. Wall-top classification against the just-written plane, using the
+    // same slab-support election as deriveLegacyLevelHeight (call shape
+    // mirrored from services/level-height.ts). Walls whose top meets the
+    // plane drop their explicit height and follow the level from now on;
+    // walls ending short (or tall) keep an explicit height — materializing
+    // the 2.5 default onto absent-height walls that end short of the plane.
+    const children = getStringArray(level.children)
+      .map((childId) => patchedNodes[childId])
+      .filter((child) => child !== undefined)
+    const slabs = children.filter((child) => child.type === 'slab')
+    const walls = children.filter((child) => child.type === 'wall')
+    for (const wall of walls) {
+      const electedBase = computeWallSlabSupport(
+        {
+          start: wall.start,
+          end: wall.end,
+          curveOffset: wall.curveOffset,
+          thickness: wall.thickness,
+        },
+        slabs,
+        walls,
+      ).elevation
+      const effectiveHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+      const top = Math.max(0, electedBase) + effectiveHeight
+      if (Math.abs(plane - top) < PLANE_BOUND_EPSILON) {
+        if ('height' in wall) {
+          const { height: _height, ...planeBound } = wall
+          patchedNodes[wall.id] = planeBound
+        }
+      } else {
+        patchedNodes[wall.id] = { ...wall, height: effectiveHeight }
+      }
+    }
+  }
+
+  // 3d. Stair rise: on legacy scenes a totalRise of exactly 2.5 is the old
+  // schema default, not a user choice — drop it so the rise derives from the
+  // storey height. Gated on isLegacyScene because on a post-migration scene
+  // a stored 2.5 IS a deliberately typed value and must survive reloads.
+  if (isLegacyScene) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      if (node?.type !== 'stair') continue
+      if (node.totalRise !== 2.5) continue
+      const { totalRise: _totalRise, ...derivedRise } = node
+      patchedNodes[id] = derivedRise
+    }
+  }
+
+  // 3e. Slab placement/thickness split. `elevation` stays the walking surface;
+  // the new `thickness` grows downward so the solid occupies
+  // [elevation − thickness, elevation]. Legacy solids extruded [0, elevation],
+  // so thickness = elevation EXACTLY (including degenerate 0 — MIN_SLAB_THICKNESS
+  // applies to edits only, never here) keeps the occupied interval identical.
+  // Legacy pools (elevation < 0) become explicit `recessed` intent with
+  // elevation unchanged. Gated per slab on a missing `thickness` — the
+  // migration output is cast, so schema defaults never materialize on load.
+  for (const [id, node] of Object.entries(patchedNodes)) {
+    if (node?.type !== 'slab' || 'thickness' in node) continue
+    const elevation = getFiniteNumber(node.elevation, 0.05)
+    patchedNodes[id] =
+      elevation < 0
+        ? { ...node, thickness: 0.05, recessed: true }
+        : { ...node, thickness: elevation }
+  }
+
+  // 3f. Ceiling follows-mode classification (the ceiling mirror of 3c; runs
+  // after 3b/3e so the clamp bound sees stored level heights and split slab
+  // thicknesses). A stored ceiling height within PLANE_BOUND_EPSILON of its
+  // clamp bound (min(storey plane, covering-slab underside) − margin, via
+  // getCeilingClampBound) is the legacy default tracking the level top, not
+  // a choice — drop it so the ceiling follows the level from now on.
+  // autoFromWalls ceilings always convert: their height was derived by the
+  // space-detection sync, never user intent. Gated on isLegacyScene, which
+  // is exact — nothing shipped between the level-height migration and this
+  // one — and makes the step idempotent. Known accepted edge: a
+  // post-migration user typing a custom height exactly equal to the bound
+  // keeps it (the gate prevents re-classification on later loads).
+  if (isLegacyScene) {
+    for (const [id, node] of Object.entries(patchedNodes)) {
+      if (node?.type !== 'ceiling' || !('height' in node)) continue
+      const dropHeight = () => {
+        const { height: _height, ...follows } = node
+        patchedNodes[id] = follows
+      }
+      if (node.autoFromWalls === true) {
+        dropHeight()
+        continue
+      }
+      if (typeof node.parentId !== 'string') continue
+      const bound = getCeilingClampBound(
+        node.parentId,
+        patchedNodes as Record<AnyNodeId, AnyNode>,
+        Array.isArray(node.polygon) ? node.polygon : [],
+      )
+      const stored = getFiniteNumber(node.height, Number.NaN)
+      if (Number.isFinite(bound) && Math.abs(stored - bound) < PLANE_BOUND_EPSILON) {
+        dropHeight()
+      }
+    }
+  }
+
   return { nodes: patchedNodes as Record<string, AnyNode>, mintedMaterials }
 }
 
@@ -1163,6 +1346,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         const level0 = LevelNode.parse({
           level: 0,
           children: [],
+          height: 2.5,
         })
 
         const building = BuildingNode.parse({

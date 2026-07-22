@@ -15,6 +15,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { type OpeningGuide3D, useOpeningGuides } from '@pascal-app/editor'
+import { resolveWallOpeningCeiling } from './wall-opening-ceiling'
 
 // Parity with `snapLocalXToNeighbors`' along-wall threshold.
 const SILL_SNAP_THRESHOLD_M = 0.08
@@ -94,7 +95,7 @@ export function publishOpeningGuides3D(args: {
 }): void {
   const { wall, centerS, centerY, width, toWorld } = args
   const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-  const wallHeight = wall.height ?? 2.5
+  const wallHeight = resolveWallOpeningCeiling(wall, args.nodes)
   const siblings = collectOpeningSiblings(wall, args.movingId, args.nodes)
   const guides = computeOpeningGuides({
     moving: { id: args.movingId, centerS, width, centerY, height: args.height },

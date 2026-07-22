@@ -1,12 +1,20 @@
 'use client'
 
-import { type AnyNode, type CeilingNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type CeilingNode,
+  getCeilingClampBound,
+  resolveCeilingHeight,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  formatLinearMeasurement,
   holeEditScope,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
   useEditingHole,
@@ -27,6 +35,7 @@ import { useCallback, useEffect, useRef } from 'react'
  */
 export function CeilingPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -35,10 +44,39 @@ export function CeilingPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined) : undefined,
   )
 
+  // Ceilings no longer drive the storey height — the stored level height
+  // does — so height writes clamp under min(storey plane, lowest covering
+  // slab underside from the level above) − margin instead of poking into
+  // the level above or a deck hanging from it (clamp, never ask).
+  // Selector returns a primitive, so recomputing per store update is
+  // re-render-safe.
+  const maxHeight = useScene((s) => {
+    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
+    return parent?.type === 'level'
+      ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
+      : 6
+  })
+
+  // Effective height: the stored custom height, or — for follows-mode
+  // ceilings (absent `height`) — the live level-top bound. Primitive
+  // selector so it tracks level-height / covering-slab edits.
+  const resolvedHeight = useScene((s) => {
+    const ceiling = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as CeilingNode | undefined)
+      : undefined
+    return ceiling?.type === 'ceiling' ? resolveCeilingHeight(ceiling, s.nodes) : 2.5
+  })
+
   // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
   // handler refs so slider drags don't trigger Maximum update depth.
   const nodeRef = useRef(node)
   nodeRef.current = node
+
+  const maxHeightRef = useRef(maxHeight)
+  maxHeightRef.current = maxHeight
+
+  const resolvedHeightRef = useRef(resolvedHeight)
+  resolvedHeightRef.current = resolvedHeight
 
   const handleUpdate = useCallback(
     (updates: Partial<CeilingNode>) => {
@@ -46,6 +84,31 @@ export function CeilingPanel() {
       useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId],
+  )
+
+  const handleHeightChange = useCallback(
+    (proposed: number) => {
+      handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+    },
+    [handleUpdate],
+  )
+
+  const handleTopModeChange = useCallback(
+    (mode: 'storey' | 'custom') => {
+      const n = nodeRef.current
+      if (!n) return
+      const isCustom = n.height != null
+      if (mode === 'custom' && !isCustom) {
+        // Seed from the current resolved height so the surface doesn't
+        // jump at the moment of detaching from the level top.
+        handleUpdate({ height: Math.min(resolvedHeightRef.current, maxHeightRef.current) })
+      } else if (mode === 'storey' && isCustom) {
+        // Absent `height` = follows the level top; the store strips
+        // undefined keys.
+        handleUpdate({ height: undefined })
+      }
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -156,6 +219,22 @@ export function CeilingPanel() {
   }
 
   const area = calculateArea(node.polygon)
+  const isFollows = node.height == null
+
+  // Clean preset values per display system; imperial stores exact meters
+  // for 8'0" / 8'6" / 9'0" ceilings.
+  const heightPresets =
+    unit === 'imperial'
+      ? [
+          { label: 'Low (8\'0")', height: 2.4384 },
+          { label: 'Standard (8\'6")', height: 2.5908 },
+          { label: 'High (9\'0")', height: 2.7432 },
+        ]
+      : [
+          { label: 'Low (2.4m)', height: 2.4 },
+          { label: 'Standard (2.5m)', height: 2.5 },
+          { label: 'High (3.0m)', height: 3.0 },
+        ]
 
   return (
     <PanelWrapper
@@ -165,21 +244,41 @@ export function CeilingPanel() {
       width={320}
     >
       <PanelSection title="Height">
-        <SliderControl
-          label="Height"
-          max={6}
-          min={0}
-          onChange={(v) => handleUpdate({ height: v })}
-          precision={3}
-          step={0.01}
-          unit="m"
-          value={Math.round(node.height * 1000) / 1000}
+        <SegmentedControl
+          onChange={handleTopModeChange}
+          options={[
+            { label: 'Follows level', value: 'storey' },
+            { label: 'Custom height', value: 'custom' },
+          ]}
+          value={isFollows ? 'storey' : 'custom'}
         />
+        {isFollows ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(resolvedHeight, unit)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Height"
+            max={Math.min(6, maxHeight)}
+            min={0}
+            onChange={handleHeightChange}
+            precision={3}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.height ?? resolvedHeight) * 1000) / 1000}
+          />
+        )}
 
+        {/* Presets write an explicit height (clamped to the bound), so
+            clicking one on a follows-mode ceiling switches it to custom. */}
         <div className="mt-2 grid grid-cols-3 gap-1.5 px-1 pb-1">
-          <ActionButton label="Low (2.4m)" onClick={() => handleUpdate({ height: 2.4 })} />
-          <ActionButton label="Standard (2.5m)" onClick={() => handleUpdate({ height: 2.5 })} />
-          <ActionButton label="High (3.0m)" onClick={() => handleUpdate({ height: 3.0 })} />
+          {heightPresets.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleHeightChange(preset.height)}
+            />
+          ))}
         </div>
       </PanelSection>
 

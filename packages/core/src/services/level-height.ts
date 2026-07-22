@@ -1,40 +1,68 @@
-import { pointInPolygon } from '../hooks/spatial-grid/spatial-grid-manager'
-import type { CeilingNode, LevelNode, WallNode } from '../schema'
+import type { CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
+import { resolveWallTop } from '../systems/wall/wall-top'
+// Cycle with ./storey (it imports DEFAULT_LEVEL_HEIGHT from here) is safe:
+// both sides only reference the other inside function bodies.
+import { CEILING_CLAMP_MARGIN, getCeilingClampBound } from './storey'
 
 export const DEFAULT_LEVEL_HEIGHT = 2.5
 
 /**
- * Optional resolver for a wall's rendered base Y (mesh elevation).
- *
- * `packages/core` is pure domain logic and must not read viewer/Three.js
- * state (see AGENTS.md “Layer Boundaries”). Callers that legitimately have
- * registry access (viewer systems, node tools) may pass a resolver so the
- * mesh elevation is factored in; pure/headless callers (MCP, tests, server)
- * omit it and get a deterministic result from serialized node data alone.
+ * Effective ceiling height in level-local meters. An explicit stored
+ * `height` wins; absent height means the ceiling follows the level top —
+ * the same bound its write-clamp uses: min(storey plane, lowest
+ * covering-slab underside over its polygon) − CEILING_CLAMP_MARGIN (see
+ * {@link getCeilingClampBound}). Falls back to the default plane minus
+ * the same margin when the owning level is unresolvable.
  */
-export type WallBaseYResolver = (wallId: AnyNodeId) => number | undefined
+export function resolveCeilingHeight(
+  ceiling: Pick<CeilingNode, 'height' | 'parentId' | 'polygon'>,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number {
+  if (ceiling.height != null) return ceiling.height
+  const bound =
+    typeof ceiling.parentId === 'string'
+      ? getCeilingClampBound(ceiling.parentId, nodes, ceiling.polygon)
+      : Number.POSITIVE_INFINITY
+  return Number.isFinite(bound) ? bound : DEFAULT_LEVEL_HEIGHT - CEILING_CLAMP_MARGIN
+}
 
-export function getLevelHeight(
+export function deriveLegacyLevelHeight(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
-  resolveWallBaseY?: WallBaseYResolver,
 ): number {
   const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
   if (!level) return DEFAULT_LEVEL_HEIGHT
 
+  const levelChildren = level.children
+    .map((childId) => nodes[childId as keyof typeof nodes])
+    .filter((child): child is AnyNode => child !== undefined)
+  const slabs = levelChildren.filter((child): child is SlabNode => child.type === 'slab')
+  const walls = levelChildren.filter((child): child is WallNode => child.type === 'wall')
+
   let maxTop = 0
 
-  for (const childId of level.children) {
-    const child = nodes[childId as keyof typeof nodes]
-    if (!child) continue
+  for (const child of levelChildren) {
     if (child.type === 'ceiling') {
-      const ch = (child as CeilingNode).height ?? DEFAULT_LEVEL_HEIGHT
-      if (ch > maxTop) maxTop = ch
+      // Absence here is the PRE-migration legacy schema default (2.5), not
+      // follows-mode — this derivation runs before the level has a height
+      // for a follows-mode bound to track.
+      const height = (child as CeilingNode).height ?? DEFAULT_LEVEL_HEIGHT
+      if (height > maxTop) maxTop = height
     } else if (child.type === 'wall') {
-      let baseY = resolveWallBaseY?.(childId as AnyNodeId) ?? 0
-      if (baseY < 0) baseY = 0
-      const top = baseY + ((child as WallNode).height ?? DEFAULT_LEVEL_HEIGHT)
+      const wall = child as WallNode
+      const electedElevation = computeWallSlabSupport(
+        {
+          start: wall.start,
+          end: wall.end,
+          curveOffset: wall.curveOffset,
+          thickness: wall.thickness,
+        },
+        slabs,
+        walls,
+      ).elevation
+      const top = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation)
       if (top > maxTop) maxTop = top
     }
   }
@@ -58,14 +86,18 @@ export function getCeilingAt(
   if (!level) return null
 
   let best: CeilingNode | null = null
+  let bestHeight = Number.POSITIVE_INFINITY
   for (const childId of level.children) {
     const child = nodes[childId as keyof typeof nodes]
     if (child?.type !== 'ceiling') continue
     const ceiling = child as CeilingNode
     if (ceiling.polygon.length < 3 || !pointInPolygon(x, z, ceiling.polygon)) continue
     if (ceiling.holes.some((hole) => hole.length >= 3 && pointInPolygon(x, z, hole))) continue
-    const h = ceiling.height ?? DEFAULT_LEVEL_HEIGHT
-    if (best === null || h < (best.height ?? DEFAULT_LEVEL_HEIGHT)) best = ceiling
+    const h = resolveCeilingHeight(ceiling, nodes)
+    if (best === null || h < bestHeight) {
+      best = ceiling
+      bestHeight = h
+    }
   }
   return best
 }
@@ -82,5 +114,5 @@ export function getCeilingHeightAt(
   z: number,
 ): number | null {
   const ceiling = getCeilingAt(levelId, nodes, x, z)
-  return ceiling ? (ceiling.height ?? DEFAULT_LEVEL_HEIGHT) : null
+  return ceiling ? resolveCeilingHeight(ceiling, nodes) : null
 }

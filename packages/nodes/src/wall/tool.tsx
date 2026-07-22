@@ -2,6 +2,7 @@ import {
   type AnyNode,
   calculateLevelMiters,
   collectAlignmentAnchors,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GridEvent,
   getWallMiterBoundaryPoints,
@@ -17,6 +18,7 @@ import {
 import {
   CursorSphere,
   chainEndJoinsExistingWall,
+  clearPlacementSurface,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -28,6 +30,8 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  publishPlacementSurface,
+  resolvePointerSupportSurface,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
   triggerSFX,
@@ -42,6 +46,7 @@ import {
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
 
@@ -58,7 +63,6 @@ import { BoxGeometry, BufferGeometry, DoubleSide, type Group, type Mesh, Vector3
  *
  * Mounted via `def.tool` from `wall/definition.ts`.
  */
-const WALL_HEIGHT = 2.5
 const DRAFT_WALL_THICKNESS = 0.1
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
@@ -82,6 +86,11 @@ const AXIS_ANGLE_REFERENCES: SegmentAngleReference[] = [
   { vector: [1, 0], orientation: 'axis' },
   { vector: [0, 1], orientation: 'axis' },
 ]
+
+// Grid-plane surface publish (pointer-decided): scratch + constant normal so
+// per-move publishes don't allocate.
+const SURFACE_UP = new Vector3(0, 1, 0)
+const surfacePointScratch = new Vector3()
 
 type DraftAngleLabel = {
   id: string
@@ -513,13 +522,24 @@ function getBelowLevelWalls(): WallNode[] {
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const activeLevelHeight = useScene((state) => {
+    const level = activeLevelId ? state.nodes[activeLevelId] : undefined
+    return level?.type === 'level' ? (level.height ?? DEFAULT_LEVEL_HEIGHT) : DEFAULT_LEVEL_HEIGHT
+  })
   // A placed wall preset seeds `toolDefaults.wall` (height / thickness …)
   // before the tool mounts, so the draft preview is drawn at the preset's
   // dimensions rather than the generic fallbacks — matching the wall that
   // will be created. Read through refs so the live event handlers below see
   // the latest values without re-subscribing.
   const wallDefaults = useEditor((s) => s.toolDefaults.wall)
-  const previewHeight = typeof wallDefaults?.height === 'number' ? wallDefaults.height : WALL_HEIGHT
+  // Camera for the pointer-support resolution (deck top vs floor) — read
+  // through a ref so the event handlers below see the live camera.
+  const camera = useThree((state) => state.camera)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
+  const previewHeight =
+    typeof wallDefaults?.height === 'number' ? wallDefaults.height : activeLevelHeight
   const previewThickness =
     typeof wallDefaults?.thickness === 'number' ? wallDefaults.thickness : DRAFT_WALL_THICKNESS
   const previewHeightRef = useRef(previewHeight)
@@ -591,6 +611,16 @@ export const WallTool: React.FC = () => {
         : point
     }
 
+    // The walking surface the pointer actually aims at (deck top when over
+    // the deck, floor/ground underneath it) — only for genuine 3D pointer
+    // events. The 2D floor plan emits synthetic grid events with no camera
+    // ray behind them; those keep the uncapped max election and leave the
+    // grid plane alone.
+    const pointedSurfaceFor = (event: GridEvent) =>
+      event.nativeEvent?.target instanceof HTMLCanvasElement
+        ? resolvePointerSupportSurface(cameraRef.current, event.position)
+        : null
+
     const stopDrafting = () => {
       buildingState.current = 0
       chainFirstVertex.current = null
@@ -610,6 +640,19 @@ export const WallTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && wallPreviewRef.current)) return
+
+      // Ride the grid event plane on the pointed surface: aiming at an
+      // elevated deck lifts the plane to the deck top, so the draft's XZ
+      // lands where the cursor points and the preview/cursor Y
+      // (`event.localPosition[1]`) sits at the base the committed wall
+      // will elect. Aiming past the deck edge drops it back to the floor.
+      const pointed = pointedSurfaceFor(event)
+      if (pointed) {
+        publishPlacementSurface(
+          surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
+          SURFACE_UP,
+        )
+      }
 
       const walls = getCurrentLevelWalls()
       // Add walls on the floor below as extra snap references so the new wall
@@ -745,10 +788,12 @@ export const WallTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
+        const pointed = pointedSurfaceFor(event)
         // Both start and end are building-local ✓
         const createdWall = createWallOnCurrentLevel(
           [startingPoint.current.x, startingPoint.current.z],
           snappedEnd,
+          { supportCap: pointed ? pointed.elevation : null },
         )
         if (!createdWall) return
         chainWallIds.current.push(createdWall.id)
@@ -831,6 +876,7 @@ export const WallTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       useSegmentDraftChain.getState().clear('wall')

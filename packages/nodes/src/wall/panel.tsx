@@ -22,6 +22,7 @@ import {
   ActionButton,
   ActionGroup,
   curveReshapeScope,
+  formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
   metersToLinearUnit,
@@ -35,6 +36,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
 
@@ -104,6 +106,15 @@ export default function WallPanel() {
     })
   })
 
+  // Effective height while the wall is plane-bound (`height` absent): the
+  // storey plane minus the elected slab base — what the wall currently
+  // renders at. `undefined` for walls with an explicit custom height.
+  const planeBoundHeightMeters = useScene((s) => {
+    const wall = selectedId ? (s.nodes[selectedId as AnyNodeId] as WallNode | undefined) : undefined
+    if (wall?.type !== 'wall' || wall.height != null) return undefined
+    return resolveWallOpeningCeiling(wall, s.nodes)
+  })
+
   // Mirror the latest node into a ref so the slider handlers below have
   // stable identities across re-renders. Without this, every store tick
   // (one per pointermove during a slider drag) rebuilt the handler
@@ -145,6 +156,24 @@ export default function WallPanel() {
     [handleUpdate],
   )
 
+  const handleTopModeChange = useCallback(
+    (mode: 'storey' | 'custom') => {
+      const n = nodeRef.current
+      if (!n) return
+      const isCustom = n.height != null
+      if (mode === 'custom' && !isCustom) {
+        // Seed from the current effective height so the geometry doesn't
+        // jump at the moment of detaching from the storey plane.
+        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes)
+        handleUpdate({ height: Math.max(0.1, seeded) })
+      } else if (mode === 'storey' && isCustom) {
+        // Absent `height` = plane-bound; the store strips undefined keys.
+        handleUpdate({ height: undefined })
+      }
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
@@ -160,7 +189,8 @@ export default function WallPanel() {
 
   const length = getWallCurveLength(node)
 
-  const height = node.height ?? 2.5
+  const isPlaneBound = node.height == null
+  const height = node.height ?? planeBoundHeightMeters ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
@@ -171,7 +201,7 @@ export default function WallPanel() {
   const displayCurveOffset = metersToLinearUnit(curveOffset, unit)
   const displayMaxCurveOffset = metersToLinearUnit(maxCurveOffset, unit)
   const curveOffsetLimit = Math.max(0.01, maxCurveOffset)
-  const wallHeightMeters = node.height ?? 2.5
+  const wallHeightMeters = height
 
   const skirting = { ...WALL_SKIRTING_DEFAULT, ...(node.skirting ?? {}) }
   const crown = { ...WALL_CROWN_DEFAULT, ...(node.crown ?? {}) }
@@ -199,20 +229,37 @@ export default function WallPanel() {
           unit={unitLabel}
           value={displayLength}
         />
-        <SliderControl
-          label="Height"
-          max={metersToLinearUnit(6, unit)}
-          min={metersToLinearUnit(0.1, unit)}
-          onChange={(v) =>
-            handleUpdate({
-              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
-            })
-          }
-          precision={2}
-          step={0.1}
-          unit={unitLabel}
-          value={Math.round(displayHeight * 100) / 100}
+        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Top
+        </div>
+        <SegmentedControl
+          onChange={handleTopModeChange}
+          options={[
+            { label: 'Follows level', value: 'storey' },
+            { label: 'Custom height', value: 'custom' },
+          ]}
+          value={isPlaneBound ? 'storey' : 'custom'}
         />
+        {isPlaneBound ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(height, unit)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Height"
+            max={metersToLinearUnit(6, unit)}
+            min={metersToLinearUnit(0.1, unit)}
+            onChange={(v) =>
+              handleUpdate({
+                height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+              })
+            }
+            precision={2}
+            step={0.1}
+            unit={unitLabel}
+            value={Math.round(displayHeight * 100) / 100}
+          />
+        )}
         <SliderControl
           label="Thickness"
           max={metersToLinearUnit(1, unit)}
@@ -318,7 +365,7 @@ function WallFaceBandSection({
   unitLabel: string
   wallHeightMeters: number
 }) {
-  const bandConfig = getWallFaceBandConfig(node)
+  const bandConfig = getWallFaceBandConfig(node, wallHeightMeters)
   const bandCount = bandConfig.count
   const lowerHeight = bandConfig.lowerHeight
   const middleHeight = bandConfig.middleHeight

@@ -59,11 +59,18 @@ export const LevelNode = BaseNode.extend({
     .default([]),
   // Specific props
   level: z.number().default(0),
+  /**
+   * Stored storey height in meters (floor-to-floor). No zod default on
+   * purpose: absence marks unmigrated legacy data and gates the load-time
+   * migration; a schema default would materialize silently through .parse().
+   */
+  height: z.number().optional(),
 }).describe(
   dedent`
   Level node - used to represent a level in the building
   - children: array of architectural, equipment, and MEP distribution nodes
   - level: level number
+  - height: storey height in meters (floor-to-floor); absent only on unmigrated legacy data
   `,
 )
 

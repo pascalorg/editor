@@ -356,6 +356,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         targetLocalY,
         movingWindowNode.width,
         movingWindowNode.height,
+        useScene.getState().nodes,
       )
 
       const valid = !hasWallChildOverlap(

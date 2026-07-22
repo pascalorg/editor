@@ -1,129 +1,33 @@
 import {
-  type AnyNode,
-  type AnyNodeId,
-  getEffectiveNode,
   getRenderableSlabPolygon,
   type PolygonPoint2D,
   pointInPolygon2D,
   polygonsIntersect,
   type SlabNode,
   type SlabPolygonContext,
-  sceneRegistry,
-  useScene,
-  type WallNode,
 } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
-import { useEffect } from 'react'
 import * as THREE from 'three'
 import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 
-function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
-  const uv = geometry.getAttribute('uv')
-  if (!uv) return
-
-  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
-}
-
 // ============================================================================
-// SLAB SYSTEM
+// SLAB GEOMETRY GENERATORS
 // ============================================================================
 
-export const SlabSystem = () => {
-  const dirtyNodes = useScene((state) => state.dirtyNodes)
-  const clearDirty = useScene((state) => state.clearDirty)
-  const markDirty = useScene((state) => state.markDirty)
-
-  useEffect(() => {
-    const nodes = useScene.getState().nodes
-    for (const node of Object.values(nodes)) {
-      if (node.type === 'slab') {
-        markDirty(node.id)
-      }
-    }
-  }, [markDirty])
-
-  useFrame(() => {
-    if (dirtyNodes.size === 0) return
-
-    const nodes = useScene.getState().nodes
-    const contextByLevel = new Map<string | null, SlabPolygonContext>()
-
-    // Process dirty slabs
-    dirtyNodes.forEach((id) => {
-      const node = nodes[id]
-      if (node?.type !== 'slab') return
-
-      const mesh = sceneRegistry.nodes.get(id) as THREE.Mesh
-      if (mesh) {
-        const slab = node as SlabNode
-        const levelContext =
-          contextByLevel.get(slab.parentId) ?? buildLevelSlabContext(slab.parentId, nodes)
-        contextByLevel.set(slab.parentId, levelContext)
-        updateSlabGeometry(
-          getEffectiveNode(slab),
-          excludeSlabFromContext(levelContext, slab.id),
-          mesh,
-        )
-        clearDirty(id as AnyNodeId)
-      }
-      // If mesh not found, keep it dirty for next frame
-    })
-  }, 1)
-
-  return null
-}
-
-function buildLevelSlabContext(
-  levelId: string | null,
-  nodes: Record<string, AnyNode>,
-): SlabPolygonContext {
-  const walls: WallNode[] = []
-  const siblingSlabs: SlabNode[] = []
-  for (const node of Object.values(nodes)) {
-    if (node.parentId !== levelId) continue
-    if (node.type === 'wall') walls.push(node as WallNode)
-    else if (node.type === 'slab') siblingSlabs.push(node as SlabNode)
-  }
-  return { walls, siblingSlabs }
-}
-
-function excludeSlabFromContext(context: SlabPolygonContext, slabId: string): SlabPolygonContext {
-  return {
-    walls: context.walls,
-    siblingSlabs: context.siblingSlabs.filter((slab) => slab.id !== slabId),
-  }
-}
-
 /**
- * Updates the geometry for a single slab
- */
-function updateSlabGeometry(node: SlabNode, context: SlabPolygonContext, mesh: THREE.Mesh) {
-  const newGeo = generateSlabGeometry(node, context)
-  ensureUv2Attribute(newGeo)
-
-  mesh.geometry.dispose()
-  mesh.geometry = newGeo
-
-  // For negative elevation, shift the mesh down so the top face sits at Y=elevation
-  // rather than at Y=0. Positive elevation stays at Y=0 (slab sits at floor level).
-  const elevation = node.elevation ?? 0.05
-  mesh.position.y = elevation < 0 ? elevation : 0
-}
-
-/**
- * Generates extruded slab geometry from polygon. `context` carries the
- * slab's level neighbourhood (walls + sibling slabs) driving the per-edge
- * render offsets — see `getRenderableSlabPolygon`.
+ * Generates slab geometry from polygon. `context` carries the slab's level
+ * neighbourhood (walls + sibling slabs) driving the per-edge render offsets —
+ * see `getRenderableSlabPolygon`. Branches on the explicit `recessed` intent:
+ * a recessed slab is an open shell (pool), everything else a solid occupying
+ * `[elevation − thickness, elevation]`.
  */
 export function generateSlabGeometry(
   slabNode: SlabNode,
   context: SlabPolygonContext,
 ): THREE.BufferGeometry {
-  const elevation = slabNode.elevation ?? 0.05
-  return elevation < 0
+  return slabNode.recessed
     ? generatePoolGeometry(slabNode, context)
-    : generatePositiveSlabGeometry(slabNode, context)
+    : generateSolidSlabGeometry(slabNode, context)
 }
 
 // Earcut normalizes cap triangulation regardless of input winding, but the side
@@ -175,7 +79,8 @@ function buildSlabRegions(contour: PolygonPoint2D[], holes: PolygonPoint2D[][]) 
 }
 
 /**
- * Standard slab: flat extrusion upward from Y=0 by elevation thickness.
+ * Solid slab occupying `[elevation − thickness, elevation]`: the top cap is
+ * the walking surface at `elevation`, the body grows downward by `thickness`.
  *
  * Built directly in 3D (Y-up) rather than via ExtrudeGeometry so the hole side
  * walls can be emitted double-sided. The slab material is forced to FrontSide
@@ -186,12 +91,14 @@ function buildSlabRegions(contour: PolygonPoint2D[], holes: PolygonPoint2D[][]) 
  * thickness visible from any angle: the two coincident triangles never z-fight
  * because exactly one faces the camera under FrontSide culling.
  */
-function generatePositiveSlabGeometry(
+function generateSolidSlabGeometry(
   slabNode: SlabNode,
   context: SlabPolygonContext,
 ): THREE.BufferGeometry {
   const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode, context))
   const elevation = slabNode.elevation ?? 0.05
+  const thickness = slabNode.thickness ?? 0.05
+  const bottom = elevation - thickness
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
   if (polygon.length < 3) return new THREE.BufferGeometry()
@@ -207,14 +114,14 @@ function generatePositiveSlabGeometry(
   const addWall = (a: THREE.Vector2, b: THREE.Vector2, flipped: boolean) => {
     const base = positions.length / 3
     const len = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 0.001)
-    positions.push(a.x, 0, a.y)
+    positions.push(a.x, bottom, a.y)
     uvs.push(0, 0)
-    positions.push(b.x, 0, b.y)
+    positions.push(b.x, bottom, b.y)
     uvs.push(len, 0)
     positions.push(b.x, elevation, b.y)
-    uvs.push(len, elevation)
+    uvs.push(len, thickness)
     positions.push(a.x, elevation, a.y)
-    uvs.push(0, elevation)
+    uvs.push(0, thickness)
     // Standard winding on a CCW polygon gives inward-facing normals (see pool
     // path), so the unflipped quad faces outward; flipped is its back face.
     if (!flipped) {
@@ -244,7 +151,7 @@ function generatePositiveSlabGeometry(
     }
     const bottomBase = positions.length / 3
     for (const p of capPoints) {
-      positions.push(p.x, 0, p.y)
+      positions.push(p.x, bottom, p.y)
       uvs.push(p.x, -p.y)
     }
 
@@ -303,7 +210,7 @@ function generatePoolGeometry(
 
   const pushFloorVertex = (x: number, y: number, z: number) => {
     positions.push(x, y, z)
-    // Floor UVs in metres (shape-space x, -z), matching generatePositiveSlabGeometry's
+    // Floor UVs in metres (shape-space x, -z), matching generateSolidSlabGeometry's
     // cap mapping so a finish tiles at the same world scale on every surface.
     uvs.push(x, -z)
   }

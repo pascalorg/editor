@@ -21,6 +21,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [scene-registry](scene-registry.md) | Global node ID → Object3D map and `useRegistry` |
 | [spatial-queries](spatial-queries.md) | Placement validation (`canPlaceOnFloor`/`Wall`/`Ceiling`) for tools |
 | [node-schemas](node-schemas.md) | Zod schema pattern for node types, `createNode`, `updateNode` |
+| [vertical-model](vertical-model.md) | Stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, clamp rules, and the load migration |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
 | [creating-rules](creating-rules.md) | How to add or update a page in this folder |
 

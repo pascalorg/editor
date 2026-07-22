@@ -63,6 +63,10 @@ import {
   updateLineGeometry,
 } from '../shared/placement-box-geometry'
 import {
+  resolvePointerSupportElevation,
+  resolvePointerSupportSurface,
+} from '../shared/pointer-support-cap'
+import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
   snapToGrid,
@@ -269,6 +273,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const raycastDisabledMeshRef = useRef<Object3D | null>(null)
   const restoreRaycastsRef = useRef<Array<() => void>>([])
   const raycastDisabledChildrenRef = useRef(new WeakSet<Object3D>())
+  // Level-local elevation of the surface the pointer ray actually points
+  // at (deck top, floor slab, or ground), refreshed on every grid move.
+  // Threaded into the floor-support election as its cap so the POINTER
+  // decides the target surface — without it the election lifts the ghost
+  // by the MAX overlapping slab and a deck above the aimed-at floor
+  // captures the item (and the grid-plane feedback makes it blink).
+  const pointerSupportCapRef = useRef<number | null>(null)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Live camera ref — the shelf-stickiness test reconstructs the cursor world
@@ -420,6 +431,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         node: previewNode,
         position,
         rotation: previewNode.rotation,
+        maxElevation: pointerSupportCapRef.current,
       })
     },
     [asset?.attachTo, draftNode],
@@ -449,6 +461,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       surfaceItemId: null,
       shelfId: null,
     }
+    // No pointer surface known yet — fall back to the uncapped election
+    // (an adopted move draft keeps its persisted host until the first move).
+    pointerSupportCapRef.current = null
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
       if (cursorGroupRef.current) {
@@ -848,6 +863,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       has3DPointerDrivenMoveRef.current = true
 
+      // The pointer decides the target surface AND the floor point: cap
+      // the floor-support election at the elevation of the surface the
+      // camera ray actually hits, and re-aim the event at the ray's
+      // crossing of that surface's plane. The grid event's own hit can't
+      // be used directly — its plane rides at the ghost's last height, so
+      // its Y is a feedback loop (the under-deck blink) and its XZ is
+      // perspective-skewed along the ray whenever the plane sits on a
+      // different storey than the pointed surface (the skew is what made
+      // a drag over a deck-above-a-floor hop between the two surfaces).
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      pointerSupportCapRef.current = pointed?.elevation ?? null
+      const surfaceEvent: GridEvent =
+        pointed?.worldPoint && pointed.localPoint
+          ? { ...event, position: pointed.worldPoint, localPosition: pointed.localPoint }
+          : event
+
       // Shelf stickiness: while hosting on a shelf, ignore floor events while
       // the cursor ray still points at the shelf volume (the ray merely slipped
       // off a board / through a gap and hit the floor behind). Detach to the
@@ -855,10 +886,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // item oscillates between the shelf row and the floor on every micro-move.
       if (placementState.current.surface === 'shelf-surface') {
         if (cursorRayIntersectsActiveShelf(event.position)) return
-        detachItemSurfaceToFloor(event as unknown as ItemEvent)
+        // Land at the pointed surface's plan point — the raw grid hit is
+        // still skewed by the plane riding at the shelf-surface height.
+        detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
       }
 
-      const floorEvent = applyFloorGrabOffset(event)
+      const floorEvent = applyFloorGrabOffset(surfaceEvent)
 
       lastRawPos.current.set(
         floorEvent.localPosition[0],
@@ -941,11 +974,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       if (draft) draft.position = gridPos
 
-      // Publish live transform for 2D floorplan
+      // Publish live transform for 2D floorplan (and the pointer surface
+      // cap, so FloorElevationSystem's per-frame Y agrees with the ghost).
       if (draft) {
         useLiveTransforms.getState().set(draft.id, {
           position: gridPos,
           rotation: cursorGroupRef.current.rotation.y,
+          supportElevationCap: pointerSupportCapRef.current ?? undefined,
         })
       }
 
@@ -973,7 +1008,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       const committedId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(result.nodeUpdate)
+      // Carry the pointer surface cap into the commit so the persisted
+      // supportSlabId reproduces the capped election (elects the aimed-at
+      // lower slab — or the ground — instead of a deck hanging above).
+      const finalId = draftNode.commit(result.nodeUpdate, {
+        supportElevationCap: pointerSupportCapRef.current,
+      })
       finishCommittedPlacement(finalId ?? committedId, wasAdopted, () => {
         draftNode.create(
           gridPosition.current,
@@ -1392,6 +1432,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const detachItemSurfaceToFloor = (event: ItemEvent) => {
       hostSurfaceDragAnchor = null
+      // Landing back on the floor: refresh the pointer surface cap from
+      // this event's world hit so the first floor position already targets
+      // the aimed-at surface (not a deck above it).
+      pointerSupportCapRef.current = resolvePointerSupportElevation(cameraRef.current, [
+        event.position[0],
+        event.position[1],
+        event.position[2],
+      ])
       // Coming back from a host: forget the floor grab too, so the item
       // centers under the cursor instead of restoring the pre-drag offset —
       // and landing on the floor is "anchoring elsewhere", so a later return

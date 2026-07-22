@@ -91,6 +91,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   // auto-slab live preview, history dances). Placement is wired via
   // `def.tool`.
   tool: () => import('./tool'),
+  preview: () => import('./preview'),
   affordanceTools: {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),

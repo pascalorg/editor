@@ -7,6 +7,7 @@ import {
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
+  resolveFenceSupportSlabPatch,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -320,6 +321,21 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
             data: { start: u.start, end: u.end },
           })),
         ])
+        // Re-elect the slab lift host as the endpoint drags (uncapped max
+        // election — 2D has no camera ray). This legacy write path commits
+        // via the dispatcher's snapshot diff, so patching per tick both
+        // previews the lift and lands it in the committed diff. Fences run
+        // no per-frame election: `supportSlabId` IS the lift.
+        const patchedNodes = useScene.getState().nodes
+        const supportPatches = [node.id, ...linkedUpdates.map((u) => u.id)].flatMap((id) => {
+          const fence = patchedNodes[id]
+          if (fence?.type !== 'fence') return []
+          const patch = resolveFenceSupportSlabPatch(fence as FenceNode, patchedNodes)
+          return patch.supportSlabId === (fence as FenceNode).supportSlabId
+            ? []
+            : [{ id, data: patch }]
+        })
+        if (supportPatches.length > 0) useScene.getState().updateNodes(supportPatches)
       },
       canCommit() {
         // Pointer-up always runs canCommit — drop the alignment guide here

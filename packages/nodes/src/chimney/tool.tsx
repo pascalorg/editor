@@ -10,7 +10,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -107,6 +107,15 @@ const ChimneyTool = () => {
       setSegmentXform(xform)
       setHitLocal([hit.localX, hit.localY, hit.localZ])
       setPreviewSegment(hit.segment)
+      usePlacementPreview.getState().set(
+        ChimneyNode.parse({
+          ...previewNode,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: hit.segment.id,
+        }),
+        hit.segment,
+      )
       publishRoofSurfacePlacementGuides({
         roof: event.node as RoofNode,
         segment: hit.segment,
@@ -137,6 +146,8 @@ const ChimneyTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [chimney.id] })
       triggerSFX('sfx:item-place')
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
@@ -149,6 +160,8 @@ const ChimneyTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
       clearRoofSurfacePlacementGuides()
     }
   }, [activeBuildingId, setSelection, previewNode])
@@ -162,6 +175,8 @@ const ChimneyTool = () => {
           setSegmentXform(null)
           setHitLocal(null)
           setPreviewSegment(null)
+          const placementPreview = usePlacementPreview.getState()
+          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
           clearRoofSurfacePlacementGuides()
         }}
       />

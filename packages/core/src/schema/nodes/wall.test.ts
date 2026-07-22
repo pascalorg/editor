@@ -41,16 +41,19 @@ describe('wall face bands', () => {
     })
 
     expect(
-      getWallFaceBandConfig({
-        height: 2.5,
-        faceBands: {
-          enabled: true,
-          count: 3,
-          lowerHeight: 0.84,
-          middleHeight: 0.61,
-          upperHeight: 0.61,
+      getWallFaceBandConfig(
+        {
+          height: 2.5,
+          faceBands: {
+            enabled: true,
+            count: 3,
+            lowerHeight: 0.84,
+            middleHeight: 0.61,
+            upperHeight: 0.61,
+          },
         },
-      }),
+        2.5,
+      ),
     ).toMatchObject({
       count: 3,
       lowerTop: 0.84,
@@ -60,16 +63,19 @@ describe('wall face bands', () => {
 
   test('four bands adds an upper split below the final top band', () => {
     expect(
-      getWallFaceBandConfig({
-        height: 2.5,
-        faceBands: {
-          enabled: true,
-          count: 4,
-          lowerHeight: 0.5,
-          middleHeight: 0.6,
-          upperHeight: 0.7,
+      getWallFaceBandConfig(
+        {
+          height: 2.5,
+          faceBands: {
+            enabled: true,
+            count: 4,
+            lowerHeight: 0.5,
+            middleHeight: 0.6,
+            upperHeight: 0.7,
+          },
         },
-      }),
+        2.5,
+      ),
     ).toMatchObject({
       count: 4,
       lowerTop: 0.5,
