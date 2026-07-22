@@ -4,6 +4,7 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  resolveSupportSlabPatch,
   SpawnNode,
   useScene,
 } from '@pascal-app/core'
@@ -105,10 +106,18 @@ const SpawnTool = () => {
       let placedId: SpawnNode['id']
 
       if (existingSpawnId) {
+        const live = useScene.getState().nodes[existingSpawnId]
+        const effectiveSpawn = SpawnNode.parse({
+          ...live,
+          parentId: activeLevelId,
+          position: next,
+          rotation: 0,
+        })
         useScene.getState().updateNode(existingSpawnId, {
           parentId: activeLevelId,
           position: next,
           rotation: 0,
+          ...resolveSupportSlabPatch(effectiveSpawn, useScene.getState().nodes),
         })
         if (duplicates.length > 0) {
           useScene.getState().deleteNodes(duplicates)
@@ -119,9 +128,14 @@ const SpawnTool = () => {
           name: 'Spawn Point',
           position: next,
           rotation: 0,
+          parentId: activeLevelId,
         })
-        useScene.getState().createNode(spawn, activeLevelId)
-        placedId = spawn.id
+        const committedSpawn = SpawnNode.parse({
+          ...spawn,
+          ...resolveSupportSlabPatch(spawn, useScene.getState().nodes),
+        })
+        useScene.getState().createNode(committedSpawn, activeLevelId)
+        placedId = committedSpawn.id
       }
 
       useViewer.getState().setSelection({ selectedIds: [placedId] })

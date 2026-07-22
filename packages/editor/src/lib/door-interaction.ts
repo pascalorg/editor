@@ -15,7 +15,7 @@ type DoorOpenAnimationOptions = {
   persist?: boolean
 }
 
-function getDisplayedDoorValue(
+export function getDisplayedDoorValue(
   doorId: AnyNodeId,
   field: keyof DoorInteractiveState,
   nodeValue: number | undefined,

@@ -360,7 +360,13 @@ function queueTextureAssignment(
   const textureMaterial = material as TextureMaterial
 
   if (!path) {
-    textureMaterial[slot] = null
+    if (textureMaterial[slot] != null) {
+      // Rebuild the node graph: a cached WebGPU material keeps a TextureNode
+      // for the slot, whose per-frame material reference would pull the null
+      // and crash in TextureNode.update ("null (reading 'matrix')").
+      textureMaterial[slot] = null
+      material.needsUpdate = true
+    }
     return
   }
 
@@ -379,7 +385,14 @@ function queueTextureAssignment(
     return
   }
 
-  textureMaterial[slot] = null
+  // Cold load: clear the slot for the fetch window, and rebuild the node
+  // graph if it previously held a texture — reused cached materials otherwise
+  // keep a TextureNode whose reference pulls the null and crashes the render
+  // pass. Cold loads are the norm for freshly generated library materials.
+  if (textureMaterial[slot] != null) {
+    textureMaterial[slot] = null
+    material.needsUpdate = true
+  }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return

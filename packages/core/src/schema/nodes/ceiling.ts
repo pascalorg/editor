@@ -18,7 +18,12 @@ export const CeilingNode = BaseNode.extend({
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   holeMetadata: z.array(SurfaceHoleMetadata).default([]),
-  height: z.number().default(2.5), // Height in meters
+  // Height in meters. Absent = the ceiling follows the level top: its
+  // effective height is the same bound its write-clamp uses —
+  // min(storey plane, lowest covering-slab underside over the polygon)
+  // − CEILING_CLAMP_MARGIN (see `resolveCeilingHeight`). Present = an
+  // explicit custom height, still write-clamped under that bound.
+  height: z.number().optional(),
   autoFromWalls: z.boolean().default(false),
 }).describe(
   dedent`
@@ -26,6 +31,7 @@ export const CeilingNode = BaseNode.extend({
   - polygon: array of [x, z] points defining the ceiling boundary
   - holes: array of polygons representing holes in the ceiling
   - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
+  - height: explicit height in meters; absent = follows the level top automatically
   - autoFromWalls: whether the ceiling is automatically generated from a closed wall loop
   `,
 )

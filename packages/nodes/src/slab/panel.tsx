@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNode, MIN_SLAB_THICKNESS, type SlabNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { applySlabElevationPreset, applySlabTopChange, clampSlabElevation } from './elevation-limit'
 
 /**
  * Phase 5 Stage E — slab inspector (kind-owned).
@@ -30,6 +31,7 @@ import { useCallback, useEffect, useRef } from 'react'
  */
 export function SlabPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -50,6 +52,33 @@ export function SlabPanel() {
       useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
     },
     [selectedId],
+  )
+
+  const handleElevationChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
+      handleUpdate(applySlabTopChange(current, elevation, { mode: 'panel' }))
+    },
+    [handleUpdate],
+  )
+
+  const handleThicknessChange = useCallback(
+    (proposed: number) => {
+      handleUpdate({ thickness: Math.max(MIN_SLAB_THICKNESS, proposed) })
+    },
+    [handleUpdate],
+  )
+
+  const handleElevationPreset = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
+      handleUpdate(applySlabElevationPreset(elevation))
+    },
+    [handleUpdate],
   )
 
   const handleClose = useCallback(() => {
@@ -162,6 +191,23 @@ export function SlabPanel() {
 
   const area = calculateArea(node.polygon)
 
+  // Clean preset values per display system; imperial stores exact meters
+  // for whole-inch offsets.
+  const elevationPresets =
+    unit === 'imperial'
+      ? [
+          { label: 'Sunken (-6")', elevation: -0.1524 },
+          { label: 'Ground (0")', elevation: 0 },
+          { label: 'Raised (+2")', elevation: 0.0508 },
+          { label: 'Step (+6")', elevation: 0.1524 },
+        ]
+      : [
+          { label: 'Sunken (-15cm)', elevation: -0.15 },
+          { label: 'Ground (0m)', elevation: 0 },
+          { label: 'Raised (+5cm)', elevation: 0.05 },
+          { label: 'Step (+15cm)', elevation: 0.15 },
+        ]
+
   return (
     <PanelWrapper
       icon="/icons/floor.webp"
@@ -174,18 +220,34 @@ export function SlabPanel() {
           label="Height"
           max={1}
           min={-1}
-          onChange={(v) => handleUpdate({ elevation: v })}
+          onChange={handleElevationChange}
           precision={3}
           step={0.01}
           unit="m"
           value={Math.round(node.elevation * 1000) / 1000}
         />
 
+        {!node.recessed && (
+          <SliderControl
+            label="Thickness"
+            max={0.5}
+            min={MIN_SLAB_THICKNESS}
+            onChange={handleThicknessChange}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.thickness ?? 0.05) * 100) / 100}
+          />
+        )}
+
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label="Sunken (-15cm)" onClick={() => handleUpdate({ elevation: -0.15 })} />
-          <ActionButton label="Ground (0m)" onClick={() => handleUpdate({ elevation: 0 })} />
-          <ActionButton label="Raised (+5cm)" onClick={() => handleUpdate({ elevation: 0.05 })} />
-          <ActionButton label="Step (+15cm)" onClick={() => handleUpdate({ elevation: 0.15 })} />
+          {elevationPresets.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleElevationPreset(preset.elevation)}
+            />
+          ))}
         </div>
       </PanelSection>
 

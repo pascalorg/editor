@@ -11,7 +11,7 @@ import { buildLevelDuplicateCreateOps } from './level-duplication'
 
 describe('buildLevelDuplicateCreateOps', () => {
   test('parents a duplicated bootstrap level back to its building', () => {
-    const level = LevelNode.parse({ level: 0, children: [] })
+    const level = LevelNode.parse({ level: 0, height: 3.25, children: [] })
     const building = BuildingNode.parse({ children: [level.id] })
     const wall = WallNode.parse({
       parentId: level.id,
@@ -36,6 +36,7 @@ describe('buildLevelDuplicateCreateOps', () => {
 
     expect(sourceLevel.parentId).toBeNull()
     expect(levelCreateOp?.parentId).toBe(building.id)
+    expect(levelCreateOp?.node.type === 'level' ? levelCreateOp.node.height : undefined).toBe(3.25)
   })
 
   test('does not copy spawn points from the source level', () => {

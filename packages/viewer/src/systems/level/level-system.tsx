@@ -1,16 +1,9 @@
-import {
-  type BuildingNode,
-  getLevelHeight,
-  type LevelNode,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
+import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
-import { getLevelBuildingId, getLevelStackPositions } from './level-stacking'
 
 const EXPLODED_GAP = 5
 
@@ -26,44 +19,31 @@ export const LevelSystem = () => {
     const levelMode = useViewer.getState().levelMode
     const selectedLevel = useViewer.getState().selection.levelId
 
-    // Collect level heights so each building can compute its own cumulative offsets.
-    // Level 0 → Y=0, Level 1 → Y=height(0), Level 2 → Y=height(0)+height(1), etc.
+    const levelElevations = getLevelElevations(nodes)
     type LevelEntry = {
       levelId: string
-      buildingId: string | null
       index: number
-      height: number
       obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
     }
     const entries: LevelEntry[] = []
-    const buildings = Object.values(nodes).filter(
-      (node): node is BuildingNode => node?.type === 'building',
-    )
     sceneRegistry.byType.level!.forEach((levelId) => {
       const obj = sceneRegistry.nodes.get(levelId)
       const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
       if (obj && level) {
         entries.push({
           levelId,
-          buildingId: getLevelBuildingId(levelId, level.parentId, buildings),
           index: level.level,
-          height: getLevelHeight(
-            levelId,
-            nodes,
-            (wallId) => sceneRegistry.nodes.get(wallId)?.position.y,
-          ),
           obj,
         })
       }
     })
-    const stackPositions = getLevelStackPositions(entries)
 
     const selectedIndex = selectedLevel
       ? entries.find((e) => e.levelId === selectedLevel)?.index
       : undefined
     for (const { levelId, index, obj } of entries) {
       const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
-      const baseY = stackPositions.get(levelId) ?? 0
+      const baseY = levelElevations.get(levelId)?.baseY ?? 0
       const explodedExtra = levelMode === 'exploded' ? index * EXPLODED_GAP : 0
       const targetY = baseY + explodedExtra
 

@@ -17,6 +17,7 @@ import {
   type Object3D,
   type PerspectiveCamera,
   Quaternion,
+  Raycaster,
   Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -25,7 +26,12 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { SCENE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
 import BVHEcctrl, { type BVHEcctrlApi, type MovementInput } from './bvh-ecctrl'
-import { WALKTHROUGH_FOV } from './walkthrough-controls'
+
+// First-person FOV. The orbit camera is 50° (set on the Canvas), which feels
+// cramped on foot; ~60° vertical (~90° horizontal at 16:9) restores peripheral
+// awareness without wide-angle distortion. Applied only while walking — both
+// walkthrough controllers read this and restore the orbit FOV on exit.
+export const WALKTHROUGH_FOV = 60
 
 // Eye/capsule geometry mirrors the editor's first-person controller so the
 // baked walkthrough feels identical. The capsule centre sits below the eye; the
@@ -36,6 +42,28 @@ const CONTROLLER_CENTER_FROM_EYE = 0.85
 const SPAWN_EYE_HEIGHT = 1.65
 const LOOK_SENSITIVITY = 0.002
 const VOID_FALL_RESPAWN_DEPTH = 12
+
+// Crouch (hold Ctrl): swap to a short capsule — it shrinks around the centre,
+// so a crouch mid-jump also lowers the head AND raises the feet, letting the
+// player thread window openings. Standing back up is gated on headroom.
+// The float gap counts toward the effective obstacle height (the capsule rides
+// floatHeight above the ground), so crouching also lowers it: crouched span is
+// CROUCH_FLOAT_HEIGHT + capsule = 0.25 + 0.7 = 0.95 m — fits a 1 m opening.
+export const STAND_CAPSULE: [number, number, number, number] = [0.25, 0.8, 4, 8]
+export const CROUCH_CAPSULE: [number, number, number, number] = [0.25, 0.2, 4, 8]
+export const STAND_FLOAT_HEIGHT = 0.5
+export const CROUCH_FLOAT_HEIGHT = 0.25
+export const CROUCH_EYE_OFFSET = 0.1
+export const CROUCH_WALK_SPEED = 1
+export const CROUCH_RUN_SPEED = 1.4
+// Headroom (from the capsule centre, upward) required before uncrouching:
+// standing raises the centre by half the length delta plus the float delta,
+// and the standing capsule top sits standLength/2 + radius above the centre.
+export const STAND_CLEARANCE = 1.25
+export const EYE_LERP_SPEED = 12
+
+const standClearanceRaycaster = new Raycaster()
+const UP = new Vector3(0, 1, 0)
 
 // Kinds that must not block the player: room helpers, the spawn marker, the
 // ceiling/roof shell (you walk under them), and door/window leaves — excluding
@@ -54,7 +82,7 @@ const keyboardMap: Array<{ name: Exclude<keyof MovementInput, 'joystick'>; keys:
   { name: 'run', keys: ['ShiftLeft', 'ShiftRight'] },
 ]
 
-const cameraOffset = new Vector3(0, CAMERA_EYE_OFFSET, 0)
+const cameraOffset = new Vector3()
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
 const spawnQuat = new Quaternion()
 const spawnEuler = new Euler(0, 0, 0, 'YXZ')
@@ -238,6 +266,10 @@ export function GlbWalkthroughController({ url }: { url: string }) {
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const yawRef = useRef(0)
   const pitchRef = useRef(0)
+  const crouchKeyRef = useRef(false)
+  const suspendRef = useRef(false)
+  const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
+  const [crouched, setCrouched] = useState(false)
   const [start, setStart] = useState<{ position: [number, number, number] } | null>(null)
   const [world, setWorld] = useState<GlbColliderWorld | null>(null)
 
@@ -333,20 +365,58 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       if (event.code === 'Escape' && document.pointerLockElement !== canvas) {
         useViewer.getState().setWalkthroughMode(false)
       }
+      // P toggles a cursor pause (advertised in the HUD): frees the pointer
+      // without leaving the walkthrough — e.g. for an OS screenshot, which
+      // needs a movable cursor — and click or P resumes.
+      if (event.code === 'KeyP') {
+        if (document.pointerLockElement === canvas) {
+          suspendRef.current = true
+          useViewer.getState().setWalkthroughSuspended(true)
+          document.exitPointerLock()
+        } else if (suspendRef.current) {
+          const result = canvas.requestPointerLock?.() as Promise<void> | undefined
+          if (result && typeof result.catch === 'function') result.catch(() => {})
+        }
+      }
+      // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard screenshot)
+      // must not toggle it under the user.
+      if ((event.code === 'ControlLeft' || event.code === 'ControlRight') && !suspendRef.current) {
+        crouchKeyRef.current = true
+      }
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if ((event.code === 'ControlLeft' || event.code === 'ControlRight') && !suspendRef.current) {
+        crouchKeyRef.current = false
+      }
+    }
+    const onBlur = () => {
+      if (!suspendRef.current) crouchKeyRef.current = false
     }
     const onPointerLockChange = () => {
-      if (document.pointerLockElement === canvas) wasLocked = true
-      else if (wasLocked) useViewer.getState().setWalkthroughMode(false)
+      if (document.pointerLockElement === canvas) {
+        wasLocked = true
+        suspendRef.current = false
+        useViewer.getState().setWalkthroughSuspended(false)
+      } else if (suspendRef.current) {
+        // Deliberately released (screenshot pause) — stay in walkthrough.
+      } else if (wasLocked) {
+        useViewer.getState().setWalkthroughMode(false)
+      }
     }
     document.addEventListener('mousemove', onMouseMove)
     canvas.addEventListener('click', onClick)
     document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
     document.addEventListener('pointerlockchange', onPointerLockChange)
     return () => {
       document.removeEventListener('mousemove', onMouseMove)
       canvas.removeEventListener('click', onClick)
       document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
       document.removeEventListener('pointerlockchange', onPointerLockChange)
+      useViewer.getState().setWalkthroughSuspended(false)
       if (document.pointerLockElement === canvas) document.exitPointerLock()
     }
   }, [gl])
@@ -367,8 +437,16 @@ export function GlbWalkthroughController({ url }: { url: string }) {
     controllerRef.current = api
   }, [])
 
+  const hasStandingClearance = useCallback((position: Vector3) => {
+    const mesh = worldRef.current?.mesh
+    if (!mesh) return true
+    standClearanceRaycaster.set(position, UP)
+    standClearanceRaycaster.far = STAND_CLEARANCE
+    return standClearanceRaycaster.intersectObject(mesh, false).length === 0
+  }, [])
+
   // Drive the camera from the capsule each frame + respawn if it falls into void.
-  useFrame(() => {
+  useFrame((_, delta) => {
     const group = controllerRef.current?.group
     if (!group) return
 
@@ -377,8 +455,18 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       controllerRef.current?.resetLinVel()
     }
 
+    // Crouch follows the held key; standing back up waits for headroom.
+    // Frozen while the cursor pause is active.
+    if (!suspendRef.current && crouchKeyRef.current !== crouched) {
+      if (crouchKeyRef.current) setCrouched(true)
+      else if (hasStandingClearance(group.position)) setCrouched(false)
+    }
+    const targetEyeOffset = crouched ? CROUCH_EYE_OFFSET : CAMERA_EYE_OFFSET
+    eyeOffsetRef.current +=
+      (targetEyeOffset - eyeOffsetRef.current) * Math.min(1, delta * EYE_LERP_SPEED)
+
     group.rotation.y = 0
-    camera.position.copy(group.position).add(cameraOffset)
+    camera.position.copy(group.position).add(cameraOffset.set(0, eyeOffsetRef.current, 0))
     cameraEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
     camera.quaternion.setFromEuler(cameraEuler)
     camera.updateMatrixWorld(true)
@@ -391,7 +479,7 @@ export function GlbWalkthroughController({ url }: { url: string }) {
       <BVHEcctrl
         acceleration={26}
         airDragFactor={0.3}
-        colliderCapsuleArgs={[0.25, 0.8, 4, 8]}
+        colliderCapsuleArgs={crouched ? CROUCH_CAPSULE : STAND_CAPSULE}
         colliderMeshes={[world.mesh]}
         collisionCheckIteration={3}
         collisionPushBackDamping={0.1}
@@ -401,15 +489,15 @@ export function GlbWalkthroughController({ url }: { url: string }) {
         fallGravityFactor={4}
         floatCheckType="BOTH"
         floatDampingC={36}
-        floatHeight={0.5}
+        floatHeight={crouched ? CROUCH_FLOAT_HEIGHT : STAND_FLOAT_HEIGHT}
         floatPullBackHeight={0.35}
         floatSensorRadius={0.15}
         floatSpringK={1200}
         gravity={9.81}
         jumpVel={5}
-        maxRunSpeed={5}
+        maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
         maxSlope={1.2}
-        maxWalkSpeed={2}
+        maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
         position={start.position}
         ref={setControllerApi}
       />

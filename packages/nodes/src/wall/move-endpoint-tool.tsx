@@ -3,13 +3,13 @@
 import {
   type AnyNodeId,
   collectAlignmentAnchors,
-  DEFAULT_WALL_HEIGHT,
   emitter,
   type GridEvent,
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
   resolveAlignment,
+  resolveWallSupportSlabPatch,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
@@ -39,6 +39,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -521,6 +522,16 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
               },
             })),
           ])
+          const affectedIds = [nodeId as AnyNodeId, ...linkedUpdates.map((u) => u.id as AnyNodeId)]
+          const committedNodes = useScene.getState().nodes
+          useScene.getState().updateNodes(
+            affectedIds.flatMap((id) => {
+              const wall = committedNodes[id]
+              return wall?.type === 'wall'
+                ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+                : []
+            }),
+          )
           useScene.getState().markDirty(nodeId as AnyNodeId)
           for (const u of linkedUpdates) {
             useScene.getState().markDirty(u.id as AnyNodeId)
@@ -613,7 +624,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     end: previewEnd,
     curveOffset: target.wall.curveOffset,
   })
-  const wallHeight = target.wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = resolveWallOpeningCeiling(target.wall, useScene.getState().nodes)
   const dimMidX = (previewStart[0] + previewEnd[0]) / 2
   const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
 

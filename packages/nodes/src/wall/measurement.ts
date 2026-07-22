@@ -1,5 +1,4 @@
 import {
-  DEFAULT_WALL_HEIGHT,
   getWallArcData,
   getWallCurveFrameAt,
   getWallThickness,
@@ -7,13 +6,15 @@ import {
   type MeasurementFeatureBinding,
   type MeasurementFeatureReference,
   sampleWallCenterline,
+  useScene,
   type WallNode,
 } from '@pascal-app/core'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 const point = (x: number, y: number, z: number) => [x, y, z] as [number, number, number]
 
 export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
-  const height = wall.height ?? DEFAULT_WALL_HEIGHT
+  const height = resolveWallOpeningCeiling(wall, useScene.getState().nodes)
   const arc = getWallArcData(wall)
   const centerline = sampleWallCenterline(wall).map(({ x, y }) => point(x, 0, y))
   const midpoint = getWallCurveFrameAt(wall, 0.5).point
@@ -181,7 +182,10 @@ export function matchWallMeasurementFeature(
     const faceDistance = Math.hypot(hit[0] - faceX, hit[2] - faceZ)
     const threshold = Math.max(maxDistance, halfThickness + 0.03)
     if (faceDistance <= threshold && (!best || faceDistance < best.distance)) {
-      const height = Math.max(0, Math.min(wall.height ?? DEFAULT_WALL_HEIGHT, hit[1]))
+      const height = Math.max(
+        0,
+        Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes), hit[1]),
+      )
       best = {
         featureId: side > 0 ? 'wall:face:left' : 'wall:face:right',
         point: point(faceX, height, faceZ),
@@ -217,7 +221,10 @@ export function resolveWallMeasurementFeature(
   if (typeof heightValue !== 'number' || feature.geometry.kind !== 'path') {
     return normal ? { ...feature, normal } : feature
   }
-  const height = Math.max(0, Math.min(wall.height ?? DEFAULT_WALL_HEIGHT, heightValue))
+  const height = Math.max(
+    0,
+    Math.min(resolveWallOpeningCeiling(wall, useScene.getState().nodes), heightValue),
+  )
   return {
     ...feature,
     ...(normal ? { normal } : {}),

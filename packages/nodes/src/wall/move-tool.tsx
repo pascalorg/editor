@@ -8,13 +8,16 @@ import {
   detectSpacesForLevel,
   emitter,
   type GridEvent,
+  getCeilingClampBound,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  getStoredLevelHeight,
+  type LevelNode,
   pauseSceneHistory,
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
-  projectAutoSlabsForPlan,
+  resolveWallSupportSlabPatch,
   resumeSceneHistory,
   type SlabNode,
   useLiveNodeOverrides,
@@ -284,12 +287,14 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // re-flowed through the planner.
       const existingSlabs = getLevelSlabs(levelId, sceneState.nodes)
       const slabPlan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
+      const levelNode = sceneState.nodes[levelId as AnyNodeId]
       const ceilingPlan = planAutoCeilingsForLevel(
         roomPolygons,
         getLevelCeilings(levelId, sceneState.nodes),
         {
-          walls: levelWalls,
-          slabs: projectAutoSlabsForPlan(existingSlabs, slabPlan),
+          storeyHeight:
+            levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
+          ceilingClampBound: (polygon) => getCeilingClampBound(levelId, sceneState.nodes, polygon),
         },
       )
 
@@ -594,6 +599,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // undoable step. Then drop the live overrides — the renderer
       // now reads the committed walls + polygons directly.
       commitSurfacesToStore()
+      const affectedWallIds = [
+        ...commitUpdates.map((entry) => entry.id),
+        ...bridgeCreates.map((entry) => entry.node.id as AnyNodeId),
+      ]
+      const committedNodes = useScene.getState().nodes
+      useScene.getState().updateNodes(
+        affectedWallIds.flatMap((id) => {
+          const wall = committedNodes[id]
+          return wall?.type === 'wall'
+            ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+            : []
+        }),
+      )
       clearSurfaceOverrides()
       clearWallOverrides()
 

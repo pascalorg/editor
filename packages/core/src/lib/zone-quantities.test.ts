@@ -17,7 +17,12 @@ function sceneRecord(nodes: AnyNode[]): Record<string, AnyNode> {
 function roomNodes() {
   const zone = ZoneNode.parse({ id: 'zone_room', name: 'Studio', parentId: 'level_main', polygon })
   const slab = SlabNode.parse({ id: 'slab_room', parentId: 'level_main', polygon })
-  const ceiling = CeilingNode.parse({ id: 'ceiling_room', parentId: 'level_main', polygon })
+  const ceiling = CeilingNode.parse({
+    id: 'ceiling_room',
+    parentId: 'level_main',
+    polygon,
+    height: 2.5,
+  })
   const walls = polygon.map((start, index) =>
     WallNode.parse({
       id: `wall_${index}`,

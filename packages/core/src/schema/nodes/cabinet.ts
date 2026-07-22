@@ -80,6 +80,8 @@ export type CabinetCompartmentSchema = z.infer<typeof CabinetCompartment>
 const cabinetBoxFields = {
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   width: z.number().min(0.05).max(3).default(0.5),
   depth: z.number().min(0.3).max(1.2).default(0.5),
   carcassHeight: z.number().min(0.4).max(2.4).default(0.72),

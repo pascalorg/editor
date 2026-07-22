@@ -28,6 +28,10 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  /** Host-owned selection highlights rendered through the viewer's native
+   * selection paths without changing the local user's editable selection. */
+  externalSelectedIds: BaseNode['id'][]
+  setExternalSelectedIds: (ids: BaseNode['id'][]) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -151,6 +155,11 @@ type ViewerState = {
 
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
+
+  /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
+   *  screenshot needs a movable cursor); clicking the canvas re-locks. */
+  walkthroughSuspended: boolean
+  setWalkthroughSuspended: (suspended: boolean) => void
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
@@ -320,6 +329,17 @@ const useViewer = create<ViewerState>()(
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      externalSelectedIds: [],
+      setExternalSelectedIds: (ids) =>
+        set((state) => {
+          if (
+            state.externalSelectedIds.length === ids.length &&
+            state.externalSelectedIds.every((id, index) => id === ids[index])
+          ) {
+            return state
+          }
+          return { externalSelectedIds: ids }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -509,7 +529,10 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
+      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+
+      walkthroughSuspended: false,
+      setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),

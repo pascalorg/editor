@@ -1,9 +1,11 @@
-import type {
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  Point2D,
-  StairNode,
+import {
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  type Point2D,
+  resolveStairTotalRise,
+  type StairNode,
+  useScene,
 } from '@pascal-app/core'
 import type {
   FloorplanStairArrowEntry,
@@ -179,7 +181,7 @@ function buildCurvedDocumentation(
   const innerRadius = Math.max(stairType === 'spiral' ? 0.05 : 0.2, stair.innerRadius)
   const outerRadius = innerRadius + stair.width
   const walkingRadius = innerRadius + stair.width / 2
-  const riserHeight = stair.totalRise / stepCount
+  const riserHeight = resolveStairTotalRise(stair, useScene.getState().nodes) / stepCount
   const treadDepth = (Math.abs(sweep) * walkingRadius) / stepCount
   const center = { x: stair.position[0], y: stair.position[2] }
   const noteAngle = (startAngle + endAngle) / 2

@@ -90,7 +90,7 @@ describe('computeWallSlabElevation', () => {
       parseWall([4, 4], [0, 4]),
       parseWall([0, 4], [0, 0]),
     ]
-    const slab = SlabNode.parse({ polygon: SLAB, elevation: 0.1 })
+    const slab = SlabNode.parse({ polygon: SLAB, elevation: 0.1, thickness: 0.1 })
 
     const bottom = walls[0]!
     expect(
@@ -100,6 +100,37 @@ describe('computeWallSlabElevation', () => {
         walls,
       ),
     ).toBeCloseTo(0.1)
+  })
+
+  it('elects a floating deck for a wall standing on its drawn footprint', () => {
+    // Wall ON a deck: no band adoption needed — the wall body lies inside
+    // the deck's drawn polygon, which is exactly what a floating slab
+    // renders.
+    const deck = SlabNode.parse({ polygon: SLAB, elevation: 1.5 })
+    const wallOnDeck = parseWall([1, 2], [3, 2])
+
+    expect(
+      computeWallSlabElevation(
+        { start: [1, 2], end: [3, 2], thickness: 0.1 },
+        [deck],
+        [wallOnDeck],
+      ),
+    ).toBeCloseTo(1.5)
+  })
+
+  it('a wall in the adoption band beside a floating deck does not stand on it', () => {
+    // Centerline 6cm below the deck's bottom edge — inside the adoption
+    // band (half-thickness + 0.06) but the body never reaches the drawn
+    // footprint. A grounded slab adopts the band and carries the wall; the
+    // deck keeps its drawn polygon and offers no support.
+    const bandWall = parseWall([0, -0.06], [4, -0.06])
+    const wallLike = { start: bandWall.start, end: bandWall.end, thickness: bandWall.thickness }
+
+    const deck = SlabNode.parse({ polygon: SLAB, elevation: 1.5 })
+    expect(computeWallSlabElevation(wallLike, [deck], [bandWall])).toBe(0)
+
+    const grounded = SlabNode.parse({ polygon: SLAB, elevation: 0.1, thickness: 0.1 })
+    expect(computeWallSlabElevation(wallLike, [grounded], [bandWall])).toBeCloseTo(0.1)
   })
 
   it('lifts a wall whose body a legacy stored polygon falls short of', () => {
@@ -114,6 +145,8 @@ describe('computeWallSlabElevation', () => {
       parseWall([4, 4], [0, 4]),
       parseWall([0, 4], [0, 0]),
     ]
+    // Grounded (thickness = elevation): band adoption only applies to
+    // grounded room floors under the vertical model.
     const slab = SlabNode.parse({
       polygon: [
         [0.06, 0.06],
@@ -122,6 +155,7 @@ describe('computeWallSlabElevation', () => {
         [0.06, 3.94],
       ],
       elevation: 0.1,
+      thickness: 0.1,
     })
 
     const bottom = walls[0]!
@@ -304,6 +338,7 @@ describe('computeWallSlabElevation', () => {
       computeWallSlabSupport({ start: [1, 2], end: [3, 2], thickness: 0.1 }, [floor, platform], []),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: platform.id,
       baseElevation: 0.6,
       baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
     })
@@ -329,6 +364,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: platform.id,
       baseElevation: 0.05,
       baseSegments: [
         { start: 0, end: 2 / 3, elevation: 0.6 },
@@ -340,6 +376,8 @@ describe('computeWallSlabElevation', () => {
   it('keeps a shared wall on the higher slab that carries the full wall band', () => {
     const sharedWall = parseWall([4, 0], [4, 4])
     const low = SlabNode.parse({ polygon: SLAB, elevation: 0.05 })
+    // Raised room floor: grounded (thickness = elevation) so the band-carry
+    // rule applies — a floating deck would keep its drawn polygon instead.
     const high = SlabNode.parse({
       polygon: [
         [4, 0],
@@ -348,6 +386,7 @@ describe('computeWallSlabElevation', () => {
         [4, 4],
       ],
       elevation: 0.6,
+      thickness: 0.6,
     })
 
     expect(
@@ -358,6 +397,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: high.id,
       baseElevation: 0.6,
       baseSegments: [{ start: 0, end: 1, elevation: 0.6 }],
     })
@@ -374,6 +414,7 @@ describe('computeWallSlabElevation', () => {
       parseWall([8, 1.5], [8, 4.5]),
       parseWall([8, 4.5], [4, 4.5]),
     ]
+    // Grounded raised room floor (see the shared-wall test above).
     const high = SlabNode.parse({
       polygon: [
         [0, 0],
@@ -382,6 +423,7 @@ describe('computeWallSlabElevation', () => {
         [0, 3],
       ],
       elevation: 0.6,
+      thickness: 0.6,
     })
     const low = SlabNode.parse({
       polygon: [
@@ -401,6 +443,7 @@ describe('computeWallSlabElevation', () => {
       ),
     ).toEqual({
       elevation: 0.6,
+      electedSlabId: high.id,
       baseElevation: 0.05,
       baseSegments: [
         { start: 0, end: 3.05 / 4.5, elevation: 0.6 },

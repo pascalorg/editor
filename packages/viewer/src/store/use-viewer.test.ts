@@ -5,6 +5,7 @@ import useViewer from './use-viewer'
 
 const resetMeasurementPreferences = () => {
   useViewer.setState({
+    externalSelectedIds: [],
     projectId: null,
     projectPreferences: {},
     showMeasurements: true,
@@ -59,5 +60,16 @@ describe('measurement display preferences', () => {
       metricNotation: 'millimeters',
       unitExplicit: true,
     })
+  })
+})
+
+describe('external selection highlights', () => {
+  test('tracks host-owned highlights without changing the local selection', () => {
+    const localSelection = useViewer.getState().selection
+
+    useViewer.getState().setExternalSelectedIds(['wall_remote'])
+
+    expect(useViewer.getState().externalSelectedIds).toEqual(['wall_remote'])
+    expect(useViewer.getState().selection).toBe(localSelection)
   })
 })

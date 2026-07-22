@@ -23,7 +23,7 @@ export function isOperableWindowType(windowType: string | undefined) {
   )
 }
 
-function getDisplayedWindowValue(windowId: AnyNodeId, nodeValue: number | undefined) {
+export function getDisplayedWindowValue(windowId: AnyNodeId, nodeValue: number | undefined) {
   const interactive = useInteractive.getState()
   const runtimeValue = interactive.windows[windowId]?.operationState
   if (runtimeValue !== undefined) return runtimeValue

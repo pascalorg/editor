@@ -1,12 +1,13 @@
-import type {
-  AnyNode,
-  CabinetModuleNode,
-  CabinetNode,
-  DoorNode,
-  ItemNode,
-  StairNode,
-  StairSegmentNode,
-  ZoneNode,
+import {
+  type AnyNode,
+  type CabinetModuleNode,
+  type CabinetNode,
+  type DoorNode,
+  type ItemNode,
+  resolveStairTotalRise,
+  type StairNode,
+  type StairSegmentNode,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { formatConstructionLength } from './construction-length'
 
@@ -258,7 +259,7 @@ export function buildClearanceAdvisories(
   )
   if (profiles.length === 0) return []
 
-  const targets = Object.values(nodes).flatMap((node) => clearanceTargets(node))
+  const targets = Object.values(nodes).flatMap((node) => clearanceTargets(node, nodes))
   const advisories: ClearanceAdvisory[] = []
 
   for (const target of targets) {
@@ -281,12 +282,15 @@ export function buildClearanceAdvisories(
   return advisories.sort((left, right) => left.id.localeCompare(right.id))
 }
 
-function clearanceTargets(node: AnyNode): ClearanceTarget[] {
+function clearanceTargets(
+  node: AnyNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ClearanceTarget[] {
   if (node.type === 'zone') return zoneTargets(node)
   if (node.type === 'door') return doorTargets(node)
   if (node.type === 'item') return itemTargets(node)
   if (node.type === 'cabinet' || node.type === 'cabinet-module') return cabinetTargets(node)
-  if (node.type === 'stair') return stairTargets(node)
+  if (node.type === 'stair') return stairTargets(node, nodes)
   if (node.type === 'stair-segment') return stairSegmentTargets(node)
   return []
 }
@@ -398,10 +402,14 @@ function cabinetTargets(cabinet: CabinetNode | CabinetModuleNode): ClearanceTarg
   return targets
 }
 
-function stairTargets(stair: StairNode): ClearanceTarget[] {
+function stairTargets(
+  stair: StairNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ClearanceTarget[] {
   const measurements: ClearanceTarget['measurements'] = { 'stair-width': stair.width }
-  if (stair.stepCount > 0 && stair.totalRise > 0) {
-    measurements['riser-height'] = stair.totalRise / stair.stepCount
+  const totalRise = resolveStairTotalRise(stair, nodes as Record<string, AnyNode>)
+  if (stair.stepCount > 0 && totalRise > 0) {
+    measurements['riser-height'] = totalRise / stair.stepCount
   }
 
   return [

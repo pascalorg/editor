@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  resolveStairTotalRise,
   type StairNode,
   type StairSegmentNode,
   useLiveNodeOverrides,
@@ -216,7 +217,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
     const sweepAngle =
       stair.sweepAngle ?? (stair.stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
     const stepSweep = sweepAngle / stepCount
-    const stepHeight = Math.max(stair.totalRise ?? 2.5, 0.1) / stepCount
+    const stepHeight = Math.max(resolveStairTotalRise(stair, nodes), 0.1) / stepCount
     const innerRadius = Math.max(
       stair.stairType === 'spiral' ? 0.05 : 0.2,
       stair.innerRadius ?? 0.9,
@@ -516,9 +517,10 @@ function CurvedStairBody({
   stair: StairNode
   bodyMaterials: StairBodyMaterials
 }) {
+  const nodes = useScene((state) => state.nodes)
   const sideMaterial = bodyMaterials[1]
   const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
-  const totalRise = Math.max(stair.totalRise ?? 2.5, 0.1)
+  const totalRise = Math.max(resolveStairTotalRise(stair, nodes), 0.1)
   const stepHeight = totalRise / stepCount
   const isSpiral = stair.stairType === 'spiral'
   const innerRadius = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? 0.9)

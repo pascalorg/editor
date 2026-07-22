@@ -6,7 +6,6 @@ import {
   type CeilingNode,
   ColumnNode,
   createSceneApi,
-  DEFAULT_WALL_HEIGHT,
   DoorNode,
   ElevatorNode,
   emitter,
@@ -15,6 +14,7 @@ import {
   getActiveRoofHeight,
   getEffectiveNode,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
   getWallThickness,
   ItemNode,
   isCurvedWall,
@@ -271,7 +271,7 @@ function getHeightPillDimensions(node: WallNode | FenceNode): {
 } {
   if (node.type === 'wall') {
     return {
-      height: node.height ?? DEFAULT_WALL_HEIGHT,
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
       length: getWallCurveLength(node),
       thickness: getWallThickness(node),
     }
@@ -413,7 +413,10 @@ export function FloatingActionMenu() {
       const override = useLiveNodeOverrides.getState().overrides.get(selectedId) as
         | { height?: number }
         | undefined
-      const fallbackHeight = node.type === 'wall' ? DEFAULT_WALL_HEIGHT : FENCE_DEFAULT_HEIGHT
+      const fallbackHeight =
+        node.type === 'wall'
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
       pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit)}`
     }

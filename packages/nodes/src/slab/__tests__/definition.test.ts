@@ -45,7 +45,7 @@ describe('slabDefinition handles', () => {
     expect(pointInPolygon2D([x, z], slab.holes[0]!, { includeBoundary: true })).toBe(false)
   })
 
-  test('allows the elevation arrow to cross zero into a recessed slab', () => {
+  test('routes the elevation arrow through adaptive slab top changes', () => {
     const slab = SlabNode.parse({
       elevation: 0.05,
       polygon: [
@@ -58,6 +58,24 @@ describe('slabDefinition handles', () => {
     const heightHandle = getHeightHandle(slab)
 
     expect(heightHandle.min).toBe(-1)
-    expect(heightHandle.apply(slab, -0.15, {} as never)).toEqual({ elevation: -0.15 })
+    // Crossing zero flips the recessed intent in the same patch; coming back
+    // above the plane clears it.
+    expect(heightHandle.apply(slab, -0.15, {} as never)).toEqual({
+      elevation: -0.15,
+      recessed: true,
+    })
+    expect(heightHandle.apply(slab, 0.1, {} as never)).toEqual({
+      elevation: 0.1,
+      thickness: 0.1,
+      recessed: false,
+    })
+    // The arrow is the drag surface: past SLAB_UNSTICK_THRESHOLD a
+    // grounded slab pops to the default deck thickness instead of
+    // stretching further.
+    expect(heightHandle.apply(slab, 0.6, {} as never)).toEqual({
+      elevation: 0.6,
+      thickness: 0.05,
+      recessed: false,
+    })
   })
 })

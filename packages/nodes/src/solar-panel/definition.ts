@@ -259,6 +259,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
 
   tool: () => import('./tool'),
   affordanceTools: {
