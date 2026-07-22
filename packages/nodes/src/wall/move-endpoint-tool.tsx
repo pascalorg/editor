@@ -229,6 +229,21 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
     const fixedPoint = fixedPointRef.current
+    const movingOriginalPoint = target.endpoint === 'start' ? originalStart : originalEnd
+    // Walls attached to the MOVING corner cascade with the drag, but the snap
+    // pipeline reads the scene store, which keeps their pre-drag coordinates
+    // until commit. Their stale corners would recreate the old junction as a
+    // snap/alignment target: inside the connect radius the endpoint could
+    // never land closer than ~5cm to where it started, making sub-5cm
+    // corrections (e.g. squaring a scan-imported 91° corner) impossible.
+    // Excluded while attached; under Alt-detach they stay put and remain
+    // legitimate targets.
+    const movingLinkedWallIds = linkedOriginalsRef.current
+      .filter(
+        (wall) =>
+          samePoint(wall.start, movingOriginalPoint) || samePoint(wall.end, movingOriginalPoint),
+      )
+      .map((wall) => wall.id)
     const levelWalls = Object.values(useScene.getState().nodes).filter(
       (node): node is WallNode =>
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
@@ -238,7 +253,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     // fences, items, slabs, ceilings, columns), gathered once (the set is
     // stable during the drag). Coords are building-local, the same frame as
     // the cursor and the 3D guide layer, so the published guide lines up.
+    // The attached variant additionally drops anchors owned by walls that
+    // follow the moving corner (see `movingLinkedWallIds` above) — their
+    // scene coordinates are stale during the drag.
     const wallAlignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, nodeId)
+    const movingLinkedIdSet = new Set<string>(movingLinkedWallIds)
+    const attachedAlignmentCandidates = wallAlignmentCandidates.filter(
+      (anchor) => !movingLinkedIdSet.has(anchor.nodeId),
+    )
 
     pauseSceneHistory(useScene)
     let wasCommitted = false
@@ -355,6 +377,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
 
     const onGridMove = (event: GridEvent) => {
       const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
+      // The keydown listener can't observe an Alt press that predates the
+      // tool mounting; the pointer event can. Sync the shared ref (single Alt
+      // source for snap targets, preview, HUD badge, and commit) before the
+      // snap pipeline reads it.
+      if (event.nativeEvent.altKey !== altPressedRef.current) {
+        altPressedRef.current = event.nativeEvent.altKey
+        setAltPressed(event.nativeEvent.altKey)
+      }
       // Endpoint move honours the active snapping mode (the HUD chip): grid →
       // lattice; lines → magnetic corner/alignment snap; angles → lock the
       // segment to 15° rays from the FIXED corner; off → raw. No Shift bypass —
@@ -362,7 +392,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
-        ignoreWallIds: [nodeId],
+        ignoreWallIds: altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds],
         start: fixedPoint,
         angleSnap: isAngleSnapActive(),
         magnetic: isMagneticSnapActive(),
@@ -379,10 +409,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       // (isAlignmentGuideActive); the magnetic pull onto them is applied only in
       // 'lines' mode (isMagneticSnapActive).
       let alignedPoint = snappedPoint
-      if (isAlignmentGuideActive() && wallAlignmentCandidates.length > 0) {
+      const alignmentCandidates = altPressedRef.current
+        ? wallAlignmentCandidates
+        : attachedAlignmentCandidates
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
         const ar = resolveAlignment({
           moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
-          candidates: wallAlignmentCandidates,
+          candidates: alignmentCandidates,
           threshold: ALIGNMENT_THRESHOLD_M,
         })
         const magnetic = isMagneticSnapActive()
@@ -428,13 +461,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             : null,
         )
 
-      // The keydown listener can't observe an Alt press that predates the
-      // tool mounting; the pointer event can. Sync the shared ref (single Alt
-      // source for preview, HUD badge, and commit) before applying.
-      if (event.nativeEvent.altKey !== altPressedRef.current) {
-        altPressedRef.current = event.nativeEvent.altKey
-        setAltPressed(event.nativeEvent.altKey)
-      }
       applyPreview(alignedPoint, altPressedRef.current)
     }
 
