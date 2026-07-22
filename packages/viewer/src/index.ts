@@ -119,6 +119,14 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export {
+  getPascalTextureRef,
+  type PascalTextureColorSpace,
+  type PascalTextureMap,
+  type PascalTextureRef,
+  stampPascalTextureRef,
+  textureMapForSlot,
+} from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
 export { useItemLightPool } from './store/use-item-light-pool'
 export { applyCountryUnitDefault, default as useViewer } from './store/use-viewer'
