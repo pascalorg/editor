@@ -6,8 +6,11 @@ import type {
   GeometryContext,
   StructuralGridNode,
 } from '@pascal-app/core'
-import { collectStructuralGridAxes, resolveStructuralGridReference } from '@pascal-app/core'
 import { floorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridReference,
+} from '../structural-grid/coordination'
 import type { ColumnResizePayload } from './floorplan-affordances'
 
 // Offsets for the floor-plan selection arrows. Resize chevrons hug the

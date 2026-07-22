@@ -1,6 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
-import { BaseNode, nodeType, objectId } from '../base'
+import { BaseNode, generateId, nodeType, objectId } from '../base'
 import { ConstructionDrawingType } from './construction-dimension'
 
 const PositiveFinite = z.number().finite().positive()
@@ -188,3 +188,76 @@ export type DrawingSheetDocumentMarkerKind = z.infer<typeof DrawingSheetDocument
 export type DrawingSheetSchedulePlacement = z.infer<typeof DrawingSheetSchedulePlacement>
 export type DrawingSheetTitleBlock = z.infer<typeof DrawingSheetTitleBlock>
 export type DrawingSheetNode = z.infer<typeof DrawingSheetNode>
+
+/**
+ * Rewrites every scene and sheet-local identity carried by a drawing sheet.
+ * External scene references are preserved when they are not present in
+ * `sceneIdMap`, which keeps a duplicated sheet attached to its existing level.
+ */
+export function remapDrawingSheetReferences(
+  sheet: DrawingSheetNode,
+  sceneIdMap: ReadonlyMap<string, string>,
+): DrawingSheetNode {
+  const placedViewIds = new Map(
+    sheet.placedViews.map((view) => [view.id, generateId('drawing-view')] as const),
+  )
+  const noteSetIds = new Map(
+    sheet.generalNoteSets.map((set) => [set.id, generateId('sheet-note-set')] as const),
+  )
+  const noteIds = new Map(
+    [...sheet.generalNotes, ...sheet.generalNoteSets.flatMap((set) => set.notes)].map(
+      (note) => [note.id, generateId('sheet-note')] as const,
+    ),
+  )
+  const keyedDefinitionIds = new Map(
+    sheet.keyedNoteDefinitions.map(
+      (definition) => [definition.id, generateId('keyed-note')] as const,
+    ),
+  )
+
+  return {
+    ...sheet,
+    placedViews: sheet.placedViews.map((view) => ({
+      ...view,
+      id: placedViewIds.get(view.id)!,
+      levelId: view.levelId
+        ? ((sceneIdMap.get(view.levelId) ?? view.levelId) as typeof view.levelId)
+        : null,
+    })),
+    generalNoteSetIds: sheet.generalNoteSetIds.map(
+      (id) => (noteSetIds.get(id) ?? id) as DrawingSheetNode['generalNoteSetIds'][number],
+    ),
+    generalNoteSets: sheet.generalNoteSets.map((set) => ({
+      ...set,
+      id: noteSetIds.get(set.id)!,
+      notes: set.notes.map((note) => ({ ...note, id: noteIds.get(note.id)! })),
+    })),
+    generalNotes: sheet.generalNotes.map((note) => ({ ...note, id: noteIds.get(note.id)! })),
+    keyedNoteDefinitions: sheet.keyedNoteDefinitions.map((definition) => ({
+      ...definition,
+      id: keyedDefinitionIds.get(definition.id)!,
+    })),
+    keyedNoteInstances: sheet.keyedNoteInstances.map((instance) => ({
+      ...instance,
+      id: generateId('keyed-note-instance'),
+      definitionId: (keyedDefinitionIds.get(instance.definitionId) ??
+        instance.definitionId) as typeof instance.definitionId,
+      placedViewId: instance.placedViewId
+        ? ((placedViewIds.get(instance.placedViewId) ??
+            instance.placedViewId) as typeof instance.placedViewId)
+        : null,
+    })),
+    documentMarkers: sheet.documentMarkers.map((marker) => ({
+      ...marker,
+      id: generateId('sheet-marker'),
+      placedViewId: marker.placedViewId
+        ? ((placedViewIds.get(marker.placedViewId) ??
+            marker.placedViewId) as typeof marker.placedViewId)
+        : null,
+    })),
+    schedules: sheet.schedules.map((schedule) => ({
+      ...schedule,
+      id: generateId('sheet-schedule'),
+    })),
+  }
+}

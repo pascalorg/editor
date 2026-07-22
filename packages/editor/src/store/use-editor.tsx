@@ -140,7 +140,7 @@ export type Phase = 'site' | 'structure' | 'furnish'
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
 
 // Structure mode tools (building elements)
-export type StructureTool =
+type BuiltInStructureTool =
   | 'wall'
   | 'fence'
   | 'room'
@@ -178,6 +178,9 @@ export type StructureTool =
   | 'pipe-segment'
   | 'pipe-fitting'
   | 'pipe-trap'
+
+/** Registry node kinds are valid build tools without central union edits. */
+export type StructureTool = BuiltInStructureTool | (string & {})
 
 // Furnish mode tools (items and decoration)
 export type FurnishTool = 'item' | 'cabinet'

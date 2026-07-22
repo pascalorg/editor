@@ -3,11 +3,9 @@ import {
   type AnyNodeId,
   type ColumnNode,
   collectAlignmentAnchors,
-  collectStructuralGridAxes,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   movingFootprintAnchors,
-  resolveStructuralGridSnap,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -22,6 +20,10 @@ import {
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
 
 /**
  * 2D floor-plan move handler for column. Columns need the same footprint-edge
@@ -48,7 +50,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [columnId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const snap = (value: number) => {
         if (!isGridSnapActive()) return value
         const step = useEditor.getState().gridSnapStep
@@ -68,7 +70,7 @@ export const columnFloorplanMoveTarget: FloorplanMoveTarget<ColumnNode> = ({ nod
         { applySnap: isMagneticSnapActive() },
       )
       const structuralSnap =
-        !modifiers.altKey && (isGridSnapActive() || isMagneticSnapActive())
+        isGridSnapActive() || isMagneticSnapActive()
           ? resolveStructuralGridSnap(snapped, collectStructuralGridAxes(nodes, node.parentId))
           : null
       const coordinated = structuralSnap?.point ?? snapped

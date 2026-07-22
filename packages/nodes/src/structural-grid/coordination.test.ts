@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { StructuralGridNode } from '../schema/nodes/structural-grid'
+import { StructuralGridNode } from '@pascal-app/core'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridReference,
   resolveStructuralGridSnap,
-} from './structural-grid'
+} from './coordination'
 
 const vertical = StructuralGridNode.parse({
   id: 'structural-grid_1',

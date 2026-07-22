@@ -12,6 +12,7 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
   extensions: {
     'pascal:editor/floorplan': {
       tool: () => import('./floorplan-tool'),
+      preferredView: '2d',
     } satisfies FloorplanNodeExtension<StructuralGridNode>,
   },
   snapProfile: 'structural',
@@ -46,7 +47,7 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
   presentation: {
     label: 'Structural Grid',
     description: 'Persistent construction grid axis with identification bubbles.',
-    icon: { kind: 'iconify', name: 'lucide:grid-2x2' },
+    icon: { kind: 'url', src: '/icons/structural-grid.webp' },
     paletteSection: 'structure',
     paletteOrder: 72,
   },

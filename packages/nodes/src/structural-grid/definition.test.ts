@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { getFloorplanNodeExtension } from '@pascal-app/editor'
 import { structuralGridDefinition } from './definition'
 
 describe('structuralGridDefinition', () => {
@@ -8,5 +9,6 @@ describe('structuralGridDefinition', () => {
     expect(structuralGridDefinition.dirtyTracking).toBe(false)
     expect(structuralGridDefinition.floorplan).toBeFunction()
     expect(structuralGridDefinition.capabilities.selectable).toBeDefined()
+    expect(getFloorplanNodeExtension(structuralGridDefinition)?.preferredView).toBe('2d')
   })
 })

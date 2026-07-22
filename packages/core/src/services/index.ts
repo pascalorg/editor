@@ -103,16 +103,6 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
-  collectStructuralGridAxes,
-  formatStructuralGridReference,
-  resolveStructuralGridReference,
-  resolveStructuralGridSnap,
-  STRUCTURAL_GRID_REFERENCE_TOLERANCE_M,
-  STRUCTURAL_GRID_SNAP_DISTANCE_M,
-  type StructuralGridPoint,
-  type StructuralGridSnap,
-} from './structural-grid'
-export {
   buildPortComponents,
   type SystemSummary,
   summarizeSystemFor,

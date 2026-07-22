@@ -1,4 +1,5 @@
 import type { MeasurementFeature, MeasurementFeatureBinding } from '../registry/types'
+import type { ConstructionDimensionNode } from '../schema/nodes/construction-dimension'
 import type {
   MeasurementAnchor,
   MeasurementPayload,
@@ -211,6 +212,21 @@ export function remapMeasurementAnchors(
     const nodeId = idMap.get(anchor.reference.nodeId)
     return nodeId ? { ...anchor, reference: { ...anchor.reference, nodeId } } : anchor
   })
+}
+
+export function remapConstructionDimensionReferences(
+  dimension: ConstructionDimensionNode,
+  idMap: ReadonlyMap<string, string>,
+): ConstructionDimensionNode {
+  const controllingDimensionId = dimension.controllingDimensionId
+    ? ((idMap.get(dimension.controllingDimensionId) as ConstructionDimensionNode['id']) ??
+      dimension.controllingDimensionId)
+    : null
+  return {
+    ...dimension,
+    anchors: remapMeasurementAnchors(dimension.anchors, idMap),
+    controllingDimensionId,
+  }
 }
 
 export function measurementAnchorReferenceNodeIds(

@@ -1,5 +1,9 @@
-import { remapMeasurementAnchors, remapMeasurementReferences } from '../lib/measurement-geometry'
+import {
+  remapConstructionDimensionReferences,
+  remapMeasurementReferences,
+} from '../lib/measurement-geometry'
 import { generateId } from '../schema/base'
+import { remapDrawingSheetReferences } from '../schema/nodes/drawing-sheet'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Generic, opinion-free primitives the host app composes to implement
@@ -141,7 +145,7 @@ export function cloneNodesInto(
   const out: AnyNode[] = []
   let root: AnyNode | null = null
   for (const original of nodes) {
-    const cloned = JSON.parse(JSON.stringify(original)) as AnyNode
+    let cloned = JSON.parse(JSON.stringify(original)) as AnyNode
     const freshId = idMap.get(original.id)!
     ;(cloned as { id: AnyNodeId }).id = freshId
     // parentId: root's parentId becomes opts.parentId (or preserved
@@ -170,12 +174,10 @@ export function cloneNodesInto(
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
     if (cloned.type === 'construction-dimension') {
-      cloned.anchors = remapMeasurementAnchors(cloned.anchors, idMap)
-      if (cloned.controllingDimensionId) {
-        cloned.controllingDimensionId =
-          (idMap.get(cloned.controllingDimensionId) as typeof cloned.controllingDimensionId) ??
-          cloned.controllingDimensionId
-      }
+      cloned = remapConstructionDimensionReferences(cloned, idMap)
+    }
+    if (cloned.type === 'drawing-sheet') {
+      cloned = remapDrawingSheetReferences(cloned, idMap)
     }
 
     if (original.id === opts.rootId) {

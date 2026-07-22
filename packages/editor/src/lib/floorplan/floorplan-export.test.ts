@@ -1,5 +1,10 @@
-import { describe, expect, test } from 'bun:test'
-import { DrawingSheetNode, type FloorplanGeometry } from '@pascal-app/core'
+import { beforeAll, describe, expect, test } from 'bun:test'
+import {
+  DrawingSheetNode,
+  type FloorplanGeometry,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import {
   filterFloorplanExportOverlay,
@@ -25,7 +30,32 @@ import {
   resolveSheetPageSetup,
   rotateFloorplanExportBounds,
 } from './floorplan-export'
-import { floorplanGeometryMetadata } from './floorplan-extension'
+import { type FloorplanNodeExtension, floorplanGeometryMetadata } from './floorplan-extension'
+
+const drawingSheetExtension: FloorplanNodeExtension<DrawingSheetNode> = {
+  resolveDrawingSheet: ({ node, levelId, drawingType }) =>
+    node.placedViews.some(
+      (view) =>
+        (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
+    )
+      ? node
+      : null,
+}
+
+beforeAll(() => {
+  if (nodeRegistry.has('drawing-sheet')) return
+  registerNode({
+    kind: 'drawing-sheet',
+    schemaVersion: 1,
+    schema: DrawingSheetNode,
+    category: 'analysis',
+    defaults: () => ({}) as never,
+    capabilities: {},
+    extensions: {
+      'pascal:editor/floorplan': drawingSheetExtension,
+    },
+  })
+})
 
 describe('filterFloorplanExportOverlay', () => {
   test('preserves value labels and removes editing handles', () => {
@@ -184,13 +214,15 @@ describe('fitPlanToBox', () => {
 
 describe('floor plan export policy', () => {
   test('uses the live floor-plan formatting profile for metric and imperial dimensions', () => {
-    expect(resolveFloorplanExportViewState('metric')).toMatchObject({
+    expect(resolveFloorplanExportViewState('metric', 'millimeters')).toMatchObject({
       purpose: 'edit',
       unit: 'metric',
+      metricNotation: 'millimeters',
     })
-    expect(resolveFloorplanExportViewState('imperial')).toMatchObject({
+    expect(resolveFloorplanExportViewState('imperial', 'meters')).toMatchObject({
       purpose: 'edit',
       unit: 'imperial',
+      metricNotation: 'meters',
     })
   })
 

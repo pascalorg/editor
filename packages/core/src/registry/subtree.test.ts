@@ -226,6 +226,38 @@ describe('cloneNodesInto', () => {
     }
   })
 
+  test('regenerates drawing-sheet identities while preserving external level references', () => {
+    const original = makeNode('drawing-sheet_a101', 'drawing-sheet', {
+      placedViews: [{ id: 'drawing-view_main', levelId: 'level_existing' }],
+      generalNoteSetIds: [],
+      generalNoteSets: [],
+      generalNotes: [],
+      keyedNoteDefinitions: [{ id: 'keyed-note_a', key: 'A', text: 'NOTE' }],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_a',
+          definitionId: 'keyed-note_a',
+          placedViewId: 'drawing-view_main',
+          position: [1, 1],
+        },
+      ],
+      keyedNoteLegend: [],
+      documentMarkers: [],
+      schedules: [],
+    })
+
+    const { nodes } = cloneNodesInto([original], { rootId: original.id as AnyNodeId })
+    const cloned = nodes[0]
+
+    expect(cloned?.type).toBe('drawing-sheet')
+    if (cloned?.type === 'drawing-sheet') {
+      expect(cloned.placedViews[0]?.levelId).toBe('level_existing')
+      expect(cloned.placedViews[0]?.id).not.toBe('drawing-view_main')
+      expect(cloned.keyedNoteInstances[0]?.definitionId).toBe(cloned.keyedNoteDefinitions[0]?.id)
+      expect(cloned.keyedNoteInstances[0]?.placedViewId).toBe(cloned.placedViews[0]?.id)
+    }
+  })
+
   test('parents the cloned root under opts.parentId when supplied', () => {
     const orig = makeNode('shelf_1', 'shelf', { parentId: 'level_old' })
     const { nodes } = cloneNodesInto([orig], {

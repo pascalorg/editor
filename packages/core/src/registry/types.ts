@@ -951,7 +951,6 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   portConnectivityFollow?: boolean
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
-  migrate?: Record<number, (old: unknown) => unknown>
 
   capabilities: Capabilities
   relations?: Relations

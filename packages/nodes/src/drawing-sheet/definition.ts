@@ -1,4 +1,5 @@
 import { DrawingSheetNode as DrawingSheetNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { DrawingSheetNode } from './schema'
 
 export const drawingSheetDefinition: NodeDefinition<typeof DrawingSheetNode> = {
@@ -7,6 +8,17 @@ export const drawingSheetDefinition: NodeDefinition<typeof DrawingSheetNode> = {
   schemaVersion: 4,
   schema: DrawingSheetNode,
   category: 'analysis',
+  extensions: {
+    'pascal:editor/floorplan': {
+      resolveDrawingSheet: ({ node, levelId, drawingType }) =>
+        node.placedViews.some(
+          (view) =>
+            (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
+        )
+          ? node
+          : null,
+    } satisfies FloorplanNodeExtension<DrawingSheetNodeSchema>,
+  },
 
   defaults: () => {
     const stub = DrawingSheetNodeSchema.parse({

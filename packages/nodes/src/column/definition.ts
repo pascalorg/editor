@@ -1,12 +1,14 @@
 import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
-  collectStructuralGridAxes,
   type GroupMoveSnapArgs,
   type HandleDescriptor,
   type NodeDefinition,
-  resolveStructuralGridSnap,
 } from '@pascal-app/core'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
 import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'

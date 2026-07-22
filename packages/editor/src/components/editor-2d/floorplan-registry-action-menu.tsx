@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
@@ -146,17 +147,19 @@ export function FloorplanRegistryActionMenu() {
   // Only show for registered kinds (skip legacy kinds — they have their
   // own FloorplanActionMenuLayer entries).
   const selectedKind = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
-  const canCurveSelectedWall = useScene((s) => {
+  const canCurve = useScene((s) => {
     if (!selectedId) return false
     const selectedNode = s.nodes[selectedId]
-    if (selectedNode?.type !== 'wall') return false
-    return !(selectedNode.children ?? []).some((childId) => {
-      const child = s.nodes[childId as AnyNodeId]
-      if (!child) return false
-      if (child.type === 'door' || child.type === 'window') return true
-      if (child.type !== 'item') return false
-      return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
-    })
+    if (!selectedNode) return false
+    const definition = nodeRegistry.get(selectedNode.type)
+    const canCurveNode = getFloorplanNodeExtension(definition)?.actionMenu?.canCurve
+    return (
+      !!definition?.floorplanAffordances?.curve &&
+      !!canCurveNode?.({
+        node: selectedNode as never,
+        nodes: s.nodes,
+      })
+    )
   })
   const def = selectedKind ? nodeRegistry.get(selectedKind) : null
   const isRegistryKind = !!def
@@ -250,7 +253,6 @@ export function FloorplanRegistryActionMenu() {
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
-  const canCurve = canCurveSelectedWall && !!def.floorplanAffordances?.curve
 
   const handleMove = () => {
     sfxEmitter.emit('sfx:item-pick')

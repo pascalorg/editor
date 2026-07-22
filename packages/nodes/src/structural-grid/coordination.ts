@@ -1,5 +1,4 @@
-import type { StructuralGridNode } from '../schema/nodes/structural-grid'
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, StructuralGridNode } from '@pascal-app/core'
 
 export type StructuralGridPoint = readonly [x: number, z: number]
 

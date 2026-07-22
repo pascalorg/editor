@@ -1,7 +1,11 @@
-import { remapMeasurementAnchors, remapMeasurementReferences } from '../lib/measurement-geometry'
+import {
+  remapConstructionDimensionReferences,
+  remapMeasurementReferences,
+} from '../lib/measurement-geometry'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
+import { remapDrawingSheetReferences } from '../schema/nodes/drawing-sheet'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -44,7 +48,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
 
   for (const [oldId, node] of Object.entries(nodes)) {
     const newId = idMap.get(oldId)! as AnyNodeId
-    const clonedNode = structuredClone({ ...node, id: newId }) as AnyNode
+    let clonedNode = structuredClone({ ...node, id: newId }) as AnyNode
 
     // Remap parentId
     if (clonedNode.parentId && typeof clonedNode.parentId === 'string') {
@@ -89,7 +93,10 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
     }
     if (clonedNode.type === 'construction-dimension') {
-      clonedNode.anchors = remapMeasurementAnchors(clonedNode.anchors, idMap)
+      clonedNode = remapConstructionDimensionReferences(clonedNode, idMap)
+    }
+    if (clonedNode.type === 'drawing-sheet') {
+      clonedNode = remapDrawingSheetReferences(clonedNode, idMap)
     }
 
     clonedNodes[newId] = clonedNode
@@ -205,7 +212,7 @@ export function cloneLevelSubtree(
     const newId = idMap.get(oldId)! as AnyNodeId
 
     // JSON roundtrip: safely strips functions, Object3D, circular refs, etc.
-    const cloned = JSON.parse(JSON.stringify(node)) as AnyNode
+    let cloned = JSON.parse(JSON.stringify(node)) as AnyNode
     ;(cloned as Record<string, unknown>).id = newId
 
     // Remap parentId — but only for descendants, not the level node itself
@@ -247,7 +254,10 @@ export function cloneLevelSubtree(
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
     if (cloned.type === 'construction-dimension') {
-      cloned.anchors = remapMeasurementAnchors(cloned.anchors, idMap)
+      cloned = remapConstructionDimensionReferences(cloned, idMap)
+    }
+    if (cloned.type === 'drawing-sheet') {
+      cloned = remapDrawingSheetReferences(cloned, idMap)
     }
 
     clonedNodes.push(cloned)

@@ -102,6 +102,7 @@ export {
   DrawingSheetScale,
   DrawingSheetSchedulePlacement,
   DrawingSheetTitleBlock,
+  remapDrawingSheetReferences,
 } from './nodes/drawing-sheet'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'

@@ -320,6 +320,7 @@ export {
   type FloorplanNodeExtension,
   type FloorplanRenderPurpose,
   type FloorplanSchedule,
+  type FloorplanToolContext,
   floorplanGeometryMetadata,
   getFloorplanNodeExtension,
   readFloorplanContext,

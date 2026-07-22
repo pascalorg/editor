@@ -4,7 +4,6 @@ import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
-import { applyNodeMigrations } from '../registry/migrations'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -560,6 +559,27 @@ function migrateRoofSurfaceMaterials(node: Record<string, any>) {
   return next
 }
 
+function migrateConstructionDimension(node: Record<string, any>) {
+  const drawingOverrides = Array.isArray(node.drawingOverrides) ? node.drawingOverrides : []
+  const hasLegacyDrawingOverride = drawingOverrides.some(
+    (entry) =>
+      entry &&
+      typeof entry === 'object' &&
+      !Array.isArray(entry) &&
+      entry.presentation === 'reference',
+  )
+  if (!('reference' in node || 'referenceStyle' in node || hasLegacyDrawingOverride)) return node
+
+  const { reference: _reference, referenceStyle: _referenceStyle, ...dimension } = node
+  return {
+    ...dimension,
+    drawingOverrides: drawingOverrides.map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry
+      return entry.presentation === 'reference' ? { ...entry, presentation: 'shown' } : entry
+    }),
+  }
+}
+
 function migrateNodes(nodes: Record<string, any>): {
   nodes: Record<string, AnyNode>
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>
@@ -568,11 +588,6 @@ function migrateNodes(nodes: Record<string, any>): {
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
   const patchedNodes = { ...healed } as Record<string, any>
-
-  for (const [id, node] of Object.entries(patchedNodes)) {
-    const migrations = nodeRegistry.get(node.type)?.migrate
-    patchedNodes[id] = applyNodeMigrations(node, migrations)
-  }
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
@@ -671,6 +686,10 @@ function migrateNodes(nodes: Record<string, any>): {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'construction-dimension') {
+      patchedNodes[id] = migrateConstructionDimension(node)
     }
 
     if (node.type === 'stair') {

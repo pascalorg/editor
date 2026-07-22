@@ -5,21 +5,19 @@ import {
   type AnyNodeId,
   StructuralGridNode,
   type StructuralGridNode as StructuralGridNodeType,
-  useScene,
 } from '@pascal-app/core'
 import {
   clearSurfacePlanSnapFeedback,
+  type FloorplanToolContext,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   resolveSurfacePlanPointSnap,
   triggerSFX,
-  useEditor,
   useFloorplanRender,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 const MIN_GRID_LENGTH = 0.01
@@ -100,25 +98,26 @@ export function snapStructuralGridAngle(start: PlanPoint, point: PlanPoint): Pla
   return [start[0] + Math.cos(angle) * length, start[1] + Math.sin(angle) * length]
 }
 
-export function FloorplanStructuralGridToolLayer() {
+export function FloorplanStructuralGridToolLayer({
+  activeLevelId,
+  finishTool,
+  gridSnapStep,
+  sceneApi,
+  selectNode,
+}: FloorplanToolContext) {
   const groupRef = useRef<SVGGElement>(null)
   const startRef = useRef<PlanPoint | null>(null)
   const [start, setStart] = useState<PlanPoint | null>(null)
   const [hover, setHover] = useState<PlanPoint | null>(null)
-  const mode = useEditor((state) => state.mode)
-  const tool = useEditor((state) => state.tool)
-  const active = mode === 'build' && tool === 'structural-grid'
-  const activeLevelId = useViewer((state) => state.selection.levelId)
   const renderContext = useFloorplanRender()
 
   useEffect(() => {
-    if (!active) return
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'structural-grid' })
     return () =>
       useInteractionScope
         .getState()
         .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'structural-grid')
-  }, [active])
+  }, [])
 
   const updateStart = useCallback((point: PlanPoint | null) => {
     startRef.current = point
@@ -130,7 +129,7 @@ export function FloorplanStructuralGridToolLayer() {
     setHover(null)
     const group = groupRef.current
     const svg = group?.ownerSVGElement
-    if (!(active && activeLevelId && group && svg)) return
+    if (!(activeLevelId && group && svg)) return
 
     const consume = (event: Event) => {
       event.preventDefault()
@@ -144,7 +143,7 @@ export function FloorplanStructuralGridToolLayer() {
         startRef.current && !event.altKey && isAngleSnapActive()
           ? snapStructuralGridAngle(startRef.current, raw)
           : raw
-      const step = !event.altKey && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const step = !event.altKey && isGridSnapActive() ? gridSnapStep : 0
       const fallback: PlanPoint = [snap(anglePoint[0], step), snap(anglePoint[1], step)]
       const snapped = resolveSurfacePlanPointSnap({
         rawPoint: anglePoint,
@@ -181,20 +180,15 @@ export function FloorplanStructuralGridToolLayer() {
         return
       }
 
-      const label = nextStructuralGridLabel(
-        useScene.getState().nodes,
-        activeLevelId,
-        currentStart,
-        point,
-      )
+      const label = nextStructuralGridLabel(sceneApi.nodes(), activeLevelId, currentStart, point)
       const node = StructuralGridNode.parse({
         name: `Grid ${label}`,
         start: currentStart,
         end: point,
         label,
       })
-      useScene.getState().createNode(node, activeLevelId as AnyNodeId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      sceneApi.upsert(node, activeLevelId as AnyNodeId)
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
       updateStart(null)
     }
@@ -207,8 +201,7 @@ export function FloorplanStructuralGridToolLayer() {
         updateStart(null)
         return
       }
-      useEditor.getState().setTool(null)
-      useEditor.getState().setMode('select')
+      finishTool()
     }
     const onBlur = () => clearSurfacePlanSnapFeedback()
 
@@ -227,15 +220,13 @@ export function FloorplanStructuralGridToolLayer() {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [active, activeLevelId, updateStart])
+  }, [activeLevelId, finishTool, gridSnapStep, sceneApi, selectNode, updateStart])
 
-  if (!(active && activeLevelId)) return null
+  if (!activeLevelId) return null
   const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
   const reticleRadius = 9 * unitsPerPixel
   const label =
-    start && hover
-      ? nextStructuralGridLabel(useScene.getState().nodes, activeLevelId, start, hover)
-      : null
+    start && hover ? nextStructuralGridLabel(sceneApi.nodes(), activeLevelId, start, hover) : null
 
   const renderBubble = (point: PlanPoint, key: string) => (
     <g key={key} pointerEvents="none">

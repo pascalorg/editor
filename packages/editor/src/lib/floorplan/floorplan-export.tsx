@@ -39,6 +39,7 @@ import {
 } from './annotation-visibility'
 import { resolveNodeForDrawingType } from './drawing-coordination'
 import {
+  type FloorplanMetricNotation,
   type FloorplanSchedule,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
@@ -107,8 +108,11 @@ const NEUTRAL_VIEW_STATE = {
   palette: NEUTRAL_PALETTE,
 } as const
 
-export function resolveFloorplanExportViewState(unit: 'metric' | 'imperial') {
-  return { ...NEUTRAL_VIEW_STATE, unit }
+export function resolveFloorplanExportViewState(
+  unit: 'metric' | 'imperial',
+  metricNotation: FloorplanMetricNotation,
+) {
+  return { ...NEUTRAL_VIEW_STATE, unit, metricNotation }
 }
 
 type ExportLevel = { id: AnyNodeId; label: string }
@@ -193,6 +197,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const nodes = useScene.getState().nodes
   const viewer = useViewer.getState()
   const unit = viewer.unit
+  const metricNotation = viewer.metricNotation
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
     useFloorplanAnnotationVisibility.getState().visibility,
   )
@@ -231,6 +236,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         level.id,
         scope,
         unit,
+        metricNotation,
         annotationVisibility,
         drawingType,
       )
@@ -554,16 +560,11 @@ function findDrawingSheetForLevel(
   drawingType: ConstructionDrawingType,
 ): DrawingSheetNode | null {
   for (const node of Object.values(nodes)) {
-    if (node.type !== 'drawing-sheet') continue
-    const sheet = node as DrawingSheetNode
-    if (
-      sheet.placedViews.some(
-        (view) =>
-          (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
-      )
-    ) {
-      return sheet
-    }
+    const resolveDrawingSheet = getFloorplanNodeExtension(
+      nodeRegistry.get(node.type),
+    )?.resolveDrawingSheet
+    const sheet = resolveDrawingSheet?.({ node: node as never, levelId, drawingType })
+    if (sheet) return sheet
   }
   return null
 }
@@ -1452,6 +1453,7 @@ function collectFloorplanGeometry(
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
   unit: 'metric' | 'imperial',
+  metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
 ): ExportGeometry[] {
@@ -1516,7 +1518,12 @@ function collectFloorplanGeometry(
       levelNodeIdsByType,
       levelDataCache,
     )
-    const baseContext = buildContext(node, nodes, resolveFloorplanExportViewState(unit), levelData)
+    const baseContext = buildContext(
+      node,
+      nodes,
+      resolveFloorplanExportViewState(unit, metricNotation),
+      levelData,
+    )
     const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext
     const geometry = builder(node, ctx)
     if (!geometry) continue

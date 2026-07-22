@@ -16,25 +16,24 @@ import {
   type MeasurementFeatureAnchor,
   type MeasurementPoint,
   nodeRegistry,
-  useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
   buildSvgArcPath,
   clearSurfacePlanSnapFeedback,
   FloorplanGeometryRenderer,
+  type FloorplanToolContext,
   formatLinearMeasurement,
   getArcPlanPoint,
+  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   resolveSurfacePlanPointSnap,
   triggerSFX,
   useDrawingView,
-  useEditor,
   useFloorplanRender,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { resolveCircularConstructionDimensionLayout } from './geometry'
 
@@ -82,9 +81,9 @@ function associatePoint(
   point: MeasurementPoint,
   targetNodeId: string | null,
   maxDistance: number,
+  nodes: Record<AnyNodeId, AnyNode>,
 ): AssociatedPoint {
   if (!targetNodeId) return { anchor: point, point, semantic: false, targetNodeId: null }
-  const nodes = useScene.getState().nodes
   const node = nodes[targetNodeId as AnyNodeId]
   const contribution = node ? nodeRegistry.get(node.type)?.measurement : undefined
   if (!(node && contribution)) return { anchor: point, point, semantic: false, targetNodeId }
@@ -388,37 +387,35 @@ export function buildCurvedWallConstructionDimensionDraft(
   }
 }
 
-export function FloorplanConstructionDimensionToolLayer() {
+export function FloorplanConstructionDimensionToolLayer({
+  activeLevelId,
+  finishTool,
+  gridSnapStep,
+  metricNotation,
+  sceneApi,
+  selectNode,
+  toolDefaults,
+  unit,
+}: FloorplanToolContext) {
   const groupRef = useRef<SVGGElement>(null)
   const draftRef = useRef<Draft>(emptyDraft())
   const [draft, setDraft] = useState<Draft>(draftRef.current)
   const [hover, setHover] = useState<AssociatedPoint | null>(null)
-  const editorMode = useEditor((state) => state.mode)
-  const tool = useEditor((state) => state.tool)
-  const toolChainMode = useEditor(
-    (state) => state.toolDefaults['construction-dimension']?.chainMode,
-  )
-  const chainMode = normalizeConstructionDimensionChainMode(toolChainMode)
-  const toolDimensionMode = useEditor((state) => state.toolDefaults['construction-dimension']?.mode)
-  const dimensionMode = normalizeConstructionDimensionMode(toolDimensionMode)
+  const chainMode = normalizeConstructionDimensionChainMode(toolDefaults?.chainMode)
+  const dimensionMode = normalizeConstructionDimensionMode(toolDefaults?.mode)
   const collectsMany =
     dimensionMode === 'coordinate' || (dimensionMode === 'linear' && chainMode === 'continuous')
   const usesBaseline = constructionDimensionUsesBaseline(dimensionMode)
-  const active = editorMode === 'build' && tool === 'construction-dimension'
-  const activeLevelId = useViewer((state) => state.selection.levelId)
-  const unit = useViewer((state) => state.unit)
-  const metricNotation = useViewer((state) => state.metricNotation)
   const renderContext = useFloorplanRender()
   const drawingType = useDrawingView((state) => state.drawingType)
 
   useEffect(() => {
-    if (!active) return
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'construction-dimension' })
     return () =>
       useInteractionScope
         .getState()
         .endIf((scope) => scope.kind === 'drafting' && scope.tool === 'construction-dimension')
-  }, [active])
+  }, [])
 
   const updateDraft = useCallback((next: Draft) => {
     draftRef.current = next
@@ -430,7 +427,7 @@ export function FloorplanConstructionDimensionToolLayer() {
     setHover(null)
     const group = groupRef.current
     const svg = group?.ownerSVGElement
-    if (!(active && activeLevelId && group && svg)) return
+    if (!(activeLevelId && group && svg)) return
 
     const consume = (event: Event) => {
       event.preventDefault()
@@ -440,19 +437,27 @@ export function FloorplanConstructionDimensionToolLayer() {
     const resolveEvent = (event: MouseEvent | PointerEvent): AssociatedPoint | null => {
       const raw = clientToPlanPoint(group, event.clientX, event.clientY)
       if (!raw) return null
+      const forceFree = event.altKey
+      const gridStep = !forceFree && isGridSnapActive() ? gridSnapStep : 0
+      const fallbackPoint: [number, number] =
+        gridStep > 0
+          ? [Math.round(raw[0] / gridStep) * gridStep, Math.round(raw[2] / gridStep) * gridStep]
+          : [raw[0], raw[2]]
+      const magnetic = !forceFree && isMagneticSnapActive()
       const surface = resolveSurfacePlanPointSnap({
         rawPoint: [raw[0], raw[2]],
-        fallbackPoint: [raw[0], raw[2]],
+        fallbackPoint,
         levelId: activeLevelId,
         align: false,
-        magnetic: !event.altKey && isMagneticSnapActive(),
+        magnetic,
       })
       const point: MeasurementPoint = [surface.point[0], 0, surface.point[1]]
       const targetNodeId = surface.wallIds[0] ?? registryTargetNodeId(event.target)
       return associatePoint(
         point,
         targetNodeId,
-        event.altKey ? SEMANTIC_BYPASS_DISTANCE : SEMANTIC_SNAP_DISTANCE,
+        magnetic ? SEMANTIC_SNAP_DISTANCE : SEMANTIC_BYPASS_DISTANCE,
+        sceneApi.nodes(),
       )
     }
     const commitDraft = (current: Draft, baselinePoint?: MeasurementPoint) => {
@@ -473,11 +478,10 @@ export function FloorplanConstructionDimensionToolLayer() {
         mode: dimensionMode,
         drawingType,
       })
-      useScene.getState().createNode(node, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      sceneApi.upsert(node, activeLevelId)
+      selectNode(node.id)
       triggerSFX('sfx:structure-build')
-      useEditor.getState().setTool(null)
-      useEditor.getState().setMode('select')
+      finishTool()
       updateDraft(emptyDraft())
       setHover(null)
       return true
@@ -528,7 +532,7 @@ export function FloorplanConstructionDimensionToolLayer() {
         return
       }
       const targetNode = associated.targetNodeId
-        ? useScene.getState().nodes[associated.targetNodeId as AnyNodeId]
+        ? sceneApi.get(associated.targetNodeId as AnyNodeId)
         : undefined
       const curvedWallDraft =
         current.points.length === 0 && targetNode?.type === 'wall'
@@ -594,8 +598,7 @@ export function FloorplanConstructionDimensionToolLayer() {
         return
       }
       if (removeLastWitness()) return
-      useEditor.getState().setTool(null)
-      useEditor.getState().setMode('select')
+      finishTool()
     }
     const onBlur = () => clearSurfacePlanSnapFeedback()
 
@@ -617,12 +620,15 @@ export function FloorplanConstructionDimensionToolLayer() {
       window.removeEventListener('blur', onBlur)
     }
   }, [
-    active,
     activeLevelId,
     chainMode,
     collectsMany,
     dimensionMode,
     drawingType,
+    finishTool,
+    gridSnapStep,
+    sceneApi,
+    selectNode,
     updateDraft,
     usesBaseline,
   ])
@@ -643,7 +649,7 @@ export function FloorplanConstructionDimensionToolLayer() {
   const witnessDraftPoints =
     draft.stage === 'witnesses' && hover ? [...draft.points, hover.point] : draft.points
 
-  if (!(active && activeLevelId)) return null
+  if (!activeLevelId) return null
   const unitsPerPixel = renderContext?.unitsPerPixel ?? 0.01
   const reticleRadius = 10 * unitsPerPixel
   const hoverColor = hover?.semantic ? '#22c55e' : '#06b6d4'

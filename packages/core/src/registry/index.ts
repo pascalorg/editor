@@ -15,7 +15,6 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
-export { applyNodeMigrations } from './migrations'
 export {
   bakePolicyOf,
   discoverPlugins,

@@ -5,10 +5,8 @@ import {
   ColumnNode,
   type ColumnPresetId,
   collectAlignmentAnchors,
-  collectStructuralGridAxes,
   emitter,
   type GridEvent,
-  resolveStructuralGridSnap,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -33,6 +31,10 @@ import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
+import {
+  collectStructuralGridAxes,
+  resolveStructuralGridSnap,
+} from '../structural-grid/coordination'
 import { ColumnPreview } from './renderer'
 
 const DEFAULT_COLUMN_PRESET_ID = 'basicPillar' satisfies ColumnPresetId
@@ -99,7 +101,7 @@ const ColumnTool = () => {
         bypassGrid: !isGridSnapActive(),
       })
       const structuralSnap =
-        !event.nativeEvent.altKey && (isGridSnapActive() || isMagneticSnapActive())
+        isGridSnapActive() || isMagneticSnapActive()
           ? resolveStructuralGridSnap(
               [alignedPosition[0], alignedPosition[2]],
               collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),
@@ -155,7 +157,7 @@ const ColumnTool = () => {
           !isGridSnapActive(),
         )
       const structuralSnap =
-        !event.nativeEvent.altKey && (isGridSnapActive() || isMagneticSnapActive())
+        isGridSnapActive() || isMagneticSnapActive()
           ? resolveStructuralGridSnap(
               [fallbackPosition[0], fallbackPosition[2]],
               collectStructuralGridAxes(useScene.getState().nodes, activeLevelId),

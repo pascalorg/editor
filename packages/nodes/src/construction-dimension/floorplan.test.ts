@@ -279,7 +279,7 @@ describe('buildConstructionDimensionFloorplan', () => {
       extensionOvershoot: 0.08,
     })
 
-    const geometry = buildConstructionDimensionFloorplan(node, context())
+    const geometry = buildConstructionDimensionFloorplan(node, context({}, false, 'document'))
     const string = geometry
       ? flatten(geometry).find((entry) => entry.kind === 'dimension-string')
       : null

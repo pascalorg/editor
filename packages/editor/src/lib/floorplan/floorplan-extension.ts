@@ -2,11 +2,13 @@ import type {
   AnyNode,
   AnyNodeId,
   ConstructionDrawingType,
+  DrawingSheetNode,
   FloorplanGeometry,
   GeometryContext,
-  LazyComponent,
   NodeDefinition,
+  SceneApi,
 } from '@pascal-app/core'
+import type { ComponentType } from 'react'
 
 export const FLOORPLAN_NODE_EXTENSION_KEY = 'pascal:editor/floorplan'
 export const FLOORPLAN_GEOMETRY_METADATA_KEY = 'pascal:editor/floorplan'
@@ -41,8 +43,28 @@ export type FloorplanSchedule = {
   issues?: readonly string[]
 }
 
+export type FloorplanToolContext = {
+  sceneApi: SceneApi
+  activeLevelId: AnyNodeId | null
+  unit: 'metric' | 'imperial'
+  metricNotation: FloorplanMetricNotation
+  gridSnapStep: number
+  toolDefaults: Readonly<Record<string, unknown>> | null
+  selectNode: (id: AnyNodeId) => void
+  finishTool: () => void
+}
+
 export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
-  tool?: LazyComponent
+  tool?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
+  preferredView?: '2d' | '3d'
+  actionMenu?: {
+    canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
+  }
+  resolveDrawingSheet?: (args: {
+    node: N
+    levelId: AnyNodeId
+    drawingType: ConstructionDrawingType
+  }) => DrawingSheetNode | null
   schedule?: (args: {
     siblings: ReadonlyArray<N>
     nodes: Readonly<Record<string, AnyNode>>

@@ -9,7 +9,12 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { resolveSurfacePlanPointSnap } from '@pascal-app/editor'
+import {
+  isGridSnapActive,
+  isMagneticSnapActive,
+  resolveSurfacePlanPointSnap,
+  useEditor,
+} from '@pascal-app/editor'
 import { matchMeasurementFeatureForNode, resolveMeasurementAnchor } from '../measurement/resolve'
 
 const SEMANTIC_FEATURE_SNAP_DISTANCE = 0.2
@@ -75,21 +80,31 @@ export const moveConstructionDimensionWitnessAffordance: FloorplanAffordance<Con
       return {
         affectedIds: [node.id],
         apply({ planPoint, modifiers }) {
+          const forceFree = modifiers.altKey === true
+          const gridStep = !forceFree && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+          const fallbackPoint: [number, number] =
+            gridStep > 0
+              ? [
+                  Math.round(planPoint[0] / gridStep) * gridStep,
+                  Math.round(planPoint[1] / gridStep) * gridStep,
+                ]
+              : [planPoint[0], planPoint[1]]
+          const magnetic = !forceFree && isMagneticSnapActive()
           const snapped = resolveSurfacePlanPointSnap({
             rawPoint: [planPoint[0], planPoint[1]],
-            fallbackPoint: [planPoint[0], planPoint[1]],
+            fallbackPoint,
             excludeId: node.id,
             levelId,
             movingId: node.id,
             nodes,
-            magnetic: !modifiers.altKey,
+            magnetic,
           })
           const point: MeasurementPoint = [snapped.point[0], 0, snapped.point[1]]
           const nextAnchor = semanticWitnessAnchor(
             point,
             snapped.wallIds,
             nodes,
-            modifiers.altKey ? SEMANTIC_FEATURE_BYPASS_DISTANCE : SEMANTIC_FEATURE_SNAP_DISTANCE,
+            magnetic ? SEMANTIC_FEATURE_SNAP_DISTANCE : SEMANTIC_FEATURE_BYPASS_DISTANCE,
           )
           const anchors = originalAnchors.map((anchor, index) =>
             index === witnessIndex ? nextAnchor : anchor,

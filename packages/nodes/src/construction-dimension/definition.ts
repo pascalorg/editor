@@ -6,7 +6,6 @@ import {
   moveConstructionDimensionBaselineAffordance,
   moveConstructionDimensionWitnessAffordance,
 } from './floorplan-affordances'
-import { migrateConstructionDimensionV6ToV7 } from './migration'
 import { constructionDimensionParametrics } from './parametrics'
 import { ConstructionDimensionNode } from './schema'
 
@@ -22,8 +21,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
       resolveForDrawing: resolveConstructionDimensionForDrawing,
     } satisfies FloorplanNodeExtension<ConstructionDimensionNode>,
   },
-  snapProfile: 'structural',
-
+  snapProfile: 'item',
   defaults: () => ({
     object: 'node',
     parentId: null,
@@ -52,8 +50,6 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     drawingOverrides: [],
     controllingDimensionId: null,
   }),
-  migrate: { 6: migrateConstructionDimensionV6ToV7 },
-
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     deletable: true,

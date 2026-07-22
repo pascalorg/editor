@@ -638,7 +638,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Kind-owned attachment snap (cabinet → wall): an attach behavior like
       // door/window wall placement, not an alignment guide — active in every
       // snapping mode except Off.
-      if (!event.nativeEvent.altKey && (magnetic || isGridSnapActive()) && groupMoveSnapConfig) {
+      if ((magnetic || isGridSnapActive()) && groupMoveSnapConfig) {
         const snappedPosition = groupMoveSnapConfig({
           node,
           candidatePosition: canonicalPositionFromPlan(x, originalPosition[1], z),

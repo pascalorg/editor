@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { getFloorplanNodeExtension } from '@pascal-app/editor'
 import { drawingSheetDefinition } from './definition'
 
 describe('drawingSheetDefinition', () => {
@@ -22,5 +23,30 @@ describe('drawingSheetDefinition', () => {
         ...drawingSheetDefinition.defaults(),
       }).success,
     ).toBe(true)
+  })
+
+  test('contributes drawing-sheet matching through the editor extension', () => {
+    const sheet = drawingSheetDefinition.schema.parse({
+      id: 'drawing-sheet_a101',
+      placedViews: [
+        {
+          id: 'drawing-view_floor',
+          levelId: 'level_main',
+          drawingType: 'floor-plan',
+          drawingNumber: '1',
+          title: 'Main floor',
+          scale: '1:50',
+        },
+      ],
+    })
+    const resolveDrawingSheet =
+      getFloorplanNodeExtension(drawingSheetDefinition)?.resolveDrawingSheet
+
+    expect(
+      resolveDrawingSheet?.({ node: sheet, levelId: 'level_main', drawingType: 'floor-plan' }),
+    ).toBe(sheet)
+    expect(
+      resolveDrawingSheet?.({ node: sheet, levelId: 'level_upper', drawingType: 'floor-plan' }),
+    ).toBeNull()
   })
 })

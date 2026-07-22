@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { BuildingNode } from './building'
-import { DrawingSheetNode } from './drawing-sheet'
+import { DrawingSheetNode, remapDrawingSheetReferences } from './drawing-sheet'
 
 describe('DrawingSheetNode', () => {
   test('creates persistent sheet defaults', () => {
@@ -179,5 +179,44 @@ describe('DrawingSheetNode', () => {
       'level_main',
       sheet.id,
     ])
+  })
+
+  test('remaps sheet-local identities and their references together', () => {
+    const sheet = DrawingSheetNode.parse({
+      placedViews: [{ id: 'drawing-view_main', levelId: 'level_main' }],
+      generalNoteSetIds: ['sheet-note-set_project'],
+      generalNoteSets: [
+        {
+          id: 'sheet-note-set_project',
+          notes: [{ id: 'sheet-note_set-1', number: 1, text: 'SET NOTE' }],
+        },
+      ],
+      generalNotes: [{ id: 'sheet-note_sheet-1', number: 1, text: 'SHEET NOTE' }],
+      keyedNoteDefinitions: [{ id: 'keyed-note_a', key: 'A', text: 'KEYED NOTE' }],
+      keyedNoteInstances: [
+        {
+          id: 'keyed-note-instance_a1',
+          definitionId: 'keyed-note_a',
+          placedViewId: 'drawing-view_main',
+        },
+      ],
+      documentMarkers: [{ id: 'sheet-marker_a', placedViewId: 'drawing-view_main', label: 'A' }],
+      schedules: [{ id: 'sheet-schedule_a' }],
+    })
+    const remapped = remapDrawingSheetReferences(sheet, new Map([['level_main', 'level_cloned']]))
+
+    expect(remapped.placedViews[0]?.id).not.toBe(sheet.placedViews[0]?.id)
+    expect(remapped.placedViews[0]?.levelId).toBe('level_cloned')
+    expect(remapped.generalNoteSetIds[0]).toBe(remapped.generalNoteSets[0]?.id)
+    expect(remapped.generalNoteSets[0]?.notes[0]?.id).not.toBe(
+      sheet.generalNoteSets[0]?.notes[0]?.id,
+    )
+    expect(remapped.generalNotes[0]?.id).not.toBe(sheet.generalNotes[0]?.id)
+    expect(remapped.keyedNoteInstances[0]?.definitionId).toBe(remapped.keyedNoteDefinitions[0]?.id)
+    expect(remapped.keyedNoteInstances[0]?.placedViewId).toBe(remapped.placedViews[0]?.id)
+    expect(remapped.documentMarkers[0]?.placedViewId).toBe(remapped.placedViews[0]?.id)
+    expect(remapped.keyedNoteInstances[0]?.id).not.toBe(sheet.keyedNoteInstances[0]?.id)
+    expect(remapped.documentMarkers[0]?.id).not.toBe(sheet.documentMarkers[0]?.id)
+    expect(remapped.schedules[0]?.id).not.toBe(sheet.schedules[0]?.id)
   })
 })
