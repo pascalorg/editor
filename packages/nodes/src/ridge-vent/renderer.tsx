@@ -7,6 +7,7 @@ import {
   type RidgeVentNode,
   type RoofNode,
   type RoofSegmentNode,
+  type RoofSegmentTrim,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
@@ -29,7 +30,7 @@ import { buildRidgeVentGeometry } from './geometry'
 
 function ridgeVentSegmentGeometryKey(segment: RoofSegmentNode | undefined): string {
   if (!segment) return 'none'
-  const trim = segment.trim
+  const trim: Partial<RoofSegmentTrim> = segment.trim ?? {}
   return [
     segment.roofType,
     segment.width,
