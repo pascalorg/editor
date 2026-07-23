@@ -241,7 +241,7 @@ export function SettingsPanel({
           result: {
             ok: false,
             parsed: null,
-            stats: { total: 0, byType: {}, unknownTypes: {}, floorAreaM2: 0 },
+            stats: { total: 0, byType: {}, pluginTypes: {}, unknownTypes: {}, floorAreaM2: 0 },
             errors: [
               {
                 severity: 'error',
