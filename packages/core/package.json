@@ -59,7 +59,7 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsgo --build --watch",
-    "test": "bun test",
+    "test": "bun test src",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
     "prepublishOnly": "npm run build"
   },
