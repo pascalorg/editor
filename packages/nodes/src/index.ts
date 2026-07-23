@@ -5,10 +5,12 @@ import { cabinetDefinition, cabinetModuleDefinition } from './cabinet'
 import { ceilingDefinition } from './ceiling'
 import { chimneyDefinition } from './chimney'
 import { columnDefinition } from './column'
+import { constructionDimensionDefinition } from './construction-dimension'
 import { cupolaDefinition } from './cupola'
 import { doorDefinition } from './door'
 import { dormerDefinition } from './dormer'
 import { downspoutDefinition } from './downspout'
+import { drawingSheetDefinition } from './drawing-sheet'
 import { ductFittingDefinition } from './duct-fitting'
 import { ductSegmentDefinition } from './duct-segment'
 import { ductTerminalDefinition } from './duct-terminal'
@@ -38,6 +40,7 @@ import { solarPanelDefinition } from './solar-panel'
 import { spawnDefinition } from './spawn'
 import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
+import { structuralGridDefinition } from './structural-grid'
 import { turbineVentDefinition } from './turbine-vent'
 import { wallDefinition } from './wall'
 import { windowDefinition } from './window'
@@ -90,6 +93,9 @@ export const builtinPlugin: Plugin = {
     guideDefinition as unknown as AnyNodeDefinition,
     scanDefinition as unknown as AnyNodeDefinition,
     measurementDefinition as unknown as AnyNodeDefinition,
+    constructionDimensionDefinition as unknown as AnyNodeDefinition,
+    drawingSheetDefinition as unknown as AnyNodeDefinition,
+    structuralGridDefinition as unknown as AnyNodeDefinition,
     // Roof-mounted accessories (custom renderer + bespoke roof-event tool).
     boxVentDefinition as unknown as AnyNodeDefinition,
     ridgeVentDefinition as unknown as AnyNodeDefinition,
@@ -130,10 +136,12 @@ export {
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
 export { columnDefinition } from './column'
+export { constructionDimensionDefinition } from './construction-dimension'
 export { cupolaDefinition } from './cupola'
 export { doorDefinition } from './door'
 export { dormerDefinition } from './dormer'
 export { downspoutDefinition } from './downspout'
+export { drawingSheetDefinition } from './drawing-sheet'
 export { ductFittingDefinition } from './duct-fitting'
 export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'
@@ -155,6 +163,35 @@ export { ridgeVentDefinition } from './ridge-vent'
 export { roofDefinition } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
+export {
+  type BuildClearanceAdvisoriesOptions,
+  buildClearanceAdvisories,
+  type ClearanceAdvisory,
+  type ClearanceAdvisoryCategory,
+  type ClearanceAdvisorySeverity,
+  type ClearanceEvidence,
+  type ClearanceProfile,
+  type ClearanceRule,
+  type ClearanceRuleSource,
+  DEFAULT_CLEARANCE_PROFILES,
+} from './shared/clearance-advisories'
+export {
+  type BuildConstructionModuleAdvisoriesOptions,
+  buildConstructionModuleAdvisories,
+  type ConstructionModuleAdvisory,
+  type ConstructionModuleAdvisorySeverity,
+  type ConstructionModuleMeasurementKind,
+  type ConstructionModuleProfile,
+  type ConstructionModuleSystem,
+  DEFAULT_CONSTRUCTION_MODULE_PROFILES,
+} from './shared/construction-module-advisories'
+export {
+  type BuildDimensionCompletenessAuditOptions,
+  buildDimensionCompletenessAudit,
+  type DimensionCompletenessIssue,
+  type DimensionCompletenessIssueKind,
+  type DimensionCompletenessIssueSeverity,
+} from './shared/dimension-completeness-audit'
 export { shelfDefinition } from './shelf'
 export { siteDefinition } from './site'
 export { skylightDefinition } from './skylight'
@@ -163,6 +200,7 @@ export { solarPanelDefinition } from './solar-panel'
 export { spawnDefinition } from './spawn'
 export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
+export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'
 export { wallDefinition } from './wall'
 export { windowDefinition } from './window'

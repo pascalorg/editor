@@ -19,6 +19,13 @@ export const DoorSegment = z.object({
 export type DoorSegment = z.infer<typeof DoorSegment>
 
 export const DoorCategory = z.enum(['interior', 'garage'])
+export const OpeningConstructionType = z.enum(['framed', 'masonry'])
+export const OpeningDimensionReference = z.enum([
+  'nominal',
+  'rough-opening',
+  'masonry-opening',
+  'finish-opening',
+])
 export const DoorType = z.enum([
   'hinged',
   'double',
@@ -34,6 +41,8 @@ export const DoorType = z.enum([
 export const DoorTrackStyle = z.enum(['none', 'visible', 'pocket', 'overhead'])
 
 export type DoorCategory = z.infer<typeof DoorCategory>
+export type OpeningConstructionType = z.infer<typeof OpeningConstructionType>
+export type OpeningDimensionReference = z.infer<typeof OpeningDimensionReference>
 export type DoorType = z.infer<typeof DoorType>
 export type DoorTrackStyle = z.infer<typeof DoorTrackStyle>
 
@@ -62,6 +71,20 @@ export const DoorNode = BaseNode.extend({
   // Overall dimensions
   width: z.number().default(0.9),
   height: z.number().default(2.1),
+
+  // Construction-document identity. `mark` overrides the deterministic
+  // level fallback (101, 102, ...). Rough-opening dimensions stay optional
+  // because they are manufacturer/framing inputs, not safe derivations from
+  // the nominal modeled size.
+  mark: z.string().trim().max(16).optional(),
+  constructionType: OpeningConstructionType.default('framed'),
+  dimensionReference: OpeningDimensionReference.default('nominal'),
+  roughOpeningWidth: z.number().positive().optional(),
+  roughOpeningHeight: z.number().positive().optional(),
+  masonryOpeningWidth: z.number().positive().optional(),
+  masonryOpeningHeight: z.number().positive().optional(),
+  finishOpeningWidth: z.number().positive().optional(),
+  finishOpeningHeight: z.number().positive().optional(),
 
   // Door family
   doorCategory: DoorCategory.default('interior'),

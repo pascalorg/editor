@@ -19,6 +19,8 @@ import {
   formatVolumeLabel,
   measurementFloorplanPresentationColor,
   measurementPolygonLabelAnchor,
+  readFloorplanContext,
+  withFloorplanGeometryMetadata,
 } from '@pascal-app/editor'
 import { measurementResolvedEditPoints } from './edit'
 import { resolveMeasurementNode } from './resolve'
@@ -46,6 +48,7 @@ export function buildMeasurementFloorplan(
   if (node.visible === false) return null
 
   const unit = ctx.viewState?.unit ?? 'metric'
+  const metricNotation = readFloorplanContext(ctx).metricNotation
   const resolved = resolveMeasurementNode(node, (id) => ctx.resolve(id))
   const measurement = resolved.payload
   const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
@@ -85,77 +88,83 @@ export function buildMeasurementFloorplan(
           ]
         : []
 
-    return {
-      kind: 'group',
-      children: [
-        { kind: 'line', x1, y1, x2, y2, ...style },
-        { kind: 'hit-line', x1, y1, x2, y2, strokeWidthPx: 12 },
-        ...collapsedHitTarget,
-        {
-          kind: 'circle',
-          cx: x1,
-          cy: y1,
-          r: 0.045,
-          fill: stroke,
-          pointerEvents: 'none',
-        },
-        {
-          kind: 'circle',
-          cx: x2,
-          cy: y2,
-          r: 0.045,
-          fill: stroke,
-          pointerEvents: 'none',
-        },
-        {
-          kind: 'dimension-label',
-          appearance: 'outlined',
-          cx: (x1 + x2) / 2,
-          cy: (y1 + y2) / 2,
-          text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit)}`,
-          angle: Math.atan2(y2 - y1, x2 - x1),
-          offsetPx: 14,
-        },
-        ...editHandles,
-      ],
-    }
+    return withFloorplanGeometryMetadata(
+      {
+        kind: 'group',
+        children: [
+          { kind: 'line', x1, y1, x2, y2, ...style },
+          { kind: 'hit-line', x1, y1, x2, y2, strokeWidthPx: 12 },
+          ...collapsedHitTarget,
+          {
+            kind: 'circle',
+            cx: x1,
+            cy: y1,
+            r: 0.045,
+            fill: stroke,
+            pointerEvents: 'none',
+          },
+          {
+            kind: 'circle',
+            cx: x2,
+            cy: y2,
+            r: 0.045,
+            fill: stroke,
+            pointerEvents: 'none',
+          },
+          {
+            kind: 'dimension-label',
+            appearance: 'outlined',
+            cx: (x1 + x2) / 2,
+            cy: (y1 + y2) / 2,
+            text: `${statusPrefix}${formatLinearMeasurement(measurementDistance(start, end), unit, metricNotation)}`,
+            angle: Math.atan2(y2 - y1, x2 - x1),
+            offsetPx: 14,
+          },
+          ...editHandles,
+        ],
+      },
+      { annotationRole: 'measurement' },
+    )
   }
 
   if (measurement.kind === 'angle') {
     const [start, vertex, end] = measurement.points
     const angleArc = buildMeasurementAngleArcPoints(start, vertex, end)
     const labelPoint = angleArc[Math.floor(angleArc.length / 2)] ?? vertex
-    return {
-      kind: 'group',
-      children: [
-        {
-          kind: 'polyline',
-          points: [projectPoint(start), projectPoint(vertex), projectPoint(end)],
-          ...style,
-        },
-        ...(angleArc.length >= 2
-          ? [
-              {
-                kind: 'polyline' as const,
-                points: angleArc.map(projectPoint),
-                ...style,
-                strokeWidth: 3,
-              },
-            ]
-          : []),
-        {
-          kind: 'dimension-label',
-          appearance: 'outlined',
-          cx: labelPoint[0],
-          cy: labelPoint[2],
-          text: `${statusPrefix}${formatAngleRadians(measurementAngle(start, vertex, end))}`,
-          angle: 0,
-          offsetPx: 10,
-          screenUpright: true,
-        },
-        ...editHandles,
-      ],
-    }
+    return withFloorplanGeometryMetadata(
+      {
+        kind: 'group',
+        children: [
+          {
+            kind: 'polyline',
+            points: [projectPoint(start), projectPoint(vertex), projectPoint(end)],
+            ...style,
+          },
+          ...(angleArc.length >= 2
+            ? [
+                {
+                  kind: 'polyline' as const,
+                  points: angleArc.map(projectPoint),
+                  ...style,
+                  strokeWidth: 3,
+                },
+              ]
+            : []),
+          {
+            kind: 'dimension-label',
+            appearance: 'outlined',
+            cx: labelPoint[0],
+            cy: labelPoint[2],
+            text: `${statusPrefix}${formatAngleRadians(measurementAngle(start, vertex, end))}`,
+            angle: 0,
+            offsetPx: 10,
+            screenUpright: true,
+          },
+          ...editHandles,
+        ],
+      },
+      { annotationRole: 'measurement' },
+    )
   }
 
   if (measurement.kind === 'area' || measurement.kind === 'perimeter') {
@@ -163,31 +172,34 @@ export function buildMeasurementFloorplan(
     const label =
       measurement.kind === 'area'
         ? `A ${formatAreaLabel(measurementArea(measurement.base), unit)}`
-        : `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit)}`
+        : `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit, metricNotation)}`
 
-    return {
-      kind: 'group',
-      children: [
-        {
-          kind: 'polygon',
-          points: measurement.base.map(projectPoint),
-          fill: stroke,
-          fillOpacity: measurement.kind === 'area' ? 0.08 : 0,
-          pointerEvents: 'all',
-          ...style,
-        },
-        {
-          kind: 'dimension-label',
-          appearance: 'outlined',
-          cx: centroid[0],
-          cy: centroid[2],
-          text: `${statusPrefix}${label}`,
-          angle: 0,
-          screenUpright: true,
-        },
-        ...editHandles,
-      ],
-    }
+    return withFloorplanGeometryMetadata(
+      {
+        kind: 'group',
+        children: [
+          {
+            kind: 'polygon',
+            points: measurement.base.map(projectPoint),
+            fill: stroke,
+            fillOpacity: measurement.kind === 'area' ? 0.08 : 0,
+            pointerEvents: 'all',
+            ...style,
+          },
+          {
+            kind: 'dimension-label',
+            appearance: 'outlined',
+            cx: centroid[0],
+            cy: centroid[2],
+            text: `${statusPrefix}${label}`,
+            angle: 0,
+            screenUpright: true,
+          },
+          ...editHandles,
+        ],
+      },
+      { annotationRole: 'measurement' },
+    )
   }
 
   const volume = measurement
@@ -232,5 +244,8 @@ export function buildMeasurementFloorplan(
   })
   children.push(...editHandles)
 
-  return { kind: 'group', children }
+  return withFloorplanGeometryMetadata(
+    { kind: 'group', children },
+    { annotationRole: 'measurement' },
+  )
 }

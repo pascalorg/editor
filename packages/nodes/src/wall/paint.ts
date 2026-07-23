@@ -23,6 +23,7 @@ import {
   createSlotPaintCapability,
   previewSlotByUserData,
 } from '../shared/slot-paint'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 const WALL_SLOT_IDS = new Set<string>(Object.keys(WALL_SURFACE_SLOT_DEFAULTS))
 const WALL_ARRAY_SLOT_INDEX: Partial<Record<WallSurfaceSlotId, number>> = {
@@ -104,9 +105,13 @@ export function resolveWallRole(args: {
   }
 
   if (sideFromIndex && localPosition) {
-    const bands = getWallFaceBandConfig(node)
+    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+    const bands = getWallFaceBandConfig(node, effectiveWallHeight)
     if (!bands.enabled) return sideFromIndex
-    return getWallBandSlotId(sideFromIndex, getWallFaceBandForHeight(node, localPosition[1]))
+    return getWallBandSlotId(
+      sideFromIndex,
+      getWallFaceBandForHeight(node, localPosition[1], effectiveWallHeight),
+    )
   }
   if (sideFromIndex) return sideFromIndex
 
@@ -128,15 +133,23 @@ export function resolveWallRole(args: {
   const semantic = hitFace === 'front' ? node.frontSide : node.backSide
 
   if (semantic === 'interior' || semantic === 'exterior') {
-    const bands = getWallFaceBandConfig(node)
+    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+    const bands = getWallFaceBandConfig(node, effectiveWallHeight)
     if (!bands.enabled) return semantic
-    return getWallBandSlotId(semantic, getWallFaceBandForHeight(node, localPosition[1]))
+    return getWallBandSlotId(
+      semantic,
+      getWallFaceBandForHeight(node, localPosition[1], effectiveWallHeight),
+    )
   }
 
   const side = hitFace === 'front' ? 'interior' : 'exterior'
-  const bands = getWallFaceBandConfig(node)
+  const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+  const bands = getWallFaceBandConfig(node, effectiveWallHeight)
   if (!bands.enabled) return side
-  return getWallBandSlotId(side, getWallFaceBandForHeight(node, localPosition[1]))
+  return getWallBandSlotId(
+    side,
+    getWallFaceBandForHeight(node, localPosition[1], effectiveWallHeight),
+  )
 }
 
 /**

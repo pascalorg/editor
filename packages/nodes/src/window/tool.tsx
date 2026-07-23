@@ -339,7 +339,14 @@ const WindowTool: React.FC = () => {
         width,
         height,
       })
-      const { clampedX, clampedY } = clampToWall(wall, localX, localY, width, height)
+      const { clampedX, clampedY } = clampToWall(
+        wall,
+        localX,
+        localY,
+        width,
+        height,
+        useScene.getState().nodes,
+      )
       const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
       return { clampedX, clampedY, valid }
     }

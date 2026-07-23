@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type AssetInput,
   ItemNode,
+  resolveSupportSlabPatch,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -39,8 +40,14 @@ export interface DraftNodeHandle {
   ) => ItemNode | null
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
-  /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place. */
-  commit: (finalUpdate: Partial<ItemNode>) => string | null
+  /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place.
+   *  `supportElevationCap` (floor commits) is the pointer-decided surface
+   *  elevation — it caps the persisted `supportSlabId` election so the
+   *  commit lands on the surface the cursor pointed at. */
+  commit: (
+    finalUpdate: Partial<ItemNode>,
+    options?: { supportElevationCap?: number | null },
+  ) => string | null
   /** Destroy the current draft. Create mode: delete node. Move mode: restore original state. */
   destroy: () => void
 }
@@ -124,100 +131,128 @@ export function useDraftNode(): DraftNodeHandle {
       )
   }, [])
 
-  const commit = useCallback((finalUpdate: Partial<ItemNode>): string | null => {
-    const draft = draftRef.current
-    if (!draft) return null
+  const commit = useCallback(
+    (
+      finalUpdate: Partial<ItemNode>,
+      options?: { supportElevationCap?: number | null },
+    ): string | null => {
+      const draft = draftRef.current
+      if (!draft) return null
 
-    if (adoptedRef.current) {
-      // Move mode: update in place (single undoable action)
+      if (adoptedRef.current) {
+        // Move mode: update in place (single undoable action)
+        const { parentId: newParentId, ...updateProps } = finalUpdate
+        const parentId =
+          newParentId ??
+          originalStateRef.current?.parentId ??
+          useViewer.getState().selection.levelId
+        const original = originalStateRef.current!
+
+        // Restore original state while paused — so the undo baseline is clean
+        useScene.getState().updateNode(draft.id, {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
+          metadata: original.metadata,
+        })
+
+        // Resume → tracked update (undo reverts to original)
+        useScene.temporal.getState().resume()
+
+        const effectiveNode = ItemNode.parse({
+          ...draft,
+          ...updateProps,
+          parentId,
+          metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+        })
+
+        useScene.getState().updateNode(draft.id, {
+          position: updateProps.position ?? draft.position,
+          rotation: updateProps.rotation ?? draft.rotation,
+          side: updateProps.side ?? draft.side,
+          metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+          parentId: parentId as string,
+          // Forward the roof host explicitly: strategies set it on every
+          // commit (segment id on a roof face, undefined elsewhere), and
+          // dropping it here strands the item in the roof frame without
+          // the segment transform.
+          roofSegmentId: updateProps.roofSegmentId,
+          roofFace: updateProps.roofFace,
+          // Only when the strategy decided about wallId (roof commits clear
+          // it) — floor/ceiling commits never managed the field.
+          ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
+          ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
+            maxElevation: options?.supportElevationCap,
+          }),
+        })
+
+        useScene.temporal.getState().pause()
+
+        const id = draft.id
+        if (usePlacementPreview.getState().node?.id === id) {
+          usePlacementPreview.getState().clear()
+        }
+        draftRef.current = null
+        adoptedRef.current = false
+        originalStateRef.current = null
+        return id
+      }
+
+      // Create mode: delete draft (paused), resume, create fresh node (tracked), re-pause
       const { parentId: newParentId, ...updateProps } = finalUpdate
-      const parentId =
-        newParentId ?? originalStateRef.current?.parentId ?? useViewer.getState().selection.levelId
-      const original = originalStateRef.current!
+      const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
+      if (!parentId) return null
 
-      // Restore original state while paused — so the undo baseline is clean
-      useScene.getState().updateNode(draft.id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-        metadata: original.metadata,
-      })
+      // Delete draft while paused (invisible to undo)
+      useScene.getState().deleteNode(draft.id)
+      draftRef.current = null
 
-      // Resume → tracked update (undo reverts to original)
+      // Briefly resume → create fresh node (the single undoable action)
       useScene.temporal.getState().resume()
 
-      useScene.getState().updateNode(draft.id, {
+      const finalNode = ItemNode.parse({
+        name: draft.name,
+        asset: draft.asset,
         position: updateProps.position ?? draft.position,
         rotation: updateProps.rotation ?? draft.rotation,
+        scale: updateProps.scale ?? draft.scale,
         side: updateProps.side ?? draft.side,
-        metadata: updateProps.metadata ?? stripTransient(draft.metadata),
-        parentId: parentId as string,
-        // Forward the roof host explicitly: strategies set it on every
-        // commit (segment id on a roof face, undefined elsewhere), and
-        // dropping it here strands the item in the roof frame without
-        // the segment transform.
+        // Carry painted slot overrides so a duplicated item keeps its materials.
+        ...(draft.slots ? { slots: draft.slots } : {}),
+        // Roof host — see the move-mode commit above for why this must be
+        // forwarded explicitly.
         roofSegmentId: updateProps.roofSegmentId,
         roofFace: updateProps.roofFace,
-        // Only when the strategy decided about wallId (roof commits clear
-        // it) — floor/ceiling commits never managed the field.
         ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
+        metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+        parentId,
       })
-
-      useScene.temporal.getState().pause()
-
-      const id = draft.id
-      if (usePlacementPreview.getState().node?.id === id) {
+      const nodes = useScene.getState().nodes
+      const committedNode = ItemNode.parse({
+        ...finalNode,
+        ...resolveSupportSlabPatch(
+          finalNode,
+          { ...nodes, [finalNode.id]: finalNode },
+          { maxElevation: options?.supportElevationCap },
+        ),
+      })
+      useScene.getState().createNode(committedNode, parentId)
+      if (usePlacementPreview.getState().node?.id === draft.id) {
         usePlacementPreview.getState().clear()
       }
-      draftRef.current = null
+
+      // Re-pause for next draft cycle
+      useScene.temporal.getState().pause()
+
       adoptedRef.current = false
       originalStateRef.current = null
-      return id
-    }
-
-    // Create mode: delete draft (paused), resume, create fresh node (tracked), re-pause
-    const { parentId: newParentId, ...updateProps } = finalUpdate
-    const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
-    if (!parentId) return null
-
-    // Delete draft while paused (invisible to undo)
-    useScene.getState().deleteNode(draft.id)
-    draftRef.current = null
-
-    // Briefly resume → create fresh node (the single undoable action)
-    useScene.temporal.getState().resume()
-
-    const finalNode = ItemNode.parse({
-      name: draft.name,
-      asset: draft.asset,
-      position: updateProps.position ?? draft.position,
-      rotation: updateProps.rotation ?? draft.rotation,
-      scale: updateProps.scale ?? draft.scale,
-      side: updateProps.side ?? draft.side,
-      // Carry painted slot overrides so a duplicated item keeps its materials.
-      ...(draft.slots ? { slots: draft.slots } : {}),
-      // Roof host — see the move-mode commit above for why this must be
-      // forwarded explicitly.
-      roofSegmentId: updateProps.roofSegmentId,
-      roofFace: updateProps.roofFace,
-      ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
-      metadata: updateProps.metadata ?? stripTransient(draft.metadata),
-    })
-    useScene.getState().createNode(finalNode, parentId)
-    if (usePlacementPreview.getState().node?.id === draft.id) {
-      usePlacementPreview.getState().clear()
-    }
-
-    // Re-pause for next draft cycle
-    useScene.temporal.getState().pause()
-
-    adoptedRef.current = false
-    originalStateRef.current = null
-    return finalNode.id
-  }, [])
+      return committedNode.id
+    },
+    [],
+  )
 
   const destroy = useCallback(() => {
     if (!draftRef.current) return

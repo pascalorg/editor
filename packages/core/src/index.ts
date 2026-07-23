@@ -9,8 +9,10 @@ export type {
   CeilingEvent,
   ChimneyEvent,
   ColumnEvent,
+  ConstructionDimensionEvent,
   DoorEvent,
   DormerEvent,
+  DrawingSheetEvent,
   ElevatorEvent,
   EventSuffix,
   FenceEvent,
@@ -34,6 +36,7 @@ export type {
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
+  StructuralGridEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -46,12 +49,16 @@ export {
 } from './hooks/scene-registry/scene-registry'
 export {
   type FloorPlacedElevationArgs,
+  GROUND_SUPPORT_ID,
   getFloorPlacedElevation,
   getFloorPlacedFootprints,
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  getWallEffectiveHeightForNodes,
+  type PointedSupportSurface,
   pointInPolygon,
+  SUPPORT_ELEVATION_EPSILON,
   spatialGridManager,
   type WallSlabSupportSegment,
 } from './hooks/spatial-grid/spatial-grid-manager'
@@ -61,6 +68,14 @@ export {
   resolveBuildingForLevel,
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
+export {
+  type FenceSupportInput,
+  resolveFenceSupportSlabPatch,
+  resolveSupportSlabPatch,
+  resolveWallSupportSlabPatch,
+  type SupportSlabPatch,
+  type SupportSlabPatchOptions,
+} from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
@@ -76,6 +91,7 @@ export {
   closestMeasurementFeatureBinding,
   MEASUREMENT_PLANAR_TOLERANCE,
   measurementAnchorFallback,
+  measurementAnchorReferenceNodeIds,
   measurementAngle,
   measurementArea,
   measurementAreaVector,
@@ -86,6 +102,7 @@ export {
   measurementPerimeter,
   measurementPrismVolume,
   measurementReferenceNodeIds,
+  remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
 export {
@@ -123,7 +140,6 @@ export {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
-  projectAutoSlabsForPlan,
   resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
@@ -146,7 +162,9 @@ export {
 } from './lib/zone-quantities'
 export {
   getCatalogMaterialById,
+  getDynamicLibraryMaterials,
   getLibraryMaterialIdFromRef,
+  getLibraryMaterialsVersion,
   getMaterialPresetByRef,
   getMaterialsForCategory,
   getSceneMaterialIdFromRef,
@@ -157,12 +175,16 @@ export {
   type MaterialCatalogItem,
   type MaterialCategory,
   type MaterialRef,
+  type MaterialSource,
   type MaterialSurface,
   type ParsedMaterialRef,
   parseMaterialRef,
+  registerLibraryMaterials,
   SCENE_MATERIAL_REF_PREFIX,
+  subscribeLibraryMaterials,
   toLibraryMaterialRef,
   toSceneMaterialRef,
+  unregisterLibraryMaterials,
 } from './material-library'
 export type {
   FloorPlacedFootprint,
@@ -248,9 +270,7 @@ export {
 } from './systems/elevator/elevator-runtime'
 export { ElevatorRuntimeSystem } from './systems/elevator/elevator-runtime-system'
 export {
-  DEFAULT_ELEVATOR_LEVEL_HEIGHT,
   type ElevatorLevelEntry,
-  getElevatorLevelHeight,
   resolveElevatorBuildingLevels,
   resolveElevatorLevels,
   resolveElevatorServiceLevelIds,
@@ -269,13 +289,20 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export {
+  clampSlabElevationForWalls,
+  getSlabElevationUpperBound,
+  type SlabElevationClamp,
+} from './systems/slab/slab-support'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
+export { resolveStairTotalRise } from './systems/stair/stair-rise'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
+  getWallArcData,
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -313,6 +340,11 @@ export {
   type WallMoveLinkedWallTargetPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
+export {
+  MIN_WALL_HEIGHT,
+  resolveWallEffectiveHeight,
+  resolveWallTop,
+} from './systems/wall/wall-top'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'

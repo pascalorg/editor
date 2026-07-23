@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CeilingNode } from './ceiling'
 import type { ColumnNode } from './column'
+import type { ConstructionDimensionNode } from './construction-dimension'
 import type { DuctFittingNode } from './duct-fitting'
 import type { DuctSegmentNode } from './duct-segment'
 import type { DuctTerminalNode } from './duct-terminal'
@@ -22,6 +23,7 @@ import type { ShelfNode } from './shelf'
 import type { SlabNode } from './slab'
 import type { SpawnNode } from './spawn'
 import type { StairNode } from './stair'
+import type { StructuralGridNode } from './structural-grid'
 import type { WallNode } from './wall'
 import type { ZoneNode } from './zone'
 
@@ -29,6 +31,8 @@ type CoreLevelChildId =
   | WallNode['id']
   | FenceNode['id']
   | ColumnNode['id']
+  | ConstructionDimensionNode['id']
+  | StructuralGridNode['id']
   | ItemNode['id']
   | ZoneNode['id']
   | SlabNode['id']
@@ -60,11 +64,18 @@ export const LevelNode = BaseNode.extend({
   children: z.array(LevelChildId).default([]),
   // Specific props
   level: z.number().default(0),
+  /**
+   * Stored storey height in meters (floor-to-floor). No zod default on
+   * purpose: absence marks unmigrated legacy data and gates the load-time
+   * migration; a schema default would materialize silently through .parse().
+   */
+  height: z.number().optional(),
 }).describe(
   dedent`
   Level node - used to represent a level in the building
   - children: array of architectural, equipment, and MEP distribution nodes
   - level: level number
+  - height: storey height in meters (floor-to-floor); absent only on unmigrated legacy data
   `,
 )
 

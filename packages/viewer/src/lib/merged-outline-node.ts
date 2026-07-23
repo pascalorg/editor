@@ -125,6 +125,7 @@ export class MergedOutlineNode extends TempNode {
   primaryEdgeGlowNode: any
   secondaryEdgeGlowNode: any
   downSampleRatio: number
+  enabled: () => boolean
   updateBeforeType: string
 
   private readonly _depthRT: RenderTarget
@@ -189,6 +190,7 @@ export class MergedOutlineNode extends TempNode {
       primaryEdgeGlow?: any
       secondaryEdgeGlow?: any
       downSampleRatio?: number
+      enabled?: () => boolean
     } = {},
   ) {
     super('vec4')
@@ -201,6 +203,7 @@ export class MergedOutlineNode extends TempNode {
       primaryEdgeGlow = float(0),
       secondaryEdgeGlow = float(0),
       downSampleRatio = 2,
+      enabled = () => true,
     } = params
 
     this.scene = scene
@@ -212,6 +215,7 @@ export class MergedOutlineNode extends TempNode {
     this.primaryEdgeGlowNode = nodeObject(primaryEdgeGlow)
     this.secondaryEdgeGlowNode = nodeObject(secondaryEdgeGlow)
     this.downSampleRatio = downSampleRatio
+    this.enabled = enabled
     this.updateBeforeType = NodeUpdateType.FRAME
 
     this._depthRT = new RenderTarget()
@@ -301,8 +305,9 @@ export class MergedOutlineNode extends TempNode {
   }
 
   updateBefore(frame: any) {
-    const hasPrimary = this.primaryObjects.length > 0
-    const hasSecondary = this.secondaryObjects.length > 0
+    const enabled = this.enabled()
+    const hasPrimary = enabled && this.primaryObjects.length > 0
+    const hasSecondary = enabled && this.secondaryObjects.length > 0
     const hasAny = hasPrimary || hasSecondary
 
     // Fast-path: nothing to render and nothing was rendered last frame either,

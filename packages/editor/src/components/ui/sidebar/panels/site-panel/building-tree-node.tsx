@@ -1,4 +1,4 @@
-import { type BuildingNode, LevelNode, useScene } from '@pascal-app/core'
+import { type BuildingNode, DEFAULT_LEVEL_HEIGHT, LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Building2, Plus } from 'lucide-react'
 import { memo, useState } from 'react'
@@ -43,6 +43,7 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
     const levelCount = children.filter((childId) => nodes[childId]?.type === 'level').length
     const newLevel = LevelNode.parse({
       level: levelCount,
+      height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: nodeId,
     })

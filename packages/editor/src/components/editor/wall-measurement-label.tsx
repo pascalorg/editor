@@ -1,10 +1,11 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   calculateLevelMiters,
-  DEFAULT_WALL_HEIGHT,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
   getWallMiterBoundaryPoints,
   getWallPlanFootprint,
   getWallSurfacePolygon,
@@ -91,10 +92,7 @@ export function WallMeasurementLabel() {
   return createPortal(<SelectedMeasurementAnnotation node={measurableNode} />, selectedObject)
 }
 
-function getLevelWalls(
-  wall: WallNode,
-  nodes: Record<string, WallNode | { type: string; children?: string[] }>,
-): WallNode[] {
+function getLevelWalls(wall: WallNode, nodes: Record<string, AnyNode>): WallNode[] {
   if (!wall.parentId) return [wall]
 
   const levelNode = nodes[wall.parentId as AnyNodeId]
@@ -308,7 +306,7 @@ function getCurvedWallMeasurementPath(
 
 function buildMeasurementGuide(
   wall: WallNode,
-  nodes: Record<string, WallNode | { type: string; children?: string[] }>,
+  nodes: Record<string, AnyNode>,
 ): MeasurementGuide | null {
   const levelWalls = getLevelWalls(wall, nodes)
   const miterData = calculateLevelMiters(levelWalls)
@@ -317,7 +315,7 @@ function buildMeasurementGuide(
   const measurementPoints = measurementLine ?? fallbackMiddlePoints
   if (!measurementPoints) return null
 
-  const height = wall.height ?? DEFAULT_WALL_HEIGHT
+  const height = getWallEffectiveHeightForNodes(wall, nodes)
   const startLocal = worldPointToWallLocal(wall, measurementPoints.start)
   const endLocal = worldPointToWallLocal(wall, measurementPoints.end)
   const curvedMeasurementPath = isCurvedWall(wall)
@@ -516,14 +514,7 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
   const color = isNight ? '#ffffff' : '#111111'
   const shadowColor = isNight ? '#111111' : '#ffffff'
 
-  const guide = useMemo(
-    () =>
-      buildMeasurementGuide(
-        wall,
-        nodes as Record<string, WallNode | { type: string; children?: string[] }>,
-      ),
-    [nodes, wall],
-  )
+  const guide = useMemo(() => buildMeasurementGuide(wall, nodes), [nodes, wall])
   const length = useMemo(() => {
     if (!guide?.guidePath?.length || guide.guidePath.length < 2) {
       return getWallCurveLength(wall)
@@ -538,7 +529,8 @@ function WallMeasurementAnnotation({ wall }: { wall: WallNode }) {
     return total
   }, [guide, wall])
   const label = formatLinearMeasurement(length, unit)
-  const heightLabel = `H ${formatLinearMeasurement(wall.height ?? DEFAULT_WALL_HEIGHT, unit)}`
+  const height = useMemo(() => getWallEffectiveHeightForNodes(wall, nodes), [nodes, wall])
+  const heightLabel = `H ${formatLinearMeasurement(height, unit)}`
 
   if (!(guide && Number.isFinite(length) && length >= 0.01)) return null
 

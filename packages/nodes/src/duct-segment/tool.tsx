@@ -9,6 +9,7 @@ import {
   type GridEvent,
   getCeilingAt,
   getCeilingHeightAt,
+  resolveCeilingHeight,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -1132,7 +1133,7 @@ function CeilingHighlight({ ceiling }: { ceiling: CeilingNode }) {
     return pts
   }, [ceiling.polygon])
   if (!geometry) return null
-  const y = ceiling.height ?? 2.5
+  const y = resolveCeilingHeight(ceiling, useScene.getState().nodes)
   return (
     <group position={[0, y, 0]}>
       <mesh geometry={geometry} layers={EDITOR_LAYER} renderOrder={1}>

@@ -6,6 +6,7 @@ import {
   type DragAction,
   type FenceNode,
   resolveAlignment,
+  resolveFenceSupportSlabPatch,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -109,6 +110,26 @@ function snapshotLinked(
     })
   }
   return out
+}
+
+/**
+ * Re-elect the slab lift host for the given fences from their CURRENT
+ * store state (call after the endpoint writes). Only writes when the host
+ * actually changes, so unaffected drags stay patch-free.
+ */
+function applyFenceSupportPatches(
+  ids: readonly AnyNodeId[],
+  scene: { update(id: AnyNodeId, data: Partial<AnyNode>): void },
+) {
+  const nodes = useScene.getState().nodes
+  for (const id of ids) {
+    const fence = nodes[id]
+    if (fence?.type !== 'fence') continue
+    const patch = resolveFenceSupportSlabPatch(fence as FenceNode, nodes)
+    if (patch.supportSlabId !== (fence as FenceNode).supportSlabId) {
+      scene.update(id, patch as Partial<AnyNode>)
+    }
+  }
 }
 
 function linkedCascade(
@@ -230,6 +251,10 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         )
         dirty.push(linked.id as AnyNodeId)
       }
+      // Re-elect the lift host live: a fence dragged onto / off an elevated
+      // deck rises or drops with the pointer instead of waiting for commit
+      // (fences run no per-frame election — `supportSlabId` IS the lift).
+      applyFenceSupportPatches(dirty, scene)
       return dirty
     },
 
@@ -250,6 +275,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       scene.restoreAll()
       scene.resumeHistory()
       scene.update(ctx.fenceId, { start: draft.start, end: draft.end } as Partial<AnyNode>)
+      const patched: AnyNodeId[] = [ctx.fenceId]
       if (!draft.detached) {
         for (const linked of draft.linkedUpdates) {
           scene.update(
@@ -259,8 +285,14 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
               end: linked.end,
             } as Partial<AnyNode>,
           )
+          patched.push(linked.id as AnyNodeId)
         }
       }
+      // The restoreAll above reverted any live host patch — re-run the
+      // election against the final endpoints so the committed fence stands
+      // on (or leaves) its deck. Uncapped: an endpoint drag has no commit
+      // pointer ray worth trusting, matching the wall move commits.
+      applyFenceSupportPatches(patched, scene)
       return true
     },
 

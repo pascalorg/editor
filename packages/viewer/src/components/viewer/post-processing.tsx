@@ -526,6 +526,7 @@ const PostProcessingPasses = ({
       let visualAlpha = contentAlpha
       if (outlineEnabled) {
         const outlineNode = mergedOutline(scene, camera, {
+          enabled: () => !useViewer.getState().cameraDragging,
           primaryObjects: outliner.selectedObjects,
           secondaryObjects: outliner.hoveredObjects,
           primaryEdgeThickness: uniform(1),

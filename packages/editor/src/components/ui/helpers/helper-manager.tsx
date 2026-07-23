@@ -95,6 +95,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const measurementToolKind = useEditor((s) => s.toolDefaults.measurement?.kind)
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
@@ -147,6 +148,10 @@ export function HelperManager() {
 
   // Helpers are keyboard-driven hints (Esc, R, etc.) — irrelevant on touch.
   if (isMobile) return null
+
+  // First-person walkthrough has its own HUD; editor shortcut hints (e.g. the
+  // Ctrl multi-select hint — Ctrl is crouch there) don't apply while walking.
+  if (isFirstPersonMode) return null
 
   // The studio workspace (compose panel / gallery) has no scene selection or
   // tools — editor shortcut hints would only mislead there.

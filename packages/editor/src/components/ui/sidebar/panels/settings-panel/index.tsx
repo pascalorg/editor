@@ -1,4 +1,9 @@
-import { clearSceneHistory, emitter, useScene, validateBuildJson } from '@pascal-app/core'
+import {
+  clearSceneHistory,
+  emitter,
+  useScene,
+  validateBuildJson,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
@@ -394,14 +399,14 @@ export function SettingsPanel({
         </div>
 
         <div className="space-y-2">
-          <div className="font-medium text-muted-foreground text-xs">Floorplan</div>
+          <div className="font-medium text-muted-foreground text-xs">Floor plan</div>
           <Button
             className="w-full justify-start gap-2"
             onClick={() => exportFloorplanPdf('full')}
             variant="outline"
           >
             <MapIcon className="size-4" />
-            Full floorplan
+            Full floor plan
           </Button>
           <Button
             className="w-full justify-start gap-2"

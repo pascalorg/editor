@@ -127,6 +127,48 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
 
+export const WallAssemblyLayerRole = z.enum([
+  'structure',
+  'interior-finish',
+  'exterior-sheathing',
+  'exterior-finish',
+  'masonry-veneer',
+  'air-space',
+  'concrete-block',
+  'structural-masonry',
+  'solid-concrete',
+  'furring',
+])
+export type WallAssemblyLayerRole = z.infer<typeof WallAssemblyLayerRole>
+
+export const WallDimensionDatum = z.enum([
+  'centerline',
+  'structural-face',
+  'finish-face',
+  'veneer-face',
+])
+export type WallDimensionDatum = z.infer<typeof WallDimensionDatum>
+
+export const WallAssemblyLayer = z.object({
+  id: z.string().trim().min(1).max(80).default('structure'),
+  role: WallAssemblyLayerRole.default('structure'),
+  side: z.enum(['core', 'interior', 'exterior']).default('core'),
+  thickness: z.number().finite().positive().default(0.1),
+  materialRef: z.string().trim().max(120).default(''),
+  datumEligible: z.array(WallDimensionDatum).max(8).default([]),
+})
+export type WallAssemblyLayer = z.infer<typeof WallAssemblyLayer>
+
+export type WallAssemblyDatumSide = 'center' | 'interior' | 'exterior'
+
+export type WallAssemblyDatumReference = {
+  id: string
+  datum: WallDimensionDatum
+  side: WallAssemblyDatumSide
+  layerId?: string
+  offset: number
+}
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -149,8 +191,11 @@ export const WallNode = BaseNode.extend({
   // in a follow-up once migrated scenes are the norm.
   slots: z.record(z.string(), z.string()).optional(),
   thickness: z.number().optional(),
+  assemblyLayers: z.array(WallAssemblyLayer).max(32).default([]),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
@@ -165,6 +210,7 @@ export const WallNode = BaseNode.extend({
   dedent`
   Wall node - used to represent a wall in the building
   - thickness: thickness in meters
+  - assemblyLayers: construction layers with role, side, thickness, material reference, and datum eligibility
   - height: height in meters
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
@@ -188,6 +234,222 @@ export type WallBandSurfaceSlotId =
   | 'upperExterior'
   | 'topExterior'
 
+export function getWallAssemblyLayers(wall: Pick<WallNode, 'assemblyLayers'>): WallAssemblyLayer[] {
+  return wall.assemblyLayers ?? []
+}
+
+export function getWallAssemblyThickness(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): number {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return wall.thickness ?? 0.1
+  return layers.reduce((sum, layer) => sum + layer.thickness, 0)
+}
+
+export function getWallAssemblyFaceOffsets(wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>): {
+  interior: number
+  exterior: number
+} {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) {
+    const halfThickness = (wall.thickness ?? 0.1) / 2
+    return { interior: -halfThickness, exterior: halfThickness }
+  }
+
+  const coreLayers = layers.filter((layer) => layer.side === 'core')
+  const coreThickness =
+    coreLayers.length > 0
+      ? coreLayers.reduce((sum, layer) => sum + layer.thickness, 0)
+      : (wall.thickness ?? 0.1)
+  const interiorFinishThickness = layers
+    .filter((layer) => layer.side === 'interior')
+    .reduce((sum, layer) => sum + layer.thickness, 0)
+  const exteriorFinishThickness = layers
+    .filter((layer) => layer.side === 'exterior')
+    .reduce((sum, layer) => sum + layer.thickness, 0)
+
+  return {
+    interior: -coreThickness / 2 - interiorFinishThickness,
+    exterior: coreThickness / 2 + exteriorFinishThickness,
+  }
+}
+
+export function getWallDatumEligibleLayers(
+  wall: Pick<WallNode, 'assemblyLayers'>,
+  datum: WallDimensionDatum,
+): WallAssemblyLayer[] {
+  return (wall.assemblyLayers ?? []).filter((layer) => layer.datumEligible.includes(datum))
+}
+
+export function getWallAssemblyDatumReferenceId(
+  datum: WallDimensionDatum,
+  side: WallAssemblyDatumSide,
+  layerId?: string,
+): string {
+  return ['wall', datum, side, layerId].filter(Boolean).join(':')
+}
+
+type WallAssemblyLayerSpan = {
+  layer: WallAssemblyLayer
+  interiorOffset: number
+  exteriorOffset: number
+}
+
+function getWallAssemblyLayerSpans(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): WallAssemblyLayerSpan[] {
+  const layers = wall.assemblyLayers ?? []
+  if (layers.length === 0) return []
+
+  const coreLayers = layers.filter((layer) => layer.side === 'core')
+  const coreThickness =
+    coreLayers.length > 0
+      ? coreLayers.reduce((sum, layer) => sum + layer.thickness, 0)
+      : (wall.thickness ?? 0.1)
+  const coreInteriorFace = -coreThickness / 2
+  const coreExteriorFace = coreThickness / 2
+  const spans: WallAssemblyLayerSpan[] = []
+
+  let coreOffset = coreInteriorFace
+  for (const layer of coreLayers) {
+    const interiorOffset = coreOffset
+    const exteriorOffset = coreOffset + layer.thickness
+    spans.push({ layer, interiorOffset, exteriorOffset })
+    coreOffset = exteriorOffset
+  }
+
+  let interiorOffset = coreInteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'interior')) {
+    const exteriorOffset = interiorOffset
+    const nextInteriorOffset = exteriorOffset - layer.thickness
+    spans.push({ layer, interiorOffset: nextInteriorOffset, exteriorOffset })
+    interiorOffset = nextInteriorOffset
+  }
+
+  let exteriorOffset = coreExteriorFace
+  for (const layer of layers.filter((candidate) => candidate.side === 'exterior')) {
+    const interiorFaceOffset = exteriorOffset
+    const nextExteriorOffset = interiorFaceOffset + layer.thickness
+    spans.push({ layer, interiorOffset: interiorFaceOffset, exteriorOffset: nextExteriorOffset })
+    exteriorOffset = nextExteriorOffset
+  }
+
+  return spans
+}
+
+function createWallAssemblyDatumReference(
+  datum: WallDimensionDatum,
+  side: WallAssemblyDatumSide,
+  offset: number,
+  layerId?: string,
+): WallAssemblyDatumReference {
+  return {
+    id: getWallAssemblyDatumReferenceId(datum, side, layerId),
+    datum,
+    side,
+    ...(layerId ? { layerId } : {}),
+    offset,
+  }
+}
+
+export function resolveWallAssemblyDatumReferences(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+): WallAssemblyDatumReference[] {
+  const layers = wall.assemblyLayers ?? []
+  const references: WallAssemblyDatumReference[] = [
+    createWallAssemblyDatumReference('centerline', 'center', 0),
+  ]
+
+  if (layers.length === 0) {
+    const halfThickness = (wall.thickness ?? 0.1) / 2
+    return [
+      ...references,
+      createWallAssemblyDatumReference('structural-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('structural-face', 'exterior', halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'exterior', halfThickness),
+    ]
+  }
+
+  const spans = getWallAssemblyLayerSpans(wall)
+
+  for (const span of spans) {
+    if (span.layer.datumEligible.includes('structural-face')) {
+      if (span.layer.side === 'core') {
+        references.push(
+          createWallAssemblyDatumReference(
+            'structural-face',
+            'interior',
+            span.interiorOffset,
+            span.layer.id,
+          ),
+          createWallAssemblyDatumReference(
+            'structural-face',
+            'exterior',
+            span.exteriorOffset,
+            span.layer.id,
+          ),
+        )
+      } else {
+        const side = span.layer.side
+        references.push(
+          createWallAssemblyDatumReference(
+            'structural-face',
+            side,
+            side === 'interior' ? span.interiorOffset : span.exteriorOffset,
+            span.layer.id,
+          ),
+        )
+      }
+    }
+
+    if (span.layer.datumEligible.includes('finish-face')) {
+      const side = span.layer.side === 'core' ? 'center' : span.layer.side
+      const offset =
+        span.layer.side === 'interior'
+          ? span.interiorOffset
+          : span.layer.side === 'exterior'
+            ? span.exteriorOffset
+            : (span.interiorOffset + span.exteriorOffset) / 2
+      references.push(createWallAssemblyDatumReference('finish-face', side, offset, span.layer.id))
+    }
+
+    if (span.layer.datumEligible.includes('veneer-face')) {
+      const side = span.layer.side === 'interior' ? 'interior' : 'exterior'
+      const offset = side === 'interior' ? span.interiorOffset : span.exteriorOffset
+      references.push(createWallAssemblyDatumReference('veneer-face', side, offset, span.layer.id))
+    }
+  }
+
+  if (!references.some((reference) => reference.datum === 'structural-face')) {
+    const halfThickness = getWallAssemblyThickness(wall) / 2
+    references.push(
+      createWallAssemblyDatumReference('structural-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('structural-face', 'exterior', halfThickness),
+    )
+  }
+
+  if (!references.some((reference) => reference.datum === 'finish-face')) {
+    const halfThickness = getWallAssemblyThickness(wall) / 2
+    references.push(
+      createWallAssemblyDatumReference('finish-face', 'interior', -halfThickness),
+      createWallAssemblyDatumReference('finish-face', 'exterior', halfThickness),
+    )
+  }
+
+  return references
+}
+
+export function resolveWallAssemblyDatumReference(
+  wall: Pick<WallNode, 'assemblyLayers' | 'thickness'>,
+  referenceId: string,
+): WallAssemblyDatumReference | null {
+  return (
+    resolveWallAssemblyDatumReferences(wall).find((reference) => reference.id === referenceId) ??
+    null
+  )
+}
+
 // Declared default appearance for an unpainted wall face in colored mode —
 // visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
 // slot declaration (nodes) and the material resolver (viewer) share one value.
@@ -198,8 +460,11 @@ export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
   exterior: WALL_SURFACE_SLOT_DEFAULTS.exterior,
 }
 
-export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands'>) {
-  const wallHeight = wall.height ?? 2.5
+export function getWallFaceBandConfig(
+  wall: Pick<WallNode, 'height' | 'faceBands'>,
+  effectiveWallHeight: number,
+) {
+  const wallHeight = Math.max(0, effectiveWallHeight)
   const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
   const count = raw.enabled ? Math.max(1, Math.min(4, Math.round(raw.count ?? 3))) : 1
   const lowerHeight = count >= 2 ? Math.max(0, Math.min(wallHeight, raw.lowerHeight)) : 0
@@ -223,8 +488,9 @@ export function getWallFaceBandConfig(wall: Pick<WallNode, 'height' | 'faceBands
 export function getWallFaceBandForHeight(
   wall: Pick<WallNode, 'height' | 'faceBands'>,
   y: number,
+  effectiveWallHeight: number,
 ): WallFaceBand {
-  const bands = getWallFaceBandConfig(wall)
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
   if (!bands.enabled) return 'upper'
   if (y < bands.lowerTop) return 'lower'
   if (y < bands.middleTop) return 'middle'

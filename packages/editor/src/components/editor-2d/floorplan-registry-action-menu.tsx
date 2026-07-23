@@ -20,16 +20,21 @@ import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
 } from '../../lib/fresh-planar-placement'
+import { curveReshapeScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
-import { useMovingNode } from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  useIsCurveReshape,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
 import { IconRefGlyph } from '../ui/icon-ref'
 
@@ -106,6 +111,8 @@ function collectQuickActionNodes(
  *    `<FloorplanRegistryMoveOverlay>` / dispatcher picks the right path.
  *    Walls are excluded — their move is reached via the side-arrow
  *    handles emitted from `def.floorplan`, not via a menu button.
+ *  - Curve (wall only): enters curve reshape mode. The selected wall's
+ *    midpoint curve handle remains visible so it can be dragged in plan.
  *  - Add hole (slab + ceiling only): inserts a small default-square
  *    hole at the polygon centroid via `updateNode`. Mirrors the legacy
  *    `handleAddHole` in `floating-action-menu.tsx`.
@@ -114,7 +121,7 @@ function collectQuickActionNodes(
  *  - Delete: calls `deleteNode(id)`. Cascade is handled by the registry's
  *    `relations.cascadeDelete` if declared on the def.
  *
- * Hidden while in a move state (so we don't show buttons over a ghost).
+ * Hidden while moving or curving so the menu does not compete with the active affordance.
  */
 export function FloorplanRegistryActionMenu() {
   const reducedMotion = useReducedMotion()
@@ -124,6 +131,7 @@ export function FloorplanRegistryActionMenu() {
     s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
   ) as AnyNodeId | undefined
   const movingNode = useMovingNode()
+  const isCurveReshape = useIsCurveReshape()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Gate on floorplan hover so this 2D menu never coexists with the 3D
@@ -139,10 +147,28 @@ export function FloorplanRegistryActionMenu() {
   // Only show for registered kinds (skip legacy kinds — they have their
   // own FloorplanActionMenuLayer entries).
   const selectedKind = useScene((s) => (selectedId ? (s.nodes[selectedId]?.type ?? null) : null))
+  const canCurve = useScene((s) => {
+    if (!selectedId) return false
+    const selectedNode = s.nodes[selectedId]
+    if (!selectedNode) return false
+    const definition = nodeRegistry.get(selectedNode.type)
+    const canCurveNode = getFloorplanNodeExtension(definition)?.actionMenu?.canCurve
+    return (
+      !!definition?.floorplanAffordances?.curve &&
+      !!canCurveNode?.({
+        node: selectedNode as never,
+        nodes: s.nodes,
+      })
+    )
+  })
   const def = selectedKind ? nodeRegistry.get(selectedKind) : null
   const isRegistryKind = !!def
   const isVisible =
-    isRegistryKind && def?.presentation?.actionMenu !== false && !movingNode && isFloorplanHovered
+    isRegistryKind &&
+    def?.presentation?.actionMenu !== false &&
+    !movingNode &&
+    !isCurveReshape &&
+    isFloorplanHovered
   const isWall = selectedKind === 'wall'
   const quickActionNodes = useScene(
     useShallow((s) => collectQuickActionNodes(s.nodes, selectedId ?? null)),
@@ -284,6 +310,12 @@ export function FloorplanRegistryActionMenu() {
     )
   }
 
+  const handleCurve = () => {
+    if (!canCurve) return
+    sfxEmitter.emit('sfx:item-pick')
+    useInteractionScope.getState().begin(curveReshapeScope(node.id))
+  }
+
   const handleDuplicate = () => {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
@@ -351,6 +383,7 @@ export function FloorplanRegistryActionMenu() {
     >
       <NodeActionMenu
         onAddHole={canAddHole ? handleAddHole : undefined}
+        onCurve={canCurve ? handleCurve : undefined}
         onDelete={canDelete ? handleDelete : undefined}
         onDuplicate={canDuplicate ? handleDuplicate : undefined}
         onMove={canMove ? handleMove : undefined}

@@ -14,6 +14,22 @@ type RafFn = (cb: (t: number) => void) => number
 
 const SHELF_ID = 'shelf_sanitize' as AnyNodeId
 const SOLAR_PANEL_ID = 'sp_x' as AnyNodeId
+const WALL_ID = 'wall_keyremoval' as AnyNodeId
+
+function makeWall(): AnyNode {
+  return {
+    id: WALL_ID,
+    type: 'wall',
+    parentId: null,
+    object: 'node',
+    visible: true,
+    metadata: {},
+    children: [],
+    start: [0, 0],
+    end: [4, 0],
+    height: 2.5,
+  } as unknown as AnyNode
+}
 
 function makeShelf(overrides: Partial<AnyNode> = {}): AnyNode {
   return {
@@ -171,5 +187,47 @@ describe('node mutation numeric sanitization', () => {
     expect(created.thickness).toBe(0.04)
     expect(Number.isFinite(created.width)).toBe(true)
     expect(Number.isFinite(created.thickness)).toBe(true)
+  })
+})
+
+describe('node update explicit-undefined key removal', () => {
+  beforeEach(() => {
+    useScene.setState({
+      nodes: { [WALL_ID]: makeWall() },
+      rootNodeIds: [WALL_ID],
+      dirtyNodes: new Set(),
+      collections: {},
+      readOnly: false,
+    } as never)
+    useScene.temporal.getState().clear()
+  })
+
+  test('an undefined value in update data removes the key from the stored node', () => {
+    useScene.getState().updateNode(WALL_ID, { height: undefined } as Partial<AnyNode>)
+
+    const wall = useScene.getState().nodes[WALL_ID] as Record<string, unknown>
+    expect('height' in wall).toBe(false)
+  })
+
+  test('undo restores a key removed via an undefined update value', () => {
+    useScene.getState().updateNode(WALL_ID, { height: undefined } as Partial<AnyNode>)
+    expect('height' in (useScene.getState().nodes[WALL_ID] as Record<string, unknown>)).toBe(false)
+
+    useScene.temporal.getState().undo()
+
+    const wall = useScene.getState().nodes[WALL_ID] as { height?: number }
+    expect('height' in wall).toBe(true)
+    expect(wall.height).toBe(2.5)
+  })
+
+  test('other keys in the same patch still apply when one is removed', () => {
+    useScene.getState().updateNode(WALL_ID, {
+      height: undefined,
+      name: 'Plane-bound wall',
+    } as Partial<AnyNode>)
+
+    const wall = useScene.getState().nodes[WALL_ID] as Record<string, unknown>
+    expect('height' in wall).toBe(false)
+    expect(wall.name).toBe('Plane-bound wall')
   })
 })

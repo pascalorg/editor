@@ -5,6 +5,11 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import { readFloorplanGeometryMetadata, withFloorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
 
 /**
@@ -722,7 +727,38 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     }
   }
 
-  return { kind: 'group', children }
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    {
+      preferredSide: swingSign === 1 ? -1 : 1,
+      stroke: showSelectedChrome ? '#f97316' : '#334155',
+    },
+  )
+  if (markAnnotation) children.push(markAnnotation)
+
+  return { kind: 'group', children: children.map(markDoorPlanObstacle) }
+}
+
+function markDoorPlanObstacle(geometry: FloorplanGeometry): FloorplanGeometry {
+  if (geometry.kind === 'group') {
+    const isOpeningMark = readFloorplanGeometryMetadata(geometry).annotationRole === 'opening-mark'
+    return isOpeningMark
+      ? geometry
+      : { ...geometry, children: geometry.children.map(markDoorPlanObstacle) }
+  }
+  if (
+    geometry.kind === 'path' ||
+    geometry.kind === 'polygon' ||
+    geometry.kind === 'polyline' ||
+    geometry.kind === 'rect' ||
+    geometry.kind === 'circle' ||
+    geometry.kind === 'line'
+  ) {
+    return withFloorplanGeometryMetadata(geometry, { annotationObstacle: 'bounds' })
+  }
+  return geometry
 }
 
 /**

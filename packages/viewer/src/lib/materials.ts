@@ -17,6 +17,7 @@ import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 import { resolveCdnUrl } from './asset-url'
 import { isKtx2Url, ktx2Loader, whenKtx2Ready } from './ktx2-loader'
 import { getSceneTheme } from './scene-themes'
+import { stampPascalTextureRef } from './texture-reference'
 
 export type RenderShading = 'solid' | 'rendered'
 export type ColorPreset = 'clay' | 'white' | 'mono' | 'blueprint'
@@ -212,7 +213,10 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = pickTextureLoader(textureConfig.url).load(textureConfig.url)
+  const resolvedUrl = /^(?:asset|blob|data):/.test(textureConfig.url)
+    ? textureConfig.url
+    : (resolveCdnUrl(textureConfig.url) ?? textureConfig.url)
+  const texture = pickTextureLoader(resolvedUrl).load(resolvedUrl)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
@@ -220,6 +224,11 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   texture.repeat.set(repeatX, repeatY)
   texture.updateMatrix()
   texture.colorSpace = THREE.SRGBColorSpace
+  stampPascalTextureRef(texture, {
+    kind: 'project-asset',
+    src: resolvedUrl,
+    slot: 'map',
+  })
 
   textureCache.set(cacheKey, texture)
   return texture
@@ -281,6 +290,11 @@ function getPresetTexture(
 
   const texture = pickTextureLoader(resolvedPath).load(resolvedPath)
   applyTextureProperties(texture, props, slot)
+  stampPascalTextureRef(texture, {
+    kind: 'material',
+    src: resolvedPath,
+    slot: slot ?? 'map',
+  })
   setTextureCacheKey(texture, cacheKey)
   textureCache.set(cacheKey, texture)
   return texture
@@ -336,6 +350,11 @@ async function loadPresetTexture(
   const promise = load
     .then((texture) => {
       applyTextureProperties(texture, props, slot)
+      stampPascalTextureRef(texture, {
+        kind: 'material',
+        src: resolvedPath,
+        slot: slot ?? 'map',
+      })
       setTextureCacheKey(texture, cacheKey)
       textureCache.set(cacheKey, texture)
       textureLoadPromises.delete(cacheKey)
@@ -360,7 +379,13 @@ function queueTextureAssignment(
   const textureMaterial = material as TextureMaterial
 
   if (!path) {
-    textureMaterial[slot] = null
+    if (textureMaterial[slot] != null) {
+      // Rebuild the node graph: a cached WebGPU material keeps a TextureNode
+      // for the slot, whose per-frame material reference would pull the null
+      // and crash in TextureNode.update ("null (reading 'matrix')").
+      textureMaterial[slot] = null
+      material.needsUpdate = true
+    }
     return
   }
 
@@ -379,7 +404,14 @@ function queueTextureAssignment(
     return
   }
 
-  textureMaterial[slot] = null
+  // Cold load: clear the slot for the fetch window, and rebuild the node
+  // graph if it previously held a texture — reused cached materials otherwise
+  // keep a TextureNode whose reference pulls the null and crashes the render
+  // pass. Cold loads are the norm for freshly generated library materials.
+  if (textureMaterial[slot] != null) {
+    textureMaterial[slot] = null
+    material.needsUpdate = true
+  }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return

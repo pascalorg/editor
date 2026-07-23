@@ -6,9 +6,15 @@ import type {
   RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  buildDoorFloorplanSchedule,
+  computeDoorFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
@@ -32,12 +38,6 @@ function readWallLength(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unk
   const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
-function readWallHeight(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!door.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
-  return wall?.height ?? Number.POSITIVE_INFINITY
 }
 
 // Width arrow on the door-local +X (right) or -X (left) side. Drag grows
@@ -100,7 +100,7 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       const roofMax = readRoofFaceHeightMax(n, scene, 1)
       if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
       const bottom = n.position[1] - n.height / 2
-      return Math.max(MIN_DOOR_HEIGHT, readWallHeight(n, scene) - bottom)
+      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene) - bottom)
     },
     currentValue: (n) => n.height,
     onDrag: (node) => publishOpeningResizeGuides(node, false),
@@ -169,9 +169,14 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
   snapProfile: 'item',
   facingIndicator: true,
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DoorNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      schedule: buildDoorFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<DoorNodeType>,
+  },
   surfaceRole: 'joinery',
 
   // Leverage the schema's zod `.default()` annotations to compute the
@@ -227,6 +232,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  computeFloorplanLevelData: computeDoorFloorplanLevelData,
   floorplanDependsOnSiblings: true,
   // Opening symbols position from `ctx.parent` (the host wall); merge the
   // walls' live drag overrides so the symbol tracks a wall / group drag in

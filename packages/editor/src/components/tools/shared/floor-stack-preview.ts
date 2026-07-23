@@ -6,6 +6,8 @@ type FloorStackPreviewArgs = {
   rotation?: unknown
   levelId?: string | null
   nodes?: Record<AnyNodeId, AnyNode>
+  /** Pointer-decided support cap — see `FloorPlacedElevationArgs.maxElevation`. */
+  maxElevation?: number | null
 }
 
 export function getFloorStackPreviewPosition({
@@ -14,6 +16,7 @@ export function getFloorStackPreviewPosition({
   rotation,
   levelId,
   nodes,
+  maxElevation,
 }: FloorStackPreviewArgs): [number, number, number] {
   return getFloorStackedPosition({
     node,
@@ -21,5 +24,6 @@ export function getFloorStackPreviewPosition({
     position,
     rotation,
     levelId,
+    maxElevation,
   })
 }

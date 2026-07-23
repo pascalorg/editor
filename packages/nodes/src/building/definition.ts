@@ -12,7 +12,7 @@ import { BuildingNode } from './schema'
  */
 export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   kind: 'building',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: BuildingNode,
   category: 'site',
 

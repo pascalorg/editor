@@ -1,1 +1,5 @@
-export { DoorNode } from '@pascal-app/core'
+export {
+  DoorNode,
+  OpeningConstructionType,
+  OpeningDimensionReference,
+} from '@pascal-app/core'

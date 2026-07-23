@@ -56,4 +56,9 @@ describe('LevelNode', () => {
 
     expect(children).toEqual(['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'])
   })
+
+  test('does not materialize height on parse — absence marks unmigrated legacy data', () => {
+    expect('height' in LevelNode.parse({})).toBe(false)
+    expect(LevelNode.parse({ height: 3 }).height).toBe(3)
+  })
 })

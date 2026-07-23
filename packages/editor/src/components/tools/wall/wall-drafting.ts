@@ -5,6 +5,7 @@ import {
   type DoorNode,
   getScaledDimensions,
   type ItemNode,
+  resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
@@ -456,6 +457,17 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
 export function createWallOnCurrentLevel(
   start: WallPlanPoint,
   end: WallPlanPoint,
+  options?: {
+    /**
+     * Pointer-decided support cap (level-local Y) from
+     * `resolvePointerSupportSurface` — the 3D tool passes the elevation of
+     * the surface the commit click actually aimed at, so the persisted
+     * host reproduces what the preview showed (floor under a deck vs deck
+     * top). Omitted by 2D floor-plan commits (no camera ray): those keep
+     * the uncapped max election.
+     */
+    supportCap?: number | null
+  },
 ): WallNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
@@ -541,8 +553,18 @@ export function createWallOnCurrentLevel(
     })
 
     createNode(wall, currentLevelId)
+    const createdWall = useScene.getState().nodes[wall.id]
+    if (createdWall?.type === 'wall') {
+      useScene.getState().updateNode(
+        createdWall.id,
+        resolveWallSupportSlabPatch(createdWall, useScene.getState().nodes, {
+          maxElevation: options?.supportCap ?? null,
+        }),
+      )
+    }
     sfxEmitter.emit('sfx:structure-build')
 
-    return wall
+    const committedWall = useScene.getState().nodes[wall.id]
+    return committedWall?.type === 'wall' ? committedWall : wall
   })
 }
