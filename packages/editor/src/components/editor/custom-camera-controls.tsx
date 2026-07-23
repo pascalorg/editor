@@ -35,6 +35,7 @@ import {
   useEndpointReshape,
   useMovingNode,
 } from '../../store/use-interaction-scope'
+import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -164,6 +165,10 @@ function setKeyboardPanKey(state: KeyboardPanState, code: string, pressed: boole
 
 function isKeyboardPanKey(code: string): boolean {
   return code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD'
+}
+
+function hasKeyboardPanInput(state: KeyboardPanState): boolean {
+  return state.forward || state.backward || state.left || state.right
 }
 
 type CameraViewportSize = {
@@ -420,6 +425,14 @@ export const CustomCameraControls = () => {
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
+  const cameraDraggingLifecycle = useMemo(
+    () =>
+      createCameraDraggingLifecycle({
+        setDragging: (dragging) => useViewer.getState().setCameraDragging(dragging),
+      }),
+    [],
+  )
+  useEffect(() => () => cameraDraggingLifecycle.end(), [cameraDraggingLifecycle])
   useEffect(() => {
     camera.layers.enable(EDITOR_LAYER)
     camera.layers.enable(GRID_LAYER)
@@ -446,8 +459,9 @@ export const CustomCameraControls = () => {
 
   const beginLocalCameraInteraction = useCallback(() => {
     cancelPoseApplication()
+    cameraDraggingLifecycle.begin()
     emitter.emit('camera-controls:interaction-start', undefined)
-  }, [cancelPoseApplication])
+  }, [cameraDraggingLifecycle, cancelPoseApplication])
 
   const applyPendingPose = useCallback(() => {
     if (isFirstPersonMode) {
@@ -1007,6 +1021,9 @@ export const CustomCameraControls = () => {
       if (isKeyboardPanKey(event.code)) {
         const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, false)
         if (changed) {
+          if (!hasKeyboardPanInput(keyboardPanKeys.current)) {
+            cameraDraggingLifecycle.end()
+          }
           event.preventDefault()
           event.stopPropagation()
         }
@@ -1048,6 +1065,7 @@ export const CustomCameraControls = () => {
 
     const onWheel = () => {
       beginLocalCameraInteraction()
+      cameraDraggingLifecycle.scheduleEnd()
       clearPendingFloorplanNavigationPose()
     }
 
@@ -1067,6 +1085,7 @@ export const CustomCameraControls = () => {
       panPointerId = null
       panPointerButton = null
       clearNavigationCursor()
+      cameraDraggingLifecycle.end()
       updateConfig()
     }
 
@@ -1089,9 +1108,11 @@ export const CustomCameraControls = () => {
       gl.domElement.removeEventListener('wheel', onWheel, true)
       clearKeyboardPanKeys()
       clearNavigationCursor()
+      cameraDraggingLifecycle.end()
     }
   }, [
     beginLocalCameraInteraction,
+    cameraDraggingLifecycle,
     cameraMode,
     gl,
     isPreviewMode,
@@ -1407,12 +1428,12 @@ export const CustomCameraControls = () => {
   }, [clearPendingFloorplanNavigationPose, focusNode, isPreviewMode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
-    useViewer.getState().setCameraDragging(true)
-  }, [])
+    cameraDraggingLifecycle.begin()
+  }, [cameraDraggingLifecycle])
 
   const onRest = useCallback(() => {
-    useViewer.getState().setCameraDragging(false)
-  }, [])
+    cameraDraggingLifecycle.end()
+  }, [cameraDraggingLifecycle])
 
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
   // so the default 2m minDistance prevents the user from getting close

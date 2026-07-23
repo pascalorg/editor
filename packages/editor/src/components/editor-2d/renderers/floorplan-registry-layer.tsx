@@ -66,6 +66,7 @@ import {
   curveReshapeScope,
   endpointReshapeScope,
   holeEditScope,
+  isIdle,
   tangentReshapeScope,
 } from '../../../lib/interaction/scope'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -1456,18 +1457,20 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
   const [layoutEpoch, setLayoutEpoch] = useState(0)
+  const interactionIdle = useInteractionScope((state) => isIdle(state.scope))
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
   const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
   const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
+  const layoutEnabled = active && interactionIdle
   useLayoutEffect(() => {
-    if (!active) return
-    const svg = markerRef.current?.ownerSVGElement
-    if (!svg) return
-    return observeSvgAnnotationLayoutChanges(svg, () => {
+    if (!layoutEnabled) return
+    const registryLayer = markerRef.current?.parentElement
+    if (!registryLayer) return
+    return observeSvgAnnotationLayoutChanges(registryLayer, () => {
       setLayoutEpoch((epoch) => epoch + 1)
     })
-  }, [active])
+  }, [layoutEnabled])
   useLayoutEffect(() => {
     // The epoch is only a trigger; collision inputs are measured from the live SVG below.
     void layoutEpoch
@@ -1475,89 +1478,149 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       resetPreflightIssues()
       return
     }
+    if (!interactionIdle) return
     const svg = markerRef.current?.ownerSVGElement
-    if (!svg) return
+    const registryLayer = markerRef.current?.parentElement
+    if (!(svg && registryLayer)) return
     const preflightIssues = resolveSvgAnnotationCollisions(svg, {
       layoutOverrides: annotationLayoutOverrides,
     })
     setPreflightIssues(preflightIssues)
 
     const labels = Array.from(
-      svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
+      registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
     )
-    const cleanup: Array<() => void> = []
     for (const [index, label] of labels.entries()) {
       const id = svgAnnotationLabelId(label, index)
       label.dataset.floorplanAnnotationId = id
       label.style.pointerEvents = 'all'
       label.style.cursor = annotationLayoutOverrides[id]?.pinned ? 'grab' : 'move'
-
-      const onPointerDown = (event: PointerEvent) => {
-        if (event.button !== 0) return
-        event.preventDefault()
-        event.stopPropagation()
-        label.style.cursor = 'grabbing'
-        const matrix = label.getScreenCTM()
-        if (!matrix) return
-        const start = { x: event.clientX, y: event.clientY }
-        const existing = annotationLayoutOverrides[id] ?? {
-          ...readFloorplanAnnotationLayoutOffset(label),
-          pinned: true,
-        }
-        let latest = existing
-        let moved = false
-        const onPointerMove = (moveEvent: PointerEvent) => {
-          moved = true
-          const local = screenVectorToFloorplanAnnotationLocal(
-            matrix,
-            moveEvent.clientX - start.x,
-            moveEvent.clientY - start.y,
-          )
-          latest = {
-            dx: existing.dx + local.x,
-            dy: existing.dy + local.y,
-            pinned: true,
-          }
-          const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
-          label.setAttribute(
-            'transform',
-            `${defaultTransform} translate(${latest.dx} ${latest.dy})`.trim(),
-          )
-        }
-        const onPointerUp = () => {
-          label.style.cursor = annotationLayoutOverrides[id]?.pinned ? 'grab' : 'move'
-          window.removeEventListener('pointermove', onPointerMove)
-          window.removeEventListener('pointerup', onPointerUp)
-          if (moved) setAnnotationLayoutOverride(id, latest)
-        }
-        window.addEventListener('pointermove', onPointerMove)
-        window.addEventListener('pointerup', onPointerUp)
-      }
-      const onDoubleClick = (event: MouseEvent) => {
-        event.preventDefault()
-        event.stopPropagation()
-        setAnnotationLayoutOverride(id, null)
-      }
-      label.addEventListener('pointerdown', onPointerDown)
-      label.addEventListener('dblclick', onDoubleClick)
-      cleanup.push(() => {
-        label.removeEventListener('pointerdown', onPointerDown)
-        label.removeEventListener('dblclick', onDoubleClick)
-        label.style.pointerEvents = ''
-        label.style.cursor = ''
-      })
-    }
-    return () => {
-      for (const fn of cleanup) fn()
     }
   }, [
     active,
     annotationLayoutOverrides,
+    interactionIdle,
     layoutEpoch,
     resetPreflightIssues,
-    setAnnotationLayoutOverride,
     setPreflightIssues,
   ])
+
+  useEffect(() => {
+    if (!layoutEnabled) return
+    const registryLayer = markerRef.current?.parentElement
+    if (!registryLayer) return
+    let cleanupPointerDrag: (() => void) | null = null
+    let cancelActivePointerDrag: (() => void) | null = null
+
+    const findLabel = (target: EventTarget | null): SVGGElement | null => {
+      if (!(target instanceof Element)) return null
+      const label = target.closest<SVGGElement>('[data-floorplan-annotation-label]')
+      return label && registryLayer.contains(label) ? label : null
+    }
+
+    const labelId = (label: SVGGElement): string => {
+      const labels = Array.from(
+        registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
+      )
+      return svgAnnotationLabelId(label, Math.max(0, labels.indexOf(label)))
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const label = findLabel(event.target)
+      if (!(label && event.button === 0)) return
+      const matrix = label.getScreenCTM()
+      if (!matrix) return
+      event.preventDefault()
+      event.stopPropagation()
+      cancelActivePointerDrag?.()
+      label.style.cursor = 'grabbing'
+      const id = labelId(label)
+      const start = { x: event.clientX, y: event.clientY }
+      const existing = useDrawingView.getState().annotationLayoutOverrides[id] ?? {
+        ...readFloorplanAnnotationLayoutOffset(label),
+        pinned: true,
+      }
+      const wasPinned = useDrawingView.getState().annotationLayoutOverrides[id]?.pinned === true
+      let latest = existing
+      let moved = false
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId !== event.pointerId) return
+        moved = true
+        const local = screenVectorToFloorplanAnnotationLocal(
+          matrix,
+          moveEvent.clientX - start.x,
+          moveEvent.clientY - start.y,
+        )
+        latest = {
+          dx: existing.dx + local.x,
+          dy: existing.dy + local.y,
+          pinned: true,
+        }
+        const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
+        label.setAttribute(
+          'transform',
+          `${defaultTransform} translate(${latest.dx} ${latest.dy})`.trim(),
+        )
+      }
+
+      const finishPointerDrag = (endEvent: PointerEvent) => {
+        if (endEvent.pointerId !== event.pointerId) return
+        cleanupPointerDrag?.()
+        label.style.cursor = moved || wasPinned ? 'grab' : 'move'
+        if (moved) setAnnotationLayoutOverride(id, latest)
+      }
+
+      const cancelPointerDrag = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId !== event.pointerId) return
+        cancelActivePointerDrag?.()
+      }
+
+      cancelActivePointerDrag = () => {
+        cleanupPointerDrag?.()
+        label.style.cursor = wasPinned ? 'grab' : 'move'
+        const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
+        label.setAttribute(
+          'transform',
+          `${defaultTransform} translate(${existing.dx} ${existing.dy})`.trim(),
+        )
+      }
+
+      cleanupPointerDrag = () => {
+        window.removeEventListener('pointermove', onPointerMove)
+        window.removeEventListener('pointerup', finishPointerDrag)
+        window.removeEventListener('pointercancel', cancelPointerDrag)
+        cleanupPointerDrag = null
+        cancelActivePointerDrag = null
+      }
+      window.addEventListener('pointermove', onPointerMove)
+      window.addEventListener('pointerup', finishPointerDrag)
+      window.addEventListener('pointercancel', cancelPointerDrag)
+    }
+
+    const onDoubleClick = (event: MouseEvent) => {
+      const label = findLabel(event.target)
+      if (!label) return
+      event.preventDefault()
+      event.stopPropagation()
+      label.style.cursor = 'move'
+      setAnnotationLayoutOverride(labelId(label), null)
+    }
+
+    registryLayer.addEventListener('pointerdown', onPointerDown)
+    registryLayer.addEventListener('dblclick', onDoubleClick)
+    return () => {
+      cancelActivePointerDrag?.()
+      registryLayer.removeEventListener('pointerdown', onPointerDown)
+      registryLayer.removeEventListener('dblclick', onDoubleClick)
+      for (const label of registryLayer.querySelectorAll<SVGGElement>(
+        '[data-floorplan-annotation-label]',
+      )) {
+        label.style.pointerEvents = ''
+        label.style.cursor = ''
+      }
+    }
+  }, [layoutEnabled, setAnnotationLayoutOverride])
   return <g pointerEvents="none" ref={markerRef} />
 }
 

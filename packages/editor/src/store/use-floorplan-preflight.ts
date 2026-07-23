@@ -18,6 +18,23 @@ export type FloorplanPreflightIssue = {
   message: string
 }
 
+function preflightIssuesEqual(
+  left: readonly FloorplanPreflightIssue[],
+  right: readonly FloorplanPreflightIssue[],
+): boolean {
+  if (left.length !== right.length) return false
+  return left.every((issue, index) => {
+    const candidate = right[index]
+    return (
+      candidate !== undefined &&
+      issue.id === candidate.id &&
+      issue.kind === candidate.kind &&
+      issue.severity === candidate.severity &&
+      issue.message === candidate.message
+    )
+  })
+}
+
 type FloorplanPreflightState = {
   issues: FloorplanPreflightIssue[]
   layoutIssues: FloorplanPreflightIssue[]
@@ -38,9 +55,17 @@ export const useFloorplanPreflight = create<FloorplanPreflightState>((set) => ({
   clearanceChecksEnabled: false,
   moduleChecksEnabled: false,
   setIssues: (issues) =>
-    set((state) => ({ layoutIssues: [...issues], issues: [...issues, ...state.auditIssues] })),
+    set((state) =>
+      preflightIssuesEqual(state.layoutIssues, issues)
+        ? state
+        : { layoutIssues: [...issues], issues: [...issues, ...state.auditIssues] },
+    ),
   setAuditIssues: (issues) =>
-    set((state) => ({ auditIssues: [...issues], issues: [...state.layoutIssues, ...issues] })),
+    set((state) =>
+      preflightIssuesEqual(state.auditIssues, issues)
+        ? state
+        : { auditIssues: [...issues], issues: [...state.layoutIssues, ...issues] },
+    ),
   setClearanceChecksEnabled: (clearanceChecksEnabled) => set({ clearanceChecksEnabled }),
   setModuleChecksEnabled: (moduleChecksEnabled) => set({ moduleChecksEnabled }),
   reset: () =>
