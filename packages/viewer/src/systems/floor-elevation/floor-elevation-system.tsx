@@ -113,7 +113,9 @@ export const FloorElevationSystem = () => {
       }
     }
 
-    dirtyNodes.forEach((id) => applyLift(id))
+    dirtyNodes.forEach((id) => {
+      applyLift(id)
+    })
     overrides.forEach((_values, id) => {
       if (!dirtyNodes.has(id as AnyNodeId)) applyLift(id as AnyNodeId)
     })

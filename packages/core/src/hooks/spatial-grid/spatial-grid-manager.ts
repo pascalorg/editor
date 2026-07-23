@@ -455,8 +455,8 @@ export class SpatialGridManager {
         effective = {
           ...effective,
           polygon: effective.polygon.map(([x, z]) => [x + dx, z + dz] as [number, number]),
-          holes: (effective.holes || []).map(
-            (hole) => hole.map(([x, z]) => [x + dx, z + dz] as [number, number]),
+          holes: (effective.holes || []).map((hole) =>
+            hole.map(([x, z]) => [x + dx, z + dz] as [number, number]),
           ),
           elevation: (effective.elevation ?? 0.05) + dy,
         }

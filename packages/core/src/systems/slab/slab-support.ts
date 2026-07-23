@@ -597,11 +597,7 @@ export function computeWallSlabSupport(
     (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
   )
 
-  const highestAt = (
-    groupList: typeof normalizedByGroup,
-    polylineIndex: number,
-    t: number,
-  ) => {
+  const highestAt = (groupList: typeof normalizedByGroup, polylineIndex: number, t: number) => {
     let highest = Number.NEGATIVE_INFINITY
     for (const group of groupList) {
       if (
