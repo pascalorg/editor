@@ -391,7 +391,7 @@ describe('scene commit boundary', () => {
     }
   })
 
-  test('validates registered nodes without stripping forward-compatible fields', () => {
+  test('validates registered creates and updates without stripping forward-compatible fields', () => {
     const kind = 'test:operation-forward-compatible'
     if (!nodeRegistry.has(kind)) {
       nodeRegistry._register({
@@ -426,10 +426,20 @@ describe('scene commit boundary', () => {
       collections: {},
       dirtyNodes: new Set<AnyNodeId>(),
       materials: {},
-      nodes: { [id]: node },
-      rootNodeIds: [id],
+      nodes: {},
+      rootNodeIds: [],
     })
     clearSceneHistory()
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [{ node, position: 0 }],
+        nodeDeletes: [],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+    expect(useScene.getState().nodes[id]).toEqual(node)
 
     expect(
       applySceneOperationPatch({

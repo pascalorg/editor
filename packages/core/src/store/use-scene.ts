@@ -1525,7 +1525,7 @@ function sceneOperationPatchNextState(
       return null
     }
     createIds.add(parsed.id)
-    parsedCreates.push({ node: parsed, position: change.position })
+    parsedCreates.push({ node: change.node, position: change.position })
   }
   for (const change of changes.nodeDeletes) {
     const id = change.node.id
