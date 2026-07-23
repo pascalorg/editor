@@ -8,8 +8,8 @@ export function heroCameraPose({
   aspect,
   fovDeg = 60,
   azimuthRad = Math.PI / 4,
-  elevationRad = (25 * Math.PI) / 180,
-  padding = 1.12,
+  elevationRad = (19 * Math.PI) / 180,
+  padding = 1.05,
   minDistance = 4,
   frameShift = 0.1,
 }: {
