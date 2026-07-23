@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { AnyNode, SlabNode } from '../../schema'
 import useLiveNodeOverrides from '../../store/use-live-node-overrides'
+import useLiveTransforms from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
 
@@ -32,7 +33,12 @@ function makeLevel(children: string[] = []): AnyNode {
   } as AnyNode
 }
 
-function makeSlab(id: string, polygon: Array<[number, number]>, elevation: number): SlabNode {
+function makeSlab(
+  id: string,
+  polygon: Array<[number, number]>,
+  elevation: number,
+  overrides: Partial<SlabNode> = {},
+): SlabNode {
   return {
     id,
     type: 'slab',
@@ -46,6 +52,7 @@ function makeSlab(id: string, polygon: Array<[number, number]>, elevation: numbe
     holeMetadata: [],
     elevation,
     autoFromWalls: false,
+    ...overrides,
   } as SlabNode
 }
 
@@ -59,6 +66,7 @@ describe('support queries honor live node overrides', () => {
   beforeEach(() => {
     spatialGridManager.clear()
     useLiveNodeOverrides.getState().clearAll()
+    useLiveTransforms.getState().clearAll()
     const deck = makeSlab('slab_deck', SQUARE, 0.5)
     useScene.setState({ nodes: { [LEVEL_ID]: makeLevel([deck.id]), [deck.id]: deck } as never })
     spatialGridManager.handleNodeCreated(deck as AnyNode, LEVEL_ID)
@@ -66,6 +74,7 @@ describe('support queries honor live node overrides', () => {
 
   afterEach(() => {
     useLiveNodeOverrides.getState().clearAll()
+    useLiveTransforms.getState().clearAll()
     useScene.setState({ nodes: {} })
     spatialGridManager.clear()
   })
@@ -102,6 +111,26 @@ describe('support queries honor live node overrides', () => {
 
     useLiveNodeOverrides.getState().clearAll()
     expect(itemSupportAt(0, 0)).toEqual({ elevation: 0.5, slabId: 'slab_deck' })
+  })
+
+  test('a deck translated via a useLiveTransforms delta supports items at the moved spot', () => {
+    // The slab move tool and the room-preset stamp publish a translation
+    // DELTA to useLiveTransforms (no polygon override) — the mesh moves but
+    // the committed polygon stays put, so furniture riding the preview used
+    // to elect ground and render under the deck until the validating click.
+    expect(itemSupportAt(0, 0)).toEqual({ elevation: 0.5, slabId: 'slab_deck' })
+
+    useLiveTransforms.getState().set('slab_deck', { position: [10, 0, 0], rotation: 0 })
+
+    expect(itemSupportAt(10, 0)).toEqual({ elevation: 0.5, slabId: 'slab_deck' })
+    expect(itemSupportAt(0, 0)).toEqual({ elevation: 0, slabId: null })
+    expect(
+      spatialGridManager.getSlabSupportForWall(LEVEL_ID, [9.5, 0], [10.5, 0]).elevation,
+    ).toBeCloseTo(0.5)
+
+    useLiveTransforms.getState().clearAll()
+    expect(itemSupportAt(0, 0)).toEqual({ elevation: 0.5, slabId: 'slab_deck' })
+    expect(itemSupportAt(10, 0)).toEqual({ elevation: 0, slabId: null })
   })
 
   test('wall support follows a live-translated deck', () => {
