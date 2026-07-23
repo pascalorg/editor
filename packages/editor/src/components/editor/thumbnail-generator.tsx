@@ -2,7 +2,7 @@
 
 import { emitter } from '@pascal-app/core'
 import {
-  computeHeroFramingBounds,
+  computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
   heroCameraPose,
@@ -166,9 +166,14 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         // the level snap so stacked positions frame correctly. User-driven
         // captures (captureMode set) keep the exact viewport pose.
         if (snapLevels) {
-          const heroBoxes = computeHeroFramingBounds()
-          if (heroBoxes) {
-            const pose = heroCameraPose({ boxes: heroBoxes, aspect: width / height })
+          const framing = computeHeroFraming()
+          if (framing) {
+            const pose = heroCameraPose({
+              boxes: framing.boxes,
+              aim: framing.aim,
+              azimuthRad: framing.azimuthRad,
+              aspect: width / height,
+            })
             thumbnailCamera.position.set(pose.position[0], pose.position[1], pose.position[2])
             thumbnailCamera.lookAt(pose.target[0], pose.target[1], pose.target[2])
             thumbnailCamera.updateMatrixWorld()

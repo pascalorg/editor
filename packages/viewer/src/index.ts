@@ -75,8 +75,9 @@ export {
 } from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
 export {
-  computeHeroFramingBounds,
+  computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
+  type HeroFraming,
   heroCameraPose,
   temporarilyHideNodeTypes,
   unionRegisteredNodeBounds,

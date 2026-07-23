@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  computeHeroFramingBounds,
+  computeHeroFraming,
   createSnapshotPipeline,
   GRID_LAYER,
   heroCameraPose,
@@ -36,8 +36,8 @@ export function BakeThumbnail({
       let pipeline: Awaited<ReturnType<typeof createSnapshotPipeline>> = null
 
       try {
-        const bounds = computeHeroFramingBounds()
-        if (!bounds) {
+        const framing = computeHeroFraming()
+        if (!framing) {
           onError('scene has no framable content')
           return
         }
@@ -47,7 +47,12 @@ export function BakeThumbnail({
         const camera = new PerspectiveCamera(60, aspect, 0.1, 1000)
         camera.layers.disable(EDITOR_LAYER)
         camera.layers.disable(GRID_LAYER)
-        const pose = heroCameraPose({ boxes: bounds, aspect })
+        const pose = heroCameraPose({
+          boxes: framing.boxes,
+          aim: framing.aim,
+          azimuthRad: framing.azimuthRad,
+          aspect,
+        })
         camera.position.set(pose.position[0], pose.position[1], pose.position[2])
         camera.lookAt(pose.target[0], pose.target[1], pose.target[2])
         camera.updateMatrixWorld()

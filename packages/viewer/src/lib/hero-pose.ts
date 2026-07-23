@@ -1,4 +1,4 @@
-import { sceneRegistry } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import { Box3, type Object3D, Vector3 } from 'three'
 
 export const DEFAULT_FRAMING_EXCLUDED_TYPES = ['site', 'scan', 'guide', 'spawn'] as const
@@ -6,23 +6,28 @@ export const DEFAULT_FRAMING_EXCLUDED_TYPES = ['site', 'scan', 'guide', 'spawn']
 export function heroCameraPose({
   boxes,
   aspect,
+  aim,
   fovDeg = 60,
   azimuthRad = Math.PI / 4,
   elevationRad = (13 * Math.PI) / 180,
-  padding = 1.0,
+  padding = 1.03,
   minDistance = 4,
-  frameShift = 0.1,
+  frameShift = 0,
 }: {
   boxes: Box3 | readonly Box3[]
   aspect: number
+  /** Where the camera looks (frame center). Defaults to the union-box center;
+   *  pass the building's center to keep it dead-center while outlying boxes
+   *  (lot plate, far palms) simply take asymmetric margin — the corner fit
+   *  still guarantees every box stays in frame. */
+  aim?: [number, number, number]
   fovDeg?: number
   azimuthRad?: number
   elevationRad?: number
   padding?: number
   minDistance?: number
-  /** Fraction of the frustum half-height to drop the aim by — lifts the
-   *  subject above dead-center so the empty sky band shrinks. Stays within
-   *  the fit slack `padding` provides. */
+  /** Fraction of the frustum half-height to drop the aim by. 0 keeps the aim
+   *  (the building center) exactly at frame center. */
   frameShift?: number
 }): {
   position: [number, number, number]
@@ -31,7 +36,7 @@ export function heroCameraPose({
   const list = Array.isArray(boxes) ? (boxes as readonly Box3[]) : [boxes as Box3]
   const union = new Box3()
   for (const box of list) union.union(box)
-  const center = union.getCenter(new Vector3())
+  const center = aim ? new Vector3(aim[0], aim[1], aim[2]) : union.getCenter(new Vector3())
   const tanVertical = Math.tan(((fovDeg / 2) * Math.PI) / 180)
   const tanHorizontal = tanVertical * aspect
 
@@ -76,11 +81,15 @@ export function heroCameraPose({
   // Reframe: slide aim and camera together along the view-up axis — pure
   // composition shift, no perspective change.
   const drop = up.clone().multiplyScalar(-frameShift * distance * tanVertical)
-  const aim = center.clone().add(drop)
+  const target = center.clone().add(drop)
 
   return {
-    position: [aim.x + dir.x * distance, aim.y + dir.y * distance, aim.z + dir.z * distance],
-    target: [aim.x, aim.y, aim.z],
+    position: [
+      target.x + dir.x * distance,
+      target.y + dir.y * distance,
+      target.z + dir.z * distance,
+    ],
+    target: [target.x, target.y, target.z],
   }
 }
 
@@ -122,37 +131,128 @@ function perNodeBoxes(excludeTypes: readonly string[]): Box3[] {
 }
 
 /**
- * Per-node framing boxes for a scene hero shot, for `heroCameraPose` corner
- * fitting. Items are second-class: the base set is the built structure (walls,
- * roofs, slabs, …), and an item joins only when it sits near that structure.
- * Without this, one palm tree at the far lot corner doubles the frame and the
- * building reads tiny. `building`/`level` container groups are skipped — their
- * Object3D holds the whole subtree, which would reintroduce every far-flung
- * item. Scenes with no structure at all (pure furniture arrangements) fall
- * back to framing every non-helper node.
+ * Matches the `SiteNode` bootstrap polygon (a 30×30 square at the origin) —
+ * same rule as the editor's `computeSceneBoundsXZ`: an untouched default lot
+ * says nothing about the user's intent, so it shouldn't drive framing.
  */
-export function computeHeroFramingBounds(): Box3[] | null {
+function isDefaultSitePolygon(points: unknown[]): boolean {
+  if (points.length !== 4) return false
+  const expected: [number, number][] = [
+    [-15, -15],
+    [15, -15],
+    [15, 15],
+    [-15, 15],
+  ]
+  for (let i = 0; i < 4; i++) {
+    const p = points[i]
+    const e = expected[i]!
+    if (!Array.isArray(p) || p.length < 2) return false
+    if (p[0] !== e[0] || p[1] !== e[1]) return false
+  }
+  return true
+}
+
+/** Flat boxes for intentionally-shaped site plates, from scene DATA — the
+ *  site's Object3D can't be measured (it carries the ±400 m horizon disc). */
+function sitePlateBoxes(): Box3[] {
+  const boxes: Box3[] = []
+  for (const node of Object.values(useScene.getState().nodes)) {
+    if ((node as { type?: string }).type !== 'site') continue
+    const polygon = (node as { polygon?: { points?: unknown[] } }).polygon
+    const points = polygon?.points
+    if (!Array.isArray(points) || isDefaultSitePolygon(points)) continue
+    const box = new Box3()
+    for (const point of points) {
+      if (Array.isArray(point) && point.length >= 2) {
+        box.expandByPoint(new Vector3(Number(point[0]), 0, Number(point[1])))
+      }
+    }
+    if (!box.isEmpty()) boxes.push(box)
+  }
+  return boxes
+}
+
+/** Dominant wall direction folded to a 90°-periodic axis (length-weighted
+ *  vector sum of 4θ), so the hero azimuth sits at a true 45° to the building's
+ *  facades no matter how the user rotated their plan. */
+function dominantWallYaw(): number | null {
+  let vx = 0
+  let vz = 0
+  for (const node of Object.values(useScene.getState().nodes)) {
+    if ((node as { type?: string }).type !== 'wall') continue
+    const { start, end } = node as { start?: unknown; end?: unknown }
+    if (!(Array.isArray(start) && Array.isArray(end))) continue
+    const dx = Number(end[0]) - Number(start[0])
+    const dz = Number(end[1]) - Number(start[1])
+    const length = Math.hypot(dx, dz)
+    if (!(Number.isFinite(length) && length > 0.01)) continue
+    const theta = Math.atan2(dz, dx)
+    vx += length * Math.cos(4 * theta)
+    vz += length * Math.sin(4 * theta)
+  }
+  if (vx === 0 && vz === 0) return null
+  return Math.atan2(vz, vx) / 4
+}
+
+export type HeroFraming = {
+  /** Fit constraints — everything that must stay in frame. */
+  boxes: Box3[]
+  /** Frame center: plate/structure center on XZ, building center on Y. */
+  aim: [number, number, number]
+  /** 45° to the dominant facade (falls back to world 45°). */
+  azimuthRad: number
+}
+
+/**
+ * Framing for a scene hero shot. The base set is the built structure (walls,
+ * roofs, slabs, …) plus any intentionally-shaped site plate; an item joins
+ * only when it sits near that base — one palm at the far lot corner must not
+ * shrink the building. `building`/`level` container groups are skipped (their
+ * Object3D holds the whole subtree). The aim keeps the building dead-center:
+ * XZ from the plate+structure union, Y from the structure alone so the
+ * building — not the ground — is vertically centered. Scenes with no
+ * structure (pure furniture arrangements) fall back to framing every
+ * non-helper node.
+ */
+export function computeHeroFraming(): HeroFraming | null {
   const structural = perNodeBoxes([...DEFAULT_FRAMING_EXCLUDED_TYPES, 'item', 'building', 'level'])
   if (structural.length === 0) {
     const all = perNodeBoxes([...DEFAULT_FRAMING_EXCLUDED_TYPES, 'building', 'level'])
-    return all.length > 0 ? all : null
+    if (all.length === 0) return null
+    const union = new Box3()
+    for (const box of all) union.union(box)
+    const center = union.getCenter(new Vector3())
+    return { boxes: all, aim: [center.x, center.y, center.z], azimuthRad: Math.PI / 4 }
   }
 
   const structuralUnion = new Box3()
   for (const box of structural) structuralUnion.union(box)
-  const nearby = structuralUnion
-    .clone()
-    .expandByVector(structuralUnion.getSize(new Vector3()).multiplyScalar(0.15))
 
-  const result = [...structural]
+  const plates = sitePlateBoxes()
+  const groundUnion = structuralUnion.clone()
+  for (const box of plates) groundUnion.union(box)
+
+  const nearby = groundUnion
+    .clone()
+    .expandByVector(groundUnion.getSize(new Vector3()).multiplyScalar(0.15))
+
+  const boxes = [...structural, ...plates]
   const itemIds = sceneRegistry.byType.item!
   for (const id of itemIds) {
     const object = sceneRegistry.nodes.get(id)
     if (!object) continue
     const bounds = new Box3().setFromObject(object)
-    if (!bounds.isEmpty() && nearby.intersectsBox(bounds)) result.push(bounds)
+    if (!bounds.isEmpty() && nearby.intersectsBox(bounds)) boxes.push(bounds)
   }
-  return result
+
+  const groundCenter = groundUnion.getCenter(new Vector3())
+  const structuralCenter = structuralUnion.getCenter(new Vector3())
+  const yaw = dominantWallYaw()
+  return {
+    boxes,
+    aim: [groundCenter.x, structuralCenter.y, groundCenter.z],
+    azimuthRad: Math.PI / 4 - (yaw ?? 0),
+  }
 }
 
 export function temporarilyHideNodeTypes(types: readonly string[]): () => void {
