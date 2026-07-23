@@ -339,7 +339,7 @@ describe('observeSvgAnnotationLayoutChanges', () => {
     const originalRequestAnimationFrame = globalThis.requestAnimationFrame
     const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
     let notify: MutationCallback | undefined
-    let animationFrame: FrameRequestCallback | undefined
+    let animationFrames: FrameRequestCallback[] = []
     let disconnected = false
     let observedOptions: MutationObserverInit | undefined
 
@@ -363,11 +363,16 @@ describe('observeSvgAnnotationLayoutChanges', () => {
 
     globalThis.MutationObserver = FakeMutationObserver as typeof MutationObserver
     globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
-      animationFrame = callback
-      return 1
+      animationFrames.push(callback)
+      return animationFrames.length
     }) as typeof requestAnimationFrame
     globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
     try {
+      const flushAnimationFrame = () => {
+        const callbacks = animationFrames
+        animationFrames = []
+        for (const callback of callbacks) callback(0)
+      }
       let layoutPasses = 0
       const stop = observeSvgAnnotationLayoutChanges({} as SVGSVGElement, () => {
         layoutPasses += 1
@@ -376,7 +381,9 @@ describe('observeSvgAnnotationLayoutChanges', () => {
       notify?.([{ type: 'childList' } as MutationRecord], {} as MutationObserver)
 
       expect(layoutPasses).toBe(0)
-      animationFrame?.(0)
+      flushAnimationFrame()
+      expect(layoutPasses).toBe(0)
+      flushAnimationFrame()
       expect(layoutPasses).toBe(1)
       expect(observedOptions).toMatchObject({
         attributes: true,
@@ -399,6 +406,58 @@ describe('observeSvgAnnotationLayoutChanges', () => {
 
       stop()
       expect(disconnected).toBe(true)
+    } finally {
+      globalThis.MutationObserver = OriginalMutationObserver
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+    }
+  })
+
+  test('waits for a quiet frame instead of resolving on every mutation frame', () => {
+    const OriginalMutationObserver = globalThis.MutationObserver
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+    let notify: MutationCallback | undefined
+    let animationFrames: FrameRequestCallback[] = []
+
+    class FakeMutationObserver {
+      constructor(callback: MutationCallback) {
+        notify = callback
+      }
+
+      observe(): void {}
+      disconnect(): void {}
+      takeRecords(): MutationRecord[] {
+        return []
+      }
+    }
+
+    globalThis.MutationObserver = FakeMutationObserver as typeof MutationObserver
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      animationFrames.push(callback)
+      return animationFrames.length
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
+    try {
+      const flushAnimationFrame = () => {
+        const callbacks = animationFrames
+        animationFrames = []
+        for (const callback of callbacks) callback(0)
+      }
+      let layoutPasses = 0
+      const stop = observeSvgAnnotationLayoutChanges({} as SVGSVGElement, () => {
+        layoutPasses += 1
+      })
+
+      for (let frame = 0; frame < 30; frame += 1) {
+        notify?.([{ type: 'childList' } as MutationRecord], {} as MutationObserver)
+        flushAnimationFrame()
+      }
+
+      expect(layoutPasses).toBe(0)
+      flushAnimationFrame()
+      expect(layoutPasses).toBe(1)
+      stop()
     } finally {
       globalThis.MutationObserver = OriginalMutationObserver
       globalThis.requestAnimationFrame = originalRequestAnimationFrame

@@ -89,10 +89,10 @@ type UseFloorplanHitTestingArgs = {
   displayWallPolygons: WallPolygonEntry[]
   floorplanElevatorEntries: ElevatorPolygonEntry[]
   floorplanItemEntries: FloorplanItemEntry[]
-  floorplanOpeningHitTolerance: number
+  getFloorplanOpeningHitTolerance: () => number
   floorplanRoofEntries: FloorplanRoofEntry[]
   floorplanStairEntries: FloorplanStairEntry[]
-  floorplanWallHitTolerance: number
+  getFloorplanWallHitTolerance: () => number
   getOpeningCenterLine: (polygon: Point2D[]) => { start: Point2D; end: Point2D } | null
   isFloorplanItemContextActive: boolean
   openingsPolygons: OpeningPolygonEntry[]
@@ -107,10 +107,10 @@ export function useFloorplanHitTesting({
   displayWallPolygons,
   floorplanElevatorEntries,
   floorplanItemEntries,
-  floorplanOpeningHitTolerance,
+  getFloorplanOpeningHitTolerance,
   floorplanRoofEntries,
   floorplanStairEntries,
-  floorplanWallHitTolerance,
+  getFloorplanWallHitTolerance,
   getOpeningCenterLine,
   isFloorplanItemContextActive,
   openingsPolygons,
@@ -132,8 +132,8 @@ export function useFloorplanHitTesting({
         elevators: floorplanElevatorEntries,
         walls: displayWallPolygons,
         slabs: displaySlabPolygons,
-        openingHitTolerance: floorplanOpeningHitTolerance,
-        wallHitTolerance: floorplanWallHitTolerance,
+        openingHitTolerance: getFloorplanOpeningHitTolerance(),
+        wallHitTolerance: getFloorplanWallHitTolerance(),
         columns: columnPolygons,
         getOpeningCenterLine,
       })
@@ -145,10 +145,10 @@ export function useFloorplanHitTesting({
       displayWallPolygons,
       floorplanItemEntries,
       floorplanElevatorEntries,
-      floorplanOpeningHitTolerance,
       floorplanRoofEntries,
       floorplanStairEntries,
-      floorplanWallHitTolerance,
+      getFloorplanOpeningHitTolerance,
+      getFloorplanWallHitTolerance,
       getOpeningCenterLine,
       isFloorplanItemContextActive,
       openingsPolygons,
