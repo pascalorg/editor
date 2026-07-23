@@ -260,6 +260,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         wallEvent.node.parentId ?? '',
         wallEvent.node.start,
         wallEvent.node.end,
+        wallEvent.node.curveOffset ?? 0,
+        wallEvent.node.thickness,
+        wallEvent.node.supportSlabId,
       )
 
     const hideCursor = () => {
@@ -984,6 +987,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             hostWall.parentId ?? '',
             hostWall.start,
             hostWall.end,
+            hostWall.curveOffset ?? 0,
+            hostWall.thickness,
+            hostWall.supportSlabId,
           ),
         )
         publishPlacementSurface(

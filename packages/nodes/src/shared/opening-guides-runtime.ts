@@ -197,6 +197,9 @@ export function wallToWorld(wall: WallNode): ToWorld {
     wall.parentId ?? '',
     wall.start,
     wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+    wall.supportSlabId,
   )
   return makeWallToWorld(wall, levelYOffset, slabElevation)
 }

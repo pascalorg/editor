@@ -133,6 +133,46 @@ describe('computeWallSlabElevation', () => {
     expect(computeWallSlabElevation(wallLike, [grounded], [bandWall])).toBeCloseTo(0.1)
   })
 
+  it('keeps a house wall on its floor when an elevated deck abuts the outer face', () => {
+    // Regression: a deck drawn against the wall covers the outer face line
+    // end-to-end (boundary contact counts), so the old max-across-polylines
+    // election handed the wall origin to the deck — every wall-hosted
+    // window/door rode along whenever the deck height changed. The carrying
+    // profile (min across supported faces) must stay on the interior floor.
+    const walls = [
+      parseWall([0, 0], [4, 0]),
+      parseWall([4, 0], [4, 4]),
+      parseWall([4, 4], [0, 4]),
+      parseWall([0, 4], [0, 0]),
+    ]
+    const floor = SlabNode.parse({ polygon: SLAB, elevation: 0.05, thickness: 0.05 })
+    const houseWall = walls[0]!
+    const wallLike = {
+      start: houseWall.start,
+      end: houseWall.end,
+      thickness: houseWall.thickness,
+    }
+
+    for (const deckElevation of [1, 2]) {
+      const deck = SlabNode.parse({
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, -3],
+          [0, -3],
+        ],
+        elevation: deckElevation,
+      })
+      const support = computeWallSlabSupport(wallLike, [floor, deck], walls)
+      expect(support.elevation).toBeCloseTo(0.05)
+      expect(support.electedSlabId).toBe(floor.id)
+      expect(support.baseElevation).toBeCloseTo(0.05)
+      for (const segment of support.baseSegments) {
+        expect(segment.elevation).toBeCloseTo(0.05)
+      }
+    }
+  })
+
   it('lifts a wall whose body a legacy stored polygon falls short of', () => {
     // Legacy hand-adjusted slab: edges 6cm inside the wall centerlines —
     // 1cm short of even the inner faces, so the STORED polygon never

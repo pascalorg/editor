@@ -134,6 +134,14 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     expect(ctx({ kind: 'idle' }, 'build', 'shelf')).toBeNull()
   })
 
+  it('the room-preset stamp tool (not a node kind) resolves to polygon', () => {
+    // The host app's room stamp drives placement with `tool='room'`, which has
+    // no registry entry — the tool map must still give it the no-angle set so
+    // Shift cycling and the HUD chip work during preset placement.
+    expect(ctx({ kind: 'idle' }, 'build', 'room')).toBe('polygon')
+    expect(ctx({ kind: 'idle' }, 'select', 'room')).toBeNull()
+  })
+
   it('drafting a non-directional structural kind is angle-less (polygon, not wall)', () => {
     // Roof / stair / elevator are placed as footprints, not directional draws →
     // declared `snapDraftDirectional: false`, so their draft context drops the
