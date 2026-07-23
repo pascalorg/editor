@@ -11365,7 +11365,7 @@ export function FloorplanPanel({
       ref={containerRef}
     >
       <FloorplanSiteKeyHandler onRestoreGroundLevel={restoreGroundLevelStructureSelection} />
-      <div className="relative min-h-0 flex-1" ref={viewportHostRef}>
+      <div className="relative min-h-0 flex-1 bg-white" ref={viewportHostRef}>
         <FloorplanCursorIndicator
           cursorColor={floorplanCursorColor}
           floorplanSelectionTool={floorplanSelectionTool}
