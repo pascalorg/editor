@@ -75,6 +75,13 @@ export {
 } from './lib/csg-utils'
 export type { EdgeMode } from './lib/edge-style'
 export {
+  computeHeroFramingBounds,
+  DEFAULT_FRAMING_EXCLUDED_TYPES,
+  heroCameraPose,
+  temporarilyHideNodeTypes,
+  unionRegisteredNodeBounds,
+} from './lib/hero-pose'
+export {
   applyIsolation,
   clearIsolation,
   collectIsolationSubtree,
@@ -119,6 +126,16 @@ export {
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export {
+  createSnapshotPipeline,
+  type SnapshotCaptureMode,
+  type SnapshotCaptureResult,
+  type SnapshotCropRegion,
+  type SnapshotPipeline,
+  type SnapshotSize,
+  THUMBNAIL_HEIGHT,
+  THUMBNAIL_WIDTH,
+} from './lib/snapshot-pipeline'
 export {
   getPascalTextureRef,
   type PascalTextureColorSpace,
