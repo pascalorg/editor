@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { z } from 'zod'
+import { nodeRegistry, registerNode } from '../registry'
+import type { AnyNodeDefinition } from '../registry/types'
 import { LevelNode, WallNode } from '../schema'
 import { validateBuildJson } from './validate-build-json'
 
@@ -65,5 +68,61 @@ describe('validateBuildJson', () => {
     expect(result.ok).toBe(false)
     expect(result.schemaIssueCount).toBe(1)
     expect(result.schemaIssues[0]?.nodeId).toBe('wall_test1')
+  })
+})
+
+describe('validateBuildJson with registered plugin kinds', () => {
+  const sceneWithTree = (position: unknown) => {
+    const scene = makeScene()
+    const level = scene.nodes.level_test as { children: string[] }
+    scene.nodes.tree_plugin1 = {
+      id: 'tree_plugin1',
+      type: 'trees:tree',
+      object: 'node',
+      parentId: 'level_test',
+      visible: true,
+      metadata: {},
+      children: [],
+      position,
+    }
+    level.children = [...level.children, 'tree_plugin1']
+    return scene
+  }
+
+  beforeEach(() => {
+    nodeRegistry._reset()
+    registerNode({
+      kind: 'trees:tree',
+      schemaVersion: 1,
+      schema: z.looseObject({
+        id: z.string(),
+        type: z.literal('trees:tree'),
+        position: z.tuple([z.number(), z.number(), z.number()]),
+      }),
+      category: 'utility',
+      defaults: () => ({}),
+      capabilities: {},
+    } as unknown as AnyNodeDefinition)
+  })
+
+  afterEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('a registered plugin kind is first-class: no unknown-types warning', () => {
+    const result = validateBuildJson(sceneWithTree([1, 0, 1]))
+    expect(result.ok).toBe(true)
+    expect(result.schemaIssueCount).toBe(0)
+    expect(result.warnings.some((w) => w.code === 'unknown_types')).toBe(false)
+    expect(result.stats.pluginTypes['trees:tree']).toBe(1)
+    expect(result.stats.unknownTypes).toEqual({})
+  })
+
+  test('a corrupt registered plugin node is caught by its own schema', () => {
+    const result = validateBuildJson(sceneWithTree('not-a-position'))
+    expect(result.ok).toBe(false)
+    expect(result.schemaIssueCount).toBe(1)
+    expect(result.schemaIssues[0]?.nodeId).toBe('tree_plugin1')
+    expect(result.schemaIssues[0]?.nodeType).toBe('trees:tree')
   })
 })
