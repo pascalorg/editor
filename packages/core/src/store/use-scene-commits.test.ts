@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { z } from 'zod'
+import { nodeRegistry } from '../registry/registry'
+import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
 import { LevelNode } from '../schema/nodes/level'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
@@ -16,6 +19,7 @@ import useLiveNodeOverrides from './use-live-node-overrides'
 import useLiveTransforms from './use-live-transforms'
 import useScene, {
   acquireSceneReadOnlyLease,
+  applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
@@ -141,8 +145,6 @@ describe('scene commit boundary', () => {
   test('applies host patches without local history and marks node and parent dirty', () => {
     const commits: SceneCommit[] = []
     unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
-    useLiveNodeOverrides.getState().set(LEVEL_ID, { level: 99 })
-    useLiveTransforms.getState().set(LEVEL_ID, { position: [1, 0, 1], rotation: 0 })
 
     expect(applyHostNodePatches([{ id: LEVEL_ID, data: { level: 3 } as Partial<AnyNode> }])).toBe(
       true,
@@ -154,8 +156,6 @@ describe('scene commit boundary', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
     expect(useScene.getState().dirtyNodes.has(LEVEL_ID)).toBe(true)
     expect(useScene.getState().dirtyNodes.has(BUILDING_ID)).toBe(true)
-    expect(useLiveNodeOverrides.getState().get(LEVEL_ID)).toBeUndefined()
-    expect(useLiveTransforms.getState().get(LEVEL_ID)).toBeUndefined()
   })
 
   test('applies material patches atomically and dirties nodes that reference them', () => {
@@ -320,17 +320,341 @@ describe('scene commit boundary', () => {
     expect(commits).toHaveLength(0)
   })
 
-  test('defers host patches while a local interaction has history paused', () => {
+  test('applies a disjoint host patch while a local interaction has history paused', () => {
+    useLiveNodeOverrides.getState().set(BUILDING_ID, { visible: false })
     pauseSceneHistory(useScene)
     try {
+      expect(applyHostNodePatches([{ id: LEVEL_ID, data: { level: 7 } as Partial<AnyNode> }])).toBe(
+        true,
+      )
+      expect(levelNumber()).toBe(7)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(useLiveNodeOverrides.getState().get(BUILDING_ID)).toEqual({ visible: false })
+    } finally {
+      resumeSceneHistory(useScene)
+    }
+  })
+
+  test('defers a host patch that collides with a live node or structural parent', () => {
+    pauseSceneHistory(useScene)
+    try {
+      useLiveNodeOverrides.getState().set(LEVEL_ID, { level: 9 })
       expect(applyHostNodePatches([{ id: LEVEL_ID, data: { level: 7 } as Partial<AnyNode> }])).toBe(
         false,
       )
       expect(levelNumber()).toBe(0)
-      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(useLiveNodeOverrides.getState().get(LEVEL_ID)).toEqual({ level: 9 })
+
+      useLiveNodeOverrides.getState().clear(LEVEL_ID)
+      useLiveTransforms.getState().set(LEVEL_ID, { position: [1, 0, 1], rotation: 0 })
+      expect(applyHostNodePatches([{ id: LEVEL_ID, data: { level: 7 } as Partial<AnyNode> }])).toBe(
+        false,
+      )
+      expect(useLiveTransforms.getState().get(LEVEL_ID)).toEqual({
+        position: [1, 0, 1],
+        rotation: 0,
+      })
+
+      useLiveTransforms.getState().clear(LEVEL_ID)
+      useLiveNodeOverrides.getState().set(BUILDING_ID, { visible: false })
+      const child = LevelNode.parse({
+        id: 'level_live_parent',
+        parentId: BUILDING_ID,
+        children: [],
+        level: 1,
+      })
+      expect(
+        applySceneOperationPatch({
+          materialChanges: [],
+          nodeCreates: [{ node: child, position: 1 }],
+          nodeDeletes: [],
+          nodeUpdates: [],
+        }),
+      ).toBe(false)
+      expect(useScene.getState().nodes[child.id]).toBeUndefined()
+      expect(useLiveNodeOverrides.getState().get(BUILDING_ID)).toEqual({ visible: false })
+
+      const existingChild = useScene.getState().nodes[LEVEL_ID] as AnyNode
+      expect(
+        applySceneOperationPatch({
+          materialChanges: [],
+          nodeCreates: [],
+          nodeDeletes: [{ node: existingChild, position: 0 }],
+          nodeUpdates: [],
+        }),
+      ).toBe(false)
+      expect(useScene.getState().nodes[LEVEL_ID]).toBe(existingChild)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
     } finally {
       resumeSceneHistory(useScene)
     }
+  })
+
+  test('validates registered creates and updates without stripping forward-compatible fields', () => {
+    const kind = 'test:operation-forward-compatible'
+    if (!nodeRegistry.has(kind)) {
+      nodeRegistry._register({
+        capabilities: {},
+        category: 'utility',
+        defaults: () => ({}),
+        kind,
+        schema: z.object({
+          id: z.string(),
+          metadata: z.record(z.string(), z.unknown()).default({}),
+          object: z.literal('node').default('node'),
+          parentId: z.string().nullable().default(null),
+          pluginValue: z.number(),
+          type: z.literal(kind),
+          visible: z.boolean().default(true),
+        }),
+        schemaVersion: 1,
+      } as unknown as AnyNodeDefinition)
+    }
+    const id = 'plugin_forward_compatible' as AnyNodeId
+    const node = {
+      forwardCompatible: { retained: true },
+      id,
+      metadata: {},
+      object: 'node',
+      parentId: null,
+      pluginValue: 1,
+      type: kind,
+      visible: true,
+    } as unknown as AnyNode
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set<AnyNodeId>(),
+      materials: {},
+      nodes: {},
+      rootNodeIds: [],
+    })
+    clearSceneHistory()
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [{ node, position: 0 }],
+        nodeDeletes: [],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+    expect(useScene.getState().nodes[id]).toEqual(node)
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [],
+        nodeDeletes: [],
+        nodeUpdates: [
+          {
+            data: { pluginValue: 2 } as Partial<AnyNode>,
+            id,
+            removeFields: [],
+          },
+        ],
+      }),
+    ).toBe(true)
+    expect(useScene.getState().nodes[id]).toMatchObject({
+      forwardCompatible: { retained: true },
+      pluginValue: 2,
+    })
+  })
+
+  test('applies exact structural, field, and material changes in one host commit', () => {
+    const replacementId = 'level_replacement' as AnyNodeId
+    const replacement = LevelNode.parse({
+      id: replacementId,
+      parentId: BUILDING_ID,
+      children: [],
+      level: 1,
+    })
+    const materialId = 'mat_operation' as SceneMaterialId
+    const material = SceneMaterial.parse({
+      id: materialId,
+      name: 'Operation material',
+      material: { properties: { color: '#112233' } },
+    })
+    const deleted = useScene.getState().nodes[LEVEL_ID] as AnyNode
+    const commits: SceneCommit[] = []
+    unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [{ id: materialId, material }],
+        nodeCreates: [{ node: replacement, position: 0 }],
+        nodeDeletes: [{ node: deleted, position: 0 }],
+        nodeUpdates: [
+          {
+            id: BUILDING_ID,
+            data: { visible: false } as Partial<AnyNode>,
+            removeFields: [],
+          },
+        ],
+      }),
+    ).toBe(true)
+
+    const state = useScene.getState()
+    expect(state.nodes[LEVEL_ID]).toBeUndefined()
+    expect(state.nodes[replacementId]).toEqual(replacement)
+    expect((state.nodes[BUILDING_ID] as { children: AnyNodeId[] }).children).toEqual([
+      replacementId,
+    ])
+    expect(state.nodes[BUILDING_ID]?.visible).toBe(false)
+    expect(state.materials[materialId]).toEqual(material)
+    expect(state.rootNodeIds).toEqual([BUILDING_ID])
+    expect(commits.map((commit) => commit.origin)).toEqual(['host'])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  })
+
+  test('does not leave deleted ancestors in the dirty set after subtree deletion', () => {
+    const building = useScene.getState().nodes[BUILDING_ID] as AnyNode
+    const level = useScene.getState().nodes[LEVEL_ID] as AnyNode
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [],
+        nodeDeletes: [
+          { node: building, position: 0 },
+          { node: level, position: 0 },
+        ],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+
+    expect(useScene.getState().nodes).toEqual({})
+    expect(useScene.getState().rootNodeIds).toEqual([])
+    expect(useScene.getState().dirtyNodes.has(BUILDING_ID)).toBe(false)
+    expect(useScene.getState().dirtyNodes.has(LEVEL_ID)).toBe(false)
+  })
+
+  test('dirties surviving siblings after a remote structural deletion', () => {
+    const siblingId = 'level_surviving_sibling' as AnyNodeId
+    const sibling = LevelNode.parse({
+      id: siblingId,
+      parentId: BUILDING_ID,
+      children: [],
+      level: 1,
+    })
+    const building = useScene.getState().nodes[BUILDING_ID] as AnyNode
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [BUILDING_ID]: { ...building, children: [LEVEL_ID, siblingId] },
+        [siblingId]: sibling,
+      },
+      dirtyNodes: new Set<AnyNodeId>(),
+    })
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [],
+        nodeDeletes: [{ node: useScene.getState().nodes[LEVEL_ID] as AnyNode, position: 0 }],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+
+    expect(useScene.getState().dirtyNodes.has(siblingId)).toBe(true)
+  })
+
+  test('preserves an external tool history pause while applying a remote patch', () => {
+    useScene.temporal.getState().pause()
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+
+    try {
+      expect(
+        applySceneOperationPatch({
+          materialChanges: [],
+          nodeCreates: [],
+          nodeDeletes: [],
+          nodeUpdates: [
+            {
+              data: { level: 2 } as Partial<AnyNode>,
+              id: LEVEL_ID,
+              removeFields: [],
+            },
+          ],
+        }),
+      ).toBe(true)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  })
+
+  test('rejects an invalid structural operation before mutating any field or material', () => {
+    const missingParentId = 'building_missing' as AnyNodeId
+    const orphan = LevelNode.parse({
+      id: 'level_orphan',
+      parentId: missingParentId,
+      children: [],
+      level: 1,
+    })
+    const materialId = 'mat_rejected' as SceneMaterialId
+    const material = SceneMaterial.parse({
+      id: materialId,
+      name: 'Rejected material',
+      material: { properties: { color: '#abcdef' } },
+    })
+    const before = currentSnapshot()
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [{ id: materialId, material }],
+        nodeCreates: [{ node: orphan, position: 0 }],
+        nodeDeletes: [],
+        nodeUpdates: [
+          {
+            id: LEVEL_ID,
+            data: { level: 5 } as Partial<AnyNode>,
+            removeFields: [],
+          },
+        ],
+      }),
+    ).toBe(false)
+
+    expect(currentSnapshot()).toEqual(before)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  })
+
+  test('keeps dirty work bounded when structurally patching a 10k-node scene', () => {
+    const nodes: Record<AnyNodeId, AnyNode> = {}
+    const rootNodeIds: AnyNodeId[] = []
+    for (let index = 0; index < 10_000; index += 1) {
+      const id = `level_scale_${index}` as AnyNodeId
+      nodes[id] = LevelNode.parse({ id, parentId: null, children: [], level: index })
+      rootNodeIds.push(id)
+    }
+    useScene.setState({
+      nodes,
+      rootNodeIds,
+      dirtyNodes: new Set<AnyNodeId>(),
+      collections: {},
+      materials: {},
+    })
+    clearSceneHistory()
+    const created = LevelNode.parse({
+      id: 'level_scale_created',
+      parentId: null,
+      children: [],
+      level: 10_000,
+    })
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [{ node: created, position: rootNodeIds.length }],
+        nodeDeletes: [],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+
+    expect(useScene.getState().rootNodeIds.at(-1)).toBe(created.id)
+    expect([...useScene.getState().dirtyNodes]).toEqual([created.id])
+    expect(useScene.getState().nodes.level_scale_5000).toBe(nodes.level_scale_5000)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   })
 
   test('applies a host snapshot as a history floor and clears live state', () => {
