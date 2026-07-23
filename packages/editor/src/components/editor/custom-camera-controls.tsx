@@ -457,11 +457,14 @@ export const CustomCameraControls = () => {
     }
   }, [freezeActivePoseInterpolation])
 
-  const beginLocalCameraInteraction = useCallback(() => {
-    cancelPoseApplication()
-    cameraDraggingLifecycle.begin()
-    emitter.emit('camera-controls:interaction-start', undefined)
-  }, [cameraDraggingLifecycle, cancelPoseApplication])
+  const beginLocalCameraInteraction = useCallback(
+    ({ dragging = true }: { dragging?: boolean } = {}) => {
+      cancelPoseApplication()
+      if (dragging) cameraDraggingLifecycle.begin()
+      emitter.emit('camera-controls:interaction-start', undefined)
+    },
+    [cameraDraggingLifecycle, cancelPoseApplication],
+  )
 
   const applyPendingPose = useCallback(() => {
     if (isFirstPersonMode) {
@@ -1123,10 +1126,18 @@ export const CustomCameraControls = () => {
   // Cancel any in-progress 2D-origin navigation pose when the user starts
   // dragging (right-click orbit, middle-click pan, touch). `controlstart`
   // fires only for user pointer interactions — not for programmatic
-  // moveTo/rotateTo which emit `transitionstart` instead.
+  // moveTo/rotateTo which emit `transitionstart` instead. It also fires for
+  // pointerdowns whose button is mapped to ACTION.NONE (plain left click in
+  // edit mode); those must not flag the camera as dragging — no rest/sleep
+  // ever follows to clear the flag, which would leave canvas clicks
+  // (selection, placement) suppressed until the next real camera move.
   const handleControlStart = useCallback(() => {
     clearPendingFloorplanNavigationPose()
-    beginLocalCameraInteraction()
+    beginLocalCameraInteraction({
+      dragging: controls.current
+        ? controls.current.currentAction !== CameraControlsImpl.ACTION.NONE
+        : false,
+    })
   }, [beginLocalCameraInteraction, clearPendingFloorplanNavigationPose])
 
   // Preview mode: auto-navigate camera to selected node (viewer behavior)
@@ -1435,6 +1446,16 @@ export const CustomCameraControls = () => {
     cameraDraggingLifecycle.end()
   }, [cameraDraggingLifecycle])
 
+  const onControlEnd = useCallback(() => {
+    // A mapped-button tap with zero camera movement never wakes the
+    // controls, so no rest/sleep follows — clear the dragging flag on
+    // release. While damping is still settling (`active`), rest/sleep
+    // clears it instead.
+    if (!controls.current?.active) {
+      cameraDraggingLifecycle.end()
+    }
+  }, [cameraDraggingLifecycle])
+
   // Preset capture mode frames a single subtree (often a 0.3–2m preset),
   // so the default 2m minDistance prevents the user from getting close
   // enough to compose a good thumbnail. Relax the clamp to 0.5m while
@@ -1455,6 +1476,7 @@ export const CustomCameraControls = () => {
       minDistance={minDistance}
       minPolarAngle={0}
       mouseButtons={mouseButtons}
+      onControlEnd={onControlEnd}
       onControlStart={handleControlStart}
       onUpdate={handleCameraUpdate}
       onRest={onRest}
