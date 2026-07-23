@@ -22,6 +22,7 @@ import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { initializeGpuRenderer } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
@@ -36,6 +37,7 @@ import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-p
 import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
+import { UnsupportedGpuViewerFallback } from './unsupported-gpu-fallback'
 import { ViewerCamera } from './viewer-camera'
 
 // Must be in place before any node material builds — a null texture pulled by
@@ -86,38 +88,6 @@ const DIRTY_BUILD_KINDS = new Set([
 ])
 
 const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
-
-function canCreateWebGLContext() {
-  if (typeof document === 'undefined') return false
-
-  const canvas = document.createElement('canvas')
-  try {
-    return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'))
-  } catch {
-    return false
-  }
-}
-
-function canMountGpuViewer() {
-  if (typeof window === 'undefined') return false
-  if (!('gpu' in navigator) && !canCreateWebGLContext()) return false
-
-  return true
-}
-
-function UnsupportedGpuViewerFallback() {
-  return (
-    <div className="flex h-full min-h-64 w-full items-center justify-center bg-[#fafafa] p-6 text-center text-neutral-900">
-      <div className="max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="font-semibold text-lg">3D viewer unavailable</h2>
-        <p className="mt-2 text-neutral-600 text-sm">
-          This browser or environment does not expose WebGPU or WebGL, so Pascal cannot render the
-          3D scene here. Try opening the editor in a browser with hardware acceleration enabled.
-        </p>
-      </div>
-    </div>
-  )
-}
 
 /**
  * Renderer-level safety net against the empty-vertex-buffer crash.
@@ -454,14 +424,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   }, [isolate])
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
-  // Capability detection runs after mount. We start optimistic (true) so the
-  // server-rendered markup and the first client render agree (no hydration
-  // mismatch); the effect flips it to false only on environments that expose
-  // neither WebGPU nor WebGL.
-  const [canMountViewer, setCanMountViewer] = useState(true)
-  useEffect(() => {
-    if (!canMountGpuViewer()) setCanMountViewer(false)
-  }, [])
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const transparentBackground = useViewer((state) => state.transparentBackground)
@@ -523,7 +485,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   // Desktops (fine pointer) keep the original 1.5 cap.
   const maxDpr =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
-  const showGpuFallback = !canMountViewer || rendererInitFailed
+  const showGpuFallback = rendererInitFailed
   // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
   // the host editor would otherwise wait on its scene-readiness timeout. Signal
   // readiness explicitly so the host can drop its loader immediately.
@@ -548,24 +510,29 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
           const promise = (async () => {
-            try {
-              const renderer = new THREE.WebGPURenderer({ ...(props as any), alpha: true })
-              renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = getSceneTheme(
-                useViewer.getState().sceneTheme,
-              ).toneMappingExposure
-              await renderer.init()
-              installEmptyDrawGuard(renderer)
-              return renderer
-            } catch (err) {
-              // Drop the failed promise from the cache so a future Canvas
-              // mount on the same DOM can retry instead of inheriting the
-              // rejection forever.
-              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-              console.error('[viewer] WebGPURenderer init failed', err)
-              setRendererInitFailed(true)
-              throw err
+            const result = await initializeGpuRenderer({
+              createRenderer: (backendParameters) => {
+                const renderer = new THREE.WebGPURenderer({
+                  ...(props as any),
+                  ...backendParameters,
+                  alpha: true,
+                })
+                renderer.toneMapping = THREE.ACESFilmicToneMapping
+                renderer.toneMappingExposure = getSceneTheme(
+                  useViewer.getState().sceneTheme,
+                ).toneMappingExposure
+                return renderer
+              },
+            })
+            if (result.status === 'ready') {
+              installEmptyDrawGuard(result.renderer)
+              return result.renderer
             }
+
+            if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+            console.error('[viewer] WebGPURenderer init failed', result.error)
+            setRendererInitFailed(true)
+            return new Promise<never>(() => undefined)
           })()
           if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
           return promise
