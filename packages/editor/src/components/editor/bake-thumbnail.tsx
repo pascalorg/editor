@@ -66,6 +66,7 @@ export function BakeThumbnail({
           theme: useViewer.getState().sceneTheme,
           transparent: false,
           grade: true,
+          edges: useViewer.getState().edges,
           camera,
         })
         const { blob, outW, outH } = await pipeline.capture({ captureMode: 'standard' })

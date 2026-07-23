@@ -120,6 +120,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           theme: useViewer.getState().sceneTheme,
           transparent,
           grade: useViewer.getState().shading === 'rendered',
+          // Preset/item captures stay clean; scene captures mirror the canvas.
+          edges: transparent ? 'off' : useViewer.getState().edges,
           camera: thumbnailCamera,
         })
 
@@ -174,6 +176,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               theme: useViewer.getState().sceneTheme,
               transparent,
               grade: useViewer.getState().shading === 'rendered',
+              edges: transparent ? 'off' : useViewer.getState().edges,
               camera: thumbnailCamera,
             })
             cameraData.position = pose.position

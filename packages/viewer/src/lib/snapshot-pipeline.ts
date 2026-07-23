@@ -22,6 +22,8 @@ import {
 import { RenderPipeline, RenderTarget, type WebGPURenderer } from 'three/webgpu'
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
 import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
+import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
+import { inkedEdges } from './ink-edges'
 import { getSceneTheme } from './scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from './tsl-compat'
 
@@ -53,11 +55,13 @@ export type SnapshotPipeline = {
     theme,
     transparent,
     grade,
+    edges,
     camera,
   }: {
     theme: string
     transparent: boolean
     grade: boolean
+    edges: EdgeMode
     camera: Camera
   }) => void
   capture: ({
@@ -96,6 +100,10 @@ export async function createSnapshotPipeline({
     const bgCamWorldUniform = uniform(new Matrix4())
     const bgMixUniform = uniform(1)
     const gradeMixUniform = uniform(0)
+    const inkMixUniform = uniform(0)
+    const inkColorUniform = uniform(new Color('#1a1d24'))
+    const inkOpacityUniform = uniform(0.5)
+    const inkOpacityScaleUniform = uniform(1)
 
     // pass() handles MRT internally for all material types, including custom
     // shaders — unlike renderer.setMRT() which crashes on non-NodeMaterials.
@@ -143,7 +151,23 @@ export async function createSnapshotPipeline({
     // horizon picks up a visible AO line in captures.
     const aoFarFade = smoothstep(float(0.9994), float(0.9998), scenePassDepth.sample(screenUV).r)
     const ao = mix((denoisePass as any).r, float(1), aoFarFade)
-    const ungradedSceneRgb = scenePassColor.rgb.mul(ao)
+    const aoRgb = scenePassColor.rgb.mul(ao)
+
+    // Ink edges, mirroring the viewport pipeline (AO → ink → grade) so
+    // captures carry the same soft/strong edge look the canvas shows.
+    // Uniform-gated like grade/backdrop: one cached pipeline serves all modes.
+    // Radius scales with render height: a supersampled capture (4K → 1080p)
+    // would otherwise halve the apparent line weight vs the viewport's 1px.
+    const inkRadius = Math.max(1, Math.round(renderer.domElement.height / 1080))
+    const inkedRgb = inkedEdges({
+      sceneRgb: aoRgb,
+      depthTex: scenePassDepth,
+      normalTex: scenePassNormal,
+      inkColor: inkColorUniform,
+      radius: inkRadius,
+      opacity: float(inkOpacityUniform).mul(inkOpacityScaleUniform),
+    })
+    const ungradedSceneRgb = mix(aoRgb, inkedRgb, inkMixUniform)
     const gradeRgb = (rgb: any) =>
       saturation(rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18), GRADE_PARAMS.saturation)
     const sceneRgb = mix(ungradedSceneRgb, gradeRgb(ungradedSceneRgb), gradeMixUniform)
@@ -181,8 +205,12 @@ export async function createSnapshotPipeline({
     const renderTarget = new RenderTarget(width, height, { depthBuffer: true })
 
     return {
-      applyEnvironment: ({ theme, transparent, grade, camera: captureCamera }) => {
+      applyEnvironment: ({ theme, transparent, grade, edges, camera: captureCamera }) => {
         const sceneTheme = getSceneTheme(theme)
+        inkMixUniform.value = edges === 'off' ? 0 : 1
+        inkOpacityUniform.value = edges === 'strong' ? 1 : 0.5
+        inkColorUniform.value.set(edgeColorFor(sceneTheme.background))
+        inkOpacityScaleUniform.value = edgeOpacityScaleFor(sceneTheme.background)
         bgColorUniform.value.set(sceneTheme.background)
         bgSkyUniform.value.set(sceneTheme.backgroundSky ?? sceneTheme.background)
         bgSkyDeepUniform.value.set(deepSkyColor(sceneTheme.backgroundSky ?? sceneTheme.background))
