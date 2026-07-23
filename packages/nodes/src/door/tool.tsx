@@ -160,7 +160,14 @@ const DoorTool: React.FC = () => {
       return id ? (sceneRegistry.nodes.get(id as AnyNodeId)?.position.y ?? 0) : 0
     }
     const getSlabElevationForWall = (wall: WallNode) =>
-      spatialGridManager.getSlabElevationForWall(wall.parentId ?? '', wall.start, wall.end)
+      spatialGridManager.getSlabElevationForWall(
+        wall.parentId ?? '',
+        wall.start,
+        wall.end,
+        wall.curveOffset ?? 0,
+        wall.thickness,
+        wall.supportSlabId,
+      )
 
     const markHostDirty = (hostId: string) => {
       useScene.getState().dirtyNodes.add(hostId as AnyNodeId)
