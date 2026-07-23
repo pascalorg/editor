@@ -122,6 +122,13 @@ function contextForProfile(
   return null
 }
 
+// Tools that are not registered node kinds (no `snapProfile` to look up) but
+// still place a whole footprint — the host app's room-preset stamp. A stamp is
+// a whole-footprint translate: no direction to set → the no-angle 'polygon'
+// set. Without an entry here the tool has no snap context at all, so Shift
+// cycling and the HUD chip stay dead while it drives placement.
+const TOOL_SNAP_CONTEXTS: Record<string, SnapContext> = { room: 'polygon' }
+
 /**
  * The active snapping context, derived from what the user is doing — fully
  * node-declared: the kind's `snapProfile` (looked up via the injected
@@ -177,7 +184,8 @@ export function snapContextOf(args: {
         : null
     default:
       return mode === 'build' && tool
-        ? contextForProfile(profileOf(tool), draftDirectionalOf?.(tool) ?? true)
+        ? (TOOL_SNAP_CONTEXTS[tool] ??
+            contextForProfile(profileOf(tool), draftDirectionalOf?.(tool) ?? true))
         : null
   }
 }
