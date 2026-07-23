@@ -9102,6 +9102,7 @@ export function FloorplanPanel({
         event.stopPropagation()
 
         if (floorplanZoomCommitTimerRef.current !== null) commitFloorplanZoom()
+        stopFloorplanViewAnimation()
         floorplanNavigationClickSuppressedRef.current = true
         const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
         if (!currentViewport) return
