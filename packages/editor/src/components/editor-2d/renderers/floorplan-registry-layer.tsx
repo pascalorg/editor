@@ -1510,6 +1510,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     const registryLayer = markerRef.current?.parentElement
     if (!registryLayer) return
     let cleanupPointerDrag: (() => void) | null = null
+    let cancelActivePointerDrag: (() => void) | null = null
 
     const findLabel = (target: EventTarget | null): SVGGElement | null => {
       if (!(target instanceof Element)) return null
@@ -1531,7 +1532,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       if (!matrix) return
       event.preventDefault()
       event.stopPropagation()
-      cleanupPointerDrag?.()
+      cancelActivePointerDrag?.()
       label.style.cursor = 'grabbing'
       const id = labelId(label)
       const start = { x: event.clientX, y: event.clientY }
@@ -1572,6 +1573,10 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
 
       const cancelPointerDrag = (cancelEvent: PointerEvent) => {
         if (cancelEvent.pointerId !== event.pointerId) return
+        cancelActivePointerDrag?.()
+      }
+
+      cancelActivePointerDrag = () => {
         cleanupPointerDrag?.()
         label.style.cursor = wasPinned ? 'grab' : 'move'
         const defaultTransform = label.dataset.floorplanAnnotationDefaultTransform ?? ''
@@ -1586,6 +1591,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
         window.removeEventListener('pointerup', finishPointerDrag)
         window.removeEventListener('pointercancel', cancelPointerDrag)
         cleanupPointerDrag = null
+        cancelActivePointerDrag = null
       }
       window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', finishPointerDrag)
@@ -1604,7 +1610,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     registryLayer.addEventListener('pointerdown', onPointerDown)
     registryLayer.addEventListener('dblclick', onDoubleClick)
     return () => {
-      cleanupPointerDrag?.()
+      cancelActivePointerDrag?.()
       registryLayer.removeEventListener('pointerdown', onPointerDown)
       registryLayer.removeEventListener('dblclick', onDoubleClick)
       for (const label of registryLayer.querySelectorAll<SVGGElement>(
