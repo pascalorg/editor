@@ -7041,13 +7041,20 @@ export function FloorplanPanel({
 
     return (widthUnitsPerPixel + heightUnitsPerPixel) / 2
   }, [surfaceSize.height, surfaceSize.width, viewBox.height, viewBox.width])
-  const floorplanWallHitTolerance = useMemo(
-    () => floorplanWorldUnitsPerPixel * (FLOORPLAN_WALL_HIT_STROKE_WIDTH / 2),
-    [floorplanWorldUnitsPerPixel],
+  const getLiveFloorplanWorldUnitsPerPixel = useCallback(() => {
+    const width = latestViewportRef.current?.width ?? viewBox.width
+    const height = width / svgAspectRatio
+    const widthUnitsPerPixel = width / Math.max(surfaceSize.width, 1)
+    const heightUnitsPerPixel = height / Math.max(surfaceSize.height, 1)
+    return (widthUnitsPerPixel + heightUnitsPerPixel) / 2
+  }, [surfaceSize.height, surfaceSize.width, svgAspectRatio, viewBox.width])
+  const getFloorplanWallHitTolerance = useCallback(
+    () => getLiveFloorplanWorldUnitsPerPixel() * (FLOORPLAN_WALL_HIT_STROKE_WIDTH / 2),
+    [getLiveFloorplanWorldUnitsPerPixel],
   )
-  const floorplanOpeningHitTolerance = useMemo(
-    () => floorplanWorldUnitsPerPixel * (FLOORPLAN_OPENING_HIT_STROKE_WIDTH / 2),
-    [floorplanWorldUnitsPerPixel],
+  const getFloorplanOpeningHitTolerance = useCallback(
+    () => getLiveFloorplanWorldUnitsPerPixel() * (FLOORPLAN_OPENING_HIT_STROKE_WIDTH / 2),
+    [getLiveFloorplanWorldUnitsPerPixel],
   )
   const wallSelectionHatchSpacing = useMemo(
     () => Math.max(floorplanWorldUnitsPerPixel * 12, 0.0001),
@@ -10114,10 +10121,10 @@ export function FloorplanPanel({
     displayWallPolygons,
     floorplanElevatorEntries,
     floorplanItemEntries,
-    floorplanOpeningHitTolerance,
     floorplanRoofEntries,
     floorplanStairEntries,
-    floorplanWallHitTolerance,
+    getFloorplanOpeningHitTolerance,
+    getFloorplanWallHitTolerance,
     getOpeningCenterLine,
     isFloorplanItemContextActive,
     openingsPolygons,
