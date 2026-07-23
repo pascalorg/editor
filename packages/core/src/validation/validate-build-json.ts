@@ -167,6 +167,33 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     })
   }
 
+  // Ids of nodes whose type falls outside the static schema union — plugin
+  // kinds (`trees:tree`) or genuinely unknown types. The scene store accepts
+  // them on load (they already round-trip through the DB fine) and they're
+  // surfaced by the unknown-types warning, but a parent's strict `children`
+  // id union would hard-fail over them: validate parents against a copy with
+  // those ids filtered out. The imported data itself keeps them.
+  const nonSchemaNodeIds = new Set<string>()
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value)) continue
+    const type = typeof value.type === 'string' ? value.type : null
+    if (type && KNOWN_TYPES.has(type)) continue
+    nonSchemaNodeIds.add(typeof value.id === 'string' ? value.id : key)
+  }
+  const withoutNonSchemaChildren = (value: Record<string, unknown>): Record<string, unknown> => {
+    const children = value.children
+    if (!Array.isArray(children)) return value
+    if (!children.some((child) => typeof child === 'string' && nonSchemaNodeIds.has(child))) {
+      return value
+    }
+    return {
+      ...value,
+      children: children.filter(
+        (child) => !(typeof child === 'string' && nonSchemaNodeIds.has(child)),
+      ),
+    }
+  }
+
   let validRootCount = 0
   let mismatchedKeyCount = 0
   let schemaFailureCount = 0
@@ -206,7 +233,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       const t = type as AnyNodeType
       stats.byType[t] = (stats.byType[t] ?? 0) + 1
 
-      const parseResult = AnyNode.safeParse(value)
+      const parseResult = AnyNode.safeParse(withoutNonSchemaChildren(value))
       if (!parseResult.success) {
         schemaFailureCount += 1
         const issue = parseResult.error.issues[0]
