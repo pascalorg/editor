@@ -50,10 +50,10 @@ describe('LevelNode', () => {
   })
 
   test('accepts level child IDs minted by plugins', () => {
-    expect(
-      LevelNode.parse({
-        children: ['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'],
-      }).children,
-    ).toEqual(['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'])
+    const children = LevelNode.parse({
+      children: ['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'],
+    }).children as string[]
+
+    expect(children).toEqual(['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'])
   })
 })
