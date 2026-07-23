@@ -529,6 +529,61 @@ describe('scene commit boundary', () => {
     expect(useScene.getState().dirtyNodes.has(LEVEL_ID)).toBe(false)
   })
 
+  test('dirties surviving siblings after a remote structural deletion', () => {
+    const siblingId = 'level_surviving_sibling' as AnyNodeId
+    const sibling = LevelNode.parse({
+      id: siblingId,
+      parentId: BUILDING_ID,
+      children: [],
+      level: 1,
+    })
+    const building = useScene.getState().nodes[BUILDING_ID] as AnyNode
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [BUILDING_ID]: { ...building, children: [LEVEL_ID, siblingId] },
+        [siblingId]: sibling,
+      },
+      dirtyNodes: new Set<AnyNodeId>(),
+    })
+
+    expect(
+      applySceneOperationPatch({
+        materialChanges: [],
+        nodeCreates: [],
+        nodeDeletes: [{ node: useScene.getState().nodes[LEVEL_ID] as AnyNode, position: 0 }],
+        nodeUpdates: [],
+      }),
+    ).toBe(true)
+
+    expect(useScene.getState().dirtyNodes.has(siblingId)).toBe(true)
+  })
+
+  test('preserves an external tool history pause while applying a remote patch', () => {
+    useScene.temporal.getState().pause()
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+
+    try {
+      expect(
+        applySceneOperationPatch({
+          materialChanges: [],
+          nodeCreates: [],
+          nodeDeletes: [],
+          nodeUpdates: [
+            {
+              data: { level: 2 } as Partial<AnyNode>,
+              id: LEVEL_ID,
+              removeFields: [],
+            },
+          ],
+        }),
+      ).toBe(true)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+    } finally {
+      useScene.temporal.getState().resume()
+    }
+  })
+
   test('rejects an invalid structural operation before mutating any field or material', () => {
     const missingParentId = 'building_missing' as AnyNodeId
     const orphan = LevelNode.parse({

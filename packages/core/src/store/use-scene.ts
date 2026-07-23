@@ -1682,11 +1682,13 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
   if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
-  pauseSceneHistory(useScene)
+  const shouldScopeHistoryPause =
+    useScene.temporal.getState().isTracking || getSceneHistoryPauseDepth() > 0
+  if (shouldScopeHistoryPause) pauseSceneHistory(useScene)
   try {
     useScene.setState(next)
   } finally {
-    resumeSceneHistory(useScene)
+    if (shouldScopeHistoryPause) resumeSceneHistory(useScene)
   }
 
   const currentState = useScene.getState()
@@ -1709,6 +1711,18 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
     if (beforeParentId) currentState.markDirty(beforeParentId)
     if (currentParentId) currentState.markDirty(currentParentId)
+  }
+  const structuralParentIds = new Set<AnyNodeId>()
+  for (const { node } of changes.nodeCreates) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const { node } of changes.nodeDeletes) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const parentId of structuralParentIds) {
+    const parent = current.nodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) continue
+    for (const childId of parent.children) currentState.markDirty(childId as AnyNodeId)
   }
   if (changes.materialChanges.length > 0) {
     const materialRefs = new Set(changes.materialChanges.map(({ id }) => toSceneMaterialRef(id)))
