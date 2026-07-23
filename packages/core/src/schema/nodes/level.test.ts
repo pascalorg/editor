@@ -48,4 +48,12 @@ describe('LevelNode', () => {
       nodes.map((node) => node.id),
     )
   })
+
+  test('accepts level child IDs minted by plugins', () => {
+    expect(
+      LevelNode.parse({
+        children: ['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'],
+      }).children,
+    ).toEqual(['tree_plugin-child', 'flower_plugin-child', 'grass_plugin-child'])
+  })
 })
