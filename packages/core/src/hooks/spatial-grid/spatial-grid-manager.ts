@@ -1,8 +1,9 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { nodeRegistry } from '../../registry'
-import type { AnyNode, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import { getWallPlaneTop } from '../../services/storey'
+import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-node-overrides'
 import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
@@ -407,19 +408,44 @@ export class SpatialGridManager {
     for (const slabId of slabMap.keys()) this.renderedSlabPolygons.delete(slabId)
   }
 
+  /**
+   * True while a slab or wall on `levelId` has a live override: group
+   * drags publish translated slab polygons and wall endpoints to
+   * `useLiveNodeOverrides` only (the scene store commits on release), so
+   * the committed cache and index would elect support against pre-drag
+   * footprints — items and walls visibly jump to ground mid-preview.
+   * Support queries then read live-effective records and skip the
+   * rendered-polygon cache.
+   */
+  private levelHasLiveOverrides(levelId: string): boolean {
+    const overrides = useLiveNodeOverrides.getState().overrides
+    if (overrides.size === 0) return false
+    const nodes = useScene.getState().nodes
+    for (const id of overrides.keys()) {
+      const node = nodes[id as AnyNodeId]
+      if (!node || (node.type !== 'slab' && node.type !== 'wall')) continue
+      if (resolveNodeLevelId(node, nodes) === levelId) return true
+    }
+    return false
+  }
+
   private getRenderedSlabPolygon(levelId: string, slab: SlabNode): Array<[number, number]> {
-    const cached = this.renderedSlabPolygons.get(slab.id)
-    if (cached) return cached
+    const live = this.levelHasLiveOverrides(levelId)
+    if (!live) {
+      const cached = this.renderedSlabPolygons.get(slab.id)
+      if (cached) return cached
+    }
 
     const siblingSlabs: SlabNode[] = []
     for (const other of this.getSlabMap(levelId).values()) {
-      if (other.id !== slab.id) siblingSlabs.push(other)
+      if (other.id !== slab.id) siblingSlabs.push(live ? getEffectiveNode(other) : other)
     }
-    const polygon = getRenderableSlabPolygon(slab, {
-      walls: this.getLevelWallNodes(levelId),
+    const walls = this.getLevelWallNodes(levelId)
+    const polygon = getRenderableSlabPolygon(live ? getEffectiveNode(slab) : slab, {
+      walls: live ? walls.map((wall) => getEffectiveNode(wall)) : walls,
       siblingSlabs,
     })
-    this.renderedSlabPolygons.set(slab.id, polygon)
+    if (!live) this.renderedSlabPolygons.set(slab.id, polygon)
     return polygon
   }
 
@@ -437,12 +463,13 @@ export class SpatialGridManager {
     dimensions: [number, number, number],
     rotation: [number, number, number],
   ): boolean {
-    if (slab.polygon.length < 3) return false
-    const rendered = this.getRenderedSlabPolygon(levelId, slab)
+    const effective = getEffectiveNode(slab)
+    if (effective.polygon.length < 3) return false
+    const rendered = this.getRenderedSlabPolygon(levelId, effective)
     if (!itemOverlapsPolygon(position, dimensions, rotation, rendered, 0.01)) return false
 
     const [cx, , cz] = position
-    for (const hole of slab.holes || []) {
+    for (const hole of effective.holes || []) {
       if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) return false
     }
     return true
@@ -774,7 +801,8 @@ export class SpatialGridManager {
     if (!slabMap) return 0
 
     let maxElevation = 0
-    for (const slab of slabMap.values()) {
+    for (const stored of slabMap.values()) {
+      const slab = getEffectiveNode(stored)
       if (slab.polygon.length >= 3 && pointInPolygon(x, z, slab.polygon)) {
         // Check if point is in any hole
         let inHole = false
@@ -836,7 +864,8 @@ export class SpatialGridManager {
 
     let winningElevation = Number.NEGATIVE_INFINITY
     let winnerId: string | null = null
-    for (const slab of slabMap.values()) {
+    for (const stored of slabMap.values()) {
+      const slab = getEffectiveNode(stored)
       const elevation = slab.elevation ?? 0.05
       if (maxElevation != null && elevation > maxElevation + SUPPORT_ELEVATION_EPSILON) continue
       if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
@@ -873,7 +902,8 @@ export class SpatialGridManager {
 
     let best: { t: number; elevation: number; slabId: string } | null = null
     if (slabMap) {
-      for (const slab of slabMap.values()) {
+      for (const stored of slabMap.values()) {
+        const slab = getEffectiveNode(stored)
         if (slab.polygon.length < 3) continue
         const elevation = slab.elevation ?? 0.05
         const t = (elevation - oy) / dy
@@ -925,7 +955,8 @@ export class SpatialGridManager {
     if (!slabMap) return []
 
     const candidates: SlabSupportCandidate[] = []
-    for (const slab of slabMap.values()) {
+    for (const stored of slabMap.values()) {
+      const slab = getEffectiveNode(stored)
       if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
       candidates.push({ slabId: slab.id, elevation: slab.elevation ?? 0.05 })
     }
@@ -951,8 +982,9 @@ export class SpatialGridManager {
     dimensions: [number, number, number],
     rotation: [number, number, number],
   ): number | null {
-    const slab = this.slabsByLevel.get(levelId)?.get(slabId)
-    if (!slab) return null
+    const stored = this.slabsByLevel.get(levelId)?.get(slabId)
+    if (!stored) return null
+    const slab = getEffectiveNode(stored)
     if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) return null
     return slab.elevation ?? 0.05
   }
@@ -997,8 +1029,8 @@ export class SpatialGridManager {
 
     return computeWallSlabSupport(
       { start, end, curveOffset, thickness },
-      [...slabMap.values()],
-      this.getLevelWallNodes(levelId),
+      [...slabMap.values()].map((slab) => getEffectiveNode(slab)),
+      this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
       preferredSlabId,
       maxElevation,
     )
