@@ -295,6 +295,7 @@ export function FloatingActionMenu() {
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setSelection = useViewer((s) => s.setSelection)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
   // flips only at drag start / end, so subscribing here is cheap — the live
   // height value is written imperatively in the useFrame below.
@@ -418,7 +419,7 @@ export function FloatingActionMenu() {
           ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
           : FENCE_DEFAULT_HEIGHT
       const liveHeight = override?.height ?? node.height ?? fallbackHeight
-      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit)}`
+      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`
     }
 
     const obj = sceneRegistry.nodes.get(selectedId)
@@ -898,7 +899,7 @@ export function FloatingActionMenu() {
                 under it for duct fittings. */}
             {node && hasPorts(node.type) ? (
               <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
-                <SystemSummaryPill nodeId={node.id} unit={unit} />
+                <SystemSummaryPill metricNotation={metricNotation} nodeId={node.id} unit={unit} />
                 {hasAxisCycling(node.type) ? (
                   <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
                     <span className="font-medium text-foreground">
@@ -932,7 +933,15 @@ export function FloatingActionMenu() {
  * subscription it needs (connectivity changes when ANY joint moves) doesn't
  * re-render the always-mounted parent menu on every unrelated scene tick.
  */
-function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric' | 'imperial' }) {
+function SystemSummaryPill({
+  metricNotation,
+  nodeId,
+  unit,
+}: {
+  metricNotation: 'meters' | 'millimeters'
+  nodeId: AnyNodeId
+  unit: 'metric' | 'imperial'
+}) {
   const allNodes = useScene((s) => s.nodes)
   const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
   if (!summary) return null
@@ -949,7 +958,7 @@ function SystemSummaryPill({ nodeId, unit }: { nodeId: AnyNodeId; unit: 'metric'
             ·
           </span>
           <span className="text-muted-foreground">
-            {formatMeasurement(summary.runLengthM, unit)} · {summary.runCount}{' '}
+            {formatMeasurement(summary.runLengthM, unit, metricNotation)} · {summary.runCount}{' '}
             {summary.runCount === 1 ? 'run' : 'runs'}
           </span>
         </>

@@ -90,6 +90,7 @@ export function DormerPlacementGuides({
   movingId?: string
 }) {
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
 
   const [cx, , cz] = center
   const faceBounds = getRoofSurfaceFaceBoundsAt(segment, cx, cz)
@@ -181,22 +182,37 @@ export function DormerPlacementGuides({
   return (
     <>
       {guides.map((g) => (
-        <Guide key={g.id} guide={g} unit={unit} />
+        <Guide key={g.id} guide={g} metricNotation={metricNotation} unit={unit} />
       ))}
     </>
   )
 }
 
-function Guide({ guide, unit }: { guide: DormerGuide; unit: 'metric' | 'imperial' }) {
+function Guide({
+  guide,
+  metricNotation,
+  unit,
+}: {
+  guide: DormerGuide
+  metricNotation: 'meters' | 'millimeters'
+  unit: 'metric' | 'imperial'
+}) {
   if (guide.kind === 'badge') {
-    return <GuideBadge at={guide.at} pill={`= ${formatMeasurement(guide.value, unit)}`} />
+    return (
+      <GuideBadge
+        at={guide.at}
+        pill={`= ${formatMeasurement(guide.value, unit, metricNotation)}`}
+      />
+    )
   }
 
   return (
     <GuideLine
       from={guide.from}
       kind={guide.kind}
-      pill={guide.value === undefined ? undefined : formatMeasurement(guide.value, unit)}
+      pill={
+        guide.value === undefined ? undefined : formatMeasurement(guide.value, unit, metricNotation)
+      }
       to={guide.to}
     />
   )

@@ -291,9 +291,10 @@ function buildRenderData(measurement: ResolvedMeasurementPayload): MeasurementRe
 function formatMeasurement(
   measurement: ResolvedMeasurementPayload,
   unit: 'metric' | 'imperial',
+  metricNotation: 'meters' | 'millimeters',
 ): string {
   if (measurement.kind === 'distance') {
-    return formatLinearMeasurement(measurementDistance(...measurement.points), unit)
+    return formatLinearMeasurement(measurementDistance(...measurement.points), unit, metricNotation)
   }
   if (measurement.kind === 'angle') {
     return formatAngleRadians(measurementAngle(...measurement.points))
@@ -302,7 +303,11 @@ function formatMeasurement(
     return `A ${formatAreaLabel(measurementArea(measurement.base), unit)}`
   }
   if (measurement.kind === 'perimeter') {
-    return `P ${formatLinearMeasurement(measurementPerimeter(measurement.base), unit)}`
+    return `P ${formatLinearMeasurement(
+      measurementPerimeter(measurement.base),
+      unit,
+      metricNotation,
+    )}`
   }
   return `V ${formatVolumeLabel(measurementPrismVolume(measurement.base, measurement.extrusion), unit)}`
 }
@@ -325,6 +330,7 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
   const handlers = useNodeEvents(node, 'measurement')
   const showMeasurements = useViewer((state) => state.showMeasurements)
   const unit = useViewer((state) => state.unit)
+  const metricNotation = useViewer((state) => state.metricNotation)
   const active = useViewer(
     (state) =>
       state.hoveredId === node.id || state.selection.selectedIds.some((id) => id === node.id),
@@ -350,9 +356,9 @@ export const MeasurementRenderer = ({ node }: { node: MeasurementNode }) => {
   })
   const data = buildRenderData(resolved.payload)
   const label = useMemo(() => {
-    const value = formatMeasurement(resolved.payload, unit)
+    const value = formatMeasurement(resolved.payload, unit, metricNotation)
     return resolved.dangling.length > 0 ? `Unlinked · ${value}` : value
-  }, [resolved, unit])
+  }, [metricNotation, resolved, unit])
   const color = measurementPresentationColor(resolved.dangling.length > 0, active)
   const lineMaterial = useMemo(
     () =>
