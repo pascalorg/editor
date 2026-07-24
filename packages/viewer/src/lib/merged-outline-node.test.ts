@@ -5,18 +5,20 @@ import { Object3D, PerspectiveCamera, Scene } from 'three'
 import { mergedOutline } from './merged-outline-node'
 
 describe('merged outline rendering', () => {
-  test('skips outline work while the pass is disabled', () => {
-    const outline = mergedOutline(new Scene(), new PerspectiveCamera(), {
-      enabled: () => false,
+  test('keeps selected outlines active during camera interaction', () => {
+    const cameraInteractionActive = true
+    const params = {
+      enabled: () => !cameraInteractionActive,
       primaryObjects: [new Object3D()],
-    })
+    }
+    const outline = mergedOutline(new Scene(), new PerspectiveCamera(), params)
     const frame = {
       get renderer(): never {
-        throw new Error('outline renderer should not be touched')
+        throw new Error('outline renderer was reached')
       },
     }
 
-    expect(() => outline.updateBefore(frame)).not.toThrow()
+    expect(() => outline.updateBefore(frame)).toThrow('outline renderer was reached')
     outline.dispose()
   })
 })

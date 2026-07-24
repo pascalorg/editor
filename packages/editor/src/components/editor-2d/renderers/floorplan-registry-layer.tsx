@@ -28,6 +28,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
+  type ComponentProps,
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -90,7 +91,11 @@ import {
   startFloorplanGroupMove,
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
-import { useFloorplanSceneRotation, useFloorplanStaticRender } from '../floorplan-render-context'
+import {
+  useFloorplanSceneRotation,
+  useFloorplanStaticRender,
+  useFloorplanStaticUnitsPerPixel,
+} from '../floorplan-render-context'
 import {
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
@@ -143,6 +148,13 @@ const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const DIRECT_DRAG_THRESHOLD_PX = 4
 const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
+
+const ScaleAwareFloorplanGroupSelectionBox = memo(function ScaleAwareFloorplanGroupSelectionBox(
+  props: Omit<ComponentProps<typeof FloorplanGroupSelectionBox>, 'unitsPerPixel'>,
+) {
+  const unitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  return <FloorplanGroupSelectionBox {...props} unitsPerPixel={unitsPerPixel} />
+})
 
 /**
  * Snapshot of node fields captured at drag-start, used by the single-undo
@@ -237,7 +249,7 @@ export function subscribeFloorplanAffordanceToolCancel(
 // affordances return `null` (no polygon/wall snapping chip). Keyed off the
 // affordance name the kinds register (`move-vertex` / `move-edge` / `add-vertex`
 // / `curve` / `move-endpoint`).
-function affordanceReshapeScope(
+export function floorplanAffordanceReshapeScope(
   affordance: string,
   nodeId: string,
   payload: unknown,
@@ -245,30 +257,30 @@ function affordanceReshapeScope(
   if (affordance.includes('vertex') || affordance.includes('edge')) {
     const holeIndex = (payload as { holeIndex?: number } | undefined)?.holeIndex
     return holeIndex !== undefined
-      ? holeEditScope({ nodeId, holeIndex })
-      : boundaryReshapeScope(nodeId)
+      ? holeEditScope({ nodeId, holeIndex, driver: 'floorplan' })
+      : boundaryReshapeScope(nodeId, 'floorplan')
   }
   if (affordance.includes('curve')) {
-    return curveReshapeScope(nodeId)
+    return curveReshapeScope(nodeId, 'floorplan')
   }
   if (affordance.includes('control-point')) {
     const index = (payload as { index?: number } | undefined)?.index ?? 0
-    return controlPointReshapeScope(nodeId, index)
+    return controlPointReshapeScope(nodeId, index, 'floorplan')
   }
   if (affordance.includes('tangent')) {
     const target = payload as { index?: number; side?: 'in' | 'out' } | undefined
-    return tangentReshapeScope(nodeId, target?.index ?? 0, target?.side ?? 'out')
+    return tangentReshapeScope(nodeId, target?.index ?? 0, target?.side ?? 'out', 'floorplan')
   }
   if (affordance.includes('endpoint')) {
     const endpoint = (payload as { endpoint?: 'start' | 'end' } | undefined)?.endpoint ?? 'end'
-    return endpointReshapeScope(nodeId, endpoint)
+    return endpointReshapeScope(nodeId, endpoint, 'floorplan')
   }
   // Roof-segment width/depth resize — a no-angle dimension edit, so the
   // no-angle 'polygon' snap set (grid / lines / off) via a boundary scope.
   // Matched exactly so a still-legacy `*-resize` affordance on another kind
   // doesn't get a chip its snap math can't honour yet.
   if (affordance === 'roof-segment-resize') {
-    return boundaryReshapeScope(nodeId)
+    return boundaryReshapeScope(nodeId, 'floorplan')
   }
   // 2D corner rotate-arrow (column / elevator / roof-segment / shelf / spawn /
   // stair). Begin the same handle-drag scope the 3D rotate gizmo uses, label-
@@ -1092,7 +1104,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // the right chip during the edit AND `getActiveSnapContext()` resolves the
       // polygon / wall mode-set the affordance's snap math reads. Torn down on
       // release / cancel below. `null` for resize / rotate (no snapping chip).
-      const reshapeScope = affordanceReshapeScope(affordance, nodeId, payload)
+      const reshapeScope = floorplanAffordanceReshapeScope(affordance, nodeId, payload)
       if (reshapeScope) {
         useInteractionScope.getState().begin(reshapeScope)
       }
@@ -1338,7 +1350,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const entries = floorplanData.entries
   if (entries.length === 0) return null
 
-  const unitsPerPixel = renderCtx?.getUnitsPerPixel() ?? 1
   const palette = renderCtx?.palette
 
   return (
@@ -1406,7 +1417,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={wallDimensionReference}
-            unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1459,7 +1469,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={wallDimensionReference}
-            unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1469,11 +1478,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       {/* Dashed group bbox — shows what a group drag carries along while a
           multi-selection exists, rides the live delta mid-drag, and doubles
           as the group's whole-area drag handle. */}
-      <FloorplanGroupSelectionBox
+      <ScaleAwareFloorplanGroupSelectionBox
         onPointerDown={handleGroupBoxPointerDown}
         onRotatePointerDown={handleGroupBoxRotatePointerDown}
         palette={palette}
-        unitsPerPixel={unitsPerPixel}
       />
       {/* Transient live-rotation readout — drawn last so the wedge + degree
           chip sit above all handle chrome while a rotate-arrow is dragged. */}
@@ -1482,7 +1490,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           overlay={rotationOverlay}
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
-          unitsPerPixel={unitsPerPixel}
         />
       ) : null}
     </g>
@@ -1805,7 +1812,6 @@ type FloorplanRegistryEntryProps = {
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
-  unitsPerPixel: number
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -1847,7 +1853,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   unit,
   metricNotation,
   wallDimensionReference,
-  unitsPerPixel,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
   const live = useLiveTransforms((s) => (floorplanVisible ? s.transforms.get(nodeId) : undefined))
@@ -1997,7 +2002,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
         onMoveHandlePointerDown={handleMoveHandlePointerDown}
         palette={palette}
         sceneRotationDeg={sceneRotationDeg}
-        unitsPerPixel={unitsPerPixel}
       />
     </g>
   )
@@ -2270,7 +2274,7 @@ export function getFloorplanLevelData(
 
 type InteractiveGeometryProps = {
   geometry: FloorplanGeometry
-  unitsPerPixel: number
+  unitsPerPixel?: number
   palette: FloorplanPalette | undefined
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
@@ -2298,7 +2302,7 @@ type InteractiveGeometryProps = {
 
 export const InteractiveGeometry = memo(function InteractiveGeometry({
   geometry,
-  unitsPerPixel,
+  unitsPerPixel: unitsPerPixelOverride,
   palette,
   hatchPatternId,
   hoveredHandleId,
@@ -2312,6 +2316,9 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
   onHandlePointerDown,
   onMoveHandlePointerDown,
 }: InteractiveGeometryProps): React.ReactElement {
+  const liveUnitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  const unitsPerPixel = unitsPerPixelOverride ?? liveUnitsPerPixel
+
   return renderInteractive(geometry, 0)
 
   function renderInteractive(g: FloorplanGeometry, keyHint: number): React.ReactElement {
@@ -3519,7 +3526,7 @@ const ROTATION_WEDGE_SEGMENTS = 48
 export function RotationAngleOverlay({
   overlay,
   palette,
-  unitsPerPixel,
+  unitsPerPixel: unitsPerPixelOverride,
   sceneRotationDeg,
 }: {
   overlay: RotationOverlayState
@@ -3527,9 +3534,11 @@ export function RotationAngleOverlay({
     FloorplanPalette,
     'measurementLabelBackground' | 'measurementLabelText' | 'measurementStroke'
   >
-  unitsPerPixel: number
+  unitsPerPixel?: number
   sceneRotationDeg: number
 }): React.ReactElement {
+  const liveUnitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  const unitsPerPixel = unitsPerPixelOverride ?? liveUnitsPerPixel
   const { pivot, startAngle, endAngle, radius, sweep } = overlay
   const span = endAngle - startAngle
   const count = Math.max(8, Math.ceil((Math.abs(span) / Math.PI) * ROTATION_WEDGE_SEGMENTS))
