@@ -1,7 +1,7 @@
 'use client'
 
 import type { FloorplanPalette } from '@pascal-app/core'
-import { createContext, type ReactNode, useContext, useMemo } from 'react'
+import { createContext, type ReactNode, useContext, useMemo, useRef } from 'react'
 
 /**
  * Per-frame render context shared between the legacy `floorplan-panel.tsx`
@@ -34,7 +34,34 @@ export type FloorplanRenderContextValue = {
   sceneRotationDeg: number
 }
 
-const FloorplanRenderContext = createContext<FloorplanRenderContextValue | null>(null)
+export type FloorplanStaticRenderContextValue = Omit<
+  FloorplanRenderContextValue,
+  'sceneRotationDeg' | 'unitsPerPixel'
+> & {
+  getSceneRotationDeg: () => number
+  getUnitsPerPixel: () => number
+}
+
+const FloorplanStaticRenderContext = createContext<FloorplanStaticRenderContextValue | null>(null)
+const FloorplanSceneRotationContext = createContext(0)
+const FloorplanUnitsPerPixelContext = createContext(1)
+
+export type FloorplanRenderScaleReference = {
+  read: () => number
+  update: (unitsPerPixel: number) => void
+}
+
+export function createFloorplanRenderScaleReference(
+  initialUnitsPerPixel: number,
+): FloorplanRenderScaleReference {
+  let unitsPerPixel = initialUnitsPerPixel
+  return {
+    read: () => unitsPerPixel,
+    update: (nextUnitsPerPixel) => {
+      unitsPerPixel = nextUnitsPerPixel
+    },
+  }
+}
 
 export function FloorplanRenderProvider({
   children,
@@ -42,12 +69,30 @@ export function FloorplanRenderProvider({
   palette,
   hatchPatternId,
   sceneRotationDeg,
-}: FloorplanRenderContextValue & { children: ReactNode }) {
-  const value = useMemo<FloorplanRenderContextValue>(
-    () => ({ unitsPerPixel, palette, hatchPatternId, sceneRotationDeg }),
-    [unitsPerPixel, palette, hatchPatternId, sceneRotationDeg],
+  getSceneRotationDeg,
+}: FloorplanRenderContextValue & {
+  children: ReactNode
+  getSceneRotationDeg: () => number
+}) {
+  const renderScaleReference = useRef<FloorplanRenderScaleReference | null>(null)
+  if (!renderScaleReference.current) {
+    renderScaleReference.current = createFloorplanRenderScaleReference(unitsPerPixel)
+  }
+  renderScaleReference.current.update(unitsPerPixel)
+  const getUnitsPerPixel = renderScaleReference.current.read
+  const staticValue = useMemo<FloorplanStaticRenderContextValue>(
+    () => ({ palette, hatchPatternId, getSceneRotationDeg, getUnitsPerPixel }),
+    [palette, hatchPatternId, getSceneRotationDeg, getUnitsPerPixel],
   )
-  return <FloorplanRenderContext.Provider value={value}>{children}</FloorplanRenderContext.Provider>
+  return (
+    <FloorplanStaticRenderContext.Provider value={staticValue}>
+      <FloorplanUnitsPerPixelContext.Provider value={unitsPerPixel}>
+        <FloorplanSceneRotationContext.Provider value={sceneRotationDeg}>
+          {children}
+        </FloorplanSceneRotationContext.Provider>
+      </FloorplanUnitsPerPixelContext.Provider>
+    </FloorplanStaticRenderContext.Provider>
+  )
 }
 
 /**
@@ -58,5 +103,27 @@ export function FloorplanRenderProvider({
  * whole legacy panel along.
  */
 export function useFloorplanRender(): FloorplanRenderContextValue | null {
-  return useContext(FloorplanRenderContext)
+  const staticValue = useContext(FloorplanStaticRenderContext)
+  const sceneRotationDeg = useContext(FloorplanSceneRotationContext)
+  const unitsPerPixel = useContext(FloorplanUnitsPerPixelContext)
+  return useMemo(
+    () =>
+      staticValue
+        ? {
+            unitsPerPixel,
+            palette: staticValue.palette,
+            hatchPatternId: staticValue.hatchPatternId,
+            sceneRotationDeg,
+          }
+        : null,
+    [sceneRotationDeg, staticValue, unitsPerPixel],
+  )
+}
+
+export function useFloorplanStaticRender(): FloorplanStaticRenderContextValue | null {
+  return useContext(FloorplanStaticRenderContext)
+}
+
+export function useFloorplanSceneRotation(): number {
+  return useContext(FloorplanSceneRotationContext)
 }

@@ -1,0 +1,217 @@
+import { describe, expect, test } from 'bun:test'
+import type { CameraPose } from '@pascal-app/core'
+import type { NavigationSyncPose } from '../../store/use-editor'
+import {
+  cameraPoseToFloorplanNavigationPose,
+  createFloorplanCameraNavigationChannel,
+  createFloorplanCameraSyncBridge,
+  floorplanNavigationPoseToCameraPose,
+} from './floorplan-camera-sync'
+
+const cameraPose: CameraPose = {
+  fov: 50,
+  position: [3, 4, 4],
+  projection: 'perspective',
+  target: [0, 1, 0],
+  viewWidth: 12,
+}
+
+function cameraPoseAtAzimuth(
+  azimuth: number,
+  target: [number, number, number] = [0, 1, 0],
+): CameraPose {
+  const horizontalDistance = 5
+  return {
+    ...cameraPose,
+    position: [
+      target[0] + Math.sin(azimuth) * horizontalDistance,
+      4,
+      target[2] + Math.cos(azimuth) * horizontalDistance,
+    ],
+    target,
+  }
+}
+
+describe('floorplan camera sync', () => {
+  test('derives the floor-plan navigation pose from the generic camera pose', () => {
+    expect(
+      cameraPoseToFloorplanNavigationPose({
+        position: [10, 5, 0],
+        projection: 'perspective',
+        target: [0, 0, 0],
+        viewWidth: 20,
+      }),
+    ).toEqual({
+      source: '3d',
+      target: [0, 0, 0],
+      azimuth: Math.PI / 2,
+      viewWidth: 20,
+    })
+  })
+
+  test('applies a floor-plan pose while preserving the generic camera elevation and projection', () => {
+    expect(
+      floorplanNavigationPoseToCameraPose(
+        {
+          source: '2d',
+          revision: 4,
+          target: [10, 2, 20],
+          azimuth: Math.PI / 2,
+          viewWidth: 8,
+        },
+        cameraPose,
+      ),
+    ).toEqual({
+      fov: 50,
+      position: [15, 5, 20],
+      projection: 'perspective',
+      target: [10, 2, 20],
+      viewWidth: 8,
+    })
+  })
+
+  test('owns two-way synchronization without echoing tiny camera changes', () => {
+    const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
+    const applied: CameraPose[] = []
+    const bridge = createFloorplanCameraSyncBridge({
+      applyCameraPose: (pose) => applied.push(pose),
+      publishNavigationPose: (pose) => published.push(pose),
+    })
+
+    bridge.receiveCameraPose(cameraPose)
+    bridge.receiveCameraPose({
+      ...cameraPose,
+      position: [3.0001, 4, 4],
+    })
+    bridge.receiveNavigationPose({
+      source: '2d',
+      revision: 1,
+      target: [10, 2, 20],
+      azimuth: Math.PI / 2,
+      viewWidth: 8,
+    })
+
+    expect(published).toHaveLength(1)
+    expect(published[0]?.source).toBe('3d')
+    expect(applied).toHaveLength(1)
+    expect(applied[0]).toMatchObject({
+      fov: 50,
+      projection: 'perspective',
+      target: [10, 2, 20],
+      viewWidth: 8,
+    })
+    expect(applied[0]?.position[0]).toBeCloseTo(15)
+    expect(applied[0]?.position[1]).toBeCloseTo(5)
+    expect(applied[0]?.position[2]).toBeCloseTo(20)
+  })
+
+  test('does not publish floor-plan rotation below one degree', () => {
+    const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
+    const bridge = createFloorplanCameraSyncBridge({
+      applyCameraPose: () => {},
+      publishNavigationPose: (pose) => published.push(pose),
+    })
+
+    bridge.receiveCameraPose(cameraPoseAtAzimuth(0))
+    bridge.receiveCameraPose(cameraPoseAtAzimuth((0.9 * Math.PI) / 180))
+    expect(published).toHaveLength(1)
+
+    bridge.receiveCameraPose(cameraPoseAtAzimuth(Math.PI / 180))
+    expect(published).toHaveLength(2)
+    expect(published[1]?.azimuth).toBeCloseTo(Math.PI / 180)
+  })
+
+  test('keeps the previous floor-plan angle when a sub-degree rotation arrives with a pan', () => {
+    const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
+    const bridge = createFloorplanCameraSyncBridge({
+      applyCameraPose: () => {},
+      publishNavigationPose: (pose) => published.push(pose),
+    })
+
+    bridge.receiveCameraPose(cameraPoseAtAzimuth(0))
+    bridge.receiveCameraPose(cameraPoseAtAzimuth((0.5 * Math.PI) / 180, [1, 1, 0]))
+
+    expect(published).toHaveLength(2)
+    expect(published[1]).toMatchObject({
+      target: [1, 1, 0],
+      azimuth: 0,
+    })
+  })
+
+  test('does no floor-plan synchronization in 3D-only mode and catches up once when visible', () => {
+    const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
+    const applied: CameraPose[] = []
+    const bridge = createFloorplanCameraSyncBridge({
+      active: false,
+      applyCameraPose: (pose) => applied.push(pose),
+      publishNavigationPose: (pose) => published.push(pose),
+    })
+    const latestPose = cameraPoseAtAzimuth(Math.PI / 2, [8, 1, 4])
+
+    bridge.receiveCameraPose(cameraPoseAtAzimuth(0))
+    bridge.receiveCameraPose(latestPose)
+    bridge.receiveNavigationPose({
+      source: '2d',
+      revision: 1,
+      target: [10, 2, 20],
+      azimuth: Math.PI / 2,
+      viewWidth: 8,
+    })
+
+    expect(published).toEqual([])
+    expect(applied).toEqual([])
+
+    bridge.setActive(true)
+    expect(published).toEqual([
+      {
+        source: '3d',
+        target: latestPose.target,
+        azimuth: Math.PI / 2,
+        viewWidth: 12,
+      },
+    ])
+    expect(applied).toEqual([])
+  })
+
+  test('waits for a generic camera reference before applying an early 2D pose', () => {
+    const applied: CameraPose[] = []
+    const bridge = createFloorplanCameraSyncBridge({
+      applyCameraPose: (pose) => applied.push(pose),
+      publishNavigationPose: () => {},
+    })
+
+    bridge.receiveNavigationPose({
+      source: '2d',
+      revision: 1,
+      target: [10, 2, 20],
+      azimuth: Math.PI / 2,
+      viewWidth: 8,
+    })
+    expect(applied).toEqual([])
+
+    bridge.receiveCameraPose(cameraPose)
+    expect(applied).toHaveLength(1)
+  })
+
+  test('delivers the live camera stream through transient subscribers', () => {
+    const channel = createFloorplanCameraNavigationChannel()
+    const received: NavigationSyncPose[] = []
+    const unsubscribe = channel.subscribe((pose) => received.push(pose))
+    const input = {
+      source: '3d' as const,
+      target: [0, 1, 2] as [number, number, number],
+      azimuth: 0.5,
+      viewWidth: 12,
+    }
+
+    channel.publish(input)
+    channel.publish({ ...input, azimuth: 0.75 })
+    unsubscribe()
+    channel.publish({ ...input, azimuth: 1 })
+
+    expect(received).toEqual([
+      { ...input, revision: 1 },
+      { ...input, azimuth: 0.75, revision: 2 },
+    ])
+  })
+})
