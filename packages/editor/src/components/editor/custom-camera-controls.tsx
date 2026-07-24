@@ -29,6 +29,7 @@ import {
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
 import {
   useActiveHandleDrag,
@@ -600,7 +601,7 @@ export const CustomCameraControls = () => {
       ...(isPerspectiveCamera(camera) ? { fov: camera.fov } : {}),
     })
     if (pose) {
-      emitter.emit('camera-controls:pose', pose)
+      publishCameraPose(pose)
     }
   }, [camera, isFirstPersonMode, viewportSize])
 

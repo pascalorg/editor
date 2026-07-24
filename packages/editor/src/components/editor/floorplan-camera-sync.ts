@@ -2,6 +2,8 @@
 
 import { type CameraPose, emitter } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
+import { subscribeCameraPose } from '../../store/camera-pose-store'
+import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useEditor, {
   type NavigationSyncPose,
   type NavigationSyncPoseInput,
@@ -220,14 +222,7 @@ export function useFloorplanCameraSyncBridge() {
 
   useEffect(() => bridge.setActive(active), [active, bridge])
 
-  useEffect(() => {
-    const receiveCameraPose = (pose: CameraPose) => bridge.receiveCameraPose(pose)
-    emitter.on('camera-controls:pose', receiveCameraPose)
-    return () => emitter.off('camera-controls:pose', receiveCameraPose)
-  }, [bridge])
+  useEffect(() => subscribeCameraPose(bridge.receiveCameraPose), [bridge])
 
-  useEffect(() => {
-    bridge.receiveNavigationPose(useEditor.getState().navigationSyncPose)
-    return useEditor.subscribe((state) => bridge.receiveNavigationPose(state.navigationSyncPose))
-  }, [bridge])
+  useEffect(() => subscribeNavigationSyncPose(bridge.receiveNavigationPose), [bridge])
 }

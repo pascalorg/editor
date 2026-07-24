@@ -95,6 +95,7 @@ import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
+import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor, {
@@ -7192,13 +7193,12 @@ export function FloorplanPanel({
   )
 
   useEffect(() => {
-    const receiveStoredNavigationPose = (state: ReturnType<typeof useEditor.getState>) => {
-      if (state.navigationSyncPose?.source === '2d') {
-        receiveFloorplanNavigationPose(state.navigationSyncPose)
+    const receiveStoredNavigationPose = (pose: NavigationSyncPose | null) => {
+      if (pose?.source === '2d') {
+        receiveFloorplanNavigationPose(pose)
       }
     }
-    receiveStoredNavigationPose(useEditor.getState())
-    return useEditor.subscribe(receiveStoredNavigationPose)
+    return subscribeNavigationSyncPose(receiveStoredNavigationPose)
   }, [receiveFloorplanNavigationPose])
 
   useEffect(

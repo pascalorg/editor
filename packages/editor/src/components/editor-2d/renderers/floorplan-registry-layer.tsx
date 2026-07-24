@@ -1466,11 +1466,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const appliedLayoutInputsRef = useRef<object | null>(null)
   const interactionIdle = useInteractionScope((state) => isIdle(state.scope))
   const sceneRotationDeg = useFloorplanSceneRotation()
-  const sceneNodes = useScene((state) => state.nodes)
-  const installedPlugins = useScene((state) => state.installedPlugins)
-  const liveTransforms = useLiveTransforms((state) => state.transforms)
-  const liveOverrides = useLiveNodeOverrides((state) => state.overrides)
-  const interactiveElevators = useInteractive((state) => state.elevators)
+  const [settledLayoutEpoch, setSettledLayoutEpoch] = useState(0)
   const drawingType = useDrawingView((state) => state.drawingType)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
@@ -1482,22 +1478,16 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       annotationVisibility,
       annotationLayoutOverrides,
       drawingType,
-      installedPlugins,
-      interactiveElevators,
-      liveOverrides,
-      liveTransforms,
-      sceneNodes,
+      interactionIdle,
+      settledLayoutEpoch,
       wallDimensionReference,
     }),
     [
       annotationVisibility,
       annotationLayoutOverrides,
       drawingType,
-      installedPlugins,
-      interactiveElevators,
-      liveOverrides,
-      liveTransforms,
-      sceneNodes,
+      interactionIdle,
+      settledLayoutEpoch,
       wallDimensionReference,
     ],
   )
@@ -1505,6 +1495,44 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
   const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
   const layoutEnabled = active && interactionIdle
+
+  useEffect(() => {
+    if (!layoutEnabled) return
+    let frame: number | null = null
+    const invalidateLayout = () => {
+      if (frame !== null) return
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        setSettledLayoutEpoch((epoch) => epoch + 1)
+      })
+    }
+    const unsubscribeScene = useScene.subscribe((state, previousState) => {
+      if (
+        state.nodes !== previousState.nodes ||
+        state.installedPlugins !== previousState.installedPlugins
+      ) {
+        invalidateLayout()
+      }
+    })
+    const unsubscribeTransforms = useLiveTransforms.subscribe((state, previousState) => {
+      if (state.transforms !== previousState.transforms) invalidateLayout()
+    })
+    const unsubscribeOverrides = useLiveNodeOverrides.subscribe((state, previousState) => {
+      if (state.overrides !== previousState.overrides) invalidateLayout()
+    })
+    const unsubscribeInteractive = useInteractive.subscribe((state, previousState) => {
+      if (state.elevators !== previousState.elevators) invalidateLayout()
+    })
+
+    return () => {
+      unsubscribeScene()
+      unsubscribeTransforms()
+      unsubscribeOverrides()
+      unsubscribeInteractive()
+      if (frame !== null) window.cancelAnimationFrame(frame)
+    }
+  }, [layoutEnabled])
+
   useLayoutEffect(() => {
     // Explicit layout inputs replace the former whole-subtree MutationObserver.
     if (!active) {
