@@ -69,6 +69,7 @@ import {
   isIdle,
   tangentReshapeScope,
 } from '../../../lib/interaction/scope'
+import { emitCanvasNodeSelection } from '../../../lib/selection-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
@@ -553,13 +554,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const applyEntrySelection = useCallback(
     (id: AnyNodeId, shouldToggle: boolean) => {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      setSelection({
-        selectedIds: shouldToggle
-          ? currentSelectedIds.includes(id)
-            ? currentSelectedIds.filter((selectedId) => selectedId !== id)
-            : [...currentSelectedIds, id]
-          : [id],
-      })
+      const nextSelectedIds = shouldToggle
+        ? currentSelectedIds.includes(id)
+          ? currentSelectedIds.filter((selectedId) => selectedId !== id)
+          : [...currentSelectedIds, id]
+        : [id]
+      setSelection({ selectedIds: nextSelectedIds })
+      if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
+        const node = useScene.getState().nodes[id]
+        if (node) emitCanvasNodeSelection(node)
+      }
       // Setting selection re-renders the entry — the overlay pass mounts
       // (endpoint handles, etc.), reshuffling DOM under the cursor between
       // pointerdown and click. If the click target ends up on the SVG
