@@ -194,6 +194,8 @@ import { resolveFloorplanBackgroundSelection } from './floorplan-background-sele
 import {
   canApplyFloorplanNavigationSync,
   canZoomFloorplanDuringNavigation,
+  createFloorplanNavigationSyncScheduler,
+  type FloorplanNavigationSyncScheduler,
   type FloorplanPresentationViewBox,
   finalizeFloorplanNavigation,
   resolveFloorplanPresentationViewBox,
@@ -337,10 +339,32 @@ type FloorplanRotationState = {
   latestViewport: FloorplanViewport
 }
 
+type FloorplanNavigationSyncPresentationState = {
+  initialUserRotationDeg: number
+  initialSceneRotationDeg: number
+  latestUserRotationDeg: number
+  latestSceneRotationDeg: number
+  latestViewport: FloorplanViewport
+  svg: SVGSVGElement
+  svgStyle: {
+    transform: string
+    transformOrigin: string
+    willChange: string
+  }
+}
+
 function restoreFloorplanRotationPresentation(rotationState: FloorplanRotationState) {
   rotationState.svg.style.transform = rotationState.svgStyle.transform
   rotationState.svg.style.transformOrigin = rotationState.svgStyle.transformOrigin
   rotationState.svg.style.willChange = rotationState.svgStyle.willChange
+}
+
+function restoreFloorplanNavigationSyncPresentation(
+  presentationState: FloorplanNavigationSyncPresentationState,
+) {
+  presentationState.svg.style.transform = presentationState.svgStyle.transform
+  presentationState.svg.style.transformOrigin = presentationState.svgStyle.transformOrigin
+  presentationState.svg.style.willChange = presentationState.svgStyle.willChange
 }
 
 type FloorplanScreenSelectionState = {
@@ -5340,6 +5364,16 @@ export function FloorplanPanel({
   const floorplanRenderScaleCommitTimerRef = useRef<number | null>(null)
   const floorplanViewportInteractionInProgressRef = useRef(false)
   const floorplanImperativeViewBoxRef = useRef<FloorplanPresentationViewBox | null>(null)
+  const floorplanNavigationSyncPresentationRef =
+    useRef<FloorplanNavigationSyncPresentationState | null>(null)
+  const applyFloorplanNavigationSyncPresentationRef = useRef<(pose: NavigationSyncPose) => void>(
+    () => {},
+  )
+  const commitFloorplanNavigationSyncPresentationRef = useRef<(pose: NavigationSyncPose) => void>(
+    () => {},
+  )
+  const floorplanNavigationSyncSchedulerRef =
+    useRef<FloorplanNavigationSyncScheduler<NavigationSyncPose> | null>(null)
   const latestFloorplanRenderUnitsPerPixelRef = useRef(1)
   const floorplanZoomPoseRef = useRef<{
     localCenter: SvgPoint
@@ -5456,6 +5490,11 @@ export function FloorplanPanel({
   const buildingRotationDeg = (buildingRotationY * 180) / Math.PI
   const floorplanSceneRotationDeg =
     FLOORPLAN_VIEW_ROTATION_DEG + floorplanUserRotationDeg - buildingRotationDeg
+  const getFloorplanSceneRotationDeg = useCallback(
+    () =>
+      FLOORPLAN_VIEW_ROTATION_DEG + latestFloorplanUserRotationDegRef.current - buildingRotationDeg,
+    [buildingRotationDeg],
+  )
   // Only sync ref from state when floorplan is open (state is source of truth).
   // When hidden, the imperative 3D path owns the ref and must not be clobbered.
   if (isFloorplanOpenRef.current && !floorplanViewportInteractionInProgressRef.current) {
@@ -6561,6 +6600,33 @@ export function FloorplanPanel({
   // so it re-renders per move without re-rendering this panel.
 
   const svgAspectRatio = surfaceSize.width / surfaceSize.height || 1
+  const applyFloorplanViewportImperatively = useCallback(
+    (nextViewport: FloorplanViewport) => {
+      const nextHeight = nextViewport.width / svgAspectRatio
+      const nextMinX = nextViewport.centerX - nextViewport.width / 2
+      const nextMinY = nextViewport.centerY - nextHeight / 2
+      floorplanImperativeViewBoxRef.current = {
+        minX: nextMinX,
+        minY: nextMinY,
+        width: nextViewport.width,
+        height: nextHeight,
+      }
+      hasUserAdjustedViewportRef.current = true
+      latestViewportRef.current = nextViewport
+      svgRef.current?.setAttribute(
+        'viewBox',
+        `${nextMinX} ${nextMinY} ${nextViewport.width} ${nextHeight}`,
+      )
+      const background = floorplanBackgroundRef.current
+      if (background) {
+        background.setAttribute('x', String(nextMinX))
+        background.setAttribute('y', String(nextMinY))
+        background.setAttribute('width', String(nextViewport.width))
+        background.setAttribute('height', String(nextHeight))
+      }
+    },
+    [svgAspectRatio],
+  )
 
   const fittedViewport = useMemo(() => {
     // Collect bounds from the legacy polygon arrays first. Most are empty
@@ -6733,6 +6799,136 @@ export function FloorplanPanel({
     [],
   )
 
+  const applyFloorplanNavigationSyncPresentation = useCallback(
+    (pose: NavigationSyncPose) => {
+      const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      const svg = svgRef.current
+      if (!(currentViewport && svg)) return
+
+      let presentationState = floorplanNavigationSyncPresentationRef.current
+      if (!presentationState) {
+        const initialUserRotationDeg = latestFloorplanUserRotationDegRef.current
+        const initialSceneRotationDeg =
+          FLOORPLAN_VIEW_ROTATION_DEG + initialUserRotationDeg - buildingRotationDeg
+        presentationState = {
+          initialUserRotationDeg,
+          initialSceneRotationDeg,
+          latestUserRotationDeg: initialUserRotationDeg,
+          latestSceneRotationDeg: initialSceneRotationDeg,
+          latestViewport: currentViewport,
+          svg,
+          svgStyle: {
+            transform: svg.style.transform,
+            transformOrigin: svg.style.transformOrigin,
+            willChange: svg.style.willChange,
+          },
+        }
+        floorplanNavigationSyncPresentationRef.current = presentationState
+        floorplanViewportInteractionInProgressRef.current = true
+        svg.style.transformOrigin = 'center'
+        svg.style.willChange = 'transform'
+      }
+
+      const nextUserRotationDeg = floorplanRotationFromCameraAzimuth(
+        pose.azimuth,
+        presentationState.latestUserRotationDeg,
+      )
+      const localCenter = worldToFloorplanLocalPoint(
+        pose.target[0],
+        pose.target[2],
+        buildingPosition,
+        buildingRotationY,
+      )
+      const nextWidth = resolveFloorplanViewWidth(
+        pose.viewWidth,
+        currentViewport.width,
+        latestFittedViewportRef.current,
+        false,
+      )
+      const nextSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG + nextUserRotationDeg - buildingRotationDeg
+      const nextCenterSvg = rotateSvgPoint(localCenter, nextSceneRotationDeg)
+      const nextViewport = {
+        centerX: nextCenterSvg.x,
+        centerY: nextCenterSvg.y,
+        width: nextWidth,
+      }
+      const presentationCenterSvg = rotateSvgPoint(
+        localCenter,
+        presentationState.initialSceneRotationDeg,
+      )
+
+      applyFloorplanViewportImperatively({
+        centerX: presentationCenterSvg.x,
+        centerY: presentationCenterSvg.y,
+        width: nextWidth,
+      })
+      svg.style.transform = `rotate(${
+        nextUserRotationDeg - presentationState.initialUserRotationDeg
+      }deg)`
+      latestFloorplanUserRotationDegRef.current = nextUserRotationDeg
+      latestViewportRef.current = nextViewport
+      presentationState.latestUserRotationDeg = nextUserRotationDeg
+      presentationState.latestSceneRotationDeg = nextSceneRotationDeg
+      presentationState.latestViewport = nextViewport
+    },
+    [applyFloorplanViewportImperatively, buildingPosition, buildingRotationDeg, buildingRotationY],
+  )
+
+  const commitFloorplanNavigationSyncPresentation = useCallback(
+    (_pose: NavigationSyncPose) => {
+      const presentationState = floorplanNavigationSyncPresentationRef.current
+      if (!presentationState) return
+
+      applyFloorplanViewportImperatively(presentationState.latestViewport)
+      const scene = floorplanSceneRef.current
+      if (scene) {
+        if (presentationState.latestSceneRotationDeg === 0) {
+          scene.removeAttribute('transform')
+        } else {
+          scene.setAttribute('transform', `rotate(${presentationState.latestSceneRotationDeg})`)
+        }
+      }
+      restoreFloorplanNavigationSyncPresentation(presentationState)
+      floorplanNavigationSyncPresentationRef.current = null
+      floorplanViewportInteractionInProgressRef.current = false
+      floorplanImperativeViewBoxRef.current = null
+      setFloorplanUserRotationDeg((current) =>
+        current === presentationState.latestUserRotationDeg
+          ? current
+          : presentationState.latestUserRotationDeg,
+      )
+      setViewport((current) =>
+        floorplanViewportEquals(current, presentationState.latestViewport)
+          ? current
+          : presentationState.latestViewport,
+      )
+    },
+    [applyFloorplanViewportImperatively],
+  )
+
+  applyFloorplanNavigationSyncPresentationRef.current = applyFloorplanNavigationSyncPresentation
+  commitFloorplanNavigationSyncPresentationRef.current = commitFloorplanNavigationSyncPresentation
+  if (!floorplanNavigationSyncSchedulerRef.current) {
+    floorplanNavigationSyncSchedulerRef.current = createFloorplanNavigationSyncScheduler({
+      applyPresentation: (pose: NavigationSyncPose) =>
+        applyFloorplanNavigationSyncPresentationRef.current(pose),
+      commit: (pose: NavigationSyncPose) =>
+        commitFloorplanNavigationSyncPresentationRef.current(pose),
+    })
+  }
+  const floorplanNavigationSyncScheduler = floorplanNavigationSyncSchedulerRef.current
+  const discardFloorplanNavigationSyncPresentation = useCallback(() => {
+    floorplanNavigationSyncScheduler.discard()
+    const presentationState = floorplanNavigationSyncPresentationRef.current
+    if (presentationState) {
+      restoreFloorplanNavigationSyncPresentation(presentationState)
+      floorplanNavigationSyncPresentationRef.current = null
+    }
+    floorplanViewportInteractionInProgressRef.current = false
+    floorplanImperativeViewBoxRef.current = null
+  }, [floorplanNavigationSyncScheduler])
+
   const stopFloorplanViewAnimation = useCallback(() => {
     if (floorplanViewAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(floorplanViewAnimationFrameRef.current)
@@ -6869,26 +7065,15 @@ export function FloorplanPanel({
       if (!isFloorplanOpenRef.current) {
         return
       }
-      if (!canApplyFloorplanNavigationSync(floorplanViewportInteractionInProgressRef.current)) {
+      const localNavigationInProgress =
+        floorplanViewportInteractionInProgressRef.current &&
+        floorplanNavigationSyncPresentationRef.current === null
+      if (!canApplyFloorplanNavigationSync(localNavigationInProgress)) {
         return
       }
-
-      const nextUserRotationDeg = floorplanRotationFromCameraAzimuth(
-        pose.azimuth,
-        latestFloorplanUserRotationDegRef.current,
-      )
-      const localCenter = worldToFloorplanLocalPoint(
-        pose.target[0],
-        pose.target[2],
-        buildingPosition,
-        buildingRotationY,
-      )
-
-      applyFloorplanNavigationView(localCenter, nextUserRotationDeg, pose.viewWidth, {
-        clampViewWidth: false,
-      })
+      floorplanNavigationSyncScheduler.update(pose)
     },
-    [applyFloorplanNavigationView, buildingPosition, buildingRotationY],
+    [floorplanNavigationSyncScheduler],
   )
 
   useEffect(() => {
@@ -6904,6 +7089,18 @@ export function FloorplanPanel({
       syncFloorplanViewportToNavigationPose(pose)
     }
   }, [syncFloorplanViewportToNavigationPose, isFloorplanOpen])
+
+  useEffect(() => {
+    if (isFloorplanOpen) return
+    discardFloorplanNavigationSyncPresentation()
+  }, [discardFloorplanNavigationSyncPresentation, isFloorplanOpen])
+
+  useEffect(
+    () => () => {
+      discardFloorplanNavigationSyncPresentation()
+    },
+    [discardFloorplanNavigationSyncPresentation],
+  )
 
   const cancelHiddenCompassAnimation = useCallback(() => {
     if (hiddenCompassAnimationRef.current !== null) {
@@ -7945,34 +8142,6 @@ export function FloorplanPanel({
     [beginPanelInteraction, panelRect],
   )
 
-  const applyFloorplanViewportImperatively = useCallback(
-    (nextViewport: FloorplanViewport) => {
-      const nextHeight = nextViewport.width / svgAspectRatio
-      const nextMinX = nextViewport.centerX - nextViewport.width / 2
-      const nextMinY = nextViewport.centerY - nextHeight / 2
-      floorplanImperativeViewBoxRef.current = {
-        minX: nextMinX,
-        minY: nextMinY,
-        width: nextViewport.width,
-        height: nextHeight,
-      }
-      hasUserAdjustedViewportRef.current = true
-      latestViewportRef.current = nextViewport
-      svgRef.current?.setAttribute(
-        'viewBox',
-        `${nextMinX} ${nextMinY} ${nextViewport.width} ${nextHeight}`,
-      )
-      const background = floorplanBackgroundRef.current
-      if (background) {
-        background.setAttribute('x', String(nextMinX))
-        background.setAttribute('y', String(nextMinY))
-        background.setAttribute('width', String(nextViewport.width))
-        background.setAttribute('height', String(nextHeight))
-      }
-    },
-    [svgAspectRatio],
-  )
-
   const applyFloorplanRotationImperatively = useCallback(
     (rotationState: FloorplanRotationState, nextUserRotationDeg: number) => {
       const currentViewport = latestViewportRef.current ?? rotationState.latestViewport
@@ -8056,7 +8225,11 @@ export function FloorplanPanel({
       if (!localPoint) {
         return
       }
-      const svgPoint = rotateSvgPoint(localPoint, floorplanSceneRotationDeg)
+      const currentSceneRotationDeg =
+        FLOORPLAN_VIEW_ROTATION_DEG +
+        latestFloorplanUserRotationDegRef.current -
+        buildingRotationDeg
+      const svgPoint = rotateSvgPoint(localPoint, currentSceneRotationDeg)
 
       const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
       if (!currentViewport) {
@@ -8085,7 +8258,7 @@ export function FloorplanPanel({
         x: nextMinX + nextWidth / 2,
         y: nextMinY + nextHeight / 2,
       }
-      const localCenter = rotateSvgPoint(nextCenterSvg, -floorplanSceneRotationDeg)
+      const localCenter = rotateSvgPoint(nextCenterSvg, -currentSceneRotationDeg)
       const nextViewport = {
         centerX: nextCenterSvg.x,
         centerY: nextCenterSvg.y,
@@ -8108,7 +8281,7 @@ export function FloorplanPanel({
     },
     [
       applyFloorplanViewportImperatively,
-      floorplanSceneRotationDeg,
+      buildingRotationDeg,
       getSvgPointFromClientPoint,
       publishFloorplanNavigationPose,
       scheduleFloorplanZoomCommit,
@@ -9177,6 +9350,7 @@ export function FloorplanPanel({
         event.preventDefault()
         event.stopPropagation()
 
+        floorplanNavigationSyncScheduler.flush()
         if (floorplanZoomCommitTimerRef.current !== null) commitFloorplanZoom()
         stopFloorplanViewAnimation()
         floorplanNavigationClickSuppressedRef.current = true
@@ -9207,6 +9381,7 @@ export function FloorplanPanel({
       event.preventDefault()
       event.stopPropagation()
 
+      floorplanNavigationSyncScheduler.flush()
       if (floorplanZoomCommitTimerRef.current !== null) commitFloorplanZoom()
       stopFloorplanViewAnimation()
       const currentViewport = latestViewportRef.current ?? latestFittedViewportRef.current
@@ -9246,6 +9421,7 @@ export function FloorplanPanel({
     [
       commitFloorplanZoom,
       buildingRotationDeg,
+      floorplanNavigationSyncScheduler,
       setFloorplanCursorPosition,
       setCursorPoint,
       stopFloorplanViewAnimation,
@@ -11318,11 +11494,13 @@ export function FloorplanPanel({
       event.preventDefault()
       event.stopPropagation()
 
+      floorplanNavigationSyncScheduler.flush()
       const widthFactor = Math.exp(event.deltaY * (event.ctrlKey ? 0.003 : 0.0015))
       zoomViewportAtClientPoint(event.clientX, event.clientY, widthFactor)
     }
 
     const handleGestureStart = (event: Event) => {
+      floorplanNavigationSyncScheduler.flush()
       const gestureEvent = event as GestureLikeEvent
       gestureScaleRef.current = gestureEvent.scale ?? 1
       event.preventDefault()
@@ -11369,7 +11547,7 @@ export function FloorplanPanel({
       svg.removeEventListener('gesturechange', handleGestureChange)
       svg.removeEventListener('gestureend', handleGestureEnd)
     }
-  }, [commitFloorplanZoom, zoomViewportAtClientPoint])
+  }, [commitFloorplanZoom, floorplanNavigationSyncScheduler, zoomViewportAtClientPoint])
 
   const restoreGroundLevelStructureSelection = useCallback(() => {
     const sceneNodes = useScene.getState().nodes
@@ -11817,6 +11995,7 @@ export function FloorplanPanel({
                   legacy wall hatch — kinds that opt into selection hatch
                   fills reuse this <defs> pattern via fill="url(...)". */}
               <FloorplanRenderProvider
+                getSceneRotationDeg={getFloorplanSceneRotationDeg}
                 hatchPatternId={wallSelectionHatchId}
                 palette={floorplanRegistryPalette}
                 sceneRotationDeg={floorplanSceneRotationDeg}

@@ -259,11 +259,16 @@ export function FloorplanDimensionRenderer({
         />
       ) : null}
       <g
+        data-floorplan-annotation-angle-radians={Math.atan2(
+          geometry.end[1] - geometry.start[1],
+          geometry.end[0] - geometry.start[0],
+        )}
         data-floorplan-annotation-default-transform={labelTransform}
         data-floorplan-annotation-label=""
         data-floorplan-annotation-priority={floorplanDimensionAnnotationPriority(
           geometry.offsetDistance,
         )}
+        data-floorplan-annotation-transform-before-rotation={`translate(${layout.labelPoint[0]} ${layout.labelPoint[1]})`}
         data-floorplan-dimension-label-placement={layout.labelPlacement}
         data-floorplan-dimension-outside-start-local-x={outsideStartLocalShift?.[0]}
         data-floorplan-dimension-outside-start-local-y={outsideStartLocalShift?.[1]}
@@ -429,11 +434,16 @@ export function FloorplanDimensionStringRenderer({
               />
             ) : null}
             <g
+              data-floorplan-annotation-angle-radians={Math.atan2(
+                segment.end[1] - segment.start[1],
+                segment.end[0] - segment.start[0],
+              )}
               data-floorplan-annotation-default-transform={labelTransform}
               data-floorplan-annotation-label=""
               data-floorplan-annotation-priority={floorplanDimensionAnnotationPriority(
                 geometry.offsetDistance,
               )}
+              data-floorplan-annotation-transform-before-rotation={`translate(${layout.labelPoint[0]} ${layout.labelPoint[1]})`}
               data-floorplan-dimension-label-placement={layout.labelPlacement}
               data-floorplan-dimension-outside-start-local-x={outsideStartLocalShift?.[0]}
               data-floorplan-dimension-outside-start-local-y={outsideStartLocalShift?.[1]}

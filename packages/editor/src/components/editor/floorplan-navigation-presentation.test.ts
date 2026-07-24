@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   canApplyFloorplanNavigationSync,
   canZoomFloorplanDuringNavigation,
+  createFloorplanNavigationSyncScheduler,
   finalizeFloorplanNavigation,
   resolveFloorplanPresentationViewBox,
 } from './floorplan-navigation-presentation'
@@ -43,5 +44,33 @@ describe('floorplan navigation presentation', () => {
     })
 
     expect(calls).toEqual(['zoom', 'pan', 'rotation:42'])
+  })
+
+  test('coalesces a camera pose stream into one settled React commit', () => {
+    const presented: number[] = []
+    const committed: number[] = []
+    let scheduled: (() => void) | null = null
+    const scheduler = createFloorplanNavigationSyncScheduler<number>({
+      applyPresentation: (pose) => presented.push(pose),
+      commit: (pose) => committed.push(pose),
+      schedule: (callback) => {
+        scheduled = callback
+        return 1 as unknown as ReturnType<typeof globalThis.setTimeout>
+      },
+      cancel: () => {
+        scheduled = null
+      },
+    })
+
+    for (let pose = 1; pose <= 30; pose += 1) {
+      scheduler.update(pose)
+    }
+
+    expect(presented).toHaveLength(30)
+    expect(committed).toEqual([])
+
+    const settle = scheduled as (() => void) | null
+    settle?.()
+    expect(committed).toEqual([30])
   })
 })
