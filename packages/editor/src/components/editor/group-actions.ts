@@ -17,8 +17,9 @@ import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { duplicateNodesToLevel } from '../../lib/scene-clipboard'
-import { sfxEmitter } from '../../lib/sfx-bus'
+import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import useDeleteConfirmation from '../../store/use-delete-confirmation'
 import useEditor, {
   isAlignmentGuideActive,
   isGridSnapActive,
@@ -444,14 +445,25 @@ export function duplicateSelectionAndPickUp(): boolean {
 export function deleteSelection(): boolean {
   const selectedIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
   if (selectedIds.length === 0) return false
-  if (selectedIds.length >= BULK_DELETE_THRESHOLD) {
-    const confirmed = window.confirm(
-      `Delete ${selectedIds.length} selected elements? This cannot be undone if the undo history is exhausted.`,
-    )
-    if (!confirmed) return false
+
+  const commitDelete = () => {
+    if (selectedIds.length === 1) {
+      emitDeleteSFX(useScene.getState().nodes[selectedIds[0]!]?.type)
+    } else {
+      sfxEmitter.emit('sfx:structure-delete')
+    }
+    useScene.getState().deleteNodes(selectedIds)
+    useViewer.getState().setSelection({ selectedIds: [] })
   }
-  sfxEmitter.emit('sfx:structure-delete')
-  useScene.getState().deleteNodes(selectedIds)
-  useViewer.getState().setSelection({ selectedIds: [] })
+
+  if (selectedIds.length >= BULK_DELETE_THRESHOLD) {
+    useDeleteConfirmation.getState().requestConfirmation({
+      count: selectedIds.length,
+      onConfirm: commitDelete,
+    })
+    return true
+  }
+
+  commitDelete()
   return true
 }
