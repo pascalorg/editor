@@ -12,6 +12,89 @@ import { useMemo, useRef } from 'react'
 import { Color, type Group, Shape } from 'three'
 
 const SPAWN_COLOR = new Color('#818cf8')
+const disableRaycast = () => {}
+
+/**
+ * Shared visible spawn model. Placement uses the same four meshes as the
+ * committed renderer so the orientation shown before click is authoritative.
+ */
+const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode }) => {
+  const handlers = useNodeEvents(node, 'spawn')
+  const shading = useViewer((state) => state.shading)
+
+  const material = useMemo(() => {
+    const next = createDefaultMaterial('#818cf8', 0.42, shading) as ReturnType<
+      typeof createDefaultMaterial
+    > & {
+      emissive?: Color
+      emissiveIntensity?: number
+      metalness?: number
+    }
+    next.emissive?.copy(SPAWN_COLOR)
+    if ('emissiveIntensity' in next) next.emissiveIntensity = 0.08
+    if ('metalness' in next) next.metalness = 0.03
+    if (ghost) {
+      next.transparent = true
+      next.opacity = 0.5
+      next.depthWrite = false
+    }
+    next.needsUpdate = true
+    return next
+  }, [ghost, shading])
+
+  const arrowShape = useMemo(() => {
+    const shape = new Shape()
+    shape.moveTo(0, 0.24)
+    shape.lineTo(-0.18, -0.14)
+    shape.lineTo(0.18, -0.14)
+    shape.closePath()
+    return shape
+  }, [])
+
+  return (
+    <>
+      <mesh
+        position={[0, 0.09, 0]}
+        raycast={ghost ? disableRaycast : undefined}
+        rotation={[-Math.PI / 2, 0, 0]}
+        {...(ghost ? {} : handlers)}
+      >
+        <ringGeometry args={[0.34, 0.48, 48]} />
+        <primitive attach="material" object={material} />
+      </mesh>
+
+      <mesh
+        position={[0, 0.1, -0.52]}
+        raycast={ghost ? disableRaycast : undefined}
+        rotation={[-Math.PI / 2, 0, 0]}
+        {...(ghost ? {} : handlers)}
+      >
+        <shapeGeometry args={[arrowShape]} />
+        <primitive attach="material" object={material} />
+      </mesh>
+
+      <mesh
+        position={[0, 0.41, 0]}
+        raycast={ghost ? disableRaycast : undefined}
+        {...(ghost ? {} : handlers)}
+      >
+        <boxGeometry args={[0.3, 0.54, 0.16]} />
+        <primitive attach="material" object={material} />
+      </mesh>
+
+      <mesh
+        position={[0, 0.83, 0]}
+        raycast={ghost ? disableRaycast : undefined}
+        {...(ghost ? {} : handlers)}
+      >
+        <boxGeometry args={[0.18, 0.18, 0.18]} />
+        <primitive attach="material" object={material} />
+      </mesh>
+    </>
+  )
+}
+
+export const SpawnPreview = ({ node }: { node: SpawnNode }) => <SpawnVisual ghost node={node} />
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy
@@ -25,7 +108,6 @@ const SPAWN_COLOR = new Color('#818cf8')
  */
 const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   const ref = useRef<Group>(null!)
-  const handlers = useNodeEvents(node, 'spawn')
   const liveOverride = useLiveNodeOverrides((state) => state.get(node.id as AnyNodeId))
   const effectiveNode = useMemo(
     () => (liveOverride ? ({ ...node, ...liveOverride } as SpawnNode) : node),
@@ -33,33 +115,8 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
   )
   const liveTransform = useLiveTransforms((state) => state.get(node.id))
   const walkthroughMode = useViewer((state) => state.walkthroughMode)
-  const shading = useViewer((state) => state.shading)
 
   useRegistry(node.id, 'spawn', ref)
-
-  const material = useMemo(() => {
-    const next = createDefaultMaterial('#818cf8', 0.42, shading) as ReturnType<
-      typeof createDefaultMaterial
-    > & {
-      emissive?: Color
-      emissiveIntensity?: number
-      metalness?: number
-    }
-    next.emissive?.copy(SPAWN_COLOR)
-    if ('emissiveIntensity' in next) next.emissiveIntensity = 0.08
-    if ('metalness' in next) next.metalness = 0.03
-    next.needsUpdate = true
-    return next
-  }, [shading])
-
-  const arrowShape = useMemo(() => {
-    const shape = new Shape()
-    shape.moveTo(0, 0.24)
-    shape.lineTo(-0.18, -0.14)
-    shape.lineTo(0.18, -0.14)
-    shape.closePath()
-    return shape
-  }, [])
 
   return (
     <group
@@ -68,25 +125,7 @@ const SpawnRenderer = ({ node }: { node: SpawnNode }) => {
       rotation={[0, liveTransform?.rotation ?? effectiveNode.rotation, 0]}
       visible={!walkthroughMode && effectiveNode.visible !== false}
     >
-      <mesh position={[0, 0.09, 0]} rotation={[-Math.PI / 2, 0, 0]} {...handlers}>
-        <ringGeometry args={[0.34, 0.48, 48]} />
-        <primitive attach="material" object={material} />
-      </mesh>
-
-      <mesh position={[0, 0.1, -0.52]} rotation={[-Math.PI / 2, 0, 0]} {...handlers}>
-        <shapeGeometry args={[arrowShape]} />
-        <primitive attach="material" object={material} />
-      </mesh>
-
-      <mesh position={[0, 0.41, 0]} {...handlers}>
-        <boxGeometry args={[0.3, 0.54, 0.16]} />
-        <primitive attach="material" object={material} />
-      </mesh>
-
-      <mesh position={[0, 0.83, 0]} {...handlers}>
-        <boxGeometry args={[0.18, 0.18, 0.18]} />
-        <primitive attach="material" object={material} />
-      </mesh>
+      <SpawnVisual node={effectiveNode} />
     </group>
   )
 }
