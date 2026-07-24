@@ -53,17 +53,26 @@ const mid = (a: OpeningGuideVec3, b: OpeningGuideVec3): OpeningGuideVec3 => [
 export const OpeningGuides3DLayer = memo(function OpeningGuides3DLayer() {
   const guides = useOpeningGuides((s) => s.guides)
   const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   if (guides.length === 0) return null
   return (
     <>
       {guides.map((guide) => (
-        <OpeningGuide guide={guide} key={guide.id} unit={unit} />
+        <OpeningGuide guide={guide} key={guide.id} metricNotation={metricNotation} unit={unit} />
       ))}
     </>
   )
 })
 
-function OpeningGuide({ guide, unit }: { guide: OpeningGuide3D; unit: 'metric' | 'imperial' }) {
+function OpeningGuide({
+  guide,
+  metricNotation,
+  unit,
+}: {
+  guide: OpeningGuide3D
+  metricNotation: 'meters' | 'millimeters'
+  unit: 'metric' | 'imperial'
+}) {
   if (guide.kind === 'badge') {
     return (
       <Html
@@ -76,7 +85,7 @@ function OpeningGuide({ guide, unit }: { guide: OpeningGuide3D; unit: 'metric' |
           className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-sans font-semibold text-[11px] text-white"
           style={{ backgroundColor: BADGE_PILL }}
         >
-          {`= ${formatMeasurement(guide.value, unit)}`}
+          {`= ${formatMeasurement(guide.value, unit, metricNotation)}`}
         </div>
       </Html>
     )
@@ -97,7 +106,7 @@ function OpeningGuide({ guide, unit }: { guide: OpeningGuide3D; unit: 'metric' |
             className="whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-medium font-sans text-[11px] text-white"
             style={{ backgroundColor: DIMENSION_PILL }}
           >
-            {formatMeasurement(guide.value, unit)}
+            {formatMeasurement(guide.value, unit, metricNotation)}
           </div>
         </Html>
       ) : null}
