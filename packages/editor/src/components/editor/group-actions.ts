@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   bboxCornerAnchors,
   collectAlignmentAnchors,
+  emitter,
   pauseSceneHistory,
   pauseSpaceDetection,
   resolveAlignment,
@@ -485,6 +486,11 @@ function removeUnusedPasteMaterials(materialIds: SceneMaterialId[]) {
  * removes the uncommitted clones and any scene materials imported with them.
  */
 export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promise<boolean> {
+  const activeScope = useInteractionScope.getState().scope
+  if (activeScope.kind === 'placing' || activeScope.kind === 'moving') {
+    emitter.emit('tool:cancel')
+  }
+
   const result = await pasteSystemEditorClipboardToLevel(targetLevelId)
   if (!result || result.pastedIds.length === 0) return false
 
@@ -526,8 +532,8 @@ export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promis
     scopeToSelection: true,
     onCancel: discardPaste,
   })
-  if (!started) discardPaste()
-  return started
+  if (!started) sfxEmitter.emit('sfx:item-place')
+  return true
 }
 
 /**
