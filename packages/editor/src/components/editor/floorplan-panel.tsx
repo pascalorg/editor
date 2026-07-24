@@ -192,6 +192,10 @@ import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
+  subscribeFloorplanCameraNavigation,
+  useFloorplanCameraSyncBridge,
+} from './floorplan-camera-sync'
+import {
   canApplyFloorplanNavigationSync,
   canZoomFloorplanDuringNavigation,
   createFloorplanNavigationSyncScheduler,
@@ -5330,6 +5334,7 @@ export function FloorplanPanel({
   compassHost?: HTMLElement | null
   floorplanSceneSlot?: ReactNode
 }) {
+  useFloorplanCameraSyncBridge()
   const viewportHostRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const floorplanBackgroundRef = useRef<SVGRectElement>(null)
@@ -7058,10 +7063,8 @@ export function FloorplanPanel({
 
   const syncFloorplanViewportToNavigationPose = useCallback(
     (pose: NavigationSyncPose) => {
-      // Skip the viewport sync while the 2D panel is hidden (3D mode). It writes
-      // React state (`setViewport`) that re-renders the whole floorplan SVG, so
-      // doing it every camera-zoom frame for an invisible panel was a needless
-      // per-frame stall. The catch-up effect below re-syncs on reopen.
+      // The transient camera stream owns refs + imperative SVG presentation.
+      // React state is committed only by the scheduler after the stream settles.
       if (!isFloorplanOpenRef.current) {
         return
       }
@@ -7079,7 +7082,7 @@ export function FloorplanPanel({
   useEffect(() => {
     if (!isFloorplanOpen) return
 
-    const pose = useEditor.getState().navigationSyncPose
+    const pose = latestNavigationSyncPoseRef.current
     if (!pose) {
       return
     }
@@ -7109,11 +7112,9 @@ export function FloorplanPanel({
     }
   }, [])
 
-  // Align-north while the panel is hidden publishes a single '2d' pose that
-  // the 3D camera applies through the echo-suppressed pending-pose path — it
-  // never publishes '3d' frames back, so the needle must animate itself.
-  // Same time constant as the 2D view animation and the camera's effective
-  // smoothTime, so all three stay visually in step.
+  // Align-north while the panel is hidden publishes one 2D pose through the
+  // generic camera bridge. Camera application suppresses its own pose stream,
+  // so the needle animates itself with the same time constant.
   const animateHiddenCompassNeedle = useCallback(
     (targetDeg: number) => {
       cancelHiddenCompassAnimation()
@@ -7144,10 +7145,10 @@ export function FloorplanPanel({
     [cancelHiddenCompassAnimation],
   )
 
-  useEffect(() => {
-    const unsubscribe = useEditor.subscribe((state) => {
-      const pose = state.navigationSyncPose
-      if (!pose || latestNavigationSyncPoseRef.current?.revision === pose.revision) {
+  const receiveFloorplanNavigationPose = useCallback(
+    (pose: NavigationSyncPose) => {
+      const previousPose = latestNavigationSyncPoseRef.current
+      if (previousPose?.source === pose.source && previousPose.revision === pose.revision) {
         return
       }
 
@@ -7177,16 +7178,35 @@ export function FloorplanPanel({
       if (pose.source === '3d') {
         syncFloorplanViewportToNavigationPose(pose)
       }
-    })
-    return () => {
-      unsubscribe()
-      cancelHiddenCompassAnimation()
+    },
+    [
+      animateHiddenCompassNeedle,
+      cancelHiddenCompassAnimation,
+      syncFloorplanViewportToNavigationPose,
+    ],
+  )
+
+  useEffect(
+    () => subscribeFloorplanCameraNavigation(receiveFloorplanNavigationPose),
+    [receiveFloorplanNavigationPose],
+  )
+
+  useEffect(() => {
+    const receiveStoredNavigationPose = (state: ReturnType<typeof useEditor.getState>) => {
+      if (state.navigationSyncPose?.source === '2d') {
+        receiveFloorplanNavigationPose(state.navigationSyncPose)
+      }
     }
-  }, [
-    syncFloorplanViewportToNavigationPose,
-    animateHiddenCompassNeedle,
-    cancelHiddenCompassAnimation,
-  ])
+    receiveStoredNavigationPose(useEditor.getState())
+    return useEditor.subscribe(receiveStoredNavigationPose)
+  }, [receiveFloorplanNavigationPose])
+
+  useEffect(
+    () => () => {
+      cancelHiddenCompassAnimation()
+    },
+    [cancelHiddenCompassAnimation],
+  )
 
   // When the panel is hidden the imperative path owns the compass needle.
   // React re-renders can overwrite the needle's inline transform with stale

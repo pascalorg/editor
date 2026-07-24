@@ -98,8 +98,8 @@ import {
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import {
+  resolveFloorplanAnnotationUpdate,
   resolveFloorplanLabelAngle,
-  shouldUpdateFloorplanLabelRotation,
   updateSvgFloorplanLabelOrientations,
 } from './floorplan-label-angle'
 
@@ -1460,7 +1460,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
 function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
+  const collisionLabelElementsRef = useRef<SVGGElement[]>([])
+  const registryLabelElementsRef = useRef<SVGGElement[]>([])
   const appliedRotationDegRef = useRef<number | null>(null)
+  const appliedLayoutInputsRef = useRef<object | null>(null)
   const interactionIdle = useInteractionScope((state) => isIdle(state.scope))
   const sceneRotationDeg = useFloorplanSceneRotation()
   const sceneNodes = useScene((state) => state.nodes)
@@ -1468,21 +1471,16 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const liveTransforms = useLiveTransforms((state) => state.transforms)
   const liveOverrides = useLiveNodeOverrides((state) => state.overrides)
   const interactiveElevators = useInteractive((state) => state.elevators)
-  const annotationRotationDeg = shouldUpdateFloorplanLabelRotation(
-    appliedRotationDegRef.current,
-    sceneRotationDeg,
-  )
-    ? sceneRotationDeg
-    : (appliedRotationDegRef.current ?? sceneRotationDeg)
   const drawingType = useDrawingView((state) => state.drawingType)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
   const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
   const wallDimensionReference = useFloorplanAnnotationVisibility(
     (state) => state.wallDimensionReference,
   )
-  const explicitLayoutInputs = useMemo(
+  const layoutInputs = useMemo(
     () => ({
       annotationVisibility,
+      annotationLayoutOverrides,
       drawingType,
       installedPlugins,
       interactiveElevators,
@@ -1493,6 +1491,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     }),
     [
       annotationVisibility,
+      annotationLayoutOverrides,
       drawingType,
       installedPlugins,
       interactiveElevators,
@@ -1508,25 +1507,44 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const layoutEnabled = active && interactionIdle
   useLayoutEffect(() => {
     // Explicit layout inputs replace the former whole-subtree MutationObserver.
-    void explicitLayoutInputs
     if (!active) {
+      appliedLayoutInputsRef.current = null
       resetPreflightIssues()
       return
     }
     if (!interactionIdle) return
-    const svg = markerRef.current?.ownerSVGElement
     const registryLayer = markerRef.current?.parentElement
-    if (!(svg && registryLayer)) return
-    updateSvgFloorplanLabelOrientations(registryLayer, annotationRotationDeg)
-    appliedRotationDegRef.current = annotationRotationDeg
+    if (!registryLayer) return
+    const update = resolveFloorplanAnnotationUpdate({
+      layoutInputsChanged: appliedLayoutInputsRef.current !== layoutInputs,
+      nextRotationDeg: sceneRotationDeg,
+      previousRotationDeg: appliedRotationDegRef.current,
+    })
+    if (update.resolveCollisions) {
+      const svg = markerRef.current?.ownerSVGElement
+      if (!svg) return
+      collisionLabelElementsRef.current = Array.from(
+        svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
+      )
+      registryLabelElementsRef.current = collisionLabelElementsRef.current.filter((label) =>
+        registryLayer.contains(label),
+      )
+    }
+    const labels = registryLabelElementsRef.current
+    if (update.updateLabelPresentation) {
+      updateSvgFloorplanLabelOrientations(labels, sceneRotationDeg)
+      appliedRotationDegRef.current = sceneRotationDeg
+    }
+    if (!update.resolveCollisions) return
+    const svg = markerRef.current?.ownerSVGElement
+    if (!svg) return
     const preflightIssues = resolveSvgAnnotationCollisions(svg, {
+      labels: collisionLabelElementsRef.current,
       layoutOverrides: annotationLayoutOverrides,
     })
     setPreflightIssues(preflightIssues)
+    appliedLayoutInputsRef.current = layoutInputs
 
-    const labels = Array.from(
-      registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
-    )
     for (const [index, label] of labels.entries()) {
       const id = svgAnnotationLabelId(label, index)
       label.dataset.floorplanAnnotationId = id
@@ -1535,11 +1553,11 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     }
   }, [
     active,
-    annotationRotationDeg,
     annotationLayoutOverrides,
-    explicitLayoutInputs,
     interactionIdle,
+    layoutInputs,
     resetPreflightIssues,
+    sceneRotationDeg,
     setPreflightIssues,
   ])
 
@@ -1557,9 +1575,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     }
 
     const labelId = (label: SVGGElement): string => {
-      const labels = Array.from(
-        registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
-      )
+      const labels = registryLabelElementsRef.current
       return svgAnnotationLabelId(label, Math.max(0, labels.indexOf(label)))
     }
 
@@ -1651,9 +1667,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       cancelActivePointerDrag?.()
       registryLayer.removeEventListener('pointerdown', onPointerDown)
       registryLayer.removeEventListener('dblclick', onDoubleClick)
-      for (const label of registryLayer.querySelectorAll<SVGGElement>(
-        '[data-floorplan-annotation-label]',
-      )) {
+      for (const label of registryLabelElementsRef.current) {
         label.style.pointerEvents = ''
         label.style.cursor = ''
       }

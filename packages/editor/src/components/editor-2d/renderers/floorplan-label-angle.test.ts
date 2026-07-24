@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   resolveFloorplanAnnotationLabelTransform,
+  resolveFloorplanAnnotationUpdate,
   resolveFloorplanLabelAngle,
   shouldUpdateFloorplanLabelRotation,
+  updateSvgFloorplanLabelOrientations,
 } from './floorplan-label-angle'
 
 describe('resolveFloorplanLabelAngle', () => {
@@ -38,5 +40,50 @@ describe('resolveFloorplanLabelAngle', () => {
       defaultTransform: 'translate(4 6) rotate(-90) translate(0 -0.2)',
       transform: 'translate(4 6) rotate(-90) translate(0 -0.2) translate(0.5 -0.25)',
     })
+  })
+
+  test('keeps a rotation-only update out of the full collision layout path', () => {
+    expect(
+      resolveFloorplanAnnotationUpdate({
+        layoutInputsChanged: false,
+        nextRotationDeg: 45,
+        previousRotationDeg: 30,
+      }),
+    ).toEqual({
+      resolveCollisions: false,
+      updateLabelPresentation: true,
+    })
+  })
+
+  test('runs collision layout when floor-plan scene inputs change', () => {
+    expect(
+      resolveFloorplanAnnotationUpdate({
+        layoutInputsChanged: true,
+        nextRotationDeg: 30,
+        previousRotationDeg: 30,
+      }),
+    ).toEqual({
+      resolveCollisions: true,
+      updateLabelPresentation: true,
+    })
+  })
+
+  test('updates captured label references without rediscovering the DOM', () => {
+    const attributes = new Map<string, string>([['transform', 'translate(4 6) rotate(0)']])
+    const label = {
+      dataset: {
+        floorplanAnnotationAngleRadians: '0',
+        floorplanAnnotationLayoutDx: '0.5',
+        floorplanAnnotationLayoutDy: '-0.25',
+        floorplanAnnotationScreenUpright: 'true',
+        floorplanAnnotationTransformAfterRotation: '',
+        floorplanAnnotationTransformBeforeRotation: 'translate(4 6)',
+      },
+      getAttribute: (name: string) => attributes.get(name) ?? null,
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+    } as unknown as SVGGElement
+
+    expect(updateSvgFloorplanLabelOrientations([label], 90)).toBe(1)
+    expect(attributes.get('transform')).toBe('translate(4 6) rotate(-90) translate(0.5 -0.25)')
   })
 })

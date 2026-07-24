@@ -23,6 +23,26 @@ export function shouldUpdateFloorplanLabelRotation(
   return Math.abs(deltaDeg) >= minimumDeltaDeg
 }
 
+export function resolveFloorplanAnnotationUpdate({
+  layoutInputsChanged,
+  previousRotationDeg,
+  nextRotationDeg,
+}: {
+  layoutInputsChanged: boolean
+  previousRotationDeg: number | null
+  nextRotationDeg: number
+}): {
+  resolveCollisions: boolean
+  updateLabelPresentation: boolean
+} {
+  return {
+    resolveCollisions: layoutInputsChanged,
+    updateLabelPresentation:
+      layoutInputsChanged ||
+      shouldUpdateFloorplanLabelRotation(previousRotationDeg, nextRotationDeg),
+  }
+}
+
 export function resolveFloorplanAnnotationLabelTransform({
   angleRadians,
   sceneRotationDeg,
@@ -57,10 +77,9 @@ export function resolveFloorplanAnnotationLabelTransform({
 }
 
 export function updateSvgFloorplanLabelOrientations(
-  root: ParentNode,
+  labels: Iterable<SVGGElement>,
   sceneRotationDeg: number,
 ): number {
-  const labels = root.querySelectorAll<SVGGElement>('[data-floorplan-annotation-angle-radians]')
   let updated = 0
 
   for (const label of labels) {

@@ -5,6 +5,7 @@ import {
   floorplanAnnotationObstacleMode,
   polylineObstacleRectangles,
   resolveAnnotationLabelRectangles,
+  resolveSvgAnnotationCollisions,
 } from './floorplan-annotation-layout'
 
 describe('floorplanAnnotationObstacleMode', () => {
@@ -329,5 +330,17 @@ describe('resolveAnnotationLabelRectangles', () => {
     expect(shifts).toHaveLength(labels.length)
     expect(shifts.every((entry) => entry.resolved)).toBe(true)
     expect(elapsedMs).toBeLessThan(500)
+  })
+})
+
+describe('resolveSvgAnnotationCollisions', () => {
+  test('uses captured label references instead of querying for them again', () => {
+    const svg = {
+      querySelectorAll: () => {
+        throw new Error('labels were rediscovered')
+      },
+    } as unknown as SVGSVGElement
+
+    expect(resolveSvgAnnotationCollisions(svg, { labels: [] })).toEqual([])
   })
 })

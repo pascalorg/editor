@@ -127,9 +127,14 @@ export function resolveAnnotationLabelRectangles(
 
 export function resolveSvgAnnotationCollisions(
   svg: SVGSVGElement,
-  options: { layoutOverrides?: AnnotationLayoutOverrides } = {},
+  options: {
+    labels?: readonly SVGGElement[]
+    layoutOverrides?: AnnotationLayoutOverrides
+  } = {},
 ): AnnotationPreflightIssue[] {
-  const labels = Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
+  const labels =
+    options.labels ??
+    Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
   if (labels.length === 0) return []
 
   for (const label of labels) {
