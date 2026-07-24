@@ -487,9 +487,15 @@ function renderNode(
 
       return (
         <g
+          data-floorplan-annotation-angle-radians={g.angle}
           data-floorplan-annotation-default-transform={labelTransform}
           data-floorplan-annotation-label=""
           data-floorplan-annotation-priority="20"
+          data-floorplan-annotation-screen-upright={g.screenUpright ? 'true' : undefined}
+          data-floorplan-annotation-transform-after-rotation={`translate(0 ${
+            -(g.offsetPx ?? 0) * unitsPerPixel
+          })`}
+          data-floorplan-annotation-transform-before-rotation={`translate(${g.cx} ${g.cy})`}
           key={keyHint}
           pointerEvents="none"
           transform={labelTransform}
