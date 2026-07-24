@@ -36,21 +36,15 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
 } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { pasteSelectionAndPickUp } from '../editor/group-actions'
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '../../lib/level-duplication'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
-import {
-  getEditorClipboardSnapshot,
-  pasteEditorClipboardToLevel,
-  subscribeEditorClipboard,
-} from '../../lib/scene-clipboard'
-import { sfxEmitter } from '../../lib/sfx-bus'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
 import { ActionButton } from './controls/action-button'
@@ -399,11 +393,6 @@ export function FloatingLevelSelector() {
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
   const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
-  const clipboardSnapshot = useSyncExternalStore(
-    subscribeEditorClipboard,
-    getEditorClipboardSnapshot,
-    getEditorClipboardSnapshot,
-  )
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -522,10 +511,7 @@ export function FloatingLevelSelector() {
   )
 
   const handlePasteToLevel = useCallback((level: LevelNode) => {
-    const result = pasteEditorClipboardToLevel(level.id)
-    if (result?.pastedIds.length) {
-      sfxEmitter.emit('sfx:item-place')
-    }
+    void pasteSelectionAndPickUp(level.id)
   }, [])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -627,9 +613,7 @@ export function FloatingLevelSelector() {
                         isSelected={isSelected}
                         level={level}
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
-                        onPaste={
-                          clipboardSnapshot ? () => handlePasteToLevel(level) : undefined
-                        }
+                        onPaste={() => handlePasteToLevel(level)}
                         onRequestDelete={() => setDeletingLevel(level)}
                         onSelect={() =>
                           setSelection(

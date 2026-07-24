@@ -21,6 +21,7 @@ import {
   computeAffectedSiblingIds,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
+  isFloorplanOpeningPlacementState,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
@@ -192,6 +193,35 @@ describe('floorplan affordance cancellation', () => {
     const activeDrag = dragRef.current
     if (activeDrag?.pointerId === 7) activeDrag.session.commit?.()
     expect(commit).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('floorplan opening placement interaction routing', () => {
+  test('passes entries through only while an opening tool or moving opening is active', () => {
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'build',
+        tool: 'window',
+        movingNodeHasWallOpeningPlacement: false,
+      }),
+    ).toBe(true)
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'select',
+        tool: null,
+        movingNodeHasWallOpeningPlacement: true,
+      }),
+    ).toBe(true)
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'select',
+        tool: null,
+        movingNodeHasWallOpeningPlacement: false,
+      }),
+    ).toBe(false)
   })
 })
 

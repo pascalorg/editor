@@ -69,6 +69,7 @@ import {
   isIdle,
   tangentReshapeScope,
 } from '../../../lib/interaction/scope'
+import { emitCanvasNodeSelection } from '../../../lib/selection-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
@@ -77,6 +78,7 @@ import useEditor from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanPreflight from '../../../store/use-floorplan-preflight'
 import useInteractionScope, {
+  getMovingNode,
   useEndpointReshape,
   useMovingNode,
 } from '../../../store/use-interaction-scope'
@@ -348,6 +350,35 @@ const POINTER_CURSOR_STYLE = { cursor: 'pointer' } as const
 const MOVE_CURSOR_STYLE = { cursor: 'move' } as const
 const NO_POINTER_EVENTS_STYLE = { pointerEvents: 'none' } as const
 
+export function isFloorplanOpeningPlacementState({
+  phase,
+  mode,
+  tool,
+  movingNodeHasWallOpeningPlacement,
+}: {
+  phase: string
+  mode: string
+  tool: string | null
+  movingNodeHasWallOpeningPlacement: boolean
+}): boolean {
+  return (
+    (phase === 'structure' && mode === 'build' && (tool === 'door' || tool === 'window')) ||
+    movingNodeHasWallOpeningPlacement
+  )
+}
+
+function isFloorplanOpeningPlacementActiveNow(): boolean {
+  const { phase, mode, tool } = useEditor.getState()
+  const movingNode = getMovingNode()
+  return isFloorplanOpeningPlacementState({
+    phase,
+    mode,
+    tool,
+    movingNodeHasWallOpeningPlacement:
+      movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement,
+  })
+}
+
 function snapshotNode(node: AnyNode): NodeSnapshot {
   // Shallow-clone every non-id, non-type field. Arrays / vec tuples are
   // deep-cloned to detach from the live store reference.
@@ -431,17 +462,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   // wall's registry entry would otherwise swallow the click via
   // `handleClickStop` / `handleSelect`, so the placement never fires.
   // Pass clicks through in that case.
-  const editorPhase = useEditor((s) => s.phase)
   const editorMode = useEditor((s) => s.mode)
-  const editorTool = useEditor((s) => s.tool)
   const structureLayer = useEditor((s) => s.structureLayer)
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
   const endpointReshape = useEndpointReshape()
-  const isOpeningPlacementActive =
-    (editorPhase === 'structure' &&
-      editorMode === 'build' &&
-      (editorTool === 'door' || editorTool === 'window')) ||
-    (movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement)
   const isMarqueeSelectionActive =
     editorMode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
@@ -557,13 +581,16 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const applyEntrySelection = useCallback(
     (id: AnyNodeId, shouldToggle: boolean) => {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      setSelection({
-        selectedIds: shouldToggle
-          ? currentSelectedIds.includes(id)
-            ? currentSelectedIds.filter((selectedId) => selectedId !== id)
-            : [...currentSelectedIds, id]
-          : [id],
-      })
+      const nextSelectedIds = shouldToggle
+        ? currentSelectedIds.includes(id)
+          ? currentSelectedIds.filter((selectedId) => selectedId !== id)
+          : [...currentSelectedIds, id]
+        : [id]
+      setSelection({ selectedIds: nextSelectedIds })
+      if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
+        const node = useScene.getState().nodes[id]
+        if (node) emitCanvasNodeSelection(node)
+      }
       // Setting selection re-renders the entry — the overlay pass mounts
       // (endpoint handles, etc.), reshuffling DOM under the cursor between
       // pointerdown and click. If the click target ends up on the SVG
@@ -587,6 +614,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   const handleClickStop = useCallback((event: React.MouseEvent<SVGGElement>) => {
+    if (isFloorplanOpeningPlacementActiveNow()) return
     event.stopPropagation()
   }, [])
 
@@ -829,6 +857,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   const handleEntryPointerDown = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => {
+      // Keep this handler mounted during opening placement and arbitrate from
+      // the stores at event time. Commit clears the interaction scope before
+      // React paints the next frame; a render-time `undefined` handler leaves
+      // a short dead zone where the first post-placement selection is lost.
+      if (isFloorplanOpeningPlacementActiveNow()) return
       if (startDirectMoveDrag(id, event)) return
       if (startDirectRotateDrag(id, event)) return
       if (startGroupMoveDrag(id, event)) return
@@ -1325,7 +1358,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // still propagate normally inside the registry tree.
     <g
       className="floorplan-registry-layer"
-      onClick={isOpeningPlacementActive ? undefined : handleClickStop}
+      onClick={handleClickStop}
       opacity={isAmbient ? 0.3 : undefined}
       style={isAmbient ? NO_POINTER_EVENTS_STYLE : undefined}
     >
@@ -1347,7 +1380,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             hoveredHandleId={handleIdForNode(hoveredHandleId, entry.id)}
             interactiveElevators={interactiveElevators}
             isMarqueeSelectionActive={isMarqueeSelectionActive}
-            isOpeningPlacementActive={isOpeningPlacementActive}
             key={`base-${entry.id}`}
             levelDataCacheRef={levelDataCacheRef}
             levelNodeIdsByType={floorplanData.levelNodeIdsByType}
@@ -1401,7 +1433,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             hoveredHandleId={handleIdForNode(hoveredHandleId, entry.id)}
             interactiveElevators={interactiveElevators}
             isMarqueeSelectionActive={isMarqueeSelectionActive}
-            isOpeningPlacementActive={isOpeningPlacementActive}
             key={`overlay-${entry.id}`}
             levelDataCacheRef={levelDataCacheRef}
             levelNodeIdsByType={floorplanData.levelNodeIdsByType}
@@ -1735,7 +1766,6 @@ type FloorplanRegistryEntryProps = {
   hoveredHandleId: string | null
   interactiveElevators: unknown
   isMarqueeSelectionActive: boolean
-  isOpeningPlacementActive: boolean
   levelDataCacheRef: { current: Map<string, LevelDataCacheEntry> }
   levelNodeIdsByType: ReadonlyMap<string, readonly AnyNodeId[]>
   moving: boolean
@@ -1792,7 +1822,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   hoveredHandleId,
   interactiveElevators,
   isMarqueeSelectionActive,
-  isOpeningPlacementActive,
   levelDataCacheRef,
   levelNodeIdsByType,
   moving,
@@ -1941,9 +1970,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       : visibleGeometry
   if (!geometry) return null
 
-  const entryClick = isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : onClickStop
-  const entryPointerDown =
-    isOpeningPlacementActive || isMarqueeSelectionActive ? undefined : handlePointerDown
+  const entryClick = isMarqueeSelectionActive ? undefined : onClickStop
+  const entryPointerDown = isMarqueeSelectionActive ? undefined : handlePointerDown
 
   return (
     <g

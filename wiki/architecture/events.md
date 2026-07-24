@@ -41,6 +41,17 @@ interface NodeEvent<T extends AnyNode = AnyNode> {
 
 Grid events only carry `position` and `nativeEvent` (no `node`).
 
+## Selection Intent Events
+
+`selection:canvas-node-click` fires after the editor accepts a 2D or 3D node
+click and resolves the node that selection actually targets. Hosts can use it
+for contextual navigation without reacting to programmatic `setSelection`
+calls. The payload is the resolved `AnyNode`.
+
+`selection:find-node` is the explicit reveal intent emitted by the node action
+menu. Hosts and plugins that own catalogs or panels listen to it and reveal the
+node's related controls or presets.
+
 ## Emitting
 
 Renderers emit via `useNodeEvents` — never call `emitter.emit` directly in a renderer:
