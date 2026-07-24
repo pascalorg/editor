@@ -1,15 +1,13 @@
 import {
+  type AnyNode,
   type AnyNodeId,
-  generateId,
   type StairNode,
-  StairNode as StairNodeSchema,
   type StairSegmentNode,
-  StairSegmentNode as StairSegmentNodeSchema,
-  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../store/use-editor'
+import { commitFreshPlacementSubtree, createFreshPlacementSubtree } from './fresh-planar-placement'
 
 type DuplicateStairOptions = {
   mode?: 'select' | 'move'
@@ -22,47 +20,19 @@ type DuplicateStairResult = {
   segmentIds: StairSegmentNode['id'][]
 }
 
-const MOVE_REGISTRY_RETRY_LIMIT = 12
-
-function stripDuplicateFlags(metadata: unknown) {
-  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
-    return metadata
-  }
-
-  const nextMeta = { ...(metadata as Record<string, unknown>) }
-  delete nextMeta.isNew
-  delete nextMeta.isTransient
-  return nextMeta
-}
-
-function moveStairWhenRegistered(stairId: StairNode['id'], attempt = 0) {
-  const latestStair = useScene.getState().nodes[stairId as AnyNodeId]
-  if (latestStair?.type !== 'stair') {
-    return
-  }
-
-  if (sceneRegistry.nodes.has(stairId)) {
-    useEditor.getState().setMovingNode(latestStair)
-    useViewer.getState().setSelection({ selectedIds: [] })
-    return
-  }
-
-  if (attempt >= MOVE_REGISTRY_RETRY_LIMIT) {
-    console.warn(`Duplicated stair "${stairId}" did not register before move mode started`)
-    return
-  }
-
-  requestAnimationFrame(() => moveStairWhenRegistered(stairId, attempt + 1))
-}
-
+/**
+ * Duplicates a stair through the shared fresh-subtree placement path.
+ *
+ * The draft passed to the move tool is the exact node stored in the scene,
+ * so its geometry, descendants, selection identity, and eventual commit all
+ * use one fresh ID graph.
+ */
 export function duplicateStairSubtree(
   sourceStairId: AnyNodeId,
   options: DuplicateStairOptions = {},
 ): DuplicateStairResult {
   const { mode = 'move', offset = [1, 0, 1], parentId: explicitParentId } = options
-
-  const scene = useScene.getState()
-  const sourceStair = scene.nodes[sourceStairId]
+  const sourceStair = useScene.getState().nodes[sourceStairId]
 
   if (sourceStair?.type !== 'stair') {
     throw new Error(`Node "${sourceStairId}" is not a stair`)
@@ -73,54 +43,56 @@ export function duplicateStairSubtree(
     throw new Error(`Stair "${sourceStairId}" is missing a parent level`)
   }
 
-  const stairClone = StairNodeSchema.parse({
-    ...structuredClone(sourceStair),
-    id: generateId('stair'),
-    parentId,
-    children: [],
-    position: [
-      sourceStair.position[0] + offset[0],
-      sourceStair.position[1] + offset[1],
-      sourceStair.position[2] + offset[2],
-    ] as StairNode['position'],
-    metadata: stripDuplicateFlags(sourceStair.metadata),
-  })
+  const temporal = useScene.temporal.getState()
+  const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
+  if (wasTracking) temporal.pause()
 
-  const segmentClones: StairSegmentNode[] = []
-  for (const childId of sourceStair.children ?? []) {
-    const childNode = scene.nodes[childId as AnyNodeId]
-    if (childNode?.type !== 'stair-segment') {
-      continue
+  let draftId: AnyNodeId | null = null
+  try {
+    draftId = createFreshPlacementSubtree(sourceStairId, {
+      parentId,
+      position: [
+        sourceStair.position[0] + offset[0],
+        sourceStair.position[1] + offset[1],
+        sourceStair.position[2] + offset[2],
+      ],
+    } as Partial<AnyNode>)
+    const draft = draftId ? useScene.getState().nodes[draftId] : null
+    if (draft?.type !== 'stair') {
+      throw new Error(`Duplicated stair "${sourceStairId}" was not created`)
     }
 
-    const childClone = StairSegmentNodeSchema.parse({
-      ...structuredClone(childNode),
-      id: generateId('sseg'),
-      parentId: stairClone.id,
-      metadata: stripDuplicateFlags(childNode.metadata),
-    })
-    segmentClones.push(childClone)
-  }
+    if (mode === 'select') {
+      const committedId = commitFreshPlacementSubtree(draft.id as AnyNodeId, {})
+      const committed = committedId ? useScene.getState().nodes[committedId] : null
+      if (committed?.type !== 'stair') {
+        throw new Error(`Duplicated stair "${sourceStairId}" could not be committed`)
+      }
+      if (wasTracking) temporal.resume()
+      useViewer.getState().setSelection({ selectedIds: [committed.id] })
+      return {
+        stair: committed,
+        segmentIds: stairSegmentIds(committed),
+      }
+    }
 
-  scene.createNodes([
-    { node: stairClone, parentId },
-    ...segmentClones.map((segment) => ({ node: segment, parentId: stairClone.id as AnyNodeId })),
-  ])
-
-  const createdStair = useScene.getState().nodes[stairClone.id as AnyNodeId]
-  if (createdStair?.type !== 'stair') {
-    throw new Error(`Duplicated stair "${stairClone.id}" was not created`)
+    useViewer.getState().setSelection({ selectedIds: [] })
+    useEditor.getState().setMovingNode(draft)
+    return {
+      stair: draft,
+      segmentIds: stairSegmentIds(draft),
+    }
+  } catch (error) {
+    if (draftId && useScene.getState().nodes[draftId]) {
+      useScene.getState().deleteNode(draftId)
+    }
+    if (wasTracking) temporal.resume()
+    throw error
   }
+}
 
-  if (mode === 'select') {
-    useViewer.getState().setSelection({ selectedIds: [createdStair.id] })
-  } else {
-    useViewer.getState().setSelection({ selectedIds: [createdStair.id] })
-    requestAnimationFrame(() => moveStairWhenRegistered(createdStair.id))
-  }
-
-  return {
-    stair: createdStair,
-    segmentIds: segmentClones.map((segment) => segment.id),
-  }
+function stairSegmentIds(stair: StairNode): StairSegmentNode['id'][] {
+  return (stair.children ?? []).filter((childId): childId is StairSegmentNode['id'] => {
+    return useScene.getState().nodes[childId as AnyNodeId]?.type === 'stair-segment'
+  })
 }

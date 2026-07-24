@@ -24,6 +24,7 @@ import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extensi
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
+  prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
 import { curveReshapeScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
@@ -116,8 +117,8 @@ function collectQuickActionNodes(
  *  - Add hole (slab + ceiling only): inserts a small default-square
  *    hole at the polygon centroid via `updateNode`. Mirrors the legacy
  *    `handleAddHole` in `floating-action-menu.tsx`.
- *  - Duplicate: deep-clones the node, marks it new, sets it as the
- *    movingNode (placement cursor) — same UX pattern as 3D duplicate.
+ *  - Duplicate: creates a fresh subtree when the kind opts in, otherwise a
+ *    root-only copy, then hands that real draft to the placement cursor.
  *  - Delete: calls `deleteNode(id)`. Cascade is handled by the registry's
  *    `relations.cascadeDelete` if declared on the def.
  *
@@ -320,34 +321,30 @@ export function FloorplanRegistryActionMenu() {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
     useScene.temporal.getState().pause()
-    if (duplicatesAsFreshSubtree(node as AnyNode)) {
-      const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
-      const draft = draftId ? useScene.getState().nodes[draftId] : null
-      if (draft) {
+    let draftId: AnyNodeId | null = null
+    try {
+      if (duplicatesAsFreshSubtree(node as AnyNode)) {
+        draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+        const draft = draftId ? useScene.getState().nodes[draftId] : null
+        if (!draft) return
         setMovingNode(draft as never)
-        setMovingNodeOrigin('2d')
-        useScene.temporal.getState().resume()
-        return
+      } else {
+        const cloned = prepareFreshPlacementRootDuplicate(node as AnyNode)
+        const parsed = def.schema.parse(cloned) as AnyNode
+        draftId = parsed.id as AnyNodeId
+        useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
+        setMovingNode(parsed as never)
       }
+      setMovingNodeOrigin('2d')
+      useViewer.getState().setSelection({ selectedIds: [] })
+    } catch (error) {
+      if (draftId && useScene.getState().nodes[draftId]) {
+        useScene.getState().deleteNode(draftId)
+      }
+      console.error('Failed to duplicate node', error)
+    } finally {
       useScene.temporal.getState().resume()
-      return
     }
-    const cloned = structuredClone(node) as AnyNode & { id?: AnyNodeId }
-    delete (cloned as { id?: AnyNodeId }).id
-    const prevMeta =
-      cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
-        ? (cloned.metadata as Record<string, unknown>)
-        : {}
-    // Mark fresh + hand to the placement cursor so the copy follows the
-    // pointer and only lands on the next click — same gesture for every
-    // kind. Polyline runs (duct / pipe / lineset) ride the same path:
-    // `FloorplanRegistryMoveOverlay` translates their whole `path`, so they
-    // no longer need the old "offset + drop already-placed" special case.
-    cloned.metadata = { ...prevMeta, isNew: true }
-    const parsed = def.schema.parse(cloned) as AnyNode
-    useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
-    setMovingNode(parsed as never)
-    useScene.temporal.getState().resume()
   }
 
   const handleDelete = () => {
