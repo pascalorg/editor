@@ -28,6 +28,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
+  type ComponentProps,
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -145,6 +146,13 @@ const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const DIRECT_DRAG_THRESHOLD_PX = 4
 const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
+
+const ScaleAwareFloorplanGroupSelectionBox = memo(function ScaleAwareFloorplanGroupSelectionBox(
+  props: Omit<ComponentProps<typeof FloorplanGroupSelectionBox>, 'unitsPerPixel'>,
+) {
+  const unitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  return <FloorplanGroupSelectionBox {...props} unitsPerPixel={unitsPerPixel} />
+})
 
 /**
  * Snapshot of node fields captured at drag-start, used by the single-undo
@@ -425,7 +433,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const levelId = selectedLevelId ?? ambientLevelId
   const isAmbient = !selectedLevelId && !!ambientLevelId
   const renderCtx = useFloorplanStaticRender()
-  const unitsPerPixel = useFloorplanStaticUnitsPerPixel()
   const sceneRotationDeg = renderCtx?.getSceneRotationDeg() ?? 0
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
@@ -1378,7 +1385,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={wallDimensionReference}
-            unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1432,7 +1438,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={wallDimensionReference}
-            unitsPerPixel={unitsPerPixel}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1442,11 +1447,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       {/* Dashed group bbox — shows what a group drag carries along while a
           multi-selection exists, rides the live delta mid-drag, and doubles
           as the group's whole-area drag handle. */}
-      <FloorplanGroupSelectionBox
+      <ScaleAwareFloorplanGroupSelectionBox
         onPointerDown={handleGroupBoxPointerDown}
         onRotatePointerDown={handleGroupBoxRotatePointerDown}
         palette={palette}
-        unitsPerPixel={unitsPerPixel}
       />
       {/* Transient live-rotation readout — drawn last so the wedge + degree
           chip sit above all handle chrome while a rotate-arrow is dragged. */}
@@ -1455,7 +1459,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           overlay={rotationOverlay}
           palette={palette}
           sceneRotationDeg={sceneRotationDeg}
-          unitsPerPixel={unitsPerPixel}
         />
       ) : null}
     </g>
@@ -1779,7 +1782,6 @@ type FloorplanRegistryEntryProps = {
   unit: 'metric' | 'imperial'
   metricNotation: 'meters' | 'millimeters'
   wallDimensionReference: FloorplanWallDimensionReference
-  unitsPerPixel: number
   visibilityRootId: AnyNodeId | undefined
 }
 
@@ -1822,7 +1824,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   unit,
   metricNotation,
   wallDimensionReference,
-  unitsPerPixel,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
   const live = useLiveTransforms((s) => (floorplanVisible ? s.transforms.get(nodeId) : undefined))
@@ -1973,7 +1974,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
         onMoveHandlePointerDown={handleMoveHandlePointerDown}
         palette={palette}
         sceneRotationDeg={sceneRotationDeg}
-        unitsPerPixel={unitsPerPixel}
       />
     </g>
   )
@@ -2246,7 +2246,7 @@ export function getFloorplanLevelData(
 
 type InteractiveGeometryProps = {
   geometry: FloorplanGeometry
-  unitsPerPixel: number
+  unitsPerPixel?: number
   palette: FloorplanPalette | undefined
   hatchPatternId: string | undefined
   hoveredHandleId: string | null
@@ -2274,7 +2274,7 @@ type InteractiveGeometryProps = {
 
 export const InteractiveGeometry = memo(function InteractiveGeometry({
   geometry,
-  unitsPerPixel,
+  unitsPerPixel: unitsPerPixelOverride,
   palette,
   hatchPatternId,
   hoveredHandleId,
@@ -2288,6 +2288,9 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
   onHandlePointerDown,
   onMoveHandlePointerDown,
 }: InteractiveGeometryProps): React.ReactElement {
+  const liveUnitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  const unitsPerPixel = unitsPerPixelOverride ?? liveUnitsPerPixel
+
   return renderInteractive(geometry, 0)
 
   function renderInteractive(g: FloorplanGeometry, keyHint: number): React.ReactElement {
@@ -3495,7 +3498,7 @@ const ROTATION_WEDGE_SEGMENTS = 48
 export function RotationAngleOverlay({
   overlay,
   palette,
-  unitsPerPixel,
+  unitsPerPixel: unitsPerPixelOverride,
   sceneRotationDeg,
 }: {
   overlay: RotationOverlayState
@@ -3503,9 +3506,11 @@ export function RotationAngleOverlay({
     FloorplanPalette,
     'measurementLabelBackground' | 'measurementLabelText' | 'measurementStroke'
   >
-  unitsPerPixel: number
+  unitsPerPixel?: number
   sceneRotationDeg: number
 }): React.ReactElement {
+  const liveUnitsPerPixel = useFloorplanStaticUnitsPerPixel()
+  const unitsPerPixel = unitsPerPixelOverride ?? liveUnitsPerPixel
   const { pivot, startAngle, endAngle, radius, sweep } = overlay
   const span = endAngle - startAngle
   const count = Math.max(8, Math.ceil((Math.abs(span) / Math.PI) * ROTATION_WEDGE_SEGMENTS))
