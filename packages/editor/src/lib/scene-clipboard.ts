@@ -48,6 +48,7 @@ const COPYABLE_ROOT_TYPES = new Set<AnyNode['type']>([
 ])
 
 let clipboardPayload: ClipboardPayload | null = null
+let pendingSystemClipboardWrite: Promise<boolean> | null = null
 const subscribers = new Set<() => void>()
 
 function notifySubscribers() {
@@ -397,11 +398,16 @@ function parseClipboardPayload(text: string): ClipboardPayload | null {
 }
 
 function writeSystemClipboard(payload: ClipboardPayload) {
-  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
-  void navigator.clipboard.writeText(serializeClipboardPayload(payload)).catch(() => {
-    // The in-memory clipboard remains available when browser permissions deny
-    // system clipboard access.
-  })
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    pendingSystemClipboardWrite = null
+    return
+  }
+  pendingSystemClipboardWrite = navigator.clipboard
+    .writeText(serializeClipboardPayload(payload))
+    .then(
+      () => true,
+      () => false,
+    )
 }
 
 export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
@@ -417,6 +423,12 @@ export function copySelectedNodesToEditorClipboard(selectedIds?: AnyNodeId[]) {
 }
 
 export async function readEditorClipboardFromSystem() {
+  const pendingWrite = pendingSystemClipboardWrite
+  pendingSystemClipboardWrite = null
+  if (pendingWrite && !(await pendingWrite)) {
+    return hasEditorClipboard()
+  }
+
   if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
     return hasEditorClipboard()
   }

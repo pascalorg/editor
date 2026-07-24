@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import useDeleteConfirmation from '../../store/use-delete-confirmation'
 import {
   Dialog,
@@ -14,6 +15,8 @@ export function DeleteConfirmationDialog() {
   const request = useDeleteConfirmation((state) => state.request)
   const cancel = useDeleteConfirmation((state) => state.cancel)
   const confirm = useDeleteConfirmation((state) => state.confirm)
+
+  useEffect(() => cancel, [cancel])
 
   return (
     <Dialog onOpenChange={(open) => !open && cancel()} open={request !== null}>

@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  EDITOR_LAYER,
   getFloorStackPreviewPosition,
   isAlignmentGuideActive,
   isGridSnapActive,
@@ -215,7 +216,7 @@ const SpawnTool = () => {
 
   return (
     <group ref={cursorRef} visible={cursorVisible}>
-      <SpawnPreview node={previewNode} />
+      <SpawnPreview layers={EDITOR_LAYER} node={previewNode} />
     </group>
   )
 }

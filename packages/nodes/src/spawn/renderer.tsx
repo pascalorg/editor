@@ -18,7 +18,15 @@ const disableRaycast = () => {}
  * Shared visible spawn model. Placement uses the same four meshes as the
  * committed renderer so the orientation shown before click is authoritative.
  */
-const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode }) => {
+const SpawnVisual = ({
+  ghost = false,
+  layers,
+  node,
+}: {
+  ghost?: boolean
+  layers?: number
+  node: SpawnNode
+}) => {
   const handlers = useNodeEvents(node, 'spawn')
   const shading = useViewer((state) => state.shading)
 
@@ -54,6 +62,7 @@ const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode
   return (
     <>
       <mesh
+        layers={layers}
         position={[0, 0.09, 0]}
         raycast={ghost ? disableRaycast : undefined}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -64,6 +73,7 @@ const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode
       </mesh>
 
       <mesh
+        layers={layers}
         position={[0, 0.1, -0.52]}
         raycast={ghost ? disableRaycast : undefined}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -74,6 +84,7 @@ const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode
       </mesh>
 
       <mesh
+        layers={layers}
         position={[0, 0.41, 0]}
         raycast={ghost ? disableRaycast : undefined}
         {...(ghost ? {} : handlers)}
@@ -83,6 +94,7 @@ const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode
       </mesh>
 
       <mesh
+        layers={layers}
         position={[0, 0.83, 0]}
         raycast={ghost ? disableRaycast : undefined}
         {...(ghost ? {} : handlers)}
@@ -94,7 +106,9 @@ const SpawnVisual = ({ ghost = false, node }: { ghost?: boolean; node: SpawnNode
   )
 }
 
-export const SpawnPreview = ({ node }: { node: SpawnNode }) => <SpawnVisual ghost node={node} />
+export const SpawnPreview = ({ layers, node }: { layers?: number; node: SpawnNode }) => (
+  <SpawnVisual ghost layers={layers} node={node} />
+)
 
 /**
  * Registry-driven spawn renderer. Behaviorally identical to the legacy

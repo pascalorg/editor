@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -292,5 +292,34 @@ describe('scene clipboard', () => {
     if (pastedWall?.type === 'wall') {
       expect(pastedWall.slots?.exterior).toBe(`scene:${materialId}`)
     }
+  })
+
+  test('waits for an in-flight copy before reading the browser clipboard', async () => {
+    let systemClipboardText = 'older clipboard contents'
+    let finishWrite!: () => void
+    const readText = mock(async () => systemClipboardText)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText,
+        writeText: (text: string) =>
+          new Promise<void>((resolve) => {
+            finishWrite = () => {
+              systemClipboardText = text
+              resolve()
+            }
+          }),
+      },
+    })
+
+    expect(copySelectedNodesToEditorClipboard([runId])).toBe(true)
+    const paste = pasteSystemEditorClipboardToLevel(targetLevelId)
+    await Promise.resolve()
+    expect(readText).not.toHaveBeenCalled()
+
+    finishWrite()
+    const result = await paste
+    expect(readText).toHaveBeenCalledTimes(1)
+    expect(result?.pastedIds).toHaveLength(1)
   })
 })
