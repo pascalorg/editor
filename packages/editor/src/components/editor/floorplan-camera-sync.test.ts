@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CameraPose } from '@pascal-app/core'
+import { publishInitialCameraPose } from '../../lib/camera-pose'
 import type { NavigationSyncPose } from '../../store/use-editor'
 import {
   cameraPoseToFloorplanNavigationPose,
@@ -176,7 +177,7 @@ describe('floorplan camera sync', () => {
     expect(applied).toEqual([])
   })
 
-  test('waits for a generic camera reference before applying an early 2D pose', () => {
+  test('applies 2D-first navigation on initial load without a 3D interaction', () => {
     const applied: CameraPose[] = []
     const bridge = createFloorplanCameraSyncBridge({
       applyCameraPose: (pose) => applied.push(pose),
@@ -192,7 +193,7 @@ describe('floorplan camera sync', () => {
     })
     expect(applied).toEqual([])
 
-    bridge.receiveCameraPose(cameraPose)
+    publishInitialCameraPose(() => bridge.receiveCameraPose(cameraPose))
     expect(applied).toHaveLength(1)
   })
 

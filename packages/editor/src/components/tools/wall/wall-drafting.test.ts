@@ -86,7 +86,7 @@ describe('createWallOnCurrentLevel', () => {
     useEditor.getState().setSnappingMode('wall', 'lines')
     useInteractionScope
       .getState()
-      .begin({ kind: 'reshaping', nodeId: 'wall_a', reshape: 'endpoint' })
+      .begin({ kind: 'reshaping', nodeId: 'wall_a', reshape: 'endpoint', driver: 'tool' })
     seedLevel([makeWall([0, 0], [4, 0], 'wall_a')])
     useScene.temporal.getState().clear()
     useScene.temporal.getState().resume()

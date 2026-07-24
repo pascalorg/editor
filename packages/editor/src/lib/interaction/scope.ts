@@ -13,6 +13,7 @@
 import type { AnyNode } from '@pascal-app/core'
 
 export type InteractionView = '2d' | '3d'
+export type ReshapeDriver = 'tool' | 'floorplan'
 
 // Endpoint/curve/hole/boundary edits are all "reshape the selected node" — one
 // node, one in-flight reshape. Grouping them as sub-states of `reshaping`
@@ -47,6 +48,8 @@ export type InteractionScope =
       kind: 'reshaping'
       nodeId: string
       reshape: ReshapeKind
+      // Floorplan affordances own their commit and must not mount a second 3D reshape tool.
+      driver: ReshapeDriver
       holeIndex?: number
       endpoint?: 'start' | 'end'
       index?: number
@@ -126,12 +129,14 @@ export function editingHoleInfo(
 export function holeEditScope(target: {
   nodeId: string
   holeIndex: number
+  driver?: ReshapeDriver
 }): ActiveInteractionScope {
   return {
     kind: 'reshaping',
     nodeId: target.nodeId,
     reshape: 'hole',
     holeIndex: target.holeIndex,
+    driver: target.driver ?? 'tool',
   }
 }
 
@@ -140,6 +145,14 @@ export function holeEditScope(target: {
 // recovered from the reshaped node's type, looked up from the scene by nodeId).
 export function isCurveReshape(scope: InteractionScope): boolean {
   return scope.kind === 'reshaping' && scope.reshape === 'curve'
+}
+
+export function isToolDrivenReshape(scope: InteractionScope): boolean {
+  return scope.kind === 'reshaping' && scope.driver === 'tool'
+}
+
+export function isFloorplanDrivenReshape(scope: InteractionScope): boolean {
+  return scope.kind === 'reshaping' && scope.driver === 'floorplan'
 }
 
 // The legacy `movingWallEndpoint` / `movingFenceEndpoint` flags minus the node
@@ -181,31 +194,43 @@ export function reshapingNodeId(scope: InteractionScope): string | null {
 }
 
 // Builders so producers don't re-spell the discriminator at every call site.
-export function curveReshapeScope(nodeId: string): ActiveInteractionScope {
-  return { kind: 'reshaping', nodeId, reshape: 'curve' }
+export function curveReshapeScope(
+  nodeId: string,
+  driver: ReshapeDriver = 'tool',
+): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'curve', driver }
 }
 
 export function endpointReshapeScope(
   nodeId: string,
   endpoint: 'start' | 'end',
+  driver: ReshapeDriver = 'tool',
 ): ActiveInteractionScope {
-  return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint }
+  return { kind: 'reshaping', nodeId, reshape: 'endpoint', endpoint, driver }
 }
 
-export function controlPointReshapeScope(nodeId: string, index: number): ActiveInteractionScope {
-  return { kind: 'reshaping', nodeId, reshape: 'control-point', index }
+export function controlPointReshapeScope(
+  nodeId: string,
+  index: number,
+  driver: ReshapeDriver = 'tool',
+): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'control-point', index, driver }
 }
 
 export function tangentReshapeScope(
   nodeId: string,
   index: number,
   side: 'in' | 'out',
+  driver: ReshapeDriver = 'tool',
 ): ActiveInteractionScope {
-  return { kind: 'reshaping', nodeId, reshape: 'tangent', index, side }
+  return { kind: 'reshaping', nodeId, reshape: 'tangent', index, side, driver }
 }
 
 // Dragging a polygon vertex/edge (slab / ceiling boundary). Drives the snapping
 // HUD (no-angle 'polygon' set) and keeps the idle select hints off-screen.
-export function boundaryReshapeScope(nodeId: string): ActiveInteractionScope {
-  return { kind: 'reshaping', nodeId, reshape: 'boundary' }
+export function boundaryReshapeScope(
+  nodeId: string,
+  driver: ReshapeDriver = 'tool',
+): ActiveInteractionScope {
+  return { kind: 'reshaping', nodeId, reshape: 'boundary', driver }
 }

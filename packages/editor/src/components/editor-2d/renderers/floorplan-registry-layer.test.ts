@@ -19,11 +19,23 @@ import {
   collectFloorplanDependencyNodes,
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
+  floorplanAffordanceReshapeScope,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
+
+describe('floorplan affordance ownership', () => {
+  test('keeps the wall center curve drag owned by the floorplan dispatcher', () => {
+    expect(floorplanAffordanceReshapeScope('wall-curve', 'wall_1', undefined)).toEqual({
+      kind: 'reshaping',
+      nodeId: 'wall_1',
+      reshape: 'curve',
+      driver: 'floorplan',
+    })
+  })
+})
 
 function cabinetRun(id: string, children: string[] = [], parentId: string | null = 'level_test') {
   return {

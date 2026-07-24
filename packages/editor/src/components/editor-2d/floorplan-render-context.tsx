@@ -1,7 +1,15 @@
 'use client'
 
 import type { FloorplanPalette } from '@pascal-app/core'
-import { createContext, type ReactNode, useContext, useMemo, useRef } from 'react'
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react'
 
 /**
  * Per-frame render context shared between the legacy `floorplan-panel.tsx`
@@ -40,6 +48,7 @@ export type FloorplanStaticRenderContextValue = Omit<
 > & {
   getSceneRotationDeg: () => number
   getUnitsPerPixel: () => number
+  subscribeUnitsPerPixel: (listener: () => void) => () => void
 }
 
 const FloorplanStaticRenderContext = createContext<FloorplanStaticRenderContextValue | null>(null)
@@ -48,6 +57,7 @@ const FloorplanUnitsPerPixelContext = createContext(1)
 
 export type FloorplanRenderScaleReference = {
   read: () => number
+  subscribe: (listener: () => void) => () => void
   update: (unitsPerPixel: number) => void
 }
 
@@ -55,10 +65,17 @@ export function createFloorplanRenderScaleReference(
   initialUnitsPerPixel: number,
 ): FloorplanRenderScaleReference {
   let unitsPerPixel = initialUnitsPerPixel
+  const listeners = new Set<() => void>()
   return {
     read: () => unitsPerPixel,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
     update: (nextUnitsPerPixel) => {
+      if (Object.is(unitsPerPixel, nextUnitsPerPixel)) return
       unitsPerPixel = nextUnitsPerPixel
+      for (const listener of listeners) listener()
     },
   }
 }
@@ -78,11 +95,20 @@ export function FloorplanRenderProvider({
   if (!renderScaleReference.current) {
     renderScaleReference.current = createFloorplanRenderScaleReference(unitsPerPixel)
   }
-  renderScaleReference.current.update(unitsPerPixel)
   const getUnitsPerPixel = renderScaleReference.current.read
+  const subscribeUnitsPerPixel = renderScaleReference.current.subscribe
+  useLayoutEffect(() => {
+    renderScaleReference.current?.update(unitsPerPixel)
+  }, [unitsPerPixel])
   const staticValue = useMemo<FloorplanStaticRenderContextValue>(
-    () => ({ palette, hatchPatternId, getSceneRotationDeg, getUnitsPerPixel }),
-    [palette, hatchPatternId, getSceneRotationDeg, getUnitsPerPixel],
+    () => ({
+      palette,
+      hatchPatternId,
+      getSceneRotationDeg,
+      getUnitsPerPixel,
+      subscribeUnitsPerPixel,
+    }),
+    [palette, hatchPatternId, getSceneRotationDeg, getUnitsPerPixel, subscribeUnitsPerPixel],
   )
   return (
     <FloorplanStaticRenderContext.Provider value={staticValue}>
@@ -122,6 +148,18 @@ export function useFloorplanRender(): FloorplanRenderContextValue | null {
 
 export function useFloorplanStaticRender(): FloorplanStaticRenderContextValue | null {
   return useContext(FloorplanStaticRenderContext)
+}
+
+const subscribeToNoFloorplanScale = () => () => {}
+const readDefaultFloorplanScale = () => 1
+
+export function useFloorplanStaticUnitsPerPixel(): number {
+  const staticValue = useContext(FloorplanStaticRenderContext)
+  return useSyncExternalStore(
+    staticValue?.subscribeUnitsPerPixel ?? subscribeToNoFloorplanScale,
+    staticValue?.getUnitsPerPixel ?? readDefaultFloorplanScale,
+    staticValue?.getUnitsPerPixel ?? readDefaultFloorplanScale,
+  )
 }
 
 export function useFloorplanSceneRotation(): number {

@@ -88,7 +88,11 @@ import {
   startFloorplanGroupMove,
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
-import { useFloorplanSceneRotation, useFloorplanStaticRender } from '../floorplan-render-context'
+import {
+  useFloorplanSceneRotation,
+  useFloorplanStaticRender,
+  useFloorplanStaticUnitsPerPixel,
+} from '../floorplan-render-context'
 import {
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
@@ -235,7 +239,7 @@ export function subscribeFloorplanAffordanceToolCancel(
 // affordances return `null` (no polygon/wall snapping chip). Keyed off the
 // affordance name the kinds register (`move-vertex` / `move-edge` / `add-vertex`
 // / `curve` / `move-endpoint`).
-function affordanceReshapeScope(
+export function floorplanAffordanceReshapeScope(
   affordance: string,
   nodeId: string,
   payload: unknown,
@@ -243,30 +247,30 @@ function affordanceReshapeScope(
   if (affordance.includes('vertex') || affordance.includes('edge')) {
     const holeIndex = (payload as { holeIndex?: number } | undefined)?.holeIndex
     return holeIndex !== undefined
-      ? holeEditScope({ nodeId, holeIndex })
-      : boundaryReshapeScope(nodeId)
+      ? holeEditScope({ nodeId, holeIndex, driver: 'floorplan' })
+      : boundaryReshapeScope(nodeId, 'floorplan')
   }
   if (affordance.includes('curve')) {
-    return curveReshapeScope(nodeId)
+    return curveReshapeScope(nodeId, 'floorplan')
   }
   if (affordance.includes('control-point')) {
     const index = (payload as { index?: number } | undefined)?.index ?? 0
-    return controlPointReshapeScope(nodeId, index)
+    return controlPointReshapeScope(nodeId, index, 'floorplan')
   }
   if (affordance.includes('tangent')) {
     const target = payload as { index?: number; side?: 'in' | 'out' } | undefined
-    return tangentReshapeScope(nodeId, target?.index ?? 0, target?.side ?? 'out')
+    return tangentReshapeScope(nodeId, target?.index ?? 0, target?.side ?? 'out', 'floorplan')
   }
   if (affordance.includes('endpoint')) {
     const endpoint = (payload as { endpoint?: 'start' | 'end' } | undefined)?.endpoint ?? 'end'
-    return endpointReshapeScope(nodeId, endpoint)
+    return endpointReshapeScope(nodeId, endpoint, 'floorplan')
   }
   // Roof-segment width/depth resize — a no-angle dimension edit, so the
   // no-angle 'polygon' snap set (grid / lines / off) via a boundary scope.
   // Matched exactly so a still-legacy `*-resize` affordance on another kind
   // doesn't get a chip its snap math can't honour yet.
   if (affordance === 'roof-segment-resize') {
-    return boundaryReshapeScope(nodeId)
+    return boundaryReshapeScope(nodeId, 'floorplan')
   }
   // 2D corner rotate-arrow (column / elevator / roof-segment / shelf / spawn /
   // stair). Begin the same handle-drag scope the 3D rotate gizmo uses, label-
@@ -421,6 +425,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const levelId = selectedLevelId ?? ambientLevelId
   const isAmbient = !selectedLevelId && !!ambientLevelId
   const renderCtx = useFloorplanStaticRender()
+  const unitsPerPixel = useFloorplanStaticUnitsPerPixel()
   const sceneRotationDeg = renderCtx?.getSceneRotationDeg() ?? 0
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
@@ -1059,7 +1064,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // the right chip during the edit AND `getActiveSnapContext()` resolves the
       // polygon / wall mode-set the affordance's snap math reads. Torn down on
       // release / cancel below. `null` for resize / rotate (no snapping chip).
-      const reshapeScope = affordanceReshapeScope(affordance, nodeId, payload)
+      const reshapeScope = floorplanAffordanceReshapeScope(affordance, nodeId, payload)
       if (reshapeScope) {
         useInteractionScope.getState().begin(reshapeScope)
       }
@@ -1305,7 +1310,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const entries = floorplanData.entries
   if (entries.length === 0) return null
 
-  const unitsPerPixel = renderCtx?.getUnitsPerPixel() ?? 1
   const palette = renderCtx?.palette
 
   return (
