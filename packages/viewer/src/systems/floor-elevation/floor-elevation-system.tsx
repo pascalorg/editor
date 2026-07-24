@@ -6,6 +6,7 @@ import {
   type LiveTransform,
   nodeRegistry,
   sceneRegistry,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
@@ -61,10 +62,18 @@ export const FloorElevationSystem = () => {
   const clearDirty = useScene((s) => s.clearDirty)
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    // Nodes with a live preview (override / transform) are reapplied EVERY
+    // frame, not only while dirty: the React commit that rebinds the group's
+    // base-Y position can land between frames, after the dirty mark was
+    // already consumed by the priority-2 systems — without this the lift
+    // vanishes until the next pointer tick re-dirties (visible Y blink
+    // during group drags over elevated slabs).
+    const overrides = useLiveNodeOverrides.getState().overrides
+    const transforms = useLiveTransforms.getState().transforms
+    if (dirtyNodes.size === 0 && overrides.size === 0 && transforms.size === 0) return
     const nodes = useScene.getState().nodes
 
-    dirtyNodes.forEach((id) => {
+    const applyLift = (id: AnyNodeId) => {
       const node = nodes[id]
       if (!node) return
 
@@ -99,9 +108,19 @@ export const FloorElevationSystem = () => {
       })
       mesh.position.y = visualPosition[1]
 
-      if (!(def.geometry || def.system)) {
-        clearDirty(id as AnyNodeId)
+      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
+        clearDirty(id)
       }
+    }
+
+    dirtyNodes.forEach((id) => {
+      applyLift(id)
+    })
+    overrides.forEach((_values, id) => {
+      if (!dirtyNodes.has(id as AnyNodeId)) applyLift(id as AnyNodeId)
+    })
+    transforms.forEach((_transform, id) => {
+      if (!dirtyNodes.has(id as AnyNodeId) && !overrides.has(id)) applyLift(id as AnyNodeId)
     })
   }, 1)
 

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type DoorNode,
   getGarageVisibleOpeningRatio,
+  getLevelElevations,
   isOperationDoorType,
   nodeRegistry,
   sceneRegistry,
@@ -129,10 +130,12 @@ function createLevelFallbackFloorGeometry(level: LevelNode, nodes: SceneNodes) {
 
 function collectLevelFallbackFloorGeometries(nodes: SceneNodes) {
   const geometries: THREE.BufferGeometry[] = []
+  const levelElevations = getLevelElevations(nodes)
 
   for (const levelId of sceneRegistry.byType.level!) {
     const node = nodes[levelId as AnyNodeId]
     if (node?.type !== 'level') continue
+    if (levelElevations.get(node.id)?.baseY !== 0) continue
 
     const geometry = createLevelFallbackFloorGeometry(node, nodes)
     if (geometry) geometries.push(geometry)

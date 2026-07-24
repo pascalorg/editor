@@ -1128,6 +1128,20 @@ export const FirstPersonControls = () => {
     return () => window.cancelAnimationFrame(frame)
   }, [gl])
 
+  // The pointer-lock effect below must be mount-stable. Its cleanup exits
+  // pointer lock, and `toggleInteractableTarget` is recreated whenever the
+  // camera object changes — which happens right after entry when the
+  // persisted orthographic mode swaps to perspective. If the async lock
+  // grant lands before that re-run, the cleanup's exitPointerLock fires an
+  // unlock the handler reads as "user left walkthrough", instantly
+  // cancelling a fresh entry (and arming the browser's ~1.25s re-lock
+  // cooldown, so the next presses fail too). Route the callback through a
+  // ref so the effect deps stay `[gl]`.
+  const toggleInteractableTargetRef = useRef(toggleInteractableTarget)
+  useEffect(() => {
+    toggleInteractableTargetRef.current = toggleInteractableTarget
+  }, [toggleInteractableTarget])
+
   useEffect(() => {
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
@@ -1155,7 +1169,7 @@ export const FirstPersonControls = () => {
 
       event.preventDefault()
       event.stopPropagation()
-      toggleInteractableTarget()
+      toggleInteractableTargetRef.current()
     }
 
     const handlePointerLockChange = () => {
@@ -1192,7 +1206,7 @@ export const FirstPersonControls = () => {
         document.exitPointerLock()
       }
     }
-  }, [gl, toggleInteractableTarget])
+  }, [gl])
 
   useEffect(() => {
     const canvas = gl.domElement

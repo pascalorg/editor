@@ -1,3 +1,4 @@
+import { nodeRegistry } from '../registry'
 import { AnyNode, type AnyNodeType } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 
@@ -13,6 +14,8 @@ export type ValidationIssue = {
 export type BuildStats = {
   total: number
   byType: Partial<Record<AnyNodeType, number>>
+  /** Kinds outside the static schema union but registered at runtime (plugins). */
+  pluginTypes: Record<string, number>
   unknownTypes: Record<string, number>
   floorAreaM2: number
 }
@@ -80,7 +83,13 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const errors: ValidationIssue[] = []
   const warnings: ValidationIssue[] = []
   const schemaIssues: SchemaIssue[] = []
-  const stats: BuildStats = { total: 0, byType: {}, unknownTypes: {}, floorAreaM2: 0 }
+  const stats: BuildStats = {
+    total: 0,
+    byType: {},
+    pluginTypes: {},
+    unknownTypes: {},
+    floorAreaM2: 0,
+  }
 
   if (!isPlainObject(input)) {
     errors.push({
@@ -167,6 +176,33 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     })
   }
 
+  // Ids of nodes whose type falls outside the static schema union — plugin
+  // kinds (`trees:tree`) or genuinely unknown types. The scene store accepts
+  // them on load (they already round-trip through the DB fine) and they're
+  // surfaced by the unknown-types warning, but a parent's strict `children`
+  // id union would hard-fail over them: validate parents against a copy with
+  // those ids filtered out. The imported data itself keeps them.
+  const nonSchemaNodeIds = new Set<string>()
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value)) continue
+    const type = typeof value.type === 'string' ? value.type : null
+    if (type && KNOWN_TYPES.has(type)) continue
+    nonSchemaNodeIds.add(typeof value.id === 'string' ? value.id : key)
+  }
+  const withoutNonSchemaChildren = (value: Record<string, unknown>): Record<string, unknown> => {
+    const children = value.children
+    if (!Array.isArray(children)) return value
+    if (!children.some((child) => typeof child === 'string' && nonSchemaNodeIds.has(child))) {
+      return value
+    }
+    return {
+      ...value,
+      children: children.filter(
+        (child) => !(typeof child === 'string' && nonSchemaNodeIds.has(child)),
+      ),
+    }
+  }
+
   let validRootCount = 0
   let mismatchedKeyCount = 0
   let schemaFailureCount = 0
@@ -206,7 +242,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       const t = type as AnyNodeType
       stats.byType[t] = (stats.byType[t] ?? 0) + 1
 
-      const parseResult = AnyNode.safeParse(value)
+      const parseResult = AnyNode.safeParse(withoutNonSchemaChildren(value))
       if (!parseResult.success) {
         schemaFailureCount += 1
         const issue = parseResult.error.issues[0]
@@ -232,7 +268,28 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
         }
       }
     } else {
-      stats.unknownTypes[type] = (stats.unknownTypes[type] ?? 0) + 1
+      const registered = nodeRegistry.get(type)
+      if (registered) {
+        // A runtime-registered plugin kind (e.g. `trees:tree`) is a
+        // first-class citizen: validate it with its own registered schema
+        // instead of flagging it unknown. Files from projects whose plugin
+        // is NOT loaded here still fall through to the unknown-types
+        // warning below.
+        stats.pluginTypes[type] = (stats.pluginTypes[type] ?? 0) + 1
+        const parseResult = registered.schema.safeParse(value)
+        if (!parseResult.success) {
+          schemaFailureCount += 1
+          const issue = parseResult.error.issues[0]
+          schemaIssues.push({
+            nodeId: key,
+            nodeType: type,
+            path: issue ? issue.path.join('.') : '',
+            message: issue ? issue.message : 'schema mismatch',
+          })
+        }
+      } else {
+        stats.unknownTypes[type] = (stats.unknownTypes[type] ?? 0) + 1
+      }
     }
 
     if (parentId && !(parentId in nodes)) {

@@ -28,10 +28,10 @@ import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
 import {
   generateSceneMaterialId,
-  type SceneMaterial,
+  SceneMaterial,
   type SceneMaterialId,
 } from '../schema/scene-material'
-import type { AnyNode, AnyNodeId } from '../schema/types'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
 import { deriveLegacyLevelHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
@@ -1594,75 +1594,344 @@ export type ScenePatch = {
   nodeUpdates: SceneNodePatch[]
 }
 
-export function applyScenePatch(changes: ScenePatch): boolean {
-  const beforeState = useScene.getState()
-  const hasInvalidNodeTarget = changes.nodeUpdates.some(({ id, data, removeFields }) => {
-    const node = beforeState.nodes[id]
-    if (!node) return true
-    if ('id' in data && data.id !== node.id) return true
-    if ('type' in data && data.type !== node.type) return true
-    if ('object' in data && data.object !== node.object) return true
-    if (removeFields.some((field) => field === 'id' || field === 'object' || field === 'type')) {
-      return true
+export type SceneNodeStructuralPatch = {
+  node: AnyNode
+  position: number
+}
+
+export type SceneOperationPatch = ScenePatch & {
+  nodeCreates: SceneNodeStructuralPatch[]
+  nodeDeletes: SceneNodeStructuralPatch[]
+}
+
+function sceneOperationPatchLiveConflictIds(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): Set<AnyNodeId> {
+  const ids = new Set<AnyNodeId>()
+  const addNodeAndParent = (node: AnyNode | undefined) => {
+    if (!node) return
+    ids.add(node.id)
+    if (node.parentId) ids.add(node.parentId as AnyNodeId)
+  }
+  for (const { id, data } of changes.nodeUpdates) {
+    ids.add(id)
+    if (Object.hasOwn(data, 'parentId')) {
+      const currentParentId = beforeState.nodes[id]?.parentId
+      if (currentParentId) ids.add(currentParentId as AnyNodeId)
+      if (typeof data.parentId === 'string') ids.add(data.parentId as AnyNodeId)
     }
-    return removeFields.some((field) => Object.hasOwn(data, field))
-  })
-  const hasInvalidMaterialTarget = changes.materialChanges.some(
-    ({ id, material }) => material !== null && material.id !== id,
+  }
+  for (const { node } of changes.nodeCreates) addNodeAndParent(node)
+  for (const { node } of changes.nodeDeletes) addNodeAndParent(node)
+  return ids
+}
+
+function sceneOperationPatchHasLiveConflict(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): boolean {
+  const overrides = useLiveNodeOverrides.getState()
+  const transforms = useLiveTransforms.getState()
+  for (const id of sceneOperationPatchLiveConflictIds(beforeState, changes)) {
+    if (overrides.get(id) || transforms.get(id)) return true
+  }
+  return false
+}
+
+function areScenePatchValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  if (typeof left !== typeof right || left === null || right === null) return false
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => areScenePatchValuesEqual(value, right[index]))
+    )
+  }
+  if (typeof left !== 'object' || typeof right !== 'object') return false
+  const leftRecord = left as Record<string, unknown>
+  const rightRecord = right as Record<string, unknown>
+  const leftKeys = Object.keys(leftRecord)
+  if (leftKeys.length !== Object.keys(rightRecord).length) return false
+  return leftKeys.every(
+    (key) =>
+      Object.hasOwn(rightRecord, key) &&
+      areScenePatchValuesEqual(leftRecord[key], rightRecord[key]),
   )
+}
+
+function parseSceneOperationPatchNode(value: unknown): AnyNode | null {
+  const builtin = AnyNodeSchema.safeParse(value)
+  if (builtin.success) return builtin.data
+  if (!(value && typeof value === 'object' && !Array.isArray(value))) return null
+  const type = (value as { type?: unknown }).type
+  if (typeof type !== 'string') return null
+  const registered = nodeRegistry.get(type)?.schema.safeParse(value)
+  return registered?.success ? (registered.data as AnyNode) : null
+}
+
+function structuralSiblingIds(
+  nodes: Record<AnyNodeId, AnyNode>,
+  rootNodeIds: AnyNodeId[],
+  parentId: AnyNodeId | null,
+): AnyNodeId[] | null {
+  if (!parentId) return rootNodeIds
+  const parent = nodes[parentId]
+  if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+  return parent.children.every((id) => typeof id === 'string')
+    ? (parent.children as AnyNodeId[])
+    : null
+}
+
+function insertSceneStructuralPlacements(
+  base: AnyNodeId[],
+  placements: readonly SceneNodeStructuralPatch[],
+): AnyNodeId[] | null {
+  if (placements.length === 0) return base
+  const result = new Array<AnyNodeId | undefined>(base.length + placements.length)
+  for (const change of placements) {
+    if (
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0 ||
+      change.position >= result.length ||
+      result[change.position] !== undefined
+    ) {
+      return null
+    }
+    result[change.position] = change.node.id
+  }
+  let baseIndex = 0
+  for (let index = 0; index < result.length; index += 1) {
+    if (result[index] !== undefined) continue
+    result[index] = base[baseIndex]
+    baseIndex += 1
+  }
+  return result as AnyNodeId[]
+}
+
+function sceneOperationPatchNextState(
+  beforeState: SceneState,
+  changes: SceneOperationPatch,
+): Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> | null {
+  const createIds = new Set<AnyNodeId>()
+  const deleteIds = new Set<AnyNodeId>()
+  const updateIds = new Set<AnyNodeId>()
+  const materialIds = new Set<SceneMaterialId>()
+  const parsedCreates: SceneNodeStructuralPatch[] = []
+
+  for (const change of changes.nodeCreates) {
+    const parsed = parseSceneOperationPatchNode(change.node)
+    if (
+      !parsed ||
+      parsed.id !== change.node.id ||
+      createIds.has(parsed.id) ||
+      Object.hasOwn(beforeState.nodes, parsed.id) ||
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0
+    ) {
+      return null
+    }
+    createIds.add(parsed.id)
+    parsedCreates.push({ node: change.node, position: change.position })
+  }
+  for (const change of changes.nodeDeletes) {
+    const id = change.node.id
+    const current = beforeState.nodes[id]
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    const siblings = structuralSiblingIds(beforeState.nodes, beforeState.rootNodeIds, parentId)
+    if (
+      !current ||
+      createIds.has(id) ||
+      deleteIds.has(id) ||
+      !Number.isSafeInteger(change.position) ||
+      change.position < 0 ||
+      siblings?.[change.position] !== id ||
+      !areScenePatchValuesEqual(current, change.node)
+    ) {
+      return null
+    }
+    deleteIds.add(id)
+  }
+  for (const id of createIds) {
+    if (deleteIds.has(id)) return null
+  }
+  for (const node of Object.values(beforeState.nodes)) {
+    const parentId = (node.parentId as AnyNodeId | null | undefined) ?? null
+    if (parentId && deleteIds.has(parentId) && !deleteIds.has(node.id)) return null
+  }
+
+  const nextNodes = { ...beforeState.nodes }
+  let nextRootNodeIds =
+    deleteIds.size > 0
+      ? beforeState.rootNodeIds.filter((id) => !deleteIds.has(id))
+      : beforeState.rootNodeIds
+  const changedParentIds = new Set<AnyNodeId>()
+  for (const change of changes.nodeDeletes) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    if (parentId && !deleteIds.has(parentId)) changedParentIds.add(parentId)
+    delete nextNodes[change.node.id]
+  }
+  for (const parentId of changedParentIds) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    nextNodes[parentId] = {
+      ...parent,
+      children: (parent.children as AnyNodeId[]).filter((id) => !deleteIds.has(id)),
+    } as AnyNode
+  }
+
+  for (const change of parsedCreates) nextNodes[change.node.id] = change.node
+  const rootCreates: SceneNodeStructuralPatch[] = []
+  const existingParentCreates = new Map<AnyNodeId, SceneNodeStructuralPatch[]>()
+  for (const change of parsedCreates) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    if (!parentId) {
+      rootCreates.push(change)
+      continue
+    }
+    const parent = nextNodes[parentId]
+    if (!parent) return null
+    if (createIds.has(parentId)) {
+      if (
+        !('children' in parent) ||
+        !Array.isArray(parent.children) ||
+        parent.children[change.position] !== change.node.id
+      ) {
+        return null
+      }
+      continue
+    }
+    const placements = existingParentCreates.get(parentId) ?? []
+    placements.push(change)
+    existingParentCreates.set(parentId, placements)
+  }
+  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
+  if (!insertedRoots) return null
+  nextRootNodeIds = insertedRoots
+  for (const [parentId, placements] of existingParentCreates) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
+    if (!children) return null
+    nextNodes[parentId] = { ...parent, children } as AnyNode
+  }
+  for (const change of parsedCreates) {
+    const parentId = (change.node.parentId as AnyNodeId | null | undefined) ?? null
+    const siblings = structuralSiblingIds(nextNodes, nextRootNodeIds, parentId)
+    if (siblings?.[change.position] !== change.node.id) return null
+    if (!('children' in change.node && Array.isArray(change.node.children))) continue
+    for (const childId of change.node.children as AnyNodeId[]) {
+      if (nextNodes[childId]?.parentId !== change.node.id) return null
+    }
+  }
+
+  for (const { id, data, removeFields } of changes.nodeUpdates) {
+    const node = nextNodes[id]
+    if (
+      !node ||
+      createIds.has(id) ||
+      deleteIds.has(id) ||
+      updateIds.has(id) ||
+      ('id' in data && data.id !== node.id) ||
+      ('type' in data && data.type !== node.type) ||
+      ('object' in data && data.object !== node.object) ||
+      removeFields.some(
+        (field) =>
+          field === 'id' || field === 'object' || field === 'type' || Object.hasOwn(data, field),
+      )
+    ) {
+      return null
+    }
+    updateIds.add(id)
+    const candidate = { ...node, ...data } as Record<string, unknown>
+    for (const field of removeFields) delete candidate[field]
+    const validated = parseSceneOperationPatchNode(candidate)
+    if (
+      !validated ||
+      validated.id !== id ||
+      validated.type !== node.type ||
+      validated.object !== node.object
+    ) {
+      return null
+    }
+    nextNodes[id] = candidate as AnyNode
+  }
+
+  const materials =
+    changes.materialChanges.length > 0 ? { ...beforeState.materials } : beforeState.materials
+  for (const { id, material } of changes.materialChanges) {
+    if (
+      materialIds.has(id) ||
+      (material !== null && (material.id !== id || !SceneMaterial.safeParse(material).success))
+    ) {
+      return null
+    }
+    materialIds.add(id)
+    if (material === null) delete materials[id]
+    else materials[id] = material
+  }
+
+  return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+}
+
+export function applySceneOperationPatch(changes: SceneOperationPatch): boolean {
+  const beforeState = useScene.getState()
   if (
-    (changes.nodeUpdates.length === 0 && changes.materialChanges.length === 0) ||
-    hasInvalidNodeTarget ||
-    hasInvalidMaterialTarget
+    changes.nodeUpdates.length === 0 &&
+    changes.materialChanges.length === 0 &&
+    changes.nodeCreates.length === 0 &&
+    changes.nodeDeletes.length === 0
   ) {
     return false
   }
-
-  const temporalState = useScene.temporal.getState()
-  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) return false
+  if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
+  const next = sceneOperationPatchNextState(beforeState, changes)
+  if (!next) return false
 
   const before = sceneHistorySnapshotFromState(beforeState)
-  pauseSceneHistory(useScene)
+  const shouldScopeHistoryPause =
+    useScene.temporal.getState().isTracking || getSceneHistoryPauseDepth() > 0
+  if (shouldScopeHistoryPause) pauseSceneHistory(useScene)
   try {
-    // Host-owned fields bypass the UI lock without running local mutation cascades.
-    useScene.setState((state) => {
-      const nodes = changes.nodeUpdates.length > 0 ? { ...state.nodes } : state.nodes
-      for (const { id, data, removeFields } of changes.nodeUpdates) {
-        const node = nodes[id]
-        if (!node) return {}
-        const nextNode = { ...node, ...data }
-        for (const field of removeFields) delete nextNode[field as keyof typeof nextNode]
-        nodes[id] = nextNode as AnyNode
-      }
-      const materials =
-        changes.materialChanges.length > 0 ? { ...state.materials } : state.materials
-      for (const { id, material } of changes.materialChanges) {
-        if (material === null) {
-          delete materials[id]
-        } else {
-          materials[id] = material
-        }
-      }
-      return { materials, nodes }
-    })
+    useScene.setState(next)
   } finally {
-    resumeSceneHistory(useScene)
+    if (shouldScopeHistoryPause) resumeSceneHistory(useScene)
   }
 
   const currentState = useScene.getState()
   const current = sceneHistorySnapshotFromState(currentState)
-  for (const { id } of changes.nodeUpdates) {
+  const touchedNodeIds = new Set<AnyNodeId>([
+    ...changes.nodeUpdates.map(({ id }) => id),
+    ...changes.nodeCreates.map(({ node }) => node.id),
+    ...changes.nodeDeletes.map(({ node }) => node.id),
+  ])
+  for (const id of touchedNodeIds) {
     useLiveNodeOverrides.getState().clear(id)
     useLiveTransforms.getState().clear(id)
   }
   if (areSceneSnapshotsEqual(before, current)) return false
 
-  for (const { id } of changes.nodeUpdates) {
-    currentState.markDirty(id)
+  for (const id of touchedNodeIds) {
+    if (current.nodes[id]) currentState.markDirty(id)
+    else currentState.clearDirty(id)
     const beforeParentId = before.nodes[id]?.parentId as AnyNodeId | null | undefined
     const currentParentId = current.nodes[id]?.parentId as AnyNodeId | null | undefined
     if (beforeParentId) currentState.markDirty(beforeParentId)
     if (currentParentId) currentState.markDirty(currentParentId)
+  }
+  const structuralParentIds = new Set<AnyNodeId>()
+  for (const { node } of changes.nodeCreates) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const { node } of changes.nodeDeletes) {
+    if (node.parentId) structuralParentIds.add(node.parentId as AnyNodeId)
+  }
+  for (const parentId of structuralParentIds) {
+    const parent = current.nodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) continue
+    for (const childId of parent.children) currentState.markDirty(childId as AnyNodeId)
   }
   if (changes.materialChanges.length > 0) {
     const materialRefs = new Set(changes.materialChanges.map(({ id }) => toSceneMaterialRef(id)))
@@ -1673,6 +1942,7 @@ export function applyScenePatch(changes: ScenePatch): boolean {
       if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
     }
   }
+  for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
     origin: 'host',
@@ -1680,6 +1950,14 @@ export function applyScenePatch(changes: ScenePatch): boolean {
     current,
   })
   return true
+}
+
+export function applyScenePatch(changes: ScenePatch): boolean {
+  return applySceneOperationPatch({
+    ...changes,
+    nodeCreates: [],
+    nodeDeletes: [],
+  })
 }
 
 export type ApplySceneSnapshotOptions = {

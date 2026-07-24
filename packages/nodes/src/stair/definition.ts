@@ -468,7 +468,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
       const aabb = stairFootprintAABB(node as StairNodeType, nodes)
       return aabb ? { shape: 'aabb', ...aabb } : null
     },
-    duplicable: true,
+    duplicable: { subtree: true },
     deletable: true,
     floorPlaced: {
       footprints: (node, ctx) =>

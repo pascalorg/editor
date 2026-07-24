@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  BuildingNode,
   CeilingNode,
   ColumnNode,
   ElevatorNode,
@@ -46,8 +47,9 @@ function mountNode(
   sceneRegistry.byType[node.type]!.add(node.id)
 }
 
-function mountRegistryGroup(node: AnyNode) {
+function mountRegistryGroup(node: AnyNode, position: [number, number, number] = [0, 0, 0]) {
   const group = new Group()
+  group.position.set(position[0], position[1], position[2])
   group.updateMatrixWorld(true)
   sceneRegistry.nodes.set(node.id, group)
   sceneRegistry.byType[node.type]!.add(node.id)
@@ -151,6 +153,34 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     const level = LevelNode.parse({ id: 'level_test', level: 0 })
     setSceneNodes([level])
     mountRegistryGroup(level)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()
+
+    expect(world).not.toBeNull()
+    expect(world?.bounds?.min.y).toBeCloseTo(-0.08)
+    expect(world?.bounds?.max.y).toBeCloseTo(0)
+    world?.dispose()
+  })
+
+  test('adds a fallback floor only for the lowest slab-less level in a building', () => {
+    const building = BuildingNode.parse({
+      id: 'building_test',
+      children: ['level_ground', 'level_upper'],
+    })
+    const groundLevel = LevelNode.parse({
+      id: 'level_ground',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+    })
+    const upperLevel = LevelNode.parse({
+      id: 'level_upper',
+      parentId: building.id,
+      level: 1,
+    })
+    setSceneNodes([building, groundLevel, upperLevel])
+    mountRegistryGroup(groundLevel)
+    mountRegistryGroup(upperLevel, [0, 3, 0])
 
     const world = buildFirstPersonColliderWorldFromRegistry()
 

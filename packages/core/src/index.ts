@@ -230,12 +230,15 @@ export { default as useLiveTransforms, type LiveTransform } from './store/use-li
 export {
   type ApplySceneSnapshotOptions,
   acquireSceneReadOnlyLease,
+  applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
   default as useScene,
   type SceneMaterialPatch,
   type SceneNodePatch,
+  type SceneNodeStructuralPatch,
+  type SceneOperationPatch,
   type ScenePatch,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'

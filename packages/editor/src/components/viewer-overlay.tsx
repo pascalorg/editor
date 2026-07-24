@@ -24,7 +24,11 @@ function requestWalkthroughPointerLock() {
   if (document.pointerLockElement === canvas) return
 
   try {
-    canvas.requestPointerLock?.()
+    // The request can also reject ASYNC (browser cooldown after a recent
+    // unlock) — swallow it like the P-resume path; clicking the canvas
+    // re-requests once the cooldown passes.
+    const result = canvas.requestPointerLock?.() as Promise<void> | undefined
+    if (result && typeof result.catch === 'function') result.catch(() => {})
   } catch {
     return
   }

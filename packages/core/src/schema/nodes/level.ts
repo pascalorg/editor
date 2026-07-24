@@ -1,66 +1,67 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { CeilingNode } from './ceiling'
-import { ColumnNode } from './column'
-import { ConstructionDimensionNode } from './construction-dimension'
-import { DuctFittingNode } from './duct-fitting'
-import { DuctSegmentNode } from './duct-segment'
-import { DuctTerminalNode } from './duct-terminal'
-import { FenceNode } from './fence'
-import { GuideNode } from './guide'
-import { HvacEquipmentNode } from './hvac-equipment'
-import { ItemNode } from './item'
-import { LinesetNode } from './lineset'
-import { LiquidLineNode } from './liquid-line'
-import { MeasurementNode } from './measurement'
-import { PipeFittingNode } from './pipe-fitting'
-import { PipeSegmentNode } from './pipe-segment'
-import { PipeTrapNode } from './pipe-trap'
-import { RoofNode } from './roof'
-import { ScanNode } from './scan'
-import { ShelfNode } from './shelf'
-import { SlabNode } from './slab'
-import { SpawnNode } from './spawn'
-import { StairNode } from './stair'
-import { StructuralGridNode } from './structural-grid'
-import { WallNode } from './wall'
-import { ZoneNode } from './zone'
+import type { CeilingNode } from './ceiling'
+import type { ColumnNode } from './column'
+import type { ConstructionDimensionNode } from './construction-dimension'
+import type { DuctFittingNode } from './duct-fitting'
+import type { DuctSegmentNode } from './duct-segment'
+import type { DuctTerminalNode } from './duct-terminal'
+import type { FenceNode } from './fence'
+import type { GuideNode } from './guide'
+import type { HvacEquipmentNode } from './hvac-equipment'
+import type { ItemNode } from './item'
+import type { LinesetNode } from './lineset'
+import type { LiquidLineNode } from './liquid-line'
+import type { MeasurementNode } from './measurement'
+import type { PipeFittingNode } from './pipe-fitting'
+import type { PipeSegmentNode } from './pipe-segment'
+import type { PipeTrapNode } from './pipe-trap'
+import type { RoofNode } from './roof'
+import type { ScanNode } from './scan'
+import type { ShelfNode } from './shelf'
+import type { SlabNode } from './slab'
+import type { SpawnNode } from './spawn'
+import type { StairNode } from './stair'
+import type { StructuralGridNode } from './structural-grid'
+import type { WallNode } from './wall'
+import type { ZoneNode } from './zone'
+
+type CoreLevelChildId =
+  | WallNode['id']
+  | FenceNode['id']
+  | ColumnNode['id']
+  | ConstructionDimensionNode['id']
+  | StructuralGridNode['id']
+  | ItemNode['id']
+  | ZoneNode['id']
+  | SlabNode['id']
+  | CeilingNode['id']
+  | RoofNode['id']
+  | StairNode['id']
+  | ScanNode['id']
+  | GuideNode['id']
+  | MeasurementNode['id']
+  | SpawnNode['id']
+  | ShelfNode['id']
+  | DuctSegmentNode['id']
+  | DuctFittingNode['id']
+  | DuctTerminalNode['id']
+  | HvacEquipmentNode['id']
+  | LinesetNode['id']
+  | LiquidLineNode['id']
+  | PipeSegmentNode['id']
+  | PipeFittingNode['id']
+  | PipeTrapNode['id']
+
+const LevelChildId = z.string().transform((id) => id as CoreLevelChildId)
 
 export const LevelNode = BaseNode.extend({
   id: objectId('level'),
   type: nodeType('level'),
-  children: z
-    .array(
-      z.union([
-        WallNode.shape.id,
-        FenceNode.shape.id,
-        ColumnNode.shape.id,
-        ConstructionDimensionNode.shape.id,
-        StructuralGridNode.shape.id,
-        ItemNode.shape.id,
-        ZoneNode.shape.id,
-        SlabNode.shape.id,
-        CeilingNode.shape.id,
-        RoofNode.shape.id,
-        StairNode.shape.id,
-        ScanNode.shape.id,
-        GuideNode.shape.id,
-        MeasurementNode.shape.id,
-        SpawnNode.shape.id,
-        ShelfNode.shape.id,
-        DuctSegmentNode.shape.id,
-        DuctFittingNode.shape.id,
-        DuctTerminalNode.shape.id,
-        HvacEquipmentNode.shape.id,
-        LinesetNode.shape.id,
-        LiquidLineNode.shape.id,
-        PipeSegmentNode.shape.id,
-        PipeFittingNode.shape.id,
-        PipeTrapNode.shape.id,
-      ]),
-    )
-    .default([]),
+  // The node registry owns child-kind validity. Persisted level relationships
+  // must also admit IDs minted by plugins that core cannot enumerate.
+  children: z.array(LevelChildId).default([]),
   // Specific props
   level: z.number().default(0),
   /**

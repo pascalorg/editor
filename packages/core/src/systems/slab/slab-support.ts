@@ -448,10 +448,14 @@ const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
  * than `WALL_SLAB_MIN_OVERLAP` of the wall is ignored entirely (point
  * contact, endpoint grazes).
  *
- * Same-elevation slabs pool their coverage. `elevation` preserves the
- * existing wall-relative origin: the highest elevation covering at
- * least `WALL_SLAB_SUPPORT_MAJORITY` of the wall, or the best-covered
- * elevation when none reaches majority. `baseElevation` only fills down
+ * Same-elevation slabs pool their coverage. `elevation` is elected from
+ * the wall's carrying profile: per arc segment, the highest support on
+ * each face, then the min across supported faces — so a slab that only
+ * brushes one face (e.g. an elevated deck adjacent along the outer face)
+ * never lifts the wall origin. The highest carrying elevation covering
+ * at least `WALL_SLAB_SUPPORT_MAJORITY` of the wall wins, or the
+ * best-covered carrying elevation when none reaches majority.
+ * `baseElevation` only fills down
  * where a lower support remains exposed on a wall face after higher,
  * overlapping support is accounted for. Coincident floor/platform slabs
  * therefore keep the wall on the platform, while slabs on opposite wall
@@ -560,58 +564,13 @@ export function computeWallSlabSupport(
   }
 
   type EvaluatedGroup = ElevationGroup & {
-    coverage: number
     mergedPerPolyline: LengthInterval[][]
   }
-  const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => {
-    let coverage = 0
-    const mergedPerPolyline = group.perPolyline.map(mergeIntervals)
-    for (let i = 0; i < group.perPolyline.length; i++) {
-      const lineLength = polylineLengths[i]!
-      if (lineLength < 1e-9) continue
-      coverage = Math.max(coverage, intervalsLength(mergedPerPolyline[i]!) / lineLength)
-    }
-    return { ...group, coverage, mergedPerPolyline }
-  })
+  const evaluatedGroups: EvaluatedGroup[] = groups.map((group) => ({
+    ...group,
+    mergedPerPolyline: group.perPolyline.map(mergeIntervals),
+  }))
 
-  const electableGroups =
-    maxElevation == null
-      ? evaluatedGroups
-      : evaluatedGroups.filter(
-          (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
-        )
-
-  let majorityElevation = Number.NEGATIVE_INFINITY
-  let bestElevation = Number.NEGATIVE_INFINITY
-  let bestCoverage = -1
-  for (const group of electableGroups) {
-    if (group.coverage >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
-      majorityElevation = Math.max(majorityElevation, group.elevation)
-    }
-    if (
-      group.coverage > bestCoverage + 1e-6 ||
-      (Math.abs(group.coverage - bestCoverage) <= 1e-6 && group.elevation > bestElevation)
-    ) {
-      bestCoverage = group.coverage
-      bestElevation = group.elevation
-    }
-  }
-
-  const elevation =
-    preferredElevation !== null
-      ? preferredElevation
-      : majorityElevation !== Number.NEGATIVE_INFINITY
-        ? majorityElevation
-        : bestElevation === Number.NEGATIVE_INFINITY
-          ? 0
-          : bestElevation
-  const electedSlabId =
-    preferredElectedSlabId ??
-    electableGroups
-      .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
-      ?.slabIds.slice()
-      .sort()[0] ??
-    null
   const normalizedIntervals = (group: EvaluatedGroup, polylineIndex: number) => {
     const lineLength = polylineLengths[polylineIndex]!
     if (lineLength < 1e-9) return []
@@ -638,9 +597,9 @@ export function computeWallSlabSupport(
     (value, index) => index === 0 || value - breakpoints[index - 1]! > 1e-7,
   )
 
-  const highestAt = (polylineIndex: number, t: number) => {
+  const highestAt = (groupList: typeof normalizedByGroup, polylineIndex: number, t: number) => {
     let highest = Number.NEGATIVE_INFINITY
-    for (const group of normalizedByGroup) {
+    for (const group of groupList) {
       if (
         group.perPolyline[polylineIndex]?.some(
           ([intervalStart, intervalEnd]) => t >= intervalStart - 1e-7 && t <= intervalEnd + 1e-7,
@@ -652,17 +611,66 @@ export function computeWallSlabSupport(
     return highest
   }
 
+  // The pointer cap filters the ELECTION's carrying profile, not the base
+  // profile: with a deck capped away, the floor that also carries the wall
+  // must still win (geometry fill-down stays uncapped).
+  const electableNormalizedGroups =
+    maxElevation == null
+      ? normalizedByGroup
+      : normalizedByGroup.filter(
+          (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
+        )
+
   const baseSegments: WallSlabSupportSegment[] = []
+  type CarryCandidate = { elevation: number; length: number }
+  const carryCandidates: CarryCandidate[] = []
+  const accumulateCarry = (elevation: number, length: number) => {
+    let candidate = carryCandidates.find(
+      (existing) => Math.abs(existing.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON,
+    )
+    if (!candidate) {
+      candidate = { elevation, length: 0 }
+      carryCandidates.push(candidate)
+    }
+    candidate.length += length
+  }
   for (let index = 1; index < uniqueBreakpoints.length; index++) {
     const start = uniqueBreakpoints[index - 1]!
     const end = uniqueBreakpoints[index]!
     if (end - start < 1e-7) continue
     const midpoint = (start + end) / 2
-    const leftElevation = polylines.length >= 3 ? highestAt(1, midpoint) : Number.NEGATIVE_INFINITY
-    const rightElevation = polylines.length >= 3 ? highestAt(2, midpoint) : Number.NEGATIVE_INFINITY
+    const centerElevation = highestAt(normalizedByGroup, 0, midpoint)
+    const leftElevation =
+      polylines.length >= 3 ? highestAt(normalizedByGroup, 1, midpoint) : Number.NEGATIVE_INFINITY
+    const rightElevation =
+      polylines.length >= 3 ? highestAt(normalizedByGroup, 2, midpoint) : Number.NEGATIVE_INFINITY
     const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
     const segmentElevation =
-      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(highestAt(0, midpoint), 0)
+      faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(centerElevation, 0)
+
+    if (electableNormalizedGroups === normalizedByGroup) {
+      if (faceElevations.length > 0 || Number.isFinite(centerElevation)) {
+        accumulateCarry(segmentElevation, end - start)
+      }
+    } else {
+      const electCenter = highestAt(electableNormalizedGroups, 0, midpoint)
+      const electLeft =
+        polylines.length >= 3
+          ? highestAt(electableNormalizedGroups, 1, midpoint)
+          : Number.NEGATIVE_INFINITY
+      const electRight =
+        polylines.length >= 3
+          ? highestAt(electableNormalizedGroups, 2, midpoint)
+          : Number.NEGATIVE_INFINITY
+      const electFaces = [electLeft, electRight].filter(Number.isFinite)
+      if (electFaces.length > 0 || Number.isFinite(electCenter)) {
+        accumulateCarry(
+          electFaces.length > 0 ? Math.min(...electFaces) : Math.max(electCenter, 0),
+          end - start,
+        )
+      }
+    }
+
     const previous = baseSegments[baseSegments.length - 1]
     if (
       previous &&
@@ -673,6 +681,42 @@ export function computeWallSlabSupport(
       baseSegments.push({ start, end, elevation: segmentElevation })
     }
   }
+
+  let majorityElevation = Number.NEGATIVE_INFINITY
+  let bestElevation = Number.NEGATIVE_INFINITY
+  let bestCoverage = -1
+  for (const candidate of carryCandidates) {
+    if (candidate.length >= WALL_SLAB_SUPPORT_MAJORITY - 1e-6) {
+      majorityElevation = Math.max(majorityElevation, candidate.elevation)
+    }
+    if (
+      candidate.length > bestCoverage + 1e-6 ||
+      (Math.abs(candidate.length - bestCoverage) <= 1e-6 && candidate.elevation > bestElevation)
+    ) {
+      bestCoverage = candidate.length
+      bestElevation = candidate.elevation
+    }
+  }
+
+  const elevation =
+    preferredElevation !== null
+      ? preferredElevation
+      : majorityElevation !== Number.NEGATIVE_INFINITY
+        ? majorityElevation
+        : bestElevation === Number.NEGATIVE_INFINITY
+          ? 0
+          : bestElevation
+  const electedSlabId =
+    preferredElectedSlabId ??
+    evaluatedGroups
+      .filter(
+        (group) =>
+          maxElevation == null || group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
+      )
+      .find((group) => Math.abs(group.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON)
+      ?.slabIds.slice()
+      .sort()[0] ??
+    null
 
   if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
   const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
