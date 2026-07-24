@@ -203,6 +203,7 @@ import {
   type FloorplanNavigationSyncScheduler,
   type FloorplanPresentationViewBox,
   finalizeFloorplanNavigation,
+  getFloorplanRotationOverscanViewBox,
   resolveFloorplanPresentationViewBox,
 } from './floorplan-navigation-presentation'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
@@ -6611,12 +6612,14 @@ export function FloorplanPanel({
       const nextHeight = nextViewport.width / svgAspectRatio
       const nextMinX = nextViewport.centerX - nextViewport.width / 2
       const nextMinY = nextViewport.centerY - nextHeight / 2
-      floorplanImperativeViewBoxRef.current = {
+      const nextViewBox = {
         minX: nextMinX,
         minY: nextMinY,
         width: nextViewport.width,
         height: nextHeight,
       }
+      const nextPaintViewBox = getFloorplanRotationOverscanViewBox(nextViewBox)
+      floorplanImperativeViewBoxRef.current = nextViewBox
       hasUserAdjustedViewportRef.current = true
       latestViewportRef.current = nextViewport
       svgRef.current?.setAttribute(
@@ -6625,10 +6628,10 @@ export function FloorplanPanel({
       )
       const background = floorplanBackgroundRef.current
       if (background) {
-        background.setAttribute('x', String(nextMinX))
-        background.setAttribute('y', String(nextMinY))
-        background.setAttribute('width', String(nextViewport.width))
-        background.setAttribute('height', String(nextHeight))
+        background.setAttribute('x', String(nextPaintViewBox.minX))
+        background.setAttribute('y', String(nextPaintViewBox.minY))
+        background.setAttribute('width', String(nextPaintViewBox.width))
+        background.setAttribute('height', String(nextPaintViewBox.height))
       }
     },
     [svgAspectRatio],
@@ -7328,6 +7331,7 @@ export function FloorplanPanel({
     floorplanImperativeViewBoxRef.current,
     floorplanViewportInteractionInProgressRef.current,
   )
+  const presentationPaintViewBox = getFloorplanRotationOverscanViewBox(presentationViewBox)
   const floorplanWorldUnitsPerPixel = useMemo(() => {
     const widthUnitsPerPixel = viewBox.width / Math.max(surfaceSize.width, 1)
     const heightUnitsPerPixel = viewBox.height / Math.max(surfaceSize.height, 1)
@@ -7603,7 +7607,11 @@ export function FloorplanPanel({
     [surfaceSize.width, viewBox.width],
   )
   const gridBounds = useMemo(
-    () => getRotatedViewBoxBounds(viewBox, floorplanSceneRotationDeg),
+    () =>
+      getRotatedViewBoxBounds(
+        getFloorplanRotationOverscanViewBox(viewBox),
+        floorplanSceneRotationDeg,
+      ),
     [floorplanSceneRotationDeg, viewBox],
   )
 
@@ -11877,6 +11885,7 @@ export function FloorplanPanel({
             style={{
               cursor:
                 floorplanNavigationCursor ?? (referenceScaleDraft ? 'crosshair' : EDITOR_CURSOR),
+              overflow: 'visible',
             }}
             viewBox={`${presentationViewBox.minX} ${presentationViewBox.minY} ${presentationViewBox.width} ${presentationViewBox.height}`}
           >
@@ -11916,11 +11925,11 @@ export function FloorplanPanel({
             </defs>
             <rect
               fill={palette.surface}
-              height={presentationViewBox.height}
+              height={presentationPaintViewBox.height}
               ref={floorplanBackgroundRef}
-              width={presentationViewBox.width}
-              x={presentationViewBox.minX}
-              y={presentationViewBox.minY}
+              width={presentationPaintViewBox.width}
+              x={presentationPaintViewBox.minX}
+              y={presentationPaintViewBox.minY}
             />
 
             <g

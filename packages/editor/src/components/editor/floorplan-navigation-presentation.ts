@@ -5,6 +5,21 @@ export type FloorplanPresentationViewBox = {
   height: number
 }
 
+export function getFloorplanRotationOverscanViewBox(
+  viewBox: FloorplanPresentationViewBox,
+): FloorplanPresentationViewBox {
+  const size = Math.hypot(viewBox.width, viewBox.height)
+  const centerX = viewBox.minX + viewBox.width / 2
+  const centerY = viewBox.minY + viewBox.height / 2
+
+  return {
+    minX: centerX - size / 2,
+    minY: centerY - size / 2,
+    width: size,
+    height: size,
+  }
+}
+
 export function resolveFloorplanPresentationViewBox(
   reactViewBox: FloorplanPresentationViewBox,
   imperativeViewBox: FloorplanPresentationViewBox | null,

@@ -4,10 +4,37 @@ import {
   canZoomFloorplanDuringNavigation,
   createFloorplanNavigationSyncScheduler,
   finalizeFloorplanNavigation,
+  getFloorplanRotationOverscanViewBox,
   resolveFloorplanPresentationViewBox,
 } from './floorplan-navigation-presentation'
 
 describe('floorplan navigation presentation', () => {
+  test('keeps the viewport inside the painted floorplan surface throughout rotation', () => {
+    const viewport = { minX: -80, minY: -45, width: 160, height: 90 }
+    const overscan = getFloorplanRotationOverscanViewBox(viewport)
+    const viewportCorners: Array<[number, number]> = [
+      [-80, -45],
+      [80, -45],
+      [80, 45],
+      [-80, 45],
+    ]
+
+    for (let degrees = 0; degrees < 360; degrees += 1) {
+      const radians = (-degrees * Math.PI) / 180
+      const cos = Math.cos(radians)
+      const sin = Math.sin(radians)
+
+      for (const [x, y] of viewportCorners) {
+        const localX = x * cos - y * sin
+        const localY = x * sin + y * cos
+        expect(localX).toBeGreaterThanOrEqual(overscan.minX - 1e-10)
+        expect(localX).toBeLessThanOrEqual(overscan.minX + overscan.width + 1e-10)
+        expect(localY).toBeGreaterThanOrEqual(overscan.minY - 1e-10)
+        expect(localY).toBeLessThanOrEqual(overscan.minY + overscan.height + 1e-10)
+      }
+    }
+  })
+
   test('keeps the imperative viewBox authoritative during navigation', () => {
     const reactViewBox = { minX: 0, minY: 0, width: 100, height: 50 }
     const imperativeViewBox = { minX: 25, minY: 10, width: 40, height: 20 }
