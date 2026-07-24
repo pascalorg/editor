@@ -69,6 +69,7 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
+import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
@@ -1152,13 +1153,14 @@ const useEditor = create<EditorState>()(
       setRiserOpen: (open) => set({ isRiserOpen: open }),
       toggleRiserOpen: () => set((state) => ({ isRiserOpen: !state.isRiserOpen })),
       navigationSyncPose: null,
-      publishNavigationSyncPose: (pose) =>
-        set((state) => ({
-          navigationSyncPose: {
-            ...pose,
-            revision: (state.navigationSyncPose?.revision ?? 0) + 1,
-          },
-        })),
+      publishNavigationSyncPose: (pose) => {
+        const navigationSyncPose = {
+          ...pose,
+          revision: (get().navigationSyncPose?.revision ?? 0) + 1,
+        }
+        publishNavigationSyncPoseToStore(navigationSyncPose)
+        set({ navigationSyncPose })
+      },
       floorplanSelectionTool: 'click' as FloorplanSelectionTool,
       setFloorplanSelectionTool: (tool) => set({ floorplanSelectionTool: tool }),
       gridSnapStep: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.gridSnapStep,

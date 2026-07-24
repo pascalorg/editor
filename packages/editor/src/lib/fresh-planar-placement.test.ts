@@ -13,7 +13,12 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { z } from 'zod'
-import { commitFreshPlacementSubtree, createFreshPlacementSubtree } from './fresh-planar-placement'
+import {
+  commitFreshPlacementSubtree,
+  createFreshPlacementSubtree,
+  duplicatesAsFreshSubtree,
+  prepareFreshPlacementRootDuplicate,
+} from './fresh-planar-placement'
 
 type RafFn = (cb: (time: number) => void) => number
 ;(globalThis as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= ((
@@ -210,6 +215,33 @@ describe('commitFreshPlacementSubtree', () => {
     expect(useScene.getState().nodes[finalId]).toBeUndefined()
     expect(useScene.getState().nodes[SHELF_ID]).toBeUndefined()
     expect((useScene.getState().nodes[LEVEL_ID] as { children: AnyNodeId[] }).children).toEqual([])
+  })
+
+  test('uses the subtree contract for childless variants and never aliases root-only children', () => {
+    registerCabinetClonePrepTestKind()
+    const childlessCabinet = {
+      ...shelf(),
+      type: 'cabinet',
+      children: [],
+      metadata: { isTransient: true, label: 'source' },
+    } as AnyNode
+    expect(duplicatesAsFreshSubtree(childlessCabinet)).toBe(true)
+
+    const source = {
+      ...shelf(),
+      children: ['item_original' as AnyNodeId],
+      metadata: { isTransient: true, label: 'source' },
+    } as AnyNode
+    const duplicate = prepareFreshPlacementRootDuplicate(source) as AnyNode & {
+      children: AnyNodeId[]
+      id?: AnyNodeId
+      metadata?: Record<string, unknown>
+    }
+
+    expect(duplicate.id).toBeUndefined()
+    expect(duplicate.children).toEqual([])
+    expect(duplicate.metadata).toEqual({ isNew: true, label: 'source' })
+    expect((source as AnyNode & { children: AnyNodeId[] }).children).toEqual(['item_original'])
   })
 
   test('commits a duplicated cabinet draft without deleting the original modules', () => {

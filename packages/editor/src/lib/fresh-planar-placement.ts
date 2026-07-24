@@ -27,10 +27,27 @@ function duplicableConfigFor(node: AnyNode): DuplicableConfig | null {
 }
 
 export function duplicatesAsFreshSubtree(node: AnyNode): boolean {
-  const children = (node as { children?: unknown }).children
-  return (
-    duplicableConfigFor(node)?.subtree === true && Array.isArray(children) && children.length > 0
-  )
+  return duplicableConfigFor(node)?.subtree === true
+}
+
+/**
+ * Prepares a non-subtree duplicate without retaining ownership of the
+ * original node's children. Subtree-capable kinds take the path above and
+ * receive fresh descendant IDs; every other kind duplicates only its root.
+ */
+export function prepareFreshPlacementRootDuplicate(node: AnyNode): AnyNode {
+  const duplicate = structuredClone(node) as unknown as Record<string, unknown> & {
+    id?: AnyNodeId
+    children?: unknown
+    metadata?: unknown
+  }
+  delete duplicate.id
+  if (Array.isArray(duplicate.children)) duplicate.children = []
+  duplicate.metadata = {
+    ...getPlacementMetadataRecord(stripPlacementMetadataFlags(duplicate.metadata)),
+    isNew: true,
+  }
+  return duplicate as unknown as AnyNode
 }
 
 /**

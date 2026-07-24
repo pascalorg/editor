@@ -127,9 +127,14 @@ export function resolveAnnotationLabelRectangles(
 
 export function resolveSvgAnnotationCollisions(
   svg: SVGSVGElement,
-  options: { layoutOverrides?: AnnotationLayoutOverrides } = {},
+  options: {
+    labels?: readonly SVGGElement[]
+    layoutOverrides?: AnnotationLayoutOverrides
+  } = {},
 ): AnnotationPreflightIssue[] {
-  const labels = Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
+  const labels =
+    options.labels ??
+    Array.from(svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'))
   if (labels.length === 0) return []
 
   for (const label of labels) {
@@ -225,101 +230,6 @@ export function resolveSvgAnnotationCollisions(
     if (!shift.resolved) label.dataset.floorplanLayoutUnresolved = 'true'
   })
   return preflightIssues
-}
-
-export function observeSvgAnnotationLayoutChanges(target: Node, onChange: () => void): () => void {
-  let scheduledFrame: number | null = null
-  let mutationVersion = 0
-  let observedVersion = 0
-  const requestFrame = globalThis.requestAnimationFrame ?? ((callback) => setTimeout(callback, 0))
-  const flushWhenSettled = () => {
-    if (observedVersion !== mutationVersion) {
-      observedVersion = mutationVersion
-      scheduledFrame = requestFrame(flushWhenSettled)
-      return
-    }
-    scheduledFrame = null
-    onChange()
-  }
-  const schedule = () => {
-    mutationVersion += 1
-    if (scheduledFrame !== null) return
-    observedVersion = mutationVersion - 1
-    scheduledFrame = requestFrame(flushWhenSettled)
-  }
-  const observer = new MutationObserver((mutations) => {
-    if (mutations.some(isAnnotationLayoutMutation)) schedule()
-  })
-  observer.observe(target, {
-    attributes: true,
-    attributeFilter: [
-      'cx',
-      'cy',
-      'd',
-      'dominant-baseline',
-      'font-family',
-      'font-size',
-      'font-weight',
-      'height',
-      'points',
-      'r',
-      'rx',
-      'ry',
-      'stroke-width',
-      'text-anchor',
-      'transform',
-      'visibility',
-      'width',
-      'x',
-      'x1',
-      'x2',
-      'y',
-      'y1',
-      'y2',
-    ],
-    characterData: true,
-    childList: true,
-    subtree: true,
-  })
-  return () => {
-    observer.disconnect()
-    if (scheduledFrame === null) return
-    if (globalThis.cancelAnimationFrame) globalThis.cancelAnimationFrame(scheduledFrame)
-    else clearTimeout(scheduledFrame)
-  }
-}
-
-function isAnnotationLayoutMutation(mutation: MutationRecord): boolean {
-  if (mutation.type !== 'attributes') return true
-  const attribute = mutation.attributeName ?? ''
-  const target = mutation.target as Element
-  const closest = typeof target.closest === 'function' ? target.closest.bind(target) : null
-
-  if (
-    attribute === 'data-floorplan-annotation-id' ||
-    attribute === 'data-floorplan-annotation-layout-dx' ||
-    attribute === 'data-floorplan-annotation-layout-dy' ||
-    attribute === 'data-floorplan-layout-unresolved'
-  ) {
-    return false
-  }
-  if (
-    closest?.('[data-floorplan-annotation-label]') &&
-    (attribute === 'style' || attribute === 'transform')
-  ) {
-    return false
-  }
-  if (
-    closest?.('[data-floorplan-dimension-line], [data-floorplan-dimension-leader]') &&
-    (attribute === 'x1' ||
-      attribute === 'x2' ||
-      attribute === 'y1' ||
-      attribute === 'y2' ||
-      attribute === 'visibility')
-  ) {
-    return false
-  }
-  return true
 }
 
 export function collectAnnotationLayoutPreflightIssues(

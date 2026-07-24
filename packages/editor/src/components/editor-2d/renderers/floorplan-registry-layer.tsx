@@ -90,17 +90,20 @@ import {
   startFloorplanGroupMove,
   startFloorplanGroupRotate,
 } from '../floorplan-group-move'
-import { useFloorplanRender } from '../floorplan-render-context'
+import { useFloorplanSceneRotation, useFloorplanStaticRender } from '../floorplan-render-context'
 import {
   floorplanAnnotationObstacleMode,
   isFloorplanAnnotationObstacleGeometry,
-  observeSvgAnnotationLayoutChanges,
   resolveSvgAnnotationCollisions,
   svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
-import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
+import {
+  resolveFloorplanAnnotationUpdate,
+  resolveFloorplanLabelAngle,
+  updateSvgFloorplanLabelOrientations,
+} from './floorplan-label-angle'
 
 /**
  * Registry-driven floor-plan layer.
@@ -448,7 +451,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   const levelId = selectedLevelId ?? ambientLevelId
   const isAmbient = !selectedLevelId && !!ambientLevelId
-  const renderCtx = useFloorplanRender()
+  const renderCtx = useFloorplanStaticRender()
+  const sceneRotationDeg = renderCtx?.getSceneRotationDeg() ?? 0
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
   // Door / window placement (both build and move) needs the SVG's
@@ -1334,7 +1338,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const entries = floorplanData.entries
   if (entries.length === 0) return null
 
-  const unitsPerPixel = renderCtx?.unitsPerPixel ?? 1
+  const unitsPerPixel = renderCtx?.getUnitsPerPixel() ?? 1
   const palette = renderCtx?.palette
 
   return (
@@ -1392,7 +1396,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onHoveredIdChange={setHoveredId}
             palette={palette}
             pass="base"
-            sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
+            sceneRotationDeg={sceneRotationDeg}
             selected={selectedIdSet.has(entry.id)}
             suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
             groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
@@ -1445,7 +1449,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onHoveredIdChange={setHoveredId}
             palette={palette}
             pass="overlay"
-            sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
+            sceneRotationDeg={sceneRotationDeg}
             selected={selectedIdSet.has(entry.id)}
             suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
             groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
@@ -1477,7 +1481,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         <RotationAngleOverlay
           overlay={rotationOverlay}
           palette={palette}
-          sceneRotationDeg={renderCtx?.sceneRotationDeg ?? 0}
+          sceneRotationDeg={sceneRotationDeg}
           unitsPerPixel={unitsPerPixel}
         />
       ) : null}
@@ -1487,40 +1491,119 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
 function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
-  const [layoutEpoch, setLayoutEpoch] = useState(0)
+  const collisionLabelElementsRef = useRef<SVGGElement[]>([])
+  const registryLabelElementsRef = useRef<SVGGElement[]>([])
+  const appliedRotationDegRef = useRef<number | null>(null)
+  const appliedLayoutInputsRef = useRef<object | null>(null)
   const interactionIdle = useInteractionScope((state) => isIdle(state.scope))
+  const sceneRotationDeg = useFloorplanSceneRotation()
+  const [settledLayoutEpoch, setSettledLayoutEpoch] = useState(0)
+  const drawingType = useDrawingView((state) => state.drawingType)
   const annotationLayoutOverrides = useDrawingView((state) => state.annotationLayoutOverrides)
+  const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
+  const wallDimensionReference = useFloorplanAnnotationVisibility(
+    (state) => state.wallDimensionReference,
+  )
+  const layoutInputs = useMemo(
+    () => ({
+      annotationVisibility,
+      annotationLayoutOverrides,
+      drawingType,
+      interactionIdle,
+      settledLayoutEpoch,
+      wallDimensionReference,
+    }),
+    [
+      annotationVisibility,
+      annotationLayoutOverrides,
+      drawingType,
+      interactionIdle,
+      settledLayoutEpoch,
+      wallDimensionReference,
+    ],
+  )
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
   const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
   const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
   const layoutEnabled = active && interactionIdle
-  useLayoutEffect(() => {
+
+  useEffect(() => {
     if (!layoutEnabled) return
-    const registryLayer = markerRef.current?.parentElement
-    if (!registryLayer) return
-    return observeSvgAnnotationLayoutChanges(registryLayer, () => {
-      setLayoutEpoch((epoch) => epoch + 1)
+    let frame: number | null = null
+    const invalidateLayout = () => {
+      if (frame !== null) return
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        setSettledLayoutEpoch((epoch) => epoch + 1)
+      })
+    }
+    const unsubscribeScene = useScene.subscribe((state, previousState) => {
+      if (
+        state.nodes !== previousState.nodes ||
+        state.installedPlugins !== previousState.installedPlugins
+      ) {
+        invalidateLayout()
+      }
     })
+    const unsubscribeTransforms = useLiveTransforms.subscribe((state, previousState) => {
+      if (state.transforms !== previousState.transforms) invalidateLayout()
+    })
+    const unsubscribeOverrides = useLiveNodeOverrides.subscribe((state, previousState) => {
+      if (state.overrides !== previousState.overrides) invalidateLayout()
+    })
+    const unsubscribeInteractive = useInteractive.subscribe((state, previousState) => {
+      if (state.elevators !== previousState.elevators) invalidateLayout()
+    })
+
+    return () => {
+      unsubscribeScene()
+      unsubscribeTransforms()
+      unsubscribeOverrides()
+      unsubscribeInteractive()
+      if (frame !== null) window.cancelAnimationFrame(frame)
+    }
   }, [layoutEnabled])
+
   useLayoutEffect(() => {
-    // The epoch is only a trigger; collision inputs are measured from the live SVG below.
-    void layoutEpoch
+    // Explicit layout inputs replace the former whole-subtree MutationObserver.
     if (!active) {
+      appliedLayoutInputsRef.current = null
       resetPreflightIssues()
       return
     }
     if (!interactionIdle) return
-    const svg = markerRef.current?.ownerSVGElement
     const registryLayer = markerRef.current?.parentElement
-    if (!(svg && registryLayer)) return
+    if (!registryLayer) return
+    const update = resolveFloorplanAnnotationUpdate({
+      layoutInputsChanged: appliedLayoutInputsRef.current !== layoutInputs,
+      nextRotationDeg: sceneRotationDeg,
+      previousRotationDeg: appliedRotationDegRef.current,
+    })
+    if (update.resolveCollisions) {
+      const svg = markerRef.current?.ownerSVGElement
+      if (!svg) return
+      collisionLabelElementsRef.current = Array.from(
+        svg.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
+      )
+      registryLabelElementsRef.current = collisionLabelElementsRef.current.filter((label) =>
+        registryLayer.contains(label),
+      )
+    }
+    const labels = registryLabelElementsRef.current
+    if (update.updateLabelPresentation) {
+      updateSvgFloorplanLabelOrientations(labels, sceneRotationDeg)
+      appliedRotationDegRef.current = sceneRotationDeg
+    }
+    if (!update.resolveCollisions) return
+    const svg = markerRef.current?.ownerSVGElement
+    if (!svg) return
     const preflightIssues = resolveSvgAnnotationCollisions(svg, {
+      labels: collisionLabelElementsRef.current,
       layoutOverrides: annotationLayoutOverrides,
     })
     setPreflightIssues(preflightIssues)
+    appliedLayoutInputsRef.current = layoutInputs
 
-    const labels = Array.from(
-      registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
-    )
     for (const [index, label] of labels.entries()) {
       const id = svgAnnotationLabelId(label, index)
       label.dataset.floorplanAnnotationId = id
@@ -1531,8 +1614,9 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     active,
     annotationLayoutOverrides,
     interactionIdle,
-    layoutEpoch,
+    layoutInputs,
     resetPreflightIssues,
+    sceneRotationDeg,
     setPreflightIssues,
   ])
 
@@ -1550,9 +1634,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     }
 
     const labelId = (label: SVGGElement): string => {
-      const labels = Array.from(
-        registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-label]'),
-      )
+      const labels = registryLabelElementsRef.current
       return svgAnnotationLabelId(label, Math.max(0, labels.indexOf(label)))
     }
 
@@ -1644,9 +1726,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       cancelActivePointerDrag?.()
       registryLayer.removeEventListener('pointerdown', onPointerDown)
       registryLayer.removeEventListener('dblclick', onDoubleClick)
-      for (const label of registryLayer.querySelectorAll<SVGGElement>(
-        '[data-floorplan-annotation-label]',
-      )) {
+      for (const label of registryLabelElementsRef.current) {
         label.style.pointerEvents = ''
         label.style.cursor = ''
       }
@@ -2800,9 +2880,15 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         const labelTransform = `translate(${g.cx} ${g.cy}) rotate(${degrees}) translate(0 ${-(g.offsetPx ?? 0) * labelUnitsPerPixel})`
         return (
           <g
+            data-floorplan-annotation-angle-radians={g.angle}
             data-floorplan-annotation-default-transform={labelTransform}
             data-floorplan-annotation-label=""
             data-floorplan-annotation-priority="20"
+            data-floorplan-annotation-screen-upright={g.screenUpright ? 'true' : undefined}
+            data-floorplan-annotation-transform-after-rotation={`translate(0 ${
+              -(g.offsetPx ?? 0) * labelUnitsPerPixel
+            })`}
+            data-floorplan-annotation-transform-before-rotation={`translate(${g.cx} ${g.cy})`}
             key={keyHint}
             pointerEvents="none"
             transform={labelTransform}
