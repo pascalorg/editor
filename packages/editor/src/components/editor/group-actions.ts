@@ -392,7 +392,12 @@ export function startGroupPickUp(
     const key = e.key.toLowerCase()
     if ((e.metaKey || e.ctrlKey) && (key === 'c' || key === 'v' || key === 'x')) {
       // A clipboard chord replaces the current carry. Let the global keyboard
-      // arm receive the same event after this cancellation.
+      // arm receive the same event after this cancellation. Capture C/X first:
+      // pasted or duplicated carries delete their transient selection while
+      // cancelling, so the global arm would otherwise see nothing.
+      if (key === 'c' || key === 'x') {
+        copySelectedNodesToEditorClipboard()
+      }
       cancel()
       return
     }

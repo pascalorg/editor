@@ -64,6 +64,7 @@ const SpawnTool = () => {
     if (!activeLevelId) return
     previousSnapRef.current = null
     rotationRef.current = 0
+    cursorRef.current?.rotation.set(0, 0, 0)
     cursorVisibleRef.current = false
     setCursorVisible(false)
     const lastCursorRef: { current: [number, number, number] | null } = { current: null }
