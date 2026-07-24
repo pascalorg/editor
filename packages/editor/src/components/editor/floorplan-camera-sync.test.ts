@@ -105,7 +105,7 @@ describe('floorplan camera sync', () => {
     expect(applied[0]?.position[2]).toBeCloseTo(20)
   })
 
-  test('does not publish floor-plan rotation below one degree', () => {
+  test('publishes sub-degree camera rotation for a real-time compass', () => {
     const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
     const bridge = createFloorplanCameraSyncBridge({
       applyCameraPose: () => {},
@@ -114,14 +114,11 @@ describe('floorplan camera sync', () => {
 
     bridge.receiveCameraPose(cameraPoseAtAzimuth(0))
     bridge.receiveCameraPose(cameraPoseAtAzimuth((0.9 * Math.PI) / 180))
-    expect(published).toHaveLength(1)
-
-    bridge.receiveCameraPose(cameraPoseAtAzimuth(Math.PI / 180))
     expect(published).toHaveLength(2)
-    expect(published[1]?.azimuth).toBeCloseTo(Math.PI / 180)
+    expect(published[1]?.azimuth).toBeCloseTo((0.9 * Math.PI) / 180)
   })
 
-  test('keeps the previous floor-plan angle when a sub-degree rotation arrives with a pan', () => {
+  test('keeps a sub-degree camera rotation when it arrives with a pan', () => {
     const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
     const bridge = createFloorplanCameraSyncBridge({
       applyCameraPose: () => {},
@@ -134,11 +131,11 @@ describe('floorplan camera sync', () => {
     expect(published).toHaveLength(2)
     expect(published[1]).toMatchObject({
       target: [1, 1, 0],
-      azimuth: 0,
     })
+    expect(published[1]?.azimuth).toBeCloseTo((0.5 * Math.PI) / 180)
   })
 
-  test('does no floor-plan synchronization in 3D-only mode and catches up once when visible', () => {
+  test('keeps streaming live camera headings in 3D-only mode', () => {
     const published: Array<Omit<NavigationSyncPose, 'revision'>> = []
     const applied: CameraPose[] = []
     const bridge = createFloorplanCameraSyncBridge({
@@ -158,11 +155,13 @@ describe('floorplan camera sync', () => {
       viewWidth: 8,
     })
 
-    expect(published).toEqual([])
-    expect(applied).toEqual([])
-
-    bridge.setActive(true)
     expect(published).toEqual([
+      {
+        source: '3d',
+        target: cameraPose.target,
+        azimuth: 0,
+        viewWidth: 12,
+      },
       {
         source: '3d',
         target: latestPose.target,
@@ -170,6 +169,10 @@ describe('floorplan camera sync', () => {
         viewWidth: 12,
       },
     ])
+    expect(applied).toEqual([])
+
+    bridge.setActive(true)
+    expect(published).toHaveLength(2)
     expect(applied).toEqual([])
   })
 

@@ -203,8 +203,11 @@ import {
   type FloorplanNavigationSyncScheduler,
   type FloorplanPresentationViewBox,
   finalizeFloorplanNavigation,
+  flushFloorplanRotationPresentationRestore,
   getFloorplanRotationOverscanViewBox,
+  queueFloorplanRotationPresentationRestore,
   resolveFloorplanPresentationViewBox,
+  setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
@@ -357,12 +360,6 @@ type FloorplanNavigationSyncPresentationState = {
     transformOrigin: string
     willChange: string
   }
-}
-
-function restoreFloorplanRotationPresentation(rotationState: FloorplanRotationState) {
-  rotationState.svg.style.transform = rotationState.svgStyle.transform
-  rotationState.svg.style.transformOrigin = rotationState.svgStyle.transformOrigin
-  rotationState.svg.style.willChange = rotationState.svgStyle.willChange
 }
 
 function restoreFloorplanNavigationSyncPresentation(
@@ -5344,6 +5341,7 @@ export function FloorplanPanel({
   const floorplanContentRef = useRef<SVGGElement>(null)
   const panStateRef = useRef<PanState | null>(null)
   const floorplanRotationStateRef = useRef<FloorplanRotationState | null>(null)
+  const pendingFloorplanRotationRestoreRef = useRef<FloorplanRotationState | null>(null)
   const floorplanSpacePanPressedRef = useRef(false)
   const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
@@ -7137,9 +7135,7 @@ export function FloorplanPanel({
           nextDeg = targetDeg
         }
         latestFloorplanUserRotationDegRef.current = nextDeg
-        if (compassNeedleRef.current) {
-          compassNeedleRef.current.style.transform = `rotate(${nextDeg}deg)`
-        }
+        setFloorplanCompassRotation(compassNeedleRef.current, nextDeg)
         if (nextDeg !== targetDeg) {
           hiddenCompassAnimationRef.current = requestAnimationFrame(tick)
         }
@@ -7170,9 +7166,7 @@ export function FloorplanPanel({
           // owns the needle, so any local animation yields to it.
           cancelHiddenCompassAnimation()
           latestFloorplanUserRotationDegRef.current = nextDeg
-          if (compassNeedleRef.current) {
-            compassNeedleRef.current.style.transform = `rotate(${nextDeg}deg)`
-          }
+          setFloorplanCompassRotation(compassNeedleRef.current, nextDeg)
         } else {
           animateHiddenCompassNeedle(nextDeg)
         }
@@ -7216,8 +7210,11 @@ export function FloorplanPanel({
   // state; this layout effect restores the authoritative ref value before
   // the browser paints so the needle never visibly snaps to a stale angle.
   useLayoutEffect(() => {
-    if (!isFloorplanOpen && compassNeedleRef.current) {
-      compassNeedleRef.current.style.transform = `rotate(${latestFloorplanUserRotationDegRef.current}deg)`
+    if (!isFloorplanOpen) {
+      setFloorplanCompassRotation(
+        compassNeedleRef.current,
+        latestFloorplanUserRotationDegRef.current,
+      )
     }
   })
 
@@ -8185,6 +8182,7 @@ export function FloorplanPanel({
       hasUserAdjustedViewportRef.current = true
       latestFloorplanUserRotationDegRef.current = nextUserRotationDeg
       latestViewportRef.current = nextViewport
+      setFloorplanCompassRotation(compassNeedleRef.current, nextUserRotationDeg)
       // Transform the already-painted SVG as one compositor layer. Mutating the
       // scene rotation/viewBox here forces the heavy vector plan to rerasterize.
       rotationState.svg.style.transform = `rotate(${nextUserRotationDeg - rotationState.initialUserRotationDeg}deg)`
@@ -8356,7 +8354,7 @@ export function FloorplanPanel({
     (rotationState: FloorplanRotationState) => {
       floorplanViewportInteractionInProgressRef.current = false
       floorplanImperativeViewBoxRef.current = null
-      restoreFloorplanRotationPresentation(rotationState)
+      queueFloorplanRotationPresentationRestore(pendingFloorplanRotationRestoreRef, rotationState)
       setFloorplanUserRotationDeg((current) =>
         current === rotationState.latestUserRotationDeg
           ? current
@@ -8375,6 +8373,10 @@ export function FloorplanPanel({
     },
     [publishFloorplanNavigationPose],
   )
+
+  useLayoutEffect(() => {
+    flushFloorplanRotationPresentationRestore(pendingFloorplanRotationRestoreRef)
+  })
 
   // Finalize imperative navigation when the floorplan closes so reopening
   // restores the last visible pose instead of stale React state.

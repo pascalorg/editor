@@ -4,8 +4,11 @@ import {
   canZoomFloorplanDuringNavigation,
   createFloorplanNavigationSyncScheduler,
   finalizeFloorplanNavigation,
+  flushFloorplanRotationPresentationRestore,
   getFloorplanRotationOverscanViewBox,
+  queueFloorplanRotationPresentationRestore,
   resolveFloorplanPresentationViewBox,
+  setFloorplanCompassRotation,
 } from './floorplan-navigation-presentation'
 
 describe('floorplan navigation presentation', () => {
@@ -55,6 +58,42 @@ describe('floorplan navigation presentation', () => {
   test('does not apply synchronized camera poses over local navigation', () => {
     expect(canApplyFloorplanNavigationSync(true)).toBe(false)
     expect(canApplyFloorplanNavigationSync(false)).toBe(true)
+  })
+
+  test('updates the compass presentation on every live rotation frame', () => {
+    const compass = { style: { transform: '' } }
+
+    setFloorplanCompassRotation(compass, 0.25)
+    expect(compass.style.transform).toBe('rotate(0.25deg)')
+
+    setFloorplanCompassRotation(compass, 0.5)
+    expect(compass.style.transform).toBe('rotate(0.5deg)')
+  })
+
+  test('keeps the rotation preview in place until the committed state is ready to paint', () => {
+    const pending = { current: null }
+    const svg = {
+      style: {
+        transform: 'rotate(42deg)',
+        transformOrigin: 'center',
+        willChange: 'transform',
+      },
+    }
+    const presentation = {
+      svg,
+      svgStyle: {
+        transform: '',
+        transformOrigin: '',
+        willChange: '',
+      },
+    }
+
+    queueFloorplanRotationPresentationRestore(pending, presentation)
+    expect(svg.style.transform).toBe('rotate(42deg)')
+
+    flushFloorplanRotationPresentationRestore(pending)
+    expect(svg.style.transform).toBe('')
+    expect(pending.current).toBeNull()
   })
 
   test('commits every active navigation channel before teardown', () => {

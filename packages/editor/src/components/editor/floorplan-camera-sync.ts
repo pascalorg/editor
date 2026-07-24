@@ -10,7 +10,7 @@ import useEditor, {
 } from '../../store/use-editor'
 
 const POSITION_EPSILON = 0.001
-const AZIMUTH_EPSILON = Math.PI / 180
+const AZIMUTH_EPSILON = 1e-4
 const VIEW_WIDTH_EPSILON = 0.001
 
 type FloorplanNavigationSnapshot = Omit<NavigationSyncPoseInput, 'source'>
@@ -151,18 +151,8 @@ export function createFloorplanCameraSyncBridge({
   }
 
   const publishCameraNavigationPose = (pose: CameraPose) => {
-    let navigationPose = cameraPoseToFloorplanNavigationPose(pose)
+    const navigationPose = cameraPoseToFloorplanNavigationPose(pose)
     if (!navigationPose) return
-    if (
-      lastPublishedNavigation &&
-      Math.abs(angleDeltaRadians(lastPublishedNavigation.azimuth, navigationPose.azimuth)) <
-        AZIMUTH_EPSILON
-    ) {
-      navigationPose = {
-        ...navigationPose,
-        azimuth: lastPublishedNavigation.azimuth,
-      }
-    }
     const nextSnapshot = navigationSnapshot(navigationPose)
     if (
       lastPublishedNavigation &&
@@ -178,8 +168,7 @@ export function createFloorplanCameraSyncBridge({
   return {
     receiveCameraPose: (pose) => {
       latestCameraPose = pose
-      if (!active) return
-      if (applyPendingNavigationPose()) return
+      if (active && applyPendingNavigationPose()) return
 
       publishCameraNavigationPose(pose)
     },
