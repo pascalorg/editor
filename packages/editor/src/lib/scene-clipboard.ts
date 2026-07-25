@@ -13,6 +13,27 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 
+/**
+ * Validate a node on its way through the clipboard.
+ *
+ * `AnyNode` is the hand-maintained union of built-in kinds, so a
+ * plugin-contributed kind can never be a member of it — the registry validates
+ * those against `def.schema` at runtime instead. Parsing with `AnyNode` alone
+ * therefore rejects every plugin node, which makes `capabilities.duplicable`
+ * unhonourable for plugins including the first-party `pascal:trees` pack.
+ *
+ * Built-in behaviour is unchanged: `AnyNode` is still tried first, and a type
+ * that is neither built-in nor registered still raises the original error.
+ */
+function parseClipboardNode(candidate: unknown): AnyNode {
+  const builtin = AnyNode.safeParse(candidate)
+  if (builtin.success) return builtin.data
+  const type = (candidate as { type?: unknown } | null)?.type
+  const definition = typeof type === 'string' ? nodeRegistry.get(type) : undefined
+  if (definition) return definition.schema.parse(candidate) as AnyNode
+  throw builtin.error
+}
+
 type ClipboardPayload = {
   copiedAt: number
   materials: SceneMaterial[]
@@ -250,7 +271,7 @@ function remapNodeReferences(
   delete metadata.isTransient
   ;(clone as Record<string, unknown>).metadata = metadata
 
-  return AnyNode.parse(clone)
+  return parseClipboardNode(clone)
 }
 
 function remapSceneMaterialReferences(
@@ -374,7 +395,13 @@ function parseClipboardPayload(text: string): ClipboardPayload | null {
       return null
     }
 
-    const nodes = candidate.nodes.map((node) => AnyNode.safeParse(node))
+    const nodes = candidate.nodes.map((node) => {
+      try {
+        return { success: true as const, data: parseClipboardNode(node) }
+      } catch {
+        return { success: false as const, data: undefined }
+      }
+    })
     if (nodes.some((result) => !result.success)) return null
     const materials = Array.isArray(candidate.materials)
       ? candidate.materials.map((material) => SceneMaterial.safeParse(material))

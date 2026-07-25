@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   type AnyNodeId,
   CabinetModuleNode,
   type CabinetModuleNode as CabinetModuleNodeType,
@@ -8,6 +9,8 @@ import {
   type CabinetNode as CabinetNodeType,
   type LevelNode,
   MeasurementNode,
+  nodeRegistry,
+  registerNode,
   SceneMaterial,
   type SceneMaterialId,
   useScene,
@@ -15,6 +18,7 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { z } from 'zod'
 import {
   copySelectedNodesToEditorClipboard,
   getEditorClipboardSnapshot,
@@ -102,6 +106,12 @@ describe('scene clipboard', () => {
   beforeEach(() => {
     seedCabinetRun()
     useScene.temporal.getState().clear()
+  })
+
+  // The plugin-kind test registers a definition; drop it so it can't leak into
+  // any other test's registry lookups.
+  afterEach(() => {
+    nodeRegistry._reset()
   })
 
   test('copies a selected cabinet run as one subtree instead of independent modules', () => {
@@ -292,6 +302,64 @@ describe('scene clipboard', () => {
     if (pastedWall?.type === 'wall') {
       expect(pastedWall.slots?.exterior).toBe(`scene:${materialId}`)
     }
+  })
+
+  test('duplicates a plugin-contributed kind that AnyNode cannot describe', () => {
+    // `AnyNode` is a hand-maintained union of built-in kinds, so a plugin kind
+    // can never be a member of it — the registry validates those against
+    // `def.schema` instead. Registering one here reproduces exactly what a
+    // plugin does at load time; before the registry fallback this copy threw
+    // `invalid_union / no matching discriminator` and duplicate silently failed
+    // for every plugin, including the first-party trees pack.
+    const PluginNode = z.object({
+      object: z.literal('node').default('node'),
+      id: z.string(),
+      type: z.literal('warehouse:pallet').default('warehouse:pallet'),
+      name: z.string().optional(),
+      parentId: z.string().nullable().default(null),
+      visible: z.boolean().optional().default(true),
+      metadata: z.json().optional().default({}),
+      position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+      rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+      preset: z.string().default('epal-1'),
+    })
+    registerNode({
+      kind: 'warehouse:pallet',
+      schemaVersion: 1,
+      schema: PluginNode,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: { duplicable: true, deletable: true },
+    } as unknown as AnyNodeDefinition)
+
+    const pluginNodeId = 'warehouse-pallet_clipboard' as AnyNodeId
+    const pluginNode = PluginNode.parse({
+      id: pluginNodeId,
+      parentId: sourceLevelId,
+      position: [2, 0, 1],
+      preset: 'epal-2',
+    }) as unknown as AnyNode
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [sourceLevelId]: makeLevel(sourceLevelId, [pluginNodeId]),
+        [pluginNodeId]: pluginNode,
+      },
+    }))
+
+    expect(copySelectedNodesToEditorClipboard([pluginNodeId])).toBe(true)
+
+    const result = pasteEditorClipboardToLevel(targetLevelId)
+    expect(result?.pastedIds).toHaveLength(1)
+
+    const pastedId = result?.pastedIds[0]
+    const pasted = pastedId ? useScene.getState().nodes[pastedId] : undefined
+    expect(pasted?.type).toBe('warehouse:pallet')
+    expect(pasted?.id).not.toBe(pluginNodeId)
+    expect(pasted?.parentId).toBe(targetLevelId)
+    // The registry schema — not `AnyNode` — is what validated it, so kind-owned
+    // fields have to survive the round trip.
+    expect((pasted as unknown as { preset?: string } | undefined)?.preset).toBe('epal-2')
   })
 
   test('waits for an in-flight copy before reading the browser clipboard', async () => {
