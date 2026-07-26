@@ -1,3 +1,4 @@
+import { warehouseCatalogPanel, warehousePlugin } from '@ovurrsl/plugin-warehouse'
 import {
   type AnyNodeDefinition,
   discoverPlugins,
@@ -85,6 +86,13 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+
+// Warehouse & logistics pack. Composed onto the discovery chain rather than
+// replacing it — `setPluginDiscovery` would drop every plugin registered above.
+// Both calls must precede `loadExternalPlugins()` below: it fires at import
+// time behind a module-closure flag, so a later registration is a no-op.
+extendPluginDiscovery(async () => [warehousePlugin])
+registerEditorHostPanel(warehouseCatalogPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()
