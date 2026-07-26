@@ -21,6 +21,7 @@ import type {
   ElevatorNode,
   EyebrowVentNode,
   FenceNode,
+  FormworkSystemNode,
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
@@ -92,6 +93,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
+export type FormworkSystemEvent = NodeEvent<FormworkSystemNode>
 export type ItemEvent = NodeEvent<ItemNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
@@ -293,6 +295,7 @@ type SelectionEvents = {
 type EditorEvents = GridEvents &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'formwork-system', FormworkSystemEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
   NodeEvents<'item', ItemEvent> &
