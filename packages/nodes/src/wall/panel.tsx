@@ -33,12 +33,14 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
   triggerSFX,
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Plus, Spline, Trash2 } from 'lucide-react'
+import { Grid3x3, Plus, Spline, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
+import { buildFormworkNode } from '../formwork-system'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 type WallTrimKey = 'skirting' | 'crown' | 'chairRail'
@@ -298,6 +300,75 @@ export default function WallPanel() {
             unit={unitLabel}
             value={Math.round(displayCurveOffset * 100) / 100}
           />
+        )}
+      </PanelSection>
+
+      <PanelSection title="Construction">
+        <SegmentedControl
+          onChange={(value: 'none' | 'plywood' | 'aluminium' | 'steel-panel') =>
+            handleUpdate(
+              value === 'none'
+                ? { formworkType: 'none' }
+                : {
+                    formworkType: value,
+                    shutterMaterial: node.shutterMaterial ?? value,
+                    tieSpacing: node.tieSpacing ?? 0.6,
+                    walerSpacing: node.walerSpacing ?? 0.9,
+                  },
+            )
+          }
+          options={[
+            { label: 'None', value: 'none' },
+            { label: 'Plywood', value: 'plywood' },
+            { label: 'Aluminium', value: 'aluminium' },
+            { label: 'Steel', value: 'steel-panel' },
+          ]}
+          value={node.formworkType ?? 'none'}
+        />
+        {node.formworkType && node.formworkType !== 'none' && (
+          <>
+            <SliderControl
+              label="Tie spacing"
+              max={metersToLinearUnit(2, unit)}
+              min={metersToLinearUnit(0.3, unit)}
+              onChange={(v) =>
+                handleUpdate({
+                  tieSpacing: linearControlValueToMeters(v, unit, { maxMeters: 2, minMeters: 0.3 }),
+                })
+              }
+              precision={2}
+              step={0.05}
+              unit={unitLabel}
+              value={metersToLinearUnit(node.tieSpacing ?? 0.6, unit)}
+            />
+            <SliderControl
+              label="Waler spacing"
+              max={metersToLinearUnit(2, unit)}
+              min={metersToLinearUnit(0.3, unit)}
+              onChange={(v) =>
+                handleUpdate({
+                  walerSpacing: linearControlValueToMeters(v, unit, {
+                    maxMeters: 2,
+                    minMeters: 0.3,
+                  }),
+                })
+              }
+              precision={2}
+              step={0.05}
+              unit={unitLabel}
+              value={metersToLinearUnit(node.walerSpacing ?? 0.9, unit)}
+            />
+            <ToggleControl
+              checked={node.scaffoldRequired ?? false}
+              label="Scaffold required"
+              onChange={(checked) => handleUpdate({ scaffoldRequired: checked })}
+            />
+            <ActionButton
+              icon={<Grid3x3 className="h-3.5 w-3.5" />}
+              label="Add formwork geometry"
+              onClick={() => useScene.getState().createNode(buildFormworkNode(node), node.id)}
+            />
+          </>
         )}
       </PanelSection>
 
