@@ -113,4 +113,44 @@ describe('apply_patch', () => {
     })
     expect(result.isError).toBe(true)
   })
+
+  test('AI can set construction/formwork properties on a wall and they persist', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: wall, parentId: level.id },
+          {
+            op: 'update',
+            id: wall.id,
+            data: {
+              formworkType: 'plywood',
+              shutterMaterial: '12mm plywood',
+              tieSpacing: 0.6,
+              walerSpacing: 1.2,
+              scaffoldRequired: true,
+            },
+          },
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    await new Promise((r) => setTimeout(r, 10))
+
+    const stored = bridge.getNode(wall.id) as WallNode
+    expect(stored.formworkType).toBe('plywood')
+    expect(stored.shutterMaterial).toBe('12mm plywood')
+    expect(stored.tieSpacing).toBe(0.6)
+    expect(stored.walerSpacing).toBe(1.2)
+    expect(stored.scaffoldRequired).toBe(true)
+
+    // Round-trip through the schema, same as save/load, to prove it's not
+    // transient in-memory state.
+    const reparsed = WallNode.parse(JSON.parse(JSON.stringify(stored)))
+    expect(reparsed.tieSpacing).toBe(0.6)
+    expect(reparsed.scaffoldRequired).toBe(true)
+  })
 })
