@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./formwork-system": {
+      "types": "./dist/formwork-system/index.d.ts",
+      "import": "./dist/formwork-system/index.js",
+      "default": "./dist/formwork-system/index.js"
     }
   },
   "files": [
