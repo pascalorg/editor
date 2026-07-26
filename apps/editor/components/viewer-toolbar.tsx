@@ -699,9 +699,20 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight() {
+export function CommunityViewerToolbarRight({ allScenesHref }: { allScenesHref?: string } = {}) {
   return (
     <div className={TOOLBAR_CONTAINER}>
+      {allScenesHref && (
+        <>
+          <a
+            className="whitespace-nowrap px-2 py-1 font-medium text-xs hover:text-foreground"
+            href={allScenesHref}
+          >
+            All scenes
+          </a>
+          <div className="my-1.5 w-px bg-border/50" />
+        </>
+      )}
       <LevelModeToggle />
       <WallModeToggle />
       <div className="my-1.5 w-px bg-border/50" />

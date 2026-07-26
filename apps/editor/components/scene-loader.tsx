@@ -9,11 +9,11 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { Hammer, Layers } from 'lucide-react'
+import { Hammer, Layers, Sparkles } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AiChatPanel } from './ai-chat-panel'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -99,6 +99,21 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  const sidebarTabs = useMemo(
+    () => [
+      ...SIDEBAR_TABS,
+      {
+        id: 'ai',
+        label: 'AI',
+        component: () => <AiChatPanel sceneId={meta.id} />,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Sparkles className="h-5 w-5" />,
+        icon: <Sparkles className="h-8 w-8" />,
+      },
+    ],
+    [meta.id],
+  )
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -223,23 +238,15 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-2">
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
       <Editor
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={sidebarTabs}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={<CommunityViewerToolbarRight allScenesHref="/scenes" />}
       />
     </div>
   )
