@@ -32,7 +32,11 @@ export type Subtree = {
 }
 
 function extractIdPrefix(id: string): string {
-  const i = id.indexOf('_')
+  // The LAST underscore: `generateId` suffixes never contain one, so this
+  // recovers the exact prefix even when the prefix itself does — a plugin
+  // kind's `pallet_rack_<suffix>` must clone as `pallet_rack_*`, and the
+  // first-underscore split minted `pallet_*`, which its schema rejects.
+  const i = id.lastIndexOf('_')
   return i === -1 ? 'node' : id.slice(0, i)
 }
 

@@ -16,10 +16,16 @@ export type SceneGraph = {
 }
 
 /**
- * Extracts the type prefix from a node ID (e.g., "wall_abc123" -> "wall")
+ * Extracts the type prefix from a node ID (e.g., "wall_abc123" -> "wall").
+ *
+ * The LAST underscore, because `generateId` suffixes are drawn from `0-9a-z`
+ * and never contain one — so this recovers the exact prefix even when the
+ * prefix itself does (a plugin kind's `pallet_rack_abc123` -> `pallet_rack`).
+ * Splitting at the first underscore cloned those as `pallet_*`, which the
+ * kind's own schema rejects.
  */
 function extractIdPrefix(id: string): string {
-  const underscoreIndex = id.indexOf('_')
+  const underscoreIndex = id.lastIndexOf('_')
   return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
 }
 

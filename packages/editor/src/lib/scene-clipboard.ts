@@ -94,7 +94,13 @@ export function hasEditorClipboard() {
 }
 
 function extractIdPrefix(id: string) {
-  const underscoreIndex = id.indexOf('_')
+  // The LAST underscore, not the first: `generateId` appends a suffix drawn
+  // from `0-9a-z` (never `_`), so everything before the last underscore is
+  // exactly the prefix — including prefixes that themselves contain one, like
+  // the plugin kind id `pallet_rack_<suffix>`. Splitting at the first
+  // underscore minted duplicates as `pallet_<suffix>`, which the kind's own
+  // schema then rejected, and every paste of that node was silently skipped.
+  const underscoreIndex = id.lastIndexOf('_')
   return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
 }
 
