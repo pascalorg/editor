@@ -53,3 +53,9 @@ og-test
 .claude/launch.json
 .claude/settings.local.json
 .vscode/launch.json
+
+#pi
+.pi-subagents
+
+#example
+/example
