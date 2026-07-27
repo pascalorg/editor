@@ -67,9 +67,15 @@ interface ChatArchive {
 function saveArchive(sceneId: string, messages: UIMessage[]): void {
   if (typeof localStorage === 'undefined' || messages.length === 0) return
   try {
-    const preview =
-      messages.find((m) => m.role === 'user')?.parts.find((p) => p.type === 'text')?.text ??
-      `${messages.length} messages`
+    const firstUser = messages
+      .find((m) => m.role === 'user')
+      ?.parts.find((p) => p.type === 'text')?.text
+    // Strip the injected `Context: ... (id: ...)\n\n` prefix so the archive
+    // preview shows what the user actually typed, not the plumbing.
+    const cleaned = firstUser?.startsWith('Context:')
+      ? firstUser.split('\n\n').slice(1).join('\n\n') || firstUser
+      : firstUser
+    const preview = cleaned?.trim() || `${messages.length} messages`
     const entry: ChatArchive = {
       id: Date.now().toString(36),
       preview: preview.slice(0, 80),
@@ -301,8 +307,14 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState>
+              <div className="space-y-1">
+                <h3 className="font-medium text-sm">Ask the construction AI</h3>
+                <p className="text-muted-foreground text-sm">
+                  e.g. "set formwork on the first wall to plywood with 0.6m tie spacing"
+                </p>
+              </div>
               {archives.length > 0 && (
-                <div className="w-full space-y-1">
+                <div className="w-full max-w-sm space-y-1">
                   <h4 className="text-muted-foreground text-xs font-medium">
                     Previous conversations
                   </h4>
@@ -323,21 +335,6 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
                   ))}
                 </div>
               )}
-              <div className="space-y-1">
-                <h3 className="font-medium text-sm">Ask the construction AI</h3>
-                <p className="text-muted-foreground text-sm">
-                  e.g. "set formwork on the first wall to plywood with 0.6m tie spacing"
-                </p>
-              </div>
-              <Suggestions>
-                {STARTER_SUGGESTIONS.map((s) => (
-                  <Suggestion
-                    key={s}
-                    onClick={(text) => !busy && sendMessage({ text })}
-                    suggestion={s}
-                  />
-                ))}
-              </Suggestions>
             </ConversationEmptyState>
           )}
           {messages.map((message, mi) => {
@@ -425,6 +422,13 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
+      {messages.length === 0 && (
+        <Suggestions className="px-1">
+          {STARTER_SUGGESTIONS.map((s) => (
+            <Suggestion key={s} onClick={(text) => !busy && sendMessage({ text })} suggestion={s} />
+          ))}
+        </Suggestions>
+      )}
       <PromptInput
         globalDrop
         multiple
