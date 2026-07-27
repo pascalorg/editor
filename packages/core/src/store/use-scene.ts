@@ -591,6 +591,42 @@ function migrateConstructionDimension(node: Record<string, any>) {
   }
 }
 
+function removeRetiredDrawingSheets(nodes: Record<string, any>) {
+  const retiredIds = new Set(
+    Object.entries(nodes)
+      .filter(([, node]) => node?.type === 'drawing-sheet')
+      .map(([id]) => id),
+  )
+  if (retiredIds.size === 0) return
+
+  for (const id of retiredIds) delete nodes[id]
+  for (const [id, node] of Object.entries(nodes)) {
+    if (!Array.isArray(node?.children)) continue
+    const children = getStringArray(node.children)
+    if (!children.some((childId) => retiredIds.has(childId))) continue
+    nodes[id] = {
+      ...node,
+      children: children.filter((childId) => !retiredIds.has(childId)),
+    }
+  }
+}
+
+function migrateWallAssembly(node: Record<string, any>) {
+  if (!Object.hasOwn(node, 'assemblyLayers')) return node
+
+  const assemblyThickness = Array.isArray(node.assemblyLayers)
+    ? node.assemblyLayers.reduce((total: number, layer: unknown) => {
+        if (!(layer && typeof layer === 'object')) return total
+        const thickness = (layer as { thickness?: unknown }).thickness
+        return typeof thickness === 'number' && Number.isFinite(thickness) && thickness > 0
+          ? total + thickness
+          : total
+      }, 0)
+    : 0
+  const { assemblyLayers: _assemblyLayers, ...wall } = node
+  return assemblyThickness > 0 ? { ...wall, thickness: assemblyThickness } : wall
+}
+
 // Walls whose top lands within this of the storey plane become plane-bound;
 // ceilings whose stored height lands within this of their clamp bound become
 // follows-mode (step 3f) — same census-backed threshold for both.
@@ -608,6 +644,7 @@ function migrateNodes(nodes: Record<string, any>): {
   // any per-type migration runs, so already-saved scenes load cleanly.
   const { nodes: healed } = healSceneNodes(nodes)
   const patchedNodes = { ...healed } as Record<string, any>
+  removeRetiredDrawingSheets(patchedNodes)
 
   // Scene materials minted while moving legacy wall fields onto `node.slots`;
   // merged into the scene material map by the caller (`setScene`).
@@ -728,7 +765,10 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'wall') {
-      patchedNodes[id] = migrateWallSurfaceMaterials(patchedNodes[id], mintedMaterials)
+      patchedNodes[id] = migrateWallSurfaceMaterials(
+        migrateWallAssembly(patchedNodes[id]),
+        mintedMaterials,
+      )
     }
 
     // Cabinet v2→v3: node-level `doorStyle` was dead (geometry reads only the

@@ -15,7 +15,7 @@ export const BuildingNode = BaseNode.extend({
   Building node - used to represent a building
   - position: position in site coordinate system
   - rotation: rotation in site coordinate system
-  - children: array of level nodes, building-level systems such as elevators, and drawing sheets
+  - children: array of level nodes and building-level systems such as elevators
   `,
 )
 
