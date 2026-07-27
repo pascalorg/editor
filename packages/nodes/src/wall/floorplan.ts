@@ -5,6 +5,8 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getWallAssemblyThickness,
+  getWallCurveFrameAt,
+  getWallCurveLength,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   isCurvedWall,
@@ -29,6 +31,8 @@ const FLOORPLAN_WALL_THICKNESS_SCALE = 1.18
 const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_ASSEMBLY_GRAPHIC_MIN_SPACING = 0.06
+const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
+const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH_PX = 3
 const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
 
 type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
@@ -234,12 +238,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // Selection hatch overlay — only when the wall is *the* selected item
   // (not when it's just marquee-highlighted), matching the legacy.
   if (isSelected && palette) {
-    children.push({
-      kind: 'hatch',
-      points,
-      color: palette.selectedHatch,
-      opacity: 1,
-    })
+    children.push(...buildSelectedWallHatchLines(self, palette.selectedHatch))
   }
 
   // Hit-line on the centerline. Stroke width is in screen pixels so it
@@ -321,6 +320,35 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   }
 
   return { kind: 'group', children }
+}
+
+function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanGeometry[] {
+  const length = getWallCurveLength(wall)
+  if (length <= 1e-6) return []
+
+  const halfAcross = getWallAssemblyThickness(wall) * 0.42
+  const halfAlong = halfAcross
+  const count = Math.max(1, Math.floor(length / FLOORPLAN_SELECTION_HATCH_SPACING))
+  const spacing = length / count
+  const lines: FloorplanGeometry[] = []
+
+  for (let index = 0; index < count; index += 1) {
+    const along = (index + 0.5) * spacing
+    const frame = getWallCurveFrameAt(wall, along / length)
+    lines.push({
+      kind: 'line',
+      x1: frame.point.x - frame.tangent.x * halfAlong - frame.normal.x * halfAcross,
+      y1: frame.point.y - frame.tangent.y * halfAlong - frame.normal.y * halfAcross,
+      x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * halfAcross,
+      y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * halfAcross,
+      stroke,
+      strokeWidth: FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH_PX,
+      vectorEffect: 'non-scaling-stroke',
+      pointerEvents: 'none',
+    })
+  }
+
+  return lines
 }
 
 function wallDimensionDatumPolicy(reference: WallDimensionReference) {

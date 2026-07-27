@@ -92,6 +92,30 @@ describe('buildWallFloorplan render purpose', () => {
     expect(readFloorplanGeometryMetadata(documentPolygon).annotationObstacle).toBe('outline')
   })
 
+  test('draws crisp diagonal hatch strokes inside a selected wall', () => {
+    const diagonalWall = WallNode.parse({
+      ...wall,
+      end: [4, 4],
+    })
+    const selected = buildWallFloorplan(diagonalWall, context('edit', true))
+    const hatchLines = selected
+      ? flatten(selected).filter(
+          (entry) => entry.kind === 'line' && entry.stroke === palette.selectedHatch,
+        )
+      : []
+
+    expect(hatchLines.length).toBeGreaterThan(8)
+    expect(
+      hatchLines.every(
+        (entry) =>
+          entry.kind === 'line' &&
+          entry.strokeWidth === 3 &&
+          entry.vectorEffect === 'non-scaling-stroke' &&
+          entry.pointerEvents === 'none',
+      ),
+    ).toBe(true)
+  })
+
   test('uses document metric notation only for document output', () => {
     const edit = buildWallFloorplan(wall, context('edit'))
     const document = buildWallFloorplan(wall, context('document'))
