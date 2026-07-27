@@ -9,7 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  CursorSphere,
+  EDITOR_LAYER,
   getFloorStackPreviewPosition,
   isAlignmentGuideActive,
   isGridSnapActive,
@@ -18,14 +18,18 @@ import {
   triggerSFX,
   useAlignmentGuides,
   useEditor,
+  usePlacementPreview,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group } from 'three'
 import {
   getLevelLocalSnappedPosition,
   resolveAlignedFloorPlacement,
 } from '../shared/floor-placement'
+import { SpawnPreview } from './renderer'
+
+const ROTATION_STEP = Math.PI / 4
 
 function getExistingSpawnIds() {
   const nodes = useScene.getState().nodes
@@ -38,14 +42,17 @@ function getExistingSpawnIds() {
 /**
  * Registry-driven spawn placement tool. Reads `activeLevelId` from useViewer
  * directly (no props), broadcasts placement via store updates + SFX, and
- * uses the shared CursorSphere from @pascal-app/editor for visual parity
- * with legacy placement tools. Snapping is mode-driven (grid + Figma-style
+ * shows the real spawn model as a translucent placement ghost, and supports
+ * R/T yaw before commit. Snapping is mode-driven (grid + Figma-style
  * alignment "lines"), matching the shelf / column build tools.
  */
 const SpawnTool = () => {
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const cursorRef = useRef<Group>(null)
   const previousSnapRef = useRef<string | null>(null)
+  const rotationRef = useRef(0)
+  const cursorVisibleRef = useRef(false)
+  const [cursorVisible, setCursorVisible] = useState(false)
 
   // Default spawn for the footprint anchors the alignment solver reads.
   const previewNode = useMemo(
@@ -56,10 +63,19 @@ const SpawnTool = () => {
   useEffect(() => {
     if (!activeLevelId) return
     previousSnapRef.current = null
+    rotationRef.current = 0
+    cursorRef.current?.rotation.set(0, 0, 0)
+    cursorVisibleRef.current = false
+    setCursorVisible(false)
     const lastCursorRef: { current: [number, number, number] | null } = { current: null }
     let alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
 
     const onGridMove = (event: GridEvent) => {
+      if (!cursorVisibleRef.current) {
+        cursorVisibleRef.current = true
+        setCursorVisible(true)
+      }
+
       const { position, guides } = resolveAlignedFloorPlacement({
         node: previewNode,
         rawX: event.localPosition[0],
@@ -75,11 +91,16 @@ const SpawnTool = () => {
       const visualPosition = getFloorStackPreviewPosition({
         node: previewNode,
         position,
-        rotation: 0,
+        rotation: rotationRef.current,
         levelId: activeLevelId,
       })
       cursorRef.current?.position.set(...visualPosition)
       lastCursorRef.current = position
+      usePlacementPreview.getState().set({
+        ...previewNode,
+        position,
+        rotation: rotationRef.current,
+      })
 
       const nextSnapKey = movementSfxStepKey({
         coords: [position[0], position[2]],
@@ -111,12 +132,12 @@ const SpawnTool = () => {
           ...live,
           parentId: activeLevelId,
           position: next,
-          rotation: 0,
+          rotation: rotationRef.current,
         })
         useScene.getState().updateNode(existingSpawnId, {
           parentId: activeLevelId,
           position: next,
-          rotation: 0,
+          rotation: rotationRef.current,
           ...resolveSupportSlabPatch(effectiveSpawn, useScene.getState().nodes),
         })
         if (duplicates.length > 0) {
@@ -127,7 +148,7 @@ const SpawnTool = () => {
         const spawn = SpawnNode.parse({
           name: 'Spawn Point',
           position: next,
-          rotation: 0,
+          rotation: rotationRef.current,
           parentId: activeLevelId,
         })
         const committedSpawn = SpawnNode.parse({
@@ -142,23 +163,63 @@ const SpawnTool = () => {
       triggerSFX('sfx:structure-build')
       alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, previewNode.id)
       useAlignmentGuides.getState().clear()
+      usePlacementPreview.getState().clear()
       useEditor.getState().setTool(null)
       useEditor.getState().setMode('select')
     }
 
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      let delta = 0
+      if (event.key === 'r' || event.key === 'R') delta = ROTATION_STEP
+      else if (event.key === 't' || event.key === 'T') delta = -ROTATION_STEP
+      else return
+
+      event.preventDefault()
+      event.stopPropagation()
+      rotationRef.current += delta
+      if (cursorRef.current) cursorRef.current.rotation.y = rotationRef.current
+      if (lastCursorRef.current) {
+        usePlacementPreview.getState().set({
+          ...previewNode,
+          position: lastCursorRef.current,
+          rotation: rotationRef.current,
+        })
+      }
+      triggerSFX('sfx:item-rotate')
+    }
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
+    window.addEventListener('keydown', onKeyDown, true)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
+      window.removeEventListener('keydown', onKeyDown, true)
       useAlignmentGuides.getState().clear()
+      usePlacementPreview.getState().clear()
     }
   }, [activeLevelId, previewNode])
 
   if (!activeLevelId) return null
 
-  return <CursorSphere color="#818cf8" height={2.2} ref={cursorRef} />
+  return (
+    <group ref={cursorRef} visible={cursorVisible}>
+      <SpawnPreview layers={EDITOR_LAYER} node={previewNode} />
+    </group>
+  )
 }
 
 export default SpawnTool

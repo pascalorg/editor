@@ -19,11 +19,24 @@ import {
   collectFloorplanDependencyNodes,
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
+  floorplanAffordanceReshapeScope,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
+  isFloorplanOpeningPlacementState,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
+
+describe('floorplan affordance ownership', () => {
+  test('keeps the wall center curve drag owned by the floorplan dispatcher', () => {
+    expect(floorplanAffordanceReshapeScope('wall-curve', 'wall_1', undefined)).toEqual({
+      kind: 'reshaping',
+      nodeId: 'wall_1',
+      reshape: 'curve',
+      driver: 'floorplan',
+    })
+  })
+})
 
 function cabinetRun(id: string, children: string[] = [], parentId: string | null = 'level_test') {
   return {
@@ -192,6 +205,35 @@ describe('floorplan affordance cancellation', () => {
     const activeDrag = dragRef.current
     if (activeDrag?.pointerId === 7) activeDrag.session.commit?.()
     expect(commit).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('floorplan opening placement interaction routing', () => {
+  test('passes entries through only while an opening tool or moving opening is active', () => {
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'build',
+        tool: 'window',
+        movingNodeHasWallOpeningPlacement: false,
+      }),
+    ).toBe(true)
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'select',
+        tool: null,
+        movingNodeHasWallOpeningPlacement: true,
+      }),
+    ).toBe(true)
+    expect(
+      isFloorplanOpeningPlacementState({
+        phase: 'structure',
+        mode: 'select',
+        tool: null,
+        movingNodeHasWallOpeningPlacement: false,
+      }),
+    ).toBe(false)
   })
 })
 

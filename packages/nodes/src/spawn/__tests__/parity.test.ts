@@ -6,6 +6,7 @@ import {
 } from '@pascal-app/core'
 import { spawnDefinition } from '../definition'
 import { buildSpawnFloorplan } from '../floorplan'
+import { SpawnPreview } from '../renderer'
 import { SpawnNode } from '../schema'
 
 /**
@@ -125,6 +126,14 @@ describe('spawn definition', () => {
 
   test('tool is a lazy module reference', () => {
     expect(typeof spawnDefinition.tool).toBe('function')
+  })
+
+  test('placement exposes the shared spawn model preview and rotation hint', () => {
+    expect(typeof SpawnPreview).toBe('function')
+    expect(spawnDefinition.toolHints).toContainEqual({
+      key: 'R / T',
+      label: 'Rotate spawn point',
+    })
   })
 
   test('mcp description is set so AI surfaces describe the kind', () => {

@@ -17,6 +17,28 @@ describe('healSceneNodes', () => {
     expect((nodes.wall_a as { children: string[] }).children).toEqual(['item_x'])
   })
 
+  test('preserves legacy embedded site children for the scene migration', () => {
+    const building = {
+      id: 'building_legacy',
+      type: 'building',
+      parentId: null,
+      children: ['level_legacy'],
+    }
+    const { nodes, strippedChildRefs } = healSceneNodes({
+      site_legacy: {
+        id: 'site_legacy',
+        type: 'site',
+        parentId: null,
+        children: [building, null],
+      },
+      building_legacy: building,
+      level_legacy: { id: 'level_legacy', type: 'level', parentId: null, children: [] },
+    })
+
+    expect(strippedChildRefs).toBe(1)
+    expect((nodes.site_legacy as { children: unknown[] }).children).toEqual([building])
+  })
+
   test('drops childless zero-length walls and removes their parent reference', () => {
     const { nodes, droppedWallIds } = healSceneNodes({
       level_0: { id: 'level_0', type: 'level', children: ['wall_zero', 'wall_real'] },

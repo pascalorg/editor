@@ -25,6 +25,8 @@ import {
   type CameraPoseApplicationPlan,
   normalizeCameraPose,
   planCameraPoseApplication,
+  publishInitialCameraPose,
+  releaseCameraPoseEventSuppression,
   stepCameraPoseInterpolation,
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
@@ -609,6 +611,10 @@ export const CustomCameraControls = () => {
     publishCurrentPose()
   }, [publishCurrentPose])
 
+  useEffect(() => {
+    publishInitialCameraPose(publishCurrentPose)
+  }, [publishCurrentPose])
+
   useFrame((_, delta) => {
     if (isFirstPersonMode || !controls.current) return
 
@@ -645,12 +651,12 @@ export const CustomCameraControls = () => {
         } catch {
           if (activePoseInterpolation.current === activePose) {
             activePoseInterpolation.current = null
-            suppressPoseEvents.current = false
+            releaseCameraPoseEventSuppression(suppressPoseEvents, publishCurrentPose)
           }
         }
         if (step.settled && activePoseInterpolation.current === activePose) {
           activePoseInterpolation.current = null
-          suppressPoseEvents.current = false
+          releaseCameraPoseEventSuppression(suppressPoseEvents, publishCurrentPose)
         }
       }
     }

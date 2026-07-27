@@ -11,6 +11,11 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Vector3 } from 'three'
 import {
+  cutSelectionToEditorClipboard,
+  deleteSelection,
+  pasteSelectionAndPickUp,
+} from '../components/editor/group-actions'
+import {
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
@@ -24,12 +29,10 @@ import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
-import {
-  copySelectedNodesToEditorClipboard,
-  pasteEditorClipboardToLevel,
-} from '../lib/scene-clipboard'
-import { emitDeleteSFX, sfxEmitter } from '../lib/sfx-bus'
+import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
+import { sfxEmitter } from '../lib/sfx-bus'
 import { toggleWindowOpenState } from '../lib/window-interaction'
+import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 
@@ -210,6 +213,10 @@ export const useKeyboard = ({
         return
       }
 
+      if (useDeleteConfirmation.getState().request) {
+        return
+      }
+
       if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
         // In paint mode Shift cycles the application scope (this surface →
         // whole item / all matching / room) — the paint-mode analogue of the
@@ -361,13 +368,14 @@ export const useKeyboard = ({
         if (isVersionPreviewMode) return
         e.preventDefault()
         copySelectedNodesToEditorClipboard()
+      } else if (e.key === 'x' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        cutSelectionToEditorClipboard()
       } else if (e.key === 'v' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        const result = pasteEditorClipboardToLevel()
-        if (result?.pastedIds.length) {
-          sfxEmitter.emit('sfx:item-place')
-        }
+        void pasteSelectionAndPickUp()
       } else if (e.key.toLowerCase() === 'z' && e.shiftKey && (e.metaKey || e.ctrlKey)) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -621,27 +629,7 @@ export const useKeyboard = ({
           }
         }
 
-        const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
-
-        if (selectedNodeIds.length > 0) {
-          // Guard against accidental bulk deletion (e.g. box-select all + Delete)
-          const BULK_DELETE_THRESHOLD = 10
-          if (selectedNodeIds.length >= BULK_DELETE_THRESHOLD) {
-            const confirmed = window.confirm(
-              `Delete ${selectedNodeIds.length} selected elements? This cannot be undone if the undo history is exhausted.`,
-            )
-            if (!confirmed) return
-          }
-
-          // Play appropriate SFX based on what's being deleted
-          if (selectedNodeIds.length === 1) {
-            const node = useScene.getState().nodes[selectedNodeIds[0]!]
-            emitDeleteSFX(node?.type)
-          } else {
-            sfxEmitter.emit('sfx:structure-delete')
-          }
-
-          useScene.getState().deleteNodes(selectedNodeIds)
+        if (deleteSelection()) {
           return
         }
 

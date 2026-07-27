@@ -277,6 +277,12 @@ type RoomPresetEvents = {
 
 type SelectionEvents = {
   /**
+   * A node click accepted by an editor canvas selection path after proxy and
+   * phase routing. Hosts can react to the user's 2D/3D selection intent
+   * without treating programmatic selection changes as canvas clicks.
+   */
+  'selection:canvas-node-click': AnyNode
+  /**
    * "Reveal this node" intent — the editor's node action menu emits it with the
    * selected node; whoever owns the node's catalog/panel (host browser, a
    * plugin's presets panel) listens and reveals it.

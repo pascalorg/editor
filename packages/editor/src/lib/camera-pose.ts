@@ -17,6 +17,18 @@ export type CameraPoseInterpolationStep = {
   target: [number, number, number]
 }
 
+export function publishInitialCameraPose(publishCurrentPose: () => void): void {
+  publishCurrentPose()
+}
+
+export function releaseCameraPoseEventSuppression(
+  suppression: { current: boolean },
+  publishCurrentPose: () => void,
+): void {
+  suppression.current = false
+  publishCurrentPose()
+}
+
 function finiteVectorTuple(value: unknown): [number, number, number] | null {
   if (
     !(
