@@ -39,6 +39,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
+    "react-grab": "0.1.50",
     "three": "0.185.1"
   },
   "optionalDependencies": {
