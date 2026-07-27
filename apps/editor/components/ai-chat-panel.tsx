@@ -326,18 +326,6 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState>
-              <div className="flex flex-col items-center gap-3">
-                <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/20">
-                  <Sparkles className="size-5 text-primary" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-semibold text-base">Ask the construction AI</h3>
-                  <p className="mx-auto max-w-xs text-balance text-muted-foreground text-sm">
-                    Describe what to build — e.g. “set formwork on the first wall to plywood with
-                    0.6m tie spacing”.
-                  </p>
-                </div>
-              </div>
               {archives.length > 0 && (
                 <div className="mt-2 w-full max-w-sm space-y-1.5">
                   <p className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
