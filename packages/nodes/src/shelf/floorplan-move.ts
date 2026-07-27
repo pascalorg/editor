@@ -12,9 +12,10 @@ import {
 import {
   applyFloorplanAlignment,
   getFloorStackPreviewPosition,
+  getSegmentGridStep,
+  isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
-  useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
@@ -46,16 +47,13 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [shelfId],
-    apply({ planPoint, modifiers }) {
-      const snap = (value: number) => {
-        if (modifiers.shiftKey) return value
-        const step = useEditor.getState().gridSnapStep
-        return Math.round(value / step) * step
-      }
+    apply({ planPoint }) {
+      const gridSnapActive = isGridSnapActive()
+      const step = gridSnapActive ? getSegmentGridStep() : 0
+      const snap = (value: number) => (step > 0 ? Math.round(value / step) * step : value)
       const gridSnapped = resolveCursor(planPoint, { snap }) as WallPlanPoint
       // Figma-style alignment layered on the grid snap — the shelf footprint
-      // edges snap to neighbours / wall faces and a guide is published. Alt
-      // bypasses alignment; Shift bypasses all snap.
+      // edges snap to neighbours / wall faces and a guide is published.
       const { point: snapped } = applyFloorplanAlignment(
         gridSnapped,
         movingFootprintAnchors(
@@ -65,7 +63,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
           originalRotationY,
         ),
         candidates,
-        { applySnap: isMagneticSnapActive(), bypass: modifiers.altKey || modifiers.shiftKey },
+        { applySnap: isMagneticSnapActive() },
       )
       const next: [number, number, number] = [snapped[0], originalPosition[1], snapped[1]]
       lastPosition = next
@@ -74,7 +72,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
       // and the placement coordinators. Item / slab / wall flows fire
       // the same cue, so the shelf following along is the expected UX.
       const snapKey = `${snapped[0]},${snapped[1]}`
-      if (!modifiers.shiftKey && snapKey !== lastSnapKey) {
+      if (gridSnapActive && snapKey !== lastSnapKey) {
         triggerSFX('sfx:grid-snap')
         lastSnapKey = snapKey
       }
