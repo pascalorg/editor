@@ -4,7 +4,7 @@ import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { DefaultChatTransport, isDynamicToolUIPart, isToolUIPart, type UIMessage } from 'ai'
 import { useChat } from '@ai-sdk/react'
-import { Sparkles, X } from 'lucide-react'
+import { MessageSquare, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import {
   Attachment,
@@ -59,26 +59,28 @@ function archivesKey(sceneId: string): string {
 
 interface ChatArchive {
   id: string
-  preview: string
   count: number
   messages: UIMessage[]
+}
+
+// Derive the preview at render time from stored messages so it's always a
+// single source of truth (old archives that predate the prefix-strip still
+// render cleanly) rather than a possibly-stale saved string.
+function previewOf(messages: UIMessage[]): string {
+  const firstUser = messages
+    .find((m) => m.role === 'user')
+    ?.parts.find((p) => p.type === 'text')?.text
+  const cleaned = firstUser?.startsWith('Context:')
+    ? firstUser.split('\n\n').slice(1).join('\n\n') || firstUser
+    : firstUser
+  return cleaned?.trim() || `${messages.length} messages`
 }
 
 function saveArchive(sceneId: string, messages: UIMessage[]): void {
   if (typeof localStorage === 'undefined' || messages.length === 0) return
   try {
-    const firstUser = messages
-      .find((m) => m.role === 'user')
-      ?.parts.find((p) => p.type === 'text')?.text
-    // Strip the injected `Context: ... (id: ...)\n\n` prefix so the archive
-    // preview shows what the user actually typed, not the plumbing.
-    const cleaned = firstUser?.startsWith('Context:')
-      ? firstUser.split('\n\n').slice(1).join('\n\n') || firstUser
-      : firstUser
-    const preview = cleaned?.trim() || `${messages.length} messages`
     const entry: ChatArchive = {
       id: Date.now().toString(36),
-      preview: preview.slice(0, 80),
       count: messages.length,
       messages,
     }
@@ -307,32 +309,45 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState>
-              <div className="space-y-1">
-                <h3 className="font-medium text-sm">Ask the construction AI</h3>
-                <p className="text-muted-foreground text-sm">
-                  e.g. "set formwork on the first wall to plywood with 0.6m tie spacing"
-                </p>
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 ring-1 ring-primary/20">
+                  <Sparkles className="size-5 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-semibold text-base">Ask the construction AI</h3>
+                  <p className="mx-auto max-w-xs text-balance text-muted-foreground text-sm">
+                    Describe what to build — e.g. “set formwork on the first wall to plywood with
+                    0.6m tie spacing”.
+                  </p>
+                </div>
               </div>
               {archives.length > 0 && (
-                <div className="w-full max-w-sm space-y-1">
-                  <h4 className="text-muted-foreground text-xs font-medium">
-                    Previous conversations
-                  </h4>
-                  {archives.map((a) => (
-                    <button
-                      className="block w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-accent"
-                      key={a.id}
-                      onClick={() => {
-                        setMessages(a.messages)
-                        removeArchive(sceneId, a.id)
-                        setArchives(loadArchives(sceneId))
-                      }}
-                      title={`${a.count} messages — ${a.preview}`}
-                      type="button"
-                    >
-                      {a.preview}
-                    </button>
-                  ))}
+                <div className="mt-2 w-full max-w-sm space-y-1.5">
+                  <p className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                    Recent chats
+                  </p>
+                  <div className="space-y-1">
+                    {archives.map((a) => (
+                      <button
+                        className="group flex w-full items-center gap-2.5 rounded-lg border border-border/50 bg-card/50 px-3 py-2 text-left transition-colors hover:border-border hover:bg-accent"
+                        key={a.id}
+                        onClick={() => {
+                          setMessages(a.messages)
+                          removeArchive(sceneId, a.id)
+                          setArchives(loadArchives(sceneId))
+                        }}
+                        type="button"
+                      >
+                        <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate text-foreground/90 text-sm">
+                          {previewOf(a.messages)}
+                        </span>
+                        <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                          {a.count}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </ConversationEmptyState>
