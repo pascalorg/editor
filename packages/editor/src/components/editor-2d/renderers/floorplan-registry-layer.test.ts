@@ -4,6 +4,7 @@ import type {
   AnyNodeId,
   FloorplanAffordanceSession,
   FloorplanGeometry,
+  FloorplanPalette,
   LiveNodeOverrides,
 } from '@pascal-app/core'
 import { type AnyNodeDefinition, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
@@ -23,9 +24,67 @@ import {
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
   isFloorplanOpeningPlacementState,
+  resolveFloorplanHandleUnitsPerPixel,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
+
+describe('floorplan selection handle sizing', () => {
+  test('caps visual handle growth at extreme zoom-out', () => {
+    expect(resolveFloorplanHandleUnitsPerPixel(0.01)).toBe(0.01)
+    expect(resolveFloorplanHandleUnitsPerPixel(0.1)).toBe(0.015)
+
+    const palette = {
+      selectedStroke: '#111111',
+      selectedFill: '#ffffff',
+      selectedHatch: '#111111',
+      wallHoverStroke: '#111111',
+      endpointHandleFill: '#ffffff',
+      endpointHandleStroke: '#111111',
+      endpointHandleHoverStroke: '#222222',
+      endpointHandleActiveFill: '#333333',
+      endpointHandleActiveStroke: '#444444',
+      curveHandleFill: '#ffffff',
+      curveHandleStroke: '#008080',
+      curveHandleHoverStroke: '#00aaaa',
+      measurementStroke: '#111111',
+      measurementLabelBackground: '#ffffff',
+      measurementLabelText: '#111111',
+    } satisfies FloorplanPalette
+    const noop = () => {}
+    const markup = renderToStaticMarkup(
+      createElement(
+        'svg',
+        null,
+        createElement(InteractiveGeometry, {
+          activeDragId: null,
+          activeRotateNodeId: null,
+          geometry: {
+            kind: 'endpoint-handle',
+            point: [0, 0],
+            state: 'idle',
+            affordance: 'move-endpoint',
+            payload: { endpoint: 'start' },
+          },
+          hatchPatternId: undefined,
+          hoveredHandleId: null,
+          isMarqueeSelectionActive: false,
+          nodeId: 'wall_test' as AnyNodeId,
+          onHandleDoubleClick: noop,
+          onHandleHoverChange: noop,
+          onHandlePointerDown: noop,
+          onMoveHandlePointerDown: noop,
+          palette,
+          sceneRotationDeg: 0,
+          unitsPerPixel: 0.1,
+        }),
+      ),
+    )
+
+    expect(markup).toContain('r="0.12"')
+    expect(markup).not.toContain('r="0.8"')
+  })
+})
 
 describe('floorplan affordance ownership', () => {
   test('keeps the wall center curve drag owned by the floorplan dispatcher', () => {

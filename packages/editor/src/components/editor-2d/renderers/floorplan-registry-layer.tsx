@@ -142,8 +142,8 @@ import {
  */
 // Handle / hit-area sizes mirror the legacy `FLOORPLAN_ENDPOINT_HANDLE_*`
 // constants in floorplan-panel.tsx. Sizes are in screen pixels — the
-// dispatcher multiplies by `unitsPerPixel` so handles stay the same on-
-// screen size at any zoom.
+// dispatcher multiplies by `unitsPerPixel` so handles stay screen-sized
+// until the world-space ceiling takes over at extreme zoom-out.
 const ENDPOINT_HANDLE_SELECTED_RADIUS_PX = 8
 const ENDPOINT_HANDLE_ACTIVE_RADIUS_PX = 9
 const ENDPOINT_HANDLE_DOT_RADIUS_PX = 3
@@ -155,6 +155,11 @@ const HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const DIRECT_DRAG_THRESHOLD_PX = 4
 const DIRECT_ROTATE_EPSILON = 1e-6
 const DIRECT_ROTATE_RADIANS_PER_PIXEL = Math.PI / 180
+const MAX_HANDLE_UNITS_PER_PIXEL = 0.015
+
+export function resolveFloorplanHandleUnitsPerPixel(unitsPerPixel: number): number {
+  return Math.min(unitsPerPixel, MAX_HANDLE_UNITS_PER_PIXEL)
+}
 
 const ScaleAwareFloorplanGroupSelectionBox = memo(function ScaleAwareFloorplanGroupSelectionBox(
   props: Omit<ComponentProps<typeof FloorplanGroupSelectionBox>, 'unitsPerPixel'>,
@@ -2343,6 +2348,9 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
 }: InteractiveGeometryProps): React.ReactElement {
   const liveUnitsPerPixel = useFloorplanStaticUnitsPerPixel()
   const unitsPerPixel = unitsPerPixelOverride ?? liveUnitsPerPixel
+  // Keep handles pixel-sized through normal navigation, then let them shrink
+  // with the plan once zoom compensation would make them dominate the geometry.
+  const handleUnitsPerPixel = resolveFloorplanHandleUnitsPerPixel(unitsPerPixel)
 
   return renderInteractive(geometry, 0)
 
@@ -2419,10 +2427,10 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
             : palette.endpointHandleFill
         const outerRadius =
           (isActive ? ENDPOINT_HANDLE_ACTIVE_RADIUS_PX : ENDPOINT_HANDLE_SELECTED_RADIUS_PX) *
-          unitsPerPixel
+          handleUnitsPerPixel
         const dotRadius =
           (isActive ? ENDPOINT_HANDLE_ACTIVE_DOT_RADIUS_PX : ENDPOINT_HANDLE_DOT_RADIUS_PX) *
-          unitsPerPixel
+          handleUnitsPerPixel
         return (
           <g
             key={keyHint}
@@ -2438,7 +2446,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               r={outerRadius}
               stroke={hoverStroke}
               strokeOpacity={isActive ? 0.24 : 0.16}
-              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * handleUnitsPerPixel}
               style={{ opacity: isHovered || isActive ? 1 : 0, transition: HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
@@ -2450,7 +2458,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               r={outerRadius}
               stroke={hoverStroke}
               strokeOpacity={isActive ? 0.72 : 0.52}
-              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * handleUnitsPerPixel}
               style={{ opacity: isHovered || isActive ? 1 : 0, transition: HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
@@ -2811,8 +2819,8 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         // Slightly smaller than endpoint dots; hover-expanded.
         const baseRadiusPx = 6
         const hoverRadiusPx = 8
-        const radius = (isHovered || isActive ? hoverRadiusPx : baseRadiusPx) * unitsPerPixel
-        const plusHalf = 3 * unitsPerPixel
+        const radius = (isHovered || isActive ? hoverRadiusPx : baseRadiusPx) * handleUnitsPerPixel
+        const plusHalf = 3 * handleUnitsPerPixel
         return (
           <g
             key={keyHint}
@@ -2825,10 +2833,10 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               cy={g.point[1]}
               fill="none"
               pointerEvents="none"
-              r={radius + 2 * unitsPerPixel}
+              r={radius + 2 * handleUnitsPerPixel}
               stroke={hoverStroke}
               strokeOpacity={0.16}
-              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * unitsPerPixel}
+              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * handleUnitsPerPixel}
               style={{ opacity: isHovered || isActive ? 1 : 0, transition: HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
