@@ -39,6 +39,7 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-e
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { Task, TaskContent, TaskTrigger } from '@/components/ai-elements/task'
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/components/ai-elements/tool'
+import { Badge } from '@/components/ui/badge'
 
 /**
  * Selected-node chips above the composer (item 5: "select element → add to
@@ -118,6 +119,22 @@ const STARTER_SUGGESTIONS = [
   'Set formwork tie spacing to 0.6m and enable scaffold access',
   'Summarize the current wall construction on this level',
 ]
+
+// The composer injects a `Context: <label> (id: <id>), ...\n\n<message>`
+// prefix so the model receives node ids. Parse it back out at render time so
+// the user's bubble shows clean text plus context badges instead of the raw
+// plumbing string.
+function parseContext(text: string): { labels: string[]; body: string } {
+  if (!text.startsWith('Context:')) return { labels: [], body: text }
+  const idx = text.indexOf('\n\n')
+  if (idx < 0) return { labels: [], body: text }
+  const labels = text
+    .slice('Context:'.length, idx)
+    .split(/\),\s*/)
+    .map((s) => s.replace(/\s*\(id:.*$/, '').trim())
+    .filter(Boolean)
+  return { labels, body: text.slice(idx + 2) }
+}
 
 type MessagePart = UIMessage['parts'][number]
 type ToolPart =
@@ -370,7 +387,21 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
                 <MessageContent>
                   {groups.map((entry, i) => {
                     if (entry.kind === 'text') {
-                      return <MessageResponse key={i}>{entry.part.text}</MessageResponse>
+                      const { labels, body } = parseContext(entry.part.text)
+                      return (
+                        <div className="space-y-1.5" key={i}>
+                          {labels.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {labels.map((label) => (
+                                <Badge key={label} variant="secondary">
+                                  {label}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          <MessageResponse>{body}</MessageResponse>
+                        </div>
+                      )
                     }
                     if (entry.kind === 'reasoning') {
                       return (
