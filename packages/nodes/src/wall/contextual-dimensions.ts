@@ -1,24 +1,25 @@
 import {
-  type DoorNode,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
   isCurvedWall,
-  resolveAutoZonePolygon,
   resolveWallAssemblyDatumReferences,
   type WallNode,
-  type WindowNode,
-  type ZoneNode,
 } from '@pascal-app/core'
-import {
-  formatAreaLabel,
-  formatLinearMeasurement,
-  readFloorplanMetricNotationOverride,
-} from '@pascal-app/editor'
+import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 
-type OpeningNode = Pick<DoorNode | WindowNode, 'position' | 'type' | 'width'>
+type WallHostedOpening = {
+  position: readonly [number, number, number]
+  width: number
+}
+
+type OpeningDimensionOptions = {
+  showClearancesWhileMoving: boolean
+  useExteriorNormal: boolean
+}
+
 const WALL_CONNECTION_TOLERANCE = 0.03
 
 function formatLength(value: number, ctx: GeometryContext): string {
@@ -41,9 +42,7 @@ function contextualWallDimensionNormal(
   const front: FloorplanPoint = [cleanZero(frontNormal[0]), cleanZero(frontNormal[1])]
   const back: FloorplanPoint = [cleanZero(-front[0]), cleanZero(-front[1])]
   if (wall.frontSide === 'exterior' && wall.backSide !== 'exterior') return front
-  if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') {
-    return back
-  }
+  if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') return back
   if (wall.frontSide === 'interior' && wall.backSide === 'interior') return front
 
   const walls = [
@@ -214,9 +213,10 @@ export function buildWallContextualDimensions(
   }
 }
 
-export function buildOpeningContextualDimensions(
-  node: OpeningNode,
+export function buildWallHostedOpeningContextualDimensions(
+  node: WallHostedOpening,
   ctx: GeometryContext,
+  options: OpeningDimensionOptions,
 ): FloorplanGeometry | null {
   const wall = ctx.parent as WallNode | null
   if (wall?.type !== 'wall' || node.width <= 1e-6) return null
@@ -233,7 +233,7 @@ export function buildOpeningContextualDimensions(
   const openingStart: FloorplanPoint = [cx - dirX * halfWidth, cy - dirY * halfWidth]
   const openingEnd: FloorplanPoint = [cx + dirX * halfWidth, cy + dirY * halfWidth]
 
-  if (node.type !== 'window' || isCurvedWall(wall)) {
+  if (!options.useExteriorNormal || isCurvedWall(wall)) {
     return {
       kind: 'dimension',
       start: openingStart,
@@ -247,7 +247,7 @@ export function buildOpeningContextualDimensions(
   }
 
   const offsetNormal = contextualWallDimensionNormal(wall, [-dirY, dirX], ctx.siblings)
-  if (!ctx.viewState?.moving) {
+  if (!options.showClearancesWhileMoving || !ctx.viewState?.moving) {
     return {
       kind: 'dimension',
       start: openingStart,
@@ -289,56 +289,5 @@ export function buildOpeningContextualDimensions(
     offsetDistance: 0.34,
     extensionOvershoot: 0.08,
     stroke: selectedStroke(ctx),
-  }
-}
-
-export function buildZoneContextualDimensions(
-  node: ZoneNode,
-  ctx: GeometryContext,
-): FloorplanGeometry | null {
-  const polygon = resolveAutoZonePolygon(node, ctx.resolve)
-  if (polygon.length < 3) return null
-  const { area, centroid } = polygonAreaAndCentroid(polygon)
-  if (area <= 1e-6) return null
-
-  return {
-    kind: 'dimension-label',
-    appearance: 'outlined',
-    cx: centroid[0],
-    cy: centroid[1],
-    text: formatAreaLabel(area, ctx.viewState?.unit ?? 'metric', 1),
-    angle: 0,
-  }
-}
-
-function polygonAreaAndCentroid(points: readonly FloorplanPoint[]): {
-  area: number
-  centroid: FloorplanPoint
-} {
-  let twiceSignedArea = 0
-  let weightedX = 0
-  let weightedY = 0
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index]!
-    const next = points[(index + 1) % points.length]!
-    const cross = current[0] * next[1] - next[0] * current[1]
-    twiceSignedArea += cross
-    weightedX += (current[0] + next[0]) * cross
-    weightedY += (current[1] + next[1]) * cross
-  }
-  const area = Math.abs(twiceSignedArea) / 2
-  if (Math.abs(twiceSignedArea) <= 1e-9) {
-    const sum = points.reduce(
-      (acc, point) => [acc[0] + point[0], acc[1] + point[1]] as FloorplanPoint,
-      [0, 0] as FloorplanPoint,
-    )
-    return {
-      area,
-      centroid: [sum[0] / points.length, sum[1] / points.length],
-    }
-  }
-  return {
-    area,
-    centroid: [weightedX / (3 * twiceSignedArea), weightedY / (3 * twiceSignedArea)],
   }
 }

@@ -4,8 +4,8 @@ import {
   ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
-import { buildZoneContextualDimensions } from '../shared/contextual-floorplan-dimensions'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { buildZoneContextualDimensions } from './contextual-dimensions'
 import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,

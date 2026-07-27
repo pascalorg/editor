@@ -7,7 +7,6 @@ import type {
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
-import { buildOpeningContextualDimensions } from '../shared/contextual-floorplan-dimensions'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -17,6 +16,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
+import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
@@ -172,7 +172,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
-      contextualDimensions: buildOpeningContextualDimensions,
+      contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },

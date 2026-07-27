@@ -7,7 +7,6 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
-import { buildOpeningContextualDimensions } from '../shared/contextual-floorplan-dimensions'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
@@ -17,6 +16,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
+import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
@@ -175,7 +175,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
-      contextualDimensions: buildOpeningContextualDimensions,
+      contextualDimensions: buildDoorContextualDimensions,
       schedule: buildDoorFloorplanSchedule,
     } satisfies FloorplanNodeExtension<DoorNodeType>,
   },

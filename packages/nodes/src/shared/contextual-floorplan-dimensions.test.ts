@@ -8,12 +8,11 @@ import {
   ZoneNode,
 } from '@pascal-app/core'
 import { createFloorplanContextExtensions } from '@pascal-app/editor'
+import { buildDoorContextualDimensions } from '../door/contextual-dimensions'
 import { buildItemContextualDimensions } from '../item/floorplan'
-import {
-  buildOpeningContextualDimensions,
-  buildWallContextualDimensions,
-  buildZoneContextualDimensions,
-} from './contextual-floorplan-dimensions'
+import { buildWallContextualDimensions } from '../wall/contextual-dimensions'
+import { buildWindowContextualDimensions } from '../window/contextual-dimensions'
+import { buildZoneContextualDimensions } from '../zone/contextual-dimensions'
 
 function context(
   parent: GeometryContext['parent'] = null,
@@ -215,7 +214,7 @@ describe('contextual floor-plan dimensions', () => {
       width: 0.9,
     })
 
-    expect(buildOpeningContextualDimensions(door, context(wall))).toMatchObject({
+    expect(buildDoorContextualDimensions(door, context(wall))).toMatchObject({
       kind: 'dimension',
       start: [1.55, 0],
       end: [2.45, 0],
@@ -252,7 +251,7 @@ describe('contextual floor-plan dimensions', () => {
     })
 
     expect(
-      buildOpeningContextualDimensions(window, context(wall, [startWall, endWall])),
+      buildWindowContextualDimensions(window, context(wall, [startWall, endWall])),
     ).toMatchObject({
       kind: 'dimension',
       offsetNormal: [0, -1],
@@ -289,7 +288,7 @@ describe('contextual floor-plan dimensions', () => {
       position: [3, 1.05, 0],
       width: 1,
     })
-    const geometry = buildOpeningContextualDimensions(
+    const geometry = buildWindowContextualDimensions(
       draggedWindow,
       context(wall, [startWall, endWall], true),
     )
