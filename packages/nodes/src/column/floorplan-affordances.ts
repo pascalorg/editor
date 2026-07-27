@@ -5,6 +5,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
@@ -150,12 +151,12 @@ export const columnRotateAffordance: FloorplanAffordance<ColumnNode> = {
 
     return {
       affectedIds: [columnId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
           initialAngle,
           planPoint,
-          free: modifiers.shiftKey,
+          free: !isAngleSnapActive(),
         })
         const newRotation = initialRotation - delta
         lastRotation = newRotation

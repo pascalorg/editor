@@ -5,6 +5,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 const MIN_ELEVATOR_DIM = 0.6
@@ -83,12 +84,12 @@ export const elevatorRotateAffordance: FloorplanAffordance<ElevatorNode> = {
 
     return {
       affectedIds: [elevatorId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
           initialAngle,
           planPoint,
-          free: modifiers.shiftKey,
+          free: !isAngleSnapActive(),
         })
         const newRotation = initialRotation - delta
         lastRotation = newRotation

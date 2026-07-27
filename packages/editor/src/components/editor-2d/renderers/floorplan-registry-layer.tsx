@@ -82,7 +82,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
-import useEditor from '../../../store/use-editor'
+import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useFloorplanPreflight from '../../../store/use-floorplan-preflight'
@@ -728,7 +728,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           startX,
           pointerEvent.clientX,
           DIRECT_ROTATE_RADIANS_PER_PIXEL,
-          pointerEvent.shiftKey,
+          !isAngleSnapActive(),
         )
         if (Math.abs(delta) < DIRECT_ROTATE_EPSILON) {
           lastPatch = null
@@ -1194,9 +1194,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         let delta = current - rot.initialAngle
         while (delta > Math.PI) delta -= 2 * Math.PI
         while (delta < -Math.PI) delta += 2 * Math.PI
-        // Match the affordance's 15° angle step (Shift = free) so the wedge +
-        // degree chip read the committed rotation, not the raw pointer bearing.
-        delta = snapDirectRotationDelta(delta, event.shiftKey)
+        delta = snapDirectRotationDelta(delta, !isAngleSnapActive())
         if (Math.abs(delta) < 0.0087) {
           setRotationOverlay(null)
         } else {

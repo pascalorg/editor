@@ -28,6 +28,7 @@ import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
   isAlignmentGuideActive,
+  isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
@@ -446,9 +447,9 @@ export function startFloorplanGroupRotate(event: {
     let delta = angleOf([plan[0], plan[1]]) - initialAngle
     while (delta > Math.PI) delta -= 2 * Math.PI
     while (delta < -Math.PI) delta += 2 * Math.PI
-    // 15° increments by default; Shift rotates freely — the same contract
-    // as the 3D group rotate gizmo (and the HUD hint its scope surfaces).
-    if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+    if (isAngleSnapActive()) {
+      delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+    }
 
     const entries = rotateGroupPatches(starts, links, pivot, delta)
     const patchById = new Map(entries)

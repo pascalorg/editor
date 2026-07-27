@@ -5,6 +5,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Mirror the 3D handles in `shelf/definition.ts` so a drag can't push a
@@ -86,12 +87,12 @@ export const shelfRotateAffordance: FloorplanAffordance<ShelfNode> = {
 
     return {
       affectedIds: [shelfId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
           initialAngle,
           planPoint,
-          free: modifiers.shiftKey,
+          free: !isAngleSnapActive(),
         })
         const newRotationY = initialRotationY - delta
         lastRotation = [r[0], newRotationY, r[2]]

@@ -127,7 +127,7 @@ describe('floor-plan affordance preview policy', () => {
       gridSnapStep: 0.1,
     })
 
-    session.apply({ planPoint: [0, 1], modifiers: { ...modifiers, shiftKey: true } })
+    session.apply({ planPoint: [0, 1], modifiers })
 
     expect(useScene.getState().nodes[spawn.id]).toBe(spawn)
     expect(useLiveNodeOverrides.getState().get(spawn.id as AnyNodeId)?.rotation).toBeCloseTo(
