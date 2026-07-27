@@ -1,8 +1,12 @@
-import type {
-  ConstructionDimensionMode,
-  ConstructionDimensionNode,
-  FloorplanPoint,
-  MeasurementPoint,
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type ConstructionDimensionMode,
+  type ConstructionDimensionNode,
+  type FloorplanPoint,
+  getWallArcData,
+  type MeasurementAnchor,
+  type MeasurementPoint,
 } from '@pascal-app/core'
 
 export type ConstructionDimensionSegmentLayout = {
@@ -23,6 +27,55 @@ export type ConstructionDimensionLayout = {
 }
 
 const project = (point: MeasurementPoint): FloorplanPoint => [point[0], point[2]]
+
+export function alignConstructionDimensionDirectionToSharedWall(
+  direction: readonly [number, number],
+  anchors: readonly MeasurementAnchor[],
+  resolve: (id: AnyNodeId) => AnyNode | undefined,
+): [number, number] {
+  const firstAnchor = anchors[0]
+  const secondAnchor = anchors[1]
+  if (
+    !firstAnchor ||
+    !secondAnchor ||
+    Array.isArray(firstAnchor) ||
+    Array.isArray(secondAnchor) ||
+    firstAnchor.reference.nodeId !== secondAnchor.reference.nodeId
+  ) {
+    return [direction[0], direction[1]]
+  }
+
+  const wall = resolve(firstAnchor.reference.nodeId as AnyNodeId)
+  if (
+    wall?.type !== 'wall' ||
+    getWallArcData(wall) ||
+    !supportsStraightWallDirection(firstAnchor.reference.featureId) ||
+    !supportsStraightWallDirection(secondAnchor.reference.featureId)
+  ) {
+    return [direction[0], direction[1]]
+  }
+
+  const wallDx = wall.end[0] - wall.start[0]
+  const wallDz = wall.end[1] - wall.start[1]
+  const wallLength = Math.hypot(wallDx, wallDz)
+  if (wallLength <= 1e-9) return [direction[0], direction[1]]
+  const wallDirection: [number, number] = [wallDx / wallLength, wallDz / wallLength]
+  return direction[0] * wallDirection[0] + direction[1] * wallDirection[1] < 0
+    ? [-wallDirection[0], -wallDirection[1]]
+    : wallDirection
+}
+
+function supportsStraightWallDirection(featureId: string): boolean {
+  return [
+    'wall:start',
+    'wall:end',
+    'wall:centerline',
+    'wall:midpoint',
+    'wall:face:left',
+    'wall:face:right',
+    'wall:top-centerline',
+  ].includes(featureId)
+}
 
 export type CircularConstructionDimensionLayout = {
   center: FloorplanPoint

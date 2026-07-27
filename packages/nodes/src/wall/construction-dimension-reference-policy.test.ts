@@ -14,34 +14,9 @@ function wall(overrides: Partial<WallNodeType>): WallNodeType {
     parentId: 'level_main',
     start: [0, 0],
     end: [1, 0],
+    thickness: 0.2,
     frontSide: 'interior',
     backSide: 'interior',
-    assemblyLayers: [
-      {
-        id: 'stud-core',
-        role: 'structure',
-        side: 'core',
-        thickness: 0.2,
-        materialRef: 'library:stud',
-        datumEligible: ['structural-face'],
-      },
-      {
-        id: 'interior-finish',
-        role: 'interior-finish',
-        side: 'interior',
-        thickness: 0.02,
-        materialRef: 'library:gypsum-board',
-        datumEligible: ['finish-face'],
-      },
-      {
-        id: 'exterior-finish',
-        role: 'exterior-finish',
-        side: 'exterior',
-        thickness: 0.04,
-        materialRef: 'library:cladding',
-        datumEligible: ['finish-face'],
-      },
-    ],
     ...overrides,
   })
 }
@@ -88,42 +63,9 @@ function topFacadeFixture(splitAtPartition = false, partitionSpansPlan = false) 
     id: 'wall_partition',
     start: [4, partitionSpansPlan ? -6 : -4],
     end: [4, 0],
+    thickness: 0.12,
     frontSide: 'interior',
     backSide: 'interior',
-    assemblyLayers: [
-      {
-        id: 'partition-stud-core',
-        role: 'structure',
-        side: 'core',
-        thickness: 0.12,
-        materialRef: 'library:stud',
-        datumEligible: ['structural-face'],
-      },
-      {
-        id: 'partition-finish-left',
-        role: 'interior-finish',
-        side: 'interior',
-        thickness: 0.02,
-        materialRef: 'library:gypsum-board',
-        datumEligible: ['finish-face'],
-      },
-      {
-        id: 'partition-finish-right',
-        role: 'interior-finish',
-        side: 'exterior',
-        thickness: 0.02,
-        materialRef: 'library:gypsum-board',
-        datumEligible: ['finish-face'],
-      },
-      {
-        id: 'partition-veneer',
-        role: 'masonry-veneer',
-        side: 'exterior',
-        thickness: 0.1,
-        materialRef: 'library:brick',
-        datumEligible: ['veneer-face'],
-      },
-    ],
   })
   const walls = [top, ...(topContinuation ? [topContinuation] : []), right, bottom, left, partition]
   const nodes = Object.fromEntries(walls.map((candidate) => [candidate.id, candidate])) as Record<
@@ -172,12 +114,12 @@ describe('automatic wall dimension reference policy', () => {
       return entries[0]?.end[0]
     }
 
-    expect(intersection('finish-face')).toBeCloseTo(3.92)
+    expect(intersection('finish-face')).toBeCloseTo(3.94)
     expect(intersection('centerline')).toBeCloseTo(4)
     expect(intersection('structural-face')).toBeCloseTo(3.94)
   })
 
-  test('keeps finished faces, centerline, and face of stud as distinct display modes', () => {
+  test('keeps centerline distinct while all face modes use the wall face', () => {
     const { nodes, top, walls } = topFacadeFixture(true)
     const levelData = computeWallFloorplanLevelData({ siblings: walls, nodes })
     const renderedSegments = (reference: 'finished-faces' | 'centerline' | 'stud-faces') => {
@@ -191,9 +133,9 @@ describe('automatic wall dimension reference policy', () => {
     }
 
     expect(renderedSegments('finished-faces').map((segment) => segment.text)).toEqual([
-      '3.92m',
-      '0.26m',
-      '6.02m',
+      '4.04m',
+      '0.12m',
+      '6.04m',
     ])
     expect(renderedSegments('centerline').map((segment) => segment.text)).toEqual(['4.1m', '6.1m'])
     expect(renderedSegments('stud-faces').map((segment) => segment.text)).toEqual([
@@ -306,16 +248,7 @@ describe('automatic wall dimension reference policy', () => {
       id: 'wall_horizontal_partition',
       start: [0, -3],
       end: [10, -3],
-      assemblyLayers: [
-        {
-          id: 'horizontal-stud-core',
-          role: 'structure',
-          side: 'core',
-          thickness: 0.12,
-          materialRef: 'library:stud',
-          datumEligible: ['structural-face'],
-        },
-      ],
+      thickness: 0.12,
     })
     const horizontalWalls = [top, right, bottom, left, partition]
     const horizontalNodes = Object.fromEntries(

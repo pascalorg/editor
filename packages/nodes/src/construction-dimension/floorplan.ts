@@ -1,4 +1,5 @@
 import type {
+  AnyNode,
   AnyNodeId,
   ConstructionDimensionNode,
   FloorplanGeometry,
@@ -11,10 +12,9 @@ import type {
 } from '@pascal-app/core'
 import {
   constructionDimensionRequiredAnchorCount,
-  getWallAssemblyFaceOffsets,
-  getWallAssemblyThickness,
+  getWallArcData,
   getWallCurveFrameAt,
-  resolveWallAssemblyDatumReferences,
+  getWallThickness,
 } from '@pascal-app/core'
 import {
   readFloorplanContext,
@@ -29,6 +29,7 @@ import {
 } from '../shared/construction-length'
 import { buildDimensionStringGeometry } from '../shared/dimension-string'
 import {
+  alignConstructionDimensionDirectionToSharedWall,
   resolveCircularConstructionDimensionLayout,
   resolveConstructionDimensionLayout,
 } from './geometry'
@@ -73,11 +74,23 @@ export function buildConstructionDimensionFloorplan(
 
   switch (node.mode) {
     case 'linear':
-    case 'chord':
+    case 'chord': {
+      const alignedNode = {
+        ...displayNode,
+        baseline: {
+          ...displayNode.baseline,
+          direction: alignConstructionDimensionDirectionToSharedWall(
+            displayNode.baseline.direction,
+            displayNode.anchors,
+            (id) => ctx.resolve(id),
+          ),
+        },
+      }
       return withFloorplanGeometryMetadata(
-        buildLinearOrChord(displayNode, points, stroke, dangling, unit, profile, editable),
+        buildLinearOrChord(alignedNode, points, stroke, dangling, unit, profile, editable),
         { annotationRole: 'manual-dimension' },
       )
+    }
     case 'radius':
       return withFloorplanGeometryMetadata(
         buildRadius(displayNode, points, stroke, dangling, unit, profile, editable),
@@ -127,13 +140,19 @@ function resolveDimensionAnchor(
   const frame = getWallCurveFrameAt(referenced, t)
   const side = wallDatumSide(node, anchor.reference.featureId, resolved, frame)
   const offset = wallDatumOffset(referenced, node.datumPolicy, side)
+  const endpointExtension = wallEndpointDatumExtension(
+    referenced,
+    anchor.reference.featureId,
+    node.datumPolicy,
+    ctx,
+  )
 
   return {
     ...resolved,
     point: [
-      frame.point.x + frame.normal.x * offset,
+      frame.point.x + frame.normal.x * offset + frame.tangent.x * endpointExtension,
       resolved.point[1],
-      frame.point.y + frame.normal.y * offset,
+      frame.point.y + frame.normal.y * offset + frame.tangent.y * endpointExtension,
     ],
   }
 }
@@ -184,17 +203,61 @@ function wallDatumOffset(
   side: 1 | -1,
 ): number {
   if (policy === 'centerline') return 0
-  if (policy === 'wall-face') {
-    const faces = getWallAssemblyFaceOffsets(wall)
-    return side > 0 ? faces.exterior : faces.interior
+  return (getWallThickness(wall) / 2) * side
+}
+
+function wallEndpointDatumExtension(
+  wall: WallNode,
+  featureId: string,
+  policy: ConstructionDimensionNode['datumPolicy'],
+  ctx: GeometryContext,
+): number {
+  if (policy === 'centerline' || (featureId !== 'wall:start' && featureId !== 'wall:end')) {
+    return 0
   }
 
-  const datum = policy === 'finish-face' ? 'finish-face' : 'structural-face'
-  const candidates = resolveWallAssemblyDatumReferences(wall)
-    .filter((reference) => reference.datum === datum && Math.sign(reference.offset) === side)
-    .map((reference) => reference.offset)
-  if (candidates.length === 0) return (getWallAssemblyThickness(wall) / 2) * side
-  return side > 0 ? Math.max(...candidates) : Math.min(...candidates)
+  const parent = wall.parentId ? ctx.resolve<AnyNode>(wall.parentId as AnyNodeId) : undefined
+  const childIds =
+    parent && 'children' in parent && Array.isArray(parent.children)
+      ? (parent.children as AnyNodeId[])
+      : []
+  const endpoint = featureId === 'wall:start' ? wall.start : wall.end
+  const frame = getWallCurveFrameAt(wall, featureId === 'wall:start' ? 0 : 1)
+  const projections = [0]
+
+  for (const childId of childIds) {
+    const candidate = ctx.resolve<WallNode>(childId)
+    if (
+      candidate?.type !== 'wall' ||
+      candidate.id === wall.id ||
+      getWallArcData(candidate) ||
+      (!pointsCoincide(endpoint, candidate.start) && !pointsCoincide(endpoint, candidate.end))
+    ) {
+      continue
+    }
+
+    const dx = candidate.end[0] - candidate.start[0]
+    const dz = candidate.end[1] - candidate.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length <= EPSILON) continue
+    const normal: FloorplanPoint = [-dz / length, dx / length]
+    for (const side of [-1, 1] as const) {
+      const candidateOffset = wallDatumOffset(candidate, policy, side)
+      projections.push(
+        normal[0] * candidateOffset * frame.tangent.x +
+          normal[1] * candidateOffset * frame.tangent.y,
+      )
+    }
+  }
+
+  return featureId === 'wall:start' ? Math.min(...projections) : Math.max(...projections)
+}
+
+function pointsCoincide(
+  left: readonly [number, number],
+  right: readonly [number, number],
+): boolean {
+  return Math.hypot(left[0] - right[0], left[1] - right[1]) <= 0.03
 }
 
 function buildLinearOrChord(

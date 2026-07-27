@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document compares the guidance in `Chapter_17_Floor_Plan_Dimensions_and_Notes.pdf` with Pascal's current floor-plan implementation. It records what the chapter teaches, what the editor already supports, and the remaining construction-document gaps.
+This document compares the guidance in `Chapter_17_Floor_Plan_Dimensions_and_Notes.pdf` with Pascal's current floor-plan implementation. It records what the chapter teaches, what the editor supports, and the product's intentional scope boundaries.
 
 The review covered the full 19-page chapter and the floor-plan stack across:
 
@@ -145,7 +145,7 @@ The rough-opening fields intentionally remain optional rather than being invente
 
 ### Rooms, stairs, and other plan graphics
 
-- Zones render a centered name but currently represent generic colored polygons rather than a complete architectural room model.
+- Architectural room zones provide room names and numbers, finish and occupancy metadata, ceiling heights, clear dimensions, and room schedules. Generic colored zones remain available for non-room uses.
 - Stairs render footprints, treads, and direction arrows, but do not yet emit a complete construction stair note.
 - Columns can contribute structural center references to automatic exterior strings.
 - The generic floor-plan registry already renders walls, doors, windows, slabs, ceilings, zones, roofs, stairs, columns, furniture, MEP nodes, and annotation nodes through a common geometry contract.
@@ -163,36 +163,24 @@ The rough-opening fields intentionally remain optional rather than being invente
 - Preservation of persistent measurement value labels in full export.
 - Respect for the existing measurement-visibility preference.
 - Document-purpose wall rendering at modeled thickness.
-- Document metric notation and initial paper-space sizing for construction dimensions and measurement labels.
+- Document metric notation and paper-space sizing for dimensions, measurement labels, room labels, annotation text, mark bubbles, and annotation linework.
 - The same automatic annotation collision layout used by the live floor plan.
 
 The export intentionally fits the plan to an A4 landscape page.
 
-## Important current limitations
+## Intentional scope boundaries
 
-### The current datum is not truly face of stud
+### Walls use one modeled thickness
 
-`WallNode` stores total thickness and finish materials but does not describe studs, sheathing, finish layers, veneer, air space, concrete block, or furring. Automatic dimensions can reference a generic wall face, but the model cannot yet prove that this face is a structural stud face or finish face.
+`WallNode` stores one total thickness and finish materials. It does not model separate studs, sheathing, finish layers, veneer, air space, concrete block, or furring. Face-based dimensions therefore reference the modeled wall face rather than a separately proven construction layer.
 
-### Paper-space control is only partially implemented
+### Export uses the supported fitted-page presentation
 
-Exported construction dimensions and measurement labels now resolve their main text, tick, extension-gap, overshoot, and label-offset sizes from paper points. Note text, mark bubbles, room labels, and remaining line-weight categories still need consistent paper-space sizing in the fitted A4 export.
+PDF export fits each supported plan to an A4 landscape page. Construction dimensions, measurements, annotation text, room labels, mark bubbles, and annotation linework use the existing document presentation profiles.
 
-### Construction dimensions have no independent visibility layer
+### Automatic annotation placement uses its current obstacle set
 
-The live floor plan exposes independent visibility controls for automatic dimensions, manual dimensions, measurements, opening marks, structural grids, room labels, and stair annotations. Full export intentionally includes every supported annotation category regardless of the live-view toggles.
-
-### Automatic collision layout has limited manual overrides
-
-Automatic placement now handles adjacent labels, short values, opening marks, and the first set of architectural obstacles. A drafter can pin a chosen label position, reset it with a double-click, and suppress individual manual-dimension segments. Broader fixed-symbol coverage remains.
-
-### Curved and circular construction dimensions
-
-Curved walls emit an automatic radius leader and center mark in live plans and document output, matching the chapter's curved-wall callout method. Manual associative construction dimensions cover radius, diameter, center, chord, arc-length, coordinate-pattern, and angular-pattern workflows, with curved-wall defining geometry resolved from stable semantic host features.
-
-### Construction systems are not semantically modeled
-
-The editor cannot yet apply different documentation rules for wood framing, masonry veneer, concrete block, structural masonry, or solid concrete because those assembly semantics do not exist in the wall model.
+Automatic placement handles adjacent labels, short values, opening marks, walls, wall corners, door symbols and swings, windows, columns, and room labels. Drafters can pin a label position, reset it with a double-click, and suppress individual manual-dimension segments.
 
 ## Features that should not be copied blindly
 

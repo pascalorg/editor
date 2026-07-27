@@ -103,47 +103,13 @@ describe('contextual floor-plan dimensions', () => {
       id: 'wall_start',
       start: [-2, 0],
       end: [2, 0],
-      assemblyLayers: [
-        {
-          id: 'stud',
-          role: 'structure',
-          side: 'core',
-          thickness: 0.2,
-          materialRef: '',
-          datumEligible: ['structural-face'],
-        },
-        {
-          id: 'finish',
-          role: 'interior-finish',
-          side: 'interior',
-          thickness: 0.05,
-          materialRef: '',
-          datumEligible: ['finish-face'],
-        },
-      ],
+      thickness: 0.2,
     })
     const endWall = WallNode.parse({
       id: 'wall_end',
       start: [-2, 4],
       end: [2, 4],
-      assemblyLayers: [
-        {
-          id: 'stud',
-          role: 'structure',
-          side: 'core',
-          thickness: 0.2,
-          materialRef: '',
-          datumEligible: ['structural-face'],
-        },
-        {
-          id: 'finish',
-          role: 'interior-finish',
-          side: 'interior',
-          thickness: 0.05,
-          materialRef: '',
-          datumEligible: ['finish-face'],
-        },
-      ],
+      thickness: 0.2,
     })
 
     expect(buildWallContextualDimensions(wall, context(null, [startWall, endWall]))).toEqual(

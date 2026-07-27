@@ -60,7 +60,6 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     visible: true,
     metadata: {},
     children: [],
-    assemblyLayers: [],
     start: [0, 0],
     end: [3, 0],
     frontSide: 'unknown',

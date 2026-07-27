@@ -22,6 +22,41 @@ describe('continuous construction-dimension drafting', () => {
     expect(resolveConstructionDimensionDraftDirection([[1, 0, 2]])).toBeNull()
   })
 
+  test('keeps an endpoint-to-face dimension aligned with the same straight wall', () => {
+    const wall = WallNode.parse({
+      id: 'wall_diagonal',
+      start: [0, 0],
+      end: [4, 4],
+      thickness: 0.2,
+    })
+    const direction = resolveConstructionDimensionDraftDirection(
+      [
+        [4, 0, 4],
+        [0.9292893219, 0, 1.0707106781],
+      ],
+      [
+        {
+          kind: 'feature',
+          reference: { nodeId: wall.id, featureId: 'wall:end' },
+          fallback: [4, 0, 4],
+        },
+        {
+          kind: 'feature',
+          reference: {
+            nodeId: wall.id,
+            featureId: 'wall:face:left',
+            parameters: { t: 0.25 },
+          },
+          fallback: [0.9292893219, 0, 1.0707106781],
+        },
+      ],
+      { [wall.id]: wall },
+    )
+
+    expect(direction?.[0]).toBeCloseTo(-Math.SQRT1_2)
+    expect(direction?.[1]).toBeCloseTo(-Math.SQRT1_2)
+  })
+
   test('previews one adjacent dimension for every witness interval', () => {
     const geometry = buildConstructionDimensionPreviewGeometries(
       [

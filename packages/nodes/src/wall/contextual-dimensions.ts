@@ -4,8 +4,8 @@ import {
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallThickness,
   isCurvedWall,
-  resolveWallAssemblyDatumReferences,
   type WallNode,
 } from '@pascal-app/core'
 import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
@@ -104,17 +104,16 @@ function structuralFaceProjections(
   if (Math.abs(denominator) <= 1e-6) return []
   const normal: FloorplanPoint = [-direction[1], direction[0]]
 
-  return resolveWallAssemblyDatumReferences(connectedWall)
-    .filter((reference) => reference.datum === 'structural-face')
-    .map((reference) => {
-      const facePoint: FloorplanPoint = [
-        connectedWall.start[0] + normal[0] * reference.offset,
-        connectedWall.start[1] + normal[1] * reference.offset,
-      ]
-      return (
-        cross([facePoint[0] - wallStart[0], facePoint[1] - wallStart[1]], direction) / denominator
-      )
-    })
+  const halfThickness = getWallThickness(connectedWall) / 2
+  return [-halfThickness, halfThickness].map((offset) => {
+    const facePoint: FloorplanPoint = [
+      connectedWall.start[0] + normal[0] * offset,
+      connectedWall.start[1] + normal[1] * offset,
+    ]
+    return (
+      cross([facePoint[0] - wallStart[0], facePoint[1] - wallStart[1]], direction) / denominator
+    )
+  })
 }
 
 function wallStudFaceSpan(

@@ -10,7 +10,6 @@ function wall(id: string, start: [number, number], end: [number, number]): WallN
     visible: true,
     parentId: 'level_test',
     children: [],
-    assemblyLayers: [],
     start,
     end,
     thickness: 0.1,
