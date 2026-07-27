@@ -1,195 +1,178 @@
 'use client'
 
-import type {
-  AnyNode,
-  CeilingNode,
-  ColumnNode,
-  DoorNode,
-  ElevatorNode,
-  ItemNode,
-  Point2D,
-  RoofNode,
-  RoofSegmentNode,
-  SlabNode,
-  StairNode,
-  StairSegmentNode,
-  WallNode,
-  WindowNode,
-} from '@pascal-app/core'
-import { useCallback } from 'react'
-import {
-  getFloorplanHitNodeId,
-  getFloorplanSelectionIdsInBounds,
-} from '../../lib/floorplan/selection-tool'
+import { type RefObject, useCallback } from 'react'
 import type { FloorplanSelectionBounds } from '../../lib/floorplan/types'
+import {
+  type Point2 as MarqueePoint2,
+  polygonsIntersect,
+  segmentIntersectsPolygon,
+} from '../tools/select/marquee-geometry'
+import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
 import type { WallPlanPoint } from '../tools/wall/wall-drafting'
 
-type OpeningNode = WindowNode | DoorNode
+const REGISTRY_ENTRY_SELECTOR = '.floorplan-registry-base .floorplan-registry-entry[data-node-id]'
+const REGISTRY_GEOMETRY_SELECTOR = 'path, polygon, polyline, rect, circle, line, image'
+const POINT_HIT_EPSILON = 1e-4
 
-type WallPolygonEntry = {
-  wall: WallNode
-  polygon: Point2D[]
+type FloorplanHitTestingOptions = {
+  sceneRef: RefObject<SVGGElement | null>
 }
 
-type OpeningPolygonEntry = {
-  opening: OpeningNode
-  polygon: Point2D[]
+function boundsPolygon(bounds: FloorplanSelectionBounds): MarqueePoint2[] {
+  return [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.minY],
+    [bounds.maxX, bounds.maxY],
+    [bounds.minX, bounds.maxY],
+  ]
 }
 
-type SlabPolygonEntry = {
-  slab: SlabNode
-  polygon: Point2D[]
-  holes: Point2D[][]
+function transformElementBoxToScene(
+  element: SVGGraphicsElement,
+  scene: SVGGElement,
+): MarqueePoint2[] | null {
+  const elementMatrix = element.getScreenCTM()
+  const sceneMatrix = scene.getScreenCTM()
+  const svg = scene.ownerSVGElement
+  if (!(elementMatrix && sceneMatrix && svg)) {
+    return null
+  }
+
+  let box: DOMRect
+  try {
+    box = element.getBBox()
+  } catch {
+    return null
+  }
+
+  const inverseSceneMatrix = sceneMatrix.inverse()
+  const corners: MarqueePoint2[] = [
+    [box.x, box.y],
+    [box.x + box.width, box.y],
+    [box.x + box.width, box.y + box.height],
+    [box.x, box.y + box.height],
+  ]
+  return corners.map(([x, y]) => {
+    const point = svg.createSVGPoint()
+    point.x = x
+    point.y = y
+    const screenPoint = point.matrixTransform(elementMatrix)
+    const scenePoint = screenPoint.matrixTransform(inverseSceneMatrix)
+    return [scenePoint.x, scenePoint.y] as MarqueePoint2
+  })
 }
 
-type CeilingPolygonEntry = {
-  ceiling: CeilingNode
-  polygon: Point2D[]
-  holes: Point2D[][]
+function elementIntersectsPlanPolygon(
+  element: SVGGraphicsElement,
+  scene: SVGGElement,
+  selectionPolygon: MarqueePoint2[],
+): boolean {
+  const polygon = transformElementBoxToScene(element, scene)
+  if (!polygon) {
+    return false
+  }
+
+  const [first, second, third] = polygon
+  if (!(first && second && third)) {
+    return false
+  }
+
+  const width = Math.hypot(second[0] - first[0], second[1] - first[1])
+  const height = Math.hypot(third[0] - second[0], third[1] - second[1])
+  if (width <= POINT_HIT_EPSILON || height <= POINT_HIT_EPSILON) {
+    const end = width >= height ? second : third
+    return segmentIntersectsPolygon(first, end, selectionPolygon)
+  }
+
+  return polygonsIntersect(polygon, selectionPolygon)
 }
 
-type ColumnPolygonEntry = {
-  column: ColumnNode
-  polygon: Point2D[]
+export function collectRegistrySelectionIdsInBounds(
+  scene: SVGGElement,
+  bounds: FloorplanSelectionBounds,
+  candidateIds = collectSelectableCandidateIds(),
+): string[] {
+  const candidateIdSet = new Set(candidateIds)
+  const selectionPolygon = boundsPolygon(bounds)
+  const hitIds = new Set<string>()
+
+  for (const entry of scene.querySelectorAll<SVGGElement>(REGISTRY_ENTRY_SELECTOR)) {
+    const nodeId = entry.dataset.nodeId
+    if (!nodeId || !candidateIdSet.has(nodeId)) {
+      continue
+    }
+
+    const geometry = entry.querySelectorAll<SVGGraphicsElement>(REGISTRY_GEOMETRY_SELECTOR)
+    const elements = geometry.length > 0 ? Array.from(geometry) : [entry]
+    if (
+      elements.some((element) => elementIntersectsPlanPolygon(element, scene, selectionPolygon))
+    ) {
+      hitIds.add(nodeId)
+    }
+  }
+
+  return candidateIds.filter((id) => hitIds.has(id))
 }
 
-type ElevatorPolygonEntry = {
-  elevator: ElevatorNode
-  polygon: Point2D[]
+export function getRegistryHitIdAtPlanPoint(
+  scene: SVGGElement,
+  planPoint: WallPlanPoint,
+  candidateIds = collectSelectableCandidateIds(),
+): string | null {
+  const sceneMatrix = scene.getScreenCTM()
+  const svg = scene.ownerSVGElement
+  if (!(sceneMatrix && svg)) {
+    return null
+  }
+
+  const point = svg.createSVGPoint()
+  point.x = planPoint[0]
+  point.y = planPoint[1]
+  const screenPoint = point.matrixTransform(sceneMatrix)
+  const candidateIdSet = new Set(candidateIds)
+
+  if (typeof document !== 'undefined' && typeof document.elementsFromPoint === 'function') {
+    for (const element of document.elementsFromPoint(screenPoint.x, screenPoint.y)) {
+      const entry = element.closest<SVGGElement>('.floorplan-registry-entry[data-node-id]')
+      const nodeId = entry?.dataset.nodeId
+      if (entry && nodeId && candidateIdSet.has(nodeId) && scene.contains(entry)) {
+        return nodeId
+      }
+    }
+  }
+
+  const hits = collectRegistrySelectionIdsInBounds(
+    scene,
+    {
+      minX: planPoint[0] - POINT_HIT_EPSILON,
+      maxX: planPoint[0] + POINT_HIT_EPSILON,
+      minY: planPoint[1] - POINT_HIT_EPSILON,
+      maxY: planPoint[1] + POINT_HIT_EPSILON,
+    },
+    candidateIds,
+  )
+  return hits.at(-1) ?? null
 }
 
-type FloorplanRoofEntry = {
-  roof: RoofNode
-  segments: Array<{
-    polygon: Point2D[]
-    segment: RoofSegmentNode
-  }>
-}
-
-type FloorplanItemEntry = {
-  item: ItemNode
-  polygon: Point2D[]
-}
-
-type FloorplanStairSegmentEntry = {
-  polygon: Point2D[]
-  segment: StairSegmentNode | AnyNode
-}
-
-type FloorplanStairEntry = {
-  hitPolygons: Point2D[][]
-  stair: StairNode
-  segments: FloorplanStairSegmentEntry[]
-}
-
-type UseFloorplanHitTestingArgs = {
-  ceilingPolygons: CeilingPolygonEntry[]
-  columnPolygons: ColumnPolygonEntry[]
-  displaySlabPolygons: SlabPolygonEntry[]
-  displayWallPolygons: WallPolygonEntry[]
-  floorplanElevatorEntries: ElevatorPolygonEntry[]
-  floorplanItemEntries: FloorplanItemEntry[]
-  getFloorplanOpeningHitTolerance: () => number
-  floorplanRoofEntries: FloorplanRoofEntry[]
-  floorplanStairEntries: FloorplanStairEntry[]
-  getFloorplanWallHitTolerance: () => number
-  getOpeningCenterLine: (polygon: Point2D[]) => { start: Point2D; end: Point2D } | null
-  isFloorplanItemContextActive: boolean
-  openingsPolygons: OpeningPolygonEntry[]
-  phase: 'site' | 'structure' | 'furnish'
-  toPoint2D: (point: WallPlanPoint) => Point2D
-}
-
-export function useFloorplanHitTesting({
-  ceilingPolygons,
-  columnPolygons,
-  displaySlabPolygons,
-  displayWallPolygons,
-  floorplanElevatorEntries,
-  floorplanItemEntries,
-  getFloorplanOpeningHitTolerance,
-  floorplanRoofEntries,
-  floorplanStairEntries,
-  getFloorplanWallHitTolerance,
-  getOpeningCenterLine,
-  isFloorplanItemContextActive,
-  openingsPolygons,
-  phase,
-  toPoint2D,
-}: UseFloorplanHitTestingArgs) {
+export function useFloorplanHitTesting({ sceneRef }: FloorplanHitTestingOptions) {
   const getFloorplanHitIdAtPoint = useCallback(
     (planPoint: WallPlanPoint) => {
-      const point = toPoint2D(planPoint)
-      return getFloorplanHitNodeId({
-        point,
-        ceilings: ceilingPolygons,
-        phase,
-        isItemContextActive: isFloorplanItemContextActive,
-        items: floorplanItemEntries,
-        openings: openingsPolygons,
-        roofs: floorplanRoofEntries,
-        stairs: floorplanStairEntries,
-        elevators: floorplanElevatorEntries,
-        walls: displayWallPolygons,
-        slabs: displaySlabPolygons,
-        openingHitTolerance: getFloorplanOpeningHitTolerance(),
-        wallHitTolerance: getFloorplanWallHitTolerance(),
-        columns: columnPolygons,
-        getOpeningCenterLine,
-      })
+      const scene = sceneRef.current
+      return scene ? getRegistryHitIdAtPlanPoint(scene, planPoint) : null
     },
-    [
-      ceilingPolygons,
-      columnPolygons,
-      displaySlabPolygons,
-      displayWallPolygons,
-      floorplanItemEntries,
-      floorplanElevatorEntries,
-      floorplanRoofEntries,
-      floorplanStairEntries,
-      getFloorplanOpeningHitTolerance,
-      getFloorplanWallHitTolerance,
-      getOpeningCenterLine,
-      isFloorplanItemContextActive,
-      openingsPolygons,
-      phase,
-      toPoint2D,
-    ],
+    [sceneRef],
   )
 
-  const getFloorplanSelectionIdsInBoundsForArea = useCallback(
-    (bounds: FloorplanSelectionBounds) =>
-      getFloorplanSelectionIdsInBounds({
-        bounds,
-        ceilings: ceilingPolygons,
-        phase,
-        isItemContextActive: isFloorplanItemContextActive,
-        items: floorplanItemEntries,
-        walls: displayWallPolygons,
-        openings: openingsPolygons,
-        roofs: floorplanRoofEntries,
-        slabs: displaySlabPolygons,
-        columns: columnPolygons,
-        elevators: floorplanElevatorEntries,
-        stairs: floorplanStairEntries,
-      }),
-    [
-      ceilingPolygons,
-      columnPolygons,
-      displaySlabPolygons,
-      displayWallPolygons,
-      floorplanItemEntries,
-      floorplanElevatorEntries,
-      floorplanRoofEntries,
-      floorplanStairEntries,
-      isFloorplanItemContextActive,
-      openingsPolygons,
-      phase,
-    ],
+  const getFloorplanSelectionIdsInBounds = useCallback(
+    (bounds: FloorplanSelectionBounds) => {
+      const scene = sceneRef.current
+      return scene ? collectRegistrySelectionIdsInBounds(scene, bounds) : []
+    },
+    [sceneRef],
   )
 
   return {
     getFloorplanHitIdAtPoint,
-    getFloorplanSelectionIdsInBounds: getFloorplanSelectionIdsInBoundsForArea,
+    getFloorplanSelectionIdsInBounds,
   }
 }

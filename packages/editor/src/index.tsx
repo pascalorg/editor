@@ -526,11 +526,6 @@ export { default as useFloorplanAnnotationVisibility } from './store/use-floorpl
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
 export { default as useFloorplanMode } from './store/use-floorplan-mode'
 export {
-  default as useFloorplanPreflight,
-  type FloorplanPreflightIssue,
-  type FloorplanPreflightIssueKind,
-} from './store/use-floorplan-preflight'
-export {
   default as useInteractionScope,
   getEditingHole,
   getIsCurveReshape,

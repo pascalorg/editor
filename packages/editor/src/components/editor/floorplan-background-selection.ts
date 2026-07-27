@@ -1,20 +1,12 @@
 'use client'
 
-import type { Point2D, ZoneNode as ZoneNodeType } from '@pascal-app/core'
-import { isPointInsidePolygon } from '../../lib/floorplan'
+import type { ZoneNode as ZoneNodeType } from '@pascal-app/core'
 import type { WallPlanPoint } from '../tools/wall/wall-drafting'
 
 type ModifierKeys = {
   meta: boolean
   ctrl: boolean
   shift: boolean
-}
-
-type ZoneHitEntry = {
-  zone: {
-    id: ZoneNodeType['id']
-  }
-  polygon: Point2D[]
 }
 
 type ResolveFloorplanBackgroundSelectionArgs = {
@@ -26,8 +18,6 @@ type ResolveFloorplanBackgroundSelectionArgs = {
   modifierKeys: ModifierKeys
   planPoint: WallPlanPoint
   structureLayer: string
-  toPoint2D: (point: WallPlanPoint) => Point2D
-  visibleZonePolygons: ZoneHitEntry[]
 }
 
 export type FloorplanBackgroundSelectionResult =
@@ -63,18 +53,14 @@ export function resolveFloorplanBackgroundSelection({
   modifierKeys,
   planPoint,
   structureLayer,
-  toPoint2D,
-  visibleZonePolygons,
 }: ResolveFloorplanBackgroundSelectionArgs): FloorplanBackgroundSelectionResult {
   if (canSelectFloorplanZones) {
-    const zoneHit = visibleZonePolygons.find(({ polygon }) =>
-      isPointInsidePolygon(toPoint2D(planPoint), polygon),
-    )
-    if (zoneHit) {
+    const zoneId = getFloorplanHitIdAtPoint(planPoint)
+    if (zoneId) {
       return {
         handled: true,
         kind: 'select-zone',
-        zoneId: zoneHit.zone.id,
+        zoneId: zoneId as ZoneNodeType['id'],
       }
     }
   }

@@ -252,23 +252,29 @@ function buildRadius(
   editable: boolean,
 ): FloorplanGeometry | null {
   const layout = resolveCircularConstructionDimensionLayout('radius', points)
-  if (!layout) return null
-  const labelPoint: FloorplanPoint = node.baseline.origin
+  if (!layout?.end) return null
+  const direction = normalized(layout.start, layout.end)
+  if (!direction) return null
+  const normal: FloorplanPoint = [-direction[1], direction[0]]
   const children: FloorplanGeometry[] = [
-    styledPolyline([layout.center, layout.start, labelPoint], stroke),
-    ...openArrow(layout.start, layout.center, stroke),
-    labelGeometry(
-      labelPoint,
+    dimensionGeometry(
+      node,
+      layout.start,
+      layout.end,
+      layout.start,
+      layout.end,
+      normal,
       notation(
         node,
         `R ${formatConstructionLength(layout.radius, unit, profile, lengthFormatOptions(node))}`,
         dangling,
       ),
-      angle(layout.start, labelPoint),
+      stroke,
     ),
+    hitLine(layout.start, layout.end),
   ]
   if (node.showCenterMark) children.push(...centerMark(layout.center, layout.radius, stroke))
-  if (editable) children.push(...anchorHandles(points), baselineHandle(labelPoint))
+  if (editable) children.push(...anchorHandles(points))
   return dimensionGroup(children)
 }
 
@@ -531,10 +537,6 @@ function styledLine(
   }
 }
 
-function styledPolyline(points: FloorplanPoint[], stroke: string): FloorplanGeometry {
-  return { kind: 'polyline', points, fill: 'none', ...lineStyle(stroke) }
-}
-
 function lineStyle(stroke: string, strokeDasharray?: string): FloorplanStyle {
   return {
     fill: 'none',
@@ -649,10 +651,6 @@ function normalized(start: FloorplanPoint, end: FloorplanPoint): FloorplanPoint 
 
 function distance(first: FloorplanPoint, second: FloorplanPoint): number {
   return Math.hypot(second[0] - first[0], second[1] - first[1])
-}
-
-function angle(first: FloorplanPoint, second: FloorplanPoint): number {
-  return Math.atan2(second[1] - first[1], second[0] - first[0])
 }
 
 function formatDegrees(value: number): string {

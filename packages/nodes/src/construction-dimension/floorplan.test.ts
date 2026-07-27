@@ -349,59 +349,23 @@ describe('buildConstructionDimensionFloorplan', () => {
     ).toHaveLength(0)
   })
 
-  test('renders radius notation with a leader and center mark', () => {
+  test('renders radius like diameter while showing half the picked span', () => {
     const node = ConstructionDimensionNode.parse({
       mode: 'radius',
       anchors: [
         [0, 0, 0],
         [2, 0, 0],
       ],
-      baseline: { origin: [3, 1], direction: [1, 0] },
     })
     const geometry = buildConstructionDimensionFloorplan(node, context())
     const entries = geometry ? flatten(geometry) : []
 
-    expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
-      text: 'R 2m',
-      cx: 3,
-      cy: 1,
-    })
-    expect(entries.filter((entry) => entry.kind === 'line').length).toBeGreaterThanOrEqual(6)
-  })
-
-  test('updates an associative curved-wall radius when the host curve changes', () => {
-    const wall = WallNode.parse({
-      id: 'wall_curve',
+    expect(dimensionSegments(geometry)[0]).toMatchObject({
+      text: 'R 1m',
       start: [0, 0],
-      end: [4, 0],
-      curveOffset: 1,
+      end: [2, 0],
     })
-    const node = ConstructionDimensionNode.parse({
-      mode: 'radius',
-      anchors: [
-        {
-          kind: 'feature',
-          reference: { nodeId: wall.id, featureId: 'wall:curve:center' },
-          fallback: [2, 0, 1.5],
-        },
-        {
-          kind: 'feature',
-          reference: { nodeId: wall.id, featureId: 'wall:midpoint' },
-          fallback: [2, 0, -1],
-        },
-      ],
-      baseline: { origin: [2, -1.5], direction: [0, -1] },
-    })
-    const reshapedWall = WallNode.parse({ ...wall, curveOffset: 0.5 })
-    const original = buildConstructionDimensionFloorplan(node, context({ [wall.id]: wall }))
-    const reshaped = buildConstructionDimensionFloorplan(node, context({ [wall.id]: reshapedWall }))
-    const originalLabel =
-      original && flatten(original).find((entry) => entry.kind === 'dimension-label')
-    const reshapedLabel =
-      reshaped && flatten(reshaped).find((entry) => entry.kind === 'dimension-label')
-
-    expect(originalLabel).toMatchObject({ text: 'R 2.5m' })
-    expect(reshapedLabel).toMatchObject({ text: 'R 4.25m' })
+    expect(entries.some((entry) => entry.kind === 'dimension-label')).toBe(false)
   })
 
   test('renders diameter and repeated-feature notation', () => {

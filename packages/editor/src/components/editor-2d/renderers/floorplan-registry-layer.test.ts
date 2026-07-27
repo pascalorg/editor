@@ -321,6 +321,23 @@ describe('floorplan vertex double-click routing', () => {
 })
 
 describe('floorplan annotation overlay routing', () => {
+  test('keeps explicitly layered selection chrome above selected body fills', () => {
+    const selectionHatch = {
+      kind: 'line',
+      x1: 0,
+      y1: 0,
+      x2: 0.2,
+      y2: 0.2,
+      stroke: '#3b82f6',
+      metadata: floorplanGeometryMetadata({ renderPass: 'overlay' }),
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(selectionHatch)).toEqual({
+      base: null,
+      overlay: selectionHatch,
+    })
+  })
+
   test('registers upright zone labels for rotation-only presentation updates', () => {
     const noop = () => {}
     const markup = renderToStaticMarkup(

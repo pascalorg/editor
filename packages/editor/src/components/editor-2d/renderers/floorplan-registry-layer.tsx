@@ -59,6 +59,7 @@ import {
   type FloorplanAnnotationRole,
   type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
+  readFloorplanGeometryMetadata,
   withFloorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
 import {
@@ -85,7 +86,6 @@ import useDrawingView from '../../../store/use-drawing-view'
 import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
-import useFloorplanPreflight from '../../../store/use-floorplan-preflight'
 import useInteractionScope, {
   getMovingNode,
   useEndpointReshape,
@@ -1518,8 +1518,6 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     ],
   )
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
-  const setPreflightIssues = useFloorplanPreflight((state) => state.setIssues)
-  const resetPreflightIssues = useFloorplanPreflight((state) => state.reset)
   const layoutEnabled = active && interactionIdle
 
   useEffect(() => {
@@ -1563,7 +1561,6 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     // Explicit layout inputs replace the former whole-subtree MutationObserver.
     if (!active) {
       appliedLayoutInputsRef.current = null
-      resetPreflightIssues()
       return
     }
     if (!interactionIdle) return
@@ -1594,11 +1591,10 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     if (!update.resolveCollisions) return
     const svg = markerRef.current?.ownerSVGElement
     if (!svg) return
-    const preflightIssues = resolveSvgAnnotationCollisions(svg, {
+    resolveSvgAnnotationCollisions(svg, {
       labels: collisionLabelElementsRef.current,
       layoutOverrides: annotationLayoutOverrides,
     })
-    setPreflightIssues(preflightIssues)
     appliedLayoutInputsRef.current = layoutInputs
 
     for (const [index, label] of registryLabelElementsRef.current.entries()) {
@@ -1607,15 +1603,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       label.style.pointerEvents = 'all'
       label.style.cursor = annotationLayoutOverrides[id]?.pinned ? 'grab' : 'move'
     }
-  }, [
-    active,
-    annotationLayoutOverrides,
-    interactionIdle,
-    layoutInputs,
-    resetPreflightIssues,
-    sceneRotationDeg,
-    setPreflightIssues,
-  ])
+  }, [active, annotationLayoutOverrides, interactionIdle, layoutInputs, sceneRotationDeg])
 
   useEffect(() => {
     if (!layoutEnabled) return
@@ -3312,6 +3300,9 @@ export function splitFloorplanOverlay(g: FloorplanGeometry): {
   base: FloorplanGeometry | null
   overlay: FloorplanGeometry | null
 } {
+  if (readFloorplanGeometryMetadata(g).renderPass === 'overlay') {
+    return { base: null, overlay: g }
+  }
   if (isFloorplanAnnotationObstacleGeometry(g)) {
     return { base: null, overlay: g }
   }

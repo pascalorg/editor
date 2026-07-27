@@ -10,7 +10,6 @@ import { CupolaNode } from './nodes/cupola'
 import { DoorNode } from './nodes/door'
 import { DormerNode } from './nodes/dormer'
 import { DownspoutNode } from './nodes/downspout'
-import { DrawingSheetNode } from './nodes/drawing-sheet'
 import { DuctFittingNode } from './nodes/duct-fitting'
 import { DuctSegmentNode } from './nodes/duct-segment'
 import { DuctTerminalNode } from './nodes/duct-terminal'
@@ -84,7 +83,6 @@ export const AnyNode = z.discriminatedUnion('type', [
   SkylightNode,
   DormerNode,
   DownspoutNode,
-  DrawingSheetNode,
   DuctSegmentNode,
   DuctFittingNode,
   DuctTerminalNode,

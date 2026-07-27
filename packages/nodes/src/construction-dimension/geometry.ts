@@ -44,7 +44,7 @@ export function resolveCircularConstructionDimensionLayout(
   const first = project(anchors[0]!)
   const second = project(anchors[1]!)
 
-  if (mode === 'diameter') {
+  if (mode === 'diameter' || mode === 'radius') {
     const center: FloorplanPoint = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2]
     const radius = distance(first, second) / 2
     if (radius <= 1e-9) return null

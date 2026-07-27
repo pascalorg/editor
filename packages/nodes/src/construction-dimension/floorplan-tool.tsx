@@ -292,7 +292,11 @@ export function buildConstructionDimensionPreviewGeometries(
     const dx = end[0] - start[0]
     const dz = end[2] - start[2]
     const value = Math.abs(dx * direction[0] + dz * direction[1])
-    const rawText = formatLinearMeasurement(value, unit, metricNotation)
+    const rawText = formatLinearMeasurement(
+      mode === 'radius' ? value / 2 : value,
+      unit,
+      metricNotation,
+    )
     const text =
       mode === 'radius'
         ? `R ${rawText}`
@@ -337,7 +341,16 @@ export function normalizeConstructionDimensionMode(value: unknown): Construction
 }
 
 export function constructionDimensionUsesBaseline(mode: ConstructionDimensionMode): boolean {
-  return ['linear', 'radius', 'chord', 'arc-length', 'angular'].includes(mode)
+  return ['linear', 'chord', 'arc-length', 'angular'].includes(mode)
+}
+
+export function shouldConsumeConstructionDimensionPointerEvent(event: {
+  type: string
+  button: number
+  buttons: number
+}): boolean {
+  if (event.type === 'pointerdown') return event.button === 0
+  return (event.buttons & 0b110) === 0
 }
 
 function wallFeatureAnchor(
@@ -368,7 +381,6 @@ export function buildCurvedWallConstructionDimensionDraft(
     wallFeatureAnchor(wall, featureId, fallback)
 
   switch (mode) {
-    case 'radius':
     case 'center-mark':
       return {
         anchors: [feature('wall:curve:center', center), feature('wall:midpoint', midpoint)],
@@ -510,10 +522,10 @@ export function FloorplanConstructionDimensionToolLayer({
       if (current.stage === 'baseline') commitDraft(current, associated.point)
     }
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button === 0) consume(event)
+      if (shouldConsumeConstructionDimensionPointerEvent(event)) consume(event)
     }
     const onPointerMove = (event: PointerEvent) => {
-      consume(event)
+      if (shouldConsumeConstructionDimensionPointerEvent(event)) consume(event)
       setHover(resolveEvent(event))
     }
     const onPointerLeave = () => {

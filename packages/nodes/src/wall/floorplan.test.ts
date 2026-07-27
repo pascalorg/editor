@@ -98,22 +98,45 @@ describe('buildWallFloorplan render purpose', () => {
       end: [4, 4],
     })
     const selected = buildWallFloorplan(diagonalWall, context('edit', true))
+    const selectedOutline = selected
+      ? flatten(selected).find((entry) => entry.kind === 'polygon')
+      : undefined
     const hatchLines = selected
       ? flatten(selected).filter(
           (entry) => entry.kind === 'line' && entry.stroke === palette.selectedHatch,
         )
       : []
 
+    expect(selectedOutline?.kind).toBe('polygon')
     expect(hatchLines.length).toBeGreaterThan(8)
     expect(
       hatchLines.every(
         (entry) =>
           entry.kind === 'line' &&
-          entry.strokeWidth === 3 &&
-          entry.vectorEffect === 'non-scaling-stroke' &&
-          entry.pointerEvents === 'none',
+          entry.strokeWidth === 0.02 &&
+          entry.strokeWidth < (selectedOutline?.strokeWidth ?? 0) &&
+          entry.vectorEffect === undefined &&
+          entry.pointerEvents === 'none' &&
+          readFloorplanGeometryMetadata(entry).renderPass === 'overlay',
       ),
     ).toBe(true)
+  })
+
+  test('extends selected-wall hatch strokes to both wall faces', () => {
+    const selected = buildWallFloorplan(wall, context('edit', true))
+    const entries = selected ? flatten(selected) : []
+    const outline = entries.find((entry) => entry.kind === 'polygon')
+    const hatch = entries.find(
+      (entry) => entry.kind === 'line' && entry.stroke === palette.selectedHatch,
+    )
+
+    expect(outline?.kind).toBe('polygon')
+    expect(hatch?.kind).toBe('line')
+    if (outline?.kind !== 'polygon' || hatch?.kind !== 'line') return
+
+    const wallFaces = outline.points.map((point) => point[1])
+    expect(Math.min(hatch.y1, hatch.y2)).toBeCloseTo(Math.min(...wallFaces))
+    expect(Math.max(hatch.y1, hatch.y2)).toBeCloseTo(Math.max(...wallFaces))
   })
 
   test('uses document metric notation only for document output', () => {

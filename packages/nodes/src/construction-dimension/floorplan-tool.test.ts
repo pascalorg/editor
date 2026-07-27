@@ -7,6 +7,7 @@ import {
   normalizeConstructionDimensionChainMode,
   normalizeConstructionDimensionMode,
   resolveConstructionDimensionDraftDirection,
+  shouldConsumeConstructionDimensionPointerEvent,
 } from './floorplan-tool'
 
 describe('continuous construction-dimension drafting', () => {
@@ -61,7 +62,7 @@ describe('continuous construction-dimension drafting', () => {
     ]
     expect(
       buildConstructionDimensionPreviewGeometries(points, [0, 0, 1], 'metric', 'radius')[0],
-    ).toMatchObject({ text: 'R 2m' })
+    ).toMatchObject({ text: 'R 1m' })
     expect(
       buildConstructionDimensionPreviewGeometries(points, [0, 0, 1], 'metric', 'diameter')[0],
     ).toMatchObject({ text: 'Ø 2m' })
@@ -123,14 +124,14 @@ describe('continuous construction-dimension drafting', () => {
 
   test('only requests a label baseline for modes that use one', () => {
     expect(constructionDimensionUsesBaseline('linear')).toBe(true)
-    expect(constructionDimensionUsesBaseline('radius')).toBe(true)
+    expect(constructionDimensionUsesBaseline('radius')).toBe(false)
     expect(constructionDimensionUsesBaseline('angular')).toBe(true)
     expect(constructionDimensionUsesBaseline('diameter')).toBe(false)
     expect(constructionDimensionUsesBaseline('center-mark')).toBe(false)
     expect(constructionDimensionUsesBaseline('coordinate')).toBe(false)
   })
 
-  test('derives associative radius, chord, and center drafts from one curved wall', () => {
+  test('keeps radius manual while deriving chord and center drafts from one curved wall', () => {
     const wall = WallNode.parse({
       id: 'wall_curve',
       start: [0, 0],
@@ -138,16 +139,7 @@ describe('continuous construction-dimension drafting', () => {
       curveOffset: 1,
     })
 
-    expect(buildCurvedWallConstructionDimensionDraft(wall, 'radius')).toMatchObject({
-      anchors: [
-        { reference: { nodeId: wall.id, featureId: 'wall:curve:center' } },
-        { reference: { nodeId: wall.id, featureId: 'wall:midpoint' } },
-      ],
-      points: [
-        [2, 0, 1.5],
-        [2, 0, -1],
-      ],
-    })
+    expect(buildCurvedWallConstructionDimensionDraft(wall, 'radius')).toBeNull()
     expect(buildCurvedWallConstructionDimensionDraft(wall, 'chord')?.anchors).toMatchObject([
       { reference: { featureId: 'wall:start' } },
       { reference: { featureId: 'wall:end' } },
@@ -176,5 +168,15 @@ describe('continuous construction-dimension drafting', () => {
     expect(buildCurvedWallConstructionDimensionDraft(straight, 'radius')).toBeNull()
     expect(buildCurvedWallConstructionDimensionDraft(curved, 'diameter')).toBeNull()
     expect(buildCurvedWallConstructionDimensionDraft(curved, 'linear')).toBeNull()
+  })
+
+  test('leaves middle-button drag moves available for floor-plan panning', () => {
+    expect(
+      shouldConsumeConstructionDimensionPointerEvent({
+        type: 'pointermove',
+        button: -1,
+        buttons: 4,
+      }),
+    ).toBe(false)
   })
 })

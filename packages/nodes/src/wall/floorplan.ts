@@ -32,7 +32,8 @@ const FLOORPLAN_MIN_VISIBLE_WALL_THICKNESS = 0.13
 const FLOORPLAN_MAX_EXTRA_THICKNESS = 0.035
 const FLOORPLAN_ASSEMBLY_GRAPHIC_MIN_SPACING = 0.06
 const FLOORPLAN_SELECTION_HATCH_SPACING = 0.12
-const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH_PX = 3
+const FLOORPLAN_SELECTED_WALL_STROKE_WIDTH = 0.03
+const FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH = 0.02
 const WALL_DIMENSION_REFERENCES = ['finished-faces', 'centerline', 'stud-faces'] as const
 
 type WallDimensionReference = (typeof WALL_DIMENSION_REFERENCES)[number]
@@ -171,7 +172,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       points,
       fill,
       stroke,
-      strokeWidth: showSelectedChrome ? 0.03 : 0.02,
+      strokeWidth: showSelectedChrome ? FLOORPLAN_SELECTED_WALL_STROKE_WIDTH : 0.02,
       opacity: 0.92,
       metadata: floorplanGeometryMetadata({ annotationObstacle: 'outline' }),
       // Once the wall is selected, the body keeps catching the pointer
@@ -326,7 +327,7 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
   const length = getWallCurveLength(wall)
   if (length <= 1e-6) return []
 
-  const halfAcross = getWallAssemblyThickness(wall) * 0.42
+  const halfAcross = getWallAssemblyThickness(wall) / 2
   const halfAlong = halfAcross
   const count = Math.max(1, Math.floor(length / FLOORPLAN_SELECTION_HATCH_SPACING))
   const spacing = length / count
@@ -342,9 +343,9 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
       x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * halfAcross,
       y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * halfAcross,
       stroke,
-      strokeWidth: FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH_PX,
-      vectorEffect: 'non-scaling-stroke',
+      strokeWidth: FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH,
       pointerEvents: 'none',
+      metadata: floorplanGeometryMetadata({ renderPass: 'overlay' }),
     })
   }
 

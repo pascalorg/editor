@@ -2,7 +2,6 @@ import type {
   AnyNode,
   AnyNodeId,
   ConstructionDrawingType,
-  DrawingSheetNode,
   FloorplanGeometry,
   GeometryContext,
   NodeDefinition,
@@ -65,11 +64,6 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
   }
-  resolveDrawingSheet?: (args: {
-    node: N
-    levelId: AnyNodeId
-    drawingType: ConstructionDrawingType
-  }) => DrawingSheetNode | null
   schedule?: (args: {
     siblings: ReadonlyArray<N>
     nodes: Readonly<Record<string, AnyNode>>
@@ -87,6 +81,7 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
 type FloorplanGeometryMetadata = {
   annotationRole?: FloorplanAnnotationRole
   annotationObstacle?: 'bounds' | 'outline'
+  renderPass?: 'overlay'
 }
 
 type FloorplanContextExtension = {

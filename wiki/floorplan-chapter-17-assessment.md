@@ -91,7 +91,7 @@ The planner also supports:
 - Matching baseline extensions when a short value changes sides.
 - A leader and true tick-to-tick baseline when both outside positions require further relocation.
 
-The former orange/red dashed collision overlay was removed because it displayed stale pre-layout conflicts on top of labels that the automatic resolver had already made readable. Any future unresolved-collision reporting should live in a separate preflight surface rather than being painted over the drawing.
+The former orange/red dashed collision overlay was removed because it displayed stale pre-layout conflicts on top of labels that the automatic resolver had already made readable.
 
 `packages/nodes/src/shared/construction-length.ts` formats imperial construction dimensions using feet, inches, and reduced fractions rounded to the nearest sixteenth.
 
@@ -111,7 +111,20 @@ The existing measurement system is broader than the chapter's drafting examples.
 - 2D and 3D drafting and editing.
 - Smart transient measurement reports.
 
-The architecture is documented in `wiki/architecture/measurements.md`. These measurements are analysis annotations; they are not yet a complete replacement for architectural construction-dimension strings.
+The architecture is documented in `wiki/architecture/measurements.md`. These measurements remain analysis annotations rather than architectural construction-dimension strings.
+
+### Manual construction dimensions
+
+The editor provides a dedicated associative `ConstructionDimensionNode` for architectural drafting in Expert mode. A drafter can:
+
+- Pick stable semantic references or free points.
+- Create point-to-point, continuous, radius, diameter, center-mark, chord, arc-length, angular, and coordinate dimensions.
+- Place and later move the dimension baseline.
+- Reposition individual witness references.
+- Suppress or restore individual segments.
+- Keep dimensions associated with their host geometry as walls, openings, and other supported elements change.
+
+Manual construction dimensions render in the live floor plan and PDF output, and their visibility is controlled independently from automatic dimensions and analysis measurements.
 
 ### Door and window documentation
 
@@ -153,13 +166,9 @@ The rough-opening fields intentionally remain optional rather than being invente
 - Document metric notation and initial paper-space sizing for construction dimensions and measurement labels.
 - The same automatic annotation collision layout used by the live floor plan.
 
-The plan is fitted to an A4 landscape page. It is not yet plotted at a fixed architectural scale.
+The export intentionally fits the plan to an A4 landscape page.
 
 ## Important current limitations
-
-### Interactive measurement and construction dimension are different concepts
-
-The measurement system stores geometric analysis annotations. The wall planner creates automatic construction strings. There is no dedicated manual construction-dimension object that lets a drafter pick references, place a baseline, add points to a continuous string, and later reposition or suppress individual segments.
 
 ### The current datum is not truly face of stud
 
@@ -167,15 +176,15 @@ The measurement system stores geometric analysis annotations. The wall planner c
 
 ### Paper-space control is only partially implemented
 
-Exported construction dimensions and measurement labels now resolve their main text, tick, extension-gap, overshoot, and label-offset sizes from paper points. Note text, mark bubbles, room labels, remaining line-weight categories, and fixed user-selectable drawing scales still require the drawing-sheet work.
+Exported construction dimensions and measurement labels now resolve their main text, tick, extension-gap, overshoot, and label-offset sizes from paper points. Note text, mark bubbles, room labels, and remaining line-weight categories still need consistent paper-space sizing in the fitted A4 export.
 
 ### Construction dimensions have no independent visibility layer
 
 The live floor plan exposes independent visibility controls for automatic dimensions, manual dimensions, measurements, opening marks, structural grids, room labels, and stair annotations. Full export intentionally includes every supported annotation category regardless of the live-view toggles.
 
-### Automatic collision layout has no persistent manual override
+### Automatic collision layout has limited manual overrides
 
-Automatic placement now handles adjacent labels, short values, opening marks, and the first set of architectural obstacles. It does not yet let a drafter pin a chosen label position, suppress a segment, or persist a view-specific layout override. Broader fixed-symbol coverage and a separate unresolved-collision preflight also remain.
+Automatic placement now handles adjacent labels, short values, opening marks, and the first set of architectural obstacles. A drafter can pin a chosen label position, reset it with a double-click, and suppress individual manual-dimension segments. Broader fixed-symbol coverage remains.
 
 ### Curved and circular construction dimensions
 
@@ -184,10 +193,6 @@ Curved walls emit an automatic radius leader and center mark in live plans and d
 ### Construction systems are not semantically modeled
 
 The editor cannot yet apply different documentation rules for wood framing, masonry veneer, concrete block, structural masonry, or solid concrete because those assembly semantics do not exist in the wall model.
-
-### The floor plan has no drawing-sheet model
-
-The export layer produces plan and schedule pages, but there is no persistent drawing sheet with view identity, scale, title block, drawing number, note blocks, graphic scale, north arrow, or per-view annotation visibility.
 
 ## Features that should not be copied blindly
 
