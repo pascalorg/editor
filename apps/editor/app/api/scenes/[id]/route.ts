@@ -7,6 +7,7 @@ import {
   sceneApiPreflight,
   withSceneApiHeaders,
 } from '@/lib/scene-api-security'
+import { countContentNodes, wouldClearSceneContent } from '@/lib/scene-content-guard'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,12 @@ const putSceneSchema = z.object({
   graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
   expectedVersion: z.number().int().nonnegative().optional(),
+  /**
+   * Opt out of the content-clear guard. Required for a deliberate
+   * "delete everything" save, which is otherwise indistinguishable from the
+   * client autosaving before it has loaded the scene.
+   */
+  allowContentClear: z.boolean().optional(),
 })
 
 const patchSceneSchema = z.object({
@@ -83,6 +90,30 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+
+    // A client that autosaves before its initial load resolves sends an empty
+    // graph — or the bare site/building/level scaffold — and the version still
+    // matches, so `expectedVersion` waves it straight through and the stored
+    // scene is destroyed. Refuse to be the last writer in that sequence: a save
+    // may shrink a scene freely, but it may not take the last content node with
+    // it unless the caller says so explicitly.
+    if (
+      !parsed.data.allowContentClear &&
+      wouldClearSceneContent(existing.graph, parsed.data.graph)
+    ) {
+      return sceneApiJson(
+        request,
+        {
+          error: 'content_clear_rejected',
+          details:
+            'Refusing to replace a non-empty scene with an empty one. Reload the scene, or resend with allowContentClear: true if the clear is intentional.',
+          existingContentNodes: countContentNodes(existing.graph),
+          version: existing.version,
+        },
+        { status: 409, headers: { ETag: `"${existing.version}"` } },
+      )
+    }
+
     const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
