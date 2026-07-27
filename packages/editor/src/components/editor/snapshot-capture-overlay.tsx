@@ -109,6 +109,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isPreset = captureMode.mode === 'preset'
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
   const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
+  // A host-preselected crop means the host needs that exact output shape
+  // (e.g. the publish-cover capture) — hide the crop/aspect switcher.
+  const isCropLocked = isPreset || requestedCrop !== undefined
 
   const [mode, setMode] = useState<CropMode>('standard')
   const [standardAspect, setStandardAspect] = useState<StandardAspect>('16:9')
@@ -538,7 +541,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
       {/* Bottom-center: crop switcher, caption + shutter */}
       <div className="pointer-events-none absolute right-0 bottom-5 left-0 flex flex-col items-center gap-2.5">
-        {!isPreset && (
+        {!isCropLocked && (
           <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
             {/* Clicking Standard while it's active opens the aspect picker */}
             <ModeButton
