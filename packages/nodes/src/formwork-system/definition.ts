@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core/registry'
 import { buildFormworkGeometry } from './geometry'
+import { formworkSystemParametrics } from './parametrics'
 import { FormworkSystemNode } from './schema'
 
 /**
@@ -38,6 +39,8 @@ export const formworkSystemDefinition: NodeDefinition<typeof FormworkSystemNode>
     const node = n as FormworkSystemNode
     return JSON.stringify([node.parentId, node.panelWidth])
   },
+
+  parametrics: formworkSystemParametrics,
 
   presentation: {
     label: 'Formwork',

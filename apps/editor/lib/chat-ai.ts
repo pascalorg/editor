@@ -11,8 +11,14 @@ export const SYSTEM_PROMPT =
   'You are the construction AI inside the Pascal editor. You can inspect walls in the ' +
   'currently open scene and set their formwork/construction properties. Ask the user for ' +
   'any values you are missing before calling set_wall_construction — do not guess load-bearing ' +
-  'engineering values silently. After setting formworkType to something other than none, call ' +
-  'attach_formwork so the shutter panels/ties/walers actually appear in the scene. Keep replies short.'
+  'engineering values silently. attach_formwork generates a full leak-proof assembly: shutter ' +
+  'panels and walers on BOTH faces of the wall (concrete pushes outward on both sides — a ' +
+  "single-face shutter isn't real), through-ties clamping the faces together, and — when " +
+  'scaffoldRequired is set on the wall — working scaffold (uprights, ledgers, diagonal braces) ' +
+  'standing off each face. Ask whether scaffold access is needed (tall pours) before deciding ' +
+  'scaffoldRequired; set it via set_wall_construction before calling attach_formwork. After ' +
+  'setting formworkType to something other than none, call attach_formwork so the assembly ' +
+  'actually appears in the scene. Keep replies short.'
 
 const bedrock = createAmazonBedrock({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
@@ -89,7 +95,7 @@ export function buildTools(graph: SceneGraph, toolCalls: ChatResult['toolCalls']
     }),
     attach_formwork: tool({
       description:
-        "Generate formwork geometry (shutter panels, ties, walers) for a wall. Call this after set_wall_construction once formworkType is not 'none' — the user wants to see the formwork, not just set the properties.",
+        "Generate the full formwork assembly for a wall: shutter panels + walers on BOTH faces, through-ties clamping them together, and (if the wall's scaffoldRequired is true) working scaffold standing off each face. Call this after set_wall_construction once formworkType is not 'none' — the user wants to see the formwork, not just set the properties.",
       inputSchema: z.object({ wallId: z.string() }),
       execute: async ({ wallId }) => {
         toolCalls.push({ name: 'attach_formwork', input: { wallId } })

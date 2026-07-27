@@ -53,14 +53,36 @@ describe('buildFormworkGeometry', () => {
     expect(group.children.length).toBe(0)
   })
 
-  test('tiles panels across wall length, generates ties + walers', () => {
+  test('tiles panels on both faces, generates ties + walers on both faces', () => {
     const ctx = { parent: makeWall() } as unknown as GeometryContext
     const group = buildFormworkGeometry(makeNode(), ctx)
-    const panels = group.children.filter((c) => c.name.startsWith('panel-'))
+    const frontPanels = group.children.filter((c) => c.name.startsWith('panel-front-'))
+    const backPanels = group.children.filter((c) => c.name.startsWith('panel-back-'))
     const ties = group.children.filter((c) => c.name.startsWith('tie-'))
-    const walers = group.children.filter((c) => c.name.startsWith('waler-'))
-    expect(panels.length).toBe(5) // 3m / 0.6m
+    const frontWalers = group.children.filter((c) => c.name.startsWith('waler-front-'))
+    const backWalers = group.children.filter((c) => c.name.startsWith('waler-back-'))
+    expect(frontPanels.length).toBe(5) // 3m / 0.6m
+    expect(backPanels.length).toBe(5)
     expect(ties.length).toBeGreaterThan(0)
-    expect(walers.length).toBeGreaterThan(0)
+    expect(frontWalers.length).toBeGreaterThan(0)
+    expect(backWalers.length).toBeGreaterThan(0)
+  })
+
+  test('scaffoldRequired false -> no scaffold members', () => {
+    const ctx = { parent: makeWall({ scaffoldRequired: false }) } as unknown as GeometryContext
+    const group = buildFormworkGeometry(makeNode(), ctx)
+    expect(group.children.some((c) => c.name.startsWith('scaffold-'))).toBe(false)
+  })
+
+  test('scaffoldRequired true -> scaffold posts/ledgers/braces on both faces', () => {
+    const ctx = { parent: makeWall({ scaffoldRequired: true, height: 4 }) } as unknown as GeometryContext
+    const group = buildFormworkGeometry(makeNode(), ctx)
+    const posts = group.children.filter((c) => c.name.startsWith('scaffold-post-'))
+    const ledgers = group.children.filter((c) => c.name.startsWith('scaffold-ledger-'))
+    const braces = group.children.filter((c) => c.name.startsWith('scaffold-brace-'))
+    expect(posts.some((c) => c.name.includes('front'))).toBe(true)
+    expect(posts.some((c) => c.name.includes('back'))).toBe(true)
+    expect(ledgers.length).toBeGreaterThan(0)
+    expect(braces.length).toBeGreaterThan(0)
   })
 })
