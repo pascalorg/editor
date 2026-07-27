@@ -394,9 +394,9 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
                             <div className="flex flex-wrap gap-1">
                               {labels.map((label) => (
                                 <Badge
-                                  className="border-border/60 bg-background/60 text-foreground"
+                                  className="bg-primary/20 text-foreground ring-1 ring-primary/40"
                                   key={label}
-                                  variant="outline"
+                                  variant="secondary"
                                 >
                                   {label}
                                 </Badge>
