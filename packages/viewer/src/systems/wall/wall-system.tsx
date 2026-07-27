@@ -559,7 +559,7 @@ export const WallSystem = () => {
       }
 
       const levelWalls = getLevelWalls(levelId)
-      const miterData = calculateLevelMiters(levelWalls)
+      const miterData = getCachedLevelMiters(levelId, levelWalls)
       const rebuiltWallIds = new Set<string>()
 
       // Update dirty walls — always, no throttling. The dragged wall must
@@ -620,7 +620,7 @@ export const WallSystem = () => {
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
-        const miterData = calculateLevelMiters(levelWalls)
+        const miterData = getCachedLevelMiters(levelId, levelWalls)
         for (const wallId of Array.from(pendingIds)) {
           if (useProgressiveAdjacentRebuilds) {
             if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
@@ -668,6 +668,49 @@ function getEffectiveWall(wall: WallNode): WallNode {
   const override = useLiveNodeOverrides.getState().get(wall.id)
   if (!override || Object.keys(override).length === 0) return wall
   return { ...wall, ...override } as WallNode
+}
+
+// --- Level miter cache ------------------------------------------------------
+// A progressive rebuild drains 8 walls per frame, so a 1081-wall import takes
+// ~136 frames. The miter solution does not change across those frames — nothing
+// dirties the geometry in between — yet the naive code recomputed it every
+// frame. Cache it, keyed on the exact wall data the miters depend on.
+//
+// The comparison is exact (no hashing): a stale hit would silently render wrong
+// joints, and 7 numeric compares × N walls is microseconds — far cheaper than
+// the risk.
+type LevelMiterCacheEntry = { walls: WallNode[]; data: WallMiterData }
+const levelMiterCache = new Map<string, LevelMiterCacheEntry>()
+
+function sameMiterInputs(a: WallNode[], b: WallNode[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (x === y) continue
+    if (!x || !y) return false
+    if (
+      x.id !== y.id ||
+      x.start[0] !== y.start[0] ||
+      x.start[1] !== y.start[1] ||
+      x.end[0] !== y.end[0] ||
+      x.end[1] !== y.end[1] ||
+      x.thickness !== y.thickness ||
+      x.curveOffset !== y.curveOffset
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function getCachedLevelMiters(levelId: string, levelWalls: WallNode[]): WallMiterData {
+  const cached = levelMiterCache.get(levelId)
+  if (cached && sameMiterInputs(cached.walls, levelWalls)) return cached.data
+
+  const data = calculateLevelMiters(levelWalls)
+  levelMiterCache.set(levelId, { walls: levelWalls, data })
+  return data
 }
 
 /**

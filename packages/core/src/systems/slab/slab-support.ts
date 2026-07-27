@@ -511,6 +511,37 @@ export type WallSlabSupportSegment = {
  * "never below the ground", which is the same rule with the ground no longer
  * assumed flat.
  */
+// A rendered slab polygon depends only on the slab set and the level's walls,
+// never on the wall being tested — but a per-frame pass asks for support once
+// per wall, so the identical polygons were rebuilt for every wall on the level
+// (and each rebuild scans all of `levelWalls`). Keyed on array identity: the
+// caller derives those arrays once and only rebuilds them when the scene or a
+// live preview changes, so a hit means the inputs are the same objects.
+let polygonMemoSlabs: readonly SlabNode[] | null = null
+let polygonMemoWalls: readonly WallNode[] | null = null
+let polygonMemo = new Map<string, Array<[number, number]>>()
+
+function renderedSlabPolygon(
+  slab: SlabNode,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+): Array<[number, number]> {
+  if (polygonMemoSlabs !== slabs || polygonMemoWalls !== levelWalls) {
+    polygonMemoSlabs = slabs
+    polygonMemoWalls = levelWalls
+    polygonMemo = new Map()
+  }
+  const cached = polygonMemo.get(slab.id)
+  if (cached) return cached
+
+  const polygon = getRenderableSlabPolygon(slab, {
+    walls: levelWalls,
+    siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+  })
+  polygonMemo.set(slab.id, polygon)
+  return polygon
+}
+
 export function computeWallSlabSupport(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
@@ -546,10 +577,7 @@ export function computeWallSlabSupport(
 
   for (const slab of slabs) {
     if (slab.polygon.length < 3) continue
-    const renderedPolygon = getRenderableSlabPolygon(slab, {
-      walls: levelWalls,
-      siblingSlabs: slabs.filter((other) => other.id !== slab.id),
-    })
+    const renderedPolygon = renderedSlabPolygon(slab, slabs, levelWalls)
 
     let supported = 0
     const perPolyline = polylines.map((line) => {

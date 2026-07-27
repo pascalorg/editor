@@ -72,6 +72,13 @@ export const WallCutout = () => {
   const lastNumberOfWalls = useRef(0)
   const lastHighlightKey = useRef('')
   const lastWallAppearanceKey = useRef('')
+  const wallAppearanceKeyRef = useRef('')
+  const wallAppearanceInputs = useRef({
+    nodes: null as object | null,
+    materials: null as object | null,
+    shading: null as unknown,
+    wallCount: -1,
+  })
   const lastTextures = useRef(useViewer.getState().textures)
   const lastColorPreset = useRef(useViewer.getState().colorPreset)
   const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
@@ -103,14 +110,31 @@ export const WallCutout = () => {
         ? hoveredId
         : null
     const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}`
-    const wallAppearanceKey = Array.from(sceneRegistry.byType.wall!)
-      .sort()
-      .map((wallId) => {
-        const wallNode = sceneState.nodes[wallId as WallNode['id']]
-        if (wallNode?.type !== 'wall') return `${wallId}:missing`
-        return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
-      })
-      .join('|')
+    // Sorting every wall id, hashing each wall's material and JSON-dumping its
+    // face bands is a full-scene scan; its inputs are immutable store slices,
+    // so identity is enough to know the key cannot have changed.
+    const wallCount = sceneRegistry.byType.wall!.size
+    const appearanceInputs = wallAppearanceInputs.current
+    if (
+      appearanceInputs.nodes !== sceneState.nodes ||
+      appearanceInputs.materials !== sceneState.materials ||
+      appearanceInputs.shading !== shading ||
+      appearanceInputs.wallCount !== wallCount
+    ) {
+      appearanceInputs.nodes = sceneState.nodes
+      appearanceInputs.materials = sceneState.materials
+      appearanceInputs.shading = shading
+      appearanceInputs.wallCount = wallCount
+      wallAppearanceKeyRef.current = Array.from(sceneRegistry.byType.wall!)
+        .sort()
+        .map((wallId) => {
+          const wallNode = sceneState.nodes[wallId as WallNode['id']]
+          if (wallNode?.type !== 'wall') return `${wallId}:missing`
+          return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
+        })
+        .join('|')
+    }
+    const wallAppearanceKey = wallAppearanceKeyRef.current
 
     const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
     const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)

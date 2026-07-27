@@ -56,7 +56,15 @@ function resolveLevelBuildingId(
  *
  * Pure — operates on the serialized nodes record only.
  */
+// Identity-keyed memo. `nodes` is an immutable store slice, so a hit means the
+// scene has not changed since the last call. Hot callers ask once per wall per
+// frame (WallCutout), which rebuilt an identical Map 1000+ times a frame.
+let memoNodes: Record<AnyNodeId, AnyNode> | null = null
+let memoElevations: Map<string, LevelElevation> | null = null
+
 export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
+  if (memoNodes === nodes && memoElevations) return memoElevations
+
   const buildings = Object.values(nodes).filter(
     (node): node is BuildingNode => node?.type === 'building',
   )
@@ -87,6 +95,8 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
     cumulativeYByBuilding.set(entry.buildingId, baseY + entry.height)
   }
 
+  memoNodes = nodes
+  memoElevations = elevations
   return elevations
 }
 
