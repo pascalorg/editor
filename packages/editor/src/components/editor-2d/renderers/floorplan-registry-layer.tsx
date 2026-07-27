@@ -1485,6 +1485,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const markerRef = useRef<SVGGElement>(null)
   const collisionLabelElementsRef = useRef<SVGGElement[]>([])
   const registryLabelElementsRef = useRef<SVGGElement[]>([])
+  const registryOrientationElementsRef = useRef<SVGGElement[]>([])
   const appliedRotationDegRef = useRef<number | null>(null)
   const appliedLayoutInputsRef = useRef<object | null>(null)
   const interactionIdle = useInteractionScope((state) => isIdle(state.scope))
@@ -1583,10 +1584,12 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       registryLabelElementsRef.current = collisionLabelElementsRef.current.filter((label) =>
         registryLayer.contains(label),
       )
+      registryOrientationElementsRef.current = Array.from(
+        registryLayer.querySelectorAll<SVGGElement>('[data-floorplan-annotation-angle-radians]'),
+      )
     }
-    const labels = registryLabelElementsRef.current
     if (update.updateLabelPresentation) {
-      updateSvgFloorplanLabelOrientations(labels, sceneRotationDeg)
+      updateSvgFloorplanLabelOrientations(registryOrientationElementsRef.current, sceneRotationDeg)
       appliedRotationDegRef.current = sceneRotationDeg
     }
     if (!update.resolveCollisions) return
@@ -1599,7 +1602,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
     setPreflightIssues(preflightIssues)
     appliedLayoutInputsRef.current = layoutInputs
 
-    for (const [index, label] of labels.entries()) {
+    for (const [index, label] of registryLabelElementsRef.current.entries()) {
       const id = svgAnnotationLabelId(label, index)
       label.dataset.floorplanAnnotationId = id
       label.style.pointerEvents = 'all'
@@ -3040,11 +3043,17 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         // Counter-rotate by the scene rotation so the label reads
         // horizontally on screen even when the floor-plan view is
         // rotated (default `sceneRotationDeg` is 90°).
+        const beforeRotation = `translate(${g.x} ${g.y})`
+        const transform = `${beforeRotation} rotate(${-sceneRotationDeg})`
         return (
           <g
             data-floorplan-annotation-obstacle={floorplanAnnotationObstacleMode(g)}
+            data-floorplan-annotation-angle-radians={0}
+            data-floorplan-annotation-default-transform={transform}
+            data-floorplan-annotation-screen-upright="true"
+            data-floorplan-annotation-transform-before-rotation={beforeRotation}
             key={keyHint}
-            transform={`translate(${g.x} ${g.y}) rotate(${-sceneRotationDeg})`}
+            transform={transform}
           >
             <text
               dominantBaseline={g.dominantBaseline ?? 'middle'}

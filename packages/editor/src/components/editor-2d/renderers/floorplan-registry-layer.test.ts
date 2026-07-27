@@ -321,6 +321,45 @@ describe('floorplan vertex double-click routing', () => {
 })
 
 describe('floorplan annotation overlay routing', () => {
+  test('registers upright zone labels for rotation-only presentation updates', () => {
+    const noop = () => {}
+    const markup = renderToStaticMarkup(
+      createElement(
+        'svg',
+        null,
+        createElement(InteractiveGeometry, {
+          activeDragId: null,
+          activeRotateNodeId: null,
+          geometry: {
+            kind: 'text',
+            x: 4,
+            y: 6,
+            text: 'Kitchen',
+            fontSize: 0.2,
+            upright: true,
+          },
+          hatchPatternId: undefined,
+          hoveredHandleId: null,
+          isMarqueeSelectionActive: false,
+          nodeId: 'zone_test' as AnyNodeId,
+          onHandleDoubleClick: noop,
+          onHandleHoverChange: noop,
+          onHandlePointerDown: noop,
+          onMoveHandlePointerDown: noop,
+          palette: undefined,
+          sceneRotationDeg: 180,
+          unitsPerPixel: 0.01,
+        }),
+      ),
+    )
+
+    expect(markup).not.toContain('data-floorplan-annotation-label=""')
+    expect(markup).toContain('data-floorplan-annotation-angle-radians="0"')
+    expect(markup).toContain('data-floorplan-annotation-screen-upright="true"')
+    expect(markup).toContain('data-floorplan-annotation-transform-before-rotation="translate(4 6)"')
+    expect(markup).toContain('transform="translate(4 6) rotate(-180)"')
+  })
+
   test('keeps automatic dimension strings left-to-right and top-to-bottom after rotation', () => {
     const noop = () => {}
     const renderAt180Degrees = (geometry: FloorplanGeometry) =>
