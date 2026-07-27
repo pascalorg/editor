@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type SpawnNode,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
@@ -25,12 +26,14 @@ export const spawnRotateAffordance: FloorplanAffordance<SpawnNode> = {
           free: modifiers.shiftKey,
         })
         lastRotation = initialRotation - delta
-        useScene.getState().updateNode(spawnId, { rotation: lastRotation })
+        useLiveNodeOverrides.getState().set(spawnId, { rotation: lastRotation })
+        useScene.getState().markDirty(spawnId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(spawnId)
         useScene.getState().updateNode(spawnId, { rotation: lastRotation })
       },
     }

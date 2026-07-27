@@ -5,6 +5,7 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   snapScalar,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { getSegmentGridStep } from '@pascal-app/editor'
@@ -91,14 +92,16 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
-        useScene
+        useLiveNodeOverrides
           .getState()
-          .updateNode(segmentId, axis === 'x' ? { width: newValue } : { depth: newValue })
+          .set(segmentId, axis === 'x' ? { width: newValue } : { depth: newValue })
+        useScene.getState().markDirty(segmentId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
         useScene
           .getState()
           .updateNode(segmentId, axis === 'x' ? { width: lastValue } : { depth: lastValue })
@@ -133,12 +136,14 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
           free: modifiers.shiftKey,
         })
         lastRotation = initialRotation - delta
-        useScene.getState().updateNode(segmentId, { rotation: lastRotation })
+        useLiveNodeOverrides.getState().set(segmentId, { rotation: lastRotation })
+        useScene.getState().markDirty(segmentId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
         useScene.getState().updateNode(segmentId, { rotation: lastRotation })
       },
     }
@@ -186,12 +191,14 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
       let localX = dx * cosRoof + dz * sinRoof
       let localZ = -dx * sinRoof + dz * cosRoof
       lastLocal = [localX, initialY, localZ]
-      useScene.getState().updateNode(segmentId, { position: lastLocal })
+      useLiveNodeOverrides.getState().set(segmentId, { position: lastLocal })
+      useScene.getState().markDirty(segmentId)
     },
     canCommit() {
       return true
     },
     commit() {
+      useLiveNodeOverrides.getState().clear(segmentId)
       useScene.getState().updateNode(segmentId, { position: lastLocal })
     },
   }

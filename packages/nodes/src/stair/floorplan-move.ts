@@ -6,6 +6,7 @@ import {
   movingAlignmentAnchors,
   type StairNode,
   snapScalar,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { applyFloorplanAlignment, getSegmentGridStep } from '@pascal-app/editor'
@@ -20,10 +21,8 @@ import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
  * Figma alignment is layered on the stair footprint edges; Alt bypasses.
  * Guides are cleared by `FloorplanRegistryMoveOverlay`'s Path 1 teardown.
  *
- * The position is written straight to scene each tick (the stair has a real
- * `position` field, unlike polygon kinds) and re-applied atomically via
- * `commit()` so the overlay's deterministic revert → resume → commit path
- * records a single undo step (same pattern door / window use).
+ * The position previews through the live override store and is written to
+ * scene once via `commit()`.
  */
 export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node, nodes }) => {
   const startY = node.position[1]
@@ -59,7 +58,8 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
 
       if (lastValid && lastValid.position[0] === sx && lastValid.position[2] === sz) return
       lastValid = { position: [sx, startY, sz] }
-      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastValid }])
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastValid)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
       // No overlap / placement rules for stairs in 2D — any pointer-up
@@ -72,6 +72,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       // commit-path (revert → resume → session.commit()). Same pattern
       // door / window use.
       if (!lastValid) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
       useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastValid }])
     },
   }

@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type ShelfNode,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
@@ -45,13 +46,15 @@ export const shelfResizeAffordance: FloorplanAffordance<ShelfNode> = {
         } else {
           lastPatch = { depth: Math.max(MIN_SHELF_DEPTH, initialDepth + 2 * projDelta) }
         }
-        useScene.getState().updateNode(shelfId, lastPatch)
+        useLiveNodeOverrides.getState().set(shelfId, lastPatch)
+        useScene.getState().markDirty(shelfId)
       },
       canCommit() {
         return true
       },
       commit() {
         if (Object.keys(lastPatch).length > 0) {
+          useLiveNodeOverrides.getState().clear(shelfId)
           useScene.getState().updateNode(shelfId, lastPatch)
         }
       },
@@ -92,12 +95,14 @@ export const shelfRotateAffordance: FloorplanAffordance<ShelfNode> = {
         })
         const newRotationY = initialRotationY - delta
         lastRotation = [r[0], newRotationY, r[2]]
-        useScene.getState().updateNode(shelfId, { rotation: lastRotation })
+        useLiveNodeOverrides.getState().set(shelfId, { rotation: lastRotation })
+        useScene.getState().markDirty(shelfId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(shelfId)
         useScene.getState().updateNode(shelfId, { rotation: lastRotation })
       },
     }

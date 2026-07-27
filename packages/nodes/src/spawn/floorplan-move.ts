@@ -4,6 +4,7 @@ import {
   type FloorplanMoveTargetSession,
   type SpawnNode,
   snapScalar,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { getSegmentGridStep } from '@pascal-app/editor'
@@ -23,7 +24,8 @@ export const spawnFloorplanMoveTarget: FloorplanMoveTarget<SpawnNode> = ({ node 
 
       if (lastPosition && lastPosition[0] === next[0] && lastPosition[2] === next[2]) return
       lastPosition = next
-      useScene.getState().updateNodes([{ id: spawnId, data: { position: next } }])
+      useLiveNodeOverrides.getState().set(spawnId, { position: next })
+      useScene.getState().markDirty(spawnId)
     },
     canCommit() {
       if (!lastPosition) return false
@@ -31,6 +33,7 @@ export const spawnFloorplanMoveTarget: FloorplanMoveTarget<SpawnNode> = ({ node 
     },
     commit() {
       if (!lastPosition) return
+      useLiveNodeOverrides.getState().clear(spawnId)
       useScene.getState().updateNodes([{ id: spawnId, data: { position: lastPosition } }])
     },
   }

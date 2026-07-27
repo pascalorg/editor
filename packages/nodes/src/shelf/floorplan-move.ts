@@ -6,6 +6,7 @@ import {
   type FloorplanMoveTargetSession,
   movingFootprintAnchors,
   type ShelfNode,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -23,22 +24,8 @@ import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
  * because shelf is a `position`-field kind (it carries its location in
  * `node.position`, not in polygon vertices):
  *
- *   - Each pointermove writes the absolute world-plan position straight
- *     to `useScene` (history is paused by the overlay). This is the single
- *     source of truth: the 2D `FloorplanRegistryLayer` and the 3D
- *     `ParametricNodeRenderer` group transform both follow it reactively,
- *     so 2D and 3D can never diverge.
- *   - On commit, the overlay's snapshot-diff reverts to baseline, resumes
- *     history, and re-applies the final position as one undoable step.
- *     `canCommit` only validates.
- *
- * Earlier this used the `useLiveTransforms` + imperative-mesh pattern that
- * `slab` / `ceiling` use. That works for polygon kinds because their commit
- * rebuilds geometry (the vertices change), which forces the 3D group to
- * reconcile. Shelf's `geometryKey` excludes `position`, so its commit
- * `markDirty` is a no-op and nothing reconciled the 3D group off the cleared
- * live transform — the 2D SVG moved but the 3D mesh stayed put. Writing the
- * scene directly removes that second source of truth entirely.
+ *   - Each pointermove previews through `useLiveNodeOverrides`.
+ *   - On commit, the final position is written once as one undoable step.
  */
 export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node, nodes }) => {
   const shelfId = node.id as AnyNodeId
@@ -49,6 +36,7 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
     metadata: node.metadata,
   })
   let lastPosition: [number, number, number] = originalPosition
+  let lastVisualPosition: [number, number, number] = originalPosition
   let lastSnapKey: string | null = null
 
   // Alignment candidates — corner/edge/segment anchors of every OTHER node
@@ -96,22 +84,18 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
         rotation: node.rotation,
         levelId: node.parentId ?? null,
       })
-      // Single source of truth — write the absolute position straight to
-      // the scene (history is paused by the overlay). Both the 2D SVG and
-      // the 3D group transform read `node.position` reactively, so they
-      // stay in lockstep. The overlay's snapshot-diff turns the whole drag
-      // into one undoable step on commit.
-      useScene.getState().updateNodes([
-        {
-          id: shelfId,
-          data: { position: visualPosition },
-        },
-      ])
+      lastVisualPosition = visualPosition
+      useLiveNodeOverrides.getState().set(shelfId, { position: visualPosition })
+      useScene.getState().markDirty(shelfId)
     },
     canCommit() {
       const live = useScene.getState().nodes[shelfId] as ShelfNode | undefined
       if (live?.type !== 'shelf') return false
       return !(lastPosition[0] === originalPosition[0] && lastPosition[2] === originalPosition[2])
+    },
+    commit() {
+      useLiveNodeOverrides.getState().clear(shelfId)
+      useScene.getState().updateNodes([{ id: shelfId, data: { position: lastVisualPosition } }])
     },
   }
   return session

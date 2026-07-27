@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type ElevatorNode,
   type FloorplanAffordance,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
@@ -15,9 +16,7 @@ type ElevatorResizePayload = { axis: 'x' | 'z'; side: 1 | -1 }
  * `linear-resize` handles declared in `definition.ts` — `anchor: 'center'`
  * means dragging outward on either +X or -X edge grows `width` by 2×
  * the elevator-local cursor offset while `position` stays put. Same for
- * +Z / -Z and `depth`. Writes directly to scene each tick (door pattern);
- * the registry dispatcher snapshots / pauses history at start so the
- * per-tick writes collapse into one undoable entry on commit.
+ * +Z / -Z and `depth`.
  */
 export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
   start({ node, payload, initialPlanPoint }) {
@@ -49,14 +48,16 @@ export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
         const delta = (currentLocal - initialLocal) * side
         const newValue = Math.max(MIN_ELEVATOR_DIM, initialValue + 2 * delta)
         lastValue = newValue
-        useScene
+        useLiveNodeOverrides
           .getState()
-          .updateNode(elevatorId, axis === 'x' ? { width: newValue } : { depth: newValue })
+          .set(elevatorId, axis === 'x' ? { width: newValue } : { depth: newValue })
+        useScene.getState().markDirty(elevatorId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(elevatorId)
         useScene
           .getState()
           .updateNode(elevatorId, axis === 'x' ? { width: lastValue } : { depth: lastValue })
@@ -69,9 +70,7 @@ export const elevatorResizeAffordance: FloorplanAffordance<ElevatorNode> = {
  * Elevator rotation drag (floor-plan). Sister to the 3D `arc-resize`
  * handle declared in `definition.ts`. Same `- delta` sign convention as
  * the 3D path so dragging the cursor in the same direction in both views
- * produces the same rotation. Writes directly to scene during the drag;
- * the registry dispatcher captures a snapshot first and re-applies the
- * single tracked update on pointer-up.
+ * produces the same rotation.
  */
 export const elevatorRotateAffordance: FloorplanAffordance<ElevatorNode> = {
   start({ node, initialPlanPoint }) {
@@ -93,12 +92,14 @@ export const elevatorRotateAffordance: FloorplanAffordance<ElevatorNode> = {
         })
         const newRotation = initialRotation - delta
         lastRotation = newRotation
-        useScene.getState().updateNode(elevatorId, { rotation: newRotation })
+        useLiveNodeOverrides.getState().set(elevatorId, { rotation: newRotation })
+        useScene.getState().markDirty(elevatorId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(elevatorId)
         useScene.getState().updateNode(elevatorId, { rotation: lastRotation })
       },
     }
