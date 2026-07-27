@@ -1,5 +1,12 @@
-import type { FloorplanAnnotationVisibility } from './annotation-visibility'
-import type { FloorplanToolMode, FloorplanWallDimensionReference } from './floorplan-extension'
+import {
+  type FloorplanAnnotationVisibility,
+  revealFloorplanAnnotationRole,
+} from './annotation-visibility'
+import type {
+  FloorplanAnnotationRole,
+  FloorplanToolMode,
+  FloorplanWallDimensionReference,
+} from './floorplan-extension'
 
 export const FLOORPLAN_MODES = ['default', 'expert'] as const
 
@@ -8,8 +15,7 @@ export type FloorplanMode = (typeof FLOORPLAN_MODES)[number]
 export const DEFAULT_FLOORPLAN_MODE: FloorplanMode = 'default'
 
 export type FloorplanPresentationContext = {
-  nodeType?: string
-  referencedBySelection?: boolean
+  referencedAnnotationRole?: FloorplanAnnotationRole
   selected?: boolean
   target: 'editor' | 'export'
 }
@@ -44,19 +50,19 @@ export function resolveFloorplanAnnotationVisibility(
 
   const interactive = context.target === 'editor'
   const selected = interactive && context.selected === true
-  const referencedMeasurement =
-    interactive && context.nodeType === 'measurement' && context.referencedBySelection === true
-
-  return {
+  const visibility: FloorplanAnnotationVisibility = {
     automaticDimensions: false,
     contextualDimensions: selected,
     manualDimensions: selected,
-    measurements: selected || referencedMeasurement,
+    measurements: selected,
     openingMarks: false,
     structuralGrids: false,
     roomLabels: true,
     stairAnnotations: false,
   }
+  return interactive && context.referencedAnnotationRole
+    ? revealFloorplanAnnotationRole(visibility, context.referencedAnnotationRole)
+    : visibility
 }
 
 export function resolveFloorplanWallDimensionReference(

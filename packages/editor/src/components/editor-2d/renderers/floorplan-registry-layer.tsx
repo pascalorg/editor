@@ -56,6 +56,7 @@ import {
 import { resolveNodeForDrawingType } from '../../../lib/floorplan/drawing-coordination'
 import {
   createFloorplanContextExtensions,
+  type FloorplanAnnotationRole,
   type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
   withFloorplanGeometryMetadata,
@@ -1845,8 +1846,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   )
   const hovered = useViewer((state) => state.hoveredId === selectionProxyId)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const referencedBySelection = useViewer((state) =>
-    isFloorplanEntryReferencedBySelection(node, new Set(state.selection.selectedIds)),
+  const referencedAnnotationRole = useViewer((state) =>
+    floorplanEntryReferencedAnnotationRole(node, new Set(state.selection.selectedIds)),
   )
   const activeRotateNodeId = useDirectManipulationFeedback((state) =>
     state.activeRotateNodeId === nodeId ? nodeId : null,
@@ -1864,8 +1865,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     floorplanMode,
     annotationVisibility,
     {
-      nodeType: node.type,
-      referencedBySelection,
+      referencedAnnotationRole,
       selected,
       target: 'editor',
     },
@@ -2062,13 +2062,16 @@ export function collectFloorplanDependencyNodes(
   })
 }
 
-function isFloorplanEntryReferencedBySelection(
+function floorplanEntryReferencedAnnotationRole(
   node: AnyNode,
   selectedIds: ReadonlySet<string>,
-): boolean {
-  if (node.type !== 'measurement' || selectedIds.size === 0) return false
-  const dependencyIds = nodeRegistry.get(node.type)?.floorplanDependencies?.(node) ?? []
-  return dependencyIds.some((id) => selectedIds.has(id))
+): FloorplanAnnotationRole | undefined {
+  if (selectedIds.size === 0) return undefined
+  const definition = nodeRegistry.get(node.type)
+  const role = getFloorplanNodeExtension(definition)?.referencedSelectionAnnotationRole
+  if (!role) return undefined
+  const dependencyIds = definition?.floorplanDependencies?.(node) ?? []
+  return dependencyIds.some((id) => selectedIds.has(id)) ? role : undefined
 }
 
 function buildFloorplanEntryGeometry({

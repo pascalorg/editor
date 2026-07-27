@@ -81,18 +81,16 @@ describe('floor-plan mode', () => {
   test('reveals a measurement when a referenced object is selected', () => {
     expect(
       resolveFloorplanAnnotationVisibility('default', DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, {
-        nodeType: 'measurement',
-        referencedBySelection: true,
+        referencedAnnotationRole: 'measurement',
         target: 'editor',
       }).measurements,
     ).toBe(true)
     expect(
       resolveFloorplanAnnotationVisibility('default', DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY, {
-        nodeType: 'construction-dimension',
-        referencedBySelection: true,
+        referencedAnnotationRole: 'manual-dimension',
         target: 'editor',
       }).manualDimensions,
-    ).toBe(false)
+    ).toBe(true)
   })
 
   test('exports Default without selection chrome or technical annotations', () => {

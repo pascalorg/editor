@@ -24,6 +24,14 @@ export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibil
   stairAnnotations: true,
 }
 
+export function revealFloorplanAnnotationRole(
+  visibility: FloorplanAnnotationVisibility,
+  role: FloorplanAnnotationRole,
+): FloorplanAnnotationVisibility {
+  const category = annotationCategoryForRole(role)
+  return visibility[category] ? visibility : { ...visibility, [category]: true }
+}
+
 export function normalizeFloorplanAnnotationVisibility(
   value: unknown,
 ): FloorplanAnnotationVisibility {
@@ -99,23 +107,27 @@ function isAnnotationRoleVisible(
   role: FloorplanAnnotationRole,
   visibility: FloorplanAnnotationVisibility,
 ): boolean {
+  return visibility[annotationCategoryForRole(role)]
+}
+
+function annotationCategoryForRole(role: FloorplanAnnotationRole): FloorplanAnnotationCategory {
   switch (role) {
     case 'automatic-dimension':
-      return visibility.automaticDimensions
+      return 'automaticDimensions'
     case 'contextual-dimension':
-      return visibility.contextualDimensions
+      return 'contextualDimensions'
     case 'manual-dimension':
-      return visibility.manualDimensions
+      return 'manualDimensions'
     case 'measurement':
-      return visibility.measurements
+      return 'measurements'
     case 'opening-mark':
-      return visibility.openingMarks
+      return 'openingMarks'
     case 'structural-grid':
     case 'column-center':
-      return visibility.structuralGrids
+      return 'structuralGrids'
     case 'room-label':
-      return visibility.roomLabels
+      return 'roomLabels'
     case 'stair-annotation':
-      return visibility.stairAnnotations
+      return 'stairAnnotations'
   }
 }

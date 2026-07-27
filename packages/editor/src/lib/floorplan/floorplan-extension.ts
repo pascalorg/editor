@@ -60,6 +60,7 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   tool?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
   availableModes?: readonly FloorplanToolMode[]
   preferredView?: '2d' | '3d'
+  referencedSelectionAnnotationRole?: FloorplanAnnotationRole
   contextualDimensions?: (node: N, ctx: GeometryContext) => FloorplanGeometry | null
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
