@@ -1,9 +1,17 @@
 'use client'
 
-import { DefaultChatTransport, isDynamicToolUIPart, isToolUIPart } from 'ai'
+import { useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { DefaultChatTransport, isDynamicToolUIPart, isToolUIPart, type UIMessage } from 'ai'
 import { useChat } from '@ai-sdk/react'
-import { useState } from 'react'
-import { Attachment, AttachmentPreview, AttachmentRemove, Attachments } from '@/components/ai-elements/attachments'
+import { Sparkles, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Attachment,
+  AttachmentPreview,
+  AttachmentRemove,
+  Attachments,
+} from '@/components/ai-elements/attachments'
 import {
   Conversation,
   ConversationContent,
@@ -27,7 +35,118 @@ import {
   PromptInputTools,
   usePromptInputAttachments,
 } from '@/components/ai-elements/prompt-input'
+import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
+import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
+import { Task, TaskContent, TaskTrigger } from '@/components/ai-elements/task'
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/components/ai-elements/tool'
+
+/**
+ * Selected-node chips above the composer (item 5: "select element → add to
+ * AI chat context"). Reads the viewer's current selection directly —
+ * `useViewer`/`useScene` are already used elsewhere in `apps/editor`
+ * (viewer-toolbar.tsx, floorplan-construction-preflight.tsx), so no new
+ * plumbing is needed. Each selected node's id/type/name is prefixed onto
+ * the outgoing message text, since the chat tools already take plain node
+ * ids as strings (see chat-ai.ts's `wallId: z.string()`).
+ */
+function chatHistoryKey(sceneId: string): string {
+  return `pascal-ai-chat-${sceneId}`
+}
+
+const STARTER_SUGGESTIONS = [
+  'Add plywood formwork to the selected wall',
+  'Set formwork tie spacing to 0.6m and enable scaffold access',
+  'Summarize the current wall construction on this level',
+]
+
+type MessagePart = UIMessage['parts'][number]
+type ToolPart =
+  | Extract<MessagePart, { type: `tool-${string}` }>
+  | Extract<MessagePart, { type: 'dynamic-tool' }>
+
+/**
+ * Item 16: group consecutive tool-call parts into a single collapsible
+ * `Task` so a multi-step AI response (e.g. set construction, then attach
+ * formwork, then set scaffold) reads as one task list instead of N
+ * separately-expanded `Tool` blocks.
+ */
+function groupMessageParts(parts: MessagePart[]) {
+  const groups: (
+    | { kind: 'text'; part: Extract<MessagePart, { type: 'text' }> }
+    | { kind: 'reasoning'; part: Extract<MessagePart, { type: 'reasoning' }> }
+    | { kind: 'file'; part: Extract<MessagePart, { type: 'file' }> }
+    | { kind: 'tools'; parts: ToolPart[] }
+  )[] = []
+  for (const part of parts) {
+    if (part.type === 'text') {
+      groups.push({ kind: 'text', part })
+    } else if (part.type === 'reasoning') {
+      groups.push({ kind: 'reasoning', part })
+    } else if (part.type === 'file') {
+      groups.push({ kind: 'file', part })
+    } else if (isToolUIPart(part) || isDynamicToolUIPart(part)) {
+      const last = groups[groups.length - 1]
+      if (last?.kind === 'tools') {
+        last.parts.push(part)
+      } else {
+        groups.push({ kind: 'tools', parts: [part] })
+      }
+    }
+  }
+  return groups
+}
+
+function loadChatHistory(sceneId: string): UIMessage[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(chatHistoryKey(sceneId))
+    return raw ? (JSON.parse(raw) as UIMessage[]) : []
+  } catch {
+    return []
+  }
+}
+
+function useSelectedNodeContext() {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const nodes = useScene((s) => s.nodes) as Record<
+    string,
+    { id: string; type: string; name?: string }
+  >
+  return selectedIds
+    .map((id) => nodes[id])
+    .filter((n): n is NonNullable<typeof n> => Boolean(n))
+    .map((n) => ({ id: n.id, type: n.type, name: n.name }))
+}
+
+function SelectionContextChips({
+  selected,
+  onRemove,
+}: {
+  selected: ReturnType<typeof useSelectedNodeContext>
+  onRemove: (id: string) => void
+}) {
+  if (selected.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1.5 px-1 pb-1.5">
+      {selected.map((node) => (
+        <span
+          className="flex items-center gap-1 rounded-full border border-border/60 bg-accent/40 px-2 py-0.5 text-foreground/80 text-xs"
+          key={node.id}
+        >
+          {node.name ?? node.type}
+          <button
+            aria-label={`Remove ${node.name ?? node.type} from context`}
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => onRemove(node.id)}
+            type="button"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+}
 
 const PromptInputAttachmentsDisplay = () => {
   const attachments = usePromptInputAttachments()
@@ -35,7 +154,11 @@ const PromptInputAttachmentsDisplay = () => {
   return (
     <Attachments variant="inline">
       {attachments.files.map((attachment) => (
-        <Attachment data={attachment} key={attachment.id} onRemove={() => attachments.remove(attachment.id)}>
+        <Attachment
+          data={attachment}
+          key={attachment.id}
+          onRemove={() => attachments.remove(attachment.id)}
+        >
           <AttachmentPreview />
           <AttachmentRemove />
         </Attachment>
@@ -46,7 +169,31 @@ const PromptInputAttachmentsDisplay = () => {
 
 export function AiChatPanel({ sceneId }: { sceneId: string }) {
   const [input, setInput] = useState('')
-  const { messages, sendMessage, status } = useChat({
+  const [excludedContextIds, setExcludedContextIds] = useState<Set<string>>(new Set())
+  // Items 10/11: browser-chrome-style header that hides on scroll-down and
+  // reveals on scroll-up (or when back at the top), rather than always
+  // occupying vertical space. `onScrollCapture` fires for the nested
+  // scrollable content even though native `scroll` events don't bubble.
+  const [headerHidden, setHeaderHidden] = useState(false)
+  const lastScrollTopRef = useRef(0)
+  const handleScrollCapture = (e: React.UIEvent<HTMLDivElement>) => {
+    const top =
+      e.currentTarget === e.target ? e.currentTarget.scrollTop : (e.target as HTMLElement).scrollTop
+    const delta = top - lastScrollTopRef.current
+    lastScrollTopRef.current = top
+    if (top < 24) {
+      setHeaderHidden(false)
+    } else if (delta > 4) {
+      setHeaderHidden(true)
+    } else if (delta < -4) {
+      setHeaderHidden(false)
+    }
+  }
+  const selectedNodes = useSelectedNodeContext()
+  const contextNodes = selectedNodes.filter((n) => !excludedContextIds.has(n.id))
+  const { messages, sendMessage, setMessages, status } = useChat({
+    id: sceneId,
+    messages: loadChatHistory(sceneId),
     transport: new DefaultChatTransport({
       api: '/api/chat',
       body: { sceneId },
@@ -54,44 +201,150 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
   })
   const busy = status === 'submitted' || status === 'streaming'
 
+  // Item 7: persist chat history per scene so it survives reload. useChat
+  // keeps no storage of its own; localStorage is the same mechanism the
+  // rest of the app already uses for durable client-only state (see
+  // packages/editor/src/lib/scene.ts's saveSceneToLocalStorage).
+  useEffect(() => {
+    if (messages.length === 0) return
+    try {
+      localStorage.setItem(chatHistoryKey(sceneId), JSON.stringify(messages))
+    } catch {
+      // Storage quota/unavailable — history just won't survive reload.
+    }
+  }, [messages, sceneId])
+
   return (
     <div className="flex h-full flex-col gap-2 p-3">
-      <Conversation className="flex-1">
+      <div
+        className={`flex items-center justify-between overflow-hidden transition-[height,opacity,margin] duration-200 ${
+          headerHidden ? 'mb-0 h-0 opacity-0' : 'mb-1 h-8 opacity-100'
+        }`}
+      >
+        <span className="flex items-center gap-1.5 font-medium text-foreground/80 text-sm">
+          <Sparkles className="h-4 w-4" />
+          AI Assistant
+        </span>
+        {messages.length > 0 && (
+          <button
+            className="text-muted-foreground text-xs hover:text-foreground"
+            onClick={() => {
+              setMessages([])
+              try {
+                localStorage.removeItem(chatHistoryKey(sceneId))
+              } catch {
+                // ignore
+              }
+            }}
+            type="button"
+          >
+            New chat
+          </button>
+        )}
+      </div>
+      <Conversation className="flex-1" onScrollCapture={handleScrollCapture}>
         <ConversationContent>
           {messages.length === 0 && (
-            <ConversationEmptyState
-              description='e.g. "set formwork on the first wall to plywood with 0.6m tie spacing"'
-              title="Ask the construction AI"
-            />
+            <ConversationEmptyState>
+              <div className="space-y-1">
+                <h3 className="font-medium text-sm">Ask the construction AI</h3>
+                <p className="text-muted-foreground text-sm">
+                  e.g. "set formwork on the first wall to plywood with 0.6m tie spacing"
+                </p>
+              </div>
+              <Suggestions>
+                {STARTER_SUGGESTIONS.map((s) => (
+                  <Suggestion
+                    key={s}
+                    onClick={(text) => !busy && sendMessage({ text })}
+                    suggestion={s}
+                  />
+                ))}
+              </Suggestions>
+            </ConversationEmptyState>
           )}
-          {messages.map((message) => (
-            <Message from={message.role} key={message.id}>
-              <MessageContent>
-                {message.parts.map((part, i) => {
-                  if (part.type === 'text') {
-                    return <MessageResponse key={i}>{part.text}</MessageResponse>
-                  }
-                  if (isToolUIPart(part) || isDynamicToolUIPart(part)) {
+          {messages.map((message, mi) => {
+            const groups = groupMessageParts(message.parts)
+            // Item: stopWhen: isStepCount(6) in /api/chat can end an agentic turn
+            // mid-tool-calls with no text part (finishReason 'tool-calls'). status
+            // still flips to 'ready' so the trailing Thinking… shimmer disappears,
+            // leaving only collapsed Task/Tool blocks — i.e. the turn looks like it
+            // silently died. Surface that instead of nothing.
+            const isLastAssistant = message.role === 'assistant' && mi === messages.length - 1
+            const endedWithoutText =
+              isLastAssistant &&
+              !busy &&
+              groups.length > 0 &&
+              !groups.some((g) => g.kind === 'text')
+            return (
+              <Message from={message.role} key={message.id}>
+                <MessageContent>
+                  {groups.map((entry, i) => {
+                    if (entry.kind === 'text') {
+                      return <MessageResponse key={i}>{entry.part.text}</MessageResponse>
+                    }
+                    if (entry.kind === 'reasoning') {
+                      return (
+                        <Reasoning defaultOpen key={i}>
+                          <ReasoningTrigger />
+                          <ReasoningContent>{entry.part.text}</ReasoningContent>
+                        </Reasoning>
+                      )
+                    }
+                    if (entry.kind === 'file') {
+                      return (
+                        <Attachments key={i} variant="inline">
+                          <Attachment data={{ ...entry.part, id: `${message.id}-file-${i}` }}>
+                            <AttachmentPreview />
+                          </Attachment>
+                        </Attachments>
+                      )
+                    }
                     return (
-                      <Tool defaultOpen={false} key={i}>
-                        {isDynamicToolUIPart(part) ? (
-                          <ToolHeader state={part.state} toolName={part.toolName} type="dynamic-tool" />
-                        ) : (
-                          <ToolHeader state={part.state} type={part.type} />
-                        )}
-                        <ToolContent>
-                          <ToolInput input={part.input} />
-                          {part.state === 'output-available' && <ToolOutput errorText={undefined} output={<pre className="text-xs">{String(part.output)}</pre>} />}
-                          {part.state === 'output-error' && <ToolOutput errorText={part.errorText} output={undefined} />}
-                        </ToolContent>
-                      </Tool>
+                      <Task defaultOpen key={i}>
+                        <TaskTrigger
+                          title={`${entry.parts.length} tool call${entry.parts.length > 1 ? 's' : ''}`}
+                        />
+                        <TaskContent>
+                          {entry.parts.map((part, j) => (
+                            <Tool defaultOpen={false} key={j}>
+                              {isDynamicToolUIPart(part) ? (
+                                <ToolHeader
+                                  state={part.state}
+                                  toolName={part.toolName}
+                                  type="dynamic-tool"
+                                />
+                              ) : (
+                                <ToolHeader state={part.state} type={part.type} />
+                              )}
+                              <ToolContent>
+                                <ToolInput input={part.input} />
+                                {part.state === 'output-available' && (
+                                  <ToolOutput
+                                    errorText={undefined}
+                                    output={<pre className="text-xs">{String(part.output)}</pre>}
+                                  />
+                                )}
+                                {part.state === 'output-error' && (
+                                  <ToolOutput errorText={part.errorText} output={undefined} />
+                                )}
+                              </ToolContent>
+                            </Tool>
+                          ))}
+                        </TaskContent>
+                      </Task>
                     )
-                  }
-                  return null
-                })}
-              </MessageContent>
-            </Message>
-          ))}
+                  })}
+                  {endedWithoutText && (
+                    <p className="text-muted-foreground text-sm">
+                      Stopped after tool calls without a reply — expand the tool calls above, or ask
+                      me to continue.
+                    </p>
+                  )}
+                </MessageContent>
+              </Message>
+            )
+          })}
         </ConversationContent>
         <ConversationScrollButton />
       </Conversation>
@@ -101,11 +354,23 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         onSubmit={(message: PromptInputMessage) => {
           const text = message.text?.trim()
           if ((!text && message.files.length === 0) || busy) return
-          sendMessage({ files: message.files, text: text || 'Sent with attachments' })
+          const contextPrefix =
+            contextNodes.length > 0
+              ? `Context: ${contextNodes.map((n) => `${n.name ?? n.type} (id: ${n.id})`).join(', ')}\n\n`
+              : ''
+          sendMessage({
+            files: message.files,
+            text: `${contextPrefix}${text || 'Sent with attachments'}`,
+          })
           setInput('')
+          setExcludedContextIds(new Set())
         }}
       >
         <PromptInputHeader>
+          <SelectionContextChips
+            onRemove={(id) => setExcludedContextIds((prev) => new Set(prev).add(id))}
+            selected={contextNodes}
+          />
           <PromptInputAttachmentsDisplay />
         </PromptInputHeader>
         <PromptInputBody>
