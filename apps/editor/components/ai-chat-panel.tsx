@@ -53,6 +53,58 @@ function chatHistoryKey(sceneId: string): string {
   return `pascal-ai-chat-${sceneId}`
 }
 
+function archivesKey(sceneId: string): string {
+  return `pascal-ai-chat-${sceneId}-archives`
+}
+
+interface ChatArchive {
+  id: string
+  preview: string
+  count: number
+  messages: UIMessage[]
+}
+
+function saveArchive(sceneId: string, messages: UIMessage[]): void {
+  if (typeof localStorage === 'undefined' || messages.length === 0) return
+  try {
+    const preview =
+      messages.find((m) => m.role === 'user')?.parts.find((p) => p.type === 'text')?.text ??
+      `${messages.length} messages`
+    const entry: ChatArchive = {
+      id: Date.now().toString(36),
+      preview: preview.slice(0, 80),
+      count: messages.length,
+      messages,
+    }
+    const raw = localStorage.getItem(archivesKey(sceneId))
+    const archives: ChatArchive[] = raw ? JSON.parse(raw) : []
+    archives.unshift(entry)
+    localStorage.setItem(archivesKey(sceneId), JSON.stringify(archives))
+  } catch {
+    // storage full or unavailable — archive silently lost
+  }
+}
+
+function loadArchives(sceneId: string): ChatArchive[] {
+  if (typeof localStorage === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(archivesKey(sceneId))
+    return raw ? (JSON.parse(raw) as ChatArchive[]) : []
+  } catch {
+    return []
+  }
+}
+
+function removeArchive(sceneId: string, id: string): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const archives = loadArchives(sceneId).filter((a) => a.id !== id)
+    localStorage.setItem(archivesKey(sceneId), JSON.stringify(archives))
+  } catch {
+    // ignore
+  }
+}
+
 const STARTER_SUGGESTIONS = [
   'Add plywood formwork to the selected wall',
   'Set formwork tie spacing to 0.6m and enable scaffold access',
@@ -175,6 +227,7 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
   // occupying vertical space. `onScrollCapture` fires for the nested
   // scrollable content even though native `scroll` events don't bubble.
   const [headerHidden, setHeaderHidden] = useState(false)
+  const [archives, setArchives] = useState<ChatArchive[]>(() => loadArchives(sceneId))
   const lastScrollTopRef = useRef(0)
   const handleScrollCapture = (e: React.UIEvent<HTMLDivElement>) => {
     const top =
@@ -229,6 +282,8 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
           <button
             className="text-muted-foreground text-xs hover:text-foreground"
             onClick={() => {
+              saveArchive(sceneId, messages)
+              setArchives(loadArchives(sceneId))
               setMessages([])
               try {
                 localStorage.removeItem(chatHistoryKey(sceneId))
@@ -246,6 +301,28 @@ export function AiChatPanel({ sceneId }: { sceneId: string }) {
         <ConversationContent>
           {messages.length === 0 && (
             <ConversationEmptyState>
+              {archives.length > 0 && (
+                <div className="w-full space-y-1">
+                  <h4 className="text-muted-foreground text-xs font-medium">
+                    Previous conversations
+                  </h4>
+                  {archives.map((a) => (
+                    <button
+                      className="block w-full truncate rounded-md px-2 py-1 text-left text-xs hover:bg-accent"
+                      key={a.id}
+                      onClick={() => {
+                        setMessages(a.messages)
+                        removeArchive(sceneId, a.id)
+                        setArchives(loadArchives(sceneId))
+                      }}
+                      title={`${a.count} messages — ${a.preview}`}
+                      type="button"
+                    >
+                      {a.preview}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="space-y-1">
                 <h3 className="font-medium text-sm">Ask the construction AI</h3>
                 <p className="text-muted-foreground text-sm">
