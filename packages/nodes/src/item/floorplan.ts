@@ -11,6 +11,7 @@ import {
   roofFacePointToSegment,
   useLiveTransforms,
 } from '@pascal-app/core'
+import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 
 /**
  * Stage C floor-plan builder for item.
@@ -151,6 +152,58 @@ function resolveItemTransform(
 
   cache.set(item.id as AnyNodeId, result)
   return result
+}
+
+export function buildItemContextualDimensions(
+  node: ItemNode,
+  ctx: GeometryContext,
+): FloorplanGeometry | null {
+  const transform = resolveItemTransform(node, ctx)
+  if (!transform) return null
+  const [width, , depth] = getScaledDimensions(node)
+  if (width <= 1e-6 || depth <= 1e-6) return null
+
+  const centerLocalZ = node.asset.attachTo === 'wall-side' ? depth / 2 : 0
+  const [centerOffsetX, centerOffsetY] = rotateVec(0, centerLocalZ, transform.rotation)
+  const cx = transform.x + centerOffsetX
+  const cy = transform.y + centerOffsetY
+  const halfWidth = width / 2
+  const halfDepth = depth / 2
+  const point = (x: number, y: number): FloorplanPoint => {
+    const [rx, ry] = rotateVec(x, y, transform.rotation)
+    return [cx + rx, cy + ry]
+  }
+  const widthNormal = rotateVec(0, -1, transform.rotation)
+  const depthNormal = rotateVec(1, 0, transform.rotation)
+  const unit = ctx.viewState?.unit ?? 'metric'
+  const metricNotation = readFloorplanMetricNotationOverride(ctx) ?? 'meters'
+  const stroke = ctx.viewState?.palette?.selectedStroke ?? '#2563eb'
+
+  return {
+    kind: 'group',
+    children: [
+      {
+        kind: 'dimension',
+        start: point(-halfWidth, -halfDepth),
+        end: point(halfWidth, -halfDepth),
+        offsetNormal: widthNormal,
+        offsetDistance: 0.28,
+        extensionOvershoot: 0.08,
+        text: formatLinearMeasurement(width, unit, metricNotation),
+        stroke,
+      },
+      {
+        kind: 'dimension',
+        start: point(halfWidth, -halfDepth),
+        end: point(halfWidth, halfDepth),
+        offsetNormal: depthNormal,
+        offsetDistance: 0.28,
+        extensionOvershoot: 0.08,
+        text: formatLinearMeasurement(depth, unit, metricNotation),
+        stroke,
+      },
+    ],
+  }
 }
 
 export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): FloorplanGeometry | null {

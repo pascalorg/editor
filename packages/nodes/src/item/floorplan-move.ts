@@ -11,6 +11,7 @@ import {
   movingFootprintAnchors,
   type RoofSegmentNode,
   roofFacePointToSegment,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -203,6 +204,7 @@ function buildWallItemSession(
     original: resolveItemPlanPoint(node, useScene.getState().nodes),
     metadata: node.metadata,
   })
+  let lastPatch: Partial<ItemNode> | null = null
 
   return {
     affectedIds: [node.id as AnyNodeId],
@@ -234,25 +236,24 @@ function buildWallItemSession(
       const halfW = width / 2
       const clampedX = Math.max(halfW, Math.min(hit.wallLength - halfW, snappedLocalX))
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: [clampedX, startLocalY, 0],
-            rotation: [0, hit.itemRotation, 0],
-            side: hit.side,
-            parentId: hit.wall.id,
-            // Re-anchoring to a wall ends any roof-segment hosting; the
-            // overlay's snapshot restores it if the move is reverted.
-            roofSegmentId: undefined,
-            roofFace: undefined,
-          },
-        },
-      ])
+      lastPatch = {
+        position: [clampedX, startLocalY, 0],
+        rotation: [0, hit.itemRotation, 0],
+        side: hit.side,
+        parentId: hit.wall.id,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item' && !!live.parentId
+      return !!lastPatch?.parentId
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }
@@ -278,6 +279,7 @@ function buildFloorItemSession(
   const resolvePlanPoint = createPlanarMovePointResolver(resolveItemPlanPoint(node, nodes), node)
   // Alignment candidates gathered once — scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, node.id)
+  let lastPatch: Partial<ItemNode> | null = null
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint }) {
@@ -300,22 +302,23 @@ function buildFloorItemSession(
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: nextPosition,
-            // Keep parent as the level we resolved at session-start. If
-            // somehow it's null (e.g. orphaned item), fall back to the
-            // existing parent so we don't write `null` and detach.
-            parentId: startLevelId ?? node.parentId,
-          },
-        },
-      ])
+      lastPatch = {
+        position: nextPosition,
+        // Keep parent as the level we resolved at session-start. If
+        // somehow it's null (e.g. orphaned item), fall back to the
+        // existing parent so we don't write `null` and detach.
+        parentId: startLevelId ?? node.parentId,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item'
+      return lastPatch !== null
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }
@@ -337,6 +340,7 @@ function buildSurfaceItemSession(
     resolveItemPlanPoint(node, useScene.getState().nodes),
     node,
   )
+  let lastPatch: Partial<ItemNode> | null = null
   return {
     affectedIds: [node.id as AnyNodeId],
     apply({ planPoint }) {
@@ -348,19 +352,20 @@ function buildSurfaceItemSession(
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: nextPosition,
-            parentId: surface ? surface.id : node.parentId,
-          },
-        },
-      ])
+      lastPatch = {
+        position: nextPosition,
+        parentId: surface ? surface.id : node.parentId,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item'
+      return lastPatch !== null
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }

@@ -1,5 +1,6 @@
 import type { AnyNodeId, NodeDefinition } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildWallContextualDimensions } from './contextual-dimensions'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
@@ -33,12 +34,13 @@ import { wallSlots } from './slots'
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 6,
+  schemaVersion: 7,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
     'pascal:editor/floorplan': {
+      contextualDimensions: buildWallContextualDimensions,
       actionMenu: {
         canCurve: ({ node, nodes }) =>
           !node.children.some((childId) => {
@@ -58,7 +60,6 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     visible: true,
     metadata: {},
     children: [],
-    assemblyLayers: [],
     start: [0, 0],
     end: [3, 0],
     frontSide: 'unknown',

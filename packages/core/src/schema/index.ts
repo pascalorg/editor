@@ -85,25 +85,6 @@ export {
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export { DownspoutNode } from './nodes/downspout'
-export {
-  DrawingSheetAnnotationProfile,
-  DrawingSheetDocumentMarker,
-  DrawingSheetDocumentMarkerKind,
-  DrawingSheetGeneralNote,
-  DrawingSheetGeneralNoteSet,
-  DrawingSheetKeyedNote,
-  DrawingSheetKeyedNoteDefinition,
-  DrawingSheetKeyedNoteInstance,
-  DrawingSheetNode,
-  DrawingSheetOrientation,
-  DrawingSheetPaperSize,
-  DrawingSheetPlacedView,
-  DrawingSheetRect,
-  DrawingSheetScale,
-  DrawingSheetSchedulePlacement,
-  DrawingSheetTitleBlock,
-  remapDrawingSheetReferences,
-} from './nodes/drawing-sheet'
 export { DuctFittingNode } from './nodes/duct-fitting'
 export { DuctSegmentNode } from './nodes/duct-segment'
 export { DuctTerminalNode } from './nodes/duct-terminal'
@@ -248,9 +229,6 @@ export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentNode } from './nodes/turbine-vent'
 export type {
-  WallAssemblyDatumReference,
-  WallAssemblyDatumSide,
-  WallAssemblyLayer,
   WallBandSurfaceSlotId,
   WallFaceBand,
   WallFaceBandConfig,
@@ -263,18 +241,11 @@ export {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getEffectiveWallSurfaceMaterial,
-  getWallAssemblyDatumReferenceId,
-  getWallAssemblyFaceOffsets,
-  getWallAssemblyLayers,
-  getWallAssemblyThickness,
   getWallBandSlotId,
-  getWallDatumEligibleLayers,
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
   getWallSurfaceSideFromBandSlot,
-  resolveWallAssemblyDatumReference,
-  resolveWallAssemblyDatumReferences,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,
@@ -285,8 +256,6 @@ export {
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WALL_TRIM_DEFAULTS,
-  WallAssemblyLayerRole,
-  WallDimensionDatum,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,

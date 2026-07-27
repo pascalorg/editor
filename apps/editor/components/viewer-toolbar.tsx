@@ -2,7 +2,6 @@
 
 import { Icon as IconifyIcon } from '@iconify/react'
 import {
-  DRAWING_TYPE_OPTIONS,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -11,9 +10,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  useDrawingView,
   useEditor,
   useFloorplanAnnotationVisibility,
+  useFloorplanMode,
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
@@ -150,6 +149,19 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
 ] as const
 
+const FLOORPLAN_MODE_OPTIONS = [
+  {
+    id: 'default',
+    name: 'Default',
+    detail: 'Clean plan; dimensions appear with selection',
+  },
+  {
+    id: 'expert',
+    name: 'Expert',
+    detail: 'Full documentation and annotation controls',
+  },
+] as const
+
 const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
   { id: 'finished-faces', name: 'Finished faces', detail: 'Full wall thickness' },
   { id: 'centerline', name: 'Wall centerline', detail: 'Single wall axis' },
@@ -184,49 +196,6 @@ function ViewModeControl() {
           </ToolbarTooltip>
         )
       })}
-    </div>
-  )
-}
-
-function DrawingTypeControl() {
-  const viewMode = useEditor((state) => state.viewMode)
-  const drawingType = useDrawingView((state) => state.drawingType)
-  const setDrawingType = useDrawingView((state) => state.setDrawingType)
-  if (viewMode === '3d') return null
-
-  const active =
-    DRAWING_TYPE_OPTIONS.find((option) => option.id === drawingType) ?? DRAWING_TYPE_OPTIONS[0]
-
-  return (
-    <div className={TOOLBAR_CONTAINER}>
-      <DropdownMenu>
-        <ToolbarTooltip label="Select coordinated drawing">
-          <DropdownMenuTrigger asChild>
-            <button
-              aria-label={`Drawing type: ${active.label}`}
-              className="flex items-center gap-1.5 px-2.5 font-medium text-foreground/90 text-xs transition-colors hover:bg-white/8"
-              type="button"
-            >
-              <Layers3 className="h-3.5 w-3.5" />
-              <span>{active.label}</span>
-            </button>
-          </DropdownMenuTrigger>
-        </ToolbarTooltip>
-        <DropdownMenuContent
-          align="start"
-          className="w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
-          side="bottom"
-          sideOffset={8}
-        >
-          {DRAWING_TYPE_OPTIONS.map((option) => (
-            <DropdownMenuItem key={option.id} onSelect={() => setDrawingType(option.id)}>
-              <Layers3 className="h-4 w-4" />
-              <span>{option.label}</span>
-              {drawingType === option.id ? <Check className="ml-auto h-4 w-4" /> : null}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   )
 }
@@ -373,6 +342,8 @@ function DisplayMenu() {
   const setWallDimensionReference = useFloorplanAnnotationVisibility(
     (state) => state.setWallDimensionReference,
   )
+  const floorplanMode = useFloorplanMode((state) => state.mode)
+  const setFloorplanMode = useFloorplanMode((state) => state.setMode)
 
   const activeShading =
     SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
@@ -432,62 +403,88 @@ function DisplayMenu() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <Layers3 className="h-4 w-4" />
-                <span>Floor plan annotations</span>
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
-                  const OptionIcon = option.icon
-                  const visible = annotationVisibility[option.id]
-                  return (
-                    <DropdownMenuItem
-                      key={option.id}
-                      onSelect={(e) =>
-                        keepOpen(e, () => setAnnotationCategory(option.id, !visible))
-                      }
-                    >
-                      <OptionIcon className="h-4 w-4" />
-                      <span>{option.name}</span>
-                      {visible ? (
-                        <Eye className="ml-auto h-4 w-4 text-foreground" />
-                      ) : (
-                        <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
-                      )}
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Ruler className="h-4 w-4" />
-                <span>Wall dimensions</span>
+                <span>Floor plan mode</span>
                 <span className="ml-auto text-muted-foreground text-xs">
-                  {
-                    FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
-                      (option) => option.id === wallDimensionReference,
-                    )?.name
-                  }
+                  {floorplanMode === 'default' ? 'Default' : 'Expert'}
                 </span>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
-                {FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.map((option) => (
-                  <DropdownMenuItem
-                    key={option.id}
-                    onSelect={(event) =>
-                      keepOpen(event, () => setWallDimensionReference(option.id))
-                    }
-                  >
+                {FLOORPLAN_MODE_OPTIONS.map((option) => (
+                  <DropdownMenuItem key={option.id} onSelect={() => setFloorplanMode(option.id)}>
                     <div className="flex flex-col">
                       <span className="text-foreground">{option.name}</span>
                       <span className="text-muted-foreground text-xs">{option.detail}</span>
                     </div>
-                    {wallDimensionReference === option.id ? (
+                    {floorplanMode === option.id ? (
                       <Check className="ml-auto h-4 w-4 text-foreground" />
                     ) : null}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            {floorplanMode === 'expert' ? (
+              <>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Layers3 className="h-4 w-4" />
+                    <span>Floor plan annotations</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                    {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
+                      const OptionIcon = option.icon
+                      const visible = annotationVisibility[option.id]
+                      return (
+                        <DropdownMenuItem
+                          key={option.id}
+                          onSelect={(e) =>
+                            keepOpen(e, () => setAnnotationCategory(option.id, !visible))
+                          }
+                        >
+                          <OptionIcon className="h-4 w-4" />
+                          <span>{option.name}</span>
+                          {visible ? (
+                            <Eye className="ml-auto h-4 w-4 text-foreground" />
+                          ) : (
+                            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+                          )}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Ruler className="h-4 w-4" />
+                    <span>Wall dimensions</span>
+                    <span className="ml-auto text-muted-foreground text-xs">
+                      {
+                        FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
+                          (option) => option.id === wallDimensionReference,
+                        )?.name
+                      }
+                    </span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                    {FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.map((option) => (
+                      <DropdownMenuItem
+                        key={option.id}
+                        onSelect={(event) =>
+                          keepOpen(event, () => setWallDimensionReference(option.id))
+                        }
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-foreground">{option.name}</span>
+                          <span className="text-muted-foreground text-xs">{option.detail}</span>
+                        </div>
+                        {wallDimensionReference === option.id ? (
+                          <Check className="ml-auto h-4 w-4 text-foreground" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </>
+            ) : null}
           </>
         ) : null}
         <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
@@ -694,7 +691,6 @@ export function CommunityViewerToolbarLeft() {
     <>
       <CollapseSidebarButton />
       <ViewModeControl />
-      <DrawingTypeControl />
     </>
   )
 }

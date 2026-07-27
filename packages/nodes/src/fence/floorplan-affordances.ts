@@ -266,6 +266,9 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
     const linkedOriginals = collectLinkedFences(fences, node.id, originalMovingPoint)
 
     const affectedIds: AnyNodeId[] = [node.id, ...linkedOriginals.map((l) => l.id)]
+    let lastPatches = new Map<AnyNodeId, Partial<FenceNode>>()
+    let lastStart = originalStart
+    let lastEnd = originalEnd
 
     return {
       affectedIds,
@@ -314,39 +317,63 @@ export const fenceMoveEndpointAffordance: FloorplanAffordance<FenceNode> = {
               end: pointsNearlyEqual(l.end, originalMovingPoint) ? aligned : l.end,
             }))
 
-        useScene.getState().updateNodes([
-          { id: node.id, data: { start: nextStart, end: nextEnd } },
-          ...linkedUpdates.map((u) => ({
-            id: u.id,
-            data: { start: u.start, end: u.end },
-          })),
+        lastStart = nextStart
+        lastEnd = nextEnd
+        const nextPatches = new Map<AnyNodeId, Partial<FenceNode>>([
+          [node.id, { start: nextStart, end: nextEnd }],
+          ...linkedUpdates.map(
+            (update) =>
+              [update.id, { start: update.start, end: update.end }] as [
+                AnyNodeId,
+                Partial<FenceNode>,
+              ],
+          ),
         ])
         // Re-elect the slab lift host as the endpoint drags (uncapped max
-        // election — 2D has no camera ray). This legacy write path commits
-        // via the dispatcher's snapshot diff, so patching per tick both
-        // previews the lift and lands it in the committed diff. Fences run
-        // no per-frame election: `supportSlabId` IS the lift.
-        const patchedNodes = useScene.getState().nodes
-        const supportPatches = [node.id, ...linkedUpdates.map((u) => u.id)].flatMap((id) => {
+        // election — 2D has no camera ray). Fences run no per-frame
+        // election: `supportSlabId` IS the lift.
+        const patchedNodes = { ...sceneNodes }
+        for (const [id, patch] of nextPatches) {
+          patchedNodes[id] = { ...patchedNodes[id], ...patch } as AnyNode
+        }
+        for (const id of nextPatches.keys()) {
           const fence = patchedNodes[id]
-          if (fence?.type !== 'fence') return []
+          if (fence?.type !== 'fence') continue
           const patch = resolveFenceSupportSlabPatch(fence as FenceNode, patchedNodes)
-          return patch.supportSlabId === (fence as FenceNode).supportSlabId
-            ? []
-            : [{ id, data: patch }]
-        })
-        if (supportPatches.length > 0) useScene.getState().updateNodes(supportPatches)
+          if (patch.supportSlabId !== (fence as FenceNode).supportSlabId) {
+            nextPatches.set(id, { ...nextPatches.get(id), ...patch })
+          }
+        }
+
+        const overrides = useLiveNodeOverrides.getState()
+        const scene = useScene.getState()
+        for (const linked of linkedOriginals) {
+          if (!nextPatches.has(linked.id)) {
+            overrides.clear(linked.id)
+            scene.markDirty(linked.id)
+          }
+        }
+        for (const [id, patch] of nextPatches) {
+          overrides.set(id, patch)
+          scene.markDirty(id)
+        }
+        lastPatches = nextPatches
       },
       canCommit() {
         // Pointer-up always runs canCommit — drop the alignment guide here
         // so it doesn't linger after a commit / reject.
         useAlignmentGuides.getState().clear()
-        const finalFence = useScene.getState().nodes[node.id] as FenceNode | undefined
-        return (
-          !!finalFence &&
-          finalFence.type === 'fence' &&
-          isSegmentLongEnough(finalFence.start, finalFence.end)
+        return isSegmentLongEnough(lastStart, lastEnd)
+      },
+      commit() {
+        useScene.getState().updateNodes(
+          Array.from(lastPatches, ([id, data]) => ({
+            id,
+            data,
+          })),
         )
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of affectedIds) overrides.clear(id)
       },
     }
   },

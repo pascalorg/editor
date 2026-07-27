@@ -4,10 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ConstructionDrawingType,
-  type DrawingSheetNode,
-  type DrawingSheetOrientation,
-  type DrawingSheetPaperSize,
-  type DrawingSheetScale,
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
@@ -33,6 +29,7 @@ import {
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
 import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import {
   type FloorplanAnnotationVisibility,
   filterFloorplanAnnotationGeometry,
@@ -41,9 +38,15 @@ import { resolveNodeForDrawingType } from './drawing-coordination'
 import {
   type FloorplanMetricNotation,
   type FloorplanSchedule,
+  type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
 } from './floorplan-extension'
+import {
+  type FloorplanMode,
+  resolveFloorplanAnnotationVisibility,
+  resolveFloorplanWallDimensionReference,
+} from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
@@ -73,11 +76,8 @@ const PLAN_PADDING_RATIO = 0.2
 /** PDF page margin + title band, in pt. */
 const PAGE_MARGIN_PT = 36
 const TITLE_BAND_PT = 28
-const SHEET_GAP_PT = 18
-const SHEET_SIDE_PANEL_WIDTH_PT = 180
-const TITLE_BLOCK_HEIGHT_PT = 42
-const POINTS_PER_INCH = 72
-const METERS_PER_INCH = 0.0254
+const A4_LANDSCAPE_WIDTH_PT = (297 / 25.4) * 72
+const A4_LANDSCAPE_HEIGHT_PT = (210 / 25.4) * 72
 
 const NEUTRAL_PALETTE: FloorplanPalette = {
   selectedStroke: '#334155',
@@ -111,8 +111,16 @@ const NEUTRAL_VIEW_STATE = {
 export function resolveFloorplanExportViewState(
   unit: 'metric' | 'imperial',
   metricNotation: FloorplanMetricNotation,
+  wallDimensionReference?: FloorplanWallDimensionReference,
+  automaticDimensions = true,
 ) {
-  return { ...NEUTRAL_VIEW_STATE, unit, metricNotation }
+  return {
+    ...NEUTRAL_VIEW_STATE,
+    automaticDimensions,
+    unit,
+    metricNotation,
+    wallDimensionReference,
+  }
 }
 
 type ExportLevel = { id: AnyNodeId; label: string }
@@ -123,74 +131,8 @@ type ExportGeometry = {
   annotations: FloorplanGeometry | null
 }
 
-type SheetComposition = {
-  sheetNumber: string
-  sheetTitle: string
-  paperSize: DrawingSheetPaperSize
-  orientation: DrawingSheetOrientation
-  customPaperWidth: number | null
-  customPaperHeight: number | null
-  drawingNumber: string
-  viewTitle: string
-  drawingLabel: string
-  scale: DrawingSheetScale
-  generalNotes: { number: number; text: string }[]
-  keyedNoteLegend: { key: string; text: string }[]
-  keyedNoteInstances: { id: string; key: string; x: number; y: number }[]
-  documentMarkers: ResolvedDocumentMarker[]
-  preflightIssues: SheetPreflightIssue[]
-}
-
-export type SheetExportLayout = {
-  planBox: { x: number; y: number; width: number; height: number }
-  sidePanel: { x: number; y: number; width: number; height: number }
-  titleBlock: { x: number; y: number; width: number; height: number }
-}
-
 export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
-}
-
-type ScheduleDrawResult = {
-  drawnSchedules: number
-  overflowSchedules: FloorplanSchedule[]
-}
-
-export type SheetPageSetup = {
-  width: number
-  height: number
-  orientation: DrawingSheetOrientation
-}
-
-export type SheetPreflightIssue = {
-  severity: 'warning'
-  message: string
-}
-
-type ResolvedGeneralNotes = {
-  notes: { number: number; text: string }[]
-  duplicateWarnings: SheetPreflightIssue[]
-}
-
-type ResolvedKeyedNotes = {
-  legend: { key: string; text: string }[]
-  instances: { id: string; key: string; x: number; y: number }[]
-  warnings: SheetPreflightIssue[]
-}
-
-type ResolvedDocumentMarker = {
-  id: string
-  kind: string
-  label: string
-  title: string
-  sheetReference: string
-  drawingReference: string
-  revisionId: string
-  x: number
-  y: number
-  endX: number | null
-  endY: number | null
-  points: { x: number; y: number }[]
 }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
@@ -198,8 +140,15 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
+  const floorplanMode = useFloorplanMode.getState().mode
+  const expertAnnotationState = useFloorplanAnnotationVisibility.getState()
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
-    useFloorplanAnnotationVisibility.getState().visibility,
+    floorplanMode,
+    expertAnnotationState.visibility,
+  )
+  const wallDimensionReference = resolveFloorplanWallDimensionReference(
+    floorplanMode,
+    expertAnnotationState.wallDimensionReference,
   )
   const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
@@ -212,15 +161,9 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
     return
   }
 
-  const defaultPageSetup = resolveSheetPageSetup({
-    paperSize: 'a4',
-    orientation: 'landscape',
-    customPaperWidth: null,
-    customPaperHeight: null,
-  })
   const { doc, save } = await createFloorplanPdfDocument([
-    defaultPageSetup.width,
-    defaultPageSetup.height,
+    A4_LANDSCAPE_WIDTH_PT,
+    A4_LANDSCAPE_HEIGHT_PT,
   ])
 
   const host = document.createElement('div')
@@ -239,17 +182,11 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         metricNotation,
         annotationVisibility,
         drawingType,
+        wallDimensionReference,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
-      const pageSetup = resolveSheetPageSetup({
-        paperSize: 'a4',
-        orientation: 'landscape',
-        customPaperWidth: null,
-        customPaperHeight: null,
-      })
-      const layout = resolveFloorplanPageLayout(pageSetup.width, pageSetup.height)
-      let scheduleOverflow: FloorplanSchedule[] = [...schedules]
+      const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
       if (geometries.length > 0) {
         // Preserve the live floor-plan orientation rather than forcing north-up.
@@ -266,7 +203,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         )
         if (mounted) {
           try {
-            doc.addPage([pageSetup.width, pageSetup.height], pageSetup.orientation)
+            doc.addPage([A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT], 'landscape')
             pageCount++
 
             const screenUnitsPerPixel = resolveFloorplanScreenUnitsPerPixel(
@@ -312,8 +249,8 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         }
       }
 
-      if (scheduleOverflow.length > 0) {
-        pageCount = drawFloorplanSchedulePages(doc, level.label, scheduleOverflow, pageCount)
+      if (schedules.length > 0) {
+        pageCount = drawFloorplanSchedulePages(doc, level.label, schedules, pageCount)
       }
     }
 
@@ -357,246 +294,6 @@ export function collectFloorplanSchedules(
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules
-}
-
-export function resolveSheetComposition(
-  nodes: Record<string, AnyNode>,
-  levelId: AnyNodeId,
-  levelLabel: string,
-  drawingType: ConstructionDrawingType,
-  drawingLabel: string,
-  fallbackScale: DrawingSheetScale,
-): SheetComposition {
-  const sheet = findDrawingSheetForLevel(nodes, levelId, drawingType)
-  const placedView = sheet?.placedViews.find(
-    (view) =>
-      (view.levelId === null || view.levelId === levelId) && view.drawingType === drawingType,
-  )
-  const generalNotes = sheet
-    ? resolveDrawingSheetGeneralNotes(sheet)
-    : { notes: [], duplicateWarnings: [] }
-  const keyedNotes = sheet
-    ? resolveDrawingSheetKeyedNotes(sheet, placedView?.id ?? null)
-    : { legend: [], instances: [], warnings: [] }
-  const documentMarkers = sheet
-    ? resolveDrawingSheetDocumentMarkers(sheet, placedView?.id ?? null)
-    : []
-  return {
-    sheetNumber: sheet?.sheetNumber ?? 'A1.0',
-    sheetTitle: sheet?.sheetTitle ?? drawingLabel,
-    paperSize: sheet?.paperSize ?? 'a4',
-    orientation: sheet?.orientation ?? 'landscape',
-    customPaperWidth: sheet?.customPaperWidth ?? null,
-    customPaperHeight: sheet?.customPaperHeight ?? null,
-    drawingNumber: placedView?.drawingNumber ?? '1',
-    viewTitle: placedView?.title ?? `${levelLabel} ${drawingLabel}`,
-    drawingLabel,
-    scale: placedView?.scale ?? fallbackScale,
-    generalNotes: generalNotes.notes,
-    keyedNoteLegend: keyedNotes.legend,
-    keyedNoteInstances: keyedNotes.instances,
-    documentMarkers,
-    preflightIssues: [...generalNotes.duplicateWarnings, ...keyedNotes.warnings],
-  }
-}
-
-export function resolveDrawingSheetGeneralNotes(sheet: DrawingSheetNode): ResolvedGeneralNotes {
-  const generalNoteSets = sheet.generalNoteSets ?? []
-  const generalNoteSetIds = sheet.generalNoteSetIds ?? []
-  const sheetNotes = sheet.generalNotes ?? []
-  const selectedSetIds =
-    generalNoteSetIds.length > 0
-      ? new Set(generalNoteSetIds)
-      : new Set(generalNoteSets.map((set) => set.id))
-  const noteSources = [
-    ...generalNoteSets
-      .filter((set) => selectedSetIds.has(set.id))
-      .flatMap((set) => set.notes.map((note) => ({ text: note.text, source: set.name }))),
-    ...sheetNotes.map((note) => ({ text: note.text, source: 'sheet' })),
-  ]
-  const notes = noteSources.map((note, index) => ({ number: index + 1, text: note.text }))
-  const duplicateWarnings: SheetPreflightIssue[] = []
-  const seen = new Map<string, { text: string; count: number; sources: Set<string> }>()
-  for (const note of noteSources) {
-    const key = normalizeGeneralNoteText(note.text)
-    const existing = seen.get(key)
-    if (existing) {
-      existing.count += 1
-      existing.sources.add(note.source)
-      continue
-    }
-    seen.set(key, { text: note.text, count: 1, sources: new Set([note.source]) })
-  }
-  for (const duplicate of seen.values()) {
-    if (duplicate.count < 2) continue
-    duplicateWarnings.push({
-      severity: 'warning',
-      message: `Duplicate general note: "${duplicate.text}" appears in ${[
-        ...duplicate.sources,
-      ].join(' and ')}.`,
-    })
-  }
-  return { notes, duplicateWarnings }
-}
-
-function normalizeGeneralNoteText(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
-}
-
-export function resolveDrawingSheetKeyedNotes(
-  sheet: DrawingSheetNode,
-  placedViewId: string | null = null,
-): ResolvedKeyedNotes {
-  const definitions = sheet.keyedNoteDefinitions ?? []
-  const instances = sheet.keyedNoteInstances ?? []
-  const definitionById = new Map(definitions.map((definition) => [definition.id, definition]))
-  const scopedInstances = instances.filter(
-    (instance) => instance.placedViewId === null || instance.placedViewId === placedViewId,
-  )
-  const warnings: SheetPreflightIssue[] = []
-  const usedDefinitions = new Map<string, { key: string; text: string }>()
-  const resolvedInstances: ResolvedKeyedNotes['instances'] = []
-
-  for (const instance of scopedInstances) {
-    const definition = definitionById.get(instance.definitionId)
-    if (!definition) {
-      warnings.push({
-        severity: 'warning',
-        message: `Keyed-note symbol ${instance.id} references missing definition ${instance.definitionId}.`,
-      })
-      continue
-    }
-    usedDefinitions.set(definition.id, { key: definition.key, text: definition.text })
-    resolvedInstances.push({
-      id: instance.id,
-      key: definition.key,
-      x: instance.position[0],
-      y: instance.position[1],
-    })
-  }
-
-  const derivedLegend = [...usedDefinitions.values()].sort((left, right) =>
-    left.key.localeCompare(right.key, undefined, { numeric: true }),
-  )
-  return {
-    legend: derivedLegend.length > 0 ? derivedLegend : (sheet.keyedNoteLegend ?? []),
-    instances: resolvedInstances,
-    warnings,
-  }
-}
-
-export function resolveDrawingSheetDocumentMarkers(
-  sheet: DrawingSheetNode,
-  placedViewId: string | null = null,
-): ResolvedDocumentMarker[] {
-  return (sheet.documentMarkers ?? [])
-    .filter((marker) => marker.placedViewId === null || marker.placedViewId === placedViewId)
-    .map((marker) => ({
-      id: marker.id,
-      kind: marker.kind,
-      label: marker.label,
-      title: marker.title,
-      sheetReference: marker.sheetReference,
-      drawingReference: marker.drawingReference,
-      revisionId: marker.revisionId,
-      x: marker.position[0],
-      y: marker.position[1],
-      endX: marker.endPosition?.[0] ?? null,
-      endY: marker.endPosition?.[1] ?? null,
-      points: marker.points.map(([x, y]) => ({ x, y })),
-    }))
-}
-
-export function resolveSheetPageSetup(
-  sheet: Pick<
-    SheetComposition,
-    'paperSize' | 'orientation' | 'customPaperWidth' | 'customPaperHeight'
-  >,
-): SheetPageSetup {
-  const base = paperSizePoints(sheet.paperSize, sheet.customPaperWidth, sheet.customPaperHeight)
-  const [width, height] =
-    sheet.orientation === 'landscape'
-      ? [Math.max(base.width, base.height), Math.min(base.width, base.height)]
-      : [Math.min(base.width, base.height), Math.max(base.width, base.height)]
-  return { width, height, orientation: sheet.orientation }
-}
-
-function paperSizePoints(
-  paperSize: DrawingSheetPaperSize,
-  customPaperWidth: number | null,
-  customPaperHeight: number | null,
-): { width: number; height: number } {
-  switch (paperSize) {
-    case 'letter':
-      return inchesToPoints(8.5, 11)
-    case 'tabloid':
-      return inchesToPoints(11, 17)
-    case 'arch-a':
-      return inchesToPoints(9, 12)
-    case 'arch-b':
-      return inchesToPoints(12, 18)
-    case 'arch-c':
-      return inchesToPoints(18, 24)
-    case 'a3':
-      return millimetersToPoints(297, 420)
-    case 'custom':
-      return inchesToPoints(customPaperWidth ?? 18, customPaperHeight ?? 12)
-    case 'a4':
-      return millimetersToPoints(210, 297)
-  }
-}
-
-function inchesToPoints(width: number, height: number): { width: number; height: number } {
-  return { width: width * POINTS_PER_INCH, height: height * POINTS_PER_INCH }
-}
-
-function millimetersToPoints(width: number, height: number): { width: number; height: number } {
-  return inchesToPoints(width / 25.4, height / 25.4)
-}
-
-function findDrawingSheetForLevel(
-  nodes: Record<string, AnyNode>,
-  levelId: AnyNodeId,
-  drawingType: ConstructionDrawingType,
-): DrawingSheetNode | null {
-  for (const node of Object.values(nodes)) {
-    const resolveDrawingSheet = getFloorplanNodeExtension(
-      nodeRegistry.get(node.type),
-    )?.resolveDrawingSheet
-    const sheet = resolveDrawingSheet?.({ node: node as never, levelId, drawingType })
-    if (sheet) return sheet
-  }
-  return null
-}
-
-export function resolveSheetExportLayout(pageWidth: number, pageHeight: number): SheetExportLayout {
-  const contentX = PAGE_MARGIN_PT
-  const contentY = PAGE_MARGIN_PT
-  const contentWidth = pageWidth - PAGE_MARGIN_PT * 2
-  const contentHeight = pageHeight - PAGE_MARGIN_PT * 2
-  const titleBlock = {
-    x: contentX,
-    y: contentY + contentHeight - TITLE_BLOCK_HEIGHT_PT,
-    width: contentWidth,
-    height: TITLE_BLOCK_HEIGHT_PT,
-  }
-  const upperHeight = contentHeight - TITLE_BLOCK_HEIGHT_PT - SHEET_GAP_PT
-  const sidePanel = {
-    x: contentX + contentWidth - SHEET_SIDE_PANEL_WIDTH_PT,
-    y: contentY,
-    width: SHEET_SIDE_PANEL_WIDTH_PT,
-    height: upperHeight,
-  }
-  return {
-    planBox: {
-      x: contentX,
-      y: contentY,
-      width: contentWidth - SHEET_SIDE_PANEL_WIDTH_PT - SHEET_GAP_PT,
-      height: upperHeight,
-    },
-    sidePanel,
-    titleBlock,
-  }
 }
 
 export function resolveFloorplanPageLayout(
@@ -748,398 +445,6 @@ function truncatePdfText(doc: FloorplanPdfDocument, value: string, maxWidth: num
   return `${truncated}...`
 }
 
-function drawSheetChrome(
-  doc: FloorplanPdfDocument,
-  layout: SheetExportLayout,
-  composition: SheetComposition,
-  schedules: readonly FloorplanSchedule[],
-): ScheduleDrawResult {
-  doc.setDrawColor('#0f172a')
-  doc.setLineWidth(0.6)
-  doc.rect(
-    PAGE_MARGIN_PT,
-    PAGE_MARGIN_PT,
-    doc.internal.pageSize.getWidth() - PAGE_MARGIN_PT * 2,
-    doc.internal.pageSize.getHeight() - PAGE_MARGIN_PT * 2,
-  )
-  doc.setDrawColor('#cbd5e1')
-  doc.setLineWidth(0.4)
-  doc.rect(layout.planBox.x, layout.planBox.y, layout.planBox.width, layout.planBox.height)
-  doc.rect(layout.sidePanel.x, layout.sidePanel.y, layout.sidePanel.width, layout.sidePanel.height)
-  doc.rect(
-    layout.titleBlock.x,
-    layout.titleBlock.y,
-    layout.titleBlock.width,
-    layout.titleBlock.height,
-  )
-
-  drawSheetTitleBlock(doc, layout, composition)
-  drawNorthArrow(doc, layout.planBox.x + layout.planBox.width - 26, layout.planBox.y + 38)
-  drawGraphicScale(doc, layout.planBox.x + 18, layout.planBox.y + layout.planBox.height - 22, {
-    scale: composition.scale,
-    maxWidth: Math.min(150, layout.planBox.width * 0.3),
-  })
-  drawSheetDocumentMarkers(doc, composition)
-  drawKeyedNoteSymbols(doc, composition)
-  return drawSheetSidePanel(doc, layout.sidePanel, composition, schedules)
-}
-
-function drawSheetDocumentMarkers(doc: FloorplanPdfDocument, composition: SheetComposition): void {
-  if (composition.documentMarkers.length === 0) return
-  doc.setDrawColor('#111827')
-  doc.setTextColor('#111827')
-  doc.setLineWidth(0.7)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  for (const marker of composition.documentMarkers) {
-    const x = marker.x * 72
-    const y = marker.y * 72
-    const end =
-      marker.endX !== null && marker.endY !== null
-        ? { x: marker.endX * 72, y: marker.endY * 72 }
-        : null
-    switch (marker.kind) {
-      case 'wall-tag':
-      case 'glazing-tag':
-      case 'assembly-tag':
-        drawTagMarker(doc, marker, x, y)
-        break
-      case 'section-callout':
-      case 'elevation-callout':
-      case 'detail-reference':
-        drawCalloutMarker(doc, marker, x, y, end)
-        break
-      case 'delta-marker':
-        drawDeltaMarker(doc, marker, x, y)
-        break
-      case 'revision-cloud':
-        drawRevisionCloudMarker(doc, marker, x, y)
-        break
-    }
-  }
-}
-
-function drawTagMarker(
-  doc: FloorplanPdfDocument,
-  marker: ResolvedDocumentMarker,
-  x: number,
-  y: number,
-) {
-  const width = Math.max(20, marker.label.length * 5 + 10)
-  const height = 14
-  if (marker.kind === 'glazing-tag') {
-    doc.roundedRect(x - width / 2, y - height / 2, width, height, 2, 2)
-  } else if (marker.kind === 'assembly-tag') {
-    doc.rect(x - width / 2, y - height / 2, width, height)
-  } else {
-    doc.circle(x, y, Math.max(7, width / 2))
-  }
-  doc.text(marker.label, x, y + 2.4, { align: 'center' })
-}
-
-function drawCalloutMarker(
-  doc: FloorplanPdfDocument,
-  marker: ResolvedDocumentMarker,
-  x: number,
-  y: number,
-  end: { x: number; y: number } | null,
-) {
-  if (end) doc.line(x, y, end.x, end.y)
-  doc.circle(x, y, 8)
-  doc.line(x - 8, y, x + 8, y)
-  doc.text(marker.label, x, y - 1.8, { align: 'center' })
-  const reference = [marker.drawingReference, marker.sheetReference].filter(Boolean).join('/')
-  if (reference) {
-    doc.setFont('helvetica', 'normal')
-    doc.text(reference, x, y + 6, { align: 'center' })
-    doc.setFont('helvetica', 'bold')
-  }
-}
-
-function drawDeltaMarker(
-  doc: FloorplanPdfDocument,
-  marker: ResolvedDocumentMarker,
-  x: number,
-  y: number,
-) {
-  const radius = 8
-  const points = [
-    [x, y - radius],
-    [x + radius * 0.87, y + radius / 2],
-    [x - radius * 0.87, y + radius / 2],
-  ] as const
-  doc.triangle(points[0][0], points[0][1], points[1][0], points[1][1], points[2][0], points[2][1])
-  doc.text(marker.revisionId || marker.label, x, y + 3, { align: 'center' })
-}
-
-function drawRevisionCloudMarker(
-  doc: FloorplanPdfDocument,
-  marker: ResolvedDocumentMarker,
-  x: number,
-  y: number,
-) {
-  const points: [number, number][] | null =
-    marker.points.length >= 3 ? marker.points.map((point) => [point.x * 72, point.y * 72]) : null
-  if (points) {
-    for (let index = 0; index < points.length; index += 1) {
-      const current = points[index]!
-      const next = points[(index + 1) % points.length]!
-      const [x1, y1] = current
-      const [x2, y2] = next
-      doc.line(x1, y1, x2, y2)
-    }
-  } else {
-    doc.roundedRect(x - 28, y - 16, 56, 32, 8, 8)
-  }
-  if (marker.revisionId) drawDeltaMarker(doc, marker, x, y)
-}
-
-function drawKeyedNoteSymbols(doc: FloorplanPdfDocument, composition: SheetComposition): void {
-  if (composition.keyedNoteInstances.length === 0) return
-  doc.setDrawColor('#111827')
-  doc.setTextColor('#111827')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
-  for (const instance of composition.keyedNoteInstances) {
-    const x = instance.x * 72
-    const y = instance.y * 72
-    doc.circle(x, y, 6)
-    doc.text(instance.key, x, y + 2.4, { align: 'center' })
-  }
-}
-
-function drawSheetTitleBlock(
-  doc: FloorplanPdfDocument,
-  layout: SheetExportLayout,
-  composition: SheetComposition,
-) {
-  const title = layout.titleBlock
-  const sheetNumberWidth = 86
-  const drawingRefWidth = 72
-  doc.setDrawColor('#cbd5e1')
-  doc.line(
-    title.x + title.width - sheetNumberWidth,
-    title.y,
-    title.x + title.width - sheetNumberWidth,
-    title.y + title.height,
-  )
-  doc.line(
-    title.x + title.width - sheetNumberWidth - drawingRefWidth,
-    title.y,
-    title.x + title.width - sheetNumberWidth - drawingRefWidth,
-    title.y + title.height,
-  )
-
-  doc.setTextColor('#111827')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
-  doc.text(composition.viewTitle.toLocaleUpperCase(), title.x + 10, title.y + 16)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.text(`Scale: ${formatDrawingScaleLabel(composition.scale)}`, title.x + 10, title.y + 30)
-  doc.text(
-    `Drawing: ${composition.drawingNumber}`,
-    title.x + title.width - sheetNumberWidth - drawingRefWidth + 10,
-    title.y + 16,
-  )
-  doc.text(
-    composition.drawingLabel,
-    title.x + title.width - sheetNumberWidth - drawingRefWidth + 10,
-    title.y + 30,
-  )
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.text(composition.sheetNumber, title.x + title.width - sheetNumberWidth + 10, title.y + 25)
-  doc.setFontSize(7)
-  doc.text(
-    composition.sheetTitle.toLocaleUpperCase(),
-    title.x + title.width - sheetNumberWidth + 10,
-    title.y + 36,
-    {
-      maxWidth: sheetNumberWidth - 20,
-    },
-  )
-}
-
-function drawNorthArrow(doc: FloorplanPdfDocument, x: number, y: number) {
-  doc.setDrawColor('#111827')
-  doc.setFillColor('#111827')
-  doc.setLineWidth(0.6)
-  doc.triangle(x, y - 24, x - 6, y - 5, x + 6, y - 5, 'F')
-  doc.line(x, y - 5, x, y + 14)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text('N', x, y - 28, { align: 'center' })
-}
-
-export function resolveGraphicScaleLength(
-  scale: DrawingSheetScale,
-  maxWidthPt: number,
-): { modelMeters: number; widthPt: number; label: string } {
-  const pointsPerMeter = pointsPerMeterForDrawingScale(scale)
-  const maxMeters = Math.max(0.1, maxWidthPt / pointsPerMeter)
-  const candidates = [50, 20, 10, 5, 2, 1, 0.5, 0.25]
-  const modelMeters = candidates.find((candidate) => candidate <= maxMeters) ?? 0.1
-  return {
-    modelMeters,
-    widthPt: modelMeters * pointsPerMeter,
-    label: `${modelMeters >= 1 ? modelMeters : modelMeters * 1000}${modelMeters >= 1 ? ' m' : ' mm'}`,
-  }
-}
-
-function drawGraphicScale(
-  doc: FloorplanPdfDocument,
-  x: number,
-  y: number,
-  options: { scale: DrawingSheetScale; maxWidth: number },
-) {
-  const resolved = resolveGraphicScaleLength(options.scale, options.maxWidth)
-  const half = resolved.widthPt / 2
-  doc.setDrawColor('#111827')
-  doc.setFillColor('#111827')
-  doc.setLineWidth(0.6)
-  doc.rect(x, y, half, 5, 'F')
-  doc.rect(x + half, y, half, 5)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.text('0', x, y + 15, { align: 'center' })
-  doc.text(resolved.label, x + resolved.widthPt, y + 15, { align: 'center' })
-  doc.text(formatDrawingScaleLabel(options.scale), x + resolved.widthPt / 2, y - 4, {
-    align: 'center',
-  })
-}
-
-function drawSheetSidePanel(
-  doc: FloorplanPdfDocument,
-  panel: SheetExportLayout['sidePanel'],
-  composition: SheetComposition,
-  schedules: readonly FloorplanSchedule[],
-): ScheduleDrawResult {
-  let y = panel.y + 12
-  const left = panel.x + 8
-  const width = panel.width - 16
-  const bottom = panel.y + panel.height - 8
-
-  y = drawSheetNotes(doc, 'GENERAL NOTES', composition.generalNotes, left, y, width, bottom)
-  y = drawKeyedNoteLegend(doc, composition, left, y + 8, width, bottom)
-  return drawInlineSchedules(doc, schedules, left, y + 8, width, bottom)
-}
-
-function drawSheetNotes(
-  doc: FloorplanPdfDocument,
-  title: string,
-  notes: readonly { number: number; text: string }[],
-  x: number,
-  y: number,
-  width: number,
-  bottom: number,
-) {
-  if (notes.length === 0) return y
-  doc.setTextColor('#111827')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.text(title, x, y)
-  y += 9
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  for (const note of notes) {
-    const lines = doc.splitTextToSize(`${note.number}. ${note.text}`, width)
-    if (y + lines.length * 8 > bottom) break
-    doc.text(lines, x, y)
-    y += lines.length * 8 + 3
-  }
-  return y
-}
-
-function drawKeyedNoteLegend(
-  doc: FloorplanPdfDocument,
-  composition: SheetComposition,
-  x: number,
-  y: number,
-  width: number,
-  bottom: number,
-) {
-  if (composition.keyedNoteLegend.length === 0) return y
-  doc.setTextColor('#111827')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.text('KEYED NOTES', x, y)
-  y += 9
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  for (const note of composition.keyedNoteLegend) {
-    const lines = doc.splitTextToSize(`${note.key}. ${note.text}`, width)
-    if (y + lines.length * 8 > bottom) break
-    doc.text(lines, x, y)
-    y += lines.length * 8 + 3
-  }
-  return y
-}
-
-function drawInlineSchedules(
-  doc: FloorplanPdfDocument,
-  schedules: readonly FloorplanSchedule[],
-  x: number,
-  y: number,
-  width: number,
-  bottom: number,
-): ScheduleDrawResult {
-  const overflowSchedules: FloorplanSchedule[] = []
-  let drawnSchedules = 0
-  for (const schedule of schedules) {
-    const rowHeight = 12
-    const tableHeight = 18 + rowHeight * Math.min(schedule.rows.length, 6)
-    if (y + tableHeight > bottom) {
-      overflowSchedules.push(schedule)
-      continue
-    }
-    drawnSchedules++
-    doc.setTextColor('#111827')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.text(schedule.title.toLocaleUpperCase(), x, y)
-    y += 10
-    const widths = scheduleColumnWidths(schedule, width)
-    doc.setFillColor('#334155')
-    doc.rect(x, y, width, rowHeight, 'F')
-    doc.setTextColor('#ffffff')
-    doc.setFontSize(6)
-    let colX = x
-    schedule.columns.forEach((column, index) => {
-      doc.text(column.label, colX + 2, y + 8, { maxWidth: Math.max(0, (widths[index] ?? 0) - 4) })
-      colX += widths[index] ?? 0
-    })
-    y += rowHeight
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor('#111827')
-    const inlineRows = schedule.rows.slice(0, 6)
-    for (const row of inlineRows) {
-      colX = x
-      schedule.columns.forEach((column, index) => {
-        const colWidth = widths[index] ?? 0
-        doc.text(
-          truncatePdfText(doc, row.cells[column.key] ?? '', Math.max(0, colWidth - 4)),
-          colX + 2,
-          y + 8,
-        )
-        colX += colWidth
-      })
-      doc.setDrawColor('#cbd5e1')
-      doc.rect(x, y, width, rowHeight)
-      y += rowHeight
-    }
-    if (schedule.rows.length > inlineRows.length) {
-      overflowSchedules.push({
-        ...schedule,
-        title: `${schedule.title} Continued`,
-        rows: schedule.rows.slice(inlineRows.length),
-      })
-    }
-    y += 12
-  }
-  return { drawnSchedules, overflowSchedules }
-}
-
 type MountedFloorplan = {
   svg: SVGSVGElement
   annotationLabelShifts: readonly FloorplanPoint[]
@@ -1241,9 +546,10 @@ export function resolveFloorplanScreenUnitsPerPixel(
 }
 
 export function resolveFloorplanExportAnnotationVisibility(
+  mode: FloorplanMode,
   liveVisibility: FloorplanAnnotationVisibility,
 ): FloorplanAnnotationVisibility {
-  return { ...liveVisibility }
+  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, { target: 'export' })
 }
 
 export function resolveFloorplanExportRotationDeg(
@@ -1255,39 +561,6 @@ export function resolveFloorplanExportRotationDeg(
       ? 0
       : (navigationAzimuth * 180) / Math.PI - FLOORPLAN_VIEW_ROTATION_DEG
   return FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - (buildingRotationY * 180) / Math.PI
-}
-
-export function pointsPerMeterForDrawingScale(scale: DrawingSheetScale): number {
-  if (scale.startsWith('1:')) {
-    const denominator = Number.parseFloat(scale.slice(2))
-    if (Number.isFinite(denominator) && denominator > 0) {
-      return POINTS_PER_INCH / METERS_PER_INCH / denominator
-    }
-  }
-
-  const imperial = scale.match(/^(.+)"=1'-0"$/)
-  if (imperial) {
-    const paperInchesPerFoot = parseImperialPaperInches(imperial[1] ?? '')
-    if (paperInchesPerFoot > 0) {
-      return (paperInchesPerFoot / 12) * (POINTS_PER_INCH / METERS_PER_INCH)
-    }
-  }
-
-  return pointsPerMeterForDrawingScale('1/4"=1\'-0"')
-}
-
-function parseImperialPaperInches(value: string): number {
-  const trimmed = value.trim()
-  if (trimmed.includes('/')) {
-    const [numerator, denominator] = trimmed.split('/').map((part) => Number.parseFloat(part))
-    return numerator && denominator ? numerator / denominator : 0
-  }
-  const parsed = Number.parseFloat(trimmed)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function formatDrawingScaleLabel(scale: DrawingSheetScale): string {
-  return scale.replace('=', ' = ')
 }
 
 async function mountFloorplanSvg(
@@ -1456,6 +729,7 @@ function collectFloorplanGeometry(
   metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
+  wallDimensionReference: FloorplanWallDimensionReference,
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -1521,7 +795,12 @@ function collectFloorplanGeometry(
     const baseContext = buildContext(
       node,
       nodes,
-      resolveFloorplanExportViewState(unit, metricNotation),
+      resolveFloorplanExportViewState(
+        unit,
+        metricNotation,
+        wallDimensionReference,
+        annotationVisibility.automaticDimensions,
+      ),
       levelData,
     )
     const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext

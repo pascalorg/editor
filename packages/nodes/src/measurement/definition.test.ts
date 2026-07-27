@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { getFloorplanNodeExtension } from '@pascal-app/editor'
 import { measurementDefinition } from './definition'
 
 describe('measurementDefinition', () => {
@@ -21,6 +22,9 @@ describe('measurementDefinition', () => {
     )
     expect(measurementDefinition.presentation?.actionMenu).toBe(false)
     expect(measurementDefinition.parametrics).toBeUndefined()
+    expect(
+      getFloorplanNodeExtension(measurementDefinition)?.referencedSelectionAnnotationRole,
+    ).toBe('measurement')
     expect(measurementDefinition.toolHints?.map((hint) => hint.key)).toEqual([
       'Left click',
       'Enter',
