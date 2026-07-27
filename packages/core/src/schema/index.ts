@@ -101,6 +101,11 @@ export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export { GutterNode, GutterOutlet } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
+export {
+  ImportedMeshNode,
+  ImportedMeshPrimitive,
+  type ImportedMeshPrimitive as ImportedMeshPrimitiveValue,
+} from './nodes/imported-mesh'
 export type {
   AnimationEffect,
   Asset,
