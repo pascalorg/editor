@@ -5,7 +5,7 @@ import {
   filterFloorplanAnnotationGeometry,
   normalizeFloorplanAnnotationVisibility,
 } from './annotation-visibility'
-import { floorplanGeometryMetadata } from './floorplan-extension'
+import { floorplanGeometryMetadata, withFloorplanGeometryMetadata } from './floorplan-extension'
 
 describe('floor-plan annotation visibility', () => {
   test('fills missing persisted categories with visible defaults', () => {
@@ -134,6 +134,84 @@ describe('floor-plan annotation visibility', () => {
         measurements: false,
       }),
     ).toBeNull()
+  })
+
+  test('keeps a contextual dimension when automatic dimensions are hidden', () => {
+    const contextualDimension = {
+      kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'contextual-dimension' }),
+      children: [
+        {
+          kind: 'dimension',
+          start: [0, 0],
+          end: [2, 0],
+          offsetNormal: [0, 1],
+          offsetDistance: 0.3,
+          extensionOvershoot: 0.08,
+          text: '2m',
+        },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(
+      filterFloorplanAnnotationGeometry(contextualDimension, {
+        ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        automaticDimensions: false,
+        contextualDimensions: true,
+      }),
+    ).toEqual(contextualDimension)
+  })
+
+  test('removes a nested automatic wall string beside a contextual dimension', () => {
+    const wallBody = {
+      kind: 'polygon',
+      points: [
+        [0, 0],
+        [0.2, 0],
+        [0.2, 6],
+        [0, 6],
+      ],
+    } satisfies FloorplanGeometry
+    const automaticDimension = {
+      kind: 'dimension-string',
+      segments: [{ start: [0, 0], end: [0, 18], text: '18m' }],
+      offsetNormal: [1, 0],
+      offsetDistance: 0.55,
+      extensionOvershoot: 0.12,
+    } satisfies FloorplanGeometry
+    const contextualDimension = withFloorplanGeometryMetadata(
+      {
+        kind: 'dimension',
+        start: [0, 0],
+        end: [0, 6],
+        offsetNormal: [1, 0],
+        offsetDistance: 0.34,
+        extensionOvershoot: 0.08,
+        text: '6m',
+      } satisfies FloorplanGeometry,
+      { annotationRole: 'contextual-dimension' },
+    )
+    const geometry = {
+      kind: 'group',
+      children: [
+        {
+          kind: 'group',
+          children: [wallBody, automaticDimension],
+        },
+        contextualDimension,
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(
+      filterFloorplanAnnotationGeometry(geometry, {
+        ...DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        automaticDimensions: false,
+        contextualDimensions: true,
+      }),
+    ).toEqual({
+      kind: 'group',
+      children: [{ kind: 'group', children: [wallBody] }, contextualDimension],
+    })
   })
 
   test('hides structural grids and only the center marks within column geometry', () => {

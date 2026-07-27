@@ -33,6 +33,7 @@ import {
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
 import useEditor from '../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../store/use-floorplan-annotation-visibility'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import {
   type FloorplanAnnotationVisibility,
   filterFloorplanAnnotationGeometry,
@@ -41,9 +42,15 @@ import { resolveNodeForDrawingType } from './drawing-coordination'
 import {
   type FloorplanMetricNotation,
   type FloorplanSchedule,
+  type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
   readFloorplanGeometryMetadata,
 } from './floorplan-extension'
+import {
+  type FloorplanMode,
+  resolveFloorplanAnnotationVisibility,
+  resolveFloorplanWallDimensionReference,
+} from './floorplan-mode'
 import { createFloorplanPdfDocument, type FloorplanPdfDocument } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
@@ -111,8 +118,16 @@ const NEUTRAL_VIEW_STATE = {
 export function resolveFloorplanExportViewState(
   unit: 'metric' | 'imperial',
   metricNotation: FloorplanMetricNotation,
+  wallDimensionReference?: FloorplanWallDimensionReference,
+  automaticDimensions = true,
 ) {
-  return { ...NEUTRAL_VIEW_STATE, unit, metricNotation }
+  return {
+    ...NEUTRAL_VIEW_STATE,
+    automaticDimensions,
+    unit,
+    metricNotation,
+    wallDimensionReference,
+  }
 }
 
 type ExportLevel = { id: AnyNodeId; label: string }
@@ -198,8 +213,15 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
+  const floorplanMode = useFloorplanMode.getState().mode
+  const expertAnnotationState = useFloorplanAnnotationVisibility.getState()
   const annotationVisibility = resolveFloorplanExportAnnotationVisibility(
-    useFloorplanAnnotationVisibility.getState().visibility,
+    floorplanMode,
+    expertAnnotationState.visibility,
+  )
+  const wallDimensionReference = resolveFloorplanWallDimensionReference(
+    floorplanMode,
+    expertAnnotationState.wallDimensionReference,
   )
   const navigationAzimuth = useEditor.getState().navigationSyncPose?.azimuth
   const drawingType = useDrawingView.getState().drawingType
@@ -239,6 +261,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         metricNotation,
         annotationVisibility,
         drawingType,
+        wallDimensionReference,
       )
       const schedules = collectFloorplanSchedules(nodes, level.id, unit)
       if (geometries.length === 0 && schedules.length === 0) continue
@@ -1241,9 +1264,10 @@ export function resolveFloorplanScreenUnitsPerPixel(
 }
 
 export function resolveFloorplanExportAnnotationVisibility(
+  mode: FloorplanMode,
   liveVisibility: FloorplanAnnotationVisibility,
 ): FloorplanAnnotationVisibility {
-  return { ...liveVisibility }
+  return resolveFloorplanAnnotationVisibility(mode, liveVisibility, { target: 'export' })
 }
 
 export function resolveFloorplanExportRotationDeg(
@@ -1456,6 +1480,7 @@ function collectFloorplanGeometry(
   metricNotation: FloorplanMetricNotation,
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
+  wallDimensionReference: FloorplanWallDimensionReference,
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -1521,7 +1546,12 @@ function collectFloorplanGeometry(
     const baseContext = buildContext(
       node,
       nodes,
-      resolveFloorplanExportViewState(unit, metricNotation),
+      resolveFloorplanExportViewState(
+        unit,
+        metricNotation,
+        wallDimensionReference,
+        annotationVisibility.automaticDimensions,
+      ),
       levelData,
     )
     const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext

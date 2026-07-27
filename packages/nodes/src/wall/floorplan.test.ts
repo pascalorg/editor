@@ -31,6 +31,7 @@ function context(
   selected = false,
   metricNotation: 'meters' | 'millimeters' = 'meters',
   wallDimensionReference: 'finished-faces' | 'centerline' | 'stud-faces' = 'finished-faces',
+  automaticDimensions = true,
 ): GeometryContext {
   return {
     resolve: () => undefined,
@@ -46,6 +47,7 @@ function context(
       palette,
     },
     extensions: createFloorplanContextExtensions({
+      automaticDimensions,
       metricNotation,
       purpose,
       wallDimensionReference,
@@ -113,6 +115,24 @@ describe('buildWallFloorplan render purpose', () => {
       : []
 
     expect(texts).toContain('4000')
+  })
+
+  test('does not construct automatic wall dimensions when presentation disables them', () => {
+    const geometry = buildWallFloorplan(
+      wall,
+      context('edit', false, 'meters', 'finished-faces', false),
+    )
+    const entries = geometry ? flatten(geometry) : []
+
+    expect(
+      entries.some(
+        (entry) =>
+          entry.kind === 'dimension' ||
+          entry.kind === 'dimension-string' ||
+          entry.kind === 'dimension-label',
+      ),
+    ).toBe(false)
+    expect(entries.some((entry) => entry.kind === 'polygon')).toBe(true)
   })
 
   test('keeps standalone wall witnesses on the stud face in every intersection mode', () => {

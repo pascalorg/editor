@@ -5,7 +5,11 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata, withFloorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  readFloorplanContext,
+  readFloorplanGeometryMetadata,
+  withFloorplanGeometryMetadata,
+} from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -721,7 +725,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   // Placement-measurement dimensions — distances to adjacent openings
   // (or wall ends) on each side. Only visible while actively moving
   // (the user clicked Move or grabbed the orange dot).
-  if (view?.moving) {
+  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }

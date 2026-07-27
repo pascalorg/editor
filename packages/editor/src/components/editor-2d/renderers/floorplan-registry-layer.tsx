@@ -58,7 +58,13 @@ import {
   createFloorplanContextExtensions,
   type FloorplanWallDimensionReference,
   getFloorplanNodeExtension,
+  withFloorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
+import {
+  type FloorplanMode,
+  resolveFloorplanAnnotationVisibility,
+  resolveFloorplanWallDimensionReference,
+} from '../../../lib/floorplan/floorplan-mode'
 import { clientToPlan } from '../../../lib/floorplan/plan-coords'
 import {
   type ActiveInteractionScope,
@@ -77,6 +83,7 @@ import useDirectManipulationFeedback from '../../../store/use-direct-manipulatio
 import useDrawingView from '../../../store/use-drawing-view'
 import useEditor from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
+import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useFloorplanPreflight from '../../../store/use-floorplan-preflight'
 import useInteractionScope, {
   getMovingNode,
@@ -313,6 +320,7 @@ type FloorplanEntryDescriptor = {
 }
 
 type NodeDeps = {
+  automaticDimensions: boolean
   node: AnyNode
   live: LiveTransform | undefined
   unit: 'metric' | 'imperial'
@@ -415,11 +423,6 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
-  const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
-  const hoveredId = useViewer((s) => s.hoveredId)
-  const activeRotateNodeId = useDirectManipulationFeedback((s) => s.activeRotateNodeId)
-  const setHoveredId = useViewer((s) => s.setHoveredId)
   const setSelection = useViewer((s) => s.setSelection)
   const nodes = useScene((s) => s.nodes)
   const installedPlugins = useScene((s) => s.installedPlugins)
@@ -491,25 +494,14 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const drawingType = useDrawingView((s) => s.drawingType)
   const annotationVisibility = useFloorplanAnnotationVisibility((s) => s.visibility)
   const wallDimensionReference = useFloorplanAnnotationVisibility((s) => s.wallDimensionReference)
+  const floorplanMode = useFloorplanMode((s) => s.mode)
+  const effectiveWallDimensionReference = resolveFloorplanWallDimensionReference(
+    floorplanMode,
+    wallDimensionReference,
+  )
   // Elevator builders read runtime state imperatively, so entries include this
   // rare-changing ref in their cache deps.
   const interactiveElevators = useInteractive((s) => s.elevators)
-
-  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
-  // Marquee preview selection — matches the legacy `highlightedIdSet` use
-  // (filter-while-marquee), surfaces selection chrome without keyboard focus.
-  const highlightedIdSet = useMemo(() => new Set(previewSelectedIds), [previewSelectedIds])
-  // Multi-selection: members show highlight only (per-node edit chrome hidden)
-  // and transformable members advertise the drag-to-move gesture.
-  const isMultiSelect = selectedIds.length > 1
-  const groupParticipantIdSet = useMemo(() => {
-    if (selectedIds.length < 2 || !levelId) return null
-    return new Set(
-      selectedIds.filter(
-        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
-      ),
-    )
-  }, [selectedIds, levelId, nodes])
 
   // Interactive state lives in refs; only the visible feedback bits go
   // into React state to keep re-renders cheap during drag.
@@ -1381,13 +1373,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         {entries.map((entry) => (
           <FloorplanRegistryEntry
             activeDragId={handleIdForNode(activeDragId, entry.id)}
-            activeRotateNodeId={activeRotateNodeId === entry.id ? activeRotateNodeId : null}
             annotationVisibility={annotationVisibility}
+            floorplanMode={floorplanMode}
             floorplanVisible={floorplanVisible}
             geometryCacheRef={geometryCacheRef}
             hatchPatternId={renderCtx?.hatchPatternId}
-            highlighted={highlightedIdSet.has(entry.id)}
-            hovered={hoveredId === entry.id}
             hoveredHandleId={handleIdForNode(hoveredHandleId, entry.id)}
             interactiveElevators={interactiveElevators}
             isMarqueeSelectionActive={isMarqueeSelectionActive}
@@ -1404,19 +1394,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onHandleHoverChange={setHoveredHandleId}
             onHandleDoubleClick={commitAffordanceAction}
             onHandlePointerDown={startAffordanceDrag}
-            onHoveredIdChange={setHoveredId}
             palette={palette}
             pass="base"
             sceneRotationDeg={sceneRotationDeg}
-            selected={selectedIdSet.has(entry.id)}
-            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
-            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
             metricNotation={metricNotation}
-            wallDimensionReference={wallDimensionReference}
+            wallDimensionReference={effectiveWallDimensionReference}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1433,13 +1419,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         {entries.map((entry) => (
           <FloorplanRegistryEntry
             activeDragId={handleIdForNode(activeDragId, entry.id)}
-            activeRotateNodeId={activeRotateNodeId === entry.id ? activeRotateNodeId : null}
             annotationVisibility={annotationVisibility}
+            floorplanMode={floorplanMode}
             floorplanVisible={floorplanVisible}
             geometryCacheRef={geometryCacheRef}
             hatchPatternId={renderCtx?.hatchPatternId}
-            highlighted={highlightedIdSet.has(entry.id)}
-            hovered={hoveredId === entry.id}
             hoveredHandleId={handleIdForNode(hoveredHandleId, entry.id)}
             interactiveElevators={interactiveElevators}
             isMarqueeSelectionActive={isMarqueeSelectionActive}
@@ -1456,19 +1440,15 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             onHandleHoverChange={setHoveredHandleId}
             onHandleDoubleClick={commitAffordanceAction}
             onHandlePointerDown={startAffordanceDrag}
-            onHoveredIdChange={setHoveredId}
             palette={palette}
             pass="overlay"
             sceneRotationDeg={sceneRotationDeg}
-            selected={selectedIdSet.has(entry.id)}
-            suppressHandles={isMultiSelect && selectedIdSet.has(entry.id)}
-            groupMoveCursor={groupParticipantIdSet?.has(entry.id) ?? false}
             setMovingNode={setMovingNode}
             setMovingNodeOrigin={setMovingNodeOrigin}
             siblingEpoch={entry.dependsOnSiblingInputs ? (siblingEpochs.get(entry.id) ?? 0) : 0}
             unit={unit}
             metricNotation={metricNotation}
-            wallDimensionReference={wallDimensionReference}
+            wallDimensionReference={effectiveWallDimensionReference}
             visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
             ctxOverrides={entry.ctxOverrides}
           />
@@ -1511,6 +1491,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
   const wallDimensionReference = useFloorplanAnnotationVisibility(
     (state) => state.wallDimensionReference,
   )
+  const floorplanMode = useFloorplanMode((state) => state.mode)
   const layoutInputs = useMemo(
     () => ({
       annotationVisibility,
@@ -1519,6 +1500,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       interactionIdle,
       settledLayoutEpoch,
       wallDimensionReference,
+      floorplanMode,
     }),
     [
       annotationVisibility,
@@ -1527,6 +1509,7 @@ function FloorplanAnnotationLayoutResolver({ active }: { active: boolean }) {
       interactionIdle,
       settledLayoutEpoch,
       wallDimensionReference,
+      floorplanMode,
     ],
   )
   const setAnnotationLayoutOverride = useDrawingView((state) => state.setAnnotationLayoutOverride)
@@ -1762,14 +1745,12 @@ function readFloorplanAnnotationLayoutOffset(label: SVGGElement) {
 
 type FloorplanRegistryEntryProps = {
   activeDragId: string | null
-  activeRotateNodeId: AnyNodeId | null
   annotationVisibility: FloorplanAnnotationVisibility
+  floorplanMode: FloorplanMode
   ctxOverrides: FloorplanContextOverrides | undefined
   floorplanVisible: boolean
   geometryCacheRef: { current: Map<string, CacheEntry> }
   hatchPatternId: string | undefined
-  highlighted: boolean
-  hovered: boolean
   hoveredHandleId: string | null
   interactiveElevators: unknown
   isMarqueeSelectionActive: boolean
@@ -1779,10 +1760,6 @@ type FloorplanRegistryEntryProps = {
   node: AnyNode
   nodeId: AnyNodeId
   nodes: Record<string, AnyNode>
-  /** Selected member of a multi-selection: hide its per-node edit chrome. */
-  suppressHandles: boolean
-  /** Transformable member of a multi-selection: advertise drag-to-move. */
-  groupMoveCursor: boolean
   onClickStop: (event: React.MouseEvent<SVGGElement>) => void
   onEntryPointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => void
   onGroupMovePointerDown: (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>) => boolean
@@ -1801,11 +1778,9 @@ type FloorplanRegistryEntryProps = {
     event: ReactPointerEvent<SVGGElement>,
     rotationPivot?: FloorplanPoint,
   ) => void
-  onHoveredIdChange: (id: AnyNodeId | null) => void
   palette: FloorplanPalette | undefined
   pass: FloorplanRenderPass
   sceneRotationDeg: number
-  selected: boolean
   setMovingNode: ReturnType<typeof useEditor.getState>['setMovingNode']
   setMovingNodeOrigin: ReturnType<typeof useEditor.getState>['setMovingNodeOrigin']
   siblingEpoch: number
@@ -1817,14 +1792,12 @@ type FloorplanRegistryEntryProps = {
 
 const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   activeDragId,
-  activeRotateNodeId,
   annotationVisibility,
+  floorplanMode,
   ctxOverrides,
   floorplanVisible,
   geometryCacheRef,
   hatchPatternId,
-  highlighted,
-  hovered,
   hoveredHandleId,
   interactiveElevators,
   isMarqueeSelectionActive,
@@ -1834,19 +1807,15 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   node,
   nodeId,
   nodes,
-  suppressHandles,
-  groupMoveCursor,
   onClickStop,
   onEntryPointerDown,
   onGroupMovePointerDown,
   onHandleHoverChange,
   onHandleDoubleClick,
   onHandlePointerDown,
-  onHoveredIdChange,
   palette,
   pass,
   sceneRotationDeg,
-  selected,
   setMovingNode,
   setMovingNodeOrigin,
   siblingEpoch,
@@ -1855,6 +1824,27 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   wallDimensionReference,
   visibilityRootId,
 }: FloorplanRegistryEntryProps): React.ReactElement | null {
+  const selected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
+  const highlighted = useViewer((state) => state.previewSelectedIds.includes(nodeId))
+  const suppressHandles = useViewer(
+    (state) =>
+      state.selection.selectedIds.length > 1 && state.selection.selectedIds.includes(nodeId),
+  )
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
+  const selectionProxyId = resolveSelectionProxyId(
+    node,
+    nodes as Record<string, AnyNode | undefined>,
+  )
+  const hovered = useViewer((state) => state.hoveredId === selectionProxyId)
+  const setHoveredId = useViewer((state) => state.setHoveredId)
+  const referencedBySelection = useViewer((state) =>
+    isFloorplanEntryReferencedBySelection(node, new Set(state.selection.selectedIds)),
+  )
+  const activeRotateNodeId = useDirectManipulationFeedback((state) =>
+    state.activeRotateNodeId === nodeId ? nodeId : null,
+  )
+  const groupMoveCursor =
+    suppressHandles && classifyParticipant(node, selectedLevelId, nodes) !== null
   const live = useLiveTransforms((s) => (floorplanVisible ? s.transforms.get(nodeId) : undefined))
   const liveOverride = useLiveNodeOverrides((s) =>
     floorplanVisible ? s.overrides.get(nodeId) : undefined,
@@ -1862,6 +1852,16 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const liveOverrides = floorplanVisible
     ? useLiveNodeOverrides.getState().overrides
     : EMPTY_LIVE_OVERRIDES
+  const presentationVisibility = resolveFloorplanAnnotationVisibility(
+    floorplanMode,
+    annotationVisibility,
+    {
+      nodeType: node.type,
+      referencedBySelection,
+      selected,
+      target: 'editor',
+    },
+  )
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<SVGGElement>) => onEntryPointerDown(nodeId, event),
@@ -1871,16 +1871,16 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   // Mirror the sidebar tree nodes' hover wiring — `useViewer.hoveredId` drives
   // the highlight halo in 3D as well as registry floor-plan hover strokes.
   const handlePointerEnter = useCallback(() => {
-    const node = useScene.getState().nodes[nodeId]
-    onHoveredIdChange(
-      node
+    const currentNode = useScene.getState().nodes[nodeId]
+    setHoveredId(
+      currentNode
         ? resolveSelectionProxyId(
-            node,
+            currentNode,
             useScene.getState().nodes as Record<string, AnyNode | undefined>,
           )
         : nodeId,
     )
-  }, [nodeId, onHoveredIdChange])
+  }, [nodeId, setHoveredId])
 
   const handlePointerLeave = useCallback(() => {
     const node = useScene.getState().nodes[nodeId]
@@ -1890,8 +1890,8 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
           useScene.getState().nodes as Record<string, AnyNode | undefined>,
         )
       : nodeId
-    if (useViewer.getState().hoveredId === targetId) onHoveredIdChange(null)
-  }, [nodeId, onHoveredIdChange])
+    if (useViewer.getState().hoveredId === targetId) setHoveredId(null)
+  }, [nodeId, setHoveredId])
 
   const handleHandlePointerDown = useCallback(
     (
@@ -1940,6 +1940,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   )
 
   const cacheEntry = buildFloorplanEntryGeometry({
+    automaticDimensions: presentationVisibility.automaticDimensions,
     ctxOverrides,
     geometryCache: geometryCacheRef.current,
     highlighted,
@@ -1964,7 +1965,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   })
   const rawGeometry = cacheEntry ? (pass === 'base' ? cacheEntry.base : cacheEntry.overlay) : null
   const visibleGeometry = rawGeometry
-    ? filterFloorplanAnnotationGeometry(rawGeometry, annotationVisibility)
+    ? filterFloorplanAnnotationGeometry(rawGeometry, presentationVisibility)
     : null
   // Multi-selection shows highlight only: strip this member's edit handles /
   // dimension chrome (all of which live in the overlay pass) while keeping
@@ -2008,6 +2009,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
 }, shallowPropsAreEqual)
 
 type BuildFloorplanEntryGeometryArgs = {
+  automaticDimensions: boolean
   ctxOverrides: FloorplanContextOverrides | undefined
   geometryCache: Map<string, CacheEntry>
   highlighted: boolean
@@ -2052,7 +2054,17 @@ export function collectFloorplanDependencyNodes(
   })
 }
 
+function isFloorplanEntryReferencedBySelection(
+  node: AnyNode,
+  selectedIds: ReadonlySet<string>,
+): boolean {
+  if (node.type !== 'measurement' || selectedIds.size === 0) return false
+  const dependencyIds = nodeRegistry.get(node.type)?.floorplanDependencies?.(node) ?? []
+  return dependencyIds.some((id) => selectedIds.has(id))
+}
+
 function buildFloorplanEntryGeometry({
+  automaticDimensions,
   ctxOverrides,
   geometryCache,
   highlighted,
@@ -2094,6 +2106,7 @@ function buildFloorplanEntryGeometry({
   )
   const dependencyNodes = collectFloorplanDependencyNodes(def, node, nodes, liveOverrides)
   const deps: NodeDeps = {
+    automaticDimensions,
     node,
     live,
     unit,
@@ -2174,6 +2187,7 @@ function buildFloorplanEntryGeometry({
     levelDataCache,
   )
   const viewState = {
+    automaticDimensions,
     selected,
     unit,
     metricNotation,
@@ -2197,6 +2211,7 @@ function buildFloorplanEntryGeometry({
         parent: ctxOverrides.parent,
         levelData,
         extensions: createFloorplanContextExtensions({
+          automaticDimensions,
           metricNotation,
           purpose: 'edit',
           wallDimensionReference,
@@ -2216,10 +2231,20 @@ function buildFloorplanEntryGeometry({
         ...buildContext(effectiveNode, contextNodes, viewState, levelData),
         resolve: resolveContextNode,
       }
-  const geometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
+  const modelGeometry = (builder as (n: AnyNode, c: GeometryContext) => FloorplanGeometry | null)(
     effectiveNode,
     ctx,
   )
+  const contextualGeometry = selected
+    ? (getFloorplanNodeExtension(def)?.contextualDimensions?.(effectiveNode, ctx) ?? null)
+    : null
+  const taggedContextualGeometry = withFloorplanGeometryMetadata(contextualGeometry, {
+    annotationRole: 'contextual-dimension',
+  })
+  const geometry =
+    modelGeometry && taggedContextualGeometry
+      ? { kind: 'group' as const, children: [modelGeometry, taggedContextualGeometry] }
+      : (modelGeometry ?? taggedContextualGeometry)
   const { base, overlay } = geometry
     ? splitFloorplanOverlay(geometry)
     : { base: null, overlay: null }
@@ -3117,6 +3142,7 @@ export function buildContext(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
   viewState: {
+    automaticDimensions?: boolean
     selected: boolean
     unit: 'metric' | 'imperial'
     metricNotation?: 'meters' | 'millimeters'
@@ -3162,6 +3188,7 @@ export function buildContext(
     parent,
     levelData,
     extensions: createFloorplanContextExtensions({
+      automaticDimensions: viewState.automaticDimensions,
       metricNotation: viewState.metricNotation ?? 'meters',
       purpose: viewState.purpose ?? 'edit',
       wallDimensionReference: viewState.wallDimensionReference,
@@ -3282,12 +3309,10 @@ export function splitFloorplanOverlay(g: FloorplanGeometry): {
       if (split.overlay) overlayChildren.push(split.overlay)
     }
     const base: FloorplanGeometry | null =
-      baseChildren.length > 0
-        ? { kind: 'group', children: baseChildren, transform: g.transform }
-        : null
+      baseChildren.length > 0 ? { ...g, children: baseChildren, transform: g.transform } : null
     const overlay: FloorplanGeometry | null =
       overlayChildren.length > 0
-        ? { kind: 'group', children: overlayChildren, transform: g.transform }
+        ? { ...g, children: overlayChildren, transform: g.transform }
         : null
     return { base, overlay }
   }
@@ -3428,6 +3453,7 @@ export function computeAffectedSiblingIds(
 
 function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
   const keys: Array<keyof NodeDeps> = [
+    'automaticDimensions',
     'node',
     'live',
     'unit',

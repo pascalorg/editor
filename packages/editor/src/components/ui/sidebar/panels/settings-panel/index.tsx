@@ -25,6 +25,7 @@ import {
 } from './../../../../../components/ui/primitives/dialog'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
+import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
@@ -192,6 +193,7 @@ export function SettingsPanel({
   const exportScene = useViewer((state) => state.exportScene)
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
+  const floorplanMode = useFloorplanMode((state) => state.mode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const sceneGraphValue = useMemo(
@@ -399,7 +401,10 @@ export function SettingsPanel({
         </div>
 
         <div className="space-y-2">
-          <div className="font-medium text-muted-foreground text-xs">Floor plan</div>
+          <div className="flex items-center justify-between font-medium text-muted-foreground text-xs">
+            <span>Floor plan</span>
+            <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
+          </div>
           <Button
             className="w-full justify-start gap-2"
             onClick={() => exportFloorplanPdf('full')}

@@ -64,29 +64,40 @@ export function computeWallFloorplanLevelData({
   nodes: Record<string, AnyNode>
 }): WallFloorplanLevelData {
   const walls = siblings.map(exaggerateWallThickness)
+  const constructionDimensionsByReference = {} as Record<
+    WallDimensionReference,
+    WallConstructionDimensionPlan
+  >
+  for (const reference of WALL_DIMENSION_REFERENCES) {
+    let cached: WallConstructionDimensionPlan | undefined
+    Object.defineProperty(constructionDimensionsByReference, reference, {
+      enumerable: true,
+      get: () => {
+        if (cached) return cached
+        const datumPolicy =
+          reference === 'finished-faces'
+            ? 'wall-face'
+            : reference === 'stud-faces'
+              ? 'structural-face'
+              : 'centerline'
+        cached = buildLevelWallConstructionDimensionPlan(
+          siblings,
+          nodes,
+          constructionDimensionStandard({
+            datumPolicy,
+            ...(reference === 'finished-faces'
+              ? { intersectionReferencePolicy: 'both-faces' as const }
+              : {}),
+          }),
+        )
+        return cached
+      },
+    })
+  }
   return {
     miters: calculateLevelMiters(walls),
     documentMiters: calculateLevelMiters([...siblings]),
-    constructionDimensionsByReference: {
-      'finished-faces': buildLevelWallConstructionDimensionPlan(
-        siblings,
-        nodes,
-        constructionDimensionStandard({
-          datumPolicy: 'wall-face',
-          intersectionReferencePolicy: 'both-faces',
-        }),
-      ),
-      centerline: buildLevelWallConstructionDimensionPlan(
-        siblings,
-        nodes,
-        constructionDimensionStandard({ datumPolicy: 'centerline' }),
-      ),
-      'stud-faces': buildLevelWallConstructionDimensionPlan(
-        siblings,
-        nodes,
-        constructionDimensionStandard({ datumPolicy: 'structural-face' }),
-      ),
-    },
+    constructionDimensionsByReference,
   }
 }
 
@@ -107,7 +118,8 @@ export function computeWallFloorplanLevelData({
  * direct builder callers.
  */
 export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): FloorplanGeometry | null {
-  const { metricNotation, purpose, wallDimensionReference } = readFloorplanContext(ctx)
+  const { automaticDimensions, metricNotation, purpose, wallDimensionReference } =
+    readFloorplanContext(ctx)
   const documentMode = purpose === 'document'
   const wallForPurpose = (wall: WallNode) =>
     documentMode ? wallWithModeledAssemblyThickness(wall) : exaggerateWallThickness(wall)
@@ -169,51 +181,53 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
 
   children.push(...buildWallAssemblyFloorplanGraphics(self))
 
-  const dimensionStroke =
-    isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
-  const dimensionStandard = constructionDimensionStandard({
-    datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
-    metricNotation,
-  })
-  const exteriorCornerDimensionStandard = constructionDimensionStandard({
-    datumPolicy: 'structural-face',
-    metricNotation,
-  })
-  if (isCurvedWall(node)) {
-    children.push(
-      ...buildCurvedWallConstructionDimensions(self, {
-        unit: view?.unit ?? 'metric',
-        stroke: dimensionStroke,
-        profile: documentMode ? 'document' : 'editor',
-        standard: exteriorCornerDimensionStandard,
-        siblings: ctx.siblings.filter(
-          (sibling): sibling is AnyNode & WallNode => sibling.type === 'wall',
-        ),
-      }),
-    )
-  } else {
-    const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
-      node.id,
-    )
-    if (planned) {
+  if (automaticDimensions) {
+    const dimensionStroke =
+      isSelected && palette ? palette.selectedStroke : (palette?.measurementStroke ?? '#334155')
+    const dimensionStandard = constructionDimensionStandard({
+      datumPolicy: wallDimensionDatumPolicy(wallDimensionReference),
+      metricNotation,
+    })
+    const exteriorCornerDimensionStandard = constructionDimensionStandard({
+      datumPolicy: 'structural-face',
+      metricNotation,
+    })
+    if (isCurvedWall(node)) {
       children.push(
-        ...renderPlannedConstructionDimensions(
-          planned,
-          view?.unit ?? 'metric',
-          dimensionStroke,
-          documentMode ? 'document' : 'editor',
-          dimensionStandard,
-        ),
-      )
-    } else if (!levelData) {
-      children.push(
-        ...buildWallConstructionDimensions(self, ctx, {
+        ...buildCurvedWallConstructionDimensions(self, {
           unit: view?.unit ?? 'metric',
           stroke: dimensionStroke,
           profile: documentMode ? 'document' : 'editor',
           standard: exteriorCornerDimensionStandard,
+          siblings: ctx.siblings.filter(
+            (sibling): sibling is AnyNode & WallNode => sibling.type === 'wall',
+          ),
         }),
       )
+    } else {
+      const planned = levelData?.constructionDimensionsByReference[wallDimensionReference].get(
+        node.id,
+      )
+      if (planned) {
+        children.push(
+          ...renderPlannedConstructionDimensions(
+            planned,
+            view?.unit ?? 'metric',
+            dimensionStroke,
+            documentMode ? 'document' : 'editor',
+            dimensionStandard,
+          ),
+        )
+      } else if (!levelData) {
+        children.push(
+          ...buildWallConstructionDimensions(self, ctx, {
+            unit: view?.unit ?? 'metric',
+            stroke: dimensionStroke,
+            profile: documentMode ? 'document' : 'editor',
+            standard: exteriorCornerDimensionStandard,
+          }),
+        )
+      }
     }
   }
 

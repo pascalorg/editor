@@ -7,6 +7,7 @@ import type {
   WindowNode as WindowNodeType,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildOpeningContextualDimensions } from '../shared/contextual-floorplan-dimensions'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -171,6 +172,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
+      contextualDimensions: buildOpeningContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },

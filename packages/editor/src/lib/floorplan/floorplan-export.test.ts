@@ -6,6 +6,7 @@ import {
   registerNode,
 } from '@pascal-app/core'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
+import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
   filterFloorplanExportOverlay,
   fitPlanToBox,
@@ -58,6 +59,26 @@ beforeAll(() => {
 })
 
 describe('filterFloorplanExportOverlay', () => {
+  test('preserves annotation metadata while splitting geometry passes', () => {
+    const contextualDimension = {
+      kind: 'group',
+      metadata: floorplanGeometryMetadata({ annotationRole: 'contextual-dimension' }),
+      children: [
+        {
+          kind: 'dimension',
+          start: [0, 0],
+          end: [2, 0],
+          offsetNormal: [0, 1],
+          offsetDistance: 0.3,
+          extensionOvershoot: 0.08,
+          text: '2m',
+        },
+      ],
+    } satisfies FloorplanGeometry
+
+    expect(splitFloorplanOverlay(contextualDimension).overlay).toMatchObject(contextualDimension)
+  })
+
   test('preserves value labels and removes editing handles', () => {
     const label = {
       kind: 'dimension-label',
@@ -242,6 +263,7 @@ describe('floor plan export policy', () => {
   test('exports the same annotation categories that are visible in the live view', () => {
     const liveVisibility = {
       automaticDimensions: true,
+      contextualDimensions: false,
       manualDimensions: false,
       measurements: true,
       openingMarks: true,
@@ -250,7 +272,27 @@ describe('floor plan export policy', () => {
       stairAnnotations: true,
     }
 
-    expect(resolveFloorplanExportAnnotationVisibility(liveVisibility)).toEqual(liveVisibility)
+    expect(resolveFloorplanExportAnnotationVisibility('expert', liveVisibility)).toEqual(
+      liveVisibility,
+    )
+  })
+
+  test('exports only model geometry and room labels in Default', () => {
+    expect(
+      resolveFloorplanExportAnnotationVisibility(
+        'default',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+      ),
+    ).toEqual({
+      automaticDimensions: false,
+      contextualDimensions: false,
+      manualDimensions: false,
+      measurements: false,
+      openingMarks: false,
+      structuralGrids: false,
+      roomLabels: true,
+      stairAnnotations: false,
+    })
   })
 
   test('matches live screen sizing to the fitted export viewport', () => {

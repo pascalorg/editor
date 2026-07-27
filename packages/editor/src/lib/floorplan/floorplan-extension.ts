@@ -16,10 +16,12 @@ export const FLOORPLAN_CONTEXT_EXTENSION_KEY = 'pascal:editor/floorplan'
 
 export type FloorplanRenderPurpose = 'edit' | 'document'
 export type FloorplanMetricNotation = 'meters' | 'millimeters'
+export type FloorplanToolMode = 'default' | 'expert'
 export type FloorplanWallDimensionReference = 'finished-faces' | 'centerline' | 'stud-faces'
 export const DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE = 'finished-faces'
 export type FloorplanAnnotationRole =
   | 'automatic-dimension'
+  | 'contextual-dimension'
   | 'manual-dimension'
   | 'measurement'
   | 'opening-mark'
@@ -56,7 +58,9 @@ export type FloorplanToolContext = {
 
 export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   tool?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
+  availableModes?: readonly FloorplanToolMode[]
   preferredView?: '2d' | '3d'
+  contextualDimensions?: (node: N, ctx: GeometryContext) => FloorplanGeometry | null
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
   }
@@ -85,6 +89,7 @@ type FloorplanGeometryMetadata = {
 }
 
 type FloorplanContextExtension = {
+  automaticDimensions: boolean
   purpose: FloorplanRenderPurpose
   metricNotation: FloorplanMetricNotation
   wallDimensionReference: FloorplanWallDimensionReference
@@ -137,6 +142,7 @@ export function createFloorplanContextExtensions(
 ): Readonly<Record<string, unknown>> {
   return {
     [FLOORPLAN_CONTEXT_EXTENSION_KEY]: {
+      automaticDimensions: values.automaticDimensions !== false,
       purpose: values.purpose === 'document' ? 'document' : 'edit',
       metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
@@ -151,6 +157,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const extension = value as Partial<FloorplanContextExtension>
     return {
+      automaticDimensions: extension.automaticDimensions !== false,
       purpose: extension.purpose === 'document' ? 'document' : 'edit',
       metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
@@ -159,6 +166,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     }
   }
   return {
+    automaticDimensions: true,
     purpose: 'edit',
     metricNotation: 'meters',
     wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,

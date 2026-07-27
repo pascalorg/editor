@@ -4,6 +4,7 @@ import {
   ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildZoneContextualDimensions } from '../shared/contextual-floorplan-dimensions'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneFloorplan } from './floorplan'
 import {
@@ -32,6 +33,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   category: 'site',
   extensions: {
     'pascal:editor/floorplan': {
+      contextualDimensions: buildZoneContextualDimensions,
       schedule: buildRoomFloorplanSchedule,
     } satisfies FloorplanNodeExtension<ZoneNode>,
   },

@@ -3,6 +3,7 @@ import { type FloorplanAnnotationRole, readFloorplanGeometryMetadata } from './f
 
 export type FloorplanAnnotationCategory =
   | 'automaticDimensions'
+  | 'contextualDimensions'
   | 'manualDimensions'
   | 'measurements'
   | 'openingMarks'
@@ -14,6 +15,7 @@ export type FloorplanAnnotationVisibility = Record<FloorplanAnnotationCategory, 
 
 export const DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY: FloorplanAnnotationVisibility = {
   automaticDimensions: true,
+  contextualDimensions: false,
   manualDimensions: true,
   measurements: true,
   openingMarks: true,
@@ -32,6 +34,10 @@ export function normalizeFloorplanAnnotationVisibility(
       typeof persisted.automaticDimensions === 'boolean'
         ? persisted.automaticDimensions
         : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.automaticDimensions,
+    contextualDimensions:
+      typeof persisted.contextualDimensions === 'boolean'
+        ? persisted.contextualDimensions
+        : DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY.contextualDimensions,
     manualDimensions:
       typeof persisted.manualDimensions === 'boolean'
         ? persisted.manualDimensions
@@ -68,7 +74,7 @@ export function filterFloorplanAnnotationGeometry(
   if (role && !isAnnotationRoleVisible(role, visibility)) return null
   if (
     !visibility.automaticDimensions &&
-    role !== 'manual-dimension' &&
+    (role === undefined || role === 'automatic-dimension') &&
     (geometry.kind === 'dimension' ||
       geometry.kind === 'dimension-string' ||
       geometry.kind === 'dimension-label' ||
@@ -82,7 +88,10 @@ export function filterFloorplanAnnotationGeometry(
     .map((child) => filterFloorplanAnnotationGeometry(child, visibility, role))
     .filter((child): child is FloorplanGeometry => child !== null)
   if (children.length === 0) return null
-  if (children.length === geometry.children.length) return geometry
+  const childrenUnchanged =
+    children.length === geometry.children.length &&
+    children.every((child, index) => child === geometry.children[index])
+  if (childrenUnchanged) return geometry
   return { ...geometry, children }
 }
 
@@ -93,6 +102,8 @@ function isAnnotationRoleVisible(
   switch (role) {
     case 'automatic-dimension':
       return visibility.automaticDimensions
+    case 'contextual-dimension':
+      return visibility.contextualDimensions
     case 'manual-dimension':
       return visibility.manualDimensions
     case 'measurement':
