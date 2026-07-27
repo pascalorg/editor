@@ -8,7 +8,8 @@
     "build": "dotenv -e ../../.env.local -- next build",
     "start": "next start",
     "lint": "biome lint",
-    "check-types": "next typegen && tsgo --noEmit"
+    "check-types": "next typegen && tsgo --noEmit",
+    "test": "bun test lib"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",

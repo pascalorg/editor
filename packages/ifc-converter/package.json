@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc --build",
     "dev": "tsgo --build --watch",
+    "test": "bun test tests",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
