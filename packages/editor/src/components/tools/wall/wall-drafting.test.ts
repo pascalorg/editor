@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  CeilingNode,
   DoorNode as DoorSchema,
+  detectSpacesForLevel,
+  initSpaceDetectionSync,
   runAsSingleSceneHistoryStep,
+  SlabNode,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -49,7 +53,12 @@ function seedLevel(walls: WallNode[], extraNodes: AnyNode[] = []) {
           parentId: null,
           visible: true,
           metadata: {},
-          children: walls.map((wall) => wall.id),
+          children: [
+            ...walls.map((wall) => wall.id),
+            ...extraNodes
+              .filter((node) => node.parentId === LEVEL_ID)
+              .map((node) => node.id as AnyNodeId),
+          ],
           level: 0,
         } as AnyNode,
       ],
@@ -176,6 +185,128 @@ describe('createWallOnCurrentLevel', () => {
 
     expect(created).not.toBeNull()
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
+  })
+
+  test('a divider commit splits the room slab and ceiling into two scene nodes', () => {
+    const walls = [
+      makeWall([0, 0], [4, 0], 'wall_bottom'),
+      makeWall([4, 0], [4, 3], 'wall_right'),
+      makeWall([4, 3], [0, 3], 'wall_top'),
+      makeWall([0, 3], [0, 0], 'wall_left'),
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_main',
+      parentId: LEVEL_ID,
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_main',
+      parentId: LEVEL_ID,
+      polygon: slab.polygon,
+      autoFromWalls: true,
+    })
+    seedLevel(walls, [slab, ceiling])
+    const editorState = {
+      spaces: {},
+      setSpaces(spaces: Record<string, unknown>) {
+        editorState.spaces = spaces
+      },
+    }
+    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+
+    try {
+      const created = createWallOnCurrentLevel([2, 0], [2, 3])
+
+      expect(created).not.toBeNull()
+      const nodes = Object.values(useScene.getState().nodes)
+      const postCommitWalls = nodes.filter((node): node is WallNode => node.type === 'wall')
+      const { roomPolygons } = detectSpacesForLevel(String(LEVEL_ID), postCommitWalls)
+      const slabs = nodes.filter((node) => node.type === 'slab').map((node) => SlabNode.parse(node))
+      const ceilings = nodes
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+
+      expect(roomPolygons).toHaveLength(2)
+      expect(slabs).toHaveLength(2)
+      expect(ceilings).toHaveLength(2)
+      expect(slabs.every((surface) => surface.autoFromWalls)).toBe(true)
+      expect(ceilings.every((surface) => surface.autoFromWalls)).toBe(true)
+      const committedLevel = useScene.getState().nodes[LEVEL_ID]
+      expect(committedLevel?.type).toBe('level')
+      if (committedLevel?.type !== 'level') return
+      const treeChildren = committedLevel.children.map((id) => useScene.getState().nodes[id])
+      expect(treeChildren.filter((node) => node?.type === 'slab')).toHaveLength(2)
+      expect(treeChildren.filter((node) => node?.type === 'ceiling')).toHaveLength(2)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('crossing divider walls split into four joined segments and four room surfaces', () => {
+    const walls = [
+      makeWall([0, 0], [4, 0], 'wall_bottom'),
+      makeWall([4, 0], [4, 3], 'wall_right'),
+      makeWall([4, 3], [0, 3], 'wall_top'),
+      makeWall([0, 3], [0, 0], 'wall_left'),
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_main',
+      parentId: LEVEL_ID,
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_main',
+      parentId: LEVEL_ID,
+      polygon: slab.polygon,
+      autoFromWalls: true,
+    })
+    seedLevel(walls, [slab, ceiling])
+    const editorState = {
+      spaces: {},
+      setSpaces(spaces: Record<string, unknown>) {
+        editorState.spaces = spaces
+      },
+    }
+    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+
+    try {
+      expect(createWallOnCurrentLevel([0, 0], [4, 3])).not.toBeNull()
+      const beforeCrossing = useScene.temporal.getState().pastStates.length
+      expect(createWallOnCurrentLevel([0, 3], [4, 0])).not.toBeNull()
+      expect(useScene.temporal.getState().pastStates.length - beforeCrossing).toBe(1)
+
+      const nodes = Object.values(useScene.getState().nodes)
+      const postCommitWalls = nodes.filter((node): node is WallNode => node.type === 'wall')
+      const centerSegments = postCommitWalls.filter(
+        (wall) =>
+          (wall.start[0] === 2 && wall.start[1] === 1.5) ||
+          (wall.end[0] === 2 && wall.end[1] === 1.5),
+      )
+      const { roomPolygons } = detectSpacesForLevel(String(LEVEL_ID), postCommitWalls)
+
+      expect(postCommitWalls).toHaveLength(8)
+      expect(centerSegments).toHaveLength(4)
+      expect(roomPolygons).toHaveLength(4)
+      expect(nodes.filter((node) => node.type === 'slab')).toHaveLength(4)
+      expect(nodes.filter((node) => node.type === 'ceiling')).toHaveLength(4)
+
+      expect(createWallOnCurrentLevel([0, 3], [4, 0])).toBeNull()
+      expect(levelWalls()).toHaveLength(8)
+    } finally {
+      unsubscribe()
+    }
   })
 })
 

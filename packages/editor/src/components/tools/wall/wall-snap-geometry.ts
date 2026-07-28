@@ -188,7 +188,7 @@ function segmentIntersection(
   a2: WallPlanPoint,
   b1: WallPlanPoint,
   b2: WallPlanPoint,
-): WallPlanPoint | null {
+): { point: WallPlanPoint; firstT: number; secondT: number } | null {
   const rx = a2[0] - a1[0]
   const rz = a2[1] - a1[1]
   const sx = b2[0] - b1[0]
@@ -202,7 +202,80 @@ function segmentIntersection(
   const u = (qpx * rz - qpz * rx) / denom
   if (t < 0 || t > 1 || u < 0 || u > 1) return null
 
-  return [a1[0] + t * rx, a1[1] + t * rz]
+  return {
+    point: [a1[0] + t * rx, a1[1] + t * rz],
+    firstT: t,
+    secondT: u,
+  }
+}
+
+export function findWallSegmentIntersections(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  walls: WallNode[],
+): Array<{ wallId: WallNode['id']; point: WallPlanPoint; draftT: number; wallT: number }> {
+  const intersections: Array<{
+    wallId: WallNode['id']
+    point: WallPlanPoint
+    draftT: number
+    wallT: number
+  }> = []
+
+  for (const wall of walls) {
+    if (isCurvedWall(wall)) continue
+    const intersection = segmentIntersection(start, end, wall.start, wall.end)
+    if (!intersection) continue
+    intersections.push({
+      wallId: wall.id,
+      point: intersection.point,
+      draftT: intersection.firstT,
+      wallT: intersection.secondT,
+    })
+  }
+
+  return intersections
+}
+
+export function wallSegmentsCoverSegment(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  walls: WallNode[],
+  tolerance = 1e-6,
+): boolean {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared <= tolerance * tolerance) return false
+
+  const length = Math.sqrt(lengthSquared)
+  const intervals: Array<[number, number]> = []
+  for (const wall of walls) {
+    if (isCurvedWall(wall)) continue
+    const startDistance =
+      Math.abs((wall.start[0] - start[0]) * dz - (wall.start[1] - start[1]) * dx) / length
+    const endDistance =
+      Math.abs((wall.end[0] - start[0]) * dz - (wall.end[1] - start[1]) * dx) / length
+    if (startDistance > tolerance || endDistance > tolerance) continue
+
+    const wallStartT =
+      ((wall.start[0] - start[0]) * dx + (wall.start[1] - start[1]) * dz) / lengthSquared
+    const wallEndT = ((wall.end[0] - start[0]) * dx + (wall.end[1] - start[1]) * dz) / lengthSquared
+    const intervalStart = Math.max(0, Math.min(wallStartT, wallEndT))
+    const intervalEnd = Math.min(1, Math.max(wallStartT, wallEndT))
+    if (intervalEnd >= intervalStart) {
+      intervals.push([intervalStart, intervalEnd])
+    }
+  }
+
+  intervals.sort((left, right) => left[0] - right[0])
+  const parameterTolerance = tolerance / length
+  let coveredUntil = 0
+  for (const [intervalStart, intervalEnd] of intervals) {
+    if (intervalStart > coveredUntil + parameterTolerance) return false
+    coveredUntil = Math.max(coveredUntil, intervalEnd)
+    if (coveredUntil >= 1 - parameterTolerance) return true
+  }
+  return false
 }
 
 /**
@@ -224,16 +297,16 @@ export function findWallIntersectionFromRaw(
 
   for (let i = 0; i < straight.length; i += 1) {
     for (let j = i + 1; j < straight.length; j += 1) {
-      const crossing = segmentIntersection(
+      const intersection = segmentIntersection(
         straight[i]!.start,
         straight[i]!.end,
         straight[j]!.start,
         straight[j]!.end,
       )
-      if (!crossing) continue
-      const d = distanceSquared(point, crossing)
+      if (!intersection) continue
+      const d = distanceSquared(point, intersection.point)
       if (d <= radiusSquared && d < bestDistSq) {
-        best = crossing
+        best = intersection.point
         bestDistSq = d
       }
     }

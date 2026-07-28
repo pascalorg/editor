@@ -119,6 +119,10 @@ function beginSceneCommitTransaction(): void {
   sceneCommitTransactionDepth += 1
 }
 
+export function isSceneCommitTransactionActive(): boolean {
+  return sceneCommitTransactionDepth > 0
+}
+
 function pendingSceneCommitIsNoOp(): boolean {
   return Boolean(
     pendingSceneCommit &&

@@ -19,6 +19,7 @@ import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
+  findWallSegmentIntersections,
   findWallSnapTarget,
   findWallSpecialPointSnap,
   projectPointOntoWall,
@@ -27,6 +28,7 @@ import {
   type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
+  wallSegmentsCoverSegment,
 } from './wall-snap-geometry'
 
 // The pure snap geometry lives in `./wall-snap-geometry`; re-exported here so
@@ -470,7 +472,7 @@ export function createWallOnCurrentLevel(
   },
 ): WallNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, createNodes, deleteNode, nodes } = useScene.getState()
+  const { createNodes, deleteNode, nodes } = useScene.getState()
   const { updateNodes } = useScene.getState()
 
   if (!(currentLevelId && isSegmentLongEnough(start, end))) {
@@ -531,13 +533,37 @@ export function createWallOnCurrentLevel(
       return null
     }
 
-    const duplicateWall = workingWalls.some(
-      (wall) =>
-        (pointsEqual(wall.start, resolvedStart) && pointsEqual(wall.end, resolvedEnd)) ||
-        (pointsEqual(wall.start, resolvedEnd) && pointsEqual(wall.end, resolvedStart)),
-    )
-    if (duplicateWall) {
+    if (wallSegmentsCoverSegment(resolvedStart, resolvedEnd, workingWalls)) {
       return null
+    }
+
+    const interiorEpsilon = 1e-6
+    const splitPoints: WallPlanPoint[] = []
+    const crossings = findWallSegmentIntersections(resolvedStart, resolvedEnd, workingWalls)
+      .filter(
+        (crossing) => crossing.draftT > interiorEpsilon && crossing.draftT < 1 - interiorEpsilon,
+      )
+      .sort((left, right) => left.draftT - right.draftT)
+
+    for (const crossing of crossings) {
+      if (crossing.wallT > interiorEpsilon && crossing.wallT < 1 - interiorEpsilon) {
+        const splitHost = splitWallIfNeeded(
+          { wallId: crossing.wallId, point: crossing.point },
+          workingWalls,
+          nodes,
+          createNodes,
+          updateNodes,
+          deleteNode,
+        )
+        if (!splitHost || splitHost.walls.some((wall) => wall.id === crossing.wallId)) {
+          continue
+        }
+        workingWalls = splitHost.walls
+      }
+
+      if (!splitPoints.some((point) => pointsEqual(point, crossing.point))) {
+        splitPoints.push(crossing.point)
+      }
     }
 
     const wallCount = Object.values(nodes).filter((node) => node.type === 'wall').length
@@ -545,26 +571,37 @@ export function createWallOnCurrentLevel(
     // materials, sides) before the tool activates; merge those first so the
     // drawn wall reproduces the preset. Identity + endpoints always win.
     const defaults = useEditor.getState().toolDefaults.wall ?? {}
-    const wall = WallSchema.parse({
-      ...defaults,
-      name: `Wall ${wallCount + 1}`,
-      start: resolvedStart,
-      end: resolvedEnd,
-    })
+    const vertices = [resolvedStart, ...splitPoints, resolvedEnd]
+    const walls = vertices.slice(0, -1).map((segmentStart, index) =>
+      WallSchema.parse({
+        ...defaults,
+        name: `Wall ${wallCount + index + 1}`,
+        start: segmentStart,
+        end: vertices[index + 1]!,
+      }),
+    )
 
-    createNode(wall, currentLevelId)
-    const createdWall = useScene.getState().nodes[wall.id]
-    if (createdWall?.type === 'wall') {
-      useScene.getState().updateNode(
-        createdWall.id,
-        resolveWallSupportSlabPatch(createdWall, useScene.getState().nodes, {
-          maxElevation: options?.supportCap ?? null,
-        }),
-      )
+    createNodes(walls.map((wall) => ({ node: wall, parentId: currentLevelId })))
+    const committedNodes = useScene.getState().nodes
+    const supportUpdates = walls.flatMap((wall) => {
+      const createdWall = committedNodes[wall.id]
+      if (createdWall?.type !== 'wall') return []
+      return [
+        {
+          id: createdWall.id,
+          data: resolveWallSupportSlabPatch(createdWall, committedNodes, {
+            maxElevation: options?.supportCap ?? null,
+          }),
+        },
+      ]
+    })
+    if (supportUpdates.length > 0) {
+      useScene.getState().updateNodes(supportUpdates)
     }
     sfxEmitter.emit('sfx:structure-build')
 
-    const committedWall = useScene.getState().nodes[wall.id]
-    return committedWall?.type === 'wall' ? committedWall : wall
+    const terminalWall = walls.at(-1)!
+    const committedWall = useScene.getState().nodes[terminalWall.id]
+    return committedWall?.type === 'wall' ? committedWall : terminalWall
   })
 }

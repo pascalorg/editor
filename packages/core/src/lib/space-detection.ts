@@ -19,8 +19,10 @@ import {
 } from '../services/storey'
 import {
   getSceneHistoryPauseDepth,
+  isSceneCommitTransactionActive,
   pauseSceneHistory,
   resumeSceneHistory,
+  subscribeSceneCommits,
 } from '../store/history-control'
 import {
   getClampedWallCurveOffset,
@@ -1456,11 +1458,10 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
   const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
   let isProcessing = false
 
-  const unsubscribe = sceneStore.subscribe((state: any) => {
+  const processNodes = (nodes: any) => {
     if (isProcessing) return
     if (getSceneHistoryPauseDepth() > 0) return
 
-    const nodes = state.nodes
     const currentSnapshots = levelStructureSnapshots(nodes)
 
     // Paused: roll the snapshot forward so we don't backfill (and re-duplicate)
@@ -1508,9 +1509,25 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       }
       isProcessing = false
     }
+  }
+
+  const unsubscribeStore = sceneStore.subscribe((state: any) => {
+    // A single semantic edit can contain several store writes (for example:
+    // create both wall halves, delete the original, then create the divider).
+    // Those intermediate graphs are intentionally invalid. Reconcile once from
+    // the coalesced scene commit below instead of demoting surfaces against a
+    // transient half-written topology.
+    if (isSceneCommitTransactionActive()) return
+    processNodes(state.nodes)
+  })
+  const unsubscribeCommits = subscribeSceneCommits((commit) => {
+    processNodes(commit.current.nodes)
   })
 
-  return unsubscribe
+  return () => {
+    unsubscribeStore()
+    unsubscribeCommits()
+  }
 }
 
 export function wallTouchesOthers(wall: WallNode, otherWalls: WallNode[]): boolean {
