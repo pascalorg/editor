@@ -775,6 +775,93 @@ function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number,
   )
 }
 
+function sameTuplePolygons(
+  current: Array<Array<[number, number]>>,
+  next: Array<Array<[number, number]>>,
+) {
+  return (
+    current.length === next.length &&
+    current.every((polygon, index) => {
+      const nextPolygon = next[index]
+      return nextPolygon ? sameTuplePolygon(polygon, nextPolygon) : false
+    })
+  )
+}
+
+type SurfaceWithOpenings = {
+  id: string
+  holes: Array<Array<[number, number]>>
+  holeMetadata: SlabNodeType['holeMetadata']
+}
+
+function partitionSurfaceOpenings(
+  surface: SurfaceWithOpenings,
+  roomIndices: number[],
+  detected: DetectedRoom[],
+) {
+  const assignments = new Map<
+    number,
+    {
+      holes: Array<Array<[number, number]>>
+      holeMetadata: SlabNodeType['holeMetadata']
+    }
+  >()
+  for (const roomIndex of roomIndices) {
+    assignments.set(roomIndex, { holes: [], holeMetadata: [] })
+  }
+
+  surface.holes.forEach((hole, holeIndex) => {
+    const holePolygon = hole.map(pointFromTuple)
+    const holeCentroid = polygonCentroid(holePolygon)
+    let bestRoomIndex: number | null = null
+    let bestCoverage = Number.NEGATIVE_INFINITY
+    let bestDistance = Number.POSITIVE_INFINITY
+
+    for (const roomIndex of roomIndices) {
+      const room = detected[roomIndex]
+      if (!room) continue
+      const coverage = polygonCoverageRatio(holePolygon, [room.poly])
+      const distance = Math.hypot(
+        holeCentroid.x - room.centroid.x,
+        holeCentroid.y - room.centroid.y,
+      )
+      if (
+        coverage > bestCoverage + 1e-6 ||
+        (Math.abs(coverage - bestCoverage) <= 1e-6 && distance < bestDistance)
+      ) {
+        bestRoomIndex = roomIndex
+        bestCoverage = coverage
+        bestDistance = distance
+      }
+    }
+
+    if (bestRoomIndex == null) return
+    const assignment = assignments.get(bestRoomIndex)
+    if (!assignment) return
+    assignment.holes.push(hole)
+    assignment.holeMetadata.push(surface.holeMetadata[holeIndex] ?? { source: 'manual' })
+  })
+
+  return assignments
+}
+
+function sameHoleMetadata(
+  current: SlabNodeType['holeMetadata'],
+  next: SlabNodeType['holeMetadata'],
+) {
+  return (
+    current.length === next.length &&
+    current.every((metadata, index) => {
+      const candidate = next[index]
+      return (
+        candidate?.source === metadata.source &&
+        candidate.stairId === metadata.stairId &&
+        candidate.elevatorId === metadata.elevatorId
+      )
+    })
+  )
+}
+
 function wallGeometrySignature(wall: WallNode) {
   return [
     wall.id,
@@ -988,7 +1075,8 @@ export function planAutoSlabsForLevel(
 
   const matchedSlabIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, [number, number][]>()
+  const roomIndexBySlabId = new Map<string, number>()
+  const sourceSlabIdByRoomIndex = new Map<number, string>()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
@@ -1003,7 +1091,8 @@ export function planAutoSlabsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(existing.slab.id)
-    updatesById.set(existing.slab.id, room.poly.map(pointToTuple))
+    roomIndexBySlabId.set(existing.slab.id, index)
+    sourceSlabIdByRoomIndex.set(index, existing.slab.id)
   })
 
   const remainingDetected = detected
@@ -1038,14 +1127,26 @@ export function planAutoSlabsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedSlabIds.add(bestMatch.entry.slab.id)
-    updatesById.set(bestMatch.entry.slab.id, room.poly.map(pointToTuple))
+    roomIndexBySlabId.set(bestMatch.entry.slab.id, index)
+    sourceSlabIdByRoomIndex.set(index, bestMatch.entry.slab.id)
   }
+
+  detected.forEach((room, index) => {
+    if (sourceSlabIdByRoomIndex.has(index)) return
+    let bestSource: { id: string; coverage: number } | null = null
+    for (const entry of existingAutoMeta) {
+      const coverage = polygonCoverageRatio(room.poly, [entry.slab.polygon.map(pointFromTuple)])
+      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
+      bestSource = { id: entry.slab.id, coverage }
+    }
+    if (bestSource) sourceSlabIdByRoomIndex.set(index, bestSource.id)
+  })
 
   const detectedRoomPolygons = detectedAll.map((room) => room.poly)
   const slabsToDelete: Array<SlabNodeType['id']> = []
   const slabDemotions: AutoSlabSyncPlan['update'] = []
   for (const slab of existingAuto) {
-    if (updatesById.has(slab.id)) continue
+    if (roomIndexBySlabId.has(slab.id)) continue
 
     const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
@@ -1057,17 +1158,34 @@ export function planAutoSlabsForLevel(
     }
   }
 
-  const slabsToUpdate = [
-    ...existingAuto
-      .filter((slab) => updatesById.has(slab.id))
-      .flatMap((slab) => {
-        const polygon = updatesById.get(slab.id)
-        if (!polygon) return []
+  const openingAssignmentsBySlabId = new Map<string, ReturnType<typeof partitionSurfaceOpenings>>()
+  for (const slab of existingAuto) {
+    const roomIndices = [...sourceSlabIdByRoomIndex.entries()]
+      .filter(([, slabId]) => slabId === slab.id)
+      .map(([roomIndex]) => roomIndex)
+    if (roomIndices.length === 0) continue
+    openingAssignmentsBySlabId.set(slab.id, partitionSurfaceOpenings(slab, roomIndices, detected))
+  }
 
-        return sameTuplePolygon(slab.polygon, polygon) ? [] : [{ id: slab.id, data: { polygon } }]
-      }),
-    ...slabDemotions,
-  ]
+  const slabsToUpdate = existingAuto.flatMap((slab) => {
+    const roomIndex = roomIndexBySlabId.get(slab.id)
+    if (roomIndex == null) return []
+    const room = detected[roomIndex]
+    if (!room) return []
+    const polygon = room.poly.map(pointToTuple)
+    const openings = openingAssignmentsBySlabId.get(slab.id)?.get(roomIndex) ?? {
+      holes: [],
+      holeMetadata: [],
+    }
+    const data: Partial<SlabNodeType> = {}
+    if (!sameTuplePolygon(slab.polygon, polygon)) data.polygon = polygon
+    if (!sameTuplePolygons(slab.holes, openings.holes)) data.holes = openings.holes
+    if (!sameHoleMetadata(slab.holeMetadata, openings.holeMetadata)) {
+      data.holeMetadata = openings.holeMetadata
+    }
+    return Object.keys(data).length > 0 ? [{ id: slab.id, data }] : []
+  })
+  slabsToUpdate.push(...slabDemotions)
 
   const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
   const slabsToCreate: SlabNodeType[] = []
@@ -1079,13 +1197,23 @@ export function planAutoSlabsForLevel(
 
     const name = nextAutoRoomName(plannedSlabsForNaming, 'Slab')
     plannedSlabsForNaming.push({ name })
+    const sourceId = sourceSlabIdByRoomIndex.get(index)
+    const source = sourceId ? existingAuto.find((slab) => slab.id === sourceId) : undefined
+    const openings = sourceId ? openingAssignmentsBySlabId.get(sourceId)?.get(index) : undefined
 
     slabsToCreate.push(
       SlabNode.parse({
         name,
         polygon: room.poly.map(pointToTuple),
-        holes: [],
-        elevation: DEFAULT_AUTO_SLAB_ELEVATION,
+        holes: openings?.holes ?? [],
+        holeMetadata: openings?.holeMetadata ?? [],
+        elevation: source?.elevation ?? DEFAULT_AUTO_SLAB_ELEVATION,
+        thickness: source?.thickness,
+        recessed: source?.recessed,
+        material: source?.material,
+        materialPreset: source?.materialPreset,
+        slots: source?.slots,
+        visible: source?.visible,
         autoFromWalls: true,
       }),
     )
@@ -1168,7 +1296,8 @@ export function planAutoCeilingsForLevel(
 
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
-  const updatesById = new Map<string, { polygon: [number, number][] }>()
+  const roomIndexByCeilingId = new Map<string, number>()
+  const sourceCeilingIdByRoomIndex = new Map<number, string>()
 
   const autoBySignature = new Map<string, Array<(typeof existingAutoMeta)[number]>>()
   for (const entry of existingAutoMeta) {
@@ -1183,9 +1312,8 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(existing.ceiling.id)
-    updatesById.set(existing.ceiling.id, {
-      polygon: room.poly.map(pointToTuple),
-    })
+    roomIndexByCeilingId.set(existing.ceiling.id, index)
+    sourceCeilingIdByRoomIndex.set(index, existing.ceiling.id)
   })
 
   const remainingDetected = detected
@@ -1220,16 +1348,26 @@ export function planAutoCeilingsForLevel(
 
     matchedDetectedIdx.add(index)
     matchedCeilingIds.add(bestMatch.entry.ceiling.id)
-    updatesById.set(bestMatch.entry.ceiling.id, {
-      polygon: room.poly.map(pointToTuple),
-    })
+    roomIndexByCeilingId.set(bestMatch.entry.ceiling.id, index)
+    sourceCeilingIdByRoomIndex.set(index, bestMatch.entry.ceiling.id)
   }
+
+  detected.forEach((room, index) => {
+    if (sourceCeilingIdByRoomIndex.has(index)) return
+    let bestSource: { id: string; coverage: number } | null = null
+    for (const entry of existingAutoMeta) {
+      const coverage = polygonCoverageRatio(room.poly, [entry.ceiling.polygon.map(pointFromTuple)])
+      if (coverage <= 0 || (bestSource && coverage <= bestSource.coverage)) continue
+      bestSource = { id: entry.ceiling.id, coverage }
+    }
+    if (bestSource) sourceCeilingIdByRoomIndex.set(index, bestSource.id)
+  })
 
   const detectedRoomPolygons = detectedAll.map((room) => room.poly)
   const ceilingsToDelete: Array<CeilingNodeType['id']> = []
   const ceilingDemotions: AutoCeilingSyncPlan['update'] = []
   for (const ceiling of existingAuto) {
-    if (updatesById.has(ceiling.id)) continue
+    if (roomIndexByCeilingId.has(ceiling.id)) continue
 
     const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
@@ -1256,20 +1394,46 @@ export function planAutoCeilingsForLevel(
       : []
   })
 
-  const ceilingsToUpdate = [
-    // Auto ceilings only track their room's POLYGON here — their height is
-    // follows-mode (absent) and derives from the level top at read time.
-    ...existingAuto
-      .filter((ceiling) => updatesById.has(ceiling.id))
-      .flatMap((ceiling) => {
-        const update = updatesById.get(ceiling.id)
-        if (!update) return []
-        if (sameTuplePolygon(ceiling.polygon, update.polygon)) return []
-        return [{ id: ceiling.id, data: { polygon: update.polygon } }]
-      }),
-    ...ceilingDemotions,
-    ...manualClamps,
-  ]
+  const openingAssignmentsByCeilingId = new Map<
+    string,
+    ReturnType<typeof partitionSurfaceOpenings>
+  >()
+  for (const ceiling of existingAuto) {
+    const roomIndices = [...sourceCeilingIdByRoomIndex.entries()]
+      .filter(([, ceilingId]) => ceilingId === ceiling.id)
+      .map(([roomIndex]) => roomIndex)
+    if (roomIndices.length === 0) continue
+    openingAssignmentsByCeilingId.set(
+      ceiling.id,
+      partitionSurfaceOpenings(ceiling, roomIndices, detected),
+    )
+  }
+
+  const ceilingsToUpdate = existingAuto.flatMap((ceiling) => {
+    const roomIndex = roomIndexByCeilingId.get(ceiling.id)
+    if (roomIndex == null) return []
+    const room = detected[roomIndex]
+    if (!room) return []
+    const polygon = room.poly.map(pointToTuple)
+    const openings = openingAssignmentsByCeilingId.get(ceiling.id)?.get(roomIndex) ?? {
+      holes: [],
+      holeMetadata: [],
+    }
+    const data: Partial<CeilingNodeType> = {}
+    if (!sameTuplePolygon(ceiling.polygon, polygon)) data.polygon = polygon
+    if (!sameTuplePolygons(ceiling.holes, openings.holes)) data.holes = openings.holes
+    if (!sameHoleMetadata(ceiling.holeMetadata, openings.holeMetadata)) {
+      data.holeMetadata = openings.holeMetadata
+    }
+    if (ceiling.height != null) {
+      const bound = resolveCeilingClampBound(polygon, context)
+      if (Number.isFinite(bound) && ceiling.height > bound + CEILING_HEIGHT_EPSILON) {
+        data.height = bound
+      }
+    }
+    return Object.keys(data).length > 0 ? [{ id: ceiling.id, data }] : []
+  })
+  ceilingsToUpdate.push(...ceilingDemotions, ...manualClamps)
 
   const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
   const ceilingsToCreate: CeilingNodeType[] = []
@@ -1281,15 +1445,32 @@ export function planAutoCeilingsForLevel(
 
     const name = nextAutoRoomName(plannedCeilingsForNaming, 'Ceiling')
     plannedCeilingsForNaming.push({ name })
+    const sourceId = sourceCeilingIdByRoomIndex.get(index)
+    const source = sourceId ? existingAuto.find((ceiling) => ceiling.id === sourceId) : undefined
+    const openings = sourceId ? openingAssignmentsByCeilingId.get(sourceId)?.get(index) : undefined
+    const inheritedHeight =
+      source?.height == null
+        ? {}
+        : {
+            height: Math.min(
+              source.height,
+              resolveCeilingClampBound(room.poly.map(pointToTuple), context),
+            ),
+          }
 
-    // Height-less on purpose: auto ceilings follow the level top (the
-    // clamp bound) through `resolveCeilingHeight` instead of baking a
-    // derived height that would go stale on level-height edits.
+    // Uncustomized auto ceilings stay height-less so they continue to follow
+    // the level top; an inherited explicit height is clamped to the new room.
     ceilingsToCreate.push(
       CeilingNode.parse({
         name,
         polygon: room.poly.map(pointToTuple),
-        holes: [],
+        holes: openings?.holes ?? [],
+        holeMetadata: openings?.holeMetadata ?? [],
+        material: source?.material,
+        materialPreset: source?.materialPreset,
+        slots: source?.slots,
+        visible: source?.visible,
+        ...inheritedHeight,
         autoFromWalls: true,
       }),
     )

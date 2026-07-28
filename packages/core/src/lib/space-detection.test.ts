@@ -176,6 +176,60 @@ describe('planAutoCeilingsForLevel', () => {
     expect(plan.update).toHaveLength(0)
     expect(plan.delete).toHaveLength(0)
   })
+
+  test('a split ceiling inherits customization and keeps each opening with its room', () => {
+    const leftHole: Array<[number, number]> = [
+      [0.5, 0.5],
+      [1, 0.5],
+      [1, 1],
+      [0.5, 1],
+    ]
+    const rightHole: Array<[number, number]> = [
+      [3, 0.5],
+      [3.5, 0.5],
+      [3.5, 1],
+      [3, 1],
+    ]
+    const ceiling = CeilingNode.parse({
+      polygon: square,
+      height: 2.2,
+      materialPreset: 'custom-ceiling',
+      slots: { surface: 'library:blue' },
+      holes: [leftHole, rightHole],
+      holeMetadata: [{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }],
+      autoFromWalls: true,
+    })
+    const rooms = [
+      [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 3 },
+        { x: 0, y: 3 },
+      ],
+      [
+        { x: 2, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+        { x: 2, y: 3 },
+      ],
+    ]
+
+    const plan = planAutoCeilingsForLevel(rooms, [ceiling], { storeyHeight: 2.5 })
+    const updated = CeilingNode.parse({ ...ceiling, ...plan.update[0]?.data })
+    const surfaces = [updated, ...plan.create]
+    const left = surfaces.find((surface) => surface.polygon.some(([x]) => x === 0))
+    const right = surfaces.find((surface) => surface.polygon.some(([x]) => x === 4))
+
+    expect(plan.create).toHaveLength(1)
+    expect(plan.update).toHaveLength(1)
+    expect(surfaces.every((surface) => surface.height === 2.2)).toBe(true)
+    expect(surfaces.every((surface) => surface.materialPreset === 'custom-ceiling')).toBe(true)
+    expect(surfaces.every((surface) => surface.slots?.surface === 'library:blue')).toBe(true)
+    expect(left?.holes).toEqual([leftHole])
+    expect(left?.holeMetadata).toEqual([{ source: 'manual' }])
+    expect(right?.holes).toEqual([rightHole])
+    expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
+  })
 })
 
 // Two stacked levels; the deck slab (occupying [-0.3, 0] over the upper
@@ -674,5 +728,61 @@ describe('planAutoSlabsForLevel', () => {
     expect(plan.create).toHaveLength(0)
     expect(plan.update).toHaveLength(0)
     expect(plan.delete).toHaveLength(0)
+  })
+
+  test('a split slab inherits customization and keeps each opening with its room', () => {
+    const leftHole: Array<[number, number]> = [
+      [0.5, 0.5],
+      [1, 0.5],
+      [1, 1],
+      [0.5, 1],
+    ]
+    const rightHole: Array<[number, number]> = [
+      [3, 0.5],
+      [3.5, 0.5],
+      [3.5, 1],
+      [3, 1],
+    ]
+    const customized = SlabNode.parse({
+      polygon: square,
+      elevation: 0.2,
+      thickness: 0.1,
+      materialPreset: 'custom-floor',
+      slots: { surface: 'library:oak' },
+      holes: [leftHole, rightHole],
+      holeMetadata: [{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }],
+      autoFromWalls: true,
+    })
+    const rooms = [
+      [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 3 },
+        { x: 0, y: 3 },
+      ],
+      [
+        { x: 2, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+        { x: 2, y: 3 },
+      ],
+    ]
+
+    const plan = planAutoSlabsForLevel(rooms, [customized])
+    const updated = SlabNode.parse({ ...customized, ...plan.update[0]?.data })
+    const surfaces = [updated, ...plan.create]
+    const left = surfaces.find((surface) => surface.polygon.some(([x]) => x === 0))
+    const right = surfaces.find((surface) => surface.polygon.some(([x]) => x === 4))
+
+    expect(plan.create).toHaveLength(1)
+    expect(plan.update).toHaveLength(1)
+    expect(surfaces.every((surface) => surface.elevation === 0.2)).toBe(true)
+    expect(surfaces.every((surface) => surface.thickness === 0.1)).toBe(true)
+    expect(surfaces.every((surface) => surface.materialPreset === 'custom-floor')).toBe(true)
+    expect(surfaces.every((surface) => surface.slots?.surface === 'library:oak')).toBe(true)
+    expect(left?.holes).toEqual([leftHole])
+    expect(left?.holeMetadata).toEqual([{ source: 'manual' }])
+    expect(right?.holes).toEqual([rightHole])
+    expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
   })
 })
