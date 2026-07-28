@@ -155,6 +155,102 @@ describe('planAutoCeilingsForLevel', () => {
     expect(plan.delete[0]).not.toBe(survivorId)
   })
 
+  test('preserves conflicting merged ceilings as separate manual surfaces', () => {
+    const leftCeiling = CeilingNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      height: 2.4,
+      slots: { surface: 'library:red' },
+      autoFromWalls: true,
+    })
+    const rightCeiling = CeilingNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      slots: { surface: 'library:blue' },
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+    expect(plan.update).toEqual(
+      expect.arrayContaining([
+        { id: leftCeiling.id, data: { autoFromWalls: false } },
+        { id: rightCeiling.id, data: { autoFromWalls: false } },
+      ]),
+    )
+  })
+
+  test('unions openings when compatible ceilings merge', () => {
+    const leftHole: Array<[number, number]> = [
+      [1, 1],
+      [2, 1],
+      [2, 2],
+      [1, 2],
+    ]
+    const rightHole: Array<[number, number]> = [
+      [6, 1],
+      [7, 1],
+      [7, 2],
+      [6, 2],
+    ]
+    const leftCeiling = CeilingNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      holes: [leftHole],
+      holeMetadata: [{ source: 'manual' }],
+      autoFromWalls: true,
+    })
+    const rightCeiling = CeilingNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      holes: [rightHole],
+      holeMetadata: [{ source: 'stair', stairId: 'stair_right' }],
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
+    const survivor = [leftCeiling, rightCeiling].find(
+      (ceiling) => ceiling.id === plan.update[0]?.id,
+    )
+    const merged = CeilingNode.parse({ ...survivor, ...plan.update[0]?.data })
+
+    expect(plan.delete).toHaveLength(1)
+    expect(merged.holes).toEqual(expect.arrayContaining([leftHole, rightHole]))
+    expect(merged.holeMetadata).toEqual(
+      expect.arrayContaining([{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }]),
+    )
+  })
+
   test('a demoted ceiling suppresses re-creating an auto ceiling when the room re-forms', () => {
     const ceiling = CeilingNode.parse({
       polygon: square,
@@ -687,6 +783,106 @@ describe('planAutoSlabsForLevel', () => {
     expect(plan.delete[0]).not.toBe(survivorId)
     // The survivor stays auto — updated to the merged polygon, not demoted.
     expect(plan.update[0]?.data.autoFromWalls).toBeUndefined()
+  })
+
+  test('preserves conflicting merged slabs as separate manual surfaces', () => {
+    const leftSlab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      elevation: 0.15,
+      thickness: 0.15,
+      slots: { surface: 'library:red' },
+      autoFromWalls: true,
+    })
+    const rightSlab = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      elevation: -0.15,
+      thickness: 0.1,
+      slots: { surface: 'library:blue' },
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
+
+    expect(plan.create).toHaveLength(0)
+    expect(plan.delete).toHaveLength(0)
+    expect(plan.update).toEqual(
+      expect.arrayContaining([
+        { id: leftSlab.id, data: { autoFromWalls: false } },
+        { id: rightSlab.id, data: { autoFromWalls: false } },
+      ]),
+    )
+  })
+
+  test('unions openings when compatible slabs merge', () => {
+    const leftHole: Array<[number, number]> = [
+      [1, 1],
+      [2, 1],
+      [2, 2],
+      [1, 2],
+    ]
+    const rightHole: Array<[number, number]> = [
+      [6, 1],
+      [7, 1],
+      [7, 2],
+      [6, 2],
+    ]
+    const leftSlab = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      holes: [leftHole],
+      holeMetadata: [{ source: 'manual' }],
+      autoFromWalls: true,
+    })
+    const rightSlab = SlabNode.parse({
+      polygon: [
+        [4, 0],
+        [8, 0],
+        [8, 3],
+        [4, 3],
+      ],
+      holes: [rightHole],
+      holeMetadata: [{ source: 'elevator', elevatorId: 'elevator_right' }],
+      autoFromWalls: true,
+    })
+    const mergedRoom = [
+      { x: 0, y: 0 },
+      { x: 8, y: 0 },
+      { x: 8, y: 3 },
+      { x: 0, y: 3 },
+    ]
+
+    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
+    const survivor = [leftSlab, rightSlab].find((slab) => slab.id === plan.update[0]?.id)
+    const merged = SlabNode.parse({ ...survivor, ...plan.update[0]?.data })
+
+    expect(plan.delete).toHaveLength(1)
+    expect(merged.holes).toEqual(expect.arrayContaining([leftHole, rightHole]))
+    expect(merged.holeMetadata).toEqual(
+      expect.arrayContaining([
+        { source: 'manual' },
+        { source: 'elevator', elevatorId: 'elevator_right' },
+      ]),
+    )
   })
 
   test('a demoted slab suppresses re-creating an auto slab when the room re-forms', () => {

@@ -248,6 +248,40 @@ describe('createWallOnCurrentLevel', () => {
     }
   })
 
+  test('repeated divider deletion rejoins its split boundary walls', () => {
+    const walls = [
+      makeWall([0, 0], [4, 0], 'wall_bottom'),
+      makeWall([4, 0], [4, 3], 'wall_right'),
+      makeWall([4, 3], [0, 3], 'wall_top'),
+      makeWall([0, 3], [0, 0], 'wall_left'),
+    ]
+    seedLevel(walls)
+
+    const divider = createWallOnCurrentLevel([2, 0], [2, 3])
+
+    expect(divider).not.toBeNull()
+    expect(levelWalls()).toHaveLength(7)
+
+    useScene.getState().deleteNode(divider!.id as AnyNodeId)
+
+    expect(levelWalls()).toHaveLength(4)
+    expect(
+      levelWalls().some(
+        (wall) =>
+          (wall.start[0] === 0 && wall.end[0] === 4) || (wall.start[0] === 4 && wall.end[0] === 0),
+      ),
+    ).toBe(true)
+
+    const secondDivider = createWallOnCurrentLevel([0, 1.5], [4, 1.5])
+
+    expect(secondDivider).not.toBeNull()
+    expect(levelWalls()).toHaveLength(7)
+
+    useScene.getState().deleteNode(secondDivider!.id as AnyNodeId)
+
+    expect(levelWalls()).toHaveLength(4)
+  })
+
   test('crossing divider walls split into four joined segments and four room surfaces', () => {
     const walls = [
       makeWall([0, 0], [4, 0], 'wall_bottom'),

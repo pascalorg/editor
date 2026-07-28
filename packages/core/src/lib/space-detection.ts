@@ -862,6 +862,47 @@ function sameHoleMetadata(
   )
 }
 
+function mergedSurfaceOpenings(surfaces: SurfaceWithOpenings[]) {
+  const holes: Array<Array<[number, number]>> = []
+  const holeMetadata: SlabNodeType['holeMetadata'] = []
+  const seen = new Set<string>()
+
+  for (const surface of surfaces) {
+    surface.holes.forEach((hole, index) => {
+      const metadata = surface.holeMetadata[index] ?? { source: 'manual' }
+      const key = JSON.stringify([hole, metadata])
+      if (seen.has(key)) return
+      seen.add(key)
+      holes.push(hole)
+      holeMetadata.push(metadata)
+    })
+  }
+
+  return { holes, holeMetadata }
+}
+
+function slabMergeSettingsSignature(slab: SlabNodeType) {
+  return JSON.stringify([
+    slab.elevation,
+    slab.thickness,
+    slab.recessed,
+    slab.material ?? null,
+    slab.materialPreset ?? null,
+    slab.slots ?? null,
+    slab.visible,
+  ])
+}
+
+function ceilingMergeSettingsSignature(ceiling: CeilingNodeType) {
+  return JSON.stringify([
+    ceiling.height ?? null,
+    ceiling.material ?? null,
+    ceiling.materialPreset ?? null,
+    ceiling.slots ?? null,
+    ceiling.visible,
+  ])
+}
+
 function wallGeometrySignature(wall: WallNode) {
   return [
     wall.id,
@@ -1073,6 +1114,26 @@ export function planAutoSlabsForLevel(
     }
   })
 
+  const conflictingMergeSlabIds = new Set<string>()
+  const conflictingMergeSlabRoomIndices = new Set<number>()
+  const compatibleMergeSlabsByRoomIndex = new Map<number, SlabNodeType[]>()
+  detected.forEach((room, roomIndex) => {
+    const contributors = existingAuto.filter(
+      (slab) =>
+        polygonCoverageRatio(slab.polygon.map(pointFromTuple), [room.poly]) >=
+        ORPHAN_MERGE_COVERAGE_THRESHOLD,
+    )
+    if (contributors.length < 2) return
+
+    const signatures = new Set(contributors.map(slabMergeSettingsSignature))
+    if (signatures.size > 1) {
+      conflictingMergeSlabRoomIndices.add(roomIndex)
+      for (const slab of contributors) conflictingMergeSlabIds.add(slab.id)
+      return
+    }
+    compatibleMergeSlabsByRoomIndex.set(roomIndex, contributors)
+  })
+
   const matchedSlabIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
   const roomIndexBySlabId = new Map<string, number>()
@@ -1086,6 +1147,10 @@ export function planAutoSlabsForLevel(
   }
 
   detected.forEach((room, index) => {
+    if (conflictingMergeSlabRoomIndices.has(index)) {
+      matchedDetectedIdx.add(index)
+      return
+    }
     const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
@@ -1148,6 +1213,11 @@ export function planAutoSlabsForLevel(
   for (const slab of existingAuto) {
     if (roomIndexBySlabId.has(slab.id)) continue
 
+    if (conflictingMergeSlabIds.has(slab.id)) {
+      slabDemotions.push({ id: slab.id, data: { autoFromWalls: false } })
+      continue
+    }
+
     const coverage = polygonCoverageRatio(slab.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
       slabsToDelete.push(slab.id)
@@ -1173,10 +1243,12 @@ export function planAutoSlabsForLevel(
     const room = detected[roomIndex]
     if (!room) return []
     const polygon = room.poly.map(pointToTuple)
-    const openings = openingAssignmentsBySlabId.get(slab.id)?.get(roomIndex) ?? {
-      holes: [],
-      holeMetadata: [],
-    }
+    const openings = compatibleMergeSlabsByRoomIndex.has(roomIndex)
+      ? mergedSurfaceOpenings(compatibleMergeSlabsByRoomIndex.get(roomIndex) ?? [])
+      : (openingAssignmentsBySlabId.get(slab.id)?.get(roomIndex) ?? {
+          holes: [],
+          holeMetadata: [],
+        })
     const data: Partial<SlabNodeType> = {}
     if (!sameTuplePolygon(slab.polygon, polygon)) data.polygon = polygon
     if (!sameTuplePolygons(slab.holes, openings.holes)) data.holes = openings.holes
@@ -1294,6 +1366,26 @@ export function planAutoCeilingsForLevel(
     }
   })
 
+  const conflictingMergeCeilingIds = new Set<string>()
+  const conflictingMergeCeilingRoomIndices = new Set<number>()
+  const compatibleMergeCeilingsByRoomIndex = new Map<number, CeilingNodeType[]>()
+  detected.forEach((room, roomIndex) => {
+    const contributors = existingAuto.filter(
+      (ceiling) =>
+        polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), [room.poly]) >=
+        ORPHAN_MERGE_COVERAGE_THRESHOLD,
+    )
+    if (contributors.length < 2) return
+
+    const signatures = new Set(contributors.map(ceilingMergeSettingsSignature))
+    if (signatures.size > 1) {
+      conflictingMergeCeilingRoomIndices.add(roomIndex)
+      for (const ceiling of contributors) conflictingMergeCeilingIds.add(ceiling.id)
+      return
+    }
+    compatibleMergeCeilingsByRoomIndex.set(roomIndex, contributors)
+  })
+
   const matchedCeilingIds = new Set<string>()
   const matchedDetectedIdx = new Set<number>()
   const roomIndexByCeilingId = new Map<string, number>()
@@ -1307,6 +1399,10 @@ export function planAutoCeilingsForLevel(
   }
 
   detected.forEach((room, index) => {
+    if (conflictingMergeCeilingRoomIndices.has(index)) {
+      matchedDetectedIdx.add(index)
+      return
+    }
     const existing = autoBySignature.get(room.sig)?.shift()
     if (!existing) return
 
@@ -1369,6 +1465,11 @@ export function planAutoCeilingsForLevel(
   for (const ceiling of existingAuto) {
     if (roomIndexByCeilingId.has(ceiling.id)) continue
 
+    if (conflictingMergeCeilingIds.has(ceiling.id)) {
+      ceilingDemotions.push({ id: ceiling.id, data: { autoFromWalls: false } })
+      continue
+    }
+
     const coverage = polygonCoverageRatio(ceiling.polygon.map(pointFromTuple), detectedRoomPolygons)
     if (coverage >= ORPHAN_MERGE_COVERAGE_THRESHOLD) {
       ceilingsToDelete.push(ceiling.id)
@@ -1415,10 +1516,12 @@ export function planAutoCeilingsForLevel(
     const room = detected[roomIndex]
     if (!room) return []
     const polygon = room.poly.map(pointToTuple)
-    const openings = openingAssignmentsByCeilingId.get(ceiling.id)?.get(roomIndex) ?? {
-      holes: [],
-      holeMetadata: [],
-    }
+    const openings = compatibleMergeCeilingsByRoomIndex.has(roomIndex)
+      ? mergedSurfaceOpenings(compatibleMergeCeilingsByRoomIndex.get(roomIndex) ?? [])
+      : (openingAssignmentsByCeilingId.get(ceiling.id)?.get(roomIndex) ?? {
+          holes: [],
+          holeMetadata: [],
+        })
     const data: Partial<CeilingNodeType> = {}
     if (!sameTuplePolygon(ceiling.polygon, polygon)) data.polygon = polygon
     if (!sameTuplePolygons(ceiling.holes, openings.holes)) data.holes = openings.holes
