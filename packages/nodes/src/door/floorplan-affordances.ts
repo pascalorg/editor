@@ -3,6 +3,7 @@ import {
   type DoorNode,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -23,11 +24,8 @@ type DoorWidthPayload = { side: 'start' | 'end' }
  *   - `'end'`: arrow at the edge closer to `wall.end`. The wall-start
  *     edge stays fixed.
  *
- * Uses the scene-write preview pattern (writes directly to `useScene`
- * each tick): the registry layer's `effectiveNode` only merges live
- * overrides for walls, so an override-based preview wouldn't show on
- * doors. The dispatcher snapshots / pauses history at start, so per-tick
- * scene writes still collapse to one undoable entry on commit.
+ * Preview state stays in the live override store so the scene graph is
+ * written only once, when the drag commits.
  */
 export const doorWidthAffordance: FloorplanAffordance<DoorNode> = {
   start({ node, payload, nodes, initialPlanPoint }): FloorplanAffordanceSession {
@@ -86,18 +84,11 @@ export const doorWidthAffordance: FloorplanAffordance<DoorNode> = {
         const newDoorX = anchorX + growDir * (newWidth / 2)
         lastWidth = newWidth
         lastDoorX = newDoorX
-        // Scene-write preview so the 2D plan + 3D viewer both pick up
-        // the change immediately. The dispatcher paused history at
-        // session start, so per-tick writes don't pollute undo.
-        useScene.getState().updateNodes([
-          {
-            id: doorId,
-            data: {
-              width: newWidth,
-              position: [newDoorX, initialDoorY, initialDoorZ],
-            },
-          },
-        ])
+        useLiveNodeOverrides.getState().set(doorId, {
+          width: newWidth,
+          position: [newDoorX, initialDoorY, initialDoorZ],
+        })
+        useScene.getState().markDirty(doorId)
       },
       canCommit() {
         // Width is always clamped to >= MIN_DOOR_WIDTH inside apply, so
@@ -110,6 +101,7 @@ export const doorWidthAffordance: FloorplanAffordance<DoorNode> = {
         // fields that differ from the pre-drag snapshot — if the user
         // drags back to the original size by accident, the diff is empty
         // and the door would otherwise revert to its starting state).
+        useLiveNodeOverrides.getState().clear(doorId)
         useScene.getState().updateNodes([
           {
             id: doorId,

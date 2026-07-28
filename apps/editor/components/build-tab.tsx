@@ -2,10 +2,13 @@
 
 import { nodeRegistry } from '@pascal-app/core'
 import {
+  type FloorplanMode,
   getFloorplanNodeExtension,
+  isFloorplanToolAvailableInMode,
   MaterialPaintPanel,
   triggerSFX,
   useEditor,
+  useFloorplanMode,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
@@ -73,7 +76,7 @@ const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
 ]
 
-function collectBuildTypes(): BuildType[] {
+function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
   const baseKinds = new Set(BASE_BUILD_TYPES.flatMap((type) => (type.kind ? [type.kind] : [])))
   const tools = BASE_BUILD_TYPES.filter((type) => type.kind).map((type, index) => ({
     ...type,
@@ -86,6 +89,7 @@ function collectBuildTypes(): BuildType[] {
     if (
       baseKinds.has(kind) ||
       !extension?.tool ||
+      !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
       !presentation ||
       presentation.hidden ||
       presentation.paletteSection !== 'structure'
@@ -126,7 +130,15 @@ const MEP_ITEMS: MepItem[] = [
  */
 function activateBuildTool(kind: string): void {
   const ed = useEditor.getState()
-  const preferredView = getFloorplanNodeExtension(nodeRegistry.get(kind))?.preferredView
+  const definition = nodeRegistry.get(kind)
+  const extension = getFloorplanNodeExtension(definition)
+  if (
+    !isFloorplanToolAvailableInMode(extension?.availableModes, useFloorplanMode.getState().mode)
+  ) {
+    useFloorplanMode.getState().showExpertModeNotice(definition?.presentation?.label ?? kind)
+    return
+  }
+  const preferredView = extension?.preferredView
   if (preferredView) ed.setViewMode(preferredView)
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
@@ -184,9 +196,10 @@ const MEP_TOOL_KINDS = new Set<string>([
 export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
+  const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
-  const buildTypes = useMemo(collectBuildTypes, [])
+  const buildTypes = useMemo(() => collectBuildTypes(floorplanMode), [floorplanMode])
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays

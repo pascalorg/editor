@@ -18,6 +18,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
   extensions: {
     'pascal:editor/floorplan': {
       tool: () => import('./floorplan-tool'),
+      availableModes: ['expert'],
       resolveForDrawing: resolveConstructionDimensionForDrawing,
     } satisfies FloorplanNodeExtension<ConstructionDimensionNode>,
   },

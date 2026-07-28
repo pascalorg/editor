@@ -32,6 +32,7 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 import { CeilingSelectionAffordanceSystem } from '../systems/ceiling/ceiling-selection-affordance-system'
 import { CeilingSystem } from '../systems/ceiling/ceiling-system'
 import { RoofEditSystem } from '../systems/roof/roof-edit-system'
@@ -65,6 +66,7 @@ import { FenceTangentLines3D } from './fence-tangent-lines-3d'
 import { FirstPersonControls, FirstPersonOverlay } from './first-person-controls'
 import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
+import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
 import { FloorplanPanel } from './floorplan-panel'
 import { Grid } from './grid'
 import { GroupFloatingActionMenu } from './group-floating-action-menu'
@@ -1176,9 +1178,11 @@ export default function Editor({
 
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
+    useFloorplanMode.getState().setProjectId(projectId ?? null)
 
     return () => {
       useViewer.getState().setProjectId(null)
+      useFloorplanMode.getState().setProjectId(null)
     }
   }, [projectId])
 
@@ -1390,6 +1394,7 @@ export default function Editor({
 
     return (
       <>
+        <FloorplanModeCoordinator />
         {showLoader && (
           <div className="fixed inset-0 z-60">
             <SceneLoader className="bg-background" />
@@ -1465,6 +1470,7 @@ export default function Editor({
 
   return (
     <div className="dark flex h-full w-full gap-3 bg-neutral-100 p-3 text-foreground">
+      <FloorplanModeCoordinator />
       {showLoader && (
         <div className="fixed inset-0 z-60">
           <SceneLoader className="bg-background" />

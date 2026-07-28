@@ -1,1 +1,0 @@
-export { drawingSheetDefinition } from './definition'

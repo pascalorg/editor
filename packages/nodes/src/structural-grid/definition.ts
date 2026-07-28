@@ -12,6 +12,7 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
   extensions: {
     'pascal:editor/floorplan': {
       tool: () => import('./floorplan-tool'),
+      availableModes: ['expert'],
       preferredView: '2d',
     } satisfies FloorplanNodeExtension<StructuralGridNode>,
   },

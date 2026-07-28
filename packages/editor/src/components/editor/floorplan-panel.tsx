@@ -35,10 +35,8 @@ import {
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
-  type SpawnNode,
   type StairNode,
   StairNode as StairNodeSchema,
-  type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
@@ -464,21 +462,6 @@ type PendingFenceDragState = {
   startClientY: number
 }
 
-type ElevatorResizeHandle =
-  | 'width-negative'
-  | 'width-positive'
-  | 'depth-negative'
-  | 'depth-positive'
-
-type ElevatorResizeDragState = {
-  center: Point2D
-  elevatorId: ElevatorNode['id']
-  handle: ElevatorResizeHandle
-  pointerId: number
-  rotation: number
-  shaftWallThickness: number
-}
-
 const GUIDE_CORNERS = ['nw', 'ne', 'se', 'sw'] as const
 
 type GuideCorner = (typeof GUIDE_CORNERS)[number]
@@ -643,20 +626,9 @@ type SitePolygonEntry = {
   points: string
 }
 
-type ZonePolygonEntry = {
-  zone: ZoneNodeType
-  polygon: Point2D[]
-  points: string
-}
-
 type FloorplanLineSegment = {
   start: Point2D
   end: Point2D
-}
-
-type FloorplanPolygonEntry = {
-  points: string
-  polygon: Point2D[]
 }
 
 type FloorplanItemEntry = {
@@ -672,52 +644,6 @@ type FloorplanItemEntry = {
   rotation: number
   width: number
   depth: number
-}
-
-type FloorplanSpawnEntry = {
-  spawn: SpawnNode
-  position: Point2D
-  rotation: number
-}
-
-type FloorplanColumnEntry = {
-  column: ColumnNode
-  points: string
-  polygon: Point2D[]
-}
-
-type FloorplanElevatorServedLevel = {
-  id: LevelNode['id']
-  isCurrent: boolean
-  isDisabled: boolean
-  isQueued: boolean
-  isServiceOnly: boolean
-  isTarget: boolean
-  label: string
-}
-
-type FloorplanElevatorEntry = {
-  cabCenterLocalY: number
-  cabDepth: number
-  cabWidth: number
-  center: Point2D
-  doorStyle: ElevatorNode['doorStyle']
-  doorWidth: number
-  elevator: ElevatorNode
-  frontEdge: FloorplanLineSegment
-  frontNormal: Point2D
-  isCarOnLevel: boolean
-  isQueuedLevel: boolean
-  isTargetLevel: boolean
-  outerHalfDepth: number
-  outerHalfWidth: number
-  points: string
-  polygon: Point2D[]
-  rotation: number
-  servedLevels: FloorplanElevatorServedLevel[]
-  shaftDepth: number
-  shaftWallThickness: number
-  shaftWidth: number
 }
 
 type ReferenceFloorData = {
@@ -763,42 +689,6 @@ const REFERENCE_REGISTRY_KINDS = new Set<AnyNode['type']>([
   'spawn',
   'elevator',
 ])
-
-type FloorplanStairSegmentEntry = {
-  centerLine: FloorplanLineSegment | null
-  innerPoints: string
-  innerPolygon: Point2D[]
-  segment: StairSegmentNode
-  points: string
-  polygon: Point2D[]
-  treadBars: FloorplanPolygonEntry[]
-  treadThickness: number
-}
-
-type FloorplanStairArrowEntry = {
-  head: Point2D[]
-  polyline: Point2D[]
-}
-
-type FloorplanStairEntry = {
-  arrow: FloorplanStairArrowEntry | null
-  hitPolygons: Point2D[][]
-  stair: StairNode
-  segments: FloorplanStairSegmentEntry[]
-}
-
-type FloorplanRoofSegmentEntry = {
-  segment: RoofSegmentNode
-  polygon: Point2D[]
-  points: string
-  ridgeLine: FloorplanLineSegment | null
-}
-
-type FloorplanRoofEntry = {
-  roof: RoofNode
-  center: Point2D
-  segments: FloorplanRoofSegmentEntry[]
-}
 
 type FloorplanPalette = {
   surface: string
@@ -942,18 +832,6 @@ function resolveFloorplanViewWidth(
   const maxWidth = fittedViewport.width * MAX_VIEWPORT_WIDTH_RATIO
 
   return clamp(requestedWidth, Math.min(minWidth, currentWidth), Math.max(maxWidth, currentWidth))
-}
-
-function roundPlanMeters(value: number) {
-  return Math.round(value * 100) / 100
-}
-
-function getElevatorResizeAxis(handle: ElevatorResizeHandle) {
-  return handle.startsWith('width') ? 'width' : 'depth'
-}
-
-function getElevatorResizeSign(handle: ElevatorResizeHandle) {
-  return handle.endsWith('positive') ? 1 : -1
 }
 
 function getSelectionModifierKeys(event?: {
@@ -2465,7 +2343,6 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
     visible: true,
     metadata: {},
     children: [],
-    assemblyLayers: [],
     start,
     end,
     frontSide: 'unknown',
@@ -4165,262 +4042,6 @@ const FloorplanSiteEdgeLabelLayer = memo(function FloorplanSiteEdgeLabelLayer({
   )
 })
 
-const FloorplanZoneLayer = memo(function FloorplanZoneLayer({
-  canSelectZones,
-  hoveredZoneId,
-  isDeleteMode,
-  onZoneHoverChange,
-  onZoneSelect,
-  palette,
-  selectedZoneId,
-  zonePolygons,
-}: {
-  canSelectZones: boolean
-  hoveredZoneId: ZoneNodeType['id'] | null
-  isDeleteMode: boolean
-  onZoneHoverChange: (zoneId: ZoneNodeType['id'] | null) => void
-  onZoneSelect: (zoneId: ZoneNodeType['id'], event: ReactMouseEvent<SVGElement>) => void
-  palette: FloorplanPalette
-  selectedZoneId: ZoneNodeType['id'] | null
-  zonePolygons: ZonePolygonEntry[]
-}) {
-  return (
-    <>
-      {zonePolygons.map(({ zone, points }) => {
-        const isSelected = selectedZoneId === zone.id
-        const isHovered = hoveredZoneId === zone.id
-        const isDeleteHovered = isDeleteMode && isHovered
-
-        return (
-          <g key={zone.id}>
-            <polygon
-              fill={isDeleteHovered ? palette.deleteFill : zone.color}
-              fillOpacity={isDeleteHovered ? 0.22 : isSelected ? 0.28 : 0.16}
-              pointerEvents="none"
-              points={points}
-              stroke={
-                isDeleteHovered
-                  ? palette.deleteStroke
-                  : isSelected
-                    ? palette.selectedStroke
-                    : zone.color
-              }
-              strokeLinejoin="round"
-              strokeOpacity={isDeleteHovered || isSelected ? 0.96 : 0.72}
-              strokeWidth={isDeleteHovered || isSelected ? '0.08' : '0.05'}
-              vectorEffect="non-scaling-stroke"
-            />
-            {canSelectZones && (
-              <polygon
-                fill="none"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onZoneSelect(zone.id, event)
-                }}
-                onPointerEnter={() => onZoneHoverChange(zone.id)}
-                onPointerLeave={() => onZoneHoverChange(null)}
-                pointerEvents="stroke"
-                points={points}
-                stroke="transparent"
-                strokeLinejoin="round"
-                strokeWidth={FLOORPLAN_WALL_HIT_STROKE_WIDTH}
-                style={{ cursor: EDITOR_CURSOR }}
-                vectorEffect="non-scaling-stroke"
-              />
-            )}
-          </g>
-        )
-      })}
-    </>
-  )
-})
-
-const FLOORPLAN_ZONE_LABEL_FONT_SIZE = 0.2
-
-function FloorplanZoneLabelInput({
-  centroid,
-  svgRef,
-  viewBox,
-  zone,
-  onDone,
-}: {
-  centroid: { x: number; y: number }
-  svgRef: React.RefObject<SVGSVGElement | null>
-  viewBox: { minX: number; minY: number; width: number; height: number }
-  zone: ZoneNodeType
-  onDone: () => void
-}) {
-  const updateNode = useScene((s) => s.updateNode)
-  const [value, setValue] = useState(zone.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    })
-  }, [])
-
-  const save = useCallback(() => {
-    const trimmed = value.trim()
-    if (trimmed && trimmed !== zone.name) {
-      updateNode(zone.id, { name: trimmed })
-    }
-    onDone()
-  }, [value, zone.id, zone.name, updateNode, onDone])
-
-  // Convert SVG coordinates to screen pixel position
-  const svgEl = svgRef.current
-  if (!svgEl) return null
-  const rect = svgEl.getBoundingClientRect()
-  const screenX = ((centroid.x - viewBox.minX) / viewBox.width) * rect.width + rect.left
-  const screenY = ((centroid.y - viewBox.minY) / viewBox.height) * rect.height + rect.top
-
-  return createPortal(
-    <input
-      onBlur={save}
-      onChange={(e) => setValue(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        e.stopPropagation()
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          save()
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          onDone()
-        }
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      ref={inputRef}
-      style={{
-        position: 'fixed',
-        left: screenX,
-        top: screenY,
-        transform: 'translate(-50%, -50%)',
-        border: 'none',
-        borderBottom: `1px solid ${zone.color}`,
-        background: 'transparent',
-        color: 'white',
-        textShadow: `-1px -1px 0 ${zone.color}, 1px -1px 0 ${zone.color}, -1px 1px 0 ${zone.color}, 1px 1px 0 ${zone.color}`,
-        outline: 'none',
-        textAlign: 'center',
-        fontSize: '14px',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        padding: '2px 4px',
-        margin: 0,
-        zIndex: 100,
-        width: `${Math.max((value || zone.name || '').length + 2, 6)}ch`,
-      }}
-      type="text"
-      value={value}
-    />,
-    document.body,
-  )
-}
-
-// Pencil icon as an SVG path (Lucide pencil simplified), rendered relative to the label
-const PENCIL_ICON_SIZE = FLOORPLAN_ZONE_LABEL_FONT_SIZE * 0.6
-
-function FloorplanZoneLabel({
-  centroid,
-  onHoverChange,
-  onLabelClick,
-  zone,
-}: {
-  centroid: { x: number; y: number }
-  onHoverChange: (zoneId: ZoneNodeType['id'] | null) => void
-  onLabelClick: (zoneId: ZoneNodeType['id'], event: ReactMouseEvent<SVGElement>) => void
-  zone: ZoneNodeType
-}) {
-  const [hovered, setHovered] = useState(false)
-  const textRef = useRef<SVGTextElement>(null)
-  const [textWidth, setTextWidth] = useState(0)
-  const mode = useEditor((s) => s.mode)
-  const deleteNode = useScene((s) => s.deleteNode)
-  const setSelection = useViewer((s) => s.setSelection)
-
-  useEffect(() => {
-    if (textRef.current) {
-      setTextWidth(textRef.current.getComputedTextLength())
-    }
-  }, [])
-
-  const isDeleteMode = mode === 'delete'
-
-  return (
-    <g
-      cursor="pointer"
-      onClick={(e) => {
-        e.stopPropagation()
-        if (isDeleteMode) {
-          sfxEmitter.emit('sfx:structure-delete')
-          deleteNode(zone.id as AnyNodeId)
-          setSelection({ zoneId: null })
-          return
-        }
-        onLabelClick(zone.id, e)
-      }}
-      onPointerEnter={() => {
-        setHovered(true)
-        onHoverChange(zone.id)
-      }}
-      onPointerLeave={() => {
-        setHovered(false)
-        onHoverChange(null)
-      }}
-      pointerEvents="auto"
-      style={{ userSelect: 'none' }}
-    >
-      <text
-        dominantBaseline="central"
-        fill={isDeleteMode && hovered ? '#fecaca' : 'white'}
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize={FLOORPLAN_ZONE_LABEL_FONT_SIZE}
-        fontWeight="500"
-        paintOrder="stroke"
-        ref={textRef}
-        stroke={isDeleteMode && hovered ? '#dc2626' : zone.color}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={FLOORPLAN_ZONE_LABEL_FONT_SIZE * 0.35}
-        textAnchor="middle"
-        x={centroid.x}
-        y={centroid.y}
-      >
-        {zone.name}
-      </text>
-      {/* Pencil icon — visible on hover */}
-      {hovered && textWidth > 0 && (
-        <g
-          transform={`translate(${centroid.x + textWidth / 2 + PENCIL_ICON_SIZE * 0.5}, ${centroid.y - PENCIL_ICON_SIZE / 2})`}
-        >
-          <g transform={`scale(${PENCIL_ICON_SIZE / 24})`}>
-            <path
-              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
-              fill="none"
-              paintOrder="stroke"
-              stroke={zone.color}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-            />
-            <path
-              d="m15 5 4 4"
-              fill="none"
-              stroke={zone.color}
-              strokeLinecap="round"
-              strokeWidth={3}
-            />
-          </g>
-        </g>
-      )}
-    </g>
-  )
-}
-
 const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   edgeHandles = [],
   hoveredHandleId,
@@ -5605,24 +5226,7 @@ export function FloorplanPanel({
   )
   const [wallEndpointDraft, setWallEndpointDraft] = useState<WallEndpointDraft | null>(null)
   const [wallCurveDraft, setWallCurveDraft] = useState<WallCurveDraft | null>(null)
-  const [hoveredOpeningId, setHoveredOpeningId] = useState<OpeningNode['id'] | null>(null)
-  const [hoveredWallId, setHoveredWallId] = useState<WallNode['id'] | null>(null)
-  const [hoveredFenceId, setHoveredFenceId] = useState<FenceNode['id'] | null>(null)
-  const [hoveredSlabId, setHoveredSlabId] = useState<SlabNode['id'] | null>(null)
-  const [hoveredCeilingId, setHoveredCeilingId] = useState<CeilingNode['id'] | null>(null)
-  const [hoveredItemId, setHoveredItemId] = useState<ItemNode['id'] | null>(null)
-  const [hoveredSpawnId, setHoveredSpawnId] = useState<SpawnNode['id'] | null>(null)
-  const [hoveredStairId, setHoveredStairId] = useState<StairNode['id'] | null>(null)
-  const [hoveredElevatorId, setHoveredElevatorId] = useState<ElevatorNode['id'] | null>(null)
-  const [elevatorResizeDragState, setElevatorResizeDragState] =
-    useState<ElevatorResizeDragState | null>(null)
-  const [hoveredZoneId, setHoveredZoneId] = useState<ZoneNodeType['id'] | null>(null)
-  const [hoveredEndpointId, setHoveredEndpointId] = useState<string | null>(null)
-  const [hoveredWallCurveHandleId, setHoveredWallCurveHandleId] = useState<string | null>(null)
   const [hoveredSiteHandleId, setHoveredSiteHandleId] = useState<string | null>(null)
-  const [hoveredSlabHandleId, setHoveredSlabHandleId] = useState<string | null>(null)
-  const [hoveredCeilingHandleId, setHoveredCeilingHandleId] = useState<string | null>(null)
-  const [hoveredZoneHandleId, setHoveredZoneHandleId] = useState<string | null>(null)
   const [hoveredGuideCorner, setHoveredGuideCorner] = useState<GuideCorner | null>(null)
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
   const setFloorplanSelectionTool = useEditor((s) => s.setFloorplanSelectionTool)
@@ -5717,11 +5321,9 @@ export function FloorplanPanel({
   if (!floorplanViewportInteractionInProgressRef.current) {
     latestViewportRef.current = viewport
   }
-  // Tight bbox of the painted floor-plan scene (the rotation `<g>`'s
-  // children), read via SVG `getBBox()` after content changes settle. The legacy
-  // polygon arrays (`wallPolygons`, `displaySlabPolygons`, etc.) are now
-  // empty stubs because rendering moved to the registry layer, so
-  // measuring the DOM is how `fittedViewport` learns where content lives.
+  // Tight bbox of the registry-rendered floor-plan content, read via SVG
+  // `getBBox()` after geometry changes settle. `fittedViewport` combines it
+  // with the editor-owned site boundary below.
   const [measuredSceneBBox, setMeasuredSceneBBox] = useState<{
     x: number
     y: number
@@ -5962,28 +5564,9 @@ export function FloorplanPanel({
 
     return hasPreviewWalls ? nextFloorplanWallById : floorplanWallById
   }, [displayWallById, floorplanWallById, wallCurveDraft, wallEndpointDraft])
-  // Fence is fully registry-driven (`def.floorplan` + `buildFenceFloorplan`).
-  // The legacy entry list is permanently empty; kept as a typed stable
-  // reference so downstream prop sites stay typed without each having to
-  // declare its own `[]`.
-  const floorplanFenceEntries = useMemo<FloorplanFenceEntry[]>(() => [], [])
-  // Wall is fully registry-driven. Empty stable arrays for the legacy
-  // entry lists; consumers' map / iteration paths become no-ops.
-  const wallPolygons = useMemo<WallPolygonEntry[]>(() => [], [])
-  const displayWallPolygons = useMemo<WallPolygonEntry[]>(() => [], [])
-
-  // Doors + windows fully registry-driven via `def.floorplan`.
-  const openingsPolygons = useMemo<OpeningPolygonEntry[]>(() => [], [])
-  // Slab + ceiling fully registry-driven via `def.floorplan`. Same
-  // empty-stable-array pattern.
-  const slabPolygons = useMemo<SlabPolygonEntry[]>(() => [], [])
-  const displaySlabPolygons = useMemo<SlabPolygonEntry[]>(() => [], [])
-  const ceilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
-  const displayCeilingPolygons = useMemo<CeilingPolygonEntry[]>(() => [], [])
   // Ceilings on the active level, projected to 2D polygons for hit-testing
-  // ceiling-item placement clicks/moves. The legacy `ceilingPolygons` above
-  // is intentionally empty (ceilings render via the registry layer); this
-  // memo is the placement-side counterpart, separate from rendering.
+  // ceiling-item placement clicks/moves. Committed ceilings render through
+  // the registry; this memo is placement data, not a rendering fallback.
   const ceilingHitEntries = useMemo(
     () =>
       ceilings.map((ceiling) => ({
@@ -5995,11 +5578,6 @@ export function FloorplanPanel({
       })),
     [ceilings],
   )
-  // Zone fully registry-driven via `def.floorplan`.
-  const zonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
-  const displayZonePolygons = useMemo<ZonePolygonEntry[]>(() => [], [])
-  // Column fully registry-driven via `def.floorplan`.
-  const floorplanColumnEntries = useMemo<FloorplanColumnEntry[]>(() => [], [])
   const levelDescendantNodeById = useMemo(
     () => new Map(levelDescendantNodes.map((node) => [node.id, node] as const)),
     [levelDescendantNodes],
@@ -6022,11 +5600,6 @@ export function FloorplanPanel({
       ),
     [levelDescendantNodes],
   )
-  // Spawn + item fully registry-driven.
-  const floorplanSpawnEntries = useMemo<FloorplanSpawnEntry[]>(() => [], [])
-  const floorplanItemEntries = useMemo<FloorplanItemEntry[]>(() => [], [])
-  // Elevator fully registry-driven via `def.floorplan`.
-  const floorplanElevatorEntries = useMemo<FloorplanElevatorEntry[]>(() => [], [])
   const referenceFloorLevel = useMemo(() => {
     if (!(showReferenceFloor && levelNode)) {
       return null
@@ -6269,26 +5842,6 @@ export function FloorplanPanel({
       wallPolygons,
     }
   }, [referenceFloorDescendants, referenceFloorLevel])
-  // Pending-mesh check was a flag the legacy active-level item entries
-  // raised when their polygon was the dimension fallback (waiting for
-  // the GLB to load to produce a tighter convex hull). Items are now
-  // registry-rendered, so the active-level entry list is always empty
-  // and this flag is permanently false.
-  const hasPendingItemMeshFootprints = false
-  // Stair fully registry-driven via `def.floorplan` (the parent walks
-  // its `stair-segment` children inside `buildStairFloorplan` to handle
-  // the cumulative-transform chain). `FloorplanRegistryLayer` renders
-  // the result; this legacy list stays empty.
-  const floorplanStairEntries = useMemo<FloorplanStairEntry[]>(() => [], [])
-  // Roof / roof-segment fully registry-driven via def.floorplan.
-  const floorplanRoofEntries = useMemo<FloorplanRoofEntry[]>(() => [], [])
-  // Slab / ceiling / zone are registry-driven; the polygon-handle, hole
-  // editor, and boundary-edit affordances live on `def.floorplanAffordances`.
-  // These legacy lookups stay as null stubs so the hole-editing fallbacks
-  // that still reference them compile cleanly.
-  const selectedSlabEntry = null as SlabPolygonEntry | null
-  const selectedCeilingEntry = null as CeilingPolygonEntry | null
-  const selectedZoneEntry = null as ZonePolygonEntry | null
   const slabById = useMemo(() => new Map(slabs.map((slab) => [slab.id, slab] as const)), [slabs])
   const zoneById = useMemo(() => new Map(zones.map((zone) => [zone.id, zone] as const)), [zones])
   const ceilingById = useMemo(
@@ -6509,7 +6062,6 @@ export function FloorplanPanel({
     Boolean(visibleSitePolygon) &&
     activeHandleDrag?.nodeId === visibleSitePolygon?.site.id &&
     activeHandleDrag?.label === SITE_BOUNDARY_DRAG_LABEL
-  const visibleZonePolygons = displayZonePolygons
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const highlightedFloorplanIdSet = useMemo(
     () => new Set([...selectedIds, ...previewSelectedIds]),
@@ -6636,31 +6188,12 @@ export function FloorplanPanel({
   )
 
   const fittedViewport = useMemo(() => {
-    // Collect bounds from the legacy polygon arrays first. Most are empty
-    // stubs (rendering moved to the registry layer), but we still honor
-    // anything that does emit points so the fit is correct during the
-    // brief window before `measuredSceneBBox` is populated.
-    const legacyPoints = [
-      ...(visibleSitePolygon ? visibleSitePolygon.polygon : []),
-      ...displayCeilingPolygons.flatMap((entry) => entry.polygon),
-      ...displaySlabPolygons.flatMap((entry) => entry.polygon),
-      ...floorplanElevatorEntries.flatMap((entry) => entry.polygon),
-      ...floorplanFenceEntries.flatMap((entry) => entry.centerline),
-      ...floorplanItemEntries.flatMap((entry) => entry.polygon),
-      ...floorplanRoofEntries.flatMap((entry) =>
-        entry.segments.flatMap((segmentEntry) => segmentEntry.polygon),
-      ),
-      ...floorplanStairEntries.flatMap((entry) => entry.hitPolygons.flat()),
-      ...visibleZonePolygons.flatMap((entry) => entry.polygon),
-      ...wallPolygons.flatMap((entry) => entry.polygon),
-    ]
-
     let minX = Number.POSITIVE_INFINITY
     let maxX = Number.NEGATIVE_INFINITY
     let minY = Number.POSITIVE_INFINITY
     let maxY = Number.NEGATIVE_INFINITY
 
-    for (const point of legacyPoints) {
+    for (const point of visibleSitePolygon?.polygon ?? []) {
       const svgPoint = rotateSvgPoint(toSvgPoint(point), floorplanSceneRotationDeg)
       minX = Math.min(minX, svgPoint.x)
       maxX = Math.max(maxX, svgPoint.x)
@@ -6708,21 +6241,7 @@ export function FloorplanPanel({
       centerY,
       width,
     }
-  }, [
-    displayCeilingPolygons,
-    displaySlabPolygons,
-    floorplanElevatorEntries,
-    floorplanFenceEntries,
-    floorplanItemEntries,
-    floorplanRoofEntries,
-    floorplanSceneRotationDeg,
-    floorplanStairEntries,
-    measuredSceneBBox,
-    svgAspectRatio,
-    visibleSitePolygon,
-    visibleZonePolygons,
-    wallPolygons,
-  ])
+  }, [floorplanSceneRotationDeg, measuredSceneBBox, svgAspectRatio, visibleSitePolygon])
   latestFittedViewportRef.current = fittedViewport
 
   // Measure the content-only subtree after its geometry settles. ViewBox-only
@@ -7825,120 +7344,6 @@ export function FloorplanPanel({
     [getSvgPointFromClientPoint, buildingRotationY],
   )
 
-  const previewElevatorResize = useCallback(
-    (dragState: ElevatorResizeDragState, planPoint: WallPlanPoint) => {
-      const localDeltaX = planPoint[0] - dragState.center.x
-      const localDeltaY = planPoint[1] - dragState.center.y
-      const [localX, localY] = rotatePlanVector(localDeltaX, localDeltaY, -dragState.rotation)
-      const axis = getElevatorResizeAxis(dragState.handle)
-      const sign = getElevatorResizeSign(dragState.handle)
-      const localDistance = sign * (axis === 'width' ? localX : localY)
-      const nextOuterSize = Math.max(0.1, localDistance) * 2
-
-      if (axis === 'width') {
-        const nextShaftWidth = roundPlanMeters(
-          Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
-        )
-        const nextCabWidth = nextShaftWidth
-        useLiveNodeOverrides
-          .getState()
-          .set(dragState.elevatorId, { shaftWidth: nextShaftWidth, width: nextCabWidth })
-        setCursorPoint(planPoint)
-        return { shaftWidth: nextShaftWidth, width: nextCabWidth } satisfies Partial<ElevatorNode>
-      }
-
-      const nextShaftDepth = roundPlanMeters(
-        Math.max(0.8, nextOuterSize - dragState.shaftWallThickness * 2),
-      )
-      const nextCabDepth = nextShaftDepth
-      useLiveNodeOverrides
-        .getState()
-        .set(dragState.elevatorId, { depth: nextCabDepth, shaftDepth: nextShaftDepth })
-      setCursorPoint(planPoint)
-      return { depth: nextCabDepth, shaftDepth: nextShaftDepth } satisfies Partial<ElevatorNode>
-    },
-    [setCursorPoint],
-  )
-
-  const handleElevatorResizePointerDown = useCallback(
-    (
-      entry: FloorplanElevatorEntry,
-      handle: ElevatorResizeHandle,
-      event: ReactPointerEvent<SVGCircleElement>,
-    ) => {
-      if (event.button !== 0 || mode !== 'select') {
-        return
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
-      event.currentTarget.setPointerCapture(event.pointerId)
-      setHoveredElevatorId(null)
-      setSelection({ selectedIds: [entry.elevator.id] })
-
-      setElevatorResizeDragState({
-        center: entry.center,
-        elevatorId: entry.elevator.id,
-        handle,
-        pointerId: event.pointerId,
-        rotation: entry.rotation,
-        shaftWallThickness: entry.shaftWallThickness,
-      })
-    },
-    [mode, setSelection],
-  )
-
-  const handleElevatorResizePointerMove = useCallback(
-    (event: ReactPointerEvent<SVGCircleElement>) => {
-      const dragState = elevatorResizeDragState
-      if (!dragState || dragState.pointerId !== event.pointerId) {
-        return
-      }
-
-      const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
-      if (!planPoint) {
-        return
-      }
-
-      event.preventDefault()
-      event.stopPropagation()
-      previewElevatorResize(dragState, planPoint)
-    },
-    [elevatorResizeDragState, getPlanPointFromClientPoint, previewElevatorResize],
-  )
-
-  const handleElevatorResizePointerUp = useCallback(
-    (event: ReactPointerEvent<SVGCircleElement>) => {
-      const dragState = elevatorResizeDragState
-      if (!dragState || dragState.pointerId !== event.pointerId) {
-        return
-      }
-
-      const planPoint = getPlanPointFromClientPoint(event.clientX, event.clientY)
-      const updates = planPoint ? previewElevatorResize(dragState, planPoint) : {}
-
-      event.preventDefault()
-      event.stopPropagation()
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }
-
-      useLiveNodeOverrides.getState().clear(dragState.elevatorId)
-      if (Object.keys(updates).length > 0) {
-        updateNode(dragState.elevatorId as AnyNodeId, updates)
-      }
-      setElevatorResizeDragState(null)
-      setCursorPoint(null)
-    },
-    [
-      elevatorResizeDragState,
-      getPlanPointFromClientPoint,
-      previewElevatorResize,
-      updateNode,
-      setCursorPoint,
-    ],
-  )
-
   useEffect(() => {
     siteBoundaryDraftRef.current = siteBoundaryDraft
   }, [siteBoundaryDraft])
@@ -8451,13 +7856,11 @@ export function FloorplanPanel({
   const clearWallEndpointDrag = useCallback(() => {
     wallEndpointDragRef.current = null
     setWallEndpointDraft(null)
-    setHoveredEndpointId(null)
     useWallSnapIndicator.getState().clear()
   }, [])
   const clearWallCurveDrag = useCallback(() => {
     wallCurveDragRef.current = null
     setWallCurveDraft(null)
-    setHoveredWallCurveHandleId(null)
   }, [])
   const clearSiteBoundaryInteraction = useCallback(() => {
     const draft = siteBoundaryDraftRef.current
@@ -8664,14 +8067,6 @@ export function FloorplanPanel({
       emitter.off('item:leave', refreshFloorplanItemPreview as any)
     }
   }, [isItemPlacementPreviewActive, scheduleMovingFloorplanNodeRefresh])
-
-  useEffect(() => {
-    if (!hasPendingItemMeshFootprints) {
-      return
-    }
-
-    scheduleMovingFloorplanNodeRefresh()
-  }, [scheduleMovingFloorplanNodeRefresh])
 
   // Subscribe to the live-transforms store so rotation/position changes that
   // *don't* go through pointer events still refresh the floorplan — e.g. R/T
@@ -9779,10 +9174,6 @@ export function FloorplanPanel({
         return
       }
 
-      if (elevatorResizeDragState?.pointerId === event.pointerId) {
-        return
-      }
-
       if (wallEndpointDragRef.current?.pointerId === event.pointerId) {
         return
       }
@@ -10135,7 +9526,6 @@ export function FloorplanPanel({
       publishFloorplanNavigationPose,
       referenceScaleDraft,
       roofDraftStart,
-      elevatorResizeDragState,
       siteVertexDragState,
       surfaceSize.height,
       surfaceSize.width,
@@ -10398,21 +9788,7 @@ export function FloorplanPanel({
     ],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
-    ceilingPolygons: displayCeilingPolygons,
-    columnPolygons: floorplanColumnEntries,
-    displaySlabPolygons,
-    displayWallPolygons,
-    floorplanElevatorEntries,
-    floorplanItemEntries,
-    floorplanRoofEntries,
-    floorplanStairEntries,
-    getFloorplanOpeningHitTolerance,
-    getFloorplanWallHitTolerance,
-    getOpeningCenterLine,
-    isFloorplanItemContextActive,
-    openingsPolygons,
-    phase,
-    toPoint2D,
+    sceneRef: floorplanSceneRef,
   })
   // Wall-commit snap for the placement hook. Mirrors the move-preview branch:
   // it honours the Magnetic snap toggle so a click never snaps to geometry the
@@ -10552,8 +9928,6 @@ export function FloorplanPanel({
         modifierKeys,
         planPoint,
         structureLayer,
-        toPoint2D,
-        visibleZonePolygons,
       })
 
       if (backgroundSelection.handled) {
@@ -10618,7 +9992,6 @@ export function FloorplanPanel({
       structureLayer,
       getFloorplanHitIdAtPoint,
       unit,
-      visibleZonePolygons,
       emitFloorplanGridEvent,
       setCursorPoint,
     ],
@@ -11268,7 +10641,6 @@ export function FloorplanPanel({
         !panStateRef.current &&
         !floorplanRotationStateRef.current &&
         !guideInteractionRef.current &&
-        !elevatorResizeDragState &&
         !wallEndpointDragRef.current &&
         !siteVertexDragState
       ) {
@@ -11296,7 +10668,6 @@ export function FloorplanPanel({
       handlePointerMove,
       hasFloorplanCursorIndicator,
       isSpacePanPressed,
-      elevatorResizeDragState,
       siteVertexDragState,
       setFloorplanCursorPosition,
     ],
@@ -12013,18 +11384,10 @@ export function FloorplanPanel({
                 />
               )}
 
-              {/* Registry-driven floor-plan layer. Iterates kinds whose
-                  NodeDefinition supplies a `floorplan` builder and renders
-                  their SVG via <FloorplanGeometryRenderer>. Sits above the
-                  legacy inline content so newly-registered kinds (shelf
-                  today) overlay on top until their inline equivalent is
-                  removed in their Phase 5 migration PR.
-
-                  Wrapped in <FloorplanRenderProvider> so registry-driven
-                  kinds receive the same themed palette / units-per-pixel
-                  the legacy layers compute. The hatch pattern id is the
-                  legacy wall hatch — kinds that opt into selection hatch
-                  fills reuse this <defs> pattern via fill="url(...)". */}
+              {/* Registry-driven floor-plan layer. Every committed node kind
+                  supplies its geometry through `NodeDefinition.floorplan`.
+                  The provider carries editor presentation data—palette,
+                  scale, rotation, and the shared selection-hatch pattern. */}
               <FloorplanRenderProvider
                 getSceneRotationDeg={getFloorplanSceneRotationDeg}
                 hatchPatternId={wallSelectionHatchId}
@@ -12164,13 +11527,6 @@ export function FloorplanPanel({
                 wallDraftStart={draftStart}
                 walls={walls}
               />
-
-              {/* Wall / fence endpoint, wall curve, slab / ceiling /
-                  zone vertex+midpoint+edge handles are all driven by the
-                  registry's `def.floorplanAffordances` and rendered as
-                  part of `FloorplanRegistryLayer`. The legacy handle
-                  layers that lived here received empty handle arrays
-                  post-migration and rendered nothing. */}
 
               {selectedGuide && showGuides && (
                 <FloorplanGuideSelectionOverlay

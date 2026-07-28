@@ -5,9 +5,10 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   snapScalar,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getSegmentGridStep } from '@pascal-app/editor'
+import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
@@ -91,14 +92,16 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         lastValue = newValue
-        useScene
+        useLiveNodeOverrides
           .getState()
-          .updateNode(segmentId, axis === 'x' ? { width: newValue } : { depth: newValue })
+          .set(segmentId, axis === 'x' ? { width: newValue } : { depth: newValue })
+        useScene.getState().markDirty(segmentId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
         useScene
           .getState()
           .updateNode(segmentId, axis === 'x' ? { width: lastValue } : { depth: lastValue })
@@ -125,20 +128,22 @@ export const roofSegmentRotateAffordance: FloorplanAffordance<RoofSegmentNode> =
 
     return {
       affectedIds: [segmentId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
           initialAngle,
           planPoint,
-          free: modifiers.shiftKey,
+          free: !isAngleSnapActive(),
         })
         lastRotation = initialRotation - delta
-        useScene.getState().updateNode(segmentId, { rotation: lastRotation })
+        useLiveNodeOverrides.getState().set(segmentId, { rotation: lastRotation })
+        useScene.getState().markDirty(segmentId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(segmentId)
         useScene.getState().updateNode(segmentId, { rotation: lastRotation })
       },
     }
@@ -186,12 +191,14 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
       let localX = dx * cosRoof + dz * sinRoof
       let localZ = -dx * sinRoof + dz * cosRoof
       lastLocal = [localX, initialY, localZ]
-      useScene.getState().updateNode(segmentId, { position: lastLocal })
+      useLiveNodeOverrides.getState().set(segmentId, { position: lastLocal })
+      useScene.getState().markDirty(segmentId)
     },
     canCommit() {
       return true
     },
     commit() {
+      useLiveNodeOverrides.getState().clear(segmentId)
       useScene.getState().updateNode(segmentId, { position: lastLocal })
     },
   }

@@ -6,11 +6,10 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getWallArcData,
-  getWallAssemblyFaceOffsets,
   getWallChordFrame,
   getWallMidpointHandlePoint,
+  getWallThickness,
   isCurvedWall,
-  resolveWallAssemblyDatumReferences,
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
@@ -1512,16 +1511,8 @@ function wallDatumOffsetOnSide(
   policy: ConstructionDimensionDrawingStandard['datumPolicy'],
   side: 1 | -1,
 ): number {
-  const faces = getWallAssemblyFaceOffsets(wall)
-  if (policy === 'wall-face') return side > 0 ? faces.exterior : faces.interior
   if (policy === 'centerline') return 0
-
-  const datum = policy === 'finish-face' ? 'finish-face' : 'structural-face'
-  const candidates = resolveWallAssemblyDatumReferences(wall)
-    .filter((reference) => reference.datum === datum && Math.sign(reference.offset) === side)
-    .map((reference) => reference.offset)
-  if (candidates.length === 0) return side > 0 ? faces.exterior : faces.interior
-  return side > 0 ? Math.max(...candidates) : Math.min(...candidates)
+  return (getWallThickness(wall) / 2) * side
 }
 
 function wallDatumDistanceToward(

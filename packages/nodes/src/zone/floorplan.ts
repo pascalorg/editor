@@ -113,7 +113,9 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         stroke,
       ),
     )
-    children.push(...buildRoomClearDimensions(node, ctx))
+    if (floorplanContext.automaticDimensions) {
+      children.push(...buildRoomClearDimensions(node, ctx))
+    }
   } else if (name) {
     children.push({
       kind: 'text',
