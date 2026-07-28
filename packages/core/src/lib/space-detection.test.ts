@@ -479,6 +479,108 @@ function createEditorStoreStub() {
   return { getState: () => state }
 }
 
+function roomWithGeneratedSurfaces() {
+  const walls = [
+    WallNode.parse({ id: 'wall_1', start: [0, 0], end: [4, 0], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_2', start: [4, 0], end: [4, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_3', start: [4, 3], end: [0, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_4', start: [0, 3], end: [0, 0], parentId: 'level_0' }),
+  ]
+  const generatedSlab = SlabNode.parse({
+    id: 'slab_main',
+    parentId: 'level_0',
+    polygon: square,
+    autoFromWalls: true,
+  })
+  const generatedCeiling = CeilingNode.parse({
+    id: 'ceiling_main',
+    parentId: 'level_0',
+    polygon: square,
+    autoFromWalls: true,
+  })
+  const nodes = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_0'] }),
+    LevelNode.parse({
+      id: 'level_0',
+      parentId: 'building_a',
+      children: [...walls.map((wall) => wall.id), generatedSlab.id, generatedCeiling.id],
+    }),
+    ...walls,
+    generatedSlab,
+    generatedCeiling,
+  ]
+
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<string, AnyNode>
+}
+
+describe('generated surface deletion through the detection sync', () => {
+  test('a deleted generated slab stays deleted', () => {
+    const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const { slab_main: _deleted, ...withoutSlab } = sceneStore.getState().nodes
+      sceneStore.setNodes(withoutSlab)
+
+      expect(
+        Object.values(sceneStore.getState().nodes).filter((node) => node.type === 'slab'),
+      ).toHaveLength(0)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('a deleted generated ceiling stays deleted after the next wall edit', () => {
+    const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const { ceiling_main: _deleted, ...withoutCeiling } = sceneStore.getState().nodes
+      sceneStore.setNodes(withoutCeiling)
+      const wall = sceneStore.getState().nodes.wall_1 as WallNode
+      sceneStore.setNodes({
+        ...sceneStore.getState().nodes,
+        wall_1: { ...wall, height: 2.6 },
+      })
+
+      expect(
+        Object.values(sceneStore.getState().nodes).filter((node) => node.type === 'ceiling'),
+      ).toHaveLength(0)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('deleted generated surfaces stay suppressed after the sync is reinitialized', () => {
+    const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
+    let unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    const {
+      slab_main: _slab,
+      ceiling_main: _ceiling,
+      ...withoutSurfaces
+    } = sceneStore.getState().nodes
+    sceneStore.setNodes(withoutSurfaces)
+    unsubscribe()
+
+    unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    try {
+      const wall = sceneStore.getState().nodes.wall_1 as WallNode
+      sceneStore.setNodes({
+        ...sceneStore.getState().nodes,
+        wall_1: { ...wall, height: 2.6 },
+      })
+
+      const surfaces = Object.values(sceneStore.getState().nodes).filter(
+        (node) => node.type === 'slab' || node.type === 'ceiling',
+      )
+      expect(surfaces).toHaveLength(0)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
 describe('reactive ceiling re-clamp through the detection sync', () => {
   test('a flush deck created on the level above clamps the existing manual ceiling below', () => {
     const walls = [

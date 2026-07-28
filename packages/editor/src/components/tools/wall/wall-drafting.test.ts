@@ -21,6 +21,7 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   createWallOnCurrentLevel,
   resolveEndpointWallSplit,
+  shouldStopWallDraftAfterCommit,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -35,6 +36,35 @@ if (typeof globalThis.requestAnimationFrame === 'undefined') {
 }
 
 const LEVEL_ID = 'level_test' as AnyNodeId
+
+describe('shouldStopWallDraftAfterCommit', () => {
+  test('stops the 2D draft when the mounted wall tool closes the chain', () => {
+    expect(
+      shouldStopWallDraftAfterCommit({
+        locallyCreatedWall: null,
+        publishedNextStart: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('continues from a next start published by the mounted wall tool', () => {
+    expect(
+      shouldStopWallDraftAfterCommit({
+        locallyCreatedWall: null,
+        publishedNextStart: [4, 0],
+      }),
+    ).toBe(false)
+  })
+
+  test('lets the 2D fallback committer decide from its created wall', () => {
+    expect(
+      shouldStopWallDraftAfterCommit({
+        locallyCreatedWall: makeWall([0, 0], [4, 0], 'wall_created'),
+        publishedNextStart: null,
+      }),
+    ).toBe(false)
+  })
+})
 
 function makeWall(start: WallPlanPoint, end: WallPlanPoint, id: string): WallNode {
   return {

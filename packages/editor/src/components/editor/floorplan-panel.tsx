@@ -179,6 +179,7 @@ import {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  shouldStopWallDraftAfterCommit,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -9764,11 +9765,17 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
+      } else if (
+        shouldStopWallDraftAfterCommit({
+          locallyCreatedWall: createdWall,
+          publishedNextStart,
+        })
+      ) {
+        // The mounted wall tool owns both the commit and the continuation
+        // decision in split and 2D-only views. It clears the published chain
+        // start whenever it stops drafting (loop close, room close,
+        // T-junction, single). Mirror that here instead of chaining the 2D
+        // draft from a dead point.
         clearWallPlacementDraft()
         setCursorPoint(null)
         return

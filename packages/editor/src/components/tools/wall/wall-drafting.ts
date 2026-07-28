@@ -476,6 +476,16 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
+export function shouldStopWallDraftAfterCommit({
+  locallyCreatedWall,
+  publishedNextStart,
+}: {
+  locallyCreatedWall: WallNode | null
+  publishedNextStart: WallPlanPoint | null
+}): boolean {
+  return locallyCreatedWall === null && publishedNextStart === null
+}
+
 export function createWallOnCurrentLevel(
   start: WallPlanPoint,
   end: WallPlanPoint,

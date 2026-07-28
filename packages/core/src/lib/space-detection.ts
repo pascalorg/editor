@@ -83,6 +83,21 @@ export type AutoZoneSyncPlan = {
   update: Array<{ id: ZoneNodeType['id']; data: Partial<ZoneNodeType> }>
 }
 
+type AutoSurfaceKind = 'slab' | 'ceiling'
+
+type AutoSurfaceSuppressionMetadata = Partial<Record<AutoSurfaceKind, string[]>>
+
+type AutoSurfaceSnapshot = {
+  id: string
+  levelId: string
+  kind: AutoSurfaceKind
+  roomSignature: string
+}
+
+export type AutoSlabPlanningContext = {
+  suppressedRoomSignatures?: readonly string[]
+}
+
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
 const CEILING_HEIGHT_EPSILON = 1e-6
 const ROOM_CURVE_TOLERANCE = 0.04
@@ -105,6 +120,7 @@ const COVERAGE_SAMPLE_STEPS = 12
 // no wall/slab inputs anymore — only the bound for the explicit-height
 // reactive re-clamp below.
 export type AutoCeilingPlanningContext = {
+  suppressedRoomSignatures?: readonly string[]
   /** Stored storey height of the level being planned (floor-to-floor). */
   storeyHeight?: number
   /**
@@ -156,6 +172,92 @@ function polygonSignature(points: Point2D[]) {
   const forward = minRotationSignature(keys)
   const reversed = minRotationSignature([...keys].reverse())
   return forward < reversed ? forward : reversed
+}
+
+function readAutoSurfaceSuppressions(level: unknown): AutoSurfaceSuppressionMetadata {
+  if (!(level && typeof level === 'object' && 'metadata' in level)) return {}
+  const metadata = level.metadata
+  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return {}
+  const value = (metadata as Record<string, unknown>).autoSurfaceSuppressions
+  if (!(value && typeof value === 'object' && !Array.isArray(value))) return {}
+
+  const record = value as Record<string, unknown>
+  return {
+    slab: Array.isArray(record.slab)
+      ? record.slab.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+    ceiling: Array.isArray(record.ceiling)
+      ? record.ceiling.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+  }
+}
+
+function autoSurfaceSnapshots(nodes: Record<string, any>) {
+  const snapshots = new Map<string, AutoSurfaceSnapshot>()
+
+  for (const node of Object.values(nodes)) {
+    if (
+      !(
+        node &&
+        (node.type === 'slab' || node.type === 'ceiling') &&
+        node.autoFromWalls === true &&
+        typeof node.parentId === 'string' &&
+        Array.isArray(node.polygon)
+      )
+    ) {
+      continue
+    }
+
+    snapshots.set(node.id, {
+      id: node.id,
+      levelId: node.parentId,
+      kind: node.type,
+      roomSignature: polygonSignature(node.polygon.map(pointFromTuple)),
+    })
+  }
+
+  return snapshots
+}
+
+function recordDeletedAutoSurfaceSuppressions(
+  previousSurfaces: Map<string, AutoSurfaceSnapshot>,
+  nodes: Record<string, any>,
+  sceneStore: any,
+) {
+  const additionsByLevel = new Map<string, AutoSurfaceSuppressionMetadata>()
+
+  for (const surface of previousSurfaces.values()) {
+    if (nodes[surface.id] || nodes[surface.levelId]?.type !== 'level') continue
+    const additions = additionsByLevel.get(surface.levelId) ?? {}
+    const signatures = additions[surface.kind] ?? []
+    if (!signatures.includes(surface.roomSignature)) signatures.push(surface.roomSignature)
+    additions[surface.kind] = signatures
+    additionsByLevel.set(surface.levelId, additions)
+  }
+
+  const updates = [...additionsByLevel.entries()].flatMap(([levelId, additions]) => {
+    const level = nodes[levelId]
+    if (level?.type !== 'level') return []
+    const existing = readAutoSurfaceSuppressions(level)
+    const next: AutoSurfaceSuppressionMetadata = {
+      slab: [...new Set([...(existing.slab ?? []), ...(additions.slab ?? [])])],
+      ceiling: [...new Set([...(existing.ceiling ?? []), ...(additions.ceiling ?? [])])],
+    }
+    return [
+      {
+        id: levelId,
+        data: {
+          metadata: {
+            ...(level.metadata && typeof level.metadata === 'object' ? level.metadata : {}),
+            autoSurfaceSuppressions: next,
+          },
+        },
+      },
+    ]
+  })
+
+  if (updates.length > 0) sceneStore.getState().updateNodes(updates)
+  return updates.length > 0
 }
 
 function samePointWithinTolerance(a: Point2D, b: Point2D, tolerance = 1e-4) {
@@ -1072,7 +1174,9 @@ export function resolveAutoZonePolygon(
 export function planAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
+  context: AutoSlabPlanningContext = {},
 ): AutoSlabSyncPlan {
+  const suppressedRoomSignatures = new Set(context.suppressedRoomSignatures ?? [])
   const manualSlabs = existingSlabs.filter((slab) => !slab.autoFromWalls)
   const manualSignatures = new Set(
     manualSlabs.map((slab) => polygonSignature(slab.polygon.map(pointFromTuple))),
@@ -1098,7 +1202,10 @@ export function planAutoSlabsForLevel(
     }))
 
   const detected = detectedAll.filter(
-    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+    ({ sig, poly }) =>
+      !suppressedRoomSignatures.has(sig) &&
+      !manualSignatures.has(sig) &&
+      !matchesManualFootprint(poly, manualPolygons),
   )
 
   const existingAuto = existingSlabs.filter((slab) => slab.autoFromWalls)
@@ -1302,8 +1409,9 @@ function syncAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
   sceneStore: any,
+  context: AutoSlabPlanningContext = {},
 ) {
-  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs)
+  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, context)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -1325,6 +1433,7 @@ export function planAutoCeilingsForLevel(
   existingCeilings: CeilingNodeType[],
   context: AutoCeilingPlanningContext = {},
 ): AutoCeilingSyncPlan {
+  const suppressedRoomSignatures = new Set(context.suppressedRoomSignatures ?? [])
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
@@ -1350,7 +1459,10 @@ export function planAutoCeilingsForLevel(
     }))
 
   const detected = detectedAll.filter(
-    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
+    ({ sig, poly }) =>
+      !suppressedRoomSignatures.has(sig) &&
+      !manualSignatures.has(sig) &&
+      !matchesManualFootprint(poly, manualPolygons),
   )
 
   const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
@@ -1679,9 +1791,12 @@ function runSpaceDetection(
       )
     }
 
-    const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
-    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore)
     const levelNode = nodes[levelId]
+    const suppressions = readAutoSurfaceSuppressions(levelNode)
+    const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
+    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore, {
+      suppressedRoomSignatures: suppressions.slab,
+    })
     const storeyHeight =
       levelNode?.type === 'level'
         ? getStoredLevelHeight(levelNode as LevelNode)
@@ -1692,6 +1807,7 @@ function runSpaceDetection(
       ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
       sceneStore,
       {
+        suppressedRoomSignatures: suppressions.ceiling,
         storeyHeight,
         ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
       },
@@ -1739,24 +1855,40 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
   // scene that merely loaded — rerunning on hydration resurrected auto slabs
   // the user had deleted in an earlier session.
   const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
+  let previousAutoSurfaces = autoSurfaceSnapshots(sceneStore.getState().nodes)
   let isProcessing = false
 
-  const processNodes = (nodes: any) => {
+  const processNodes = (incomingNodes: any) => {
     if (isProcessing) return
     if (getSceneHistoryPauseDepth() > 0) return
 
-    const currentSnapshots = levelStructureSnapshots(nodes)
-
-    // Paused: roll the snapshot forward so we don't backfill (and re-duplicate)
-    // every paused change once detection resumes. Whatever the AI built while
-    // paused becomes the new baseline; only future changes will reconcile.
     if (spaceDetectionPauseDepth > 0) {
+      const pausedSnapshots = levelStructureSnapshots(incomingNodes)
       previousSnapshots.clear()
-      for (const [levelId, snapshot] of currentSnapshots.entries()) {
+      for (const [levelId, snapshot] of pausedSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      previousAutoSurfaces = autoSurfaceSnapshots(incomingNodes)
       return
     }
+
+    let nodes = incomingNodes
+    const deletedSurfaceSuppressionNeeded = [...previousAutoSurfaces.values()].some(
+      (surface) => !nodes[surface.id] && nodes[surface.levelId]?.type === 'level',
+    )
+    if (deletedSurfaceSuppressionNeeded) {
+      isProcessing = true
+      pauseSceneHistory(sceneStore)
+      try {
+        recordDeletedAutoSurfaceSuppressions(previousAutoSurfaces, nodes, sceneStore)
+        nodes = sceneStore.getState().nodes
+      } finally {
+        resumeSceneHistory(sceneStore)
+        isProcessing = false
+      }
+    }
+
+    const currentSnapshots = levelStructureSnapshots(nodes)
 
     const levelsToUpdate = new Set<string>()
     for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
@@ -1776,6 +1908,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       for (const [levelId, snapshot] of currentSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      previousAutoSurfaces = autoSurfaceSnapshots(nodes)
       return
     }
 
@@ -1790,6 +1923,7 @@ export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () =>
       for (const [levelId, snapshot] of postRunSnapshots.entries()) {
         previousSnapshots.set(levelId, snapshot)
       }
+      previousAutoSurfaces = autoSurfaceSnapshots(sceneStore.getState().nodes)
       isProcessing = false
     }
   }
