@@ -34,6 +34,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
@@ -513,6 +514,11 @@ export const WallSystem = () => {
   // drags could land an override and a markDirty in the same React
   // tick and the next `useFrame` would still see the stale closure.
   useLiveNodeOverrides((s) => s.overrides)
+
+  // The miter cache is module-level, so it outlives this mount. Editor
+  // teardown resets the other shared singletons; without the same reset here a
+  // remount in the same tab keeps every previous level's walls reachable.
+  useEffect(() => () => levelMiterCache.clear(), [])
 
   useFrame(() => {
     const hasDirty = dirtyNodes.size > 0
