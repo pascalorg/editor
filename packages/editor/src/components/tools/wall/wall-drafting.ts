@@ -4,7 +4,10 @@ import {
   DEFAULT_ANGLE_STEP,
   type DoorNode,
   getScaledDimensions,
+  getWallArcData,
+  getWallCurveLength,
   type ItemNode,
+  isCurvedWall,
   resolveWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
@@ -22,7 +25,7 @@ import {
   findWallSegmentIntersections,
   findWallSnapTarget,
   findWallSpecialPointSnap,
-  projectPointOntoWall,
+  projectPointOntoWallDetailed,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallDraftSnapResult,
@@ -56,6 +59,7 @@ type WallSplitIntersection = {
   /** `null` = snap-only outcome: resolve to `point` but split no wall. */
   wallId: WallNode['id'] | null
   point: WallPlanPoint
+  wallT: number
 }
 
 export function getSegmentGridStep(): number {
@@ -75,19 +79,32 @@ export function snapPointToGrid(point: WallPlanPoint, step = WALL_GRID_STEP): Wa
   return [snapScalarToGrid(point[0], step), snapScalarToGrid(point[1], step)]
 }
 
-function splitWallAtPoint(wall: WallNode, splitPoint: WallPlanPoint): [WallNode, WallNode] {
+function splitWallAtPoint(
+  wall: WallNode,
+  splitPoint: WallPlanPoint,
+  wallT: number,
+): [WallNode, WallNode] {
   const { id: _id, parentId: _parentId, children, ...rest } = wall
+  const arc = getWallArcData(wall)
+  const curveOffsets = arc
+    ? ([wallT, 1 - wallT].map((fraction) => {
+        const subArcAngle = Math.abs(arc.delta) * fraction
+        return arc.direction * arc.radius * (1 - Math.cos(subArcAngle / 2))
+      }) as [number, number])
+    : ([wall.curveOffset, wall.curveOffset] as const)
 
   const first = WallSchema.parse({
     ...rest,
     start: wall.start,
     end: splitPoint,
+    curveOffset: curveOffsets[0],
     children: [],
   })
   const second = WallSchema.parse({
     ...rest,
     start: splitPoint,
     end: wall.end,
+    curveOffset: curveOffsets[1],
     children: [],
   })
 
@@ -111,8 +128,9 @@ function findWallIntersection(
   for (const wall of walls) {
     if (ignore.has(wall.id)) continue
 
-    const projected = projectPointOntoWall(point, wall)
-    if (!projected) continue
+    const projection = projectPointOntoWallDetailed(point, wall)
+    if (!projection) continue
+    const { point: projected, wallT } = projection
 
     const candidateDistanceSquared = distanceSquared(point, projected)
     if (
@@ -128,8 +146,8 @@ function findWallIntersection(
         WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
     )
     best = nearCorner
-      ? { wallId: null, point: [nearCorner[0], nearCorner[1]] }
-      : { wallId: wall.id, point: projected }
+      ? { wallId: null, point: [nearCorner[0], nearCorner[1]], wallT }
+      : { wallId: wall.id, point: projected, wallT }
     bestDistanceSquared = candidateDistanceSquared
   }
 
@@ -149,8 +167,10 @@ function wallHasAttachments(wall: WallNode, nodes: ReturnType<typeof useScene.ge
   })
 }
 
-function wallLength(wall: Pick<WallNode, 'start' | 'end'>) {
-  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+function wallLength(wall: WallNode) {
+  return isCurvedWall(wall)
+    ? getWallCurveLength(wall)
+    : Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
 function getWallAttachmentSpan(node: AnyNode): { min: number; max: number; center: number } | null {
@@ -226,12 +246,12 @@ function remapAttachmentToWall(
 
 function buildAttachmentMigrationPlan(
   wall: WallNode,
-  splitPoint: WallPlanPoint,
+  wallT: number,
   firstWall: WallNode,
   secondWall: WallNode,
   nodes: ReturnType<typeof useScene.getState>['nodes'],
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null {
-  const splitDistance = Math.hypot(splitPoint[0] - wall.start[0], splitPoint[1] - wall.start[1])
+  const splitDistance = wallLength(wall) * wallT
   const firstLength = wallLength(firstWall)
   const secondLength = wallLength(secondWall)
   const tolerance = 1e-4
@@ -290,10 +310,10 @@ function splitWallIfNeeded(
     return { walls, point: intersection.point }
   }
 
-  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point)
+  const [first, second] = splitWallAtPoint(wallToSplit, intersection.point, intersection.wallT)
   const attachmentUpdates = buildAttachmentMigrationPlan(
     wallToSplit,
-    intersection.point,
+    intersection.wallT,
     first,
     second,
     nodes,
@@ -548,7 +568,7 @@ export function createWallOnCurrentLevel(
     for (const crossing of crossings) {
       if (crossing.wallT > interiorEpsilon && crossing.wallT < 1 - interiorEpsilon) {
         const splitHost = splitWallIfNeeded(
-          { wallId: crossing.wallId, point: crossing.point },
+          { wallId: crossing.wallId, point: crossing.point, wallT: crossing.wallT },
           workingWalls,
           nodes,
           createNodes,

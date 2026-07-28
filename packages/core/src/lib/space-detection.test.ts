@@ -563,6 +563,38 @@ describe('detectSpacesForLevel', () => {
     ).toEqual(walls.map((wall) => `${wall.id}:front`).sort())
   })
 
+  test('detects a valid room below 0.5 square metres and plans its surfaces', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [0.6, 0] }),
+      WallNode.parse({ start: [0.6, 0], end: [0.6, 0.6] }),
+      WallNode.parse({ start: [0.6, 0.6], end: [0, 0.6] }),
+      WallNode.parse({ start: [0, 0.6], end: [0, 0] }),
+    ]
+
+    const { roomPolygons } = detectSpacesForLevel('level-small', walls)
+
+    expect(roomPolygons).toHaveLength(1)
+    expect(areaOf(roomPolygons[0]!)).toBeCloseTo(0.36)
+    expect(planAutoSlabsForLevel(roomPolygons, []).create).toHaveLength(1)
+    expect(planAutoCeilingsForLevel(roomPolygons, []).create).toHaveLength(1)
+  })
+
+  test('detects a valid room above 10,000 square metres and plans its surfaces', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [101, 0] }),
+      WallNode.parse({ start: [101, 0], end: [101, 101] }),
+      WallNode.parse({ start: [101, 101], end: [0, 101] }),
+      WallNode.parse({ start: [0, 101], end: [0, 0] }),
+    ]
+
+    const { roomPolygons } = detectSpacesForLevel('level-large', walls)
+
+    expect(roomPolygons).toHaveLength(1)
+    expect(areaOf(roomPolygons[0]!)).toBeCloseTo(10_201)
+    expect(planAutoSlabsForLevel(roomPolygons, []).create).toHaveLength(1)
+    expect(planAutoCeilingsForLevel(roomPolygons, []).create).toHaveLength(1)
+  })
+
   test('excludes dangling wall branches from a room boundary', () => {
     const roomWalls = squareWalls()
     const branch = WallNode.parse({ start: [0, 0], end: [1, 1] })

@@ -5,7 +5,10 @@ import {
   CeilingNode,
   DoorNode as DoorSchema,
   detectSpacesForLevel,
+  getWallCurveFrameAt,
+  getWallCurveLength,
   initSpaceDetectionSync,
+  isCurvedWall,
   runAsSingleSceneHistoryStep,
   SlabNode,
   useScene,
@@ -280,6 +283,95 @@ describe('createWallOnCurrentLevel', () => {
     useScene.getState().deleteNode(secondDivider!.id as AnyNodeId)
 
     expect(levelWalls()).toHaveLength(4)
+  })
+
+  test('a divider ending on a curved wall splits the curve and the room surfaces', () => {
+    const curvedWall = {
+      ...makeWall([0, 0], [4, 0], 'wall_curve'),
+      curveOffset: 1,
+    }
+    const curveMidpoint = getWallCurveFrameAt(curvedWall, 0.5).point
+    const walls = [
+      curvedWall,
+      makeWall([4, 0], [4, 3], 'wall_right'),
+      makeWall([4, 3], [0, 3], 'wall_top'),
+      makeWall([0, 3], [0, 0], 'wall_left'),
+    ]
+    seedLevel(walls)
+    const editorState = {
+      spaces: {},
+      setSpaces(spaces: Record<string, unknown>) {
+        editorState.spaces = spaces
+      },
+    }
+    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+
+    try {
+      const divider = createWallOnCurrentLevel([curveMidpoint.x, curveMidpoint.y], [2, 3])
+      const nodes = Object.values(useScene.getState().nodes)
+      const postCommitWalls = nodes.filter((node): node is WallNode => node.type === 'wall')
+      const curvedSegments = postCommitWalls.filter(isCurvedWall)
+      const { roomPolygons } = detectSpacesForLevel(String(LEVEL_ID), postCommitWalls)
+
+      expect(divider).not.toBeNull()
+      expect(useScene.getState().nodes[curvedWall.id]).toBeUndefined()
+      expect(curvedSegments).toHaveLength(2)
+      expect(
+        curvedSegments.every(
+          (wall) =>
+            (wall.start[0] === curveMidpoint.x && wall.start[1] === curveMidpoint.y) ||
+            (wall.end[0] === curveMidpoint.x && wall.end[1] === curveMidpoint.y),
+        ),
+      ).toBe(true)
+      const firstCurve = curvedSegments.find(
+        (wall) => wall.start[0] === curvedWall.start[0] && wall.start[1] === curvedWall.start[1],
+      )
+      const secondCurve = curvedSegments.find(
+        (wall) => wall.end[0] === curvedWall.end[0] && wall.end[1] === curvedWall.end[1],
+      )
+      const originalQuarter = getWallCurveFrameAt(curvedWall, 0.25).point
+      const originalThreeQuarter = getWallCurveFrameAt(curvedWall, 0.75).point
+      const firstMidpoint = getWallCurveFrameAt(firstCurve!, 0.5).point
+      const secondMidpoint = getWallCurveFrameAt(secondCurve!, 0.5).point
+      expect(firstMidpoint.x).toBeCloseTo(originalQuarter.x, 6)
+      expect(firstMidpoint.y).toBeCloseTo(originalQuarter.y, 6)
+      expect(secondMidpoint.x).toBeCloseTo(originalThreeQuarter.x, 6)
+      expect(secondMidpoint.y).toBeCloseTo(originalThreeQuarter.y, 6)
+      expect(roomPolygons).toHaveLength(2)
+      expect(nodes.filter((node) => node.type === 'slab')).toHaveLength(2)
+      expect(nodes.filter((node) => node.type === 'ceiling')).toHaveLength(2)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('splitting a curved wall migrates attachments by arc length', () => {
+    const curvedWall = {
+      ...makeWall([0, 0], [4, 0], 'wall_curve'),
+      curveOffset: 1,
+    }
+    const curveLength = getWallCurveLength(curvedWall)
+    const door = DoorSchema.parse({
+      position: [curveLength * 0.75, 1.05, 0],
+      parentId: curvedWall.id,
+      wallId: curvedWall.id,
+    })
+    seedLevel([{ ...curvedWall, children: [door.id] }], [door as AnyNode])
+    const curveMidpoint = getWallCurveFrameAt(curvedWall, 0.5).point
+
+    const divider = createWallOnCurrentLevel([curveMidpoint.x, curveMidpoint.y], [2, 3])
+
+    expect(divider).not.toBeNull()
+    const secondCurve = levelWalls().find(
+      (wall) => isCurvedWall(wall) && wall.end[0] === 4 && wall.end[1] === 0,
+    )
+    const migratedDoor = useScene.getState().nodes[door.id as AnyNodeId]
+    expect(secondCurve).toBeDefined()
+    expect(migratedDoor?.type).toBe('door')
+    expect(migratedDoor?.parentId).toBe(secondCurve?.id)
+    if (migratedDoor?.type === 'door') {
+      expect(migratedDoor.position[0]).toBeCloseTo(curveLength * 0.25, 2)
+    }
   })
 
   test('crossing divider walls split into four joined segments and four room surfaces', () => {

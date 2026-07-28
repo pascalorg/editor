@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { WallNode } from '@pascal-app/core'
+import { getWallArcData, getWallCurveFrameAt, type WallNode } from '@pascal-app/core'
 import {
   chainEndJoinsExistingWall,
   findWallSnapTarget,
@@ -100,6 +100,13 @@ describe('chainEndJoinsExistingWall (chain termination)', () => {
     expect(chainEndJoinsExistingWall([2, 0.01], walls, [])).toBe(false)
     expect(chainEndJoinsExistingWall([2, 0.0005], walls, [])).toBe(true)
   })
+
+  test('true when the end lies on a curved wall interior', () => {
+    const curvedWall = { ...makeWall([0, 0], [4, 0], 'host'), curveOffset: 1 }
+    const point = getWallCurveFrameAt(curvedWall, 0.37).point
+
+    expect(chainEndJoinsExistingWall([point.x, point.y], [curvedWall], [])).toBe(true)
+  })
 })
 
 describe('findWallSnapTarget (edge / along-wall)', () => {
@@ -119,5 +126,20 @@ describe('findWallSnapTarget (edge / along-wall)', () => {
     const walls = [makeWall([0, 0], [4, 0])]
 
     expect(findWallSnapTarget([1.2, 0.1], walls, { radius: 0.08 })).toBeNull()
+  })
+
+  test('projects exactly onto a curved wall body between sample points', () => {
+    const curvedWall = { ...makeWall([0, 0], [4, 0]), curveOffset: 1 }
+    const expected = getWallCurveFrameAt(curvedWall, 0.37).point
+    const arc = getWallArcData(curvedWall)!
+    const radialX = (expected.x - arc.center.x) / arc.radius
+    const radialY = (expected.y - arc.center.y) / arc.radius
+    const result = findWallSnapTarget(
+      [expected.x + radialX * 0.02, expected.y + radialY * 0.02],
+      [curvedWall],
+    )
+
+    expect(result?.[0]).toBeCloseTo(expected.x, 3)
+    expect(result?.[1]).toBeCloseTo(expected.y, 3)
   })
 })

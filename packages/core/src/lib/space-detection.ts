@@ -655,7 +655,6 @@ function extractRooms(walls: WallNode[]): ExtractedRoom[] {
 
       const signedArea = polygonArea(polygon)
       if (signedArea <= 0) continue
-      if (signedArea < 0.5 || signedArea > 10_000) continue
 
       const signature = polygonSignature(polygon)
       if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue

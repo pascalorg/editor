@@ -3,14 +3,14 @@
 // (building-local meters). `wall-drafting.ts` layers grid/angle snapping and
 // scene access on top of these primitives.
 
-import {
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  isCurvedWall,
-  type WallNode,
-} from '@pascal-app/core'
+import { getWallArcData, getWallCurveFrameAt, isCurvedWall, type WallNode } from '@pascal-app/core'
 
 export type WallPlanPoint = [number, number]
+
+export type WallProjection = {
+  point: WallPlanPoint
+  wallT: number
+}
 
 /** Which kind of existing-geometry snap produced a drafted point. */
 export type WallDraftSnapKind = 'endpoint' | 'midpoint' | 'intersection' | 'wall'
@@ -53,7 +53,32 @@ export function distanceSquared(a: WallPlanPoint, b: WallPlanPoint): number {
   return dx * dx + dz * dz
 }
 
-export function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): WallPlanPoint | null {
+export function projectPointOntoWallDetailed(
+  point: WallPlanPoint,
+  wall: WallNode,
+): WallProjection | null {
+  if (isCurvedWall(wall)) {
+    const arc = getWallArcData(wall)
+    if (!arc) return null
+
+    const pointAngle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
+    const direction = Math.sign(arc.delta)
+    let directedAngle = (pointAngle - arc.startAngle) * direction
+    while (directedAngle < 0) directedAngle += Math.PI * 2
+
+    const totalAngle = Math.abs(arc.delta)
+    const wallT = directedAngle / totalAngle
+    if (wallT <= 0 || wallT >= 1) {
+      return null
+    }
+
+    const frame = getWallCurveFrameAt(wall, wallT)
+    return {
+      point: [frame.point.x, frame.point.y],
+      wallT,
+    }
+  }
+
   const [x1, z1] = wall.start
   const [x2, z2] = wall.end
   const dx = x2 - x1
@@ -68,7 +93,14 @@ export function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): Wall
     return null
   }
 
-  return [x1 + dx * t, z1 + dz * t]
+  return {
+    point: [x1 + dx * t, z1 + dz * t],
+    wallT: t,
+  }
+}
+
+export function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): WallPlanPoint | null {
+  return projectPointOntoWallDetailed(point, wall)?.point ?? null
 }
 
 export function findWallSnapTarget(
@@ -88,15 +120,7 @@ export function findWallSnapTarget(
 
     const candidates: Array<WallPlanPoint | null> = [wall.start, wall.end]
 
-    if (isCurvedWall(wall)) {
-      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(wall) / 0.3))
-      for (let index = 0; index <= sampleCount; index += 1) {
-        const frame = getWallCurveFrameAt(wall, index / sampleCount)
-        candidates.push([frame.point.x, frame.point.y])
-      }
-    } else {
-      candidates.push(projectPointOntoWall(point, wall))
-    }
+    candidates.push(projectPointOntoWall(point, wall))
     for (const candidate of candidates) {
       if (!candidate) {
         continue
@@ -340,14 +364,12 @@ export const WALL_CHAIN_JOIN_TOLERANCE = 1e-3
 
 /**
  * True when a committed chain segment's resolved `end` lies on wall geometry
- * (an endpoint, or a straight wall's interior) of a wall outside the current
+ * (an endpoint, or a wall's interior) of a wall outside the current
  * draft chain. The wall tools stop chaining there: a segment that tees into
  * the existing network is a termination — continuing would draft the next
  * segment on top of existing walls. `chainWallIds` excludes the chain's own
  * segments (including the just-committed one) so edge/midpoint snaps onto a
- * previous own segment don't read as a join. Curved wall interiors are
- * skipped (their endpoints still count) — resolving an end onto a curve body
- * is rare and continuing there matches the previous behaviour.
+ * previous own segment don't read as a join.
  */
 export function chainEndJoinsExistingWall(
   end: WallPlanPoint,
@@ -367,8 +389,6 @@ export function chainEndJoinsExistingWall(
     ) {
       return true
     }
-
-    if (isCurvedWall(wall)) continue
 
     const projected = projectPointOntoWall(end, wall)
     if (projected && distanceSquared(end, projected) <= toleranceSquared) {
