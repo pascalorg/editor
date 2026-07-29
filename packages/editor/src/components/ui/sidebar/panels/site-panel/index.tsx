@@ -493,8 +493,16 @@ const LevelReferences = memo(function LevelReferences({
         setSelection({ selectedIds: [], zoneId: null })
         useUploadStore.getState().setResult(levelId, guide.url)
         window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
-      } catch {
-        useUploadStore.getState().setError(levelId, 'Could not add that guide image.')
+      } catch (error) {
+        console.error('[guide-image]', error)
+        useUploadStore
+          .getState()
+          .setError(
+            levelId,
+            error instanceof Error && error.message
+              ? `Could not add that guide image: ${error.message}`
+              : 'Could not add that guide image.',
+          )
       }
       return
     }

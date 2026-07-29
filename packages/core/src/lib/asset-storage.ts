@@ -6,10 +6,27 @@ export const ASSET_PREFIX = 'asset_data:'
 const urlCache = new Map<string, string>()
 
 /**
+ * `crypto.randomUUID` exists only in secure contexts, and an editor served
+ * over plain http on a LAN is not one — the first line of every upload threw
+ * `TypeError` and the user saw "Could not add that guide image" with no cause.
+ * `getRandomValues` is NOT secure-context-gated, so the fallback keeps the
+ * same entropy; the id only needs uniqueness, never secrecy.
+ */
+function randomAssetId(): string {
+  const webCrypto = globalThis.crypto
+  if (webCrypto?.randomUUID) return webCrypto.randomUUID()
+  const bytes = webCrypto?.getRandomValues?.(new Uint8Array(16))
+  if (bytes) {
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+}
+
+/**
  * Save a file to IndexedDB and return a custom protocol URL
  */
 export async function saveAsset(file: File): Promise<string> {
-  const id = crypto.randomUUID()
+  const id = randomAssetId()
   await set(`${ASSET_PREFIX}${id}`, file)
   return `asset://${id}`
 }

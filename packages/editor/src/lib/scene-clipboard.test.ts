@@ -332,7 +332,11 @@ describe('scene clipboard', () => {
       capabilities: { duplicable: true, deletable: true },
     } as unknown as AnyNodeDefinition)
 
-    const pluginNodeId = 'warehouse-pallet_clipboard' as AnyNodeId
+    // Deliberately an id whose *prefix* contains an underscore. Plugin kinds
+    // routinely have one — `pallet_rack_<suffix>` — and `extractIdPrefix` split
+    // at the first underscore, so a pasted rack came back as `pallet_<suffix>`,
+    // matched no kind, and the paste failed with a bare console error.
+    const pluginNodeId = 'pallet_rack_clipboard' as AnyNodeId
     const pluginNode = PluginNode.parse({
       id: pluginNodeId,
       parentId: sourceLevelId,
@@ -354,8 +358,11 @@ describe('scene clipboard', () => {
 
     const pastedId = result?.pastedIds[0]
     const pasted = pastedId ? useScene.getState().nodes[pastedId] : undefined
-    expect(pasted?.type).toBe('warehouse:pallet')
+    // `type` is typed as the built-in union, which a plugin kind can never be a
+    // member of — that is the whole premise of this test.
+    expect(pasted?.type as string | undefined).toBe('warehouse:pallet')
     expect(pasted?.id).not.toBe(pluginNodeId)
+    expect(pasted?.id.startsWith('pallet_rack_')).toBe(true)
     expect(pasted?.parentId).toBe(targetLevelId)
     // The registry schema — not `AnyNode` — is what validated it, so kind-owned
     // fields have to survive the round trip.
