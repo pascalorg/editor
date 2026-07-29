@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import {
   useControlPointReshape,
@@ -32,6 +33,7 @@ import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
+import { TerrainSculptTool } from './site/terrain-sculpt-tool'
 import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
@@ -163,8 +165,11 @@ export const ToolManager: React.FC = () => {
     | undefined
 
   // Keep the site vertex flags available in select mode; the editor component
-  // switches to full polygon editing only after a flag activates site mode.
-  const showSiteBoundaryEditor = phase === 'site' || mode === 'select'
+  // switches to full polygon editing only after a flag activates site mode. The rule
+  // itself lives in `lib/site-boundary` because the floorplan's SVG handles must
+  // reach the same answer, and they used to compute it separately.
+  const sculpting = mode === 'terrain-sculpt'
+  const showSiteBoundaryEditor = siteBoundaryHandlesEnabled({ mode, phase })
 
   // A multi-selection is manipulated as one rigid group (drag / R / T), so
   // per-node reshape chrome — the slab / ceiling boundary editors' vertex and
@@ -256,6 +261,10 @@ export const ToolManager: React.FC = () => {
     <>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
+      {/* Terrain sculpting is a mode rather than a `tools[phase][tool]` entry —
+          it places no node — so it gets its own gate here. World-space, because
+          the ground is not building-local. */}
+      {sculpting && <TerrainSculptTool />}
       {showMover && movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}

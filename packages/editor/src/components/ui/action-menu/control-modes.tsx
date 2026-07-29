@@ -72,7 +72,10 @@ export function ControlModes() {
   }
 
   const handleClick = (id: ControlId) => {
-    // Exit site editing first if needed
+    // Exit site editing first if needed. Sculpting is a site-phase mode, so
+    // leaving the phase is exactly the right way to leave the brush — but the
+    // order matters: `setPhase` resets the mode, and setting the mode first
+    // would have it overwritten below.
     if (isSiteEditing) {
       setPhase('structure')
       setStructureLayer('elements')

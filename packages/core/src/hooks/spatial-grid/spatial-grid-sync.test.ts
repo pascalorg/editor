@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { z } from 'zod'
+import { encodeTerrainField } from '../../lib/terrain-codec'
+import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
+import { nodeRegistry, registerNode } from '../../registry'
+import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, AnyNodeId } from '../../schema'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
@@ -6,7 +11,9 @@ import {
   initSpatialGridSync,
   markCoveringDependentsBelow,
   markLevelHeightDependents,
+  markTerrainSupportDependents,
 } from './spatial-grid-sync'
+import { GROUND_SUPPORT_ID } from './support-host-id'
 
 const SQUARE: Array<[number, number]> = [
   [0, 0],
@@ -285,5 +292,214 @@ describe('sync dirty helpers (pure)', () => {
     const { marked, markDirty } = collect()
     markCoveringDependentsBelow('level_0', nodes, markDirty)
     expect(marked).toEqual([])
+  })
+})
+
+// The sculpt-desync rule. Nothing else in this file gates on a *node's* support
+// being terrain, so these are the tests that keep a stroke from silently leaving
+// the scene standing at the height the ground used to be.
+describe('spatial-grid sync dirty rules (terrain support)', () => {
+  const PLATEAU_HEIGHT = 2.5
+
+  /** Ground that is a 2.5 m plateau over x,z ∈ [2,5] and flat at the datum elsewhere. */
+  function terrainData() {
+    const base = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+    const patch = flattenPatch(base, { minX: 2, minZ: 2, maxX: 5, maxZ: 5 }, PLATEAU_HEIGHT)
+    return encodeTerrainField(applyHeightPatch(base, patch as never))
+  }
+
+  function makeSite(overrides: Record<string, unknown> = {}): AnyNode {
+    return {
+      id: 'site_test',
+      type: 'site',
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: [],
+      ...overrides,
+    } as unknown as AnyNode
+  }
+
+  function makeFloorNode(id: string, parentId: string, position: [number, number, number]) {
+    return {
+      id,
+      type: 'column',
+      object: 'node',
+      parentId,
+      visible: true,
+      metadata: {},
+      children: [],
+      position,
+      rotation: [0, 0, 0],
+    } as unknown as AnyNode
+  }
+
+  function registerFloorPlaced(kind: string) {
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal(kind) }) as never,
+      category: 'structure',
+      defaults: () => ({}) as never,
+      capabilities: { floorPlaced: { footprint: () => ({ dimensions: [0.3, 2.5, 0.3] }) } },
+    } as unknown as AnyNodeDefinition)
+  }
+
+  let stopSync = () => {}
+
+  function startWith(nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: string[]) {
+    spatialGridManager.clear()
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set<AnyNodeId>(),
+      nodes,
+      readOnly: false,
+      rootNodeIds: rootNodeIds as AnyNodeId[],
+    } as never)
+    clearSceneHistory()
+    stopSync = initSpatialGridSync()
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+  }
+
+  beforeEach(() => {
+    nodeRegistry._reset()
+    registerFloorPlaced('column')
+  })
+
+  afterEach(() => {
+    stopSync()
+    stopSync = () => {}
+    nodeRegistry._reset()
+  })
+
+  test('a sculpt stroke marks the nodes standing on the ground it moved', () => {
+    const level = makeLevel('level_0', 0, 2.5, ['column_a'])
+    const column = makeFloorNode('column_a', 'level_0', [3, 0, 3])
+    const site = makeSite()
+    startWith(nodesFor(level, column, site), ['level_0', 'site_test'])
+
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        site_test: makeSite({ terrain: terrainData() }),
+      } as never,
+    })
+
+    expect(useScene.getState().dirtyNodes.has('column_a' as AnyNodeId)).toBe(true)
+  })
+
+  test('clearing the terrain marks them too, so they come back down with the ground', () => {
+    const level = makeLevel('level_0', 0, 2.5, ['column_a'])
+    const column = makeFloorNode('column_a', 'level_0', [3, 0, 3])
+    startWith(nodesFor(level, column, makeSite({ terrain: terrainData() })), [
+      'level_0',
+      'site_test',
+    ])
+
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, site_test: makeSite() } as never,
+    })
+
+    expect(useScene.getState().dirtyNodes.has('column_a' as AnyNodeId)).toBe(true)
+  })
+
+  test('a site edit that leaves the terrain object alone marks nothing', () => {
+    const level = makeLevel('level_0', 0, 2.5, ['column_a'])
+    const column = makeFloorNode('column_a', 'level_0', [3, 0, 3])
+    const terrain = terrainData()
+    startWith(nodesFor(level, column, makeSite({ terrain })), ['level_0', 'site_test'])
+
+    // Same `terrain` object, different polygon — renaming a lot or reshaping its
+    // boundary must not re-elevate the whole scene every keystroke.
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        site_test: makeSite({ terrain, polygon: { points: SQUARE } }),
+      } as never,
+    })
+
+    expect(dirtyIds()).toEqual([])
+  })
+
+  test('only storeys at grade follow the ground', () => {
+    // level_1 sits a storey up on level_0, so its floor is not the datum: its
+    // contents have a real slab under them and must not be draped.
+    const ground = makeLevel('level_0', 0, 2.5, ['column_ground'])
+    const upper = makeLevel('level_1', 1, 2.5, ['column_upper'])
+    const building = {
+      id: 'building_a',
+      type: 'building',
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['level_0', 'level_1'],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+    } as unknown as AnyNode
+    const groundColumn = makeFloorNode('column_ground', 'level_0', [3, 0, 3])
+    const upperColumn = makeFloorNode('column_upper', 'level_1', [3, 0, 3])
+    startWith(
+      nodesFor(
+        building,
+        { ...ground, parentId: 'building_a' } as AnyNode,
+        { ...upper, parentId: 'building_a' } as AnyNode,
+        groundColumn,
+        upperColumn,
+        makeSite(),
+      ),
+      ['building_a', 'site_test'],
+    )
+
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        site_test: makeSite({ terrain: terrainData() }),
+      } as never,
+    })
+
+    expect(dirtyIds()).toEqual(['column_ground'])
+  })
+
+  test('markTerrainSupportDependents skips nodes hosted on another node', () => {
+    // A column parented to another column inherits Y from that group; lifting it
+    // here would double-count the ground under its host.
+    const level = makeLevel('level_0', 0, 2.5, ['column_host'])
+    const host = makeFloorNode('column_host', 'level_0', [3, 0, 3])
+    const hosted = makeFloorNode('column_hosted', 'column_host', [0, 0, 0])
+    const nodes = nodesFor(level, host, hosted)
+
+    const marked: string[] = []
+    markTerrainSupportDependents(nodes, (id) => marked.push(id))
+
+    expect(marked).toEqual(['column_host'])
+  })
+
+  test('markTerrainSupportDependents includes ground-hosted and terrain-fill walls', () => {
+    const level = makeLevel('level_0', 0, 2.5, [
+      'wall_ground',
+      'wall_fill',
+      'wall_other',
+      'column_a',
+    ])
+    const nodes = nodesFor(
+      level,
+      {
+        ...makeChild('wall_ground', 'wall', 'level_0'),
+        supportSlabId: GROUND_SUPPORT_ID,
+      } as AnyNode,
+      {
+        ...makeChild('wall_fill', 'wall', 'level_0'),
+        fillToTerrain: true,
+      } as AnyNode,
+      makeChild('wall_other', 'wall', 'level_0'),
+      makeFloorNode('column_a', 'level_0', [3, 0, 3]),
+    )
+
+    const marked: string[] = []
+    markTerrainSupportDependents(nodes, (id) => marked.push(id))
+
+    expect(marked).toEqual(['wall_ground', 'wall_fill', 'column_a'])
   })
 })

@@ -31,6 +31,7 @@ import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
+import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
@@ -227,6 +228,34 @@ export const useKeyboard = ({
         return
       }
 
+      // Brush size, on the keys every sculpting tool in the industry uses. Gated
+      // on sculpt mode so `[`/`]` stay free everywhere else. Key-repeat is
+      // allowed (unlike the cycles above) because holding to resize is the
+      // expected feel, and the step is multiplicative so one press is a
+      // proportional change at both the floor and 20 m rather than 40× coarser at
+      // the bottom of the range. The range comes from `brushRadiusRange` so this
+      // and the panel's slider cannot disagree about it — and so the low end
+      // tracks the field's sample spacing, below which a dab paints nothing.
+      if (
+        (e.key === '[' || e.key === ']') &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        useEditor.getState().mode === 'terrain-sculpt'
+      ) {
+        e.preventDefault()
+        const { terrainBrush, setTerrainBrush } = useEditor.getState()
+        const factor = e.key === ']' ? 1.25 : 1 / 1.25
+        const radius = clampBrushRadius(
+          activeSiteNode(),
+          Math.round(terrainBrush.radius * factor * 10) / 10,
+        )
+        if (radius !== terrainBrush.radius) {
+          setTerrainBrush({ radius })
+          sfxEmitter.emit('sfx:grid-snap')
+        }
+        return
+      }
+
       if (e.key === 'Shift' && !e.repeat && isSnappingCycleContext()) {
         // Cycle the global snapping mode (grid → lines → angles → off).
         // `'off'` is the snap bypass now, so Shift no longer holds-to-bypass.
@@ -364,6 +393,12 @@ export const useKeyboard = ({
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
         useEditor.getState().setMode('material-paint')
+      } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
+        if (isVersionPreviewMode) return
+        e.preventDefault()
+        // G for ground. No `setPhase` — `setMode` moves to the site phase itself,
+        // and doing it here would set the phase twice with a mode reset between.
+        useEditor.getState().setMode('terrain-sculpt')
       } else if (e.key === 'c' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()

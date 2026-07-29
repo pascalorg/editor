@@ -9,6 +9,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { resolveTerrainGroundHit } from '../lib/ground-surface'
 
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
@@ -37,6 +38,25 @@ export function useGridEvents(gridY: number) {
 
       // Update raycaster
       raycaster.current.setFromCamera(pointer.current, camera)
+
+      // Sculpted ground wins over the plane, but only while the plane IS the
+      // ground (see `isSiteGroundPlane`): a plane riding a storey base or a slab
+      // top is a real flat surface and must stay planar. The march is what removes
+      // the perspective skew — a ray intersected at the datum instead of at the
+      // hillside reports an XZ that slides along the ray, so every tool consuming
+      // `position`/`localPosition` was placing short of the cursor on a slope.
+      //
+      // The plane's own height is the query height, not the `gridY` argument: this
+      // effect is keyed on `[camera, gl]` (re-attaching listeners mid-drag would
+      // drop the gesture), so the argument in this closure is the value from mount.
+      // `constant = -gridY` by construction in the effect above.
+      const { origin, direction } = raycaster.current.ray
+      const hit = resolveTerrainGroundHit(
+        [origin.x, origin.y, origin.z],
+        [direction.x, direction.y, direction.z],
+        -groundPlane.current.constant,
+      )
+      if (hit) return intersectionPoint.current.set(hit.x, hit.y, hit.z).clone()
 
       // Intersect with ground plane
       if (raycaster.current.ray.intersectPlane(groundPlane.current, intersectionPoint.current)) {

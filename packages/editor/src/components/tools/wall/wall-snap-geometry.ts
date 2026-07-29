@@ -25,6 +25,12 @@ export type WallDraftSnapResult = {
    * the "magnetic" snap the beacon visualises; `null` for grid/angle-only.
    */
   snap: WallDraftSnapKind | null
+  /**
+   * Walls whose geometry produced the snap. Kept separate from `snap` so a
+   * caller can use geometry for XZ alignment while independently deciding
+   * whether the target is allowed to transfer its construction plane.
+   */
+  targetWallIds: string[]
 }
 
 export const WALL_JOIN_SNAP_RADIUS = 0.35
@@ -116,6 +122,53 @@ export function findWallSnapTarget(
   }
 
   return bestTarget
+}
+
+/**
+ * Wall ids that contain an already-resolved snap point.
+ *
+ * This is provenance, not another snap pass: the tolerance only absorbs float
+ * drift around a point the snap pipeline already chose.
+ */
+export function wallIdsAtSnapPoint(
+  point: WallPlanPoint,
+  walls: WallNode[],
+  ignoreWallIds?: string[],
+  tolerance = 1e-6,
+): string[] {
+  const ignored = new Set(ignoreWallIds ?? [])
+  const toleranceSquared = tolerance * tolerance
+  const ids: string[] = []
+
+  for (const wall of walls) {
+    if (ignored.has(wall.id)) continue
+    if (
+      distanceSquared(point, wall.start) <= toleranceSquared ||
+      distanceSquared(point, wall.end) <= toleranceSquared
+    ) {
+      ids.push(wall.id)
+      continue
+    }
+
+    if (isCurvedWall(wall)) {
+      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(wall) / 0.3))
+      for (let index = 1; index < sampleCount; index += 1) {
+        const frame = getWallCurveFrameAt(wall, index / sampleCount)
+        if (distanceSquared(point, [frame.point.x, frame.point.y]) <= toleranceSquared) {
+          ids.push(wall.id)
+          break
+        }
+      }
+      continue
+    }
+
+    const projected = projectPointOntoWall(point, wall)
+    if (projected && distanceSquared(point, projected) <= toleranceSquared) {
+      ids.push(wall.id)
+    }
+  }
+
+  return ids
 }
 
 /**
@@ -320,12 +373,26 @@ export function findWallSpecialPointSnap(
   radii?: WallSnapRadii,
 ): WallDraftSnapResult | null {
   const endpoint = findWallEndpointFromRaw(point, walls, ignoreWallIds, radii?.endpoint)
-  if (endpoint) return { point: endpoint, snap: 'endpoint' }
+  if (endpoint) {
+    return {
+      point: endpoint,
+      snap: 'endpoint',
+      targetWallIds: wallIdsAtSnapPoint(endpoint, walls, ignoreWallIds),
+    }
+  }
 
   const midpoint = findWallMidpointFromRaw(point, walls, ignoreWallIds, radii?.midpoint)
   const intersection = findWallIntersectionFromRaw(point, walls, ignoreWallIds, radii?.intersection)
   return nearestCandidate(point, [
-    midpoint && { point: midpoint, snap: 'midpoint' },
-    intersection && { point: intersection, snap: 'intersection' },
+    midpoint && {
+      point: midpoint,
+      snap: 'midpoint',
+      targetWallIds: wallIdsAtSnapPoint(midpoint, walls, ignoreWallIds),
+    },
+    intersection && {
+      point: intersection,
+      snap: 'intersection',
+      targetWallIds: wallIdsAtSnapPoint(intersection, walls, ignoreWallIds),
+    },
   ])
 }

@@ -22,6 +22,7 @@ import {
   resolveWallTop,
   sceneRegistry,
   spatialGridManager,
+  terrainSupportLift,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -34,6 +35,7 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
@@ -714,8 +716,13 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     node.curveOffset ?? 0,
     node.thickness,
     node.supportSlabId,
+    undefined,
+    node.supportOffset,
   )
   const slabElevation = slabSupport.elevation
+  const terrainBottomAt = node.fillToTerrain
+    ? (x: number, z: number) => terrainSupportLift(nodes, levelId, x, z)
+    : undefined
 
   const childrenIds = node.children || []
   // Merge live overrides into door / window children so cutouts track an
@@ -745,6 +752,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     slabSupport.baseElevation,
     slabSupport.baseSegments,
     planeTop,
+    terrainBottomAt,
   )
   const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   // World transform the render mesh will apply (position + Y-rotation below).
@@ -770,6 +778,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       slabSupport.baseElevation,
       slabSupport.baseSegments,
       planeTop,
+      terrainBottomAt,
     )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
@@ -851,6 +860,147 @@ function applyWorldPlanarWallUVs(
  * Key insight from demo: polygon is built in WORLD coordinates first,
  * then we transform to wall-local for the 3D mesh.
  */
+const WALL_TERRAIN_SAMPLE_STEP = 0.25
+const WALL_TERRAIN_FILL_EPSILON = 1e-6
+
+type WallTerrainBottomSampler = (x: number, z: number) => number | null
+
+function densifyClosedWallPerimeter(points: Point2D[]): Point2D[] {
+  const dense: Point2D[] = []
+  for (let index = 0; index < points.length; index += 1) {
+    const start = points[index]!
+    const end = points[(index + 1) % points.length]!
+    const length = Math.hypot(end.x - start.x, end.y - start.y)
+    const segments = Math.max(1, Math.ceil(length / WALL_TERRAIN_SAMPLE_STEP))
+    for (let segment = 0; segment < segments; segment += 1) {
+      const t = segment / segments
+      dense.push({
+        x: start.x + (end.x - start.x) * t,
+        y: start.y + (end.y - start.y) * t,
+      })
+    }
+  }
+  return dense
+}
+
+function buildWallTerrainFillGeometry(
+  perimeter: Point2D[],
+  worldToLocal: (point: Point2D) => { x: number; z: number },
+  wallBaseElevation: number,
+  terrainBottomAt: WallTerrainBottomSampler,
+): THREE.BufferGeometry | null {
+  const worldPoints = densifyClosedWallPerimeter(perimeter)
+  if (worldPoints.length < 3) return null
+
+  const localPoints = worldPoints.map(worldToLocal)
+  const bottomY = worldPoints.map((point) => {
+    const terrainElevation = terrainBottomAt(point.x, point.y)
+    return terrainElevation == null ? 0 : Math.min(0, terrainElevation - wallBaseElevation)
+  })
+  if (bottomY.every((y) => y >= -WALL_TERRAIN_FILL_EPSILON)) return null
+
+  let signedArea = 0
+  for (let index = 0; index < localPoints.length; index += 1) {
+    const a = localPoints[index]!
+    const b = localPoints[(index + 1) % localPoints.length]!
+    signedArea += a.x * b.z - b.x * a.z
+  }
+  const counterClockwise = signedArea > 0
+  const positions: number[] = []
+  const push = (point: { x: number; z: number }, y: number) => {
+    positions.push(point.x, y, point.z)
+  }
+
+  for (let index = 0; index < localPoints.length; index += 1) {
+    const next = (index + 1) % localPoints.length
+    const a = localPoints[index]!
+    const b = localPoints[next]!
+    const ay = bottomY[index]!
+    const by = bottomY[next]!
+    if (ay >= -WALL_TERRAIN_FILL_EPSILON && by >= -WALL_TERRAIN_FILL_EPSILON) continue
+
+    if (counterClockwise) {
+      push(a, 0)
+      push(b, by)
+      push(a, ay)
+      push(a, 0)
+      push(b, 0)
+      push(b, by)
+    } else {
+      push(a, 0)
+      push(a, ay)
+      push(b, by)
+      push(a, 0)
+      push(b, by)
+      push(b, 0)
+    }
+  }
+
+  const faces = THREE.ShapeUtils.triangulateShape(
+    localPoints.map((point) => new THREE.Vector2(point.x, point.z)),
+    [],
+  )
+  for (const face of faces) {
+    const ia = face[0]
+    const ib = face[1]
+    const ic = face[2]
+    if (ia == null || ib == null || ic == null) continue
+    const a = localPoints[ia]!
+    const b = localPoints[ib]!
+    const c = localPoints[ic]!
+    if (
+      bottomY[ia]! >= -WALL_TERRAIN_FILL_EPSILON &&
+      bottomY[ib]! >= -WALL_TERRAIN_FILL_EPSILON &&
+      bottomY[ic]! >= -WALL_TERRAIN_FILL_EPSILON
+    ) {
+      continue
+    }
+    const cross = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)
+    push(a, bottomY[ia]!)
+    if (cross >= 0) {
+      push(b, bottomY[ib]!)
+      push(c, bottomY[ic]!)
+    } else {
+      push(c, bottomY[ic]!)
+      push(b, bottomY[ib]!)
+    }
+  }
+
+  if (positions.length === 0) return null
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals()
+  ensureRenderableGeometryAttributes(geometry)
+  return geometry
+}
+
+function mergeWallTerrainFill(
+  body: THREE.BufferGeometry,
+  fill: THREE.BufferGeometry | null,
+  wall: WallNode,
+  boundaryEdges: TaggedWallBoundaryEdge[],
+  effectiveWallHeight: number,
+): THREE.BufferGeometry {
+  if (!fill) return body
+
+  const bodyGeometry = body.index ? body.toNonIndexed() : body
+  if (bodyGeometry !== body) body.dispose()
+  ensureRenderableGeometryAttributes(bodyGeometry)
+  ensureRenderableGeometryAttributes(fill)
+  const merged = mergeGeometries([bodyGeometry, fill], false)
+  if (!merged) {
+    fill.dispose()
+    return bodyGeometry
+  }
+
+  bodyGeometry.dispose()
+  fill.dispose()
+  merged.computeVertexNormals()
+  assignWallMaterialGroups(merged, wall, boundaryEdges, effectiveWallHeight)
+  ensureRenderableGeometryAttributes(merged)
+  return merged
+}
+
 export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
@@ -861,6 +1011,7 @@ export function generateExtrudedWall(
     { start: 0, end: 1, elevation: baseElevation },
   ],
   storeyHeight = DEFAULT_LEVEL_HEIGHT,
+  terrainBottomAt?: WallTerrainBottomSampler,
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
@@ -913,6 +1064,9 @@ export function generateExtrudedWall(
   // Convert polygon to local coordinates
   const localPoints = polyPoints.map(worldToLocal)
   const boundaryEdges = buildTaggedWallBoundaryEdges(wallNode, localPoints, miterData)
+  const terrainFill = terrainBottomAt
+    ? buildWallTerrainFillGeometry(polyPoints, worldToLocal, slabElevation, terrainBottomAt)
+    : null
 
   // Build THREE.js shape
   // Shape uses (x, y) where we map: shape.x = local.x, shape.y = -local.z
@@ -1041,7 +1195,13 @@ export function generateExtrudedWall(
     splitGeometry.computeVertexNormals()
     assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, effectiveWallHeight)
     ensureRenderableGeometryAttributes(splitGeometry)
-    return splitGeometry
+    return mergeWallTerrainFill(
+      splitGeometry,
+      terrainFill,
+      wallNode,
+      boundaryEdges,
+      effectiveWallHeight,
+    )
   }
 
   // Create wall brush from geometry
@@ -1079,7 +1239,13 @@ export function generateExtrudedWall(
   assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(splitResultGeometry)
 
-  return splitResultGeometry
+  return mergeWallTerrainFill(
+    splitResultGeometry,
+    terrainFill,
+    wallNode,
+    boundaryEdges,
+    effectiveWallHeight,
+  )
 }
 
 /**

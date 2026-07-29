@@ -1,6 +1,7 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import { isLevelAtSiteDatum } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
-import type { AnyNode, AnyNodeId, LevelNode, SlabNode, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, LevelNode, SiteNode, SlabNode, WallNode } from '../../schema'
 import { getLevelBelow } from '../../services/storey'
 import useScene from '../../store/use-scene'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
@@ -9,6 +10,7 @@ import {
   spatialGridManager,
   wallOverlapsPolygon,
 } from './spatial-grid-manager'
+import { GROUND_SUPPORT_ID } from './support-host-id'
 
 export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // If the node itself is a level
@@ -119,6 +121,13 @@ export function initSpatialGridSync(): () => void {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
+
+        // A site arriving with terrain already on it (scene load, paste,
+        // imported elevation data) is the same event as a stroke: ground exists
+        // where flat ground was assumed.
+        if (node.type === 'site' && (node as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
+        }
       }
     }
 
@@ -132,6 +141,12 @@ export function initSpatialGridSync(): () => void {
         if (node.type === 'slab') {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
+        }
+
+        // Deleting a sculpted site drops the ground back to the datum, so its
+        // contents have to come down with it.
+        if (node.type === 'site' && (node as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
         }
       }
     }
@@ -187,6 +202,14 @@ export function initSpatialGridSync(): () => void {
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {
           markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
+        }
+      } else if (node.type === 'site' && prev.type === 'site') {
+        // Object identity, not deep equality: the store is
+        // immutable-by-convention, so a sculpt commit necessarily produces a new
+        // `terrain` object and an unrelated site edit (polygon, name) keeps the
+        // old one. The same reasoning `terrain-source`'s field cache is keyed on.
+        if ((node as SiteNode).terrain !== (prev as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
         }
       } else if (node.type === 'wall' && prev.type === 'wall') {
         if (
@@ -250,6 +273,60 @@ export function markDeckAttachedStairs(
     if (node.type === 'stair' && node.deckSlabId === slabId) {
       markDirty(node.id)
     }
+  }
+}
+
+/**
+ * The sculpted ground moved: every node the terrain *supports* must re-elevate.
+ *
+ * The other rules in this file gate on a footprint overlapping the changed
+ * surface. Terrain has no such gate — a stroke rewrites a field that spans the
+ * whole lot, and the resolver samples it at each node's own XZ — so the sweep is
+ * every floor-placed node on a storey at grade, plus every wall whose explicit
+ * terrain infill samples that field. Cheaper than it looks: this fires once per
+ * committed stroke, not per dab.
+ *
+ * Without this a sculpt silently desyncs the scene from its own ground. Nothing
+ * re-runs `getFloorPlacedElevation`, so the React commit that rebinds a node
+ * group's base Y leaves it there: a column that was resting on a hillside drops
+ * to the datum and stays buried under the terrain it used to stand on.
+ *
+ * Gated on `isLevelAtSiteDatum` — the same predicate `terrainSupportLift` uses to
+ * decide whether it drapes at all, so the two cannot disagree about which storey
+ * is on the ground.
+ */
+export function markTerrainSupportDependents(
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  const gradeLevels = new Map<string, boolean>()
+  const isGrade = (levelId: string) => {
+    let cached = gradeLevels.get(levelId)
+    if (cached === undefined) {
+      cached = isLevelAtSiteDatum(nodes, levelId)
+      gradeLevels.set(levelId, cached)
+    }
+    return cached
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'wall') {
+      if (node.supportSlabId !== GROUND_SUPPORT_ID && node.fillToTerrain !== true) continue
+      if (!isGrade(resolveLevelId(node, nodes))) continue
+      markDirty(node.id)
+      continue
+    }
+
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (!floorPlaced) continue
+    if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    // Items hosted on a shelf or table inherit Y from the parent group; only
+    // level-parented nodes read the ground. Mirrors the resolver's own gate.
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
+    if (!isGrade(resolveLevelId(node, nodes))) continue
+    markDirty(node.id)
   }
 }
 

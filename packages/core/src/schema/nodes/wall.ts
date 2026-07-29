@@ -196,6 +196,12 @@ export const WallNode = BaseNode.extend({
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
+  // Vertical offset from the elected support surface. Ground-hosted chained
+  // walls use this to preserve one construction plane without copying terrain.
+  supportOffset: z.number().finite().optional(),
+  // Extend downward from the authored wall base to the terrain while keeping
+  // the wall body height and top unchanged.
+  fillToTerrain: z.boolean().optional(),
   faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
@@ -212,6 +218,7 @@ export const WallNode = BaseNode.extend({
   - thickness: thickness in meters
   - assemblyLayers: construction layers with role, side, thickness, material reference, and datum eligibility
   - height: height in meters
+  - fillToTerrain: extends the wall downward to the terrain without changing its authored height
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system

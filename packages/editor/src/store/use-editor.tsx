@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
+  type BrushSettings,
   type BuildingNode,
   type CabinetModuleNode,
   type CabinetNode,
@@ -11,6 +12,7 @@ import {
   type ChimneyMaterialRole,
   type ChimneyNode,
   type ColumnNode,
+  DEFAULT_BRUSH_SETTINGS,
   type DoorNode,
   type DormerNode,
   type DormerSurfaceMaterialRole,
@@ -28,6 +30,7 @@ import {
   type StairNode,
   type StairSegmentNode,
   type StairSurfaceMaterialRole,
+  type TerrainVerb,
   useScene,
   type WallNode,
   type WallSurfaceSide,
@@ -138,7 +141,21 @@ export type CaptureMode =
 
 export type Phase = 'site' | 'structure' | 'furnish'
 
-export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint'
+/**
+ * `terrain-sculpt` is a mode, not a build tool, and that is the whole answer to
+ * "how does terrain editing avoid conflicting with everything else".
+ *
+ * A build tool places a node and hands the pointer back. Sculpting is a
+ * sustained brush over the *ground* — the one surface every other tool uses as
+ * its reference plane — so while it is armed, clicks must not select a wall,
+ * drag a window, or arm a ghost. Modeling it as a mode gets that for free: it is
+ * mutually exclusive with `build`/`select`/`delete` by construction, every
+ * selection manager already early-returns unless `mode === 'select'`, and it
+ * holds a `sculpting` interaction scope for its whole lifetime so conflicting
+ * controls stay stepped back. `material-paint` is the existing precedent for
+ * exactly this shape.
+ */
+export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint' | 'terrain-sculpt'
 
 // Structure mode tools (building elements)
 type BuiltInStructureTool =
@@ -368,6 +385,29 @@ type EditorState = {
   paintEraser: boolean
   setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
+  /**
+   * Terrain sculpt state. Lives here rather than in the tool component so the
+   * bottom-bar HUD, the keyboard shortcuts, and the brush all read one source —
+   * the same reason the paint mode's material/scope/eraser live here.
+   */
+  terrainVerb: TerrainVerb
+  setTerrainVerb: (verb: TerrainVerb) => void
+  terrainBrush: BrushSettings
+  setTerrainBrush: (settings: Partial<BrushSettings>) => void
+  /**
+   * Absolute height in metres the `flatten` verb aims at. Sampled by clicking
+   * the ground with the eyedropper, or typed. `null` means "sample on first
+   * click", which is what makes flatten usable without ever opening a number
+   * field.
+   */
+  terrainFlattenTarget: number | null
+  setTerrainFlattenTarget: (metres: number | null) => void
+  /**
+   * True while the next click should sample a flatten target instead of
+   * sculpting. One-shot: sampling clears it.
+   */
+  terrainSampling: boolean
+  setTerrainSampling: (sampling: boolean) => void
   // What the cursor is over in paint mode: the scopes it offers + labels for the
   // HUD chip. `null` when not over a paintable surface (drives the "hover a
   // surface" hint). Set by the selection-manager paint hover; not persisted.
@@ -549,8 +589,12 @@ type SelectDefaultBuildingAndLevelOptions = {
 }
 
 function normalizeModeForPhase(phase: Phase, mode: Mode | undefined): Mode {
+  // The site phase used to hard-return `select`, which made a site-phase brush
+  // mode unrepresentable. It is an allowlist now rather than a free-for-all:
+  // `delete` and `material-paint` still have nothing to act on at site scope, so
+  // letting them survive here would restore a mode with no targets.
   if (phase === 'site') {
-    return 'select'
+    return mode === 'terrain-sculpt' ? mode : 'select'
   }
 
   return mode === 'build' || mode === 'delete' || mode === 'material-paint' ? mode : 'select'
@@ -568,7 +612,7 @@ export function normalizePersistedEditorUiState(
   state: Partial<PersistedEditorUiState> | null | undefined,
 ): PersistedEditorUiState {
   const phase = state?.phase === 'structure' || state?.phase === 'furnish' ? state.phase : 'site'
-  const mode = normalizeModeForPhase(phase, state?.mode)
+  let mode = normalizeModeForPhase(phase, state?.mode)
 
   // Migrate old isFloorplanOpen to viewMode
   let viewMode: ViewMode = '3d'
@@ -578,6 +622,13 @@ export function normalizePersistedEditorUiState(
     viewMode = 'split'
   }
   const isFloorplanOpen = viewMode !== '3d'
+
+  // Both are persisted independently, and rehydrate goes through neither setter,
+  // so this is the third place the sculpt/2D pair has to be reconciled. The view
+  // wins here for the same reason it does in `setViewMode`: a brush armed over a
+  // hidden canvas is a mode the user cannot use, and reviving one on load is
+  // worse than reviving it mid-session — nothing on screen explains it.
+  if (mode === 'terrain-sculpt' && viewMode === '2d') mode = 'select'
 
   if (phase === 'site') {
     return {
@@ -829,6 +880,54 @@ export function selectSiteFloorplanContext() {
 // floorplan panes render nothing meaningful for a thumbnail.
 let viewModeBeforeCapture: ViewMode | null = null
 
+/**
+ * Hold the interaction scope that belongs to a sustained brush mode.
+ *
+ * Paint and sculpt are the two modes whose scope lifetime is the *mode*, not a
+ * pointer gesture. Both must be released whenever the mode changes for any
+ * reason — including the phase switch that resets the mode without going through
+ * `setMode`. A stuck `sculpting` scope would leave selection disabled across the
+ * whole editor, so this is one function called from every mode transition rather
+ * than a rule each transition remembers.
+ *
+ * The eyedropper arm rides along for the same reason: it is one-shot state whose
+ * UI is unmounted the moment sculpt mode ends, so it has to be cleared on every
+ * exit path and not just the one through `setMode`.
+ *
+ * Every `set({ mode: ... })` in this store must be followed by a call to this —
+ * see the callers in `setPhase`, `setStructureLayer`, `setPreviewMode`,
+ * `setFirstPersonMode` and `setWorkspaceMode`. The four view-swapping ones are
+ * the dangerous class: they unmount `ToolManager` (via `noEditing`), so the
+ * sculpt tool that would otherwise release the scope on unmount is gone, and a
+ * scope leaked there is unrecoverable without a reload.
+ */
+function syncBrushModeScope(mode: Mode): void {
+  const scope = useInteractionScope.getState()
+  if (mode === 'material-paint') scope.begin({ kind: 'painting' })
+  else if (mode === 'terrain-sculpt') scope.begin({ kind: 'sculpting' })
+  // `isBrushMode` is the same set as the two branches above — kept as one
+  // predicate so an added brush mode cannot be handled here and missed there.
+  else {
+    scope.endIf((s) => s.kind === 'painting' || s.kind === 'sculpting')
+    if (useEditor.getState().terrainSampling) useEditor.getState().setTerrainSampling(false)
+  }
+}
+
+/**
+ * Whether `mode` is one of the two sustained brush modes.
+ *
+ * Named because callers *outside* this store need the same test: a scope is
+ * single-owner, so anything that calls `begin()` while a brush mode holds its
+ * scope silently evicts it — the brush stays armed and painting while the rest of
+ * the editor believes a drag is running. Almost every producer is unreachable
+ * under a brush mode because it needs a selection and entering the mode clears
+ * one, but the clipboard paths read the clipboard instead (see
+ * `pasteSelectionAndPickUp`), so they have to ask.
+ */
+export function isBrushMode(mode: Mode): boolean {
+  return mode === 'material-paint' || mode === 'terrain-sculpt'
+}
+
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
@@ -857,6 +956,11 @@ const useEditor = create<EditorState>()(
           set({ mode: 'select', tool: null, catalogCategory: null })
         }
 
+        // Leaving the site phase must drop a held sculpt scope: this branch
+        // rewrites `mode` without going through `setMode`, so without this a
+        // stuck `sculpting` scope would disable selection in structure phase.
+        syncBrushModeScope(get().mode)
+
         switch (phase) {
           case 'site':
             selectSiteFloorplanContext()
@@ -875,6 +979,23 @@ const useEditor = create<EditorState>()(
       },
       mode: DEFAULT_PERSISTED_EDITOR_UI_STATE.mode,
       setMode: (mode) => {
+        // Sculpting is a site-phase mode. Arming it from structure/furnish moves
+        // the phase rather than failing silently: the user asked for the ground,
+        // and `normalizeModeForPhase` would otherwise reject the mode on the next
+        // rehydrate, leaving the UI showing a mode the store does not hold.
+        if (mode === 'terrain-sculpt' && get().phase !== 'site') {
+          get().setPhase('site')
+        }
+
+        // Same promotion, one axis over. The brush needs the 3D canvas: in `2d`
+        // the pane is only `display: none`, so the mode would arm, hold its
+        // scope and show its HUD while no pointer event could ever reach it.
+        // `split` is the smallest move that satisfies it — a plain `3d` would
+        // throw away a floorplan the user deliberately opened.
+        if (mode === 'terrain-sculpt' && get().viewMode === '2d') {
+          set({ viewMode: 'split', isFloorplanOpen: true })
+        }
+
         set({ mode })
 
         const { phase, structureLayer, tool } = get()
@@ -898,9 +1019,14 @@ const useEditor = create<EditorState>()(
           set({ tool: null })
         }
 
-        const scope = useInteractionScope.getState()
-        if (mode === 'material-paint') scope.begin({ kind: 'painting' })
-        else scope.endIf((s) => s.kind === 'painting')
+        if (mode === 'terrain-sculpt') {
+          // Sculpting acts on the ground, never on a node. Clearing the
+          // selection on entry is what stops the selected wall's gizmo from
+          // sitting under the brush, competing for the same clicks.
+          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+        }
+
+        syncBrushModeScope(mode)
       },
       tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
       setTool: (tool) => set({ tool }),
@@ -926,6 +1052,7 @@ const useEditor = create<EditorState>()(
           set({ structureLayer: layer, tool })
         } else {
           set({ structureLayer: layer, mode: 'select', tool: null })
+          syncBrushModeScope('select')
         }
 
         const viewer = useViewer.getState()
@@ -1045,6 +1172,21 @@ const useEditor = create<EditorState>()(
       },
       paintHover: null,
       setPaintHover: (info) => set({ paintHover: info }),
+      terrainVerb: 'flatten',
+      setTerrainVerb: (verb) =>
+        set({
+          terrainVerb: verb,
+          // Switching away from flatten drops the sampling arm — an eyedropper
+          // that survives into the raise brush would swallow its first click.
+          terrainSampling: verb === 'flatten' ? get().terrainSampling : false,
+        }),
+      terrainBrush: DEFAULT_BRUSH_SETTINGS,
+      setTerrainBrush: (settings) => set({ terrainBrush: { ...get().terrainBrush, ...settings } }),
+      terrainFlattenTarget: null,
+      setTerrainFlattenTarget: (metres) =>
+        set({ terrainFlattenTarget: metres, terrainSampling: false }),
+      terrainSampling: false,
+      setTerrainSampling: (sampling) => set({ terrainSampling: sampling }),
       canFindNode: false,
       setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
@@ -1095,6 +1237,7 @@ const useEditor = create<EditorState>()(
       setPreviewMode: (preview) => {
         if (preview) {
           set({ isPreviewMode: true, mode: 'select', tool: null, catalogCategory: null })
+          syncBrushModeScope('select')
           // Clear zone/item selection for clean viewer drill-down hierarchy
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
@@ -1137,7 +1280,14 @@ const useEditor = create<EditorState>()(
         })
       },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
-      setViewMode: (mode) => set({ viewMode: mode, isFloorplanOpen: mode !== '3d' }),
+      setViewMode: (mode) => {
+        set({ viewMode: mode, isFloorplanOpen: mode !== '3d' })
+        // Going the other way, the view wins and the mode yields. Hiding the 3D
+        // pane leaves the brush unreachable, and a held `sculpting` scope would
+        // then keep selection suppressed in a floorplan the user is trying to
+        // work in — a mode you cannot use and cannot see how to leave.
+        if (mode === '2d' && get().mode === 'terrain-sculpt') get().setMode('select')
+      },
       splitOrientation: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.splitOrientation,
       setSplitOrientation: (orientation) => set({ splitOrientation: orientation }),
       isFloorplanOpen: DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen,
@@ -1235,6 +1385,7 @@ const useEditor = create<EditorState>()(
             tool: null,
             catalogCategory: null,
           })
+          syncBrushModeScope('select')
         } else {
           const prevMode = get()._viewModeBeforeFirstPerson
           set({
@@ -1259,6 +1410,7 @@ const useEditor = create<EditorState>()(
             tool: null,
             catalogCategory: null,
           })
+          syncBrushModeScope('select')
           // Clear selection so no edit affordances bleed into the clean canvas.
           useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         } else {
@@ -1301,6 +1453,13 @@ const useEditor = create<EditorState>()(
               }
             : {}),
         }
+      },
+      // `mode` is persisted, but the interaction scope a brush mode holds is not
+      // — it lives in a separate, non-persisted store. Rehydrating into
+      // `terrain-sculpt` (or paint) without re-claiming the scope would restore
+      // the brush with selection still enabled, so every dab could grab a wall.
+      onRehydrateStorage: () => (state) => {
+        if (state) syncBrushModeScope(state.mode)
       },
       partialize: (state) => ({
         phase: state.phase,

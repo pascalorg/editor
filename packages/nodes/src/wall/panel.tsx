@@ -25,7 +25,6 @@ import {
   ActionButton,
   ActionGroup,
   curveReshapeScope,
-  formatLinearMeasurement,
   getLinearUnitLabel,
   linearControlValueToMeters,
   metersToLinearUnit,
@@ -109,12 +108,12 @@ export default function WallPanel() {
     })
   })
 
-  // Effective height while the wall is plane-bound (`height` absent): the
-  // storey plane minus the elected slab base — what the wall currently
-  // renders at. `undefined` for walls with an explicit custom height.
-  const planeBoundHeightMeters = useScene((s) => {
+  // Existing plane-bound walls have no stored height. Resolve their current
+  // body height for display and materialize it if the user edits height or
+  // enables terrain infill.
+  const resolvedHeightMeters = useScene((s) => {
     const wall = selectedId ? (s.nodes[selectedId as AnyNodeId] as WallNode | undefined) : undefined
-    if (wall?.type !== 'wall' || wall.height != null) return undefined
+    if (wall?.type !== 'wall') return undefined
     return resolveWallOpeningCeiling(wall, s.nodes)
   })
 
@@ -159,20 +158,15 @@ export default function WallPanel() {
     [handleUpdate],
   )
 
-  const handleTopModeChange = useCallback(
-    (mode: 'storey' | 'custom') => {
+  const handleBaseModeChange = useCallback(
+    (mode: 'terrain' | 'fixed') => {
       const n = nodeRef.current
       if (!n) return
-      const isCustom = n.height != null
-      if (mode === 'custom' && !isCustom) {
-        // Seed from the current effective height so the geometry doesn't
-        // jump at the moment of detaching from the storey plane.
-        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes)
-        handleUpdate({ height: Math.max(0.1, seeded) })
-      } else if (mode === 'storey' && isCustom) {
-        // Absent `height` = plane-bound; the store strips undefined keys.
-        handleUpdate({ height: undefined })
-      }
+      const height = n.height ?? resolveWallOpeningCeiling(n, useScene.getState().nodes)
+      handleUpdate({
+        height: Math.max(0.1, height),
+        fillToTerrain: mode === 'terrain' ? true : undefined,
+      })
     },
     [handleUpdate],
   )
@@ -192,8 +186,8 @@ export default function WallPanel() {
 
   const length = getWallCurveLength(node)
 
-  const isPlaneBound = node.height == null
-  const height = node.height ?? planeBoundHeightMeters ?? 2.5
+  const followsTerrain = node.fillToTerrain === true
+  const height = node.height ?? resolvedHeightMeters ?? 2.5
   const thickness = node.thickness ?? 0.1
   const curveOffset = getClampedWallCurveOffset(node)
   const maxCurveOffset = getMaxWallCurveOffset(node)
@@ -232,36 +226,35 @@ export default function WallPanel() {
           unit={unitLabel}
           value={displayLength}
         />
+        <SliderControl
+          label="Height"
+          max={metersToLinearUnit(6, unit)}
+          min={metersToLinearUnit(0.1, unit)}
+          onChange={(v) =>
+            handleUpdate({
+              height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
+            })
+          }
+          precision={2}
+          step={0.1}
+          unit={unitLabel}
+          value={Math.round(displayHeight * 100) / 100}
+        />
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Top
+          Base
         </div>
         <SegmentedControl
-          onChange={handleTopModeChange}
+          onChange={handleBaseModeChange}
           options={[
-            { label: 'Follows level', value: 'storey' },
-            { label: 'Custom height', value: 'custom' },
+            { label: 'Fixed', value: 'fixed' },
+            { label: 'Follows level', value: 'terrain' },
           ]}
-          value={isPlaneBound ? 'storey' : 'custom'}
+          value={followsTerrain ? 'terrain' : 'fixed'}
         />
-        {isPlaneBound ? (
+        {followsTerrain && (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {formatLinearMeasurement(height, unit)}
+            Extends downward to meet the terrain. Height and top stay unchanged.
           </div>
-        ) : (
-          <SliderControl
-            label="Height"
-            max={metersToLinearUnit(6, unit)}
-            min={metersToLinearUnit(0.1, unit)}
-            onChange={(v) =>
-              handleUpdate({
-                height: linearControlValueToMeters(v, unit, { maxMeters: 6, minMeters: 0.1 }),
-              })
-            }
-            precision={2}
-            step={0.1}
-            unit={unitLabel}
-            value={Math.round(displayHeight * 100) / 100}
-          />
         )}
         <SliderControl
           label="Thickness"

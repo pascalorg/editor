@@ -55,6 +55,7 @@ export {
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
   type PointedSupportSurface,
   pointInPolygon,
@@ -71,6 +72,7 @@ export {
 export {
   type FenceSupportInput,
   resolveFenceSupportSlabPatch,
+  resolveMovedWallSupportSlabPatch,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
   type SupportSlabPatch,
@@ -147,6 +149,51 @@ export {
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
+export {
+  advanceStroke,
+  type BrushSettings,
+  type BrushShape,
+  beginStroke,
+  brushHeightAt,
+  DEFAULT_BRUSH_SETTINGS,
+  detachStrokeAnchor,
+  highestOver,
+  MIN_BRUSH_RADIUS_IN_SPACINGS,
+  maxCoverage,
+  minBrushRadius,
+  RAISE_METRES_PER_STROKE,
+  sampleTarget,
+  type TerrainStroke,
+  type TerrainVerb,
+  weightAt,
+} from './lib/terrain-brush'
+export { decodeTerrainField, encodeTerrainField, isDatumField } from './lib/terrain-codec'
+export {
+  applyHeightPatch,
+  createTerrainField,
+  DEFAULT_TERRAIN_SPACING,
+  DEFAULT_TERRAIN_STEP,
+  diffToPatches,
+  flattenPatch,
+  type HeightPatch,
+  heightAt,
+  heightAtSample,
+  isFlatOver,
+  normalAt,
+  quantize,
+  sampleRangeOver,
+  slopeAt,
+  surfaceHeightAt,
+  type TerrainField,
+} from './lib/terrain-field'
+export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
+export { commitTerrainField, terrainFieldForEdit, terrainFieldOf } from './lib/terrain-source'
+export {
+  isSiteDatum,
+  SITE_DATUM_EPSILON,
+  SITE_DATUM_Y,
+  terrainSupportLift,
+} from './lib/terrain-support'
 export {
   closestOnSegment,
   collectLevelWallSegments,
@@ -226,6 +273,10 @@ export {
   getEffectiveNode,
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
+export {
+  default as useLiveTerrain,
+  type LiveTerrainStroke,
+} from './store/use-live-terrain'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export {
   type ApplySceneSnapshotOptions,

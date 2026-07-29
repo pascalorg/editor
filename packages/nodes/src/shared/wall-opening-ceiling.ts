@@ -1,9 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getWallPlaneTop,
-  resolveWallEffectiveHeight,
-  spatialGridManager,
+  getWallEffectiveHeightForNodes,
   type WallNode,
 } from '@pascal-app/core'
 
@@ -33,19 +31,7 @@ export function resolveWallOpeningCeiling(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): number {
-  const levelId = wall.parentId ?? 'default'
-  const support = spatialGridManager.getSlabSupportForWall(
-    levelId,
-    wall.start,
-    wall.end,
-    wall.curveOffset ?? 0,
-    wall.thickness,
-    wall.supportSlabId,
-  )
-  // Covering-clamped plane: openings cap under a flush/thick slab from the
-  // level above, matching the shortened wall body.
-  const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<AnyNodeId, AnyNode>)
-  return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+  return getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>)
 }
 
 /**

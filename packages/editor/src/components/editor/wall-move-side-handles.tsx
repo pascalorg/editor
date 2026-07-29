@@ -1,8 +1,10 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type FenceNode,
+  getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallEffectiveHeightForNodes,
   getWallThickness,
@@ -154,6 +156,7 @@ export function WallMoveSideHandles() {
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
+  const nodes = useScene((state) => state.nodes)
   // Merge the in-flight drag override so every handle (side-move arrows,
   // height arrow, corner leaders) tracks the live height in real time
   // during a height drag — the scene store stays at the pre-drag value
@@ -197,12 +200,13 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
     }
   }, [wall.parentId])
 
-  const handles = useMemo(() => getWallMoveHandles(effectiveWall), [effectiveWall])
+  const baseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
+  const handles = useMemo(() => getWallMoveHandles(effectiveWall, nodes), [effectiveWall, nodes])
 
   if (!levelObject || handles.length === 0) return null
 
   return createPortal(
-    <group>
+    <group position={[0, baseElevation, 0]}>
       {handles.map((handle) => (
         <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
       ))}
@@ -215,6 +219,8 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
 }
 
 function buildDashedVerticalGeometry(height: number) {
+  if (!(Number.isFinite(height) && height > 0)) return new BufferGeometry()
+
   // Build each dash as a thin cylinder section so thickness is
   // controllable — native `lineSegments` lock to 1px on WebGL/WebGPU.
   const dashes: BufferGeometry[] = []
@@ -227,7 +233,10 @@ function buildDashedVerticalGeometry(height: number) {
     dashes.push(cylinder)
     y = end + CORNER_GAP_SIZE
   }
-  const merged = mergeGeometries(dashes, false) ?? new BufferGeometry()
+  const merged =
+    dashes.length > 0
+      ? (mergeGeometries(dashes, false) ?? new BufferGeometry())
+      : new BufferGeometry()
   for (const dash of dashes) dash.dispose()
   return merged
 }
@@ -760,7 +769,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   )
 }
 
-function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
+function getWallMoveHandles(wall: WallNode, nodes: Record<string, AnyNode>): WallMoveHandle[] {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dz)
@@ -776,7 +785,7 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
   const midpoint: [number, number] = frame
     ? [frame.point.x, frame.point.y]
     : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
 

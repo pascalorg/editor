@@ -14,6 +14,13 @@ describe('resolveWallTop', () => {
     expect(resolveWallTop({ height: 2.5 }, 3, -0.4)).toBe(2.5)
   })
 
+  test('ground-hosted explicit height remains body-relative in a terrain depression', () => {
+    expect(resolveWallTop({ height: 2.5, supportSlabId: 'ground' }, 3, -0.4)).toBeCloseTo(2.1)
+    expect(
+      resolveWallEffectiveHeight({ height: 2.5, supportSlabId: 'ground' }, 3, -0.4),
+    ).toBeCloseTo(2.5)
+  })
+
   test('plane-bound wall tops out at the storey plane regardless of base', () => {
     expect(resolveWallTop({}, 3, 0)).toBe(3)
     expect(resolveWallTop({}, 3, 0.6)).toBe(3)
