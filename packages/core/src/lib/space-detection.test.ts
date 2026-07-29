@@ -530,7 +530,11 @@ function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
       return () => listeners.delete(listener)
     },
     temporal: { getState: () => ({ pause() {}, resume() {} }) },
-    setNodes(next: Record<string, AnyNode>, origin: SceneCommitOrigin = 'local') {
+    setNodes(
+      next: Record<string, AnyNode>,
+      origin: SceneCommitOrigin = 'local',
+      changedNodeIds?: ReadonlySet<AnyNodeId>,
+    ) {
       const before = state.nodes
       state.nodes = next
       notify()
@@ -545,6 +549,7 @@ function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
         origin,
         before: snapshot(before),
         current: snapshot(next),
+        changedNodeIds,
       })
     },
   }
@@ -714,6 +719,132 @@ function splitRoomWithGeneratedSurfaces() {
     }
   }
   return nodes
+}
+
+function fourRoomGridWithSplitA() {
+  const walls = [
+    WallNode.parse({
+      id: 'wall_bottom_left',
+      start: [0, 0],
+      end: [4, 0],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_bottom_right',
+      start: [4, 0],
+      end: [8, 0],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_right_bottom',
+      start: [8, 0],
+      end: [8, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_right_top',
+      start: [8, 3],
+      end: [8, 6],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_top_right',
+      start: [8, 6],
+      end: [4, 6],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_top_a2',
+      start: [4, 6],
+      end: [2, 6],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_top_a1',
+      start: [2, 6],
+      end: [0, 6],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_left_top',
+      start: [0, 6],
+      end: [0, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_left_bottom',
+      start: [0, 3],
+      end: [0, 0],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_horizontal_a1',
+      start: [0, 3],
+      end: [2, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_horizontal_a2',
+      start: [2, 3],
+      end: [4, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_horizontal_right',
+      start: [4, 3],
+      end: [8, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_vertical_bottom',
+      start: [4, 0],
+      end: [4, 3],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_vertical_top',
+      start: [4, 3],
+      end: [4, 6],
+      parentId: 'level_0',
+    }),
+    WallNode.parse({
+      id: 'wall_a_split',
+      start: [2, 3],
+      end: [2, 6],
+      parentId: 'level_0',
+    }),
+  ]
+  const distantSlab = SlabNode.parse({
+    id: 'slab_d',
+    parentId: 'level_0',
+    polygon: [
+      [4, 0],
+      [8, 0],
+      [8, 3],
+      [4, 3],
+    ],
+    autoFromWalls: true,
+  })
+  const distantCeiling = CeilingNode.parse({
+    id: 'ceiling_d',
+    parentId: 'level_0',
+    polygon: distantSlab.polygon,
+    autoFromWalls: true,
+  })
+  const level = LevelNode.parse({
+    id: 'level_0',
+    parentId: 'building_a',
+    children: [...walls.map((wall) => wall.id), distantSlab.id, distantCeiling.id],
+  })
+  return Object.fromEntries(
+    [
+      BuildingNode.parse({ id: 'building_a', children: [level.id] }),
+      level,
+      ...walls,
+      distantSlab,
+      distantCeiling,
+    ].map((node) => [node.id, node]),
+  ) as Record<string, AnyNode>
 }
 
 describe('generated surface deletion through the detection sync', () => {
@@ -896,6 +1027,94 @@ describe('generated surface deletion through the detection sync', () => {
 })
 
 describe('topology-delta room surface reconciliation', () => {
+  test('indexes only room A while its divider is deleted, recreated, and moved', () => {
+    const sceneStore = createSceneStoreStub(fourRoomGridWithSplitA())
+    const editorStore = createEditorStoreStub()
+    const events: Array<{
+      strategy: string
+      examinedWallIds: string[]
+      affectedBeforeRoomCount: number
+      affectedCurrentRoomCount: number
+    }> = []
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+      onTopologyReconcile: (event) => events.push(event),
+    })
+    const distantSlabBefore = sceneStore.getState().nodes.slab_d
+    const distantCeilingBefore = sceneStore.getState().nodes.ceiling_d
+
+    try {
+      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+
+      const current = sceneStore.getState().nodes
+      const splitWall = current.wall_a_split as WallNode
+      const level = current.level_0 as LevelNode
+      const { wall_a_split: _deleted, ...withoutSplit } = current
+      sceneStore.setNodes(
+        {
+          ...withoutSplit,
+          level_0: {
+            ...level,
+            children: level.children.filter((id) => id !== splitWall.id),
+          },
+        },
+        'local',
+        new Set([splitWall.id as AnyNodeId]),
+      )
+
+      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(4)
+      expect(events.at(-1)?.strategy).toBe('indexed')
+      expect(events.at(-1)?.examinedWallIds).not.toEqual(
+        expect.arrayContaining([
+          'wall_bottom_right',
+          'wall_right_bottom',
+          'wall_horizontal_right',
+          'wall_vertical_bottom',
+        ]),
+      )
+      expect(sceneStore.getState().nodes.slab_d).toEqual(distantSlabBefore)
+      expect(sceneStore.getState().nodes.ceiling_d).toEqual(distantCeilingBefore)
+
+      const afterDelete = sceneStore.getState().nodes
+      const levelAfterDelete = afterDelete.level_0 as LevelNode
+      sceneStore.setNodes(
+        {
+          ...afterDelete,
+          [splitWall.id]: splitWall,
+          level_0: {
+            ...levelAfterDelete,
+            children: [...levelAfterDelete.children, splitWall.id],
+          },
+        },
+        'local',
+        new Set([splitWall.id as AnyNodeId]),
+      )
+
+      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+      expect(events.at(-1)?.examinedWallIds).not.toContain('wall_bottom_right')
+
+      const afterCreate = sceneStore.getState().nodes
+      sceneStore.setNodes(
+        {
+          ...afterCreate,
+          [splitWall.id]: {
+            ...(afterCreate[splitWall.id] as WallNode),
+            start: [2.5, 3],
+            end: [2.5, 6],
+          },
+        },
+        'local',
+        new Set([splitWall.id as AnyNodeId]),
+      )
+
+      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+      expect(events.at(-1)?.examinedWallIds).not.toContain('wall_bottom_right')
+      expect(sceneStore.getState().nodes.slab_d).toEqual(distantSlabBefore)
+      expect(sceneStore.getState().nodes.ceiling_d).toEqual(distantCeilingBefore)
+    } finally {
+      unsubscribe()
+    }
+  })
+
   test('closing a genuinely new room creates its initial slab and ceiling', () => {
     const initial = roomWithGeneratedSurfaces()
     delete initial.wall_4

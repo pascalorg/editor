@@ -9717,10 +9717,9 @@ export function FloorplanPanel({
       // pipelines resolved endpoints ≥1e-6 apart (the duplicate
       // check compares exact endpoints).
       //
-      // That 3D path is dead in 2D-only view — the canvas is
-      // `display:none`, so the tool never commits. Mirror the slab /
-      // ceiling 2D-only committers: create locally here, gated on the
-      // view, so split / 3D keep their single-owner tool commit.
+      // The mounted 3D wall tool explicitly ignores floorplan events in
+      // 2D-only view. Mirror the slab / ceiling 2D-only committers: create
+      // locally here, gated on the view, so every view has one commit owner.
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
       const createdWall = viewIs2DOnly ? createWallOnCurrentLevel(draftStart, point) : null
       if (createdWall) {

@@ -558,6 +558,7 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (useEditor.getState().viewMode === '2d') return
       if (!(cursorRef.current && wallPreviewRef.current)) return
 
       // Ride the grid event plane on the pointed surface: aiming at an
@@ -652,6 +653,7 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (useEditor.getState().viewMode === '2d') return
       if (!wallPreviewRef.current) return
 
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {

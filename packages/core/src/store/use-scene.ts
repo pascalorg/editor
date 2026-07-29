@@ -45,6 +45,7 @@ import {
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
@@ -1446,18 +1447,42 @@ const useScene: UseSceneStore = create<SceneState>()(
         get().dirtyNodes.delete(id)
       },
 
-      createNodes: (ops) => nodeActions.createNodesAction(set, get, ops),
-      createNode: (node, parentId) => nodeActions.createNodesAction(set, get, [{ node, parentId }]),
-      applyNodeChanges: (changes) => nodeActions.applyNodeChangesAction(set, get, changes),
+      createNodes: (ops) =>
+        runWithSceneCommitNodeIds(
+          ops.map(({ node }) => node.id),
+          () => nodeActions.createNodesAction(set, get, ops),
+        ),
+      createNode: (node, parentId) =>
+        runWithSceneCommitNodeIds([node.id], () =>
+          nodeActions.createNodesAction(set, get, [{ node, parentId }]),
+        ),
+      applyNodeChanges: (changes) =>
+        runWithSceneCommitNodeIds(
+          [
+            ...(changes.create ?? []).map(({ node }) => node.id),
+            ...(changes.update ?? []).map(({ id }) => id),
+            ...(changes.delete ?? []),
+          ],
+          () => nodeActions.applyNodeChangesAction(set, get, changes),
+        ),
 
-      updateNodes: (updates) => nodeActions.updateNodesAction(set, get, updates),
-      updateNode: (id, data) => nodeActions.updateNodesAction(set, get, [{ id, data }]),
+      updateNodes: (updates) =>
+        runWithSceneCommitNodeIds(
+          updates.map(({ id }) => id),
+          () => nodeActions.updateNodesAction(set, get, updates),
+        ),
+      updateNode: (id, data) =>
+        runWithSceneCommitNodeIds([id], () =>
+          nodeActions.updateNodesAction(set, get, [{ id, data }]),
+        ),
 
       // --- DELETE ---
 
-      deleteNodes: (ids) => nodeActions.deleteNodesAction(set, get, ids),
+      deleteNodes: (ids) =>
+        runWithSceneCommitNodeIds(ids, () => nodeActions.deleteNodesAction(set, get, ids)),
 
-      deleteNode: (id) => nodeActions.deleteNodesAction(set, get, [id]),
+      deleteNode: (id) =>
+        runWithSceneCommitNodeIds([id], () => nodeActions.deleteNodesAction(set, get, [id])),
 
       // --- COLLECTIONS ---
 
@@ -1988,6 +2013,7 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     origin: 'host',
     before,
     current,
+    changedNodeIds: touchedNodeIds,
   })
   return true
 }

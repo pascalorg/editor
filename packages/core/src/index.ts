@@ -197,6 +197,7 @@ export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,
+  notifySceneCommit,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,

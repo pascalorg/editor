@@ -3,9 +3,11 @@
 import {
   clearSceneHistory,
   nodeRegistry,
+  notifySceneCommit,
   pauseSceneHistory,
   resolveLevelId,
   resumeSceneHistory,
+  type SceneSnapshot,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -384,8 +386,14 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
+function currentSceneSnapshot(): SceneSnapshot {
+  const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+  return { nodes, rootNodeIds, collections, materials, installedPlugins }
+}
+
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
+  const before = currentSceneSnapshot()
   pauseSceneHistory(useScene)
   try {
     if (hasUsableSceneGraph(sceneGraph)) {
@@ -406,6 +414,11 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
 
   // The loaded scene is the undo floor; discard history from the previous scene.
   clearSceneHistory()
+  notifySceneCommit({
+    origin: 'load',
+    before,
+    current: currentSceneSnapshot(),
+  })
 
   syncEditorSelectionFromCurrentScene()
 }

@@ -67,6 +67,7 @@ describe('applySceneGraphToEditor', () => {
         (node) => node.type === 'slab' || node.type === 'ceiling',
       )
       expect(surfaces).toHaveLength(0)
+      expect(Object.values(useEditor.getState().spaces)).toHaveLength(1)
     } finally {
       unsubscribe()
     }

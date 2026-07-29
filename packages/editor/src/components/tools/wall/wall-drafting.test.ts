@@ -167,6 +167,23 @@ describe('createWallOnCurrentLevel', () => {
     ).toBe(true)
   })
 
+  test('projecting a magnetic endpoint onto an angled host does not create a sliver', () => {
+    seedLevel([
+      makeWall([-6.5, 2.5], [-0.5, -3.5], 'wall_top'),
+      makeWall([-0.5, -3.5], [4, 1.5], 'wall_right'),
+      makeWall([4, 1.5], [-2, 7], 'wall_bottom'),
+      makeWall([-2, 7], [-6.5, 2.5], 'wall_left'),
+    ])
+
+    const created = createWallOnCurrentLevel(
+      [-3.5, -0.5],
+      [0.994_492_060_526_807_5, 4.005_494_489_071_548],
+    )
+
+    expect(created?.end).not.toEqual([0.994_492_060_526_807_5, 4.005_494_489_071_548])
+    expect(levelWalls()).toHaveLength(7)
+  })
+
   test('exact duplicate segment is rejected', () => {
     expect(createWallOnCurrentLevel([0, 0], [4, 0])).toBeNull()
     expect(levelWalls()).toHaveLength(1)
