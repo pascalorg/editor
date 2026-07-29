@@ -9768,6 +9768,7 @@ export function FloorplanPanel({
         shouldStopWallDraftAfterCommit({
           locallyCreatedWall: createdWall,
           publishedNextStart,
+          locallyOwnsCommit: viewIs2DOnly,
         })
       ) {
         // The mounted wall tool owns both the commit and the continuation

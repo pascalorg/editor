@@ -10,6 +10,24 @@ function nodeMap(nodes: AnyNode[]) {
 }
 
 describe('planWallInsertion', () => {
+  test('rejects a covered draft before producing any host split changes', () => {
+    const host = WallNode.parse({
+      id: 'wall_covered',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+    })
+
+    const plan = planWallInsertion(nodeMap([host]), {
+      levelId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+      joinRadius: 0.05,
+    })
+
+    expect(plan).toBeNull()
+  })
+
   test('returns one atomic plan for host splits and inserted wall segments', () => {
     const horizontal = WallNode.parse({
       id: 'wall_horizontal',
@@ -32,6 +50,28 @@ describe('planWallInsertion', () => {
     expect(plan?.insertedWalls).toHaveLength(2)
     expect(plan?.insertedWalls[0]?.end).toEqual([2, 0])
     expect(plan?.insertedWalls[1]?.start).toEqual([2, 0])
+  })
+
+  test('joins at a nearby host endpoint without minting a sliver wall', () => {
+    const host = WallNode.parse({
+      id: 'wall_near_endpoint',
+      parentId: LEVEL_ID,
+      start: [2, -0.005],
+      end: [2, 2],
+    })
+
+    const plan = planWallInsertion(nodeMap([host]), {
+      levelId: LEVEL_ID,
+      start: [-2, 0],
+      end: [4, 0],
+      joinRadius: 0.05,
+    })
+
+    expect(plan).not.toBeNull()
+    expect(plan?.changes.delete).not.toContain(host.id)
+    expect(plan?.insertedWalls).toHaveLength(2)
+    expect(plan?.insertedWalls[0]?.end).toEqual(host.start)
+    expect(plan?.insertedWalls[1]?.start).toEqual(host.start)
   })
 
   test('splits one curved host at every crossing without exposing intermediate mutations', () => {
@@ -91,6 +131,36 @@ describe('planWallInsertion', () => {
     const newParent = plan?.changes.create.find(({ node }) => node.id === doorUpdate?.data.parentId)
     expect(newParent?.node.type).toBe('wall')
     expect(newParent?.node.type === 'wall' ? newParent.node.children : []).toContain(door.id)
+  })
+
+  test('splits the inserted wall when an opening prevents splitting the crossed host', () => {
+    const door = DoorNode.parse({
+      id: 'door_crossing',
+      parentId: 'wall_crossing_blocked',
+      wallId: 'wall_crossing_blocked',
+      position: [2, 0, 0],
+      width: 1,
+    })
+    const host = WallNode.parse({
+      id: 'wall_crossing_blocked',
+      parentId: LEVEL_ID,
+      children: [door.id],
+      start: [0, 0],
+      end: [4, 0],
+    })
+
+    const plan = planWallInsertion(nodeMap([host, door]), {
+      levelId: LEVEL_ID,
+      start: [2, -2],
+      end: [2, 2],
+      joinRadius: 0.05,
+    })
+
+    expect(plan).not.toBeNull()
+    expect(plan?.changes.delete).not.toContain(host.id)
+    expect(plan?.insertedWalls).toHaveLength(2)
+    expect(plan?.insertedWalls[0]?.end).toEqual([2, 0])
+    expect(plan?.insertedWalls[1]?.start).toEqual([2, 0])
   })
 
   test('resolves onto a host but refuses to split through an opening', () => {

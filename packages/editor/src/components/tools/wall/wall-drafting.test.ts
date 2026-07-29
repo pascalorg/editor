@@ -64,6 +64,16 @@ describe('shouldStopWallDraftAfterCommit', () => {
       }),
     ).toBe(false)
   })
+
+  test('keeps the 2D chain alive when its local commit is rejected', () => {
+    const rejectedLocalCommit = {
+      locallyCreatedWall: null,
+      publishedNextStart: null,
+      locallyOwnsCommit: true,
+    }
+
+    expect(shouldStopWallDraftAfterCommit(rejectedLocalCommit)).toBe(false)
+  })
 })
 
 function makeWall(start: WallPlanPoint, end: WallPlanPoint, id: string): WallNode {

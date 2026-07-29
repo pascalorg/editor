@@ -259,6 +259,28 @@ function nearestWallProjection(
   return best
 }
 
+function joinCrossingAtNearbyWallEndpoint(
+  crossing: WallSegmentIntersection,
+  walls: WallNode[],
+): WallSegmentIntersection {
+  const wall = walls.find((candidate) => candidate.id === crossing.wallId)
+  if (!wall) return crossing
+
+  const endpointIndex = ([wall.start, wall.end] as WallPlanPoint[]).findIndex(
+    (endpoint) =>
+      distanceSquared(crossing.point, endpoint) <=
+      WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
+  )
+  if (endpointIndex < 0) return crossing
+
+  const endpoint = endpointIndex === 0 ? wall.start : wall.end
+  return {
+    ...crossing,
+    point: [endpoint[0], endpoint[1]],
+    wallT: endpointIndex,
+  }
+}
+
 function wallLength(wall: WallNode) {
   return isCurvedWall(wall)
     ? getWallCurveLength(wall)
@@ -483,6 +505,7 @@ export function planWallInsertion(
   }
 
   const crossings = findWallSegmentIntersections(resolvedStart, resolvedEnd, walls)
+    .map((crossing) => joinCrossingAtNearbyWallEndpoint(crossing, walls))
     .filter(
       ({ draftT }) => draftT > WALL_INTERSECTION_EPSILON && draftT < 1 - WALL_INTERSECTION_EPSILON,
     )
@@ -507,9 +530,6 @@ export function planWallInsertion(
 
   const splitPoints: WallPlanPoint[] = []
   for (const crossing of crossings) {
-    const doesNotNeedHostSplit =
-      crossing.wallT <= WALL_INTERSECTION_EPSILON || crossing.wallT >= 1 - WALL_INTERSECTION_EPSILON
-    if (!(doesNotNeedHostSplit || splitPlans.has(crossing.wallId))) continue
     if (!splitPoints.some((point) => pointsEqual(point, crossing.point))) {
       splitPoints.push(crossing.point)
     }

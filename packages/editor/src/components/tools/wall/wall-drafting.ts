@@ -200,11 +200,13 @@ export function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint): b
 export function shouldStopWallDraftAfterCommit({
   locallyCreatedWall,
   publishedNextStart,
+  locallyOwnsCommit = false,
 }: {
   locallyCreatedWall: WallNode | null
   publishedNextStart: WallPlanPoint | null
+  locallyOwnsCommit?: boolean
 }): boolean {
-  return locallyCreatedWall === null && publishedNextStart === null
+  return !locallyOwnsCommit && locallyCreatedWall === null && publishedNextStart === null
 }
 
 export function createWallOnCurrentLevel(
