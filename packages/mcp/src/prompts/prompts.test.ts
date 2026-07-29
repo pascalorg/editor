@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { WallNode } from '@pascal-app/core/schema'
 import useScene from '@pascal-app/core/store'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
+import { publishLiveSceneSnapshot } from '../tools/live-sync'
+import { InMemorySceneStore } from '../tools/scene-lifecycle/test-utils'
 import { buildFromBriefPrompt, registerFromBrief } from './from-brief'
 import { buildIterateOnFeedbackPrompt, registerIterateOnFeedback } from './iterate-on-feedback'
 import { buildRenovationMessages, registerRenovationFromPhotos } from './renovation-from-photos'
@@ -61,10 +65,31 @@ describe('from_brief', () => {
       expect(m.content.type).toBe('text')
       if (m.content.type === 'text') {
         expect(m.content.text).toContain('60 sqm studio')
-        expect(m.content.text).toContain('apply_patch')
         expect(m.content.text).toContain('create_story_shell')
         expect(m.content.text).toContain('pascal://agent/guide')
         expect(m.content.text).toContain('dedicated roof level')
+      }
+    } finally {
+      await pair.close()
+    }
+  })
+
+  test('instructs the LLM to bind an active scene before mutations', async () => {
+    const pair = await spinUp(registerFromBrief)
+    try {
+      const res = await pair.client.getPrompt({
+        name: 'from_brief',
+        arguments: { brief: 'Add a bedroom' },
+      })
+      const m = res.messages[0]
+      expect(m).toBeDefined()
+      if (!m) return
+      if (m.content.type === 'text') {
+        expect(m.content.text).toContain('CRITICAL FIRST STEP')
+        expect(m.content.text).toContain('load_scene')
+        expect(m.content.text).toContain('create_project')
+        expect(m.content.text).toContain('create_house_from_brief')
+        expect(m.content.text).toContain('no bound scene')
       }
     } finally {
       await pair.close()
@@ -219,5 +244,214 @@ describe('renovation_from_photos', () => {
     if (last && last.content.type === 'text') {
       expect(last.content.text).toContain('## Task')
     }
+  })
+})
+
+describe('full prompt→tool→save→event regression', () => {
+  beforeEach(() => {
+    useScene.getState().unloadScene()
+    useScene.temporal.getState().clear()
+  })
+
+  test('bedroom prompt scenario: create_room + add_door + add_window + furnish_room persists to store and emits events', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const store = new InMemorySceneStore()
+    const operations = createSceneOperations({ bridge, store })
+
+    const graph = { nodes: bridge.getNodes(), rootNodeIds: bridge.getRootNodeIds() }
+    const meta = await store.save({
+      name: 'Empty Project',
+      graph,
+      saveMode: 'draft',
+      publish: false,
+      operation: 'init',
+    })
+    operations.setActiveScene(meta)
+
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+
+    const {
+      ZoneNode,
+      SlabNode,
+      CeilingNode,
+      WallNode: WallSchema,
+      DoorNode,
+      WindowNode,
+      ItemNode,
+    } = await import('@pascal-app/core/schema')
+
+    const polygon: [number, number][] = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+
+    const zone = ZoneNode.parse({ name: 'Bedroom', polygon, color: '#60a5fa' })
+    const slab = SlabNode.parse({ polygon })
+    const ceiling = CeilingNode.parse({ polygon })
+    const walls = polygon.map((start, i) =>
+      WallSchema.parse({
+        name: `Bedroom wall ${i + 1}`,
+        start,
+        end: polygon[(i + 1) % polygon.length],
+      }),
+    )
+
+    const patchResult = await operations.applyPatch([
+      { op: 'create', node: zone, parentId: level.id },
+      { op: 'create', node: slab, parentId: level.id },
+      { op: 'create', node: ceiling, parentId: level.id },
+      ...walls.map((w) => ({ op: 'create' as const, node: w, parentId: level.id })),
+    ])
+    expect(patchResult.appliedOps).toBe(7)
+    await publishLiveSceneSnapshot(operations, 'create_room')
+
+    const doorWall = walls[0]!
+    const door = DoorNode.parse({
+      wallId: doorWall.id,
+      parentId: doorWall.id,
+      position: [1.5, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    await operations.applyPatch([{ op: 'create', node: door, parentId: doorWall.id }])
+    await publishLiveSceneSnapshot(operations, 'add_door')
+
+    const windowWall = walls[2]!
+    const win = WindowNode.parse({
+      wallId: windowWall.id,
+      parentId: windowWall.id,
+      position: [2, 1.65, 0],
+      width: 1.5,
+      height: 1.5,
+    })
+    await operations.applyPatch([{ op: 'create', node: win, parentId: windowWall.id }])
+    await publishLiveSceneSnapshot(operations, 'add_window')
+
+    const bed = ItemNode.parse({
+      name: 'Double Bed',
+      position: [2, 0, 0.5],
+      asset: {
+        id: 'double-bed',
+        name: 'Double Bed',
+        category: 'furniture',
+        thumbnail: '',
+        src: '',
+        dimensions: [1.8, 0.5, 2],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    })
+    const nightstand1 = ItemNode.parse({
+      name: 'Nightstand 1',
+      position: [0.4, 0, 0.5],
+      asset: {
+        id: 'bedside-table',
+        name: 'Nightstand',
+        category: 'furniture',
+        thumbnail: '',
+        src: '',
+        dimensions: [0.4, 0.5, 0.4],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    })
+    const nightstand2 = ItemNode.parse({
+      name: 'Nightstand 2',
+      position: [3.6, 0, 0.5],
+      asset: {
+        id: 'bedside-table',
+        name: 'Nightstand',
+        category: 'furniture',
+        thumbnail: '',
+        src: '',
+        dimensions: [0.4, 0.5, 0.4],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    })
+    const wardrobe = ItemNode.parse({
+      name: 'Wardrobe',
+      position: [0.3, 0, 1.5],
+      rotation: [0, Math.PI / 2, 0],
+      asset: {
+        id: 'closet',
+        name: 'Wardrobe',
+        category: 'furniture',
+        thumbnail: '',
+        src: '',
+        dimensions: [1.2, 0.6, 2],
+        offset: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    })
+    await operations.applyPatch([
+      { op: 'create', node: bed, parentId: level.id },
+      { op: 'create', node: nightstand1, parentId: level.id },
+      { op: 'create', node: nightstand2, parentId: level.id },
+      { op: 'create', node: wardrobe, parentId: level.id },
+    ])
+    await publishLiveSceneSnapshot(operations, 'furnish_room')
+
+    const events = await store.listSceneEvents(meta.id)
+    expect(events.length).toBe(4)
+    expect(events.map((e) => e.kind)).toEqual([
+      'create_room',
+      'add_door',
+      'add_window',
+      'furnish_room',
+    ])
+
+    const savedScene = await store.load(meta.id)
+    expect(savedScene).not.toBeNull()
+    const nodes = savedScene!.graph.nodes
+    const nodeTypes = new Set(Object.values(nodes).map((n) => n.type))
+    expect(nodeTypes).toContain('zone')
+    expect(nodeTypes).toContain('slab')
+    expect(nodeTypes).toContain('ceiling')
+    expect(nodeTypes).toContain('wall')
+    expect(nodeTypes).toContain('door')
+    expect(nodeTypes).toContain('window')
+    expect(nodeTypes).toContain('item')
+
+    const itemCount = Object.values(nodes).filter((n) => n.type === 'item').length
+    expect(itemCount).toBe(4)
+    const doorCount = Object.values(nodes).filter((n) => n.type === 'door').length
+    expect(doorCount).toBe(1)
+    const windowCount = Object.values(nodes).filter((n) => n.type === 'window').length
+    expect(windowCount).toBe(1)
+  })
+
+  test('mutation without active scene and with store throws a descriptive error', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const store = new InMemorySceneStore()
+    const operations = createSceneOperations({ bridge, store })
+
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+    bridge.createNode(wall, level.id)
+
+    await expect(
+      publishLiveSceneSnapshot(operations, 'create_wall'),
+    ).rejects.toThrow('no_active_scene')
+  })
+
+  test('mutation without active scene and without store silently returns', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const operations = createSceneOperations({ bridge })
+
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+    bridge.createNode(wall, level.id)
+
+    await publishLiveSceneSnapshot(operations, 'create_wall')
   })
 })
