@@ -3,7 +3,12 @@
 // (building-local meters). `wall-drafting.ts` layers grid/angle snapping and
 // scene access on top of these primitives.
 
-import { getWallArcData, getWallCurveFrameAt, isCurvedWall, type WallNode } from '@pascal-app/core'
+import {
+  getWallCurveFrameAt,
+  isCurvedWall,
+  projectPointOntoWallCenterline,
+  type WallNode,
+} from '@pascal-app/core'
 
 export type WallPlanPoint = [number, number]
 
@@ -57,46 +62,7 @@ export function projectPointOntoWallDetailed(
   point: WallPlanPoint,
   wall: WallNode,
 ): WallProjection | null {
-  if (isCurvedWall(wall)) {
-    const arc = getWallArcData(wall)
-    if (!arc) return null
-
-    const pointAngle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
-    const direction = Math.sign(arc.delta)
-    let directedAngle = (pointAngle - arc.startAngle) * direction
-    while (directedAngle < 0) directedAngle += Math.PI * 2
-
-    const totalAngle = Math.abs(arc.delta)
-    const wallT = directedAngle / totalAngle
-    if (wallT <= 0 || wallT >= 1) {
-      return null
-    }
-
-    const frame = getWallCurveFrameAt(wall, wallT)
-    return {
-      point: [frame.point.x, frame.point.y],
-      wallT,
-    }
-  }
-
-  const [x1, z1] = wall.start
-  const [x2, z2] = wall.end
-  const dx = x2 - x1
-  const dz = z2 - z1
-  const lengthSquared = dx * dx + dz * dz
-  if (lengthSquared < 1e-9) {
-    return null
-  }
-
-  const t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared
-  if (t <= 0 || t >= 1) {
-    return null
-  }
-
-  return {
-    point: [x1 + dx * t, z1 + dz * t],
-    wallT: t,
-  }
+  return projectPointOntoWallCenterline(point, wall)
 }
 
 export function projectPointOntoWall(point: WallPlanPoint, wall: WallNode): WallPlanPoint | null {
@@ -231,117 +197,6 @@ function segmentIntersection(
     firstT: t,
     secondT: u,
   }
-}
-
-function curvedWallSegmentIntersections(start: WallPlanPoint, end: WallPlanPoint, wall: WallNode) {
-  const arc = getWallArcData(wall)
-  if (!arc) return []
-  const dx = end[0] - start[0]
-  const dz = end[1] - start[1]
-  const offsetX = start[0] - arc.center.x
-  const offsetZ = start[1] - arc.center.y
-  const a = dx * dx + dz * dz
-  if (a < 1e-12) return []
-  const b = 2 * (offsetX * dx + offsetZ * dz)
-  const c = offsetX * offsetX + offsetZ * offsetZ - arc.radius * arc.radius
-  const discriminant = b * b - 4 * a * c
-  if (discriminant < -1e-9) return []
-
-  const root = Math.sqrt(Math.max(0, discriminant))
-  const draftParameters = [(-b - root) / (2 * a), (-b + root) / (2 * a)]
-  const intersections: Array<{ point: WallPlanPoint; draftT: number; wallT: number }> = []
-  for (const draftT of draftParameters) {
-    if (draftT < -1e-9 || draftT > 1 + 1e-9) continue
-    const point: WallPlanPoint = [start[0] + draftT * dx, start[1] + draftT * dz]
-    const angle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
-    let directedAngle = (angle - arc.startAngle) * arc.direction
-    while (directedAngle < 0) directedAngle += Math.PI * 2
-    const wallT = directedAngle / Math.abs(arc.delta)
-    if (wallT < -1e-9 || wallT > 1 + 1e-9) continue
-    if (intersections.some((candidate) => distanceSquared(candidate.point, point) < 1e-12)) {
-      continue
-    }
-    intersections.push({
-      point,
-      draftT: Math.max(0, Math.min(1, draftT)),
-      wallT: Math.max(0, Math.min(1, wallT)),
-    })
-  }
-  return intersections
-}
-
-export function findWallSegmentIntersections(
-  start: WallPlanPoint,
-  end: WallPlanPoint,
-  walls: WallNode[],
-): Array<{ wallId: WallNode['id']; point: WallPlanPoint; draftT: number; wallT: number }> {
-  const intersections: Array<{
-    wallId: WallNode['id']
-    point: WallPlanPoint
-    draftT: number
-    wallT: number
-  }> = []
-
-  for (const wall of walls) {
-    if (isCurvedWall(wall)) {
-      for (const intersection of curvedWallSegmentIntersections(start, end, wall)) {
-        intersections.push({ wallId: wall.id, ...intersection })
-      }
-      continue
-    }
-    const intersection = segmentIntersection(start, end, wall.start, wall.end)
-    if (!intersection) continue
-    intersections.push({
-      wallId: wall.id,
-      point: intersection.point,
-      draftT: intersection.firstT,
-      wallT: intersection.secondT,
-    })
-  }
-
-  return intersections
-}
-
-export function wallSegmentsCoverSegment(
-  start: WallPlanPoint,
-  end: WallPlanPoint,
-  walls: WallNode[],
-  tolerance = 1e-6,
-): boolean {
-  const dx = end[0] - start[0]
-  const dz = end[1] - start[1]
-  const lengthSquared = dx * dx + dz * dz
-  if (lengthSquared <= tolerance * tolerance) return false
-
-  const length = Math.sqrt(lengthSquared)
-  const intervals: Array<[number, number]> = []
-  for (const wall of walls) {
-    if (isCurvedWall(wall)) continue
-    const startDistance =
-      Math.abs((wall.start[0] - start[0]) * dz - (wall.start[1] - start[1]) * dx) / length
-    const endDistance =
-      Math.abs((wall.end[0] - start[0]) * dz - (wall.end[1] - start[1]) * dx) / length
-    if (startDistance > tolerance || endDistance > tolerance) continue
-
-    const wallStartT =
-      ((wall.start[0] - start[0]) * dx + (wall.start[1] - start[1]) * dz) / lengthSquared
-    const wallEndT = ((wall.end[0] - start[0]) * dx + (wall.end[1] - start[1]) * dz) / lengthSquared
-    const intervalStart = Math.max(0, Math.min(wallStartT, wallEndT))
-    const intervalEnd = Math.min(1, Math.max(wallStartT, wallEndT))
-    if (intervalEnd >= intervalStart) {
-      intervals.push([intervalStart, intervalEnd])
-    }
-  }
-
-  intervals.sort((left, right) => left[0] - right[0])
-  const parameterTolerance = tolerance / length
-  let coveredUntil = 0
-  for (const [intervalStart, intervalEnd] of intervals) {
-    if (intervalStart > coveredUntil + parameterTolerance) return false
-    coveredUntil = Math.max(coveredUntil, intervalEnd)
-    if (coveredUntil >= 1 - parameterTolerance) return true
-  }
-  return false
 }
 
 /**

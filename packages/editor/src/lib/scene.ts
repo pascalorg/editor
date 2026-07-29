@@ -1,12 +1,10 @@
 'use client'
 
 import {
-  clearSceneHistory,
+  applySceneSnapshot,
+  createDefaultSceneSnapshot,
   nodeRegistry,
-  notifySceneCommit,
-  pauseSceneHistory,
   resolveLevelId,
-  resumeSceneHistory,
   type SceneSnapshot,
   sceneRegistry,
   useScene,
@@ -386,38 +384,22 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-function currentSceneSnapshot(): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
-  return { nodes, rootNodeIds, collections, materials, installedPlugins }
-}
-
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
-  const before = currentSceneSnapshot()
-  pauseSceneHistory(useScene)
-  try {
-    if (hasUsableSceneGraph(sceneGraph)) {
-      const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-      useScene.getState().setScene(nodes as any, rootNodeIds as any, {
-        collections: collections as any,
-        materials: materials as any,
-        installedPlugins: installedPlugins ?? defaultInstalledPlugins,
-        hasExplicitPluginInstallState: installedPlugins !== undefined,
-      })
-    } else {
-      useScene.getState().clearScene()
-      useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })
-    }
-  } finally {
-    resumeSceneHistory(useScene)
-  }
+  const hasSceneGraph = hasUsableSceneGraph(sceneGraph)
+  const snapshot: SceneSnapshot = hasSceneGraph
+    ? {
+        nodes: sceneGraph.nodes as SceneSnapshot['nodes'],
+        rootNodeIds: sceneGraph.rootNodeIds as SceneSnapshot['rootNodeIds'],
+        collections: (sceneGraph.collections ?? {}) as SceneSnapshot['collections'],
+        materials: (sceneGraph.materials ?? {}) as SceneSnapshot['materials'],
+        installedPlugins: sceneGraph.installedPlugins ?? defaultInstalledPlugins,
+      }
+    : createDefaultSceneSnapshot(defaultInstalledPlugins)
 
-  // The loaded scene is the undo floor; discard history from the previous scene.
-  clearSceneHistory()
-  notifySceneCommit({
+  applySceneSnapshot(snapshot, {
     origin: 'load',
-    before,
-    current: currentSceneSnapshot(),
+    hasExplicitPluginInstallState: hasSceneGraph && sceneGraph.installedPlugins !== undefined,
   })
 
   syncEditorSelectionFromCurrentScene()

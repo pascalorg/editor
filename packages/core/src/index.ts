@@ -197,7 +197,6 @@ export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   getSceneHistoryPauseDepth,
-  notifySceneCommit,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
@@ -234,6 +233,7 @@ export {
   applyScenePatch,
   applySceneSnapshot,
   clearSceneHistory,
+  createDefaultSceneSnapshot,
   default as useScene,
   type SceneMaterialPatch,
   type SceneNodePatch,
@@ -345,6 +345,18 @@ export {
   resolveWallEffectiveHeight,
   resolveWallTop,
 } from './systems/wall/wall-top'
+export {
+  findWallSegmentIntersections,
+  planWallInsertion,
+  planWallSplitAtPoint,
+  projectPointOntoWallCenterline,
+  type WallInsertionPlan,
+  type WallPointSplitPlan,
+  type WallProjection,
+  type WallSegmentIntersection,
+  type WallTopologyChanges,
+  wallSegmentsCoverSegment,
+} from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'

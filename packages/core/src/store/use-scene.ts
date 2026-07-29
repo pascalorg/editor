@@ -1285,6 +1285,28 @@ function sceneHistorySnapshotFromState(
   return { nodes, rootNodeIds, collections, materials, installedPlugins }
 }
 
+export function createDefaultSceneSnapshot(installedPlugins: string[] = []): SceneSnapshot {
+  const level = LevelNode.parse({
+    level: 0,
+    children: [],
+    height: 2.5,
+  })
+  const building = BuildingNode.parse({ children: [level.id] })
+  const site = SiteNode.parse({ children: [building.id] })
+
+  return {
+    nodes: {
+      [site.id]: site,
+      [building.id]: building,
+      [level.id]: level,
+    },
+    rootNodeIds: [site.id],
+    collections: {},
+    materials: {},
+    installedPlugins,
+  }
+}
+
 const useScene: UseSceneStore = create<SceneState>()(
   temporal(
     (set, get) => ({
@@ -1408,32 +1430,8 @@ const useScene: UseSceneStore = create<SceneState>()(
           return // Scene already loaded
         }
 
-        // Create hierarchy: Site → Building → Level
-        const level0 = LevelNode.parse({
-          level: 0,
-          children: [],
-          height: 2.5,
-        })
-
-        const building = BuildingNode.parse({
-          children: [level0.id],
-        })
-
-        const site = SiteNode.parse({
-          children: [building.id],
-        })
-
-        // Define all nodes flat
-        const nodes: Record<AnyNodeId, AnyNode> = {
-          [site.id]: site,
-          [building.id]: building,
-          [level0.id]: level0,
-        }
-
-        // Site is the root
-        const rootNodeIds = [site.id]
-
-        set({ nodes, rootNodeIds })
+        const snapshot = createDefaultSceneSnapshot(get().installedPlugins)
+        set({ nodes: snapshot.nodes, rootNodeIds: snapshot.rootNodeIds })
       },
 
       markDirty: (id) => {
@@ -2028,6 +2026,7 @@ export function applyScenePatch(changes: ScenePatch): boolean {
 
 export type ApplySceneSnapshotOptions = {
   origin: Extract<SceneCommitOrigin, 'load' | 'host'>
+  hasExplicitPluginInstallState?: boolean
 }
 
 export function applySceneSnapshot(
@@ -2045,11 +2044,12 @@ export function applySceneSnapshot(
       collections: snapshot.collections,
       installedPlugins: snapshot.installedPlugins,
       materials: snapshot.materials,
+      hasExplicitPluginInstallState: options.hasExplicitPluginInstallState,
     })
-    useScene.temporal.getState().clear()
   } finally {
     resumeSceneHistory(useScene)
   }
+  clearSceneHistory()
 
   useLiveNodeOverrides.getState().clearAll()
   useLiveTransforms.getState().clearAll()
