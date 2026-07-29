@@ -432,6 +432,36 @@ describe('SceneBridge', () => {
       expect(Object.keys(bridge.getNodes()).length).toBe(Object.keys(snap.nodes).length)
     })
 
+    test('round-trips document state', () => {
+      const snapshot = {
+        ...bridge.exportJSON(),
+        collections: {
+          collection_kitchen: {
+            id: 'collection_kitchen',
+            name: 'Kitchen',
+            nodeIds: [],
+          },
+        },
+        materials: {
+          mat_accent: {
+            id: 'mat_accent',
+            name: 'Accent',
+            material: { preset: 'custom', properties: { color: '#123456' } },
+          },
+        },
+        installedPlugins: ['pascal:trees'],
+      }
+
+      bridge.setScene({}, [])
+      bridge.loadJSON(snapshot)
+
+      expect(bridge.exportJSON()).toMatchObject({
+        collections: snapshot.collections,
+        materials: snapshot.materials,
+        installedPlugins: snapshot.installedPlugins,
+      })
+    })
+
     test('loadJSON preserves explicit plugin installs', () => {
       const snap = bridge.exportJSON()
       bridge.loadJSON({ ...snap, installedPlugins: ['pascal:trees'] })

@@ -14,6 +14,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  isRemoteSceneEcho,
+  sceneGraphSignature,
+  type PersistedSceneGraph,
+} from '../lib/scene-sync'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -70,33 +75,19 @@ interface SceneLoaderProps {
   meta: SceneMeta
 }
 
-type SceneGraphWithCollections = SceneGraph & {
-  collections?: Record<string, unknown>
-}
-
 interface LiveSceneEvent {
   eventId: number
   sceneId: string
   version: number
   kind: string
   createdAt: string
-  graph: SceneGraphWithCollections
-}
-
-function sceneGraphSignature(graph: SceneGraphWithCollections): string {
-  return JSON.stringify({
-    nodes: graph.nodes,
-    rootNodeIds: graph.rootNodeIds,
-    collections: graph.collections,
-    installedPlugins: graph.installedPlugins,
-  })
+  graph: PersistedSceneGraph
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const versionRef = useRef(meta.version)
   const lastRemoteGraphJsonRef = useRef<string | null>(null)
-  const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -105,13 +96,10 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
       const graphJson = sceneGraphSignature(graph)
-      const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
-      if (lastRemoteGraphJsonRef.current === graphJson) {
+      if (isRemoteSceneEcho(lastRemoteGraphJsonRef.current, graphJson)) {
         lastRemoteGraphJsonRef.current = null
-        suppressRemoteSaveUntilRef.current = 0
         return
       }
-      if (isRecentRemoteApply) return
 
       try {
         const response = await fetch(`/api/scenes/${meta.id}`, {
@@ -163,7 +151,6 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
       versionRef.current = payload.version
       lastRemoteGraphJsonRef.current = sceneGraphSignature(payload.graph)
-      suppressRemoteSaveUntilRef.current = Date.now() + 2500
       applySceneGraphToEditor(payload.graph)
       setConflict(false)
       setSaveError(null)

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Preserve custom scene materials, collections, and installed plugins across save, clone, import, and export.
+
 ## 0.6.0 (2026-04-21)
 
 ### Features

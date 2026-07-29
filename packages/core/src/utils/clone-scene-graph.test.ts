@@ -46,6 +46,13 @@ function makeSceneGraph(): SceneGraph {
         nodeIds: ['scan_1', 'guide_1'] as AnyNodeId[],
       },
     },
+    materials: {
+      mat_accent: {
+        id: 'mat_accent',
+        name: 'Accent',
+        material: { preset: 'custom', properties: { color: '#123456' } },
+      },
+    },
     installedPlugins: ['pascal:trees'],
   }
 }
@@ -59,6 +66,7 @@ describe('forkSceneGraph', () => {
     expect(nodes.some((node) => node.type === 'guide')).toBe(false)
     expect(nodes.some((node) => node.type === 'wall')).toBe(true)
     expect(forked.collections).toEqual({})
+    expect(forked.materials).toEqual(makeSceneGraph().materials)
     expect(forked.installedPlugins).toEqual(['pascal:trees'])
   })
 
@@ -73,7 +81,17 @@ describe('forkSceneGraph', () => {
     expect(
       Object.values(forked.collections ?? {}).flatMap((collection) => collection.nodeIds),
     ).toHaveLength(2)
+    expect(forked.materials).toEqual(makeSceneGraph().materials)
     expect(forked.installedPlugins).toEqual(['pascal:trees'])
+  })
+
+  test('clones materials without sharing the source registry', () => {
+    const source = makeSceneGraph()
+    const cloned = cloneSceneGraph(source)
+
+    expect(cloned.materials).toEqual(source.materials)
+    expect(cloned.materials).not.toBe(source.materials)
+    expect(cloned.materials?.mat_accent).not.toBe(source.materials?.mat_accent)
   })
 })
 

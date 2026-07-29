@@ -20,6 +20,8 @@ export type ActiveSceneMeta = Pick<
   'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version'
 >
 
+type SetSceneExtra = Parameters<ReturnType<typeof useScene.getState>['setScene']>[2]
+
 /**
  * Headless bridge to the `@pascal-app/core` Zustand store.
  *
@@ -59,8 +61,12 @@ export class SceneBridge {
   }
 
   /** Replace entire scene (undoable via Zundo). */
-  setScene(nodes: Record<AnyNodeId, AnyNode>, rootNodeIds: AnyNodeId[]): void {
-    useScene.getState().setScene(nodes, rootNodeIds)
+  setScene(
+    nodes: Record<AnyNodeId, AnyNode>,
+    rootNodeIds: AnyNodeId[],
+    extra?: SetSceneExtra,
+  ): void {
+    useScene.getState().setScene(nodes, rootNodeIds, extra)
   }
 
   /** Full snapshot for export, including collections. */
@@ -72,6 +78,7 @@ export class SceneBridge {
         nodes: state.nodes,
         rootNodeIds: state.rootNodeIds,
         collections: state.collections ?? {},
+        materials: state.materials,
         ...(state.hasExplicitPluginInstallState || state.installedPlugins.length > 0
           ? { installedPlugins: state.installedPlugins }
           : {}),
@@ -119,13 +126,23 @@ export class SceneBridge {
       }
     }
 
-    this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[])
-    if (Array.isArray(obj.installedPlugins)) {
-      useScene.getState().setInstalledPlugins(
-        obj.installedPlugins.filter((id): id is string => typeof id === 'string'),
-        { explicit: true },
-      )
-    }
+    const collections =
+      obj.collections && typeof obj.collections === 'object' && !Array.isArray(obj.collections)
+        ? (obj.collections as NonNullable<SetSceneExtra>['collections'])
+        : undefined
+    const materials =
+      obj.materials && typeof obj.materials === 'object' && !Array.isArray(obj.materials)
+        ? (obj.materials as NonNullable<SetSceneExtra>['materials'])
+        : undefined
+    const installedPlugins = Array.isArray(obj.installedPlugins)
+      ? obj.installedPlugins.filter((id): id is string => typeof id === 'string')
+      : undefined
+
+    this.setScene(nodes as Record<AnyNodeId, AnyNode>, rootNodeIds as AnyNodeId[], {
+      ...(collections && { collections }),
+      ...(materials && { materials }),
+      ...(installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true }),
+    })
   }
 
   /** Read a single node, or `null` if not present. */

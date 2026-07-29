@@ -96,7 +96,33 @@ describe('SqliteSceneStore', () => {
   })
 
   test('round-trips a saved scene through a reopened database', async () => {
-    const graph = makeGraph()
+    const graph = makeGraph({
+      collections: {
+        collection_kitchen: {
+          id: 'collection_kitchen',
+          name: 'Kitchen',
+          nodeIds: ['building_def'],
+        },
+      } as NonNullable<SceneGraph['collections']>,
+      materials: {
+        mat_accent: {
+          id: 'mat_accent',
+          name: 'Accent',
+          material: {
+            preset: 'custom',
+            properties: {
+              color: '#123456',
+              metalness: 0,
+              roughness: 0.5,
+              opacity: 1,
+              transparent: false,
+              side: 'front',
+            },
+          },
+        },
+      } as NonNullable<SceneGraph['materials']>,
+      installedPlugins: ['pascal:trees'],
+    })
     const saved = await store.save({ id: 'kitchen', name: 'Kitchen', graph })
 
     expect(saved.id).toBe('kitchen')
