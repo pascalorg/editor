@@ -327,7 +327,21 @@ describe('createWallOnCurrentLevel', () => {
       makeWall([4, 3], [0, 3], 'wall_top'),
       makeWall([0, 3], [0, 0], 'wall_left'),
     ]
-    seedLevel(walls)
+    const initialRoom = detectSpacesForLevel(String(LEVEL_ID), walls).roomPolygons[0]
+    expect(initialRoom).toBeDefined()
+    const slab = SlabNode.parse({
+      id: 'slab_main',
+      parentId: LEVEL_ID,
+      polygon: initialRoom!.map(({ x, y }) => [x, y]),
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_main',
+      parentId: LEVEL_ID,
+      polygon: slab.polygon,
+      autoFromWalls: true,
+    })
+    seedLevel(walls, [slab, ceiling])
     const editorState = {
       spaces: {},
       setSpaces(spaces: Record<string, unknown>) {
@@ -402,6 +416,61 @@ describe('createWallOnCurrentLevel', () => {
     if (migratedDoor?.type === 'door') {
       expect(migratedDoor.position[0]).toBeCloseTo(curveLength * 0.25, 2)
     }
+  })
+
+  test('a straight wall drawn through a curved wall splits both at the crossing', () => {
+    const curvedWall = {
+      ...makeWall([0, 0], [4, 0], 'wall_curve'),
+      curveOffset: 1,
+    }
+    const crossing = getWallCurveFrameAt(curvedWall, 0.5).point
+    seedLevel([curvedWall])
+
+    const created = createWallOnCurrentLevel([2, -2], [2, 2])
+    const walls = levelWalls()
+    const curvedSegments = walls.filter(isCurvedWall)
+    const straightSegments = walls.filter((wall) => !isCurvedWall(wall))
+
+    expect(created).not.toBeNull()
+    expect(useScene.getState().nodes[curvedWall.id]).toBeUndefined()
+    expect(curvedSegments).toHaveLength(2)
+    expect(straightSegments).toHaveLength(2)
+    expect(
+      walls.filter(
+        (wall) =>
+          (wall.start[0] === crossing.x && wall.start[1] === crossing.y) ||
+          (wall.end[0] === crossing.x && wall.end[1] === crossing.y),
+      ),
+    ).toHaveLength(4)
+  })
+
+  test('two crossings on the same curved wall split it at both intersections', () => {
+    const curvedWall = {
+      ...makeWall([0, 0], [4, 0], 'wall_curve'),
+      curveOffset: 2,
+    }
+    seedLevel([curvedWall])
+
+    const created = createWallOnCurrentLevel([-1, -1], [5, -1])
+    const walls = levelWalls()
+
+    expect(created).not.toBeNull()
+    expect(useScene.getState().nodes[curvedWall.id]).toBeUndefined()
+    expect(walls.filter(isCurvedWall)).toHaveLength(3)
+    expect(walls.filter((wall) => !isCurvedWall(wall))).toHaveLength(3)
+    const crossings: WallPlanPoint[] = [
+      [2 - Math.sqrt(3), -1],
+      [2 + Math.sqrt(3), -1],
+    ]
+    expect(
+      walls.filter((wall) =>
+        crossings.some(
+          (point) =>
+            Math.hypot(wall.start[0] - point[0], wall.start[1] - point[1]) < 1e-6 ||
+            Math.hypot(wall.end[0] - point[0], wall.end[1] - point[1]) < 1e-6,
+        ),
+      ),
+    ).toHaveLength(6)
   })
 
   test('crossing divider walls split into four joined segments and four room surfaces', () => {

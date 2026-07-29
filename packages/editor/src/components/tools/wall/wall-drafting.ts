@@ -577,8 +577,11 @@ export function createWallOnCurrentLevel(
 
     for (const crossing of crossings) {
       if (crossing.wallT > interiorEpsilon && crossing.wallT < 1 - interiorEpsilon) {
+        const hostIntersection = workingWalls.some((wall) => wall.id === crossing.wallId)
+          ? { wallId: crossing.wallId, point: crossing.point, wallT: crossing.wallT }
+          : findWallIntersection(crossing.point, workingWalls, 1e-5)
         const splitHost = splitWallIfNeeded(
-          { wallId: crossing.wallId, point: crossing.point, wallT: crossing.wallT },
+          hostIntersection,
           workingWalls,
           nodes,
           createNodes,

@@ -12,16 +12,13 @@ import {
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import {
   CEILING_CLAMP_MARGIN,
-  findLevelAboveId,
   getCeilingClampBound,
-  getLevelElevations,
   getStoredLevelHeight,
 } from '../services/storey'
 import {
-  getSceneHistoryPauseDepth,
-  isSceneCommitTransactionActive,
   pauseSceneHistory,
   resumeSceneHistory,
+  type SceneCommit,
   subscribeSceneCommits,
 } from '../store/history-control'
 import {
@@ -83,21 +80,6 @@ export type AutoZoneSyncPlan = {
   update: Array<{ id: ZoneNodeType['id']; data: Partial<ZoneNodeType> }>
 }
 
-type AutoSurfaceKind = 'slab' | 'ceiling'
-
-type AutoSurfaceSuppressionMetadata = Partial<Record<AutoSurfaceKind, string[]>>
-
-type AutoSurfaceSnapshot = {
-  id: string
-  levelId: string
-  kind: AutoSurfaceKind
-  roomSignature: string
-}
-
-export type AutoSlabPlanningContext = {
-  suppressedRoomSignatures?: readonly string[]
-}
-
 const DEFAULT_AUTO_SLAB_ELEVATION = 0.05
 const CEILING_HEIGHT_EPSILON = 1e-6
 const ROOM_CURVE_TOLERANCE = 0.04
@@ -120,7 +102,6 @@ const COVERAGE_SAMPLE_STEPS = 12
 // no wall/slab inputs anymore — only the bound for the explicit-height
 // reactive re-clamp below.
 export type AutoCeilingPlanningContext = {
-  suppressedRoomSignatures?: readonly string[]
   /** Stored storey height of the level being planned (floor-to-floor). */
   storeyHeight?: number
   /**
@@ -172,92 +153,6 @@ function polygonSignature(points: Point2D[]) {
   const forward = minRotationSignature(keys)
   const reversed = minRotationSignature([...keys].reverse())
   return forward < reversed ? forward : reversed
-}
-
-function readAutoSurfaceSuppressions(level: unknown): AutoSurfaceSuppressionMetadata {
-  if (!(level && typeof level === 'object' && 'metadata' in level)) return {}
-  const metadata = level.metadata
-  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return {}
-  const value = (metadata as Record<string, unknown>).autoSurfaceSuppressions
-  if (!(value && typeof value === 'object' && !Array.isArray(value))) return {}
-
-  const record = value as Record<string, unknown>
-  return {
-    slab: Array.isArray(record.slab)
-      ? record.slab.filter((entry): entry is string => typeof entry === 'string')
-      : [],
-    ceiling: Array.isArray(record.ceiling)
-      ? record.ceiling.filter((entry): entry is string => typeof entry === 'string')
-      : [],
-  }
-}
-
-function autoSurfaceSnapshots(nodes: Record<string, any>) {
-  const snapshots = new Map<string, AutoSurfaceSnapshot>()
-
-  for (const node of Object.values(nodes)) {
-    if (
-      !(
-        node &&
-        (node.type === 'slab' || node.type === 'ceiling') &&
-        node.autoFromWalls === true &&
-        typeof node.parentId === 'string' &&
-        Array.isArray(node.polygon)
-      )
-    ) {
-      continue
-    }
-
-    snapshots.set(node.id, {
-      id: node.id,
-      levelId: node.parentId,
-      kind: node.type,
-      roomSignature: polygonSignature(node.polygon.map(pointFromTuple)),
-    })
-  }
-
-  return snapshots
-}
-
-function recordDeletedAutoSurfaceSuppressions(
-  previousSurfaces: Map<string, AutoSurfaceSnapshot>,
-  nodes: Record<string, any>,
-  sceneStore: any,
-) {
-  const additionsByLevel = new Map<string, AutoSurfaceSuppressionMetadata>()
-
-  for (const surface of previousSurfaces.values()) {
-    if (nodes[surface.id] || nodes[surface.levelId]?.type !== 'level') continue
-    const additions = additionsByLevel.get(surface.levelId) ?? {}
-    const signatures = additions[surface.kind] ?? []
-    if (!signatures.includes(surface.roomSignature)) signatures.push(surface.roomSignature)
-    additions[surface.kind] = signatures
-    additionsByLevel.set(surface.levelId, additions)
-  }
-
-  const updates = [...additionsByLevel.entries()].flatMap(([levelId, additions]) => {
-    const level = nodes[levelId]
-    if (level?.type !== 'level') return []
-    const existing = readAutoSurfaceSuppressions(level)
-    const next: AutoSurfaceSuppressionMetadata = {
-      slab: [...new Set([...(existing.slab ?? []), ...(additions.slab ?? [])])],
-      ceiling: [...new Set([...(existing.ceiling ?? []), ...(additions.ceiling ?? [])])],
-    }
-    return [
-      {
-        id: levelId,
-        data: {
-          metadata: {
-            ...(level.metadata && typeof level.metadata === 'object' ? level.metadata : {}),
-            autoSurfaceSuppressions: next,
-          },
-        },
-      },
-    ]
-  })
-
-  if (updates.length > 0) sceneStore.getState().updateNodes(updates)
-  return updates.length > 0
 }
 
 function samePointWithinTolerance(a: Point2D, b: Point2D, tolerance = 1e-4) {
@@ -895,6 +790,127 @@ type SurfaceWithOpenings = {
   holeMetadata: SlabNodeType['holeMetadata']
 }
 
+function crossProduct(a: Point2D, b: Point2D, c: Point2D) {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+function lineIntersection(start: Point2D, end: Point2D, clipStart: Point2D, clipEnd: Point2D) {
+  const segment = { x: end.x - start.x, y: end.y - start.y }
+  const clip = { x: clipEnd.x - clipStart.x, y: clipEnd.y - clipStart.y }
+  const denominator = segment.x * clip.y - segment.y * clip.x
+  if (Math.abs(denominator) < 1e-9) return end
+  const offset = { x: clipStart.x - start.x, y: clipStart.y - start.y }
+  const t = (offset.x * clip.y - offset.y * clip.x) / denominator
+  return { x: start.x + segment.x * t, y: start.y + segment.y * t }
+}
+
+function clipPolygonToConvex(subject: Point2D[], clipPolygon: Point2D[]) {
+  if (subject.length < 3 || clipPolygon.length < 3) return []
+  const orientation = polygonArea(clipPolygon) >= 0 ? 1 : -1
+  let output = [...subject]
+
+  for (let index = 0; index < clipPolygon.length; index += 1) {
+    const clipStart = clipPolygon[index]!
+    const clipEnd = clipPolygon[(index + 1) % clipPolygon.length]!
+    const input = output
+    output = []
+    if (input.length === 0) break
+
+    let previous = input[input.length - 1]!
+    let previousInside = orientation * crossProduct(clipStart, clipEnd, previous) >= -1e-8
+    for (const current of input) {
+      const currentInside = orientation * crossProduct(clipStart, clipEnd, current) >= -1e-8
+      if (currentInside !== previousInside) {
+        output.push(lineIntersection(previous, current, clipStart, clipEnd))
+      }
+      if (currentInside) output.push(current)
+      previous = current
+      previousInside = currentInside
+    }
+    output = dedupeSequentialPoints(output, 1e-7)
+  }
+
+  return output.length >= 3 && Math.abs(polygonArea(output)) > 1e-8 ? output : []
+}
+
+function isConvexPolygon(polygon: Point2D[]) {
+  let direction = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const cross = crossProduct(
+      polygon[index]!,
+      polygon[(index + 1) % polygon.length]!,
+      polygon[(index + 2) % polygon.length]!,
+    )
+    if (Math.abs(cross) < 1e-8) continue
+    const nextDirection = Math.sign(cross)
+    if (direction !== 0 && nextDirection !== direction) return false
+    direction = nextDirection
+  }
+  return true
+}
+
+function pointInTriangle(point: Point2D, a: Point2D, b: Point2D, c: Point2D) {
+  return (
+    crossProduct(a, b, point) >= -1e-8 &&
+    crossProduct(b, c, point) >= -1e-8 &&
+    crossProduct(c, a, point) >= -1e-8
+  )
+}
+
+function triangulatePolygon(polygon: Point2D[]) {
+  const points = polygonArea(polygon) >= 0 ? [...polygon] : [...polygon].reverse()
+  const indices = points.map((_, index) => index)
+  const triangles: Point2D[][] = []
+  let attempts = 0
+
+  while (indices.length > 3 && attempts < points.length * points.length) {
+    let clippedEar = false
+    for (let index = 0; index < indices.length; index += 1) {
+      const previousIndex = indices[(index - 1 + indices.length) % indices.length]!
+      const currentIndex = indices[index]!
+      const nextIndex = indices[(index + 1) % indices.length]!
+      const previous = points[previousIndex]!
+      const current = points[currentIndex]!
+      const next = points[nextIndex]!
+      if (crossProduct(previous, current, next) <= 1e-8) continue
+      if (
+        indices.some(
+          (candidateIndex) =>
+            candidateIndex !== previousIndex &&
+            candidateIndex !== currentIndex &&
+            candidateIndex !== nextIndex &&
+            pointInTriangle(points[candidateIndex]!, previous, current, next),
+        )
+      ) {
+        continue
+      }
+      triangles.push([previous, current, next])
+      indices.splice(index, 1)
+      clippedEar = true
+      break
+    }
+    if (!clippedEar) break
+    attempts += 1
+  }
+
+  if (indices.length === 3) {
+    triangles.push(indices.map((index) => points[index]!))
+  }
+  return triangles
+}
+
+function clipOpeningToRoom(opening: Point2D[], room: Point2D[]) {
+  const openingIsInside = opening.every(
+    (point) => pointInPolygon(point, room) || pointDistanceToPolygonBoundary(point, room) <= 1e-7,
+  )
+  if (openingIsInside) return [opening]
+
+  const clipRegions = isConvexPolygon(room) ? [room] : triangulatePolygon(room)
+  return clipRegions
+    .map((region) => clipPolygonToConvex(opening, region))
+    .filter((polygon) => polygon.length >= 3)
+}
+
 function partitionSurfaceOpenings(
   surface: SurfaceWithOpenings,
   roomIndices: number[],
@@ -913,34 +929,17 @@ function partitionSurfaceOpenings(
 
   surface.holes.forEach((hole, holeIndex) => {
     const holePolygon = hole.map(pointFromTuple)
-    const holeCentroid = polygonCentroid(holePolygon)
-    let bestRoomIndex: number | null = null
-    let bestCoverage = Number.NEGATIVE_INFINITY
-    let bestDistance = Number.POSITIVE_INFINITY
-
     for (const roomIndex of roomIndices) {
       const room = detected[roomIndex]
       if (!room) continue
-      const coverage = polygonCoverageRatio(holePolygon, [room.poly])
-      const distance = Math.hypot(
-        holeCentroid.x - room.centroid.x,
-        holeCentroid.y - room.centroid.y,
-      )
-      if (
-        coverage > bestCoverage + 1e-6 ||
-        (Math.abs(coverage - bestCoverage) <= 1e-6 && distance < bestDistance)
-      ) {
-        bestRoomIndex = roomIndex
-        bestCoverage = coverage
-        bestDistance = distance
+      const assignment = assignments.get(roomIndex)
+      if (!assignment) continue
+      const clippedOpenings = clipOpeningToRoom(holePolygon, room.poly)
+      for (const clipped of clippedOpenings) {
+        assignment.holes.push(clipped.map(pointToTuple))
+        assignment.holeMetadata.push(surface.holeMetadata[holeIndex] ?? { source: 'manual' })
       }
     }
-
-    if (bestRoomIndex == null) return
-    const assignment = assignments.get(bestRoomIndex)
-    if (!assignment) return
-    assignment.holes.push(hole)
-    assignment.holeMetadata.push(surface.holeMetadata[holeIndex] ?? { source: 'manual' })
   })
 
   return assignments
@@ -1011,95 +1010,8 @@ function wallGeometrySignature(wall: WallNode) {
     wall.start[1].toFixed(4),
     wall.end[0].toFixed(4),
     wall.end[1].toFixed(4),
-    (wall.thickness ?? 0.2).toFixed(4),
-    // Plane-bound (no stored height) is a distinct state, not a default
-    // value: it resolves to the storey plane, so it must not alias an
-    // explicit height of the same magnitude in the trigger signature.
-    wall.height == null ? 'plane' : wall.height.toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),
   ].join('|')
-}
-
-function levelWallSnapshot(walls: WallNode[]) {
-  return walls.map(wallGeometrySignature).sort().join('||')
-}
-
-function zoneGeometrySignature(zone: ZoneNodeType) {
-  return [
-    zone.id,
-    zone.autoFromWalls ? 'auto' : 'manual',
-    zone.boundaryWallIds.slice().sort().join(','),
-    zone.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(';'),
-  ].join('|')
-}
-
-// Slab/ceiling POLYGONS stay out of the trigger signature: including
-// generated footprints caused delete/recreate feedback. Zones are included
-// only so a newly traced room footprint can adopt its enclosing walls
-// without waiting for the next remodel. Slab ELEVATIONS and the level's
-// stored storey height ARE included — both feed the explicit-ceiling
-// re-clamp bound (the storey plane), and neither is rewritten by
-// the sync, so regeneration triggers when they change without feedback.
-// Stage 3-B adds the LEVEL-ABOVE's covering-slab undersides (elevation −
-// thickness, recessed pools excluded): a deck created, lowered, or
-// thickened above must re-run the sync below so ceilings re-clamp under
-// it. Same polygon exclusion applies — the level-above's own auto sync
-// rewrites its slab footprints, and hashing them here would re-trigger
-// this level on every remodel above.
-function levelStructureSnapshots(nodes: Record<string, any>) {
-  const wallsByLevel = new Map<string, WallNode[]>()
-  const zonesByLevel = new Map<string, ZoneNodeType[]>()
-  const slabElevationsByLevel = new Map<string, string[]>()
-  const coveringUndersidesByLevel = new Map<string, string[]>()
-
-  for (const node of Object.values(nodes)) {
-    if (!(node && typeof node === 'object' && 'parentId' in node && node.parentId)) continue
-    const levelId = (node as any).parentId as string
-    if ((node as any).type === 'wall') {
-      const walls = wallsByLevel.get(levelId) ?? []
-      walls.push(node as WallNode)
-      wallsByLevel.set(levelId, walls)
-    } else if ((node as any).type === 'zone') {
-      const zones = zonesByLevel.get(levelId) ?? []
-      zones.push(ZoneNode.parse(node))
-      zonesByLevel.set(levelId, zones)
-    } else if ((node as any).type === 'slab') {
-      const elevations = slabElevationsByLevel.get(levelId) ?? []
-      elevations.push(
-        `${(node as any).id}:${(((node as any).elevation as number | undefined) ?? DEFAULT_AUTO_SLAB_ELEVATION).toFixed(4)}`,
-      )
-      slabElevationsByLevel.set(levelId, elevations)
-      if ((node as any).recessed !== true) {
-        const undersides = coveringUndersidesByLevel.get(levelId) ?? []
-        const elevation = ((node as any).elevation as number | undefined) ?? 0.05
-        const thickness = ((node as any).thickness as number | undefined) ?? 0.05
-        undersides.push(`${(node as any).id}:${(elevation - thickness).toFixed(4)}`)
-        coveringUndersidesByLevel.set(levelId, undersides)
-      }
-    }
-  }
-
-  const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, any>)
-  const snapshots = new Map<string, string>()
-  const levelIds = new Set([...wallsByLevel.keys(), ...zonesByLevel.keys()])
-  for (const levelId of levelIds) {
-    const walls = wallsByLevel.get(levelId) ?? []
-    const zones = zonesByLevel.get(levelId) ?? []
-    const level = nodes[levelId]
-    const storeyKey =
-      level?.type === 'level' && typeof level.height === 'number' ? level.height.toFixed(4) : ''
-    const slabKey = (slabElevationsByLevel.get(levelId) ?? []).sort().join(';')
-    const aboveId = findLevelAboveId(levelId, levelElevations)
-    const aboveSlabKey = aboveId
-      ? (coveringUndersidesByLevel.get(aboveId) ?? []).sort().join(';')
-      : ''
-    snapshots.set(
-      levelId,
-      `${storeyKey}#${levelWallSnapshot(walls)}##${zones.map(zoneGeometrySignature).sort().join('||')}##${slabKey}##${aboveSlabKey}`,
-    )
-  }
-
-  return snapshots
 }
 
 function buildSpace(levelId: string, room: ExtractedRoom): Space {
@@ -1174,9 +1086,8 @@ export function resolveAutoZonePolygon(
 export function planAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
-  context: AutoSlabPlanningContext = {},
+  namingSlabs: Array<{ name?: string }> = existingSlabs,
 ): AutoSlabSyncPlan {
-  const suppressedRoomSignatures = new Set(context.suppressedRoomSignatures ?? [])
   const manualSlabs = existingSlabs.filter((slab) => !slab.autoFromWalls)
   const manualSignatures = new Set(
     manualSlabs.map((slab) => polygonSignature(slab.polygon.map(pointFromTuple))),
@@ -1202,10 +1113,7 @@ export function planAutoSlabsForLevel(
     }))
 
   const detected = detectedAll.filter(
-    ({ sig, poly }) =>
-      !suppressedRoomSignatures.has(sig) &&
-      !manualSignatures.has(sig) &&
-      !matchesManualFootprint(poly, manualPolygons),
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
   )
 
   const existingAuto = existingSlabs.filter((slab) => slab.autoFromWalls)
@@ -1365,7 +1273,7 @@ export function planAutoSlabsForLevel(
   })
   slabsToUpdate.push(...slabDemotions)
 
-  const plannedSlabsForNaming: Array<{ name?: string }> = [...existingSlabs]
+  const plannedSlabsForNaming: Array<{ name?: string }> = [...namingSlabs]
   const slabsToCreate: SlabNodeType[] = []
   for (let index = 0; index < detected.length; index += 1) {
     if (matchedDetectedIdx.has(index)) continue
@@ -1409,9 +1317,9 @@ function syncAutoSlabsForLevel(
   roomPolygons: Point2D[][],
   existingSlabs: SlabNodeType[],
   sceneStore: any,
-  context: AutoSlabPlanningContext = {},
+  namingSlabs: Array<{ name?: string }> = existingSlabs,
 ) {
-  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, context)
+  const plan = planAutoSlabsForLevel(roomPolygons, existingSlabs, namingSlabs)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -1432,8 +1340,8 @@ export function planAutoCeilingsForLevel(
   roomPolygons: Point2D[][],
   existingCeilings: CeilingNodeType[],
   context: AutoCeilingPlanningContext = {},
+  namingCeilings: Array<{ name?: string }> = existingCeilings,
 ): AutoCeilingSyncPlan {
-  const suppressedRoomSignatures = new Set(context.suppressedRoomSignatures ?? [])
   const manualCeilings = existingCeilings.filter((ceiling) => !ceiling.autoFromWalls)
   const manualSignatures = new Set(
     manualCeilings.map((ceiling) => polygonSignature(ceiling.polygon.map(pointFromTuple))),
@@ -1459,10 +1367,7 @@ export function planAutoCeilingsForLevel(
     }))
 
   const detected = detectedAll.filter(
-    ({ sig, poly }) =>
-      !suppressedRoomSignatures.has(sig) &&
-      !manualSignatures.has(sig) &&
-      !matchesManualFootprint(poly, manualPolygons),
+    ({ sig, poly }) => !manualSignatures.has(sig) && !matchesManualFootprint(poly, manualPolygons),
   )
 
   const existingAuto = existingCeilings.filter((ceiling) => ceiling.autoFromWalls)
@@ -1649,7 +1554,7 @@ export function planAutoCeilingsForLevel(
   })
   ceilingsToUpdate.push(...ceilingDemotions, ...manualClamps)
 
-  const plannedCeilingsForNaming: Array<{ name?: string }> = [...existingCeilings]
+  const plannedCeilingsForNaming: Array<{ name?: string }> = [...namingCeilings]
   const ceilingsToCreate: CeilingNodeType[] = []
   for (let index = 0; index < detected.length; index += 1) {
     if (matchedDetectedIdx.has(index)) continue
@@ -1703,8 +1608,9 @@ function syncAutoCeilingsForLevel(
   existingCeilings: CeilingNodeType[],
   sceneStore: any,
   context: AutoCeilingPlanningContext = {},
+  namingCeilings: Array<{ name?: string }> = existingCeilings,
 ) {
-  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context)
+  const plan = planAutoCeilingsForLevel(roomPolygons, existingCeilings, context, namingCeilings)
 
   if (plan.delete.length > 0) {
     sceneStore.getState().deleteNodes(plan.delete)
@@ -1741,89 +1647,359 @@ export function detectSpacesForLevel(levelId: string, walls: WallNode[]) {
   return detectSpacesFromWalls(levelId, walls)
 }
 
-function runSpaceDetection(
-  levelIds: string[],
-  sceneStore: any,
-  editorStore: any,
-  nodes: any,
-): void {
-  const { updateNodes } = sceneStore.getState()
-  const existingSpaces = editorStore.getState().spaces as Record<string, Space>
-  const nextSpaces: Record<string, Space> = {}
+type SceneNodes = SceneCommit['current']['nodes']
 
-  for (const [spaceId, space] of Object.entries(existingSpaces)) {
-    if (!levelIds.includes(space.levelId)) {
-      nextSpaces[spaceId] = space
-    }
+function wallsForLevel(nodes: SceneNodes, levelId: string) {
+  return Object.values(nodes).filter(
+    (node): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
+  )
+}
+
+function changedWallIdsByLevel(before: SceneNodes, current: SceneNodes) {
+  const changes = new Map<string, Set<string>>()
+  const wallIds = new Set<string>()
+  for (const node of Object.values(before)) {
+    if (node?.type === 'wall') wallIds.add(node.id)
+  }
+  for (const node of Object.values(current)) {
+    if (node?.type === 'wall') wallIds.add(node.id)
   }
 
-  for (const levelId of levelIds) {
-    const walls = Object.values(nodes).filter(
-      (node: any): node is WallNode => node?.type === 'wall' && node.parentId === levelId,
-    )
+  const markChanged = (levelId: string | null | undefined, wallId: string) => {
+    if (!levelId) return
+    const ids = changes.get(levelId) ?? new Set<string>()
+    ids.add(wallId)
+    changes.set(levelId, ids)
+  }
 
-    const slabs = Object.values(nodes).filter(
-      (node: any) => node?.type === 'slab' && node.parentId === levelId,
-    )
-    const ceilings = Object.values(nodes).filter(
-      (node: any) => node?.type === 'ceiling' && node.parentId === levelId,
-    )
-    const zones = Object.values(nodes).filter(
-      (node: any) => node?.type === 'zone' && node.parentId === levelId,
-    )
+  for (const wallId of wallIds) {
+    const beforeWall = before[wallId as AnyNodeId]
+    const currentWall = current[wallId as AnyNodeId]
+    const previous = beforeWall?.type === 'wall' ? beforeWall : null
+    const next = currentWall?.type === 'wall' ? currentWall : null
+    const unchanged =
+      previous &&
+      next &&
+      previous.parentId === next.parentId &&
+      wallGeometrySignature(previous) === wallGeometrySignature(next)
+    if (unchanged) continue
+    markChanged(previous?.parentId, wallId)
+    markChanged(next?.parentId, wallId)
+  }
 
-    const { wallUpdates, spaces, roomPolygons } = detectSpacesFromWalls(levelId, walls)
+  return changes
+}
 
-    const changedWallUpdates = wallUpdates.filter((update) => {
-      const wall = nodes[update.wallId]
-      return wall && (wall.frontSide !== update.frontSide || wall.backSide !== update.backSide)
-    })
+function zoneGeometrySignature(zone: ZoneNodeType) {
+  return [
+    zone.autoFromWalls ? 'auto' : 'manual',
+    zone.boundaryWallIds.slice().sort().join(','),
+    zone.polygon.map(([x, z]) => `${x.toFixed(4)},${z.toFixed(4)}`).join(';'),
+  ].join('|')
+}
 
-    if (changedWallUpdates.length > 0) {
-      updateNodes(
-        changedWallUpdates.map((update) => ({
-          id: update.wallId,
-          data: {
-            frontSide: update.frontSide,
-            backSide: update.backSide,
-          },
-        })),
-      )
+function changedZoneIdsByLevel(before: SceneNodes, current: SceneNodes) {
+  const changes = new Map<string, Set<string>>()
+  const zoneIds = new Set<string>()
+  for (const node of Object.values(before)) {
+    if (node?.type === 'zone') zoneIds.add(node.id)
+  }
+  for (const node of Object.values(current)) {
+    if (node?.type === 'zone') zoneIds.add(node.id)
+  }
+
+  const markChanged = (levelId: string | null | undefined, zoneId: string) => {
+    if (!levelId) return
+    const ids = changes.get(levelId) ?? new Set<string>()
+    ids.add(zoneId)
+    changes.set(levelId, ids)
+  }
+
+  for (const zoneId of zoneIds) {
+    const beforeNode = before[zoneId as AnyNodeId]
+    const currentNode = current[zoneId as AnyNodeId]
+    const previous = beforeNode?.type === 'zone' ? beforeNode : null
+    const next = currentNode?.type === 'zone' ? currentNode : null
+    const unchanged =
+      previous &&
+      next &&
+      previous.parentId === next.parentId &&
+      zoneGeometrySignature(previous) === zoneGeometrySignature(next)
+    if (unchanged) continue
+    markChanged(previous?.parentId, zoneId)
+    markChanged(next?.parentId, zoneId)
+  }
+
+  return changes
+}
+
+function roomWallIds(room: ExtractedRoom) {
+  return new Set(room.boundaryFaces.map((boundary) => boundary.wallId))
+}
+
+function roomsAreRelated(beforeRoom: ExtractedRoom, currentRoom: ExtractedRoom) {
+  const beforeIds = roomWallIds(beforeRoom)
+  const currentIds = roomWallIds(currentRoom)
+  const sharedWallCount = [...currentIds].filter((wallId) => beforeIds.has(wallId)).length
+  const smallerBoundarySize = Math.min(beforeIds.size, currentIds.size)
+  if (sharedWallCount >= 2 && sharedWallCount >= Math.ceil(smallerBoundarySize / 2)) {
+    return true
+  }
+  if (bboxOverlapArea(bboxOf(beforeRoom.polygon), bboxOf(currentRoom.polygon)) <= 1e-6) {
+    return false
+  }
+  return (
+    polygonCoverageRatio(beforeRoom.polygon, [currentRoom.polygon]) > 0 ||
+    polygonCoverageRatio(currentRoom.polygon, [beforeRoom.polygon]) > 0
+  )
+}
+
+function affectedRoomsForWallDelta(
+  beforeRooms: ExtractedRoom[],
+  currentRooms: ExtractedRoom[],
+  changedWallIds: ReadonlySet<string>,
+) {
+  const beforeIndices = new Set<number>()
+  const currentIndices = new Set<number>()
+
+  beforeRooms.forEach((room, index) => {
+    if (room.boundaryFaces.some((boundary) => changedWallIds.has(boundary.wallId))) {
+      beforeIndices.add(index)
     }
+  })
+  currentRooms.forEach((room, index) => {
+    if (room.boundaryFaces.some((boundary) => changedWallIds.has(boundary.wallId))) {
+      currentIndices.add(index)
+    }
+  })
 
-    const levelNode = nodes[levelId]
-    const suppressions = readAutoSurfaceSuppressions(levelNode)
-    const parsedSlabs = slabs.map((slab: any) => SlabNode.parse(slab))
-    syncAutoSlabsForLevel(levelId, roomPolygons, parsedSlabs, sceneStore, {
-      suppressedRoomSignatures: suppressions.slab,
+  let changed = true
+  while (changed) {
+    changed = false
+    beforeRooms.forEach((beforeRoom, beforeIndex) => {
+      currentRooms.forEach((currentRoom, currentIndex) => {
+        if (!roomsAreRelated(beforeRoom, currentRoom)) return
+        if (beforeIndices.has(beforeIndex) && !currentIndices.has(currentIndex)) {
+          currentIndices.add(currentIndex)
+          changed = true
+        }
+        if (currentIndices.has(currentIndex) && !beforeIndices.has(beforeIndex)) {
+          beforeIndices.add(beforeIndex)
+          changed = true
+        }
+      })
     })
+  }
+
+  return {
+    before: [...beforeIndices].map((index) => beforeRooms[index]!).filter(Boolean),
+    current: [...currentIndices].map((index) => currentRooms[index]!).filter(Boolean),
+  }
+}
+
+type RoomSurface = SlabNodeType | CeilingNodeType
+
+function surfaceTouchesRooms(surface: RoomSurface, rooms: ExtractedRoom[]) {
+  const polygon = surface.polygon.map(pointFromTuple)
+  return rooms.some(
+    (room) =>
+      polygonCoverageRatio(polygon, [room.polygon]) > 0 ||
+      polygonCoverageRatio(room.polygon, [polygon]) > 0,
+  )
+}
+
+function roomHasAutoSurface(room: ExtractedRoom, surfaces: RoomSurface[]) {
+  return matchesManualFootprint(
+    room.polygon,
+    surfaces
+      .filter((surface) => surface.autoFromWalls)
+      .map((surface) => surface.polygon.map(pointFromTuple)),
+  )
+}
+
+function roomsEligibleForAutoSurface(
+  beforeRooms: ExtractedRoom[],
+  currentRooms: ExtractedRoom[],
+  currentSurfaces: RoomSurface[],
+) {
+  return currentRooms.filter((currentRoom) => {
+    const related = beforeRooms.flatMap((beforeRoom) => {
+      if (!roomsAreRelated(beforeRoom, currentRoom)) return []
+      return [
+        {
+          room: beforeRoom,
+          coverage: polygonCoverageRatio(currentRoom.polygon, [beforeRoom.polygon]),
+        },
+      ]
+    })
+    const maxCoverage = Math.max(0, ...related.map(({ coverage }) => coverage))
+    const predecessors =
+      currentRooms.length >= beforeRooms.length && maxCoverage > 0
+        ? related.filter(({ coverage }) => coverage >= maxCoverage - 1e-6).map(({ room }) => room)
+        : related.map(({ room }) => room)
+    if (predecessors.length === 0) return true
+    return predecessors.every((beforeRoom) => roomHasAutoSurface(beforeRoom, currentSurfaces))
+  })
+}
+
+function updateSpacesForLevel(levelId: string, spaces: Space[], editorStore: any) {
+  const existingSpaces = editorStore.getState().spaces as Record<string, Space>
+  const nextSpaces: Record<string, Space> = {}
+  for (const [spaceId, space] of Object.entries(existingSpaces)) {
+    if (space.levelId !== levelId) nextSpaces[spaceId] = space
+  }
+  for (const space of spaces) nextSpaces[space.id] = space
+  editorStore.getState().setSpaces(nextSpaces)
+}
+
+function reconcileChangedZones(
+  levelId: string,
+  changedZoneIds: ReadonlySet<string>,
+  currentNodes: SceneNodes,
+  sceneStore: any,
+) {
+  const spaces = detectSpacesFromWalls(levelId, wallsForLevel(currentNodes, levelId)).spaces
+  const zones = [...changedZoneIds].flatMap((id) => {
+    const node = currentNodes[id as AnyNodeId]
+    return node?.type === 'zone' && node.parentId === levelId ? [ZoneNode.parse(node)] : []
+  })
+  const plan = planAutoZonesForLevel(spaces, zones)
+  if (plan.update.length > 0) sceneStore.getState().updateNodes(plan.update)
+}
+
+function reconcileWallTopologyDelta(
+  levelId: string,
+  changedWallIds: ReadonlySet<string>,
+  beforeNodes: SceneNodes,
+  currentNodes: SceneNodes,
+  sceneStore: any,
+  editorStore: any,
+): void {
+  const { updateNodes } = sceneStore.getState()
+  const beforeRooms = extractRooms(wallsForLevel(beforeNodes, levelId))
+  const currentWalls = wallsForLevel(currentNodes, levelId)
+  const detection = detectSpacesFromWalls(levelId, currentWalls)
+  const currentRooms = extractRooms(currentWalls)
+  const affected = affectedRoomsForWallDelta(beforeRooms, currentRooms, changedWallIds)
+  const scopedRooms = [...affected.before, ...affected.current]
+
+  const changedWallUpdates = detection.wallUpdates.filter((update) => {
+    const wall = currentNodes[update.wallId as AnyNodeId]
+    return (
+      wall?.type === 'wall' &&
+      (wall.frontSide !== update.frontSide || wall.backSide !== update.backSide)
+    )
+  })
+  if (changedWallUpdates.length > 0) {
+    updateNodes(
+      changedWallUpdates.map((update) => ({
+        id: update.wallId,
+        data: {
+          frontSide: update.frontSide,
+          backSide: update.backSide,
+        },
+      })),
+    )
+  }
+
+  if (scopedRooms.length > 0 && affected.current.length > 0) {
+    const unaffectedRooms = [
+      ...beforeRooms.filter((room) => !affected.before.includes(room)),
+      ...currentRooms.filter((room) => !affected.current.includes(room)),
+    ]
+    const allSlabs = Object.values(currentNodes)
+      .filter((node): node is SlabNodeType => node?.type === 'slab' && node.parentId === levelId)
+      .map((slab) => SlabNode.parse(slab))
+    const slabs = allSlabs.filter(
+      (slab) =>
+        surfaceTouchesRooms(slab, scopedRooms) && !surfaceTouchesRooms(slab, unaffectedRooms),
+    )
+    const allCeilings = Object.values(currentNodes)
+      .filter(
+        (node): node is CeilingNodeType => node?.type === 'ceiling' && node.parentId === levelId,
+      )
+      .map((ceiling) => CeilingNode.parse(ceiling))
+    const ceilings = allCeilings.filter(
+      (ceiling) =>
+        surfaceTouchesRooms(ceiling, scopedRooms) && !surfaceTouchesRooms(ceiling, unaffectedRooms),
+    )
+    const slabRooms = roomsEligibleForAutoSurface(affected.before, affected.current, slabs)
+    const ceilingRooms = roomsEligibleForAutoSurface(affected.before, affected.current, ceilings)
+
+    syncAutoSlabsForLevel(
+      levelId,
+      slabRooms.map((room) => room.polygon),
+      slabs,
+      sceneStore,
+      allSlabs,
+    )
+    const levelNode = currentNodes[levelId as AnyNodeId]
     const storeyHeight =
       levelNode?.type === 'level'
         ? getStoredLevelHeight(levelNode as LevelNode)
         : DEFAULT_LEVEL_HEIGHT
     syncAutoCeilingsForLevel(
       levelId,
-      roomPolygons,
-      ceilings.map((ceiling: any) => CeilingNode.parse(ceiling)),
+      ceilingRooms.map((room) => room.polygon),
+      ceilings,
       sceneStore,
       {
-        suppressedRoomSignatures: suppressions.ceiling,
         storeyHeight,
-        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
+        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, currentNodes, polygon),
       },
+      allCeilings,
     )
-    const zonePlan = planAutoZonesForLevel(
-      spaces,
-      zones.map((zone: any) => ZoneNode.parse(zone)),
-    )
-    if (zonePlan.update.length > 0) updateNodes(zonePlan.update)
+  }
 
-    for (const space of spaces) {
-      nextSpaces[space.id] = space
+  const zones = Object.values(currentNodes)
+    .filter((node): node is ZoneNodeType => node?.type === 'zone' && node.parentId === levelId)
+    .map((zone) => ZoneNode.parse(zone))
+  const zonePlan = planAutoZonesForLevel(detection.spaces, zones)
+  if (zonePlan.update.length > 0) updateNodes(zonePlan.update)
+  updateSpacesForLevel(levelId, detection.spaces, editorStore)
+}
+
+function ceilingClampInputsChanged(before: SceneNodes, current: SceneNodes) {
+  const ids = new Set<AnyNodeId>([
+    ...(Object.keys(before) as AnyNodeId[]),
+    ...(Object.keys(current) as AnyNodeId[]),
+  ])
+  for (const id of ids) {
+    const previous = before[id]
+    const next = current[id]
+    const relevant =
+      previous?.type === 'slab' ||
+      next?.type === 'slab' ||
+      previous?.type === 'level' ||
+      next?.type === 'level' ||
+      previous?.type === 'building' ||
+      next?.type === 'building'
+    if (relevant && previous !== next) return true
+  }
+  return false
+}
+
+function reconcileLoweredCeilingBounds(
+  beforeNodes: SceneNodes,
+  currentNodes: SceneNodes,
+  sceneStore: any,
+) {
+  const liveNodes = sceneStore.getState().nodes as SceneNodes
+  const updates: Array<{ id: CeilingNodeType['id']; data: Partial<CeilingNodeType> }> = []
+
+  for (const node of Object.values(liveNodes)) {
+    if (node?.type !== 'ceiling' || node.height == null || !node.parentId) continue
+    const currentBound = getCeilingClampBound(node.parentId, currentNodes, node.polygon)
+    const previousBound = getCeilingClampBound(node.parentId, beforeNodes, node.polygon)
+    if (
+      currentBound < previousBound - CEILING_HEIGHT_EPSILON &&
+      node.height > currentBound + CEILING_HEIGHT_EPSILON
+    ) {
+      updates.push({ id: node.id, data: { height: currentBound } })
     }
   }
 
-  editorStore.getState().setSpaces(nextSpaces)
+  if (updates.length > 0) sceneStore.getState().updateNodes(updates)
 }
 
 // Refcount of outstanding pause requests, matching the pauseSceneHistory
@@ -1850,101 +2026,46 @@ export function isSpaceDetectionPaused(): boolean {
 }
 
 export function initSpaceDetectionSync(sceneStore: any, editorStore: any): () => void {
-  // Baseline from whatever is already in the store. Detection reacts to wall
-  // edits made IN-SESSION (create / move / delete); it must not re-litigate a
-  // scene that merely loaded — rerunning on hydration resurrected auto slabs
-  // the user had deleted in an earlier session.
-  const previousSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
-  let previousAutoSurfaces = autoSurfaceSnapshots(sceneStore.getState().nodes)
   let isProcessing = false
 
-  const processNodes = (incomingNodes: any) => {
+  const processCommit = (commit: SceneCommit) => {
     if (isProcessing) return
-    if (getSceneHistoryPauseDepth() > 0) return
-
-    if (spaceDetectionPauseDepth > 0) {
-      const pausedSnapshots = levelStructureSnapshots(incomingNodes)
-      previousSnapshots.clear()
-      for (const [levelId, snapshot] of pausedSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
-      }
-      previousAutoSurfaces = autoSurfaceSnapshots(incomingNodes)
-      return
-    }
-
-    let nodes = incomingNodes
-    const deletedSurfaceSuppressionNeeded = [...previousAutoSurfaces.values()].some(
-      (surface) => !nodes[surface.id] && nodes[surface.levelId]?.type === 'level',
+    if (spaceDetectionPauseDepth > 0 || commit.origin === 'load') return
+    const changedWalls = changedWallIdsByLevel(commit.before.nodes, commit.current.nodes)
+    const changedZones = changedZoneIdsByLevel(commit.before.nodes, commit.current.nodes)
+    const shouldReconcileCeilingBounds = ceilingClampInputsChanged(
+      commit.before.nodes,
+      commit.current.nodes,
     )
-    if (deletedSurfaceSuppressionNeeded) {
-      isProcessing = true
-      pauseSceneHistory(sceneStore)
-      try {
-        recordDeletedAutoSurfaceSuppressions(previousAutoSurfaces, nodes, sceneStore)
-        nodes = sceneStore.getState().nodes
-      } finally {
-        resumeSceneHistory(sceneStore)
-        isProcessing = false
-      }
-    }
-
-    const currentSnapshots = levelStructureSnapshots(nodes)
-
-    const levelsToUpdate = new Set<string>()
-    for (const levelId of new Set([...previousSnapshots.keys(), ...currentSnapshots.keys()])) {
-      // First sight of a level is a hydration baseline, not a wall edit —
-      // `setScene` delivers a loaded scene as one atomic update, and a level's
-      // first wall can't close a room anyway. Record it (below) and only
-      // react to subsequent changes.
-      const previous = previousSnapshots.get(levelId)
-      if (previous === undefined) continue
-      if (previous !== (currentSnapshots.get(levelId) ?? '')) {
-        levelsToUpdate.add(levelId)
-      }
-    }
-
-    if (levelsToUpdate.size === 0) {
-      previousSnapshots.clear()
-      for (const [levelId, snapshot] of currentSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
-      }
-      previousAutoSurfaces = autoSurfaceSnapshots(nodes)
-      return
-    }
+    if (changedWalls.size === 0 && changedZones.size === 0 && !shouldReconcileCeilingBounds) return
 
     isProcessing = true
     pauseSceneHistory(sceneStore)
     try {
-      runSpaceDetection([...levelsToUpdate], sceneStore, editorStore, nodes)
+      for (const [levelId, wallIds] of changedWalls) {
+        reconcileWallTopologyDelta(
+          levelId,
+          wallIds,
+          commit.before.nodes,
+          commit.current.nodes,
+          sceneStore,
+          editorStore,
+        )
+      }
+      for (const [levelId, zoneIds] of changedZones) {
+        if (changedWalls.has(levelId)) continue
+        reconcileChangedZones(levelId, zoneIds, commit.current.nodes, sceneStore)
+      }
+      if (shouldReconcileCeilingBounds || changedWalls.size > 0) {
+        reconcileLoweredCeilingBounds(commit.before.nodes, sceneStore.getState().nodes, sceneStore)
+      }
     } finally {
       resumeSceneHistory(sceneStore)
-      previousSnapshots.clear()
-      const postRunSnapshots = levelStructureSnapshots(sceneStore.getState().nodes)
-      for (const [levelId, snapshot] of postRunSnapshots.entries()) {
-        previousSnapshots.set(levelId, snapshot)
-      }
-      previousAutoSurfaces = autoSurfaceSnapshots(sceneStore.getState().nodes)
       isProcessing = false
     }
   }
 
-  const unsubscribeStore = sceneStore.subscribe((state: any) => {
-    // A single semantic edit can contain several store writes (for example:
-    // create both wall halves, delete the original, then create the divider).
-    // Those intermediate graphs are intentionally invalid. Reconcile once from
-    // the coalesced scene commit below instead of demoting surfaces against a
-    // transient half-written topology.
-    if (isSceneCommitTransactionActive()) return
-    processNodes(state.nodes)
-  })
-  const unsubscribeCommits = subscribeSceneCommits((commit) => {
-    processNodes(commit.current.nodes)
-  })
-
-  return () => {
-    unsubscribeStore()
-    unsubscribeCommits()
-  }
+  return subscribeSceneCommits(processCommit)
 }
 
 export function wallTouchesOthers(wall: WallNode, otherWalls: WallNode[]): boolean {

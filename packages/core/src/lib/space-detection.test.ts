@@ -4,6 +4,11 @@ import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import {
+  notifySceneCommit,
+  type SceneCommitOrigin,
+  type SceneSnapshot,
+} from '../store/history-control'
+import {
   detectSpacesForLevel,
   initSpaceDetectionSync,
   planAutoCeilingsForLevel,
@@ -31,6 +36,10 @@ function squareWalls(height = 2.5) {
     WallNode.parse({ start: [4, 3], end: [0, 3], height }),
     WallNode.parse({ start: [0, 3], end: [0, 0], height }),
   ]
+}
+
+function wallsForTest(nodes: AnyNode[]) {
+  return nodes.filter((node): node is WallNode => node.type === 'wall')
 }
 
 function slab(elevation: number) {
@@ -326,6 +335,65 @@ describe('planAutoCeilingsForLevel', () => {
     expect(right?.holes).toEqual([rightHole])
     expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
   })
+
+  test('a stair opening crossing a divider is clipped into both split ceilings', () => {
+    const crossingHole: Array<[number, number]> = [
+      [1.5, 1],
+      [2.5, 1],
+      [2.5, 2],
+      [1.5, 2],
+    ]
+    const ceiling = CeilingNode.parse({
+      polygon: square,
+      holes: [crossingHole],
+      holeMetadata: [{ source: 'stair', stairId: 'stair_crossing' }],
+      autoFromWalls: true,
+    })
+    const rooms = [
+      [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 3 },
+        { x: 0, y: 3 },
+      ],
+      [
+        { x: 2, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+        { x: 2, y: 3 },
+      ],
+    ]
+
+    const plan = planAutoCeilingsForLevel(rooms, [ceiling])
+    const surfaces = [CeilingNode.parse({ ...ceiling, ...plan.update[0]?.data }), ...plan.create]
+    const holes = surfaces.flatMap((surface) => surface.holes)
+
+    expect(holes).toHaveLength(2)
+    expect(holes).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          [1.5, 1],
+          [2, 1],
+          [2, 2],
+          [1.5, 2],
+        ]),
+        expect.arrayContaining([
+          [2, 1],
+          [2.5, 1],
+          [2.5, 2],
+          [2, 2],
+        ]),
+      ]),
+    )
+    expect(
+      surfaces.every(
+        (surface) =>
+          surface.holeMetadata.length === 1 &&
+          surface.holeMetadata[0]?.source === 'stair' &&
+          surface.holeMetadata[0]?.stairId === 'stair_crossing',
+      ),
+    ).toBe(true)
+  })
 })
 
 // Two stacked levels; the deck slab (occupying [-0.3, 0] over the upper
@@ -462,9 +530,22 @@ function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
       return () => listeners.delete(listener)
     },
     temporal: { getState: () => ({ pause() {}, resume() {} }) },
-    setNodes(next: Record<string, AnyNode>) {
+    setNodes(next: Record<string, AnyNode>, origin: SceneCommitOrigin = 'local') {
+      const before = state.nodes
       state.nodes = next
       notify()
+      const snapshot = (nodes: Record<string, AnyNode>): SceneSnapshot => ({
+        nodes: nodes as Record<AnyNodeId, AnyNode>,
+        rootNodeIds: [],
+        collections: {},
+        materials: {},
+        installedPlugins: [],
+      })
+      notifySceneCommit({
+        origin,
+        before: snapshot(before),
+        current: snapshot(next),
+      })
     },
   }
 }
@@ -513,6 +594,128 @@ function roomWithGeneratedSurfaces() {
   return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<string, AnyNode>
 }
 
+function twoSeparatedRoomsWithGeneratedSurfaces() {
+  const leftWalls = [
+    WallNode.parse({ id: 'wall_left_bottom', start: [0, 0], end: [4, 0], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_left_right', start: [4, 0], end: [4, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_left_top', start: [4, 3], end: [0, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_left_left', start: [0, 3], end: [0, 0], parentId: 'level_0' }),
+  ]
+  const rightWalls = [
+    WallNode.parse({ id: 'wall_right_bottom', start: [10, 0], end: [14, 0], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_right_right', start: [14, 0], end: [14, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_right_top', start: [14, 3], end: [10, 3], parentId: 'level_0' }),
+    WallNode.parse({ id: 'wall_right_left', start: [10, 3], end: [10, 0], parentId: 'level_0' }),
+  ]
+  const leftSlab = SlabNode.parse({
+    id: 'slab_left',
+    parentId: 'level_0',
+    polygon: square,
+    autoFromWalls: true,
+  })
+  const rightSlab = SlabNode.parse({
+    id: 'slab_right',
+    parentId: 'level_0',
+    polygon: [
+      [10, 0],
+      [14, 0],
+      [14, 3],
+      [10, 3],
+    ],
+    autoFromWalls: true,
+  })
+  const leftCeiling = CeilingNode.parse({
+    id: 'ceiling_left',
+    parentId: 'level_0',
+    polygon: leftSlab.polygon,
+    autoFromWalls: true,
+  })
+  const rightCeiling = CeilingNode.parse({
+    id: 'ceiling_right',
+    parentId: 'level_0',
+    polygon: rightSlab.polygon,
+    autoFromWalls: true,
+  })
+  const children = [...leftWalls, ...rightWalls, leftSlab, rightSlab, leftCeiling, rightCeiling]
+  const nodes = [
+    BuildingNode.parse({ id: 'building_a', children: ['level_0'] }),
+    LevelNode.parse({
+      id: 'level_0',
+      parentId: 'building_a',
+      children: children.map((node) => node.id),
+    }),
+    ...children,
+  ]
+
+  return Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<string, AnyNode>
+}
+
+function splitRoomWithGeneratedSurfaces() {
+  const nodes = roomWithGeneratedSurfaces()
+  const divider = WallNode.parse({
+    id: 'wall_divider',
+    start: [2, 0],
+    end: [2, 3],
+    parentId: 'level_0',
+  })
+  const leftSlab = SlabNode.parse({
+    id: 'slab_left',
+    parentId: 'level_0',
+    polygon: [
+      [0, 0],
+      [2, 0],
+      [2, 3],
+      [0, 3],
+    ],
+    autoFromWalls: true,
+  })
+  const rightSlab = SlabNode.parse({
+    id: 'slab_right',
+    parentId: 'level_0',
+    polygon: [
+      [2, 0],
+      [4, 0],
+      [4, 3],
+      [2, 3],
+    ],
+    autoFromWalls: true,
+  })
+  const leftCeiling = CeilingNode.parse({
+    id: 'ceiling_left',
+    parentId: 'level_0',
+    polygon: leftSlab.polygon,
+    autoFromWalls: true,
+  })
+  const rightCeiling = CeilingNode.parse({
+    id: 'ceiling_right',
+    parentId: 'level_0',
+    polygon: rightSlab.polygon,
+    autoFromWalls: true,
+  })
+  delete nodes.slab_main
+  delete nodes.ceiling_main
+  nodes[divider.id] = divider
+  nodes[leftSlab.id] = leftSlab
+  nodes[rightSlab.id] = rightSlab
+  nodes[leftCeiling.id] = leftCeiling
+  nodes[rightCeiling.id] = rightCeiling
+  const level = nodes.level_0
+  if (level?.type === 'level') {
+    nodes.level_0 = {
+      ...level,
+      children: [
+        ...level.children.filter((id) => id !== 'slab_main' && id !== 'ceiling_main'),
+        divider.id,
+        leftSlab.id,
+        rightSlab.id,
+        leftCeiling.id,
+        rightCeiling.id,
+      ],
+    }
+  }
+  return nodes
+}
+
 describe('generated surface deletion through the detection sync', () => {
   test('a deleted generated slab stays deleted', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
@@ -525,6 +728,9 @@ describe('generated surface deletion through the detection sync', () => {
       expect(
         Object.values(sceneStore.getState().nodes).filter((node) => node.type === 'slab'),
       ).toHaveLength(0)
+      expect(sceneStore.getState().nodes.level_0?.metadata).not.toHaveProperty(
+        'autoSurfaceSuppressions',
+      )
     } finally {
       unsubscribe()
     }
@@ -537,6 +743,9 @@ describe('generated surface deletion through the detection sync', () => {
     try {
       const { ceiling_main: _deleted, ...withoutCeiling } = sceneStore.getState().nodes
       sceneStore.setNodes(withoutCeiling)
+      const levelAfterDelete = sceneStore.getState().nodes.level_0
+      expect(levelAfterDelete?.metadata).not.toHaveProperty('autoSurfaceSuppressions')
+
       const wall = sceneStore.getState().nodes.wall_1 as WallNode
       sceneStore.setNodes({
         ...sceneStore.getState().nodes,
@@ -551,7 +760,7 @@ describe('generated surface deletion through the detection sync', () => {
     }
   })
 
-  test('deleted generated surfaces stay suppressed after the sync is reinitialized', () => {
+  test('a reshaped room keeps its missing surfaces after the sync is reinitialized', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
     let unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
 
@@ -565,16 +774,490 @@ describe('generated surface deletion through the detection sync', () => {
 
     unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
     try {
-      const wall = sceneStore.getState().nodes.wall_1 as WallNode
+      const current = sceneStore.getState().nodes
       sceneStore.setNodes({
-        ...sceneStore.getState().nodes,
-        wall_1: { ...wall, height: 2.6 },
+        ...current,
+        wall_1: { ...(current.wall_1 as WallNode), end: [5, 0] },
+        wall_2: { ...(current.wall_2 as WallNode), start: [5, 0], end: [5, 3] },
+        wall_3: { ...(current.wall_3 as WallNode), start: [5, 3] },
       })
 
       const surfaces = Object.values(sceneStore.getState().nodes).filter(
         (node) => node.type === 'slab' || node.type === 'ceiling',
       )
       expect(surfaces).toHaveLength(0)
+      expect(sceneStore.getState().nodes.level_0?.metadata).not.toHaveProperty(
+        'autoSurfaceSuppressions',
+      )
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('slab and ceiling deletion are preserved independently during a reshape', () => {
+    const initial = roomWithGeneratedSurfaces()
+    delete initial.slab_main
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        wall_1: { ...(current.wall_1 as WallNode), end: [5, 0] },
+        wall_2: { ...(current.wall_2 as WallNode), start: [5, 0], end: [5, 3] },
+        wall_3: { ...(current.wall_3 as WallNode), start: [5, 3] },
+      })
+
+      const slabs = Object.values(sceneStore.getState().nodes).filter(
+        (node) => node.type === 'slab',
+      )
+      const ceilings = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+      expect(slabs).toHaveLength(0)
+      expect(ceilings).toHaveLength(1)
+      expect(ceilings[0]?.polygon).toContainEqual([5, 0])
+      expect(ceilings[0]?.polygon).toContainEqual([5, 3])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('a distant wall edit does not recreate missing surfaces in an unchanged room', () => {
+    const initialNodes = twoSeparatedRoomsWithGeneratedSurfaces()
+    const {
+      slab_left: _deletedSlab,
+      ceiling_left: _deletedCeiling,
+      ...withoutLeftSurfaces
+    } = initialNodes
+    const sceneStore = createSceneStoreStub(withoutLeftSurfaces)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        wall_right_bottom: {
+          ...(current.wall_right_bottom as WallNode),
+          end: [15, 0],
+        },
+        wall_right_right: {
+          ...(current.wall_right_right as WallNode),
+          start: [15, 0],
+          end: [15, 3],
+        },
+        wall_right_top: {
+          ...(current.wall_right_top as WallNode),
+          start: [15, 3],
+        },
+      })
+
+      const slabs = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'slab')
+        .map((node) => SlabNode.parse(node))
+      const ceilings = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+      expect(slabs).toHaveLength(1)
+      expect(ceilings).toHaveLength(1)
+      expect(slabs[0]?.id).toBe('slab_right')
+      expect(ceilings[0]?.id).toBe('ceiling_right')
+      expect(slabs[0]?.polygon).toContainEqual([15, 0])
+      expect(slabs[0]?.polygon).toContainEqual([15, 3])
+      expect(ceilings[0]?.polygon).toContainEqual([15, 0])
+      expect(ceilings[0]?.polygon).toContainEqual([15, 3])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('loading an older project does not generate its missing surfaces', () => {
+    const sceneStore = createSceneStoreStub({})
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const loaded = roomWithGeneratedSurfaces()
+    delete loaded.slab_main
+    delete loaded.ceiling_main
+
+    try {
+      sceneStore.setNodes(loaded, 'load')
+
+      const surfaces = Object.values(sceneStore.getState().nodes).filter(
+        (node) => node.type === 'slab' || node.type === 'ceiling',
+      )
+      expect(surfaces).toHaveLength(0)
+      expect(sceneStore.getState().nodes.level_0?.metadata).not.toHaveProperty(
+        'autoSurfaceSuppressions',
+      )
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
+describe('topology-delta room surface reconciliation', () => {
+  test('closing a genuinely new room creates its initial slab and ceiling', () => {
+    const initial = roomWithGeneratedSurfaces()
+    delete initial.wall_4
+    delete initial.slab_main
+    delete initial.ceiling_main
+    const level = initial.level_0
+    if (level?.type === 'level') {
+      initial.level_0 = {
+        ...level,
+        children: level.children.filter(
+          (id) => id !== 'wall_4' && id !== 'slab_main' && id !== 'ceiling_main',
+        ),
+      }
+    }
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      const closingWall = WallNode.parse({
+        id: 'wall_4',
+        start: [0, 3],
+        end: [0, 0],
+        parentId: 'level_0',
+      })
+      const currentLevel = current.level_0
+      sceneStore.setNodes({
+        ...current,
+        wall_4: closingWall,
+        ...(currentLevel?.type === 'level'
+          ? {
+              level_0: {
+                ...currentLevel,
+                children: [...currentLevel.children, closingWall.id],
+              },
+            }
+          : {}),
+      })
+
+      const nodes = Object.values(sceneStore.getState().nodes)
+      expect(nodes.filter((node) => node.type === 'slab')).toHaveLength(1)
+      expect(nodes.filter((node) => node.type === 'ceiling')).toHaveLength(1)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('a new bay against an existing room gets surfaces even when the older room has none', () => {
+    const initial = roomWithGeneratedSurfaces()
+    delete initial.slab_main
+    delete initial.ceiling_main
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      const bayWalls = [
+        WallNode.parse({
+          id: 'wall_bay_left',
+          start: [1, 0],
+          end: [1, -2],
+          parentId: 'level_0',
+        }),
+        WallNode.parse({
+          id: 'wall_bay_bottom',
+          start: [1, -2],
+          end: [3, -2],
+          parentId: 'level_0',
+        }),
+        WallNode.parse({
+          id: 'wall_bay_right',
+          start: [3, -2],
+          end: [3, 0],
+          parentId: 'level_0',
+        }),
+      ]
+      sceneStore.setNodes({
+        ...current,
+        ...Object.fromEntries(bayWalls.map((wall) => [wall.id, wall])),
+      })
+
+      const nodes = Object.values(sceneStore.getState().nodes)
+      const slabs = nodes.filter((node) => node.type === 'slab').map((node) => SlabNode.parse(node))
+      const ceilings = nodes
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+      expect(detectSpacesForLevel('level_0', wallsForTest(nodes)).roomPolygons).toHaveLength(2)
+      expect(slabs).toHaveLength(1)
+      expect(ceilings).toHaveLength(1)
+      expect(slabs[0]?.polygon.some(([, z]) => z < 0)).toBe(true)
+      expect(ceilings[0]?.polygon.some(([, z]) => z < 0)).toBe(true)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('splitting a room without generated surfaces preserves their absence', () => {
+    const initial = roomWithGeneratedSurfaces()
+    delete initial.slab_main
+    delete initial.ceiling_main
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      const divider = WallNode.parse({
+        id: 'wall_divider',
+        start: [2, 0],
+        end: [2, 3],
+        parentId: 'level_0',
+      })
+      const currentLevel = current.level_0
+      sceneStore.setNodes({
+        ...current,
+        wall_divider: divider,
+        ...(currentLevel?.type === 'level'
+          ? {
+              level_0: {
+                ...currentLevel,
+                children: [...currentLevel.children, divider.id],
+              },
+            }
+          : {}),
+      })
+
+      const nodes = Object.values(sceneStore.getState().nodes)
+      expect(detectSpacesForLevel('level_0', wallsForTest(nodes)).roomPolygons).toHaveLength(2)
+      expect(nodes.filter((node) => node.type === 'slab')).toHaveLength(0)
+      expect(nodes.filter((node) => node.type === 'ceiling')).toHaveLength(0)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('deleting a divider merges compatible generated surfaces', () => {
+    const initial = splitRoomWithGeneratedSurfaces()
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const { wall_divider: _deleted, ...withoutDivider } = sceneStore.getState().nodes
+      sceneStore.setNodes(withoutDivider)
+
+      const nodes = Object.values(sceneStore.getState().nodes)
+      const slabs = nodes.filter((node) => node.type === 'slab').map((node) => SlabNode.parse(node))
+      const ceilings = nodes
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+      expect(slabs).toHaveLength(1)
+      expect(ceilings).toHaveLength(1)
+      expect(slabs[0]?.polygon).toEqual(expect.arrayContaining(square))
+      expect(ceilings[0]?.polygon).toEqual(expect.arrayContaining(square))
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('merging rooms does not fill an area whose slab was already missing', () => {
+    const initial = splitRoomWithGeneratedSurfaces()
+    delete initial.slab_left
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const { wall_divider: _deleted, ...withoutDivider } = sceneStore.getState().nodes
+      sceneStore.setNodes(withoutDivider)
+
+      const slabs = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'slab')
+        .map((node) => SlabNode.parse(node))
+      expect(slabs).toHaveLength(1)
+      expect(slabs[0]?.autoFromWalls).toBe(false)
+      expect(slabs[0]?.polygon).toEqual([
+        [2, 0],
+        [4, 0],
+        [4, 3],
+        [2, 3],
+      ])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('editing one room does not shrink a legacy surface shared with an unaffected room', () => {
+    const initial = twoSeparatedRoomsWithGeneratedSurfaces()
+    delete initial.slab_left
+    delete initial.slab_right
+    delete initial.ceiling_left
+    delete initial.ceiling_right
+    const sharedPolygon: Array<[number, number]> = [
+      [0, 0],
+      [14, 0],
+      [14, 3],
+      [0, 3],
+    ]
+    const sharedSlab = SlabNode.parse({
+      id: 'slab_shared',
+      parentId: 'level_0',
+      polygon: sharedPolygon,
+      autoFromWalls: true,
+    })
+    const sharedCeiling = CeilingNode.parse({
+      id: 'ceiling_shared',
+      parentId: 'level_0',
+      polygon: sharedPolygon,
+      autoFromWalls: true,
+    })
+    initial[sharedSlab.id] = sharedSlab
+    initial[sharedCeiling.id] = sharedCeiling
+    const level = initial.level_0
+    if (level?.type === 'level') {
+      initial.level_0 = {
+        ...level,
+        children: [
+          ...level.children.filter(
+            (id) =>
+              id !== 'slab_left' &&
+              id !== 'slab_right' &&
+              id !== 'ceiling_left' &&
+              id !== 'ceiling_right',
+          ),
+          sharedSlab.id,
+          sharedCeiling.id,
+        ],
+      }
+    }
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        wall_right_bottom: {
+          ...(current.wall_right_bottom as WallNode),
+          end: [15, 0],
+        },
+        wall_right_right: {
+          ...(current.wall_right_right as WallNode),
+          start: [15, 0],
+          end: [15, 3],
+        },
+        wall_right_top: {
+          ...(current.wall_right_top as WallNode),
+          start: [15, 3],
+        },
+      })
+
+      expect((sceneStore.getState().nodes.slab_shared as SlabNode).polygon).toEqual(sharedPolygon)
+      expect((sceneStore.getState().nodes.ceiling_shared as CeilingNode).polygon).toEqual(
+        sharedPolygon,
+      )
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('moving a divider keeps the existing side automatic without filling the missing side', () => {
+    const initial = splitRoomWithGeneratedSurfaces()
+    delete initial.slab_left
+    delete initial.ceiling_left
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        wall_divider: {
+          ...(current.wall_divider as WallNode),
+          start: [2.5, 0],
+          end: [2.5, 3],
+        },
+      })
+
+      const slabs = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'slab')
+        .map((node) => SlabNode.parse(node))
+      const ceilings = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => CeilingNode.parse(node))
+      expect(slabs).toHaveLength(1)
+      expect(ceilings).toHaveLength(1)
+      expect(slabs[0]?.autoFromWalls).toBe(true)
+      expect(ceilings[0]?.autoFromWalls).toBe(true)
+      expect(slabs[0]?.polygon).toContainEqual([2.5, 0])
+      expect(slabs[0]?.polygon).toContainEqual([2.5, 3])
+      expect(ceilings[0]?.polygon).toContainEqual([2.5, 0])
+      expect(ceilings[0]?.polygon).toContainEqual([2.5, 3])
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('separately closed rooms receive unique generated surface names', () => {
+    const initial = twoSeparatedRoomsWithGeneratedSurfaces()
+    const closingWall = initial.wall_right_left as WallNode
+    delete initial.wall_right_left
+    delete initial.slab_right
+    delete initial.ceiling_right
+    initial.slab_left = SlabNode.parse({ ...initial.slab_left, name: 'Room 1 Slab' })
+    initial.ceiling_left = CeilingNode.parse({
+      ...initial.ceiling_left,
+      name: 'Room 1 Ceiling',
+    })
+    const level = initial.level_0
+    if (level?.type === 'level') {
+      initial.level_0 = {
+        ...level,
+        children: level.children.filter(
+          (id) => id !== closingWall.id && id !== 'slab_right' && id !== 'ceiling_right',
+        ),
+      }
+    }
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      const currentLevel = current.level_0
+      sceneStore.setNodes({
+        ...current,
+        [closingWall.id]: closingWall,
+        ...(currentLevel?.type === 'level'
+          ? {
+              level_0: {
+                ...currentLevel,
+                children: [...currentLevel.children, closingWall.id],
+              },
+            }
+          : {}),
+      })
+
+      const slabNames = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'slab')
+        .map((node) => node.name)
+      const ceilingNames = Object.values(sceneStore.getState().nodes)
+        .filter((node) => node.type === 'ceiling')
+        .map((node) => node.name)
+      expect(new Set(slabNames).size).toBe(2)
+      expect(new Set(ceilingNames).size).toBe(2)
+      expect(slabNames).toContain('Room 2 Slab')
+      expect(ceilingNames).toContain('Room 2 Ceiling')
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('deleting an exterior wall leaves generated slabs and ceilings unchanged', () => {
+    const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const slabBefore = sceneStore.getState().nodes.slab_main
+    const ceilingBefore = sceneStore.getState().nodes.ceiling_main
+
+    try {
+      const { wall_1: _deleted, ...withoutBoundaryWall } = sceneStore.getState().nodes
+      sceneStore.setNodes(withoutBoundaryWall)
+
+      const nodes = Object.values(sceneStore.getState().nodes)
+      expect(detectSpacesForLevel('level_0', wallsForTest(nodes)).roomPolygons).toHaveLength(0)
+      expect(sceneStore.getState().nodes.slab_main).toEqual(slabBefore)
+      expect(sceneStore.getState().nodes.ceiling_main).toEqual(ceilingBefore)
     } finally {
       unsubscribe()
     }
@@ -637,6 +1320,123 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
 
       const ceiling = sceneStore.getState().nodes.ceiling_main as CeilingNode
       expect(ceiling.height).toBeCloseTo(2.5 - 0.3 - 0.01)
+    } finally {
+      unsubscribe()
+    }
+  })
+
+  test('an auto slab expanded by an upper-room reshape clamps a newly covered ceiling', () => {
+    const upperWalls = [
+      WallNode.parse({ id: 'wall_upper_1', start: [0, 0], end: [1, 0], parentId: 'level_1' }),
+      WallNode.parse({ id: 'wall_upper_2', start: [1, 0], end: [1, 3], parentId: 'level_1' }),
+      WallNode.parse({ id: 'wall_upper_3', start: [1, 3], end: [0, 3], parentId: 'level_1' }),
+      WallNode.parse({ id: 'wall_upper_4', start: [0, 3], end: [0, 0], parentId: 'level_1' }),
+    ]
+    const upperSlab = SlabNode.parse({
+      id: 'slab_upper',
+      parentId: 'level_1',
+      polygon: [
+        [0, 0],
+        [1, 0],
+        [1, 3],
+        [0, 3],
+      ],
+      elevation: 0,
+      thickness: 0.3,
+      autoFromWalls: true,
+    })
+    const lowerCeilingPolygon: Array<[number, number]> = [
+      [2, 0],
+      [4, 0],
+      [4, 3],
+      [2, 3],
+    ]
+    const manualCeiling = CeilingNode.parse({
+      id: 'ceiling_main',
+      parentId: 'level_0',
+      polygon: lowerCeilingPolygon,
+      height: 2.49,
+      autoFromWalls: false,
+    })
+    const initialNodes = Object.fromEntries(
+      [
+        BuildingNode.parse({ id: 'building_a', children: ['level_0', 'level_1'] }),
+        LevelNode.parse({
+          id: 'level_0',
+          level: 0,
+          height: 2.5,
+          parentId: 'building_a',
+          children: [manualCeiling.id],
+        }),
+        LevelNode.parse({
+          id: 'level_1',
+          level: 1,
+          height: 2.5,
+          parentId: 'building_a',
+          children: [...upperWalls.map((wall) => wall.id), upperSlab.id],
+        }),
+        ...upperWalls,
+        upperSlab,
+        manualCeiling,
+      ].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      sceneStore.setNodes({
+        ...current,
+        wall_upper_1: { ...(current.wall_upper_1 as WallNode), end: [4, 0] },
+        wall_upper_2: {
+          ...(current.wall_upper_2 as WallNode),
+          start: [4, 0],
+          end: [4, 3],
+        },
+        wall_upper_3: { ...(current.wall_upper_3 as WallNode), start: [4, 3] },
+      })
+
+      const expandedUpperSlab = sceneStore.getState().nodes.slab_upper as SlabNode
+      const ceiling = sceneStore.getState().nodes.ceiling_main as CeilingNode
+      expect(expandedUpperSlab.polygon).toContainEqual([4, 0])
+      expect(expandedUpperSlab.polygon).toContainEqual([4, 3])
+      expect(ceiling.height).toBeCloseTo(2.5 - 0.3 - 0.01)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
+describe('procedural zone sync isolation', () => {
+  test('creating a matching zone adopts room walls without reconciling surfaces', () => {
+    const initial = roomWithGeneratedSurfaces()
+    delete initial.slab_main
+    delete initial.ceiling_main
+    const sceneStore = createSceneStoreStub(initial)
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+
+    try {
+      const current = sceneStore.getState().nodes
+      const zone = ZoneNode.parse({
+        id: 'zone_room',
+        parentId: 'level_0',
+        name: 'Kitchen',
+        polygon: square,
+      })
+      sceneStore.setNodes({ ...current, [zone.id]: zone })
+
+      const updated = sceneStore.getState().nodes[zone.id]
+      expect(updated?.type).toBe('zone')
+      if (updated?.type !== 'zone') return
+      expect(updated.autoFromWalls).toBe(true)
+      expect(new Set(updated.boundaryWallIds)).toEqual(
+        new Set(['wall_1', 'wall_2', 'wall_3', 'wall_4']),
+      )
+      expect(
+        Object.values(sceneStore.getState().nodes).filter(
+          (node) => node.type === 'slab' || node.type === 'ceiling',
+        ),
+      ).toHaveLength(0)
     } finally {
       unsubscribe()
     }
@@ -1114,5 +1914,64 @@ describe('planAutoSlabsForLevel', () => {
     expect(left?.holeMetadata).toEqual([{ source: 'manual' }])
     expect(right?.holes).toEqual([rightHole])
     expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
+  })
+
+  test('an elevator opening crossing a divider is clipped into both split slabs', () => {
+    const crossingHole: Array<[number, number]> = [
+      [1.5, 1],
+      [2.5, 1],
+      [2.5, 2],
+      [1.5, 2],
+    ]
+    const auto = SlabNode.parse({
+      polygon: square,
+      holes: [crossingHole],
+      holeMetadata: [{ source: 'elevator', elevatorId: 'elevator_crossing' }],
+      autoFromWalls: true,
+    })
+    const rooms = [
+      [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+        { x: 2, y: 3 },
+        { x: 0, y: 3 },
+      ],
+      [
+        { x: 2, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+        { x: 2, y: 3 },
+      ],
+    ]
+
+    const plan = planAutoSlabsForLevel(rooms, [auto])
+    const surfaces = [SlabNode.parse({ ...auto, ...plan.update[0]?.data }), ...plan.create]
+    const holes = surfaces.flatMap((surface) => surface.holes)
+
+    expect(holes).toHaveLength(2)
+    expect(holes).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          [1.5, 1],
+          [2, 1],
+          [2, 2],
+          [1.5, 2],
+        ]),
+        expect.arrayContaining([
+          [2, 1],
+          [2.5, 1],
+          [2.5, 2],
+          [2, 2],
+        ]),
+      ]),
+    )
+    expect(
+      surfaces.every(
+        (surface) =>
+          surface.holeMetadata.length === 1 &&
+          surface.holeMetadata[0]?.source === 'elevator' &&
+          surface.holeMetadata[0]?.elevatorId === 'elevator_crossing',
+      ),
+    ).toBe(true)
   })
 })

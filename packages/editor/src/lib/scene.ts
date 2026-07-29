@@ -3,7 +3,9 @@
 import {
   clearSceneHistory,
   nodeRegistry,
+  pauseSceneHistory,
   resolveLevelId,
+  resumeSceneHistory,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -384,23 +386,25 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
-  if (hasUsableSceneGraph(sceneGraph)) {
-    const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any, {
-      collections: collections as any,
-      materials: materials as any,
-      installedPlugins: installedPlugins ?? defaultInstalledPlugins,
-      hasExplicitPluginInstallState: installedPlugins !== undefined,
-    })
-  } else {
-    useScene.getState().clearScene()
-    useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })
+  pauseSceneHistory(useScene)
+  try {
+    if (hasUsableSceneGraph(sceneGraph)) {
+      const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
+      useScene.getState().setScene(nodes as any, rootNodeIds as any, {
+        collections: collections as any,
+        materials: materials as any,
+        installedPlugins: installedPlugins ?? defaultInstalledPlugins,
+        hasExplicitPluginInstallState: installedPlugins !== undefined,
+      })
+    } else {
+      useScene.getState().clearScene()
+      useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })
+    }
+  } finally {
+    resumeSceneHistory(useScene)
   }
 
-  // The loaded scene is the undo floor. Loading records history entries of
-  // its own (`unloadScene` + `setScene`/`clearScene` are tracked writes), so
-  // without this reset a few Ctrl+Z presses could step past the load into the
-  // pre-load — often empty — state and wipe the whole project.
+  // The loaded scene is the undo floor; discard history from the previous scene.
   clearSceneHistory()
 
   syncEditorSelectionFromCurrentScene()

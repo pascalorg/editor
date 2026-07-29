@@ -233,6 +233,43 @@ function segmentIntersection(
   }
 }
 
+function curvedWallSegmentIntersections(start: WallPlanPoint, end: WallPlanPoint, wall: WallNode) {
+  const arc = getWallArcData(wall)
+  if (!arc) return []
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const offsetX = start[0] - arc.center.x
+  const offsetZ = start[1] - arc.center.y
+  const a = dx * dx + dz * dz
+  if (a < 1e-12) return []
+  const b = 2 * (offsetX * dx + offsetZ * dz)
+  const c = offsetX * offsetX + offsetZ * offsetZ - arc.radius * arc.radius
+  const discriminant = b * b - 4 * a * c
+  if (discriminant < -1e-9) return []
+
+  const root = Math.sqrt(Math.max(0, discriminant))
+  const draftParameters = [(-b - root) / (2 * a), (-b + root) / (2 * a)]
+  const intersections: Array<{ point: WallPlanPoint; draftT: number; wallT: number }> = []
+  for (const draftT of draftParameters) {
+    if (draftT < -1e-9 || draftT > 1 + 1e-9) continue
+    const point: WallPlanPoint = [start[0] + draftT * dx, start[1] + draftT * dz]
+    const angle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
+    let directedAngle = (angle - arc.startAngle) * arc.direction
+    while (directedAngle < 0) directedAngle += Math.PI * 2
+    const wallT = directedAngle / Math.abs(arc.delta)
+    if (wallT < -1e-9 || wallT > 1 + 1e-9) continue
+    if (intersections.some((candidate) => distanceSquared(candidate.point, point) < 1e-12)) {
+      continue
+    }
+    intersections.push({
+      point,
+      draftT: Math.max(0, Math.min(1, draftT)),
+      wallT: Math.max(0, Math.min(1, wallT)),
+    })
+  }
+  return intersections
+}
+
 export function findWallSegmentIntersections(
   start: WallPlanPoint,
   end: WallPlanPoint,
@@ -246,7 +283,12 @@ export function findWallSegmentIntersections(
   }> = []
 
   for (const wall of walls) {
-    if (isCurvedWall(wall)) continue
+    if (isCurvedWall(wall)) {
+      for (const intersection of curvedWallSegmentIntersections(start, end, wall)) {
+        intersections.push({ wallId: wall.id, ...intersection })
+      }
+      continue
+    }
     const intersection = segmentIntersection(start, end, wall.start, wall.end)
     if (!intersection) continue
     intersections.push({
