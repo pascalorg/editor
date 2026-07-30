@@ -562,7 +562,10 @@ export class MysqlSceneStore implements SceneStore {
         node_count INT UNSIGNED NOT NULL,
         graph_json LONGTEXT NOT NULL,
         graph_hash CHAR(64) NOT NULL,
-        INDEX scenes_project_updated_idx (project_id, updated_at),
+        -- project_id is indexed by prefix: servers still defaulting to the
+        -- COMPACT row format cap an index key at 767 bytes, and the whole
+        -- column is 800 under utf8mb4.
+        INDEX scenes_project_updated_idx (project_id(150), updated_at),
         INDEX scenes_owner_updated_idx (owner_id, updated_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `)
