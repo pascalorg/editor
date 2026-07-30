@@ -60,7 +60,9 @@ describe('applySceneGraphToEditor', () => {
   })
 
   test('loading a closed room does not recreate a slab or ceiling deleted before reload', () => {
-    const unsubscribe = initSpaceDetectionSync(useScene, useEditor)
+    const unsubscribe = initSpaceDetectionSync(useScene, {
+      onSpacesChanged: (spaces) => useEditor.getState().setSpaces(spaces),
+    })
 
     try {
       applySceneGraphToEditor(loadedRoomWithoutSurfaces())

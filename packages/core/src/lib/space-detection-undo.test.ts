@@ -12,14 +12,14 @@ type RafFn = (cb: (time: number) => void) => number
 ;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
   () => {}
 
-function editorStoreStub() {
+function spacesSink() {
   const state = {
     spaces: {} as Record<string, Space>,
-    setSpaces(spaces: Record<string, Space>) {
+    onSpacesChanged(spaces: Record<string, Space>) {
       state.spaces = spaces
     },
   }
-  return { getState: () => state }
+  return state
 }
 
 function resetRoom() {
@@ -68,11 +68,13 @@ describe('space topology index undo and redo', () => {
 
   test('rebuilds its disposable room lookup after undo and redo', async () => {
     resetRoom()
-    const editorStore = editorStoreStub()
-    const unsubscribe = initSpaceDetectionSync(useScene, editorStore)
+    const sink = spacesSink()
+    const unsubscribe = initSpaceDetectionSync(useScene, {
+      onSpacesChanged: sink.onSpacesChanged,
+    })
 
     try {
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(1)
+      expect(Object.keys(sink.spaces)).toHaveLength(1)
 
       useScene.getState().createNode(
         WallNode.parse({
@@ -83,15 +85,15 @@ describe('space topology index undo and redo', () => {
         }),
         'level_0',
       )
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(2)
+      expect(Object.keys(sink.spaces)).toHaveLength(2)
 
       useScene.temporal.getState().undo()
       await Promise.resolve()
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(1)
+      expect(Object.keys(sink.spaces)).toHaveLength(1)
 
       useScene.temporal.getState().redo()
       await Promise.resolve()
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(2)
+      expect(Object.keys(sink.spaces)).toHaveLength(2)
     } finally {
       unsubscribe()
     }

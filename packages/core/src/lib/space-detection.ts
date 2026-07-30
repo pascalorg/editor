@@ -1725,6 +1725,7 @@ export type SpaceTopologyReconcileEvent = {
 }
 
 export type SpaceDetectionSyncOptions = {
+  onSpacesChanged?: (spaces: Record<string, Space>) => void
   onTopologyReconcile?: (event: SpaceTopologyReconcileEvent) => void
 }
 
@@ -2224,18 +2225,21 @@ function roomsEligibleForAutoSurface(
   })
 }
 
-function updateSpacesForLevel(levelId: string, spaces: Space[], editorStore: any) {
-  const existingSpaces = editorStore.getState().spaces as Record<string, Space>
+function replaceSpacesForLevel(
+  existingSpaces: Record<string, Space>,
+  levelId: string,
+  spaces: Space[],
+) {
   const nextSpaces: Record<string, Space> = {}
   for (const [spaceId, space] of Object.entries(existingSpaces)) {
     if (space.levelId !== levelId) nextSpaces[spaceId] = space
   }
   for (const space of spaces) nextSpaces[space.id] = space
-  editorStore.getState().setSpaces(nextSpaces)
+  return nextSpaces
 }
 
-function replaceIndexedSpaces(spaces: Space[], editorStore: any) {
-  editorStore.getState().setSpaces(Object.fromEntries(spaces.map((space) => [space.id, space])))
+function indexSpaces(spaces: Space[]) {
+  return Object.fromEntries(spaces.map((space) => [space.id, space]))
 }
 
 function reconcileChangedZones(
@@ -2258,8 +2262,7 @@ function reconcileWallTopologyDelta(
   topologyDelta: IndexedTopologyDelta,
   currentNodes: SceneNodes,
   sceneStore: any,
-  editorStore: any,
-): void {
+): Space[] {
   const { updateNodes } = sceneStore.getState()
   const scopedRooms = [...topologyDelta.beforeRooms, ...topologyDelta.currentRooms]
   const allCurrentRoomPolygons = topologyDelta.allCurrentRooms.map((room) => room.polygon)
@@ -2348,7 +2351,7 @@ function reconcileWallTopologyDelta(
   const spaces = topologyDelta.allCurrentRooms.map((room) => buildSpace(levelId, room))
   const zonePlan = planAutoZonesForLevel(spaces, zones)
   if (zonePlan.update.length > 0) updateNodes(zonePlan.update)
-  updateSpacesForLevel(levelId, spaces, editorStore)
+  return spaces
 }
 
 function ceilingClampInputsChanged(
@@ -2429,13 +2432,22 @@ export function isSpaceDetectionPaused(): boolean {
 
 export function initSpaceDetectionSync(
   sceneStore: any,
-  editorStore: any,
   options: SpaceDetectionSyncOptions = {},
 ): () => void {
   let isProcessing = false
   const topologyIndex = new RoomTopologyIndex()
+  let spacesById: Record<string, Space> = {}
+  const publishAllSpaces = (spaces: Space[]) => {
+    spacesById = indexSpaces(spaces)
+    options.onSpacesChanged?.(spacesById)
+  }
+  const publishSpacesForLevel = (levelId: string, spaces: Space[]) => {
+    spacesById = replaceSpacesForLevel(spacesById, levelId, spaces)
+    options.onSpacesChanged?.(spacesById)
+  }
+
   topologyIndex.rebuild(sceneStore.getState().nodes as SceneNodes)
-  replaceIndexedSpaces(topologyIndex.spaces(), editorStore)
+  publishAllSpaces(topologyIndex.spaces())
   const temporalState = sceneStore.temporal?.getState?.()
   let previousPastLength = temporalState?.pastStates?.length ?? 0
   let previousFutureLength = temporalState?.futureStates?.length ?? 0
@@ -2444,7 +2456,7 @@ export function initSpaceDetectionSync(
     if (isProcessing) return
     if (commit.origin === 'load') {
       topologyIndex.rebuild(commit.current.nodes)
-      replaceIndexedSpaces(topologyIndex.spaces(), editorStore)
+      publishAllSpaces(topologyIndex.spaces())
       return
     }
     const changedWalls = changedWallIdsByLevel(
@@ -2465,7 +2477,7 @@ export function initSpaceDetectionSync(
     if (changedWalls.size === 0 && changedZones.size === 0 && !shouldReconcileCeilingBounds) return
     if (spaceDetectionPauseDepth > 0) {
       topologyIndex.rebuild(commit.current.nodes)
-      replaceIndexedSpaces(topologyIndex.spaces(), editorStore)
+      publishAllSpaces(topologyIndex.spaces())
       return
     }
 
@@ -2479,13 +2491,13 @@ export function initSpaceDetectionSync(
           commit.before.nodes,
           commit.current.nodes,
         )
-        reconcileWallTopologyDelta(
+        const spaces = reconcileWallTopologyDelta(
           levelId,
           topologyDelta,
           commit.current.nodes,
           sceneStore,
-          editorStore,
         )
+        publishSpacesForLevel(levelId, spaces)
         options.onTopologyReconcile?.({
           levelId,
           strategy: topologyDelta.strategy,
@@ -2535,7 +2547,7 @@ export function initSpaceDetectionSync(
 
         queueMicrotask(() => {
           topologyIndex.rebuild(sceneStore.getState().nodes as SceneNodes)
-          replaceIndexedSpaces(topologyIndex.spaces(), editorStore)
+          publishAllSpaces(topologyIndex.spaces())
         })
       },
     ) ?? (() => {})

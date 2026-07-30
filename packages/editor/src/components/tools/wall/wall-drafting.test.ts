@@ -300,7 +300,9 @@ describe('createWallOnCurrentLevel', () => {
         editorState.spaces = spaces
       },
     }
-    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+    const unsubscribe = initSpaceDetectionSync(useScene, {
+      onSpacesChanged: editorState.setSpaces,
+    })
 
     try {
       const created = createWallOnCurrentLevel([2, 0], [2, 3])
@@ -397,7 +399,9 @@ describe('createWallOnCurrentLevel', () => {
         editorState.spaces = spaces
       },
     }
-    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+    const unsubscribe = initSpaceDetectionSync(useScene, {
+      onSpacesChanged: editorState.setSpaces,
+    })
 
     try {
       const divider = createWallOnCurrentLevel([curveMidpoint.x, curveMidpoint.y], [2, 3])
@@ -553,7 +557,9 @@ describe('createWallOnCurrentLevel', () => {
         editorState.spaces = spaces
       },
     }
-    const unsubscribe = initSpaceDetectionSync(useScene, { getState: () => editorState })
+    const unsubscribe = initSpaceDetectionSync(useScene, {
+      onSpacesChanged: editorState.setSpaces,
+    })
 
     try {
       expect(createWallOnCurrentLevel([0, 0], [4, 3])).not.toBeNull()

@@ -116,7 +116,9 @@ const EDITOR_DEFAULT_RENDER = { shading: 'solid' } as const
  */
 function initializeEditorRuntime(): () => void {
   const unsubscribeSpatialGrid = initSpatialGridSync()
-  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
+  const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, {
+    onSpacesChanged: (spaces) => useEditor.getState().setSpaces(spaces),
+  })
   initSFXBus()
 
   return () => {

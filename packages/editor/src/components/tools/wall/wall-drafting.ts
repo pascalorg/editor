@@ -149,9 +149,11 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
     if (special) return special
   } else {
     const intersection =
-      findWallJunctionFromRaw(point, walls, ignoreWallIds) ??
-      findWallIntersectionFromRaw(point, walls, ignoreWallIds)
-    if (intersection) return { point: intersection, snap: 'intersection' }
+      findWallJunctionFromRaw(point, walls, ignoreWallIds, snapRadii?.intersection) ??
+      findWallIntersectionFromRaw(point, walls, ignoreWallIds, snapRadii?.intersection)
+    if (intersection && distanceSquared(point, intersection) > WALL_CONNECT_SNAP_RADIUS ** 2) {
+      return { point: intersection, snap: 'intersection' }
+    }
   }
 
   const step = overrideStep ?? getSegmentGridStep()

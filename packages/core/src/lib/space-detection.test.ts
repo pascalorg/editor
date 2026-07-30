@@ -15,6 +15,7 @@ import {
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
   resolveAutoZonePolygon,
+  type Space,
   wallClosesRoom,
 } from './space-detection'
 
@@ -487,7 +488,7 @@ describe('stage 3-B ceiling clamp bound', () => {
 
 // Minimal store stand-ins for initSpaceDetectionSync: a zustand-shaped
 // scene store (getState/subscribe/temporal) whose write methods mutate the
-// nodes record and re-notify, and an editor store carrying `spaces`.
+// nodes record and re-notify, and a sink for derived spaces.
 function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
   const listeners = new Set<(state: unknown) => void>()
   const state: Record<string, unknown> & { nodes: Record<string, AnyNode> } = {
@@ -555,14 +556,14 @@ function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
   }
 }
 
-function createEditorStoreStub() {
-  const state = {
-    spaces: {} as Record<string, unknown>,
-    setSpaces(next: Record<string, unknown>) {
-      state.spaces = next
+function createSpacesSink() {
+  const sink = {
+    spaces: {} as Record<string, Space>,
+    onSpacesChanged(next: Record<string, Space>) {
+      sink.spaces = next
     },
   }
-  return { getState: () => state }
+  return sink
 }
 
 function roomWithGeneratedSurfaces() {
@@ -850,7 +851,7 @@ function fourRoomGridWithSplitA() {
 describe('generated surface deletion through the detection sync', () => {
   test('a deleted generated slab stays deleted', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const { slab_main: _deleted, ...withoutSlab } = sceneStore.getState().nodes
@@ -869,7 +870,7 @@ describe('generated surface deletion through the detection sync', () => {
 
   test('a deleted generated ceiling stays deleted after the next wall edit', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const { ceiling_main: _deleted, ...withoutCeiling } = sceneStore.getState().nodes
@@ -893,7 +894,7 @@ describe('generated surface deletion through the detection sync', () => {
 
   test('a reshaped room keeps its missing surfaces after the sync is reinitialized', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
-    let unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    let unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     const {
       slab_main: _slab,
@@ -903,7 +904,7 @@ describe('generated surface deletion through the detection sync', () => {
     sceneStore.setNodes(withoutSurfaces)
     unsubscribe()
 
-    unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
     try {
       const current = sceneStore.getState().nodes
       sceneStore.setNodes({
@@ -929,7 +930,7 @@ describe('generated surface deletion through the detection sync', () => {
     const initial = roomWithGeneratedSurfaces()
     delete initial.slab_main
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -963,7 +964,7 @@ describe('generated surface deletion through the detection sync', () => {
       ...withoutLeftSurfaces
     } = initialNodes
     const sceneStore = createSceneStoreStub(withoutLeftSurfaces)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1005,7 +1006,7 @@ describe('generated surface deletion through the detection sync', () => {
 
   test('loading an older project does not generate its missing surfaces', () => {
     const sceneStore = createSceneStoreStub({})
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
     const loaded = roomWithGeneratedSurfaces()
     delete loaded.slab_main
     delete loaded.ceiling_main
@@ -1029,21 +1030,22 @@ describe('generated surface deletion through the detection sync', () => {
 describe('topology-delta room surface reconciliation', () => {
   test('indexes only room A while its divider is deleted, recreated, and moved', () => {
     const sceneStore = createSceneStoreStub(fourRoomGridWithSplitA())
-    const editorStore = createEditorStoreStub()
+    const sink = createSpacesSink()
     const events: Array<{
       strategy: string
       examinedWallIds: string[]
       affectedBeforeRoomCount: number
       affectedCurrentRoomCount: number
     }> = []
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore, {
+    const unsubscribe = initSpaceDetectionSync(sceneStore, {
+      onSpacesChanged: sink.onSpacesChanged,
       onTopologyReconcile: (event) => events.push(event),
     })
     const distantSlabBefore = sceneStore.getState().nodes.slab_d
     const distantCeilingBefore = sceneStore.getState().nodes.ceiling_d
 
     try {
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+      expect(Object.keys(sink.spaces)).toHaveLength(5)
 
       const current = sceneStore.getState().nodes
       const splitWall = current.wall_a_split as WallNode
@@ -1061,7 +1063,7 @@ describe('topology-delta room surface reconciliation', () => {
         new Set([splitWall.id as AnyNodeId]),
       )
 
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(4)
+      expect(Object.keys(sink.spaces)).toHaveLength(4)
       expect(events.at(-1)?.strategy).toBe('indexed')
       expect(events.at(-1)?.examinedWallIds).not.toEqual(
         expect.arrayContaining([
@@ -1089,7 +1091,7 @@ describe('topology-delta room surface reconciliation', () => {
         new Set([splitWall.id as AnyNodeId]),
       )
 
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+      expect(Object.keys(sink.spaces)).toHaveLength(5)
       expect(events.at(-1)?.examinedWallIds).not.toContain('wall_bottom_right')
 
       const afterCreate = sceneStore.getState().nodes
@@ -1106,7 +1108,7 @@ describe('topology-delta room surface reconciliation', () => {
         new Set([splitWall.id as AnyNodeId]),
       )
 
-      expect(Object.keys(editorStore.getState().spaces)).toHaveLength(5)
+      expect(Object.keys(sink.spaces)).toHaveLength(5)
       expect(events.at(-1)?.examinedWallIds).not.toContain('wall_bottom_right')
       expect(sceneStore.getState().nodes.slab_d).toEqual(distantSlabBefore)
       expect(sceneStore.getState().nodes.ceiling_d).toEqual(distantCeilingBefore)
@@ -1130,7 +1132,7 @@ describe('topology-delta room surface reconciliation', () => {
       }
     }
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1167,7 +1169,7 @@ describe('topology-delta room surface reconciliation', () => {
     delete initial.slab_main
     delete initial.ceiling_main
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1216,7 +1218,7 @@ describe('topology-delta room surface reconciliation', () => {
     delete initial.slab_main
     delete initial.ceiling_main
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1252,7 +1254,7 @@ describe('topology-delta room surface reconciliation', () => {
   test('deleting a divider merges compatible generated surfaces', () => {
     const initial = splitRoomWithGeneratedSurfaces()
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const { wall_divider: _deleted, ...withoutDivider } = sceneStore.getState().nodes
@@ -1276,7 +1278,7 @@ describe('topology-delta room surface reconciliation', () => {
     const initial = splitRoomWithGeneratedSurfaces()
     delete initial.slab_left
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const { wall_divider: _deleted, ...withoutDivider } = sceneStore.getState().nodes
@@ -1342,7 +1344,7 @@ describe('topology-delta room surface reconciliation', () => {
       }
     }
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1377,7 +1379,7 @@ describe('topology-delta room surface reconciliation', () => {
     delete initial.slab_left
     delete initial.ceiling_left
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1430,7 +1432,7 @@ describe('topology-delta room surface reconciliation', () => {
       }
     }
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1465,7 +1467,7 @@ describe('topology-delta room surface reconciliation', () => {
 
   test('deleting an exterior wall leaves generated slabs and ceilings unchanged', () => {
     const sceneStore = createSceneStoreStub(roomWithGeneratedSurfaces())
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
     const slabBefore = sceneStore.getState().nodes.slab_main
     const ceilingBefore = sceneStore.getState().nodes.ceiling_main
 
@@ -1515,8 +1517,8 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
     ) as Record<string, AnyNode>
 
     const sceneStore = createSceneStoreStub(initialNodes)
-    const editorStore = createEditorStoreStub()
-    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+    const sink = createSpacesSink()
+    const unsubscribe = initSpaceDetectionSync(sceneStore, sink)
 
     try {
       // Scenario gate 11's reactive half: the deck lands on the level
@@ -1600,7 +1602,7 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
       ].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
     const sceneStore = createSceneStoreStub(initialNodes)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
@@ -1632,7 +1634,7 @@ describe('procedural zone sync isolation', () => {
     delete initial.slab_main
     delete initial.ceiling_main
     const sceneStore = createSceneStoreStub(initial)
-    const unsubscribe = initSpaceDetectionSync(sceneStore, createEditorStoreStub())
+    const unsubscribe = initSpaceDetectionSync(sceneStore, createSpacesSink())
 
     try {
       const current = sceneStore.getState().nodes
