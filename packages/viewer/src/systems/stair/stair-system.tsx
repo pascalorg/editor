@@ -118,7 +118,7 @@ export const StairSystem = () => {
       if (group) {
         const mergedMesh = group.getObjectByName('merged-stair') as THREE.Mesh | undefined
         if (mergedMesh?.visible !== false) {
-          updateMergedStairGeometry(node as StairNode, group, nodes)
+          updateMergedStairGeometry(getEffectiveNode(node as StairNode), group, nodes)
           stairsProcessed++
         }
       }

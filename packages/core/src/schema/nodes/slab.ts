@@ -24,6 +24,8 @@ export const SlabNode = BaseNode.extend({
   elevation: z.number().default(0.05), // Walking surface (slab top), meters above the level plane
   thickness: z.number().default(0.05), // Grows downward from the surface
   recessed: z.boolean().default(false),
+  recessedRimElevation: z.number().finite().optional(),
+  fillToTerrain: z.boolean().optional(),
   autoFromWalls: z.boolean().default(false),
 }).describe(
   dedent`
@@ -33,7 +35,9 @@ export const SlabNode = BaseNode.extend({
   - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
   - elevation: the walking surface (slab top), in meters above the level plane
   - thickness: grows downward from the surface; the solid occupies [elevation - thickness, elevation]
-  - recessed: open recess (pool) whose floor sits at elevation (< 0); the shell walls rise to the level plane
+  - recessed: open recess (pool) whose floor sits at elevation
+  - recessedRimElevation: optional rim anchor for a raised/lowered recess; absent means the level plane
+  - fillToTerrain: extends a solid slab's perimeter downward to terrain without changing its flat top or authored thickness
   - autoFromWalls: whether the slab is automatically generated from a closed wall loop
   `,
 )

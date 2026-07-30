@@ -16,17 +16,20 @@ export const MIN_WALL_HEIGHT = 0.5
  * the wall shorter, never taller, and no gap can open at the top of a
  * level. A wall WITH `height` is an explicit exception (half wall,
  * parapet) and keeps the legacy semantics: the top rides a raised elected
- * base (`electedBase + height`), while a zero or sunken base leaves the
- * top at `height` (the legacy negative-slab constraint).
+ * base (`electedBase + height`), while a zero or sunken slab base leaves
+ * the top at `height` (the legacy negative-slab constraint). Explicit
+ * ground-hosted walls are the terrain exception: `height` is always body
+ * height, including below datum, so sculpting cannot stretch the wall.
  *
  * Returns the top in level-local Y (same frame as `electedBase`).
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
   storeyHeight: number,
   electedBase: number,
 ): number {
   if (wall.height == null) return storeyHeight
+  if (wall.supportSlabId === 'ground') return electedBase + wall.height
   return electedBase > 0 ? electedBase + wall.height : wall.height
 }
 
@@ -45,7 +48,7 @@ export function resolveWallTop(
  * policy.
  */
 export function resolveWallEffectiveHeight(
-  wall: Pick<WallNode, 'height'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
   storeyHeight: number,
   electedBase: number,
 ): number {

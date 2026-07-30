@@ -8,6 +8,11 @@ import {
   type SceneApi,
   useScene,
 } from '@pascal-app/core'
+import {
+  clearStructuralElevationGuide,
+  publishStructuralElevationGuide,
+  resolveStructuralElevationSnap,
+} from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildCeilingFloorplan } from './floorplan'
 import {
@@ -49,6 +54,14 @@ function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
   return [cx / polygon.length, cz / polygon.length]
 }
 
+function ceilingElevationGuideSource(n: CeilingNodeType) {
+  return {
+    nodeId: n.id,
+    levelId: n.parentId,
+    anchor: ceilingPolygonCenter(n),
+  }
+}
+
 // Ceiling height arrow — vertical chevron at the polygon centroid,
 // hovering just above the ceiling plane. Drags the `height` field
 // (the Y position of the ceiling surface). `anchor: 'min'` so dragging
@@ -71,6 +84,15 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     min: MIN_CEILING_HEIGHT,
     max: ceilingHeightBound,
     currentValue: (n) => resolveCeilingHeight(n, useScene.getState().nodes),
+    magneticSnap: (n, newValue, sceneApi) =>
+      resolveStructuralElevationSnap(ceilingElevationGuideSource(n), newValue, sceneApi.nodes()),
+    onDrag: (n, sceneApi) =>
+      publishStructuralElevationGuide(
+        ceilingElevationGuideSource(n),
+        resolveCeilingHeight(n, sceneApi.nodes()),
+        sceneApi.nodes(),
+      ),
+    onDragEnd: (n) => clearStructuralElevationGuide(n.id),
     apply: (_n, newValue) => ({ height: newValue }),
     placement: {
       position: (n) => {

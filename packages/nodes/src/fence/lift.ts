@@ -13,13 +13,14 @@ import type { FenceNode } from './schema'
  * callable from the geometry builder with `ctx.resolve`.
  */
 export function resolveFenceLiftElevation(
-  node: Pick<FenceNode, 'supportSlabId' | 'parentId'>,
+  node: Pick<FenceNode, 'supportSlabId' | 'supportOffset' | 'parentId'>,
   resolve: (id: string) => AnyNode | undefined,
 ): number {
-  if (!node.supportSlabId) return 0
+  const offset = node.supportOffset ?? 0
+  if (!node.supportSlabId) return offset
   const host = resolve(node.supportSlabId)
-  if (host?.type !== 'slab') return 0
-  if ((host.parentId ?? null) !== (node.parentId ?? null)) return 0
+  if (host?.type !== 'slab') return offset
+  if ((host.parentId ?? null) !== (node.parentId ?? null)) return offset
   const elevation = (host as SlabNode).elevation
-  return Number.isFinite(elevation) ? elevation : 0
+  return (Number.isFinite(elevation) ? elevation : 0) + offset
 }

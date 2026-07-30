@@ -54,6 +54,7 @@ export {
   getFloorStackedPosition,
 } from './hooks/spatial-grid/floor-placed-elevation'
 export {
+  getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
   type PointedSupportSurface,
   pointInPolygon,
@@ -64,12 +65,14 @@ export {
 export {
   findLevelAncestorId,
   initSpatialGridSync,
+  markSlabChangeDependents,
   resolveBuildingForLevel,
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
 export {
   type FenceSupportInput,
   resolveFenceSupportSlabPatch,
+  resolveMovedWallSupportSlabPatch,
   resolveSupportSlabPatch,
   resolveWallSupportSlabPatch,
   type SupportSlabPatch,
@@ -130,6 +133,7 @@ export {
 export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
+  type AutoSlabPlanningContext,
   type AutoSlabSyncPlan,
   type AutoZoneSyncPlan,
   detectSpacesForLevel,
@@ -146,6 +150,51 @@ export {
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
+export {
+  advanceStroke,
+  type BrushSettings,
+  type BrushShape,
+  beginStroke,
+  brushHeightAt,
+  DEFAULT_BRUSH_SETTINGS,
+  detachStrokeAnchor,
+  highestOver,
+  MIN_BRUSH_RADIUS_IN_SPACINGS,
+  maxCoverage,
+  minBrushRadius,
+  RAISE_METRES_PER_STROKE,
+  sampleTarget,
+  type TerrainStroke,
+  type TerrainVerb,
+  weightAt,
+} from './lib/terrain-brush'
+export { decodeTerrainField, encodeTerrainField, isDatumField } from './lib/terrain-codec'
+export {
+  applyHeightPatch,
+  createTerrainField,
+  DEFAULT_TERRAIN_SPACING,
+  DEFAULT_TERRAIN_STEP,
+  diffToPatches,
+  flattenPatch,
+  type HeightPatch,
+  heightAt,
+  heightAtSample,
+  isFlatOver,
+  normalAt,
+  quantize,
+  sampleRangeOver,
+  slopeAt,
+  surfaceHeightAt,
+  type TerrainField,
+} from './lib/terrain-field'
+export { raycastTerrain, type TerrainHit } from './lib/terrain-raycast'
+export { commitTerrainField, terrainFieldForEdit, terrainFieldOf } from './lib/terrain-source'
+export {
+  isSiteDatum,
+  SITE_DATUM_EPSILON,
+  SITE_DATUM_Y,
+  terrainSupportLift,
+} from './lib/terrain-support'
 export {
   closestOnSegment,
   collectLevelWallSegments,
@@ -225,6 +274,10 @@ export {
   getEffectiveNode,
   type LiveNodeOverrides,
 } from './store/use-live-node-overrides'
+export {
+  default as useLiveTerrain,
+  type LiveTerrainStroke,
+} from './store/use-live-terrain'
 export { default as useLiveTransforms, type LiveTransform } from './store/use-live-transforms'
 export {
   type ApplySceneSnapshotOptions,
@@ -288,6 +341,7 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
 export {
   clampSlabElevationForWalls,
   getSlabElevationUpperBound,
@@ -297,7 +351,7 @@ export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/sta
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
-export { resolveStairTotalRise } from './systems/stair/stair-rise'
+export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,

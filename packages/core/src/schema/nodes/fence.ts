@@ -35,6 +35,9 @@ export const FenceNode = BaseNode.extend({
   // Persisted slab-support host — the fence sits on that slab's walking
   // surface (see ItemNode.supportSlabId for the host rules).
   supportSlabId: z.string().optional(),
+  // Manual vertical offset from the elected slab or level support. This moves
+  // the complete fence body without changing its height.
+  supportOffset: z.number().finite().optional(),
   curveOffset: z.number().optional(),
   baseHeight: z.number().default(0.22),
   postSpacing: z.number().default(2),
@@ -58,6 +61,7 @@ export const FenceNode = BaseNode.extend({
   - tangents: optional per-point handle vectors (parallel to path); null entries fall back to the automatic tangent
   - height/thickness: overall fence dimensions in meters
   - supportSlabId: optional slab host; the fence stands on that slab's walking surface (elevation)
+  - supportOffset: manual vertical offset from the elected support surface
   - curveOffset: midpoint sagitta offset used to bend the fence into an arc (ignored when path is set)
   - baseHeight/postSpacing/postSize/topRailHeight: exact geometric controls from the plan3D fence model
   - groundClearance/edgeInset/baseStyle: fence support and inset configuration
