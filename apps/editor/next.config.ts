@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  // Hostinger runs the app from a self-contained bundle; see hostinger-server.js.
+  output: 'standalone',
   // Dev-only. Without these, the dev server refuses the HMR websocket for any
   // origin other than localhost, and because Turbopack delivers module updates
   // over that socket the page loads its shell and then hangs waiting for lazy

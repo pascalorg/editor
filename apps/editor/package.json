@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3002",
-    "build": "dotenv -e ../../.env.local -- next build",
+    "build": "next build",
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsgo --noEmit"
