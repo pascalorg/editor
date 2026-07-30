@@ -258,4 +258,4 @@ jobs:
             git tag "$TAG"
           done
 
-          git push --follow-tags
+          git push origin HEAD:main $TAGS
