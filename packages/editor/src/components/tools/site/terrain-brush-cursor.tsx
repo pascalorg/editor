@@ -12,7 +12,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -22,7 +22,7 @@ import {
   Vector2,
 } from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
-import { sculptFieldForSite } from '../../../lib/terrain-sculpt'
+import { sculptFieldForSite, terrainPointInsideSite } from '../../../lib/terrain-sculpt'
 import { brushRingColor } from '../../../lib/terrain-verb-color'
 import useEditor from '../../../store/use-editor'
 import { formatMeasurement } from '../../editor/measurement-pill'
@@ -44,6 +44,12 @@ const RING_LIFT = 0.02
 /** The ring is decoration; it must never intercept a pointer ray. */
 const NO_RAYCAST = () => null
 
+export type TerrainBrushFocus = {
+  radius: number
+  x: number
+  z: number
+}
+
 /**
  * The brush ring, drawn *on the terrain surface* rather than as a flat disc.
  *
@@ -60,16 +66,15 @@ const NO_RAYCAST = () => null
  * poisons the MRT scene pass and makes FrontSide geometry render see-through.
  */
 export const TerrainBrushCursor: React.FC<{
-  lockedPointer: { clientX: number; clientY: number } | null
+  focusRef: MutableRefObject<TerrainBrushFocus | null>
   site: SiteNode
-}> = ({ lockedPointer, site }) => {
+}> = ({ focusRef, site }) => {
   const { camera, gl } = useThree()
   const radius = useEditor((state) => state.terrainBrush.radius)
   const shape = useEditor((state) => state.terrainBrush.shape)
   // The ring is the only thing at the point of action that can say what the next
   // drag will do — its geometry is identical for all four verbs, so colour is the
-  // one channel left. The mapping lives in `lib/terrain-verb-color` because the
-  // panel's verb picker paints the same swatches and the two must not drift.
+  // one channel left. Keep the mapping centralized in `lib/terrain-verb-color`.
   const verb = useEditor((state) => state.terrainVerb)
   const sampling = useEditor((state) => state.terrainSampling)
   const color = brushRingColor(verb, sampling)
@@ -100,14 +105,14 @@ export const TerrainBrushCursor: React.FC<{
         y: -((event.clientY - rect.top) / rect.height) * 2 + 1,
       }
     }
-    const clear = () => {
+    const freeze = () => {
       pointerRef.current = null
     }
     canvas.addEventListener('pointermove', track)
-    canvas.addEventListener('pointerleave', clear)
+    canvas.addEventListener('pointerleave', freeze)
     return () => {
       canvas.removeEventListener('pointermove', track)
-      canvas.removeEventListener('pointerleave', clear)
+      canvas.removeEventListener('pointerleave', freeze)
     }
   }, [gl])
 
@@ -116,7 +121,7 @@ export const TerrainBrushCursor: React.FC<{
     const center = centerRef.current
     const pointer = pointerRef.current
     if (!(line && center)) return
-    if (!(lockedPointer || pointer)) {
+    if (!(pointer || focusRef.current)) {
       line.visible = false
       center.visible = false
       if (heightRef.current) heightRef.current.style.display = 'none'
@@ -132,22 +137,27 @@ export const TerrainBrushCursor: React.FC<{
     const surface: TerrainField = stroke?.field ?? terrainFieldOf(site) ?? sculptFieldForSite(site)
     const aim: TerrainField = stroke?.snapshot ?? surface
 
-    if (lockedPointer) {
-      const rect = gl.domElement.getBoundingClientRect()
-      ndc.current.set(
-        ((lockedPointer.clientX - rect.left) / rect.width) * 2 - 1,
-        -((lockedPointer.clientY - rect.top) / rect.height) * 2 + 1,
-      )
-    } else if (pointer) {
+    let hit: { x: number; z: number } | null = null
+    if (pointer) {
       ndc.current.set(pointer.x, pointer.y)
+      raycaster.current.setFromCamera(ndc.current, camera)
+      const { origin, direction } = raycaster.current.ray
+      hit = raycastTerrain(
+        aim,
+        [origin.x, origin.y, origin.z],
+        [direction.x, direction.y, direction.z],
+      )
+      if (hit && terrainPointInsideSite(site, hit.x, hit.z)) {
+        focusRef.current = { radius: Math.max(radius, minBrushRadius(aim)), x: hit.x, z: hit.z }
+      } else {
+        hit = null
+        focusRef.current = null
+      }
+    } else if (focusRef.current) {
+      hit = terrainPointInsideSite(site, focusRef.current.x, focusRef.current.z)
+        ? focusRef.current
+        : null
     }
-    raycaster.current.setFromCamera(ndc.current, camera)
-    const { origin, direction } = raycaster.current.ray
-    const hit = raycastTerrain(
-      aim,
-      [origin.x, origin.y, origin.z],
-      [direction.x, direction.y, direction.z],
-    )
     if (!hit) {
       line.visible = false
       center.visible = false
@@ -164,6 +174,7 @@ export const TerrainBrushCursor: React.FC<{
     // gets — on a coarse lot the ring would be the one thing insisting the brush
     // is 2 m wide while the stroke is 1.5 spacings wide.
     const drawn = Math.max(radius, minBrushRadius(aim))
+    focusRef.current = { radius: drawn, x: hit.x, z: hit.z }
     for (let index = 0; index <= RING_SEGMENTS; index++) {
       const angle = (index / RING_SEGMENTS) * Math.PI * 2
       // The square brush uses Chebyshev distance, so its rim is a square: scale

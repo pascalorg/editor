@@ -5,7 +5,6 @@ import {
   collectAlignmentAnchors,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
-  GROUND_SUPPORT_ID,
   type GridEvent,
   getWallMiterBoundaryPoints,
   type LevelNode,
@@ -13,7 +12,6 @@ import {
   resolveAlignment,
   resolveBuildingForLevel,
   sceneRegistry,
-  terrainSupportLift,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -30,11 +28,15 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  type HorizontalConstructionPlane,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  publishHorizontalConstructionPlane,
   publishPlacementSurface,
+  resampleTerrainConstructionPlane,
+  resolveEventConstructionPlane,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
@@ -91,19 +93,6 @@ const SURFACE_UP = new Vector3(0, 1, 0)
 const surfacePointScratch = new Vector3()
 const wallSurfaceWorldScratch = new Vector3()
 const wallSurfaceLocalScratch = new Vector3()
-
-type DraftConstructionPlane = {
-  /** Building-local Y used by the cursor and wall preview. */
-  localY: number
-  /** World Y published to the shared placement grid. */
-  worldY: number
-  /** Level-local Y used as the support election cap on commit. */
-  elevation: number | null
-  /** Surface source selected at the first click. */
-  supportSlabId: string | null
-  /** Optional scene node from which this frozen plane was derived. */
-  sourceNodeId: AnyNodeId | null
-}
 
 type DraftMeasurementState = {
   lengthLabel: string
@@ -494,7 +483,7 @@ export const WallTool: React.FC = () => {
   // the "segment tees into an existing wall" chain-termination test, so
   // snapping onto the chain's own segments never reads as a join.
   const chainWallIds = useRef<string[]>([])
-  const constructionPlane = useRef<DraftConstructionPlane | null>(null)
+  const constructionPlane = useRef<HorizontalConstructionPlane | null>(null)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -563,78 +552,10 @@ export const WallTool: React.FC = () => {
           })
         : null
 
-    const eventConstructionPlane = (
-      event: GridEvent,
-      pointed: ReturnType<typeof pointedSurfaceFor>,
-    ): DraftConstructionPlane => {
-      if (pointed) {
-        return {
-          localY: pointed.localPoint?.[1] ?? event.localPosition[1],
-          worldY: pointed.worldY,
-          elevation: pointed.elevation,
-          supportSlabId: pointed.supportSlabId,
-          sourceNodeId: pointed.sourceNodeId,
-        }
-      }
-
-      let elevation: number | null = null
-      const currentLevelId = useViewer.getState().selection.levelId
-      const levelMesh = currentLevelId
-        ? sceneRegistry.nodes.get(currentLevelId as AnyNodeId)
-        : undefined
-      if (levelMesh) {
-        wallSurfaceLocalScratch.set(event.position[0], event.position[1], event.position[2])
-        levelMesh.worldToLocal(wallSurfaceLocalScratch)
-        elevation = wallSurfaceLocalScratch.y
-      }
-      return {
-        localY: event.localPosition[1],
-        worldY: event.position[1],
-        elevation,
-        supportSlabId: null,
-        sourceNodeId: null,
-      }
-    }
-
-    const groundConstructionPlaneAt = (
-      plane: DraftConstructionPlane,
-      point: WallPlanPoint,
-    ): DraftConstructionPlane => {
-      if (plane.supportSlabId !== GROUND_SUPPORT_ID || plane.sourceNodeId) return plane
-
-      const currentLevelId = useViewer.getState().selection.levelId
-      if (!currentLevelId) return plane
-      const elevation = terrainSupportLift(
-        useScene.getState().nodes,
-        currentLevelId,
-        point[0],
-        point[1],
-      )
-      if (elevation == null) return plane
-
-      const levelMesh = sceneRegistry.nodes.get(currentLevelId as AnyNodeId)
-      wallSurfaceWorldScratch.set(point[0], elevation, point[1])
-      if (levelMesh) levelMesh.localToWorld(wallSurfaceWorldScratch)
-      const worldY = wallSurfaceWorldScratch.y
-
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : undefined
-      wallSurfaceLocalScratch.copy(wallSurfaceWorldScratch)
-      if (buildingMesh) buildingMesh.worldToLocal(wallSurfaceLocalScratch)
-
-      return {
-        localY: wallSurfaceLocalScratch.y,
-        worldY,
-        elevation,
-        supportSlabId: GROUND_SUPPORT_ID,
-        sourceNodeId: null,
-      }
-    }
-
     const snappedWallConstructionPlane = (
       targetWallIds: string[],
       walls: WallNode[],
-    ): DraftConstructionPlane | null => {
+    ): HorizontalConstructionPlane | null => {
       const activeWallIds = new Set(walls.map((wall) => wall.id))
       const targetIds = targetWallIds.filter((id) => activeWallIds.has(id as WallNode['id']))
       if (targetIds.length === 0) return null
@@ -645,7 +566,7 @@ export const WallTool: React.FC = () => {
       const levelMesh = currentLevelId
         ? sceneRegistry.nodes.get(currentLevelId as AnyNodeId)
         : undefined
-      let resolved: DraftConstructionPlane | null = null
+      let resolved: HorizontalConstructionPlane | null = null
 
       for (const id of targetIds) {
         const targetWall = walls.find((wall) => wall.id === id)
@@ -684,13 +605,6 @@ export const WallTool: React.FC = () => {
       return resolved
     }
 
-    const publishConstructionPlane = (event: GridEvent, plane: DraftConstructionPlane) => {
-      publishPlacementSurface(
-        surfacePointScratch.set(event.position[0], plane.worldY, event.position[2]),
-        SURFACE_UP,
-      )
-    }
-
     const stopDrafting = () => {
       buildingState.current = 0
       constructionPlane.current = null
@@ -720,7 +634,7 @@ export const WallTool: React.FC = () => {
       // will elect. Aiming past the deck edge drops it back to the floor.
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
       if (constructionPlane.current) {
-        publishConstructionPlane(event, constructionPlane.current)
+        publishHorizontalConstructionPlane(event, constructionPlane.current)
       } else if (pointed) {
         publishPlacementSurface(
           surfacePointScratch.set(event.position[0], pointed.worldY, event.position[2]),
@@ -803,8 +717,8 @@ export const WallTool: React.FC = () => {
           ),
         )
       } else {
-        const hoverPlane = groundConstructionPlaneAt(
-          eventConstructionPlane(event, pointed),
+        const hoverPlane = resampleTerrainConstructionPlane(
+          resolveEventConstructionPlane(event, pointed),
           gridPosition,
         )
         cursorRef.current.position.set(gridPosition[0], hoverPlane.localY, gridPosition[1])
@@ -837,13 +751,13 @@ export const WallTool: React.FC = () => {
         const snappedStart = alignPoint(snapResult.point)
         const resolvedPlane =
           (pointed?.sourceNodeId
-            ? eventConstructionPlane(event, pointed)
+            ? resolveEventConstructionPlane(event, pointed)
             : pointMatches(snappedStart, snapResult.point)
               ? snappedWallConstructionPlane(snapResult.targetWallIds, walls)
-              : null) ?? eventConstructionPlane(event, pointed)
-        const plane = groundConstructionPlaneAt(resolvedPlane, snappedStart)
+              : null) ?? resolveEventConstructionPlane(event, pointed)
+        const plane = resampleTerrainConstructionPlane(resolvedPlane, snappedStart)
         constructionPlane.current = plane
-        publishConstructionPlane(event, plane)
+        publishHorizontalConstructionPlane(event, plane)
         gridPosition = snappedStart
         startingPoint.current.set(snappedStart[0], plane.localY, snappedStart[1])
         chainFirstVertex.current = startingPoint.current.clone()

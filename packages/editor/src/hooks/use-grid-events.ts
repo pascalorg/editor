@@ -9,6 +9,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { getPlacementSurface } from '../lib/active-placement-surface'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
 
 /**
@@ -51,11 +52,14 @@ export function useGridEvents(gridY: number) {
       // drop the gesture), so the argument in this closure is the value from mount.
       // `constant = -gridY` by construction in the effect above.
       const { origin, direction } = raycaster.current.ray
-      const hit = resolveTerrainGroundHit(
-        [origin.x, origin.y, origin.z],
-        [direction.x, direction.y, direction.z],
-        -groundPlane.current.constant,
-      )
+      const fixedConstructionPlane = getPlacementSurface()?.projection === 'fixed-plane'
+      const hit = fixedConstructionPlane
+        ? null
+        : resolveTerrainGroundHit(
+            [origin.x, origin.y, origin.z],
+            [direction.x, direction.y, direction.z],
+            -groundPlane.current.constant,
+          )
       if (hit) return intersectionPoint.current.set(hit.x, hit.y, hit.z).clone()
 
       // Intersect with ground plane

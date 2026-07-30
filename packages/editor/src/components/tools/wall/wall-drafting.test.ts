@@ -135,10 +135,9 @@ describe('createWallOnCurrentLevel', () => {
 
   test('2D terrain construction options freeze the first-point elevation and wall height', () => {
     const field = createTerrainField({ cols: 5, rows: 5, spacing: 1, origin: [-2, -2] })
-    const terrain = applyHeightPatch(
-      field,
-      flattenPatch(field, { minX: -2, minZ: -2, maxX: 2, maxZ: 2 }, 1.5),
-    )
+    const patch = flattenPatch(field, { minX: -2, minZ: -2, maxX: 2, maxZ: 2 }, 1.5)
+    if (!patch) throw new Error('Expected terrain patch')
+    const terrain = applyHeightPatch(field, patch)
     const site = {
       id: 'site_test',
       type: 'site',
@@ -148,7 +147,7 @@ describe('createWallOnCurrentLevel', () => {
       metadata: {},
       children: ['building_test'],
       terrain: encodeTerrainField(terrain),
-    } as AnyNode
+    } as unknown as AnyNode
     const building = {
       id: 'building_test',
       type: 'building',

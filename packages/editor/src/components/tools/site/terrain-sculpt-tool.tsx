@@ -16,14 +16,21 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Raycaster, Vector2 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
-import { commitStroke, resolveFlattenTarget, sculptFieldForSite } from '../../../lib/terrain-sculpt'
+import { sfxEmitter } from '../../../lib/sfx-bus'
+import {
+  clipTerrainPatchToSite,
+  commitStroke,
+  resolveFlattenTarget,
+  sculptFieldForSite,
+  terrainPointInsideSite,
+} from '../../../lib/terrain-sculpt'
 import useEditor from '../../../store/use-editor'
+import { isBoxSelectPointerSuppressed } from '../select/box-select-state'
 import { strokePointerAction } from './stroke-pointer-ownership'
-import { TerrainBrushContextMenu } from './terrain-brush-context-menu'
-import { TerrainBrushCursor } from './terrain-brush-cursor'
+import { TerrainBrushCursor, type TerrainBrushFocus } from './terrain-brush-cursor'
 import { TerrainSculptGrid } from './terrain-sculpt-grid'
 
 /**
@@ -51,14 +58,7 @@ import { TerrainSculptGrid } from './terrain-sculpt-grid'
  */
 export const TerrainSculptTool: React.FC = () => {
   const { camera, gl } = useThree()
-  const [brushMenuAnchor, setBrushMenuAnchor] = useState<{
-    clientX: number
-    clientY: number
-  } | null>(null)
-  const handleBrushMenuAnchorChange = useCallback(
-    (anchor: { clientX: number; clientY: number } | null) => setBrushMenuAnchor(anchor),
-    [],
-  )
+  const brushFocusRef = useRef<TerrainBrushFocus | null>(null)
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const verb = useEditor((state) => state.terrainVerb)
@@ -111,7 +111,8 @@ export const TerrainSculptTool: React.FC = () => {
         [origin.x, origin.y, origin.z],
         [direction.x, direction.y, direction.z],
       )
-      return hit ? [hit.x, hit.z] : null
+      const target = latest.current.site
+      return hit && target && terrainPointInsideSite(target, hit.x, hit.z) ? [hit.x, hit.z] : null
     }
 
     /** Which pointer owns the stroke in flight, for `strokePointerAction`. */
@@ -119,6 +120,11 @@ export const TerrainSculptTool: React.FC = () => {
 
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
+      if (useEditor.getState().mode !== 'terrain-sculpt') return
+      // Polygon handles run through R3F on this same canvas. They mark the
+      // pointer before this DOM listener sees it, so a flag/midpoint press can
+      // switch cleanly into boundary editing without also depositing a dab.
+      if (isBoxSelectPointerSuppressed(event)) return
       // A second pointer means the gesture was navigation, not sculpting: one
       // finger paints (`editorOwnsOneFingerDrag` gives the editor one-finger
       // priority in this mode) but two fingers always pinch-zoom, and by the time
@@ -173,8 +179,14 @@ export const TerrainSculptTool: React.FC = () => {
         target:
           activeVerb === 'flatten' ? resolveFlattenTarget(field, explicit, ...point) : undefined,
       })
-      strokeRef.current = { stroke, field, siteId: target.id, pointerId: event.pointerId }
+      strokeRef.current = {
+        stroke,
+        field,
+        siteId: target.id,
+        pointerId: event.pointerId,
+      }
       useLiveTerrain.getState().begin(target.id, field)
+      sfxEmitter.emit('sfx:terrain-sculpt-start', activeVerb)
 
       // Capture so a stroke that leaves the canvas still ends. Without this a
       // drag released outside the viewport would leave the live stroke armed and
@@ -204,8 +216,11 @@ export const TerrainSculptTool: React.FC = () => {
       }
       const point = groundPoint(event, active.field)
       if (!point) return
-      const patch = advanceStroke(active.stroke, point[0], point[1])
-      if (!patch) return
+      const brushPatch = advanceStroke(active.stroke, point[0], point[1])
+      if (!brushPatch) return
+      const target = latest.current.site
+      if (!target || target.id !== active.siteId) return
+      const patch = clipTerrainPatchToSite(active.field, brushPatch, target)
       const next = applyHeightPatch(active.field, patch)
       // The stroke's *snapshot* stays the pointer-down field (that is what makes
       // it saturating); `active.field` is only the running result the mesh shows.
@@ -242,6 +257,7 @@ export const TerrainSculptTool: React.FC = () => {
       }
       strokeRef.current = null
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
+      sfxEmitter.emit('sfx:terrain-sculpt-stop')
 
       // Commit before ending the live stroke: `terrainFieldOf` prefers the live
       // field, so ending first would flash one frame of the pre-stroke ground
@@ -266,6 +282,7 @@ export const TerrainSculptTool: React.FC = () => {
       if (canvas.hasPointerCapture(active.pointerId)) {
         canvas.releasePointerCapture(active.pointerId)
       }
+      sfxEmitter.emit('sfx:terrain-sculpt-stop')
       useLiveTerrain.getState().end(active.siteId)
       return true
     }
@@ -322,6 +339,7 @@ export const TerrainSculptTool: React.FC = () => {
       // stroke armed — every reader prefers it over the persisted terrain, so a
       // leaked stroke is a scene that shows ground the scene graph does not have.
       abandonStroke()
+      sfxEmitter.emit('sfx:terrain-sculpt-stop')
     }
   }, [camera, gl])
 
@@ -329,13 +347,8 @@ export const TerrainSculptTool: React.FC = () => {
 
   return (
     <>
-      <TerrainSculptGrid site={site} />
-      <TerrainBrushCursor lockedPointer={brushMenuAnchor} site={site} />
-      <TerrainBrushContextMenu
-        canvas={gl.domElement}
-        onAnchorChange={handleBrushMenuAnchorChange}
-        site={site}
-      />
+      <TerrainSculptGrid focusRef={brushFocusRef} site={site} />
+      <TerrainBrushCursor focusRef={brushFocusRef} site={site} />
     </>
   )
 }

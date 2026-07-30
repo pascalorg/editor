@@ -22,9 +22,12 @@ The invariant, in one sentence:
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
 | `slab.elevation` | The walking surface (top), level-local. | Default 0.05. |
 | `slab.thickness` | Grows **downward**: the solid occupies `[elevation − thickness, elevation]`. | Default 0.05. |
-| `slab.recessed` | Pool intent: open shell, floor at (negative) `elevation`, inner walls up to the plane. Excluded from "covering" queries and wall-face adoption. | Solid slab. |
+| `slab.recessed` | Recess intent: open shell whose floor is `elevation` and whose rim is `recessedRimElevation`. Excluded from "covering" queries and wall-face adoption. | Solid slab. |
+| `slab.recessedRimElevation` | Optional rim anchor for a raised/lowered recess. Relative presets preserve this anchor while changing depth. | Level plane (`0`), preserving legacy pools. |
+| `slab.fillToTerrain` | Adds a terrain-following perimeter foundation below a solid slab's fixed underside. The walking surface and authored structural thickness stay flat. | No terrain foundation. |
 | `supportSlabId` | Persisted support host on walls and all floor-placed kinds. Written at commit **only when overlapping supports disagree on elevation**; `'ground'` sentinel pins bare ground under a deck. | Support is elected per query (coverage election for walls, footprint max for items). |
 | `wall.supportOffset` | Optional level-local delta from the elected support. Terrain wall chains use it to keep every segment on the first point's construction plane while storing only one number, never terrain samples. | Zero offset: the wall sits directly on its elected slab or sculpted ground source. |
+| `fence.supportOffset` | Optional level-local delta from the fence's slab host or level plane. It translates the complete fence while preserving height. | Zero offset: the fence sits directly on its host or level plane. |
 | `wall.fillToTerrain` | Extends the wall downward from its authored base to the terrain with independently sampled left/right faces. The wall body height and top stay unchanged. | Fixed base with no terrain infill. |
 | `stair.deckSlabId` | Destination deck: rise follows `deck.elevation − the stair's own elected base` live; cutout sync disabled while attached. | Destination is a level. |
 | `stair.totalRise` | Explicit custom rise (wins over everything). | Follows: derived from the deck or the containing level; `syncStairRises` converges straight-stair segments to the resolved rise. |
@@ -46,19 +49,39 @@ Two schema rules protect these semantics:
 | `resolveCeilingHeight` | `services/level-height.ts` | A ceiling's effective height (explicit or follows) |
 | `resolveStairTotalRise`, `syncStairRises` | `systems/stair/stair-rise.ts` | Stair rise precedence + straight-flight convergence |
 | `computeWallSlabSupport`, `getSlabSupportForItem`, `getSupportCandidatesForFootprint` | `systems/slab/slab-support.ts` + spatial-grid manager | Support election (rendered polygons, host-preferring, optional `maxElevation` cap) |
-| `clampSlabElevationForWalls`, `applySlabTopChange`, `SLAB_UNSTICK_THRESHOLD` | slab-support + `nodes/slab/elevation-limit.ts` | Slab edit clamps and the adaptive drag/panel rules |
+| `resolveSlabPlacementElevation` | `systems/slab/slab-placement.ts` | Translates a solid slab's authored top/thickness interval onto a captured base plane; recessed slabs stay level-relative |
+| `getSlabBaseElevation`, `applySlabBaseElevationChange`, `applySlabThicknessChange` | `nodes/slab/elevation-limit.ts` | Separates whole-body underside placement from fixed-base thickness editing |
+| `resolveFenceLiftElevation` | `nodes/fence/lift.ts` | Fence slab-host elevation plus its optional manual support offset |
+| `clampSlabElevationForWalls` | slab-support + `nodes/slab/elevation-limit.ts` | Slab top clamp under plane-bound walls |
 
 ## Clamp rules (clamp, never ask)
 
 - A slab under plane-bound walls clamps its elevation to `level height − MIN_WALL_HEIGHT` (0.5).
 - Ceilings clamp (at write time, and reactively downward via space-detection) to `min(level top, covering-slab underside) − 0.01`.
 - Plane-bound wall tops clamp to covering-slab undersides — a thick or flush upper-level slab shortens the walls below it (Revit's attach-to-floor-bottom, automatic). Explicit-height walls are exempt.
-- Slab vertical editing is adaptive: the panel moves placement (thickness untouched); the viewport drag stretches a grounded slab (elevation and thickness together) up to `SLAB_UNSTICK_THRESHOLD` (0.4), then unsticks it into a 0.05-thick deck; floating decks move with thickness preserved and re-ground at underside 0; pools keep the drag-through-zero gesture.
+- Solid slab controls have non-overlapping contracts: the cube translates the occupied interval while preserving `thickness`; the chevron and panel thickness control hold the underside fixed and move the walking surface by writing `thickness` and `elevation` together. Panel elevation translates the body while preserving thickness. Recesses store their rim separately so floor/rim/depth controls and presets remain relative to the same anchor.
+- Structural elevation trackers move the reference base, not the body dimensions. A slab tracker moves its underside and keeps `thickness`; a wall tracker writes `supportOffset` and materializes its current body `height`; a fence tracker writes `supportOffset` and keeps `height`. Recessed slabs retain their separate rim/depth control.
 - Wall-face adoption in `getRenderableSlabPolygon` applies only to grounded slabs (`elevation − thickness ≤ 0.01`, not recessed) — floating decks keep their drawn polygon and are skipped as seam candidates.
 
 ## Pointer-decided placement
 
 Grid events intersect a plane that rides the ghost's elevation, so any stacked-surface decision must come from the true camera ray, not the plane hit: `getPointedSupportSurface` returns the nearest eligible surface plus the crossing point, and both the support-election cap (`maxElevation`) and the cursor XZ derive from that single computation. Pointing under a deck elects the floor; pointing at the deck top elects the deck. Wall drafting may additionally include upward-facing wall, stackable-item, and column meshes. Those node-top hits freeze a scalar construction plane for the throw; they are not a persistent hosting edge and do not follow later host edits. Commits persist the elected slab/ground source plus `wall.supportOffset`. 2D floorplan placement has no camera ray and keeps max-election.
+
+Wall and slab drafting share the horizontal construction-plane resolver. A slab freezes the
+first snapped vertex's plane, keeps later vertices on that flat plane, and translates its authored
+vertical interval onto the captured base at commit. It never drapes thickness or individual
+vertices over terrain. Optional terrain following is a separate perimeter foundation from the
+fixed underside; it never changes the slab interval. Recessed slabs keep an explicit rim anchor. A locked
+construction plane is tagged `fixed-plane` so a plane at world Y=0 cannot be mistaken for the
+terrain query plane on later pointer moves.
+
+Auto-room surfaces derive their vertical placement from the enclosing walls when every boundary
+wall agrees on one base and top plane. The floor keeps its established 0.05 m walking-surface
+offset above that base; the ceiling sits 0.01 m below the common wall top. Existing
+`autoFromWalls` surfaces reconcile with later wall support-offset changes. Manual surfaces are
+never rewritten, and a mixed-elevation enclosure keeps its existing/fallback placement rather
+than choosing an arbitrary wall. Auto slabs are excluded from this wall-base election so a
+derived floor cannot recursively lift its own walls and then itself.
 
 ## Load migration (lives in `migrateNodes` Pass 3, indefinitely)
 
@@ -75,7 +98,7 @@ Because community autosave only persists after the first post-load edit, the mig
 - **Ordinals are semantic.** `level < 0` renders "Basement N"; `level === 0` is the ground-floor lookup. Never renumber without the zero anchor.
 - **Boundary geometry.** Auto slabs derive polygons from wall centerlines, so wall/ceiling clamp samples sit exactly on polygon edges — always use the boundary-inclusive band-overlap helpers (`wallOverlapsSlabFootprint`, `slabCoversPoint`), never raw ray-cast point-in-polygon on those paths.
 - **Straight stairs build from stored segment heights**, not the resolved rise — any rise change must go through `syncStairRises` (applied by `StairOpeningSystem`, history-paused, one microtask after store updates so the spatial grid has settled).
-- **Reactivity is explicit.** A `level.height` change dirties that level's walls/stairs/ceilings/fences; a slab change dirties the level below's walls/ceilings and deck-attached stairs; terrain changes dirty ground-hosted and `fillToTerrain` walls (`spatial-grid-sync.ts`). If a new consumer reads these bounds, wire its dirty rule there.
+- **Reactivity is explicit.** A `level.height` change dirties that level's walls/stairs/ceilings/fences; a slab change dirties overlapping same-level supports, the level below's walls/ceilings, and deck-attached stairs; terrain changes dirty ground-hosted structures and `fillToTerrain` walls/slabs (`spatial-grid-sync.ts`). Slab handles reuse the same slab-change dependency helper for live previews. If a new consumer reads these bounds, wire its dirty rule there.
 - **Host lifecycle.** Deleting a slab strips `supportSlabId`/`deckSlabId` from survivors in the same undo commit; a host merely reshaped away falls back silently and resumes if the slab returns.
 - **Clone paths differ.** `clone-scene-graph.ts` remaps `supportSlabId`/`deckSlabId`; the editor clipboard (`scene-clipboard.ts`) intentionally does not (it re-elects); room placement remaps them (fixed in the private repo's `room-placement.ts`). When adding a new clone/instantiation path, remap both fields.
 

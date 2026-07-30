@@ -5,12 +5,14 @@ import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/te
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
 import type { AnyNode, AnyNodeId } from '../../schema'
+import useLiveTerrain from '../../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
 import {
   initSpatialGridSync,
   markCoveringDependentsBelow,
   markLevelHeightDependents,
+  markSlabChangeDependents,
   markTerrainSupportDependents,
 } from './spatial-grid-sync'
 import { GROUND_SUPPORT_ID } from './support-host-id'
@@ -293,6 +295,37 @@ describe('sync dirty helpers (pure)', () => {
     markCoveringDependentsBelow('level_0', nodes, markDirty)
     expect(marked).toEqual([])
   })
+
+  test('markSlabChangeDependents covers top, deck, and underside consumers', () => {
+    const previous = makeSlab('slab_a', 'level_1', { elevation: 0.2, thickness: 0.2 })
+    const next = { ...previous, elevation: 0.4, thickness: 0.4 } as AnyNode
+    const sameLevelWall = makeChild('wall_same', 'wall', 'level_1')
+    const attachedStair = {
+      ...makeChild('stair_a', 'stair', 'level_1'),
+      deckSlabId: 'slab_a',
+    } as AnyNode
+    const belowWall = makeChild('wall_below', 'wall', 'level_0')
+    const belowCeiling = makeChild('ceiling_below', 'ceiling', 'level_0')
+    const nodes = nodesFor(
+      makeLevel('level_0', 0, 2.5, ['wall_below', 'ceiling_below']),
+      makeLevel('level_1', 1, 2.5, ['slab_a', 'wall_same', 'stair_a']),
+      next,
+      sameLevelWall,
+      attachedStair,
+      belowWall,
+      belowCeiling,
+    )
+
+    const { marked, markDirty } = collect()
+    markSlabChangeDependents(previous as never, next as never, nodes, markDirty)
+
+    expect([...new Set(marked)].sort()).toEqual([
+      'ceiling_below',
+      'stair_a',
+      'wall_below',
+      'wall_same',
+    ])
+  })
 })
 
 // The sculpt-desync rule. Nothing else in this file gates on a *node's* support
@@ -365,11 +398,13 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
   beforeEach(() => {
     nodeRegistry._reset()
     registerFloorPlaced('column')
+    useLiveTerrain.getState().endAll()
   })
 
   afterEach(() => {
     stopSync()
     stopSync = () => {}
+    useLiveTerrain.getState().endAll()
     nodeRegistry._reset()
   })
 
@@ -387,6 +422,29 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
     })
 
     expect(useScene.getState().dirtyNodes.has('column_a' as AnyNodeId)).toBe(true)
+  })
+
+  test('live dabs re-elevate dependents without writing the scene graph', () => {
+    const level = makeLevel('level_0', 0, 2.5, ['column_a'])
+    const column = makeFloorNode('column_a', 'level_0', [3, 0, 3])
+    const site = makeSite()
+    startWith(nodesFor(level, column, site), ['level_0', 'site_test'])
+    const nodesBeforeStroke = useScene.getState().nodes
+
+    const base = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+    const patch = flattenPatch(base, { minX: 2, minZ: 2, maxX: 5, maxZ: 5 }, PLATEAU_HEIGHT)
+    const live = applyHeightPatch(base, patch as never)
+    useLiveTerrain.getState().begin(site.id, base)
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+
+    useLiveTerrain.getState().advance(site.id, live, patch as never)
+
+    expect(useScene.getState().nodes).toBe(nodesBeforeStroke)
+    expect(dirtyIds()).toEqual(['column_a'])
+
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+    useLiveTerrain.getState().end(site.id)
+    expect(dirtyIds()).toEqual(['column_a'])
   })
 
   test('clearing the terrain marks them too, so they come back down with the ground', () => {
@@ -476,11 +534,13 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
     expect(marked).toEqual(['column_host'])
   })
 
-  test('markTerrainSupportDependents includes ground-hosted and terrain-fill walls', () => {
+  test('markTerrainSupportDependents includes ground-hosted and terrain-fill structures', () => {
     const level = makeLevel('level_0', 0, 2.5, [
       'wall_ground',
       'wall_fill',
       'wall_other',
+      'slab_fill',
+      'slab_other',
       'column_a',
     ])
     const nodes = nodesFor(
@@ -494,12 +554,14 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
         fillToTerrain: true,
       } as AnyNode,
       makeChild('wall_other', 'wall', 'level_0'),
+      makeSlab('slab_fill', 'level_0', { fillToTerrain: true } as Partial<AnyNode>),
+      makeSlab('slab_other', 'level_0'),
       makeFloorNode('column_a', 'level_0', [3, 0, 3]),
     )
 
     const marked: string[] = []
     markTerrainSupportDependents(nodes, (id) => marked.push(id))
 
-    expect(marked).toEqual(['wall_ground', 'wall_fill', 'column_a'])
+    expect(marked).toEqual(['wall_ground', 'wall_fill', 'slab_fill', 'column_a'])
   })
 })

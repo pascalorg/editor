@@ -12,11 +12,13 @@ import {
 import {
   brushRadiusRange,
   clampBrushRadius,
+  clipTerrainPatchToSite,
   fieldExtentForSite,
   flattenSite,
   resetSiteTerrain,
   resolveFlattenTarget,
   sculptFieldForSite,
+  terrainPointInsideSite,
 } from './terrain-sculpt'
 
 // `updateNode` batches its dirty-node flush through rAF, which bun's runtime does
@@ -145,6 +147,40 @@ describe('sculptFieldForSite', () => {
     const field = sculptFieldForSite(target)
     expect(field.cols).toBe(fieldExtentForSite(target).cols)
     expect(heightAt(field, 0, 0)).toBeCloseTo(0, 6)
+  })
+})
+
+describe('site footprint', () => {
+  const concaveSite = site([
+    [0, 0],
+    [4, 0],
+    [4, 2],
+    [2, 2],
+    [2, 4],
+    [0, 4],
+  ])
+
+  test('includes the boundary but excludes the padded field and concave notch', () => {
+    expect(terrainPointInsideSite(concaveSite, 0, 2)).toBe(true)
+    expect(terrainPointInsideSite(concaveSite, 1, 3)).toBe(true)
+    expect(terrainPointInsideSite(concaveSite, 3, 3)).toBe(false)
+    expect(terrainPointInsideSite(concaveSite, -1, 2)).toBe(false)
+  })
+
+  test('a brush patch preserves samples outside the property polygon', () => {
+    const field = createTerrainField({ cols: 5, rows: 5, spacing: 1, origin: [0, 0] })
+    const heights = new Int16Array(25)
+    heights.fill(100)
+    const clipped = clipTerrainPatchToSite(
+      field,
+      { col0: 0, row0: 0, cols: 5, rows: 5, heights },
+      concaveSite,
+    )
+
+    expect(clipped.heights[1 * 5 + 1]).toBe(100)
+    expect(clipped.heights[3 * 5 + 3]).toBe(0)
+    expect(clipped.heights[2 * 5 + 0]).toBe(100)
+    expect(clipped.heights[2 * 5 + 4]).toBe(100)
   })
 })
 

@@ -32,6 +32,7 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
+  resolveSlabPlacementElevation,
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
@@ -43,6 +44,8 @@ import {
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
+  spatialGridManager,
+  terrainSupportLift,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -5544,6 +5547,7 @@ export function FloorplanPanel({
   )
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
+  const slabPlacementBaseRef = useRef<number | null>(null)
   // Mirror the per-click draft START anchors into the shared draft store so
   // out-of-tree consumers (such as host-owned preview publishers) see the whole open
   // segment without subscribing to this panel's state.
@@ -8448,6 +8452,7 @@ export function FloorplanPanel({
   }, [])
   const clearSlabPlacementDraft = useCallback(() => {
     setSlabDraftPoints([])
+    slabPlacementBaseRef.current = null
   }, [])
   const clearZonePlacementDraft = useCallback(() => {
     setZoneDraftPoints([])
@@ -8572,18 +8577,22 @@ export function FloorplanPanel({
   // the tools' own `commitSlab/CeilingDrawing`) are called ONLY in 2D-only view
   // so split / 3D keep their single-owner tool commit (no double-create).
   const createSlabOnCurrentLevel = useCallback(
-    (points: WallPlanPoint[]) => {
+    (points: WallPlanPoint[], baseElevation: number | null) => {
       if (!levelId) {
         return null
       }
       const { createNode, nodes } = useScene.getState()
       const slabCount = Object.values(nodes).filter((node) => node.type === 'slab').length
       const defaults = useEditor.getState().toolDefaults.slab ?? {}
-      const slab = SlabNodeSchema.parse({
+      const authored = SlabNodeSchema.parse({
         ...defaults,
         name: `Slab ${slabCount + 1}`,
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
+      const slab = {
+        ...authored,
+        elevation: resolveSlabPlacementElevation(authored, baseElevation),
+      }
       createNode(slab, levelId)
       sfxEmitter.emit('sfx:structure-build')
       setSelection({ selectedIds: [slab.id] })
@@ -10179,16 +10188,32 @@ export function FloorplanPanel({
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
         // 2D-only view: the 3D tool can't commit, so close the polygon here.
         if (useEditor.getState().viewMode === '2d') {
-          createSlabOnCurrentLevel(slabDraftPoints)
+          createSlabOnCurrentLevel(slabDraftPoints, slabPlacementBaseRef.current)
         }
         clearDraft()
         return
       }
 
+      if (slabDraftPoints.length === 0) {
+        const recessed = useEditor.getState().toolDefaults.slab?.recessed === true
+        if (!levelId || recessed) {
+          slabPlacementBaseRef.current = null
+        } else {
+          const support = spatialGridManager.getPointedSupportSurface(
+            levelId,
+            [point[0], 1_000_000, point[1]],
+            [0, -1, 0],
+          )
+          slabPlacementBaseRef.current =
+            support.slabId != null
+              ? support.elevation
+              : terrainSupportLift(useScene.getState().nodes, levelId, point[0], point[1])
+        }
+      }
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints, setCursorPoint],
+    [clearDraft, createSlabOnCurrentLevel, levelId, slabDraftPoints, setCursorPoint],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -10213,7 +10238,7 @@ export function FloorplanPanel({
 
       // 2D-only view: the 3D tool can't commit, so create the slab here.
       if (useEditor.getState().viewMode === '2d') {
-        createSlabOnCurrentLevel(nextPoints)
+        createSlabOnCurrentLevel(nextPoints, slabPlacementBaseRef.current)
       }
       clearDraft()
     },

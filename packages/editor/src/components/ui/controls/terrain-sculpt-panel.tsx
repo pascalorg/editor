@@ -7,20 +7,18 @@ import {
   type TerrainVerb,
   useScene,
 } from '@pascal-app/core'
-import type { LucideIcon } from 'lucide-react'
-import { ArrowDownToLine, Mountain, MoveDown, MoveUp, Pipette, Waves } from 'lucide-react'
+import { Mountain, Pipette } from 'lucide-react'
 import { brushRadiusRange, flattenSite, resetSiteTerrain } from '../../../lib/terrain-sculpt'
-import { TERRAIN_VERB_COLOR } from '../../../lib/terrain-verb-color'
 import useEditor from '../../../store/use-editor'
 import { Button } from '../primitives/button'
 import { SegmentedControl } from './segmented-control'
 import { SliderControl } from './slider-control'
 
-const VERB_OPTIONS: Array<{ value: TerrainVerb; Icon: LucideIcon; hint: string }> = [
-  { value: 'raise', Icon: MoveUp, hint: 'Raise' },
-  { value: 'lower', Icon: MoveDown, hint: 'Lower' },
-  { value: 'flatten', Icon: ArrowDownToLine, hint: 'Flatten' },
-  { value: 'smooth', Icon: Waves, hint: 'Smooth' },
+const VERB_OPTIONS: Array<{ value: TerrainVerb; iconSrc: string; hint: string }> = [
+  { value: 'raise', iconSrc: '/icons/terrain-raise.webp', hint: 'Raise' },
+  { value: 'lower', iconSrc: '/icons/terrain-lower.webp', hint: 'Lower' },
+  { value: 'flatten', iconSrc: '/icons/terrain-flatten.webp', hint: 'Flatten' },
+  { value: 'smooth', iconSrc: '/icons/terrain-smooth.webp', hint: 'Smooth' },
 ]
 
 const VERB_HINTS: Record<TerrainVerb, string> = {
@@ -62,22 +60,24 @@ export function TerrainSculptPanel() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
-        {/*
-          The icon is tinted with the same colour the brush ring will take, so the
-          mapping is learned here and read at the point of action. Without it the ring's
-          colour is a code with no key: the canvas can say "these two verbs differ" but
-          only the picker can say which one is armed.
-        */}
         <SegmentedControl
+          className="h-14"
           onChange={(next) => setTerrainVerb(next)}
-          options={VERB_OPTIONS.map(({ value, Icon, hint }) => ({
+          options={VERB_OPTIONS.map(({ value, iconSrc, hint }) => ({
             value,
             label: (
-              <Icon
-                aria-label={hint}
-                className="size-4"
-                style={{ color: TERRAIN_VERB_COLOR[value] }}
-              />
+              <span className="flex flex-col items-center gap-0.5">
+                <img
+                  alt=""
+                  aria-hidden
+                  className="size-7 object-contain"
+                  draggable={false}
+                  height={28}
+                  src={iconSrc}
+                  width={28}
+                />
+                <span className="text-[9px] leading-none">{hint}</span>
+              </span>
             ),
           }))}
           value={verb}

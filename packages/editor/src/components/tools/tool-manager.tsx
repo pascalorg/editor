@@ -25,6 +25,7 @@ import {
   useTangentReshape,
 } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
+import { Elevation3DGuideLayer } from '../editor/elevation-3d-guide-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
@@ -164,12 +165,14 @@ export const ToolManager: React.FC = () => {
     | CeilingNode['id']
     | undefined
 
-  // Keep the site vertex flags available in select mode; the editor component
-  // switches to full polygon editing only after a flag activates site mode. The rule
-  // itself lives in `lib/site-boundary` because the floorplan's SVG handles must
-  // reach the same answer, and they used to compute it separately.
+  // Site boundary handles normally share one 2D/3D rule. Sculpt is the deliberate
+  // 3D exception: the brush only owns this canvas, where PolygonEditor can hand
+  // off its pointer before a boundary drag starts.
   const sculpting = mode === 'terrain-sculpt'
-  const showSiteBoundaryEditor = siteBoundaryHandlesEnabled({ mode, phase })
+  // Sculpt keeps the 3D property controls visible. PolygonEditor marks its
+  // pointer before the canvas-level brush listener runs, and activating one
+  // exits sculpt mode before starting the boundary drag.
+  const showSiteBoundaryEditor = sculpting || siteBoundaryHandlesEnabled({ mode, phase })
 
   // A multi-selection is manipulated as one rigid group (drag / R / T), so
   // per-node reshape chrome — the slab / ceiling boundary editors' vertex and
@@ -396,6 +399,9 @@ export const ToolManager: React.FC = () => {
         {/* Wall-plane proximity / sill / equal-spacing guides for openings,
             published by the door/window move tools in the same world frame. */}
         <OpeningGuides3DLayer />
+        {/* Structural Y-datum feedback for slab, ceiling, wall, and fence
+            elevation handles. Ephemeral editor chrome; never scene data. */}
+        <Elevation3DGuideLayer />
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
       </group>

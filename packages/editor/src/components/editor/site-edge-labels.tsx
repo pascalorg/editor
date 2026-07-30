@@ -89,11 +89,10 @@ export function SiteEdgeLabels() {
     if (obj) setSiteObj(obj)
   })
 
-  // No live-terrain subscription here, deliberately: these labels only render while
-  // a site-boundary handle drag is active, and sculpt mode hides those handles
-  // (`siteBoundaryHandlesEnabled`), so the ground cannot move while they are on
-  // screen. The drag itself rewrites `polygon` every frame, which is what re-runs
-  // this — so the heights are always read against the field as of this frame.
+  // No live-terrain subscription here, deliberately: activating a site-boundary
+  // handle exits sculpt mode before the handle-drag scope begins, so the ground
+  // cannot move while these labels are on screen. The drag itself rewrites
+  // `polygon` every frame, which re-runs this memo against the current field.
   const edges = useMemo(() => {
     if (polygon.length < 2) return []
     return polygon.map(([x1, z1], i) => {

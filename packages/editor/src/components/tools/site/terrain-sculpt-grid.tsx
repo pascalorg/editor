@@ -8,11 +8,14 @@ import {
   useLiveTerrain,
   useScene,
 } from '@pascal-app/core'
-import { getSceneTheme, useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, type LineSegments } from 'three'
-import { EDITOR_LAYER } from '../../../lib/constants'
-import { sculptFieldForSite } from '../../../lib/terrain-sculpt'
+import { GRID_LAYER, getSceneTheme, useViewer } from '@pascal-app/viewer'
+import { useFrame } from '@react-three/fiber'
+import { type MutableRefObject, useEffect, useMemo, useRef } from 'react'
+import { BufferAttribute, BufferGeometry, type LineSegments, Vector2 } from 'three'
+import { float, positionLocal, smoothstep, uniform } from 'three/tsl'
+import { LineBasicNodeMaterial } from 'three/webgpu'
+import { sculptFieldForSite, terrainPointInsideSite } from '../../../lib/terrain-sculpt'
+import type { TerrainBrushFocus } from './terrain-brush-cursor'
 
 const GRID_LIFT = 0.012
 const NO_RAYCAST = () => null
@@ -43,12 +46,10 @@ function writeGridHeights(
   attribute.needsUpdate = true
 }
 
-function createGridGeometry(field: TerrainField): BufferGeometry {
+function createGridGeometry(field: TerrainField, site: Pick<SiteNode, 'polygon'>): BufferGeometry {
   const geometry = new BufferGeometry()
   const positions = new Float32Array(field.cols * field.rows * 3)
-  const segmentCount =
-    field.rows * Math.max(0, field.cols - 1) + field.cols * Math.max(0, field.rows - 1)
-  const indices = new Uint32Array(segmentCount * 2)
+  const indices: number[] = []
 
   for (let row = 0; row < field.rows; row += 1) {
     for (let col = 0; col < field.cols; col += 1) {
@@ -62,21 +63,35 @@ function createGridGeometry(field: TerrainField): BufferGeometry {
   for (let row = 0; row < field.rows; row += 1) {
     for (let col = 0; col < field.cols - 1; col += 1) {
       const sampleIndex = row * field.cols + col
-      indices[indexOffset++] = sampleIndex
-      indices[indexOffset++] = sampleIndex + 1
+      const x = field.origin[0] + col * field.spacing
+      const z = field.origin[1] + row * field.spacing
+      if (
+        terrainPointInsideSite(site, x, z) &&
+        terrainPointInsideSite(site, x + field.spacing, z)
+      ) {
+        indices[indexOffset++] = sampleIndex
+        indices[indexOffset++] = sampleIndex + 1
+      }
     }
   }
   for (let col = 0; col < field.cols; col += 1) {
     for (let row = 0; row < field.rows - 1; row += 1) {
       const sampleIndex = row * field.cols + col
-      indices[indexOffset++] = sampleIndex
-      indices[indexOffset++] = sampleIndex + field.cols
+      const x = field.origin[0] + col * field.spacing
+      const z = field.origin[1] + row * field.spacing
+      if (
+        terrainPointInsideSite(site, x, z) &&
+        terrainPointInsideSite(site, x, z + field.spacing)
+      ) {
+        indices[indexOffset++] = sampleIndex
+        indices[indexOffset++] = sampleIndex + field.cols
+      }
     }
   }
 
   const positionAttribute = new BufferAttribute(positions, 3)
   geometry.setAttribute('position', positionAttribute)
-  geometry.setIndex(new BufferAttribute(indices, 1))
+  geometry.setIndex(indices)
   writeGridHeights(positionAttribute, field, null)
   geometry.computeBoundingSphere()
   return geometry
@@ -88,15 +103,52 @@ function createGridGeometry(field: TerrainField): BufferGeometry {
  * The ordinary editor grid is a planar snapping aid, so making it visible here
  * would leave it cutting through hills and hiding below excavations. This grid
  * shares the terrain samples instead: every row and column visibly bends with
- * the surface, and live dabs rewrite only the affected height span.
+ * the surface, and live dabs rewrite only the affected height span. It stays on
+ * `GRID_LAYER` so scene geometry depth-occludes it instead of the overlay pass
+ * compositing it through walls and objects.
  */
-export function TerrainSculptGrid({ site }: { site: SiteNode }) {
+export function TerrainSculptGrid({
+  focusRef,
+  site,
+}: {
+  focusRef: MutableRefObject<TerrainBrushFocus | null>
+  site: SiteNode
+}) {
   const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
   const targetRef = useRef<LineSegments>(null)
 
   const field = useMemo(() => sculptFieldForSite(site), [site])
-  const geometry = useMemo(() => createGridGeometry(field), [field])
+  const geometry = useMemo(() => createGridGeometry(field, site), [field, site])
   useEffect(() => () => geometry.dispose(), [geometry])
+
+  const focusCenter = useMemo(() => uniform(new Vector2()), [])
+  const focusRadius = useMemo(() => uniform(1), [])
+  const focusVisible = useMemo(() => uniform(0), [])
+  const material = useMemo(() => {
+    const baseOpacity = appearance === 'dark' ? 0.07 : 0.05
+    const focusBoost = appearance === 'dark' ? 0.11 : 0.09
+    const distance = positionLocal.xz.sub(focusCenter).length()
+    const focus = float(1)
+      .sub(smoothstep(focusRadius.mul(1.05), focusRadius.mul(2.5), distance))
+      .mul(focusVisible)
+
+    return new LineBasicNodeMaterial({
+      color: appearance === 'dark' ? '#cbd5e1' : '#475569',
+      depthTest: true,
+      depthWrite: false,
+      opacityNode: float(baseOpacity).add(focus.mul(focusBoost)),
+      transparent: true,
+    })
+  }, [appearance, focusCenter, focusRadius, focusVisible])
+  useEffect(() => () => material.dispose(), [material])
+
+  useFrame(() => {
+    const focus = focusRef.current
+    focusVisible.value = focus ? 1 : 0
+    if (!focus) return
+    focusCenter.value.set(focus.x, focus.z)
+    focusRadius.value = focus.radius
+  })
 
   useEffect(() => {
     let lastPatch = useLiveTerrain.getState().strokeOf(site.id)?.lastPatch ?? null
@@ -130,18 +182,11 @@ export function TerrainSculptGrid({ site }: { site: SiteNode }) {
     <lineSegments
       frustumCulled={false}
       geometry={geometry}
-      layers={EDITOR_LAYER}
+      layers={GRID_LAYER}
+      material={material}
       raycast={NO_RAYCAST}
       ref={targetRef}
       renderOrder={11}
-    >
-      <lineBasicMaterial
-        color={appearance === 'dark' ? '#cbd5e1' : '#475569'}
-        depthTest
-        depthWrite={false}
-        opacity={appearance === 'dark' ? 0.34 : 0.28}
-        transparent
-      />
-    </lineSegments>
+    />
   )
 }

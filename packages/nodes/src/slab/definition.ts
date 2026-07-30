@@ -1,11 +1,28 @@
 import {
+  type AnyNode,
+  type AnyNodeId,
   type HandleDescriptor,
+  MIN_SLAB_THICKNESS,
+  markSlabChangeDependents,
   type NodeDefinition,
   pointInPolygon2D,
+  type SceneApi,
   type SlabNode as SlabNodeType,
+  syncStairRises,
 } from '@pascal-app/core'
+import {
+  clearStructuralElevationGuide,
+  publishStructuralElevationGuide,
+  resolveStructuralElevationSnap,
+} from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
-import { applySlabTopChange, slabElevationUpperBound } from './elevation-limit'
+import {
+  applySlabBaseElevationChange,
+  applySlabThicknessChange,
+  applySlabTopChange,
+  getSlabBaseElevation,
+  slabElevationUpperBound,
+} from './elevation-limit'
 import { buildSlabFloorplan } from './floorplan'
 import {
   slabAddVertexAffordance,
@@ -92,15 +109,40 @@ function slabHandleAnchor(slab: SlabNodeType): [number, number] {
   return best ?? fallback
 }
 
-// Slab elevation arrow — vertical chevron on solid slab surface near the
-// polygon center. The shared top-change policy stretches grounded slabs up
-// to SLAB_UNSTICK_THRESHOLD (past it the slab pops to a thin floating
-// deck), moves floating slabs, and preserves the drag-through-zero pool
-// gesture. Same registry-handle pipeline as the column height arrow, so
-// live override + commit-on-release come for free. `max` clamps the drag
-// under the storey plane while plane-bound walls elect this slab as their
-// base.
-function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
+function slabElevationGuideSource(slab: SlabNodeType) {
+  return {
+    nodeId: slab.id,
+    levelId: slab.parentId,
+    anchor: slabHandleAnchor(slab),
+  }
+}
+
+function slabChangePreviewOverrides(
+  slab: SlabNodeType,
+  patch: Partial<SlabNodeType>,
+  sceneApi: SceneApi,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const next = { ...slab, ...patch } as SlabNodeType
+  const nodes = { ...sceneApi.nodes(), [slab.id]: next } as Record<AnyNodeId, AnyNode>
+  const previews = new Map<AnyNodeId, Partial<AnyNode>>()
+
+  markSlabChangeDependents(slab, next, nodes, (id) => previews.set(id, {}))
+  for (const update of syncStairRises(nodes)) {
+    const segment = nodes[update.id]
+    if (
+      segment?.type !== 'stair-segment' ||
+      !segment.parentId ||
+      !previews.has(segment.parentId as AnyNodeId)
+    ) {
+      continue
+    }
+    previews.set(update.id, update.data)
+  }
+
+  return [...previews]
+}
+
+function slabRecessedDepthHandle(): HandleDescriptor<SlabNodeType> {
   return {
     kind: 'linear-resize',
     axis: 'y',
@@ -108,7 +150,18 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
     min: MIN_SLAB_ELEVATION,
     max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n),
     currentValue: (n) => n.elevation ?? 0.05,
-    apply: (n, newValue) => applySlabTopChange(n, newValue, { mode: 'drag' }),
+    magneticSnap: (n, newValue, sceneApi) =>
+      resolveStructuralElevationSnap(slabElevationGuideSource(n), newValue, sceneApi.nodes()),
+    onDrag: (n, sceneApi) =>
+      publishStructuralElevationGuide(
+        slabElevationGuideSource(n),
+        n.elevation ?? 0.05,
+        sceneApi.nodes(),
+      ),
+    onDragEnd: (n) => clearStructuralElevationGuide(n.id),
+    apply: (n, newValue) => applySlabTopChange(n, newValue),
+    previewOverrides: (n, newValue, sceneApi) =>
+      slabChangePreviewOverrides(n, applySlabTopChange(n, newValue), sceneApi),
     placement: {
       position: (n) => {
         const [cx, cz] = slabHandleAnchor(n)
@@ -119,8 +172,81 @@ function slabHeightHandle(): HandleDescriptor<SlabNodeType> {
   }
 }
 
-function slabHandles(_node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
-  return [slabHeightHandle()]
+function slabThicknessHandle(): HandleDescriptor<SlabNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: MIN_SLAB_THICKNESS,
+    max: (n, sceneApi) =>
+      Math.max(
+        MIN_SLAB_THICKNESS,
+        slabElevationUpperBound(sceneApi.nodes(), n) - getSlabBaseElevation(n),
+      ),
+    currentValue: (n) => n.thickness ?? 0.05,
+    magneticSnap: (n, newThickness, sceneApi) => {
+      const base = getSlabBaseElevation(n)
+      const snappedTop = resolveStructuralElevationSnap(
+        slabElevationGuideSource(n),
+        base + newThickness,
+        sceneApi.nodes(),
+      )
+      return Math.max(MIN_SLAB_THICKNESS, snappedTop - base)
+    },
+    onDrag: (n, sceneApi) =>
+      publishStructuralElevationGuide(
+        slabElevationGuideSource(n),
+        n.elevation ?? 0.05,
+        sceneApi.nodes(),
+      ),
+    onDragEnd: (n) => clearStructuralElevationGuide(n.id),
+    apply: (n, newThickness) => applySlabThicknessChange(n, newThickness),
+    previewOverrides: (n, newThickness, sceneApi) =>
+      slabChangePreviewOverrides(n, applySlabThicknessChange(n, newThickness), sceneApi),
+    placement: {
+      position: (n) => {
+        const [cx, cz] = slabHandleAnchor(n)
+        return [cx, (n.elevation ?? 0.05) + HEIGHT_HANDLE_OFFSET, cz]
+      },
+    },
+  }
+}
+
+function slabBaseElevationHandle(): HandleDescriptor<SlabNodeType> {
+  return {
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    shape: 'tracker',
+    gridSnap: true,
+    min: (n) => MIN_SLAB_ELEVATION - (n.thickness ?? 0.05),
+    max: (n, sceneApi) => slabElevationUpperBound(sceneApi.nodes(), n) - (n.thickness ?? 0.05),
+    currentValue: (n) => getSlabBaseElevation(n),
+    magneticSnap: (n, newValue, sceneApi) =>
+      resolveStructuralElevationSnap(slabElevationGuideSource(n), newValue, sceneApi.nodes()),
+    onDrag: (n, sceneApi) =>
+      publishStructuralElevationGuide(
+        slabElevationGuideSource(n),
+        getSlabBaseElevation(n),
+        sceneApi.nodes(),
+      ),
+    onDragEnd: (n) => clearStructuralElevationGuide(n.id),
+    apply: (n, newBase) => applySlabBaseElevationChange(n, newBase),
+    previewOverrides: (n, newBase, sceneApi) =>
+      slabChangePreviewOverrides(n, applySlabBaseElevationChange(n, newBase), sceneApi),
+    placement: {
+      position: (n) => {
+        const [cx, cz] = slabHandleAnchor(n)
+        return [cx, getSlabBaseElevation(n), cz]
+      },
+    },
+  }
+}
+
+function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
+  return node.recessed
+    ? [slabRecessedDepthHandle()]
+    : [slabThicknessHandle(), slabBaseElevationHandle()]
 }
 
 /**

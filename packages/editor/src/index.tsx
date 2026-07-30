@@ -136,6 +136,13 @@ export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
+export {
+  type HorizontalConstructionPlane,
+  publishHorizontalConstructionPlane,
+  resampleTerrainConstructionPlane,
+  resolveEventConstructionPlane,
+  resolveLevelConstructionPlane,
+} from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
@@ -311,6 +318,17 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export {
+  clearStructuralElevationGuide,
+  collectElevationSnapTargets,
+  ELEVATION_ALIGNMENT_THRESHOLD_M,
+  type ElevationGuideSource,
+  type ElevationSnapMatch,
+  type ElevationSnapTarget,
+  publishStructuralElevationGuide,
+  resolveElevationSnapMatch,
+  resolveStructuralElevationSnap,
+} from './lib/elevation-guides'
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,

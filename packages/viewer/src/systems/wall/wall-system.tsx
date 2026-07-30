@@ -39,6 +39,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
+import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import {
   buildOpeningCutoutGeometry,
   getOpeningCutoutBottomPadding,
@@ -861,7 +862,6 @@ function applyWorldPlanarWallUVs(
  * then we transform to wall-local for the 3D mesh.
  */
 const WALL_TERRAIN_SAMPLE_STEP = 0.25
-const WALL_TERRAIN_FILL_EPSILON = 1e-6
 
 type WallTerrainBottomSampler = (x: number, z: number) => number | null
 
@@ -897,81 +897,7 @@ function buildWallTerrainFillGeometry(
     const terrainElevation = terrainBottomAt(point.x, point.y)
     return terrainElevation == null ? 0 : Math.min(0, terrainElevation - wallBaseElevation)
   })
-  if (bottomY.every((y) => y >= -WALL_TERRAIN_FILL_EPSILON)) return null
-
-  let signedArea = 0
-  for (let index = 0; index < localPoints.length; index += 1) {
-    const a = localPoints[index]!
-    const b = localPoints[(index + 1) % localPoints.length]!
-    signedArea += a.x * b.z - b.x * a.z
-  }
-  const counterClockwise = signedArea > 0
-  const positions: number[] = []
-  const push = (point: { x: number; z: number }, y: number) => {
-    positions.push(point.x, y, point.z)
-  }
-
-  for (let index = 0; index < localPoints.length; index += 1) {
-    const next = (index + 1) % localPoints.length
-    const a = localPoints[index]!
-    const b = localPoints[next]!
-    const ay = bottomY[index]!
-    const by = bottomY[next]!
-    if (ay >= -WALL_TERRAIN_FILL_EPSILON && by >= -WALL_TERRAIN_FILL_EPSILON) continue
-
-    if (counterClockwise) {
-      push(a, 0)
-      push(b, by)
-      push(a, ay)
-      push(a, 0)
-      push(b, 0)
-      push(b, by)
-    } else {
-      push(a, 0)
-      push(a, ay)
-      push(b, by)
-      push(a, 0)
-      push(b, by)
-      push(b, 0)
-    }
-  }
-
-  const faces = THREE.ShapeUtils.triangulateShape(
-    localPoints.map((point) => new THREE.Vector2(point.x, point.z)),
-    [],
-  )
-  for (const face of faces) {
-    const ia = face[0]
-    const ib = face[1]
-    const ic = face[2]
-    if (ia == null || ib == null || ic == null) continue
-    const a = localPoints[ia]!
-    const b = localPoints[ib]!
-    const c = localPoints[ic]!
-    if (
-      bottomY[ia]! >= -WALL_TERRAIN_FILL_EPSILON &&
-      bottomY[ib]! >= -WALL_TERRAIN_FILL_EPSILON &&
-      bottomY[ic]! >= -WALL_TERRAIN_FILL_EPSILON
-    ) {
-      continue
-    }
-    const cross = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)
-    push(a, bottomY[ia]!)
-    if (cross >= 0) {
-      push(b, bottomY[ib]!)
-      push(c, bottomY[ic]!)
-    } else {
-      push(c, bottomY[ic]!)
-      push(b, bottomY[ib]!)
-    }
-  }
-
-  if (positions.length === 0) return null
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.computeVertexNormals()
-  ensureRenderableGeometryAttributes(geometry)
-  return geometry
+  return buildTerrainPerimeterFillGeometry(localPoints, bottomY, 0)
 }
 
 function mergeWallTerrainFill(

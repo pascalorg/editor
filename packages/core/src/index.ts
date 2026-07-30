@@ -66,6 +66,7 @@ export {
 export {
   findLevelAncestorId,
   initSpatialGridSync,
+  markSlabChangeDependents,
   resolveBuildingForLevel,
   resolveLevelId,
 } from './hooks/spatial-grid/spatial-grid-sync'
@@ -133,6 +134,7 @@ export {
 export {
   type AutoCeilingPlanningContext,
   type AutoCeilingSyncPlan,
+  type AutoSlabPlanningContext,
   type AutoSlabSyncPlan,
   type AutoZoneSyncPlan,
   detectSpacesForLevel,
@@ -340,6 +342,7 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
 export {
   clampSlabElevationForWalls,
   getSlabElevationUpperBound,
@@ -349,7 +352,7 @@ export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/sta
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
-export { resolveStairTotalRise } from './systems/stair/stair-rise'
+export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,

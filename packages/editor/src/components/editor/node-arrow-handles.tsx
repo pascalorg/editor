@@ -751,6 +751,9 @@ function LinearArrow({
         },
         onEnd: () => {
           useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
+          if (descriptor.kind === 'linear-resize') {
+            descriptor.onDragEnd?.(initialNode as never, sceneApi)
+          }
           if (onDrag) useOpeningGuides.getState().clear()
           for (const previewId of previewOverrideIds) {
             useLiveNodeOverrides.getState().clear(previewId)
@@ -1580,7 +1583,10 @@ function CornerPickerShape({
         position={position}
         renderOrder={1001}
       />
-      <group position={[position[0], CORNER_FLOOR_OFFSET, position[2]]} ref={billboardRef}>
+      <group
+        position={[position[0], position[1] + CORNER_FLOOR_OFFSET, position[2]]}
+        ref={billboardRef}
+      >
         <HandleArrow
           cursor={cursor}
           hover={hover}
