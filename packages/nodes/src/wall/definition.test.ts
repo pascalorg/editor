@@ -3,6 +3,10 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { getFloorplanNodeExtension } from '@pascal-app/editor'
 import { wallDefinition } from './definition'
 
+test('wallDefinition records the retired assembly field migration', () => {
+  expect(wallDefinition.schemaVersion).toBe(7)
+})
+
 describe('wallDefinition floor-plan extension', () => {
   test('owns curve eligibility for hosted openings', () => {
     const wall = wallDefinition.schema.parse({

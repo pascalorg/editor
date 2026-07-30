@@ -3,7 +3,6 @@ import {
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
 import { generateId } from '../schema/base'
-import { remapDrawingSheetReferences } from '../schema/nodes/drawing-sheet'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Generic, opinion-free primitives the host app composes to implement
@@ -180,10 +179,6 @@ export function cloneNodesInto(
     if (cloned.type === 'construction-dimension') {
       cloned = remapConstructionDimensionReferences(cloned, idMap)
     }
-    if (cloned.type === 'drawing-sheet') {
-      cloned = remapDrawingSheetReferences(cloned, idMap)
-    }
-
     if (original.id === opts.rootId) {
       if (opts.position) {
         ;(cloned as { position: [number, number, number] }).position = [

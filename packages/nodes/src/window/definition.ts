@@ -16,6 +16,7 @@ import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-open
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
+import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
@@ -171,6 +172,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   category: 'structure',
   extensions: {
     'pascal:editor/floorplan': {
+      contextualDimensions: buildWindowContextualDimensions,
       schedule: buildWindowFloorplanSchedule,
     } satisfies FloorplanNodeExtension<WindowNodeType>,
   },

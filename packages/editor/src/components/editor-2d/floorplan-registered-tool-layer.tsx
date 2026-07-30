@@ -7,13 +7,23 @@ import {
   type FloorplanToolContext,
   getFloorplanNodeExtension,
 } from '../../lib/floorplan/floorplan-extension'
+import {
+  type FloorplanMode,
+  isFloorplanToolAvailableInMode,
+} from '../../lib/floorplan/floorplan-mode'
 import useEditor from '../../store/use-editor'
+import useFloorplanMode from '../../store/use-floorplan-mode'
 
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType<FloorplanToolContext>>()
 
-function registeredFloorplanTool(tool: string | null): ComponentType<FloorplanToolContext> | null {
+function registeredFloorplanTool(
+  tool: string | null,
+  mode: FloorplanMode,
+): ComponentType<FloorplanToolContext> | null {
   if (!tool) return null
-  const loader = getFloorplanNodeExtension(nodeRegistry.get(tool))?.tool
+  const extension = getFloorplanNodeExtension(nodeRegistry.get(tool))
+  if (!isFloorplanToolAvailableInMode(extension?.availableModes, mode)) return null
+  const loader = extension?.tool
   if (!loader) return null
   const cached = lazyToolCache.get(loader)
   if (cached) return cached
@@ -25,6 +35,7 @@ function registeredFloorplanTool(tool: string | null): ComponentType<FloorplanTo
 export function FloorplanRegisteredToolLayer() {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const floorplanMode = useFloorplanMode((state) => state.mode)
   const gridSnapStep = useEditor((state) => state.gridSnapStep)
   const toolDefaults = useEditor((state) =>
     state.tool ? (state.toolDefaults[state.tool] ?? null) : null,
@@ -43,7 +54,7 @@ export function FloorplanRegisteredToolLayer() {
     useEditor.getState().setMode('select')
   }, [])
   if (mode !== 'build') return null
-  const Tool = registeredFloorplanTool(tool)
+  const Tool = registeredFloorplanTool(tool, floorplanMode)
   return Tool ? (
     <Suspense fallback={null}>
       <Tool

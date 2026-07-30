@@ -4,6 +4,7 @@ import {
   ConstructionDimensionNode,
   type FloorplanGeometry,
   type GeometryContext,
+  LevelNode,
   nodeRegistry,
   registerNode,
   WallNode,
@@ -134,47 +135,92 @@ describe('buildConstructionDimensionFloorplan', () => {
     })
   })
 
-  test('resolves wall anchors against the selected assembly datum', () => {
+  test('straightens an existing endpoint-to-face baseline onto its referenced wall', () => {
     const wall = WallNode.parse({
-      id: 'wall_assembly',
+      id: 'wall_existing_diagonal',
       start: [0, 0],
-      end: [4, 0],
-      assemblyLayers: [
+      end: [4, 4],
+      thickness: 0.2,
+    })
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
         {
-          id: 'stud-core',
-          role: 'structure',
-          side: 'core',
-          thickness: 0.1,
-          datumEligible: ['structural-face'],
+          kind: 'feature',
+          reference: { nodeId: wall.id, featureId: 'wall:end' },
+          fallback: [4, 0, 4],
         },
         {
-          id: 'exterior-finish',
-          role: 'exterior-finish',
-          side: 'exterior',
-          thickness: 0.03,
-          datumEligible: ['finish-face'],
+          kind: 'feature',
+          reference: {
+            nodeId: wall.id,
+            featureId: 'wall:face:left',
+            parameters: { t: 0.25 },
+          },
+          fallback: [0.9292893219, 0, 1.0707106781],
         },
       ],
+      baseline: {
+        origin: [5, 5],
+        direction: [-0.7235724834, -0.6902484349],
+      },
+      datumPolicy: 'structural-face',
     })
-    const anchor = {
-      kind: 'feature' as const,
-      reference: { nodeId: wall.id, featureId: 'wall:centerline', parameters: { t: 0.25 } },
-      fallback: [1, 0, 0] as [number, number, number],
-    }
-    const build = (datumPolicy: 'centerline' | 'wall-face' | 'structural-face' | 'finish-face') =>
-      buildConstructionDimensionFloorplan(
-        ConstructionDimensionNode.parse({
-          anchors: [anchor, [3, 0, 0]],
-          baseline: { origin: [0, 1], direction: [1, 0] },
-          datumPolicy,
-        }),
-        context({ [wall.id]: wall }),
-      )
+    const segment = dimensionSegments(
+      buildConstructionDimensionFloorplan(node, context({ [wall.id]: wall })),
+    )[0]
+    const dx = (segment?.dimensionEnd?.[0] ?? 0) - (segment?.dimensionStart?.[0] ?? 0)
+    const dy = (segment?.dimensionEnd?.[1] ?? 0) - (segment?.dimensionStart?.[1] ?? 0)
+    const length = Math.hypot(dx, dy)
 
-    expect(dimensionSegments(build('centerline'))[0]?.start).toEqual([1, 0])
-    expect(dimensionSegments(build('structural-face'))[0]?.start[1]).toBeCloseTo(0.05)
-    expect(dimensionSegments(build('finish-face'))[0]?.start[1]).toBeCloseTo(0.08)
-    expect(dimensionSegments(build('wall-face'))[0]?.start[1]).toBeCloseTo(0.08)
+    expect(dx / length).toBeCloseTo(-Math.SQRT1_2)
+    expect(dy / length).toBeCloseTo(-Math.SQRT1_2)
+  })
+
+  test('extends a wall-face dimension to the connected wall edge', () => {
+    const measuredWall = WallNode.parse({
+      id: 'wall_measured',
+      parentId: 'level_main',
+      start: [0, 0],
+      end: [4, 0],
+      thickness: 0.2,
+    })
+    const connectedWall = WallNode.parse({
+      id: 'wall_connected',
+      parentId: 'level_main',
+      start: [4, 0],
+      end: [4, 3],
+      thickness: 0.2,
+    })
+    const level = LevelNode.parse({
+      id: 'level_main',
+      children: [measuredWall.id, connectedWall.id],
+    })
+    const node = ConstructionDimensionNode.parse({
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: measuredWall.id, featureId: 'wall:start' },
+          fallback: [0, 0, 0],
+        },
+        {
+          kind: 'feature',
+          reference: { nodeId: measuredWall.id, featureId: 'wall:end' },
+          fallback: [4, 0, 0],
+        },
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      datumPolicy: 'wall-face',
+    })
+    const geometry = buildConstructionDimensionFloorplan(
+      node,
+      context({
+        [level.id]: level,
+        [measuredWall.id]: measuredWall,
+        [connectedWall.id]: connectedWall,
+      }),
+    )
+
+    expect(dimensionSegments(geometry)[0]?.end).toEqual([4.1, 0.1])
   })
 
   test('uses millimetre notation in document output', () => {
@@ -349,59 +395,23 @@ describe('buildConstructionDimensionFloorplan', () => {
     ).toHaveLength(0)
   })
 
-  test('renders radius notation with a leader and center mark', () => {
+  test('renders radius like diameter while showing half the picked span', () => {
     const node = ConstructionDimensionNode.parse({
       mode: 'radius',
       anchors: [
         [0, 0, 0],
         [2, 0, 0],
       ],
-      baseline: { origin: [3, 1], direction: [1, 0] },
     })
     const geometry = buildConstructionDimensionFloorplan(node, context())
     const entries = geometry ? flatten(geometry) : []
 
-    expect(entries.find((entry) => entry.kind === 'dimension-label')).toMatchObject({
-      text: 'R 2m',
-      cx: 3,
-      cy: 1,
-    })
-    expect(entries.filter((entry) => entry.kind === 'line').length).toBeGreaterThanOrEqual(6)
-  })
-
-  test('updates an associative curved-wall radius when the host curve changes', () => {
-    const wall = WallNode.parse({
-      id: 'wall_curve',
+    expect(dimensionSegments(geometry)[0]).toMatchObject({
+      text: 'R 1m',
       start: [0, 0],
-      end: [4, 0],
-      curveOffset: 1,
+      end: [2, 0],
     })
-    const node = ConstructionDimensionNode.parse({
-      mode: 'radius',
-      anchors: [
-        {
-          kind: 'feature',
-          reference: { nodeId: wall.id, featureId: 'wall:curve:center' },
-          fallback: [2, 0, 1.5],
-        },
-        {
-          kind: 'feature',
-          reference: { nodeId: wall.id, featureId: 'wall:midpoint' },
-          fallback: [2, 0, -1],
-        },
-      ],
-      baseline: { origin: [2, -1.5], direction: [0, -1] },
-    })
-    const reshapedWall = WallNode.parse({ ...wall, curveOffset: 0.5 })
-    const original = buildConstructionDimensionFloorplan(node, context({ [wall.id]: wall }))
-    const reshaped = buildConstructionDimensionFloorplan(node, context({ [wall.id]: reshapedWall }))
-    const originalLabel =
-      original && flatten(original).find((entry) => entry.kind === 'dimension-label')
-    const reshapedLabel =
-      reshaped && flatten(reshaped).find((entry) => entry.kind === 'dimension-label')
-
-    expect(originalLabel).toMatchObject({ text: 'R 2.5m' })
-    expect(reshapedLabel).toMatchObject({ text: 'R 4.25m' })
+    expect(entries.some((entry) => entry.kind === 'dimension-label')).toBe(false)
   })
 
   test('renders diameter and repeated-feature notation', () => {

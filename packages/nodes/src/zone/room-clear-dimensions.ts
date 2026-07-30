@@ -3,8 +3,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
-  getWallAssemblyFaceOffsets,
-  resolveWallAssemblyDatumReferences,
+  getWallThickness,
   type SpaceBoundaryFace,
   type WallNode,
   type ZoneNode,
@@ -30,11 +29,6 @@ type FaceLine = {
 }
 
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
-
-type ClearDimensionPolicy = Extract<
-  ZoneNode['clearDimensionPolicy'],
-  'inside-faces' | 'finish-faces'
->
 
 export function buildRoomClearDimensions(
   node: ZoneNode,
@@ -72,7 +66,7 @@ export function buildRoomClearDimensions(
   if (!space) return []
 
   const wallsById = new Map(walls.map((wall) => [wall.id, wall]))
-  const faceLines = resolveClearFaceLines(space.boundaryFaces, wallsById, node.clearDimensionPolicy)
+  const faceLines = resolveClearFaceLines(space.boundaryFaces, wallsById)
   if (!faceLines) return []
 
   const unit = ctx.viewState?.unit ?? 'metric'
@@ -104,13 +98,12 @@ export function buildRoomClearDimensions(
 function resolveClearFaceLines(
   boundaryFaces: readonly SpaceBoundaryFace[],
   wallsById: ReadonlyMap<string, WallNode>,
-  policy: ClearDimensionPolicy,
 ): FaceLine[] | null {
   const faceLines: FaceLine[] = []
   for (const boundary of boundaryFaces) {
     const wall = wallsById.get(boundary.wallId)
     if (!wall || Math.abs(wall.curveOffset ?? 0) > LINE_TOLERANCE) return null
-    const line = offsetBoundaryFace(boundary, wall, policy)
+    const line = offsetBoundaryFace(boundary, wall)
     if (!line) return null
     faceLines.push(line)
   }
@@ -228,11 +221,7 @@ function buildRectilinearClearDimensions(
   return dimensions
 }
 
-function offsetBoundaryFace(
-  boundary: SpaceBoundaryFace,
-  wall: WallNode,
-  policy: ClearDimensionPolicy,
-): FaceLine | null {
+function offsetBoundaryFace(boundary: SpaceBoundaryFace, wall: WallNode): FaceLine | null {
   const first = boundary.points[0]
   const last = boundary.points[boundary.points.length - 1]
   if (!(first && last)) return null
@@ -241,30 +230,11 @@ function offsetBoundaryFace(
   if (!wallDirection) return null
   const normal: FloorplanPoint = [-wallDirection[1], wallDirection[0]]
   const side = boundary.face === 'front' ? 1 : -1
-  const faces = getWallAssemblyFaceOffsets(wall)
-  const offset =
-    policy === 'finish-faces'
-      ? resolveFinishFaceOffset(wall, side)
-      : side > 0
-        ? faces.exterior
-        : faces.interior
-  if (offset === null) return null
+  const offset = (getWallThickness(wall) / 2) * side
   return {
     start: [first[0] + normal[0] * offset, first[1] + normal[1] * offset],
     end: [last[0] + normal[0] * offset, last[1] + normal[1] * offset],
   }
-}
-
-function resolveFinishFaceOffset(wall: WallNode, side: 1 | -1): number | null {
-  if ((wall.assemblyLayers ?? []).length === 0) return null
-  const references = resolveWallAssemblyDatumReferences(wall).filter(
-    (reference) => reference.datum === 'finish-face',
-  )
-  const matching = references
-    .filter((reference) => Math.sign(reference.offset) === side)
-    .map((reference) => reference.offset)
-  if (matching.length === 0) return null
-  return side > 0 ? Math.max(...matching) : Math.min(...matching)
 }
 
 function clearFacePolygon(faceLines: readonly FaceLine[]): FloorplanPoint[] | null {
@@ -421,8 +391,8 @@ function buildRoomToRoomClearDimensions(
       const currentBoundary = currentBoundaryByWallId.get(wallId)
       const neighborBoundary = neighborBoundaryByWallId.get(wallId)
       if (!(wall && currentBoundary && neighborBoundary)) continue
-      const currentLine = offsetBoundaryFace(currentBoundary, wall, 'finish-faces')
-      const neighborLine = offsetBoundaryFace(neighborBoundary, wall, 'finish-faces')
+      const currentLine = offsetBoundaryFace(currentBoundary, wall)
+      const neighborLine = offsetBoundaryFace(neighborBoundary, wall)
       if (!(currentLine && neighborLine)) continue
       const dimension = dimensionAcrossSharedRoomWall(
         currentLine,

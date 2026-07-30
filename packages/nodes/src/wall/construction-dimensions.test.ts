@@ -184,36 +184,12 @@ describe('buildWallConstructionDimensions', () => {
     })
   })
 
-  test('places witness origins on centerline, structural, finish, or assembly faces', () => {
-    const assemblyWall = wall({
-      assemblyLayers: [
-        {
-          id: 'stud-core',
-          role: 'structure',
-          side: 'core',
-          thickness: 0.1,
-          datumEligible: ['structural-face'],
-        },
-        {
-          id: 'interior-finish',
-          role: 'interior-finish',
-          side: 'interior',
-          thickness: 0.02,
-          datumEligible: ['finish-face'],
-        },
-        {
-          id: 'exterior-finish',
-          role: 'exterior-finish',
-          side: 'exterior',
-          thickness: 0.03,
-          datumEligible: ['finish-face'],
-        },
-      ],
-    })
+  test('places witness origins on the centerline or wall faces', () => {
+    const plainWall = wall({ thickness: 0.2 })
     const witnessY = (
       datumPolicy: 'centerline' | 'wall-face' | 'structural-face' | 'finish-face',
     ) => {
-      const entry = buildWallConstructionDimensions(assemblyWall, context(), {
+      const entry = buildWallConstructionDimensions(plainWall, context(), {
         unit: 'metric',
         standard: constructionDimensionStandard({ datumPolicy }),
       })[0]
@@ -221,9 +197,9 @@ describe('buildWallConstructionDimensions', () => {
     }
 
     expect(witnessY('centerline')).toBe(0)
-    expect(witnessY('structural-face')).toBeCloseTo(0.05)
-    expect(witnessY('finish-face')).toBeCloseTo(0.08)
-    expect(witnessY('wall-face')).toBeCloseTo(0.08)
+    expect(witnessY('structural-face')).toBeCloseTo(0.1)
+    expect(witnessY('finish-face')).toBeCloseTo(0.1)
+    expect(witnessY('wall-face')).toBeCloseTo(0.1)
   })
 
   test('never dimensions a classified interior wall', () => {

@@ -6,7 +6,6 @@ import {
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
-import { remapDrawingSheetReferences } from '../schema/nodes/drawing-sheet'
 
 export type SceneGraph = {
   nodes: Record<AnyNodeId, AnyNode>
@@ -120,10 +119,6 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     if (clonedNode.type === 'construction-dimension') {
       clonedNode = remapConstructionDimensionReferences(clonedNode, idMap)
     }
-    if (clonedNode.type === 'drawing-sheet') {
-      clonedNode = remapDrawingSheetReferences(clonedNode, idMap)
-    }
-
     clonedNodes[newId] = clonedNode
   }
 
@@ -293,10 +288,6 @@ export function cloneLevelSubtree(
     if (cloned.type === 'construction-dimension') {
       cloned = remapConstructionDimensionReferences(cloned, idMap)
     }
-    if (cloned.type === 'drawing-sheet') {
-      cloned = remapDrawingSheetReferences(cloned, idMap)
-    }
-
     clonedNodes.push(cloned)
   }
 
