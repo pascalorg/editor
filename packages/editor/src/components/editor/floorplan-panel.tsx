@@ -32,6 +32,7 @@ import {
   type Point2D,
   type RoofNode,
   type RoofSegmentNode,
+  resolveSlabPlacementElevation,
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
@@ -41,6 +42,8 @@ import {
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
+  spatialGridManager,
+  terrainSupportLift,
   useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -85,11 +88,12 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
+import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { SITE_BOUNDARY_DRAG_LABEL } from '../../lib/site-boundary'
+import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
@@ -179,6 +183,7 @@ import {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  resolveTerrainWallConstructionOptions,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -5133,6 +5138,8 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
+  const wallConstructionOptionsRef =
+    useRef<ReturnType<typeof resolveTerrainWallConstructionOptions>>(undefined)
   // Walls committed by the current 2D-only chain — exclusion set for the
   // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
   const wallChainWallIdsRef = useRef<string[]>([])
@@ -5161,6 +5168,7 @@ export function FloorplanPanel({
   )
   const [ceilingDraftPoints, setCeilingDraftPoints] = useState<WallPlanPoint[]>([])
   const [slabDraftPoints, setSlabDraftPoints] = useState<WallPlanPoint[]>([])
+  const slabPlacementBaseRef = useRef<number | null>(null)
   // Mirror the per-click draft START anchors into the shared draft store so
   // out-of-tree consumers (such as host-owned preview publishers) see the whole open
   // segment without subscribing to this panel's state.
@@ -6056,7 +6064,7 @@ export function FloorplanPanel({
     isFloorplanItemContextActive
   const visibleSitePolygon = displaySitePolygon
   const canUseSiteBoundaryVertexHandles =
-    visibleSitePolygon !== null && (isSiteEditActive || mode === 'select')
+    visibleSitePolygon !== null && siteBoundaryHandlesEnabled({ mode, phase })
   const isSiteBoundaryHighlighted = isSiteEditActive || siteVertexDragState !== null
   const shouldShowSiteEdgeLabels =
     Boolean(visibleSitePolygon) &&
@@ -7831,6 +7839,7 @@ export function FloorplanPanel({
   const clearWallPlacementDraft = useCallback(() => {
     setDraftStart(null)
     setWallChainFirstVertex(null)
+    wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
     useSegmentDraftChain.getState().clear('wall')
@@ -7848,6 +7857,7 @@ export function FloorplanPanel({
   }, [])
   const clearSlabPlacementDraft = useCallback(() => {
     setSlabDraftPoints([])
+    slabPlacementBaseRef.current = null
   }, [])
   const clearZonePlacementDraft = useCallback(() => {
     setZoneDraftPoints([])
@@ -7970,18 +7980,22 @@ export function FloorplanPanel({
   // the tools' own `commitSlab/CeilingDrawing`) are called ONLY in 2D-only view
   // so split / 3D keep their single-owner tool commit (no double-create).
   const createSlabOnCurrentLevel = useCallback(
-    (points: WallPlanPoint[]) => {
+    (points: WallPlanPoint[], baseElevation: number | null) => {
       if (!levelId) {
         return null
       }
       const { createNode, nodes } = useScene.getState()
       const slabCount = Object.values(nodes).filter((node) => node.type === 'slab').length
       const defaults = useEditor.getState().toolDefaults.slab ?? {}
-      const slab = SlabNodeSchema.parse({
+      const authored = SlabNodeSchema.parse({
         ...defaults,
         name: `Slab ${slabCount + 1}`,
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
+      const slab = {
+        ...authored,
+        elevation: resolveSlabPlacementElevation(authored, baseElevation),
+      }
       createNode(slab, levelId)
       sfxEmitter.emit('sfx:structure-build')
       setSelection({ selectedIds: [slab.id] })
@@ -8949,10 +8963,20 @@ export function FloorplanPanel({
       const worldX = buildingPosition[0] + planPoint[0] * cos + planPoint[1] * sin
       const worldZ = buildingPosition[2] - planPoint[0] * sin + planPoint[1] * cos
 
+      // On sculpted ground the grid Y is the terrain height under the plan point,
+      // not the flat storey plane. There is no XZ correction to make here — the
+      // plan view's ray is vertical by construction, so the skew the 3D path has
+      // to march for cannot happen — but the Y still has to be the ground's, or a
+      // wall drafted in 2D lands at the datum while the same wall drafted in 3D
+      // lands on the hillside.
+      const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
+      const worldY = groundY ?? floorplanGridWorldY
+      const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
+
       emitter.emit(`grid:${eventType}` as any, {
         nativeEvent: nativeEvent.nativeEvent as any,
-        position: [worldX, floorplanGridWorldY, worldZ],
-        localPosition: [planPoint[0], floorplanGridLocalY, planPoint[1]],
+        position: [worldX, worldY, worldZ],
+        localPosition: [planPoint[0], localY, planPoint[1]],
       })
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
@@ -9554,16 +9578,32 @@ export function FloorplanPanel({
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
         // 2D-only view: the 3D tool can't commit, so close the polygon here.
         if (useEditor.getState().viewMode === '2d') {
-          createSlabOnCurrentLevel(slabDraftPoints)
+          createSlabOnCurrentLevel(slabDraftPoints, slabPlacementBaseRef.current)
         }
         clearDraft()
         return
       }
 
+      if (slabDraftPoints.length === 0) {
+        const recessed = useEditor.getState().toolDefaults.slab?.recessed === true
+        if (!levelId || recessed) {
+          slabPlacementBaseRef.current = null
+        } else {
+          const support = spatialGridManager.getPointedSupportSurface(
+            levelId,
+            [point[0], 1_000_000, point[1]],
+            [0, -1, 0],
+          )
+          slabPlacementBaseRef.current =
+            support.slabId != null
+              ? support.elevation
+              : terrainSupportLift(useScene.getState().nodes, levelId, point[0], point[1])
+        }
+      }
       setSlabDraftPoints((currentPoints) => [...currentPoints, point])
       setCursorPoint(point)
     },
-    [clearDraft, createSlabOnCurrentLevel, slabDraftPoints, setCursorPoint],
+    [clearDraft, createSlabOnCurrentLevel, levelId, slabDraftPoints, setCursorPoint],
   )
   const handleSlabPlacementConfirm = useCallback(
     (point?: WallPlanPoint) => {
@@ -9588,7 +9628,7 @@ export function FloorplanPanel({
 
       // 2D-only view: the 3D tool can't commit, so create the slab here.
       if (useEditor.getState().viewMode === '2d') {
-        createSlabOnCurrentLevel(nextPoints)
+        createSlabOnCurrentLevel(nextPoints, slabPlacementBaseRef.current)
       }
       clearDraft()
     },
@@ -9695,6 +9735,14 @@ export function FloorplanPanel({
   const handleWallPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
       if (!draftStart) {
+        wallConstructionOptionsRef.current = levelId
+          ? resolveTerrainWallConstructionOptions(
+              useScene.getState().nodes,
+              levelId,
+              point,
+              useEditor.getState().toolDefaults.wall,
+            )
+          : undefined
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
@@ -9721,7 +9769,14 @@ export function FloorplanPanel({
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
-      const createdWall = viewIs2DOnly ? createWallOnCurrentLevel(draftStart, point) : null
+      let createdWall: WallNode | null = null
+      if (viewIs2DOnly) {
+        createdWall = createWallOnCurrentLevel(
+          draftStart,
+          point,
+          wallConstructionOptionsRef.current,
+        )
+      }
       if (createdWall) {
         wallChainWallIdsRef.current.push(createdWall.id)
       }

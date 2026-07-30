@@ -5,6 +5,7 @@ import {
   getSlabElevationUpperBound,
   getStoredLevelHeight,
   type LevelNode,
+  MIN_SLAB_THICKNESS,
   type SlabElevationClamp,
   type SlabNode,
   type WallNode,
@@ -17,58 +18,120 @@ type SlabLevelContext = {
 }
 
 const GROUNDED_SLAB_EPSILON = 1e-3
-/** Deck thickness an unsticking slab pops to — the schema default. */
-const UNSTUCK_DECK_THICKNESS = 0.05
-/**
- * Grounded-stretch ceiling for the 3D elevation arrow (m) — above any
- * plausible step/platform height. While grounded, dragging the top up to
- * here stretches the body; dragging past it unsticks the slab into a
- * thin floating deck and the drag continues as pure placement.
- */
-export const SLAB_UNSTICK_THRESHOLD = 0.4
 
-export type SlabTopChangeMode = 'drag' | 'panel'
+/** Level-local Y of a solid slab's underside (its placement anchor). */
+export function getSlabBaseElevation(slab: Pick<SlabNode, 'elevation' | 'thickness'>): number {
+  return (slab.elevation ?? 0.05) - (slab.thickness ?? 0.05)
+}
+
+/** Stable vertical reference used by relative slab presets. */
+export function getSlabAnchorElevation(
+  slab: Pick<SlabNode, 'elevation' | 'thickness' | 'recessed' | 'recessedRimElevation'>,
+): number {
+  return slab.recessed ? (slab.recessedRimElevation ?? 0) : getSlabBaseElevation(slab)
+}
 
 /**
- * The one owner of the slab vertical-editing rules. Both edit surfaces
- * route through it: the viewport arrow as `mode: 'drag'`, the panel
- * elevation input as `mode: 'panel'`.
- *
- * Hysteresis-free state machine (pure in current state + newTop):
- *  - recessed → move the pool floor; rising to ≥ 0 un-recesses.
- *  - grounded, newTop ≤ 0 → pool gesture (both modes).
- *  - grounded drag, newTop ≤ {@link SLAB_UNSTICK_THRESHOLD} → stretch
- *    (elevation and thickness move together, underside stays at 0).
- *  - grounded drag past the threshold → unstick: pop to the default deck
- *    thickness and continue as placement.
- *  - otherwise (floating, or any panel edit) → placement: move the body
- *    preserving thickness, clamping the underside to the level plane —
- *    landing re-grounds the slab, so the way back up stretches again
- *    below the threshold.
+ * Translate a solid slab to a new underside elevation without changing its
+ * authored thickness. Recessed slabs use a different rim/depth contract and
+ * keep the existing top/depth control instead.
  */
-export function applySlabTopChange(
-  slab: SlabNode,
-  newTop: number,
-  options: { mode: SlabTopChangeMode },
+export function applySlabBaseElevationChange(
+  slab: Pick<SlabNode, 'thickness'>,
+  newBase: number,
+): Pick<SlabNode, 'elevation'> {
+  return { elevation: newBase + (slab.thickness ?? 0.05) }
+}
+
+/** Translate a solid underside or recessed rim without resizing the body. */
+export function applySlabAnchorElevationChange(
+  slab: Pick<SlabNode, 'elevation' | 'thickness' | 'recessed' | 'recessedRimElevation'>,
+  newAnchor: number,
 ): Partial<SlabNode> {
-  if (slab.recessed) return { elevation: newTop, recessed: newTop < 0 }
+  if (!slab.recessed) return applySlabBaseElevationChange(slab, newAnchor)
+  const rim = getSlabAnchorElevation(slab)
+  return {
+    elevation: slab.elevation + (newAnchor - rim),
+    recessedRimElevation: newAnchor,
+  }
+}
+
+export function getSlabRecessDepth(
+  slab: Pick<SlabNode, 'elevation' | 'recessedRimElevation'>,
+): number {
+  return Math.max(MIN_SLAB_THICKNESS, (slab.recessedRimElevation ?? 0) - slab.elevation)
+}
+
+/** Resize a recess downward while keeping its rim anchor fixed. */
+export function applySlabRecessDepthChange(
+  slab: Pick<SlabNode, 'recessedRimElevation'>,
+  newDepth: number,
+): Pick<SlabNode, 'elevation'> {
+  const depth = Math.max(MIN_SLAB_THICKNESS, newDepth)
+  return { elevation: (slab.recessedRimElevation ?? 0) - depth }
+}
+
+/**
+ * Resize a solid slab upward from its underside. The occupied interval changes
+ * from [base, old top] to [base, base + new thickness], so anything hosted on
+ * the walking surface observes the new elevation.
+ */
+export function applySlabThicknessChange(
+  slab: Pick<SlabNode, 'elevation' | 'thickness'>,
+  newThickness: number,
+): Pick<SlabNode, 'elevation' | 'thickness' | 'recessed'> {
+  const thickness = Math.max(MIN_SLAB_THICKNESS, newThickness)
+  return {
+    elevation: getSlabBaseElevation(slab) + thickness,
+    thickness,
+    recessed: false,
+  }
+}
+
+/**
+ * Move a slab's authored top while preserving thickness. Recessed slabs keep
+ * their pool-depth gesture; a grounded solid crossing below datum becomes
+ * recessed. Solid slab thickness is edited separately.
+ */
+export function applySlabTopChange(slab: SlabNode, newTop: number): Partial<SlabNode> {
+  if (slab.recessed) {
+    const rim = getSlabAnchorElevation(slab)
+    if (newTop < rim) return { elevation: newTop, recessed: true }
+    return {
+      elevation: Math.max(newTop, rim + MIN_SLAB_THICKNESS),
+      thickness: Math.max(MIN_SLAB_THICKNESS, newTop - rim),
+      recessed: false,
+      recessedRimElevation: undefined,
+    }
+  }
 
   const grounded = Math.abs(slab.elevation - slab.thickness) < GROUNDED_SLAB_EPSILON
   if (grounded && newTop <= 0) return { elevation: newTop, recessed: true }
 
-  if (grounded && options.mode === 'drag') {
-    return newTop <= SLAB_UNSTICK_THRESHOLD
-      ? { elevation: newTop, thickness: newTop, recessed: false }
-      : { elevation: newTop, thickness: UNSTUCK_DECK_THICKNESS, recessed: false }
-  }
-
-  return { elevation: Math.max(newTop, slab.thickness), recessed: false }
+  return { elevation: newTop, recessed: false }
 }
 
-export function applySlabElevationPreset(newTop: number): Partial<SlabNode> {
-  return newTop < 0
-    ? { elevation: newTop, recessed: true }
-    : { elevation: newTop, thickness: Math.max(newTop, 0), recessed: false }
+/**
+ * Apply a signed surface preset around the current anchor. Negative values make
+ * a recess below the anchor; positive values make a solid upward from it.
+ */
+export function applySlabElevationPreset(slab: SlabNode, signedDepth: number): Partial<SlabNode> {
+  const anchor = getSlabAnchorElevation(slab)
+  if (signedDepth < 0) {
+    return {
+      elevation: anchor + signedDepth,
+      recessed: true,
+      recessedRimElevation: anchor,
+      fillToTerrain: undefined,
+    }
+  }
+  const thickness = Math.max(MIN_SLAB_THICKNESS, signedDepth)
+  return {
+    elevation: anchor + thickness,
+    thickness,
+    recessed: false,
+    recessedRimElevation: undefined,
+  }
 }
 
 function resolveSlabLevelContext(

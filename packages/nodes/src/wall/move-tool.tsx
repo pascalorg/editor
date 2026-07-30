@@ -17,7 +17,7 @@ import {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planWallMoveJunctions,
-  resolveWallSupportSlabPatch,
+  resolveMovedWallSupportSlabPatch,
   resumeSceneHistory,
   type SlabNode,
   useLiveNodeOverrides,
@@ -608,7 +608,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         affectedWallIds.flatMap((id) => {
           const wall = committedNodes[id]
           return wall?.type === 'wall'
-            ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+            ? [{ id, data: resolveMovedWallSupportSlabPatch(wall, committedNodes) }]
             : []
         }),
       )

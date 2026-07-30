@@ -59,6 +59,13 @@ export type InteractionScope =
   | { kind: 'box-select' }
   // Material paint application.
   | { kind: 'painting' }
+  // Terrain sculpting. Held for the whole time the sculpt tool is armed, not
+  // just while the pointer is down — the same lifetime as `painting`, and for
+  // the same reason: an *active* scope is what makes every other object's
+  // handles, the floating action menu, and the zone labels step back
+  // (`resolveOverlayPolicy`). A brush that only claimed the scope between
+  // pointer-down and -up would flicker all of that back on between dabs.
+  | { kind: 'sculpting' }
 
 export type InteractionKind = InteractionScope['kind']
 

@@ -5,11 +5,12 @@ import {
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  getWallBaseElevationForNodes,
   getWallCurveLength,
   getWallThickness,
   pauseSceneHistory,
   resolveAlignment,
-  resolveWallSupportSlabPatch,
+  resolveMovedWallSupportSlabPatch,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
@@ -39,6 +40,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -209,6 +211,12 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
   })
   const [altPressed, setAltPressed] = useState(false)
   const unit = useViewer((s) => s.unit)
+  const nodes = useScene((state) => state.nodes)
+  const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(target.wall.id))
+  const effectiveWall = liveOverride
+    ? ({ ...target.wall, ...liveOverride } as WallNode)
+    : target.wall
+  const wallBaseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
 
   // Alt-detach only affects walls sharing the moving endpoint; walls linked
   // solely to the fixed endpoint never move, so the hint would be noise.
@@ -564,7 +572,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             affectedIds.flatMap((id) => {
               const wall = committedNodes[id]
               return wall?.type === 'wall'
-                ? [{ id, data: resolveWallSupportSlabPatch(wall, committedNodes) }]
+                ? [{ id, data: resolveMovedWallSupportSlabPatch(wall, committedNodes) }]
                 : []
             }),
           )
@@ -661,48 +669,52 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     end: previewEnd,
     curveOffset: target.wall.curveOffset,
   })
-  const wallHeight = resolveWallOpeningCeiling(target.wall, useScene.getState().nodes)
+  const wallHeight = resolveWallOpeningCeiling(effectiveWall, nodes)
   const dimMidX = (previewStart[0] + previewEnd[0]) / 2
   const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
 
   return (
-    <group>
-      <CursorSphere position={cursorLocalPos} showTooltip={false} />
-      <Html
-        center
-        position={[dimMidX, wallHeight + 0.3, dimMidZ]}
-        style={{ pointerEvents: 'none', touchAction: 'none' }}
-        zIndexRange={[100, 0]}
-      >
-        <MeasurementPill
-          height={wallHeight}
-          length={liveLength}
-          primary="length"
-          thickness={getWallThickness(target.wall)}
-          unit={unit}
-        />
-      </Html>
-      {canDetachCorner && (
+    <LevelOffsetGroup>
+      <group position={[0, wallBaseElevation, 0]}>
+        <CursorSphere position={cursorLocalPos} showTooltip={false} />
         <Html
-          position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+          center
+          position={[dimMidX, wallHeight + 0.3, dimMidZ]}
           style={{ pointerEvents: 'none', touchAction: 'none' }}
           zIndexRange={[100, 0]}
         >
-          <div className="translate-y-10">
-            <div
-              className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
-                altPressed
-                  ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
-                  : 'border-border bg-background/95 text-muted-foreground'
-              }`}
-            >
-              {altPressed ? 'Detaching corner' : 'Alt to detach'}
-            </div>
-          </div>
+          <MeasurementPill
+            height={wallHeight}
+            length={liveLength}
+            primary="length"
+            thickness={getWallThickness(effectiveWall)}
+            unit={unit}
+          />
         </Html>
-      )}
-      {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
-    </group>
+        {canDetachCorner && (
+          <Html
+            position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+            style={{ pointerEvents: 'none', touchAction: 'none' }}
+            zIndexRange={[100, 0]}
+          >
+            <div className="translate-y-10">
+              <div
+                className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                    : 'border-border bg-background/95 text-muted-foreground'
+                }`}
+              >
+                {altPressed ? 'Detaching corner' : 'Alt to detach'}
+              </div>
+            </div>
+          </Html>
+        )}
+        {angleLabel && (
+          <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />
+        )}
+      </group>
+    </LevelOffsetGroup>
   )
 }
 

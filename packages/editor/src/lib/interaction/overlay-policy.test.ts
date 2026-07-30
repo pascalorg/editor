@@ -20,6 +20,7 @@ const ACTIVE_SCOPES: ActiveInteractionScope[] = [
   { kind: 'reshaping', nodeId: 's1', reshape: 'hole', driver: 'tool', holeIndex: 0 },
   { kind: 'box-select' },
   { kind: 'painting' },
+  { kind: 'sculpting' },
 ]
 
 describe('resolveOverlayPolicy', () => {

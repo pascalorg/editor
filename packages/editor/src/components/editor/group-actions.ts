@@ -29,6 +29,7 @@ import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDeleteConfirmation from '../../store/use-delete-confirmation'
 import useEditor, {
   isAlignmentGuideActive,
+  isBrushMode,
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
@@ -490,6 +491,15 @@ export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promis
   if (activeScope.kind === 'placing' || activeScope.kind === 'moving') {
     emitter.emit('tool:cancel')
   }
+  // Paint and sculpt hold their scope for the whole *mode*, so a pick-up would
+  // `begin({kind: 'handle-drag'})` over it — scopes are single-owner, so the brush
+  // would stay armed and painting while the editor believed a group move was
+  // running, and the mode's own release would then end someone else's scope.
+  // ⌘V is reachable from either mode (it reads the clipboard, not the selection,
+  // which is why clearing the selection on mode entry does not cover it), so drop
+  // the brush first: carrying clones is the newer intent, and unlike the cancels
+  // above there is nothing to abandon.
+  if (isBrushMode(useEditor.getState().mode)) useEditor.getState().setMode('select')
 
   const result = await pasteSystemEditorClipboardToLevel(targetLevelId)
   if (!result || result.pastedIds.length === 0) return false

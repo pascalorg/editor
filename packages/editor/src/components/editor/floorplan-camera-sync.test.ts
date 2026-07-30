@@ -177,6 +177,34 @@ describe('floorplan camera sync', () => {
     expect(applied).toEqual([])
   })
 
+  test('applies the north-alignment pose used by the compass in 3D view', () => {
+    const applied: CameraPose[] = []
+    const bridge = createFloorplanCameraSyncBridge({
+      applyCameraPose: (pose) => applied.push(pose),
+      publishNavigationPose: () => {},
+    })
+    const currentPose = cameraPoseAtAzimuth(Math.PI / 2, [8, 1, 4])
+
+    bridge.receiveCameraPose(currentPose)
+    bridge.receiveNavigationPose({
+      source: '2d',
+      revision: 1,
+      target: [...currentPose.target],
+      azimuth: 0,
+      viewWidth: currentPose.viewWidth!,
+    })
+
+    expect(applied).toHaveLength(1)
+    expect(applied[0]).toMatchObject({
+      target: currentPose.target,
+      projection: currentPose.projection,
+      viewWidth: currentPose.viewWidth,
+    })
+    expect(applied[0]?.position[0]).toBeCloseTo(currentPose.target[0])
+    expect(applied[0]?.position[1]).toBeCloseTo(currentPose.position[1])
+    expect(applied[0]?.position[2]).toBeCloseTo(currentPose.target[2] + 5)
+  })
+
   test('applies 2D-first navigation on initial load without a 3D interaction', () => {
     const applied: CameraPose[] = []
     const bridge = createFloorplanCameraSyncBridge({

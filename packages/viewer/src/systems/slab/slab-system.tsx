@@ -186,8 +186,8 @@ function generateSolidSlabGeometry(
 }
 
 /**
- * Pool / recessed slab: floor cap at Y=0 (local) + inner walls up to Y=|elevation|.
- * No top cap — the opening at ground level is handled by the ground occluder hole.
+ * Pool / recessed slab: floor cap at Y=0 (local) + inner walls up to the rim.
+ * No top cap — the opening at the rim is handled by the ground occluder hole.
  * mesh.position.y must be set to elevation so the floor sits at the correct world Y.
  *
  * Geometry is built directly in 3D (Y-up) to avoid rotation confusion:
@@ -199,7 +199,8 @@ function generatePoolGeometry(
   context: SlabPolygonContext,
 ): THREE.BufferGeometry {
   const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode, context))
-  const depth = Math.abs(slabNode.elevation ?? 0.05)
+  const floor = slabNode.elevation ?? 0.05
+  const depth = Math.max(0, (slabNode.recessedRimElevation ?? 0) - floor)
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
   if (polygon.length < 3) return new THREE.BufferGeometry()

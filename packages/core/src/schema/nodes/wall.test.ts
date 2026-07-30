@@ -13,9 +13,29 @@ import {
   WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WallFaceBandConfig,
+  WallNode,
   type WallNode as WallNodeType,
   WallTrimConfig,
 } from './wall'
+
+describe('wall support offset', () => {
+  test('stores a finite offset without defaulting it onto ordinary walls', () => {
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0] }).supportOffset).toBeUndefined()
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0], supportOffset: 1.75 }).supportOffset).toBe(
+      1.75,
+    )
+    expect(
+      WallNode.safeParse({ start: [0, 0], end: [4, 0], supportOffset: Number.NaN }).success,
+    ).toBe(false)
+  })
+
+  test('stores terrain infill only when explicitly enabled', () => {
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0] }).fillToTerrain).toBeUndefined()
+    expect(WallNode.parse({ start: [0, 0], end: [4, 0], fillToTerrain: true }).fillToTerrain).toBe(
+      true,
+    )
+  })
+})
 
 describe('wall face bands', () => {
   test('defaults to one band while preserving legacy enabled scenes as three bands', () => {

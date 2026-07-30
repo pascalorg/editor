@@ -138,6 +138,10 @@ export {
   THUMBNAIL_WIDTH,
 } from './lib/snapshot-pipeline'
 export {
+  buildTerrainPerimeterFillGeometry,
+  type TerrainPerimeterPoint,
+} from './lib/terrain-perimeter-fill'
+export {
   getPascalTextureRef,
   type PascalTextureColorSpace,
   type PascalTextureMap,

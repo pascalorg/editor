@@ -2,10 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  applyHeightPatch,
   BuildingNode,
   CeilingNode,
   ColumnNode,
+  createTerrainField,
   ElevatorNode,
+  encodeTerrainField,
+  flattenPatch,
   LevelNode,
   nodeRegistry,
   registerNode,
@@ -14,7 +18,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial } from 'three'
+import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildFirstPersonColliderWorldFromRegistry } from './build-collider-world'
 
 function registerColliderDefinition(
@@ -208,5 +212,35 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     expect(world?.bounds?.min.z).toBeCloseTo(-1000)
     expect(world?.bounds?.max.z).toBeCloseTo(1000)
     world?.dispose()
+  })
+
+  test('a sculpted site walks on its terrain instead of the flat ground slab', () => {
+    const base = createTerrainField({ cols: 17, rows: 17, spacing: 1, origin: [-8, -8] })
+    const patch = flattenPatch(base, { minX: 2, minZ: 2, maxX: 5, maxZ: 5 }, 2.5)
+    const field = applyHeightPatch(base, patch as never)
+    const site = SiteNode.parse({ id: 'site_test', terrain: encodeTerrainField(field) })
+    setSceneNodes([site])
+    mountRegistryGroup(site)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()
+    expect(world).not.toBeNull()
+    if (!world) return
+
+    // The hill is in the collider: a flat slab would top out at 0.
+    expect(world.bounds?.max.y).toBeCloseTo(2.5)
+    // And it still reaches past the site so stepping out does not drop the player.
+    expect(world.bounds?.min.x).toBeCloseTo(-1008)
+    expect(world.bounds?.max.x).toBeCloseTo(1008)
+
+    // What the player actually stands on, on the plateau and off it.
+    const raycaster = new Raycaster()
+    const standOn = (x: number, z: number) => {
+      raycaster.set(new Vector3(x, 500, z), new Vector3(0, -1, 0))
+      return raycaster.intersectObject(world.mesh, false)[0]?.point.y ?? null
+    }
+    expect(standOn(3, 3)).toBeCloseTo(2.5, 4)
+    expect(standOn(-3, -3)).toBeCloseTo(0, 4)
+
+    world.dispose()
   })
 })
