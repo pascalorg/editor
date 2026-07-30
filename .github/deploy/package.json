@@ -1,0 +1,22 @@
+{
+  "name": "digitaltwin",
+  "version": "1.4.0",
+  "private": true,
+  "type": "module",
+  "description": "Pascal Editor, compiled and ready to run. Nothing is built at deploy time.",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "build": "echo 'Prebuilt bundle - nothing to compile.'",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "mysql2": "3.23.2",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "sharp": "0.34.5"
+  }
+}

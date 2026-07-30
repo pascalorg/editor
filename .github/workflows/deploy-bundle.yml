@@ -1,0 +1,94 @@
+name: Deploy bundle
+
+# Plugins compile into the app, so a plugin release only reaches the site
+# through a rebuild. Run this after pinning a new plugin commit, or send a
+# repository_dispatch from the plugin repo to have it run itself.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/editor/**'
+      - 'packages/**'
+      - 'bun.lock'
+  repository_dispatch:
+    types: [plugin-updated]
+
+concurrency:
+  group: deploy-bundle
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+
+      # The plugin is pinned over ssh; rewrite it to an authenticated https
+      # URL so the runner can fetch it whether or not the repo is public.
+      - name: Allow git dependencies over https
+        run: |
+          git config --global \
+            url."https://x-access-token:${{ secrets.DEPLOY_TOKEN }}@github.com/".insteadOf \
+            "ssh://git@github.com/"
+
+      # The hoisted linker keeps the standalone output free of symlinks, which
+      # break once the host moves the deployed directory.
+      - name: Install
+        run: bun install --linker=hoisted
+
+      - name: Build
+        run: bunx turbo run build --filter=editor
+
+      # The standalone output omits both of these by design.
+      - name: Complete the standalone output
+        run: |
+          mkdir -p apps/editor/.next/standalone/apps/editor/public \
+                   apps/editor/.next/standalone/apps/editor/.next/static
+          cp -r apps/editor/public/. apps/editor/.next/standalone/apps/editor/public/
+          cp -r apps/editor/.next/static/. apps/editor/.next/standalone/apps/editor/.next/static/
+
+      # Lift the app to the top level: the host picks the directory holding
+      # package.json, and a nested second one sends it to the wrong place.
+      - name: Assemble the bundle
+        run: |
+          mkdir -p bundle
+          cp -a apps/editor/.next/standalone/apps/editor/.next bundle/.next
+          cp -a apps/editor/.next/standalone/apps/editor/public bundle/public
+          cp -a apps/editor/.next/standalone/apps/editor/server.js bundle/server.js
+          cp .github/deploy/package.json bundle/package.json
+          cp .github/deploy/README.md bundle/README.md
+          printf 'node_modules/\n' > bundle/.gitignore
+
+      - name: Smoke test
+        run: |
+          cd bundle
+          npm install --no-audit --no-fund
+          npm run build
+          node server.js &
+          for _ in $(seq 1 30); do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/api/health || true)
+            [ "$code" = "200" ] && break
+          done
+          test "$code" = "200" || { echo "health check failed: $code"; exit 1; }
+          curl -sf -o /dev/null http://127.0.0.1:3000/ || { echo "home page failed"; exit 1; }
+
+      - name: Publish
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          cd bundle
+          rm -rf node_modules
+          git init -q
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "Build from ${GITHUB_SHA::7}"
+          git push -q --force \
+            "https://x-access-token:${DEPLOY_TOKEN}@github.com/ovurrsl/digitaltwin.git" \
+            HEAD:main
