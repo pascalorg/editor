@@ -66,6 +66,11 @@ function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
   if (!token) {
     if (isLoopbackRequest(request)) return null
+    // With no token configured the API still serves the app's own pages: the
+    // origin check above rejects everything cross-origin, and requests that
+    // carry no Origin at all — scripts, other servers — fall through to 503.
+    const origin = request.headers.get('origin')
+    if (origin && isOriginAllowed(request, origin)) return null
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
   }
 
@@ -142,16 +147,25 @@ function configuredOrigins(): Set<string> {
   )
 }
 
+/**
+ * Compares hosts rather than full origins: behind a TLS-terminating proxy the
+ * request URL keeps the internal scheme, so a scheme comparison would reject
+ * the app's own pages. The host is the part that matters for CSRF anyway.
+ */
 function isSameOrigin(request: Request, origin: string): boolean {
   const parsedOrigin = parseUrl(origin)
   if (!parsedOrigin) return false
-  const requestUrl = new URL(request.url)
-  return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
+  return parsedOrigin.host.toLowerCase() === requestHost(request)
+}
+
+function requestHost(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+  const host = forwarded || request.headers.get('host') || new URL(request.url).host
+  return host.toLowerCase()
 }
 
 function isLoopbackRequest(request: Request): boolean {
-  const host = request.headers.get('host') ?? new URL(request.url).host
-  return isLoopbackHostname(stripPort(host))
+  return isLoopbackHostname(stripPort(requestHost(request)))
 }
 
 function isLoopbackHostname(hostname: string): boolean {

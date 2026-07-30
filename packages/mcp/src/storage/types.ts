@@ -119,7 +119,7 @@ export interface ProjectStatus {
 }
 
 export interface SceneStore {
-  readonly backend: 'sqlite' | 'supabase'
+  readonly backend: 'sqlite' | 'mysql' | 'supabase'
   createProject?(opts: ProjectCreateOptions): Promise<ProjectStatus>
   getProjectStatus?(id: SceneId): Promise<ProjectStatus | null>
   save(opts: SceneSaveOptions): Promise<SceneMeta>

@@ -1,9 +1,15 @@
-import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { z } from 'zod'
+import {
+  assertValidName,
+  DEFAULT_LIST_LIMIT,
+  editorUrlForScene,
+  hashGraphJson,
+  parseGraph,
+  resolveMaxSceneBytes,
+  serializeGraph,
+} from './scene-store-shared'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
@@ -23,11 +29,6 @@ import {
   SceneVersionConflictError,
   type SceneWithGraph,
 } from './types'
-
-const DEFAULT_MAX_SCENE_BYTES = 10 * 1024 * 1024
-const DEFAULT_LIST_LIMIT = 100
-const MAX_NAME_LENGTH = 200
-const MIN_NAME_LENGTH = 1
 
 export interface SqliteSceneStoreOptions {
   /** Exact SQLite database file path. If omitted, resolved from env. */
@@ -70,12 +71,6 @@ interface ProjectPlaceholder {
   updatedAt: string
 }
 
-const GraphSchema = z.object({
-  nodes: z.record(z.string(), z.unknown()),
-  rootNodeIds: z.array(z.string()),
-  collections: z.record(z.string(), z.unknown()).optional(),
-})
-
 /**
  * Resolves Pascal's local SQLite database path.
  *
@@ -107,26 +102,6 @@ export function resolveDefaultDatabasePath(env: NodeJS.ProcessEnv = process.env)
   return path.join(os.homedir(), '.pascal', 'data', 'pascal.db')
 }
 
-function resolveMaxSceneBytes(
-  env: NodeJS.ProcessEnv | undefined,
-  explicit: number | undefined,
-): number {
-  if (explicit !== undefined) {
-    if (!Number.isInteger(explicit) || explicit <= 0) {
-      throw new SceneInvalidError('maxSceneBytes must be a positive integer')
-    }
-    return explicit
-  }
-
-  const raw = env?.PASCAL_MAX_SCENE_BYTES
-  if (raw === undefined || raw === '') return DEFAULT_MAX_SCENE_BYTES
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new SceneInvalidError('PASCAL_MAX_SCENE_BYTES must be a positive integer')
-  }
-  return parsed
-}
-
 function rowToMeta(row: SceneRow): SceneMeta {
   const editorUrl = editorUrlForScene(row.id)
   return {
@@ -145,14 +120,6 @@ function rowToMeta(row: SceneRow): SceneMeta {
     published: true,
     graphHash: hashGraphJson(row.graph_json),
   }
-}
-
-function editorUrlForScene(id: string): string {
-  return `/editor/${id}`
-}
-
-function hashGraphJson(graphJson: string): string {
-  return createHash('sha256').update(graphJson).digest('hex')
 }
 
 function rowToProjectStatus(row: SceneRow): ProjectStatus {
@@ -201,53 +168,6 @@ function placeholderToProjectStatus(project: ProjectPlaceholder): ProjectStatus 
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }
-}
-
-function assertValidName(name: string): void {
-  if (typeof name !== 'string') {
-    throw new SceneInvalidError('Scene name must be a string')
-  }
-  const trimmed = name.trim()
-  if (trimmed.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
-    throw new SceneInvalidError(
-      `Scene name must be ${MIN_NAME_LENGTH}-${MAX_NAME_LENGTH} characters (got ${name.length})`,
-    )
-  }
-}
-
-function serializeGraph(graph: SceneGraph): string {
-  return JSON.stringify(graph)
-}
-
-function parseGraph(raw: string, context: string): SceneGraph {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch (err) {
-    throw new SceneInvalidError(
-      `Failed to parse scene graph for ${context}: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  const result = GraphSchema.safeParse(parsed)
-  if (!result.success) {
-    throw new SceneInvalidError(`Scene graph for ${context} has invalid shape: ${result.error}`)
-  }
-
-  const graph = result.data
-  for (const [nodeId, node] of Object.entries(graph.nodes)) {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) {
-      throw new SceneInvalidError(`Scene graph for ${context} has non-object node at "${nodeId}"`)
-    }
-    const typeField = (node as { type?: unknown }).type
-    if (typeof typeField !== 'string' || typeField.length === 0) {
-      throw new SceneInvalidError(
-        `Scene graph for ${context} has node "${nodeId}" missing a string "type"`,
-      )
-    }
-  }
-
-  return graph as SceneGraph
 }
 
 function asSceneRow(value: unknown): SceneRow | null {
