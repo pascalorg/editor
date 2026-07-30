@@ -25,6 +25,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
+import { shouldRegistryCommitCeiling } from './placement-ownership'
 import { CeilingNode } from './schema'
 
 /**
@@ -160,8 +161,10 @@ export const CeilingTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        const ceilingId = commitCeilingDrawing(currentLevelId, points)
-        setSelection({ selectedIds: [ceilingId] })
+        if (shouldRegistryCommitCeiling(useEditor.getState().viewMode)) {
+          const ceilingId = commitCeilingDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [ceilingId] })
+        }
         setPoints([])
         clearCeilingSnapFeedback()
       } else {
@@ -175,8 +178,10 @@ export const CeilingTool: React.FC = () => {
     const onGridDoubleClick = (_event: GridEvent) => {
       if (!currentLevelId) return
       if (points.length >= 3) {
-        const ceilingId = commitCeilingDrawing(currentLevelId, points)
-        setSelection({ selectedIds: [ceilingId] })
+        if (shouldRegistryCommitCeiling(useEditor.getState().viewMode)) {
+          const ceilingId = commitCeilingDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [ceilingId] })
+        }
         setPoints([])
         clearCeilingSnapFeedback()
       }
