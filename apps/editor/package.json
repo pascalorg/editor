@@ -13,7 +13,7 @@
   "dependencies": {
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.6.0",
-    "@ovurrsl/plugin-warehouse": "git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#b5bce6b8ded7cb56a28c1f8708a6ed3cc9936086",
+    "@ovurrsl/plugin-warehouse": "git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#d7c07e5c2d31351d59850fceca0429c7b5e8a8ac",
     "@pascal-app/core": "*",
     "@pascal-app/editor": "*",
     "@pascal-app/mcp": "*",
