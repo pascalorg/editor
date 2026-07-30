@@ -29,7 +29,7 @@
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@number-flow/react": "^0.6.0",
-        "@ovurrsl/plugin-warehouse": "git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#e959a11c8199a32e4b6e0f163096586b0805874a",
+        "@ovurrsl/plugin-warehouse": "git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#2c5417876ec6b04865f04ea9bc04341438817e09",
         "@pascal-app/core": "*",
         "@pascal-app/editor": "*",
         "@pascal-app/mcp": "*",
@@ -568,7 +568,7 @@
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.41.1", "", {}, "sha512-/UhIkaZgPutTFmQ7RnIJGgDXZmtEJ7Dvi86xNTFWcnRxVRNk/aotsqDJYeEvDP+FSMB2SdW+pQzNMcWP0rwuNA=="],
 
-    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#e959a11c8199a32e4b6e0f163096586b0805874a", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=0.9.2 <1", "@pascal-app/editor": ">=0.9.2 <1", "@pascal-app/viewer": ">=0.9.2 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "e959a11c8199a32e4b6e0f163096586b0805874a"],
+    "@ovurrsl/plugin-warehouse": ["@ovurrsl/plugin-warehouse@git+ssh://git@github.com/ovurrsl/plugin-warehouse.git#2c5417876ec6b04865f04ea9bc04341438817e09", { "peerDependencies": { "@iconify/react": "^6", "@pascal-app/core": ">=0.9.2 <1", "@pascal-app/editor": ">=0.9.2 <1", "@pascal-app/viewer": ">=0.9.2 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "2c5417876ec6b04865f04ea9bc04341438817e09"],
 
     "@oxc-parser/binding-android-arm-eabi": ["@oxc-parser/binding-android-arm-eabi@0.132.0", "", { "os": "android", "cpu": "arm" }, "sha512-KrLaPWa5c9Y7LkW+rKkaUE3y7DBDrQtaf7rlsSDfv6KAHUjgzAIRA761Lrrp6//Yd/Rlie/yEOt9YENCoJnOcw=="],
 
