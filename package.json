@@ -2,7 +2,7 @@
   "name": "editor",
   "private": true,
   "scripts": {
-    "build": "rm -rf node_modules apps/editor/node_modules apps/ifc-converter/node_modules packages/*/node_modules tooling/*/node_modules && bun install --linker=hoisted && turbo run build --filter=editor && mkdir -p apps/editor/.next/standalone/apps/editor/public apps/editor/.next/standalone/apps/editor/.next/static && cp -r apps/editor/public/. apps/editor/.next/standalone/apps/editor/public/ && cp -r apps/editor/.next/static/. apps/editor/.next/standalone/apps/editor/.next/static/ && cp apps/editor/hostinger-server.js apps/editor/.next/standalone/server.js",
+    "build": "rm -rf node_modules apps/editor/node_modules apps/ifc-converter/node_modules packages/*/node_modules tooling/*/node_modules && bun install --linker=hoisted && chmod -R +x node_modules/.bin node_modules/@turbo && turbo run build --filter=editor && mkdir -p apps/editor/.next/standalone/apps/editor/public apps/editor/.next/standalone/apps/editor/.next/static && cp -r apps/editor/public/. apps/editor/.next/standalone/apps/editor/public/ && cp -r apps/editor/.next/static/. apps/editor/.next/standalone/apps/editor/.next/static/ && cp apps/editor/hostinger-server.js apps/editor/.next/standalone/server.js",
     "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
