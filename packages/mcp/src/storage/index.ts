@@ -17,10 +17,28 @@ export * from './types'
  * hosts whose filesystem does not survive a redeploy.
  */
 export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneStore> {
-  if (resolveMysqlUrl(env ?? process.env)) {
+  const resolved = env ?? process.env
+  const mysqlUrl = resolveMysqlUrl(resolved)
+  if (mysqlUrl) {
     const mod = await import('./mysql-scene-store')
-    return new mod.MysqlSceneStore({ env })
+    const store = new mod.MysqlSceneStore({ env })
+    console.log(`[pascal:storage] backend=mysql ${describeMysqlTarget(mysqlUrl)}`)
+    return store
   }
   const mod = await import('./sqlite-scene-store')
-  return new mod.SqliteSceneStore({ env })
+  const store = new mod.SqliteSceneStore({ env })
+  console.log(
+    `[pascal:storage] backend=sqlite path=${store.databasePath} (set PASCAL_MYSQL_URL to use MySQL)`,
+  )
+  return store
+}
+
+/** Host and database only — the URL carries a password. */
+function describeMysqlTarget(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `host=${parsed.hostname}:${parsed.port || '3306'} database=${parsed.pathname.replace(/^\//, '')}`
+  } catch {
+    return 'target=unparseable'
+  }
 }
