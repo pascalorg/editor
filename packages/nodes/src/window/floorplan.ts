@@ -5,7 +5,7 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata } from '@pascal-app/editor'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
@@ -169,7 +169,7 @@ export function buildWindowFloorplan(
 
   // Placement-measurement dimensions when actively moving — same
   // contract as door (see `nodes/src/door/floorplan.ts`).
-  if (view?.moving) {
+  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }

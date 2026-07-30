@@ -10,8 +10,6 @@ const baseArgs = {
   modifierKeys: { meta: false, ctrl: false, shift: false },
   planPoint: [0, 0] as [number, number],
   structureLayer: 'elements',
-  toPoint2D: ([x, y]: [number, number]) => ({ x, y }),
-  visibleZonePolygons: [],
 }
 
 describe('resolveFloorplanBackgroundSelection', () => {
@@ -53,6 +51,22 @@ describe('resolveFloorplanBackgroundSelection', () => {
       handled: true,
       kind: 'clear-elements',
       preserveSelection: true,
+    })
+  })
+
+  test('uses the registry hit result for zone selection', () => {
+    const result = resolveFloorplanBackgroundSelection({
+      ...baseArgs,
+      canSelectElementFloorplanGeometry: false,
+      canSelectFloorplanZones: true,
+      getFloorplanHitIdAtPoint: () => 'zone_1',
+      structureLayer: 'zones',
+    })
+
+    expect(result).toEqual({
+      handled: true,
+      kind: 'select-zone',
+      zoneId: 'zone_1',
     })
   })
 })

@@ -6,9 +6,15 @@ import {
   movingAlignmentAnchors,
   type StairNode,
   snapScalar,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { applyFloorplanAlignment, getSegmentGridStep } from '@pascal-app/editor'
+import {
+  applyFloorplanAlignment,
+  getSegmentGridStep,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
 /**
@@ -17,13 +23,11 @@ import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
  * Existing stairs preserve the cursor grab offset, matching the 3D move
  * tools; fresh catalog placement follows the cursor absolutely.
  *
- * Figma alignment is layered on the stair footprint edges; Alt bypasses.
+ * Figma alignment is layered on the stair footprint edges.
  * Guides are cleared by `FloorplanRegistryMoveOverlay`'s Path 1 teardown.
  *
- * The position is written straight to scene each tick (the stair has a real
- * `position` field, unlike polygon kinds) and re-applied atomically via
- * `commit()` so the overlay's deterministic revert → resume → commit path
- * records a single undo step (same pattern door / window use).
+ * The position previews through the live override store and is written to
+ * scene once via `commit()`.
  */
 export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node, nodes }) => {
   const startY = node.position[1]
@@ -37,14 +41,12 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
-      // Snap the origin to the editor's current grid step (driven by
-      // `useEditor.gridSnapStep`). Shift bypasses the grid snap.
-      const step = getSegmentGridStep()
-      const snap = (value: number) => (modifiers.shiftKey ? value : snapScalar(value, step))
+    apply({ planPoint }) {
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
+      const snap = (value: number) => (step > 0 ? snapScalar(value, step) : value)
       const [gx, gz] = resolveCursor(planPoint, { snap })
-      // Figma alignment on the actual stair footprint (Alt bypasses alignment; Shift all snap),
-      // matching the 3D move tool. Publishes guides via `useAlignmentGuides`.
+      // Figma alignment on the actual stair footprint, matching the 3D move
+      // tool. Publishes guides via `useAlignmentGuides`.
       const movingAnchors = movingAlignmentAnchors(node, nodes, gx, gz, node.rotation ?? 0)
       const { point: aligned } = applyFloorplanAlignment(
         [gx, gz],
@@ -52,14 +54,15 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
           ? movingAnchors
           : [{ nodeId: node.id, kind: 'corner', x: gx, z: gz }],
         candidates,
-        { bypass: modifiers.altKey || modifiers.shiftKey },
+        { applySnap: isMagneticSnapActive() },
       )
       const sx = aligned[0]
       const sz = aligned[1]
 
       if (lastValid && lastValid.position[0] === sx && lastValid.position[2] === sz) return
       lastValid = { position: [sx, startY, sz] }
-      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastValid }])
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastValid)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
       // No overlap / placement rules for stairs in 2D — any pointer-up
@@ -72,6 +75,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       // commit-path (revert → resume → session.commit()). Same pattern
       // door / window use.
       if (!lastValid) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
       useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastValid }])
     },
   }

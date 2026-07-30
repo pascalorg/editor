@@ -14,7 +14,6 @@ import type {
   DoorNode,
   DormerNode,
   DownspoutNode,
-  DrawingSheetNode,
   DuctFittingNode,
   DuctSegmentNode,
   DuctTerminalNode,
@@ -126,7 +125,6 @@ export type SolarPanelEvent = NodeEvent<SolarPanelNode>
 export type SkylightEvent = NodeEvent<SkylightNode>
 export type DormerEvent = NodeEvent<DormerNode>
 export type DownspoutEvent = NodeEvent<DownspoutNode>
-export type DrawingSheetEvent = NodeEvent<DrawingSheetNode>
 export type DuctSegmentEvent = NodeEvent<DuctSegmentNode>
 export type DuctFittingEvent = NodeEvent<DuctFittingNode>
 export type DuctTerminalEvent = NodeEvent<DuctTerminalNode>
@@ -327,7 +325,6 @@ type EditorEvents = GridEvents &
   NodeEvents<'skylight', SkylightEvent> &
   NodeEvents<'dormer', DormerEvent> &
   NodeEvents<'downspout', DownspoutEvent> &
-  NodeEvents<'drawing-sheet', DrawingSheetEvent> &
   NodeEvents<'duct-segment', DuctSegmentEvent> &
   NodeEvents<'duct-fitting', DuctFittingEvent> &
   NodeEvents<'duct-terminal', DuctTerminalEvent> &

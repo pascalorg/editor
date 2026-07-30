@@ -155,7 +155,6 @@ function toMiterWall(segment: SegmentLike): WallNode {
     visible: true,
     metadata: {},
     children: [],
-    assemblyLayers: [],
     start: segment.start,
     end: segment.end,
     thickness: segment.thickness,

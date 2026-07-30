@@ -53,33 +53,10 @@ function enclosure(points: Array<[number, number]>) {
   return { context, nodes, walls, zone }
 }
 
-function withFinishAssembly(wall: WallNode): WallNode {
+function withFinishedThickness(wall: WallNode): WallNode {
   return WallNode.parse({
     ...wall,
-    thickness: undefined,
-    assemblyLayers: [
-      {
-        id: `${wall.id}_core`,
-        role: 'structure',
-        side: 'core',
-        thickness: 0.2,
-        datumEligible: ['structural-face'],
-      },
-      {
-        id: `${wall.id}_interior-finish`,
-        role: 'interior-finish',
-        side: 'interior',
-        thickness: 0.02,
-        datumEligible: ['finish-face'],
-      },
-      {
-        id: `${wall.id}_exterior-finish`,
-        role: 'exterior-finish',
-        side: 'exterior',
-        thickness: 0.02,
-        datumEligible: ['finish-face'],
-      },
-    ],
+    thickness: 0.24,
   })
 }
 
@@ -147,23 +124,23 @@ describe('buildRoomClearDimensions', () => {
     ).toEqual(['2.8m', '3.8m'])
   })
 
-  test('dimensions finish faces when every boundary wall has assembly finish datums', () => {
+  test('dimensions finish faces using each boundary wall thickness', () => {
     const { context, nodes, walls, zone } = enclosure([
       [0, 0],
       [4, 0],
       [4, 3],
       [0, 3],
     ])
-    const assembledWalls = walls.map(withFinishAssembly)
-    const assembledNodes = { ...nodes }
-    for (const wall of assembledWalls) assembledNodes[wall.id] = wall
+    const finishedWalls = walls.map(withFinishedThickness)
+    const finishedNodes = { ...nodes }
+    for (const wall of finishedWalls) finishedNodes[wall.id] = wall
 
     const result = dimensions(
       buildRoomClearDimensions(
         { ...zone, clearDimensionPolicy: 'finish-faces' },
         {
           ...context,
-          resolve: (id) => assembledNodes[id],
+          resolve: (id) => finishedNodes[id],
         },
       ),
     )
@@ -181,7 +158,7 @@ describe('buildRoomClearDimensions', () => {
       WallNode.parse({ id: 'wall_b_bottom', parentId: 'level_main', start: [4, 0], end: [8, 0] }),
       WallNode.parse({ id: 'wall_b_right', parentId: 'level_main', start: [8, 0], end: [8, 3] }),
       WallNode.parse({ id: 'wall_b_top', parentId: 'level_main', start: [8, 3], end: [4, 3] }),
-    ].map(withFinishAssembly)
+    ].map(withFinishedThickness)
     const zoneA = ZoneNode.parse({
       id: 'zone_a',
       parentId: 'level_main',
@@ -254,7 +231,7 @@ describe('buildRoomClearDimensions', () => {
     expect(result.map((entry) => entry.text).sort()).toEqual(['1.8m', '1.8m', '3.8m', '3.8m'])
   })
 
-  test('suppresses dimensions when the requested datum cannot be proven', () => {
+  test('suppresses dimensions when the room or requested policy is invalid', () => {
     const { context, nodes, walls, zone } = enclosure([
       [0, 0],
       [4, 0],
@@ -264,8 +241,10 @@ describe('buildRoomClearDimensions', () => {
 
     expect(buildRoomClearDimensions({ ...zone, clearDimensionPolicy: 'none' }, context)).toEqual([])
     expect(
-      buildRoomClearDimensions({ ...zone, clearDimensionPolicy: 'finish-faces' }, context),
-    ).toEqual([])
+      dimensions(
+        buildRoomClearDimensions({ ...zone, clearDimensionPolicy: 'finish-faces' }, context),
+      ),
+    ).toHaveLength(2)
     expect(buildRoomClearDimensions({ ...zone, enclosureStatus: 'open' }, context)).toEqual([])
     expect(buildRoomClearDimensions({ ...zone, autoFromWalls: false }, context)).toEqual([])
 

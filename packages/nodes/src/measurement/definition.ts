@@ -1,4 +1,5 @@
 import { measurementReferenceNodeIds, type NodeDefinition } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildMeasurementFloorplan } from './floorplan'
 import { measurementMoveVertexAffordance } from './floorplan-affordance'
 import { MeasurementNode } from './schema'
@@ -40,6 +41,11 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   },
   floorplan: buildMeasurementFloorplan,
   floorplanDependencies: (node) => measurementReferenceNodeIds(node.measurement),
+  extensions: {
+    'pascal:editor/floorplan': {
+      referencedSelectionAnnotationRole: 'measurement',
+    } satisfies FloorplanNodeExtension,
+  },
   floorplanAffordances: {
     'move-measurement-vertex': measurementMoveVertexAffordance,
   },

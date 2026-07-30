@@ -34,4 +34,10 @@ describe('floor-plan context extensions', () => {
     expect(normalizeFloorplanWallDimensionReference('unknown')).toBe('finished-faces')
     expect(normalizeFloorplanWallDimensionReference(null)).toBe('finished-faces')
   })
+
+  test('lets presentation code suppress automatic annotation construction', () => {
+    expect(readFloorplanContext(context()).automaticDimensions).toBe(true)
+    const extensions = createFloorplanContextExtensions({ automaticDimensions: false })
+    expect(readFloorplanContext(context(extensions)).automaticDimensions).toBe(false)
+  })
 })

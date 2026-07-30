@@ -12,7 +12,6 @@ export type {
   ConstructionDimensionEvent,
   DoorEvent,
   DormerEvent,
-  DrawingSheetEvent,
   ElevatorEvent,
   EventSuffix,
   FenceEvent,

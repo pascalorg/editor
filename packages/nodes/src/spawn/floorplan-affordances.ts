@@ -2,8 +2,10 @@ import {
   type AnyNodeId,
   type FloorplanAffordance,
   type SpawnNode,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 export const spawnRotateAffordance: FloorplanAffordance<SpawnNode> = {
@@ -17,20 +19,22 @@ export const spawnRotateAffordance: FloorplanAffordance<SpawnNode> = {
 
     return {
       affectedIds: [spawnId],
-      apply({ planPoint, modifiers }) {
+      apply({ planPoint }) {
         const delta = rotateAffordanceDelta({
           center: [cx, cz],
           initialAngle,
           planPoint,
-          free: modifiers.shiftKey,
+          free: !isAngleSnapActive(),
         })
         lastRotation = initialRotation - delta
-        useScene.getState().updateNode(spawnId, { rotation: lastRotation })
+        useLiveNodeOverrides.getState().set(spawnId, { rotation: lastRotation })
+        useScene.getState().markDirty(spawnId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(spawnId)
         useScene.getState().updateNode(spawnId, { rotation: lastRotation })
       },
     }

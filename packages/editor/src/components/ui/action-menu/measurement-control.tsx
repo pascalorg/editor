@@ -22,6 +22,7 @@ import { useState } from 'react'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
 
@@ -63,6 +64,7 @@ export function MeasurementControl() {
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const floorplanMode = useFloorplanMode((state) => state.mode)
   const selectedKind = useEditor((state) => state.lastMeasurementKind)
   const activeToolKind = useEditor((state) => state.toolDefaults.measurement?.kind)
   const constructionDimensionChainMode = useEditor(
@@ -130,6 +132,10 @@ export function MeasurementControl() {
     dimensionMode: ConstructionDimensionMode,
     chainMode: ConstructionDimensionChainMode,
   ) => {
+    if (useFloorplanMode.getState().mode !== 'expert') {
+      useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
+      return
+    }
     setPhase('structure')
     setStructureLayer('elements')
     setViewMode('2d')
@@ -218,38 +224,42 @@ export function MeasurementControl() {
             )
           })}
 
-          <div className="my-1.5 h-px bg-border/60" />
-          <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-            Floor plan
-          </div>
+          {floorplanMode === 'expert' ? (
+            <>
+              <div className="my-1.5 h-px bg-border/60" />
+              <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
+                Floor plan
+              </div>
 
-          {constructionDimensionOptions.map((option) => {
-            const OptionIcon = option.icon
-            const isSelected =
-              isConstructionDimensionActive && activeConstructionDimensionOption === option
-            return (
-              <button
-                aria-checked={isSelected}
-                className={cn(
-                  'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
-                  isSelected
-                    ? 'bg-white/10 text-foreground'
-                    : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
-                )}
-                key={`${option.mode}-${option.chainMode}`}
-                onClick={() => {
-                  activateConstructionDimension(option.mode, option.chainMode)
-                  setIsOpen(false)
-                }}
-                role="menuitemradio"
-                type="button"
-              >
-                <OptionIcon aria-hidden="true" className="h-4 w-4" />
-                <span>{option.label}</span>
-                {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
-              </button>
-            )
-          })}
+              {constructionDimensionOptions.map((option) => {
+                const OptionIcon = option.icon
+                const isSelected =
+                  isConstructionDimensionActive && activeConstructionDimensionOption === option
+                return (
+                  <button
+                    aria-checked={isSelected}
+                    className={cn(
+                      'flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors',
+                      isSelected
+                        ? 'bg-white/10 text-foreground'
+                        : 'text-muted-foreground hover:bg-white/8 hover:text-foreground',
+                    )}
+                    key={`${option.mode}-${option.chainMode}`}
+                    onClick={() => {
+                      activateConstructionDimension(option.mode, option.chainMode)
+                      setIsOpen(false)
+                    }}
+                    role="menuitemradio"
+                    type="button"
+                  >
+                    <OptionIcon aria-hidden="true" className="h-4 w-4" />
+                    <span>{option.label}</span>
+                    {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
+                  </button>
+                )
+              })}
+            </>
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

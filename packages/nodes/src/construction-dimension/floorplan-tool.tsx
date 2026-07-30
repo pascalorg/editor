@@ -35,7 +35,10 @@ import {
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { resolveCircularConstructionDimensionLayout } from './geometry'
+import {
+  alignConstructionDimensionDirectionToSharedWall,
+  resolveCircularConstructionDimensionLayout,
+} from './geometry'
 
 const SEMANTIC_SNAP_DISTANCE = 0.2
 const SEMANTIC_BYPASS_DISTANCE = 0.012
@@ -123,12 +126,18 @@ function registryTargetNodeId(target: EventTarget | null): string | null {
 
 export function resolveConstructionDimensionDraftDirection(
   points: readonly MeasurementPoint[],
+  anchors?: readonly MeasurementAnchor[],
+  nodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): [number, number] | null {
   if (points.length < 2) return null
   const dx = points[1]![0] - points[0]![0]
   const dz = points[1]![2] - points[0]![2]
   const magnitude = Math.hypot(dx, dz)
-  return magnitude <= MIN_DIMENSION_LENGTH ? null : [dx / magnitude, dz / magnitude]
+  if (magnitude <= MIN_DIMENSION_LENGTH) return null
+  const measuredDirection: [number, number] = [dx / magnitude, dz / magnitude]
+  return anchors && nodes
+    ? alignConstructionDimensionDirectionToSharedWall(measuredDirection, anchors, (id) => nodes[id])
+    : measuredDirection
 }
 
 export function buildConstructionDimensionPreviewGeometries(
@@ -137,6 +146,7 @@ export function buildConstructionDimensionPreviewGeometries(
   unit: 'metric' | 'imperial',
   mode: ConstructionDimensionMode = 'linear',
   metricNotation: 'meters' | 'millimeters' = 'meters',
+  directionOverride?: readonly [number, number] | null,
 ): FloorplanGeometry[] {
   if (mode === 'arc-length' || mode === 'angular') {
     const layout = resolveCircularConstructionDimensionLayout(mode, points)
@@ -278,7 +288,7 @@ export function buildConstructionDimensionPreviewGeometries(
     ]
   }
   if (!['linear', 'chord', 'radius', 'diameter'].includes(mode)) return []
-  const direction = resolveConstructionDimensionDraftDirection(points)
+  const direction = directionOverride ?? resolveConstructionDimensionDraftDirection(points)
   if (!direction) return []
   const normal: [number, number] = [-direction[1], direction[0]]
   const project = (point: MeasurementPoint): [number, number] => {
@@ -292,7 +302,11 @@ export function buildConstructionDimensionPreviewGeometries(
     const dx = end[0] - start[0]
     const dz = end[2] - start[2]
     const value = Math.abs(dx * direction[0] + dz * direction[1])
-    const rawText = formatLinearMeasurement(value, unit, metricNotation)
+    const rawText = formatLinearMeasurement(
+      mode === 'radius' ? value / 2 : value,
+      unit,
+      metricNotation,
+    )
     const text =
       mode === 'radius'
         ? `R ${rawText}`
@@ -337,7 +351,16 @@ export function normalizeConstructionDimensionMode(value: unknown): Construction
 }
 
 export function constructionDimensionUsesBaseline(mode: ConstructionDimensionMode): boolean {
-  return ['linear', 'radius', 'chord', 'arc-length', 'angular'].includes(mode)
+  return ['linear', 'chord', 'arc-length', 'angular'].includes(mode)
+}
+
+export function shouldConsumeConstructionDimensionPointerEvent(event: {
+  type: string
+  button: number
+  buttons: number
+}): boolean {
+  if (event.type === 'pointerdown') return event.button === 0
+  return (event.buttons & 0b110) === 0
 }
 
 function wallFeatureAnchor(
@@ -368,7 +391,6 @@ export function buildCurvedWallConstructionDimensionDraft(
     wallFeatureAnchor(wall, featureId, fallback)
 
   switch (mode) {
-    case 'radius':
     case 'center-mark':
       return {
         anchors: [feature('wall:curve:center', center), feature('wall:midpoint', midpoint)],
@@ -461,7 +483,11 @@ export function FloorplanConstructionDimensionToolLayer({
       )
     }
     const commitDraft = (current: Draft, baselinePoint?: MeasurementPoint) => {
-      const direction = resolveConstructionDimensionDraftDirection(current.points)
+      const direction = resolveConstructionDimensionDraftDirection(
+        current.points,
+        current.anchors,
+        sceneApi.nodes(),
+      )
       const originPoint = baselinePoint ?? current.points.at(-1)
       if (!(direction && originPoint)) return false
       const node = ConstructionDimensionNode.parse({
@@ -510,10 +536,10 @@ export function FloorplanConstructionDimensionToolLayer({
       if (current.stage === 'baseline') commitDraft(current, associated.point)
     }
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button === 0) consume(event)
+      if (shouldConsumeConstructionDimensionPointerEvent(event)) consume(event)
     }
     const onPointerMove = (event: PointerEvent) => {
-      consume(event)
+      if (shouldConsumeConstructionDimensionPointerEvent(event)) consume(event)
       setHover(resolveEvent(event))
     }
     const onPointerLeave = () => {
@@ -633,19 +659,31 @@ export function FloorplanConstructionDimensionToolLayer({
     usesBaseline,
   ])
 
-  const preview = useMemo(
-    () =>
-      draft.stage === 'baseline' && hover
-        ? buildConstructionDimensionPreviewGeometries(
-            draft.points,
-            hover.point,
-            unit,
-            dimensionMode,
-            metricNotation,
-          )
-        : [],
-    [dimensionMode, draft.points, draft.stage, hover, metricNotation, unit],
-  )
+  const preview = useMemo(() => {
+    if (draft.stage !== 'baseline' || !hover) return []
+    const direction = resolveConstructionDimensionDraftDirection(
+      draft.points,
+      draft.anchors,
+      sceneApi.nodes(),
+    )
+    return buildConstructionDimensionPreviewGeometries(
+      draft.points,
+      hover.point,
+      unit,
+      dimensionMode,
+      metricNotation,
+      direction,
+    )
+  }, [
+    dimensionMode,
+    draft.anchors,
+    draft.points,
+    draft.stage,
+    hover,
+    metricNotation,
+    sceneApi,
+    unit,
+  ])
   const witnessDraftPoints =
     draft.stage === 'witnesses' && hover ? [...draft.points, hover.point] : draft.points
 

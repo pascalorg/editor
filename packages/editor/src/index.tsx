@@ -370,6 +370,7 @@ export {
   type FloorplanRenderPurpose,
   type FloorplanSchedule,
   type FloorplanToolContext,
+  type FloorplanToolMode,
   floorplanGeometryMetadata,
   getFloorplanNodeExtension,
   readFloorplanContext,
@@ -377,6 +378,12 @@ export {
   readFloorplanMetricNotationOverride,
   withFloorplanGeometryMetadata,
 } from './lib/floorplan/floorplan-extension'
+export {
+  DEFAULT_FLOORPLAN_MODE,
+  FLOORPLAN_MODES,
+  type FloorplanMode,
+  isFloorplanToolAvailableInMode,
+} from './lib/floorplan/floorplan-mode'
 export { commitFreshPlacementSubtree } from './lib/fresh-planar-placement'
 export { exportSceneToGlb } from './lib/glb-export'
 export {
@@ -543,11 +550,7 @@ export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'
 export { type FirstPersonHudState, useFirstPersonHud } from './store/use-first-person-hud'
 export { default as useFloorplanAnnotationVisibility } from './store/use-floorplan-annotation-visibility'
 export { useFloorplanDraftPreview } from './store/use-floorplan-draft-preview'
-export {
-  default as useFloorplanPreflight,
-  type FloorplanPreflightIssue,
-  type FloorplanPreflightIssueKind,
-} from './store/use-floorplan-preflight'
+export { default as useFloorplanMode } from './store/use-floorplan-mode'
 export {
   default as useInteractionScope,
   getEditingHole,
