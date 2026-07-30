@@ -93,9 +93,24 @@ interface MysqlPool extends MysqlQueryable {
 const SCENE_COLUMNS =
   'id, name, project_id, owner_id, thumbnail_url, version, created_at, updated_at, size_bytes, node_count, graph_hash'
 
+/**
+ * Reads the connection target from `PASCAL_MYSQL_URL`, or assembles one from
+ * `PASCAL_MYSQL_HOST`/`_USER`/`_PASSWORD`/`_DATABASE`/`_PORT`. The separate
+ * variables exist because control panels hand out those fields individually,
+ * and some mangle a value containing `://` and `@`.
+ */
 export function resolveMysqlUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const raw = env.PASCAL_MYSQL_URL
-  return raw && raw.length > 0 ? raw : undefined
+  if (raw && raw.length > 0) return raw
+
+  const host = env.PASCAL_MYSQL_HOST
+  const user = env.PASCAL_MYSQL_USER
+  const database = env.PASCAL_MYSQL_DATABASE
+  if (!host || !user || !database) return undefined
+
+  const password = env.PASCAL_MYSQL_PASSWORD ?? ''
+  const port = env.PASCAL_MYSQL_PORT ?? '3306'
+  return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`
 }
 
 function rows(result: unknown): Record<string, unknown>[] {
@@ -539,7 +554,16 @@ export class MysqlSceneStore implements SceneStore {
           createPool: (config: { uri: string; connectionLimit: number }) => MysqlPool
         }
         const pool = mod.createPool({ uri: this.url, connectionLimit: 5 })
-        await this.migrate(pool)
+        try {
+          await this.migrate(pool)
+        } catch (err) {
+          // Don't cache the failure: a database that was briefly unreachable
+          // at boot would otherwise poison the store until the process
+          // restarts. Drop the pool and let the next call retry.
+          this.poolPromise = null
+          await pool.end().catch(() => {})
+          throw err
+        }
         this.pool = pool
         return pool
       })()

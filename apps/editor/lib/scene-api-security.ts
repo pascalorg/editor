@@ -66,11 +66,11 @@ function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
   if (!token) {
     if (isLoopbackRequest(request)) return null
-    // With no token configured the API still serves the app's own pages: the
-    // origin check above rejects everything cross-origin, and requests that
-    // carry no Origin at all — scripts, other servers — fall through to 503.
-    const origin = request.headers.get('origin')
-    if (origin && isOriginAllowed(request, origin)) return null
+    // With no token configured the API still serves the app's own pages.
+    // Everything cross-origin was already rejected above; anything that is
+    // neither loopback nor a same-origin browser request — scripts, other
+    // servers — falls through and needs the token.
+    if (isSameOriginBrowserRequest(request)) return null
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
   }
 
@@ -156,6 +156,17 @@ function isSameOrigin(request: Request, origin: string): boolean {
   const parsedOrigin = parseUrl(origin)
   if (!parsedOrigin) return false
   return parsedOrigin.host.toLowerCase() === requestHost(request)
+}
+
+/**
+ * Browsers omit Origin on same-origin GETs — which is how the editor opens its
+ * live scene event stream — but they do send Sec-Fetch-Site on every request,
+ * and it cannot be set from script. Non-browser callers send neither.
+ */
+function isSameOriginBrowserRequest(request: Request): boolean {
+  const origin = request.headers.get('origin')
+  if (origin) return isOriginAllowed(request, origin)
+  return request.headers.get('sec-fetch-site') === 'same-origin'
 }
 
 function requestHost(request: Request): string {
