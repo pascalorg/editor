@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   BuildingNode,
+  type CameraControlFitSceneEvent,
+  emitter,
   initSpaceDetectionSync,
   LevelNode,
   SiteNode,
@@ -70,6 +72,41 @@ describe('applySceneGraphToEditor', () => {
       expect(Object.values(useEditor.getState().spaces)).toHaveLength(1)
     } finally {
       unsubscribe()
+    }
+  })
+
+  test('initial load requests a camera fit for the refreshed 3D viewport', () => {
+    let fitBounds: CameraControlFitSceneEvent['bounds']
+    const handleFitScene = (event: CameraControlFitSceneEvent) => {
+      fitBounds = event.bounds
+    }
+
+    emitter.on('camera-controls:fit-scene', handleFitScene)
+    try {
+      applySceneGraphToEditor(loadedRoomWithoutSurfaces(), { fitCamera: true })
+      expect(fitBounds).toEqual({
+        min: [0, 0],
+        max: [4, 3],
+        center: [2, 1.5],
+        size: [4, 3],
+      })
+    } finally {
+      emitter.off('camera-controls:fit-scene', handleFitScene)
+    }
+  })
+
+  test('ordinary scene application does not reframe an active camera', () => {
+    let fitEventCount = 0
+    const handleFitScene = () => {
+      fitEventCount += 1
+    }
+
+    emitter.on('camera-controls:fit-scene', handleFitScene)
+    try {
+      applySceneGraphToEditor(loadedRoomWithoutSurfaces())
+      expect(fitEventCount).toBe(0)
+    } finally {
+      emitter.off('camera-controls:fit-scene', handleFitScene)
     }
   })
 })

@@ -139,6 +139,48 @@ export function findWallEndpointFromRaw(
   return best
 }
 
+/** Nearest endpoint shared by at least two walls. */
+export function findWallJunctionFromRaw(
+  point: WallPlanPoint,
+  walls: WallNode[],
+  ignoreWallIds?: string[],
+  radius = WALL_INTERSECTION_SNAP_RADIUS,
+): WallPlanPoint | null {
+  const ignored = new Set(ignoreWallIds ?? [])
+  const candidates = walls
+    .filter((wall) => !ignored.has(wall.id))
+    .flatMap((wall) =>
+      ([wall.start, wall.end] as WallPlanPoint[]).map((endpoint) => ({
+        endpoint,
+        wallId: wall.id,
+      })),
+    )
+  const radiusSquared = radius * radius
+  const joinToleranceSquared = WALL_CHAIN_JOIN_TOLERANCE * WALL_CHAIN_JOIN_TOLERANCE
+  let best: WallPlanPoint | null = null
+  let bestDistSq = Number.POSITIVE_INFINITY
+
+  for (const candidate of candidates) {
+    if (
+      !candidates.some(
+        (other) =>
+          other.wallId !== candidate.wallId &&
+          distanceSquared(candidate.endpoint, other.endpoint) <= joinToleranceSquared,
+      )
+    ) {
+      continue
+    }
+
+    const candidateDistanceSquared = distanceSquared(point, candidate.endpoint)
+    if (candidateDistanceSquared <= radiusSquared && candidateDistanceSquared < bestDistSq) {
+      best = candidate.endpoint
+      bestDistSq = candidateDistanceSquared
+    }
+  }
+
+  return best
+}
+
 /** Midpoint of a wall — curve midpoint for curved walls, segment midpoint otherwise. */
 function wallMidpoint(wall: WallNode): WallPlanPoint {
   if (isCurvedWall(wall)) {

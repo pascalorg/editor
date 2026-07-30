@@ -94,8 +94,12 @@ export function MyTool() {
     existing wall's endpoint / midpoint / crossing / body, the drafted point sticks onto it (and the
     beacon shows). This is *connectivity*, not alignment — the snap runs from the already
     mode-positioned point, so grid quantise / angle lock / free placement are respected right up to
-    the wall and only the last few cm stick. It is **not** a Shift bypass and must not be gated on
-    modifiers. See `snapWallDraftPointDetailed` in `components/tools/wall/wall-drafting.ts`.
+    the wall and only the last few cm stick. A multi-wall intersection is the narrow exception to
+    that radius: it is captured from the raw cursor with the standard intersection radius so a grid
+    or angle constraint cannot pass through both branches beside the junction and create a micro
+    room. Ordinary single-wall endpoints and bodies remain on the 0.05 m rule. It is **not** a Shift
+    bypass and must not be gated on modifiers. See `snapWallDraftPointDetailed` in
+    `components/tools/wall/wall-drafting.ts`.
 - **Constraints and guides can be decoupled.** When a stronger constraint owns the proposal —
   a wall segment's 45° lock while in `angles` mode — the tool may still publish passive dashed
   alignment/proximity guides as long as it does not apply the guide snap delta. Use this for chained

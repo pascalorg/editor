@@ -15,6 +15,8 @@ import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
 import {
   distanceSquared,
+  findWallIntersectionFromRaw,
+  findWallJunctionFromRaw,
   findWallSnapTarget,
   findWallSpecialPointSnap,
   WALL_CONNECT_SNAP_RADIUS,
@@ -145,6 +147,11 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   if (magnetic) {
     const special = findWallSpecialPointSnap(point, walls, ignoreWallIds, snapRadii)
     if (special) return special
+  } else {
+    const intersection =
+      findWallJunctionFromRaw(point, walls, ignoreWallIds) ??
+      findWallIntersectionFromRaw(point, walls, ignoreWallIds)
+    if (intersection) return { point: intersection, snap: 'intersection' }
   }
 
   const step = overrideStep ?? getSegmentGridStep()
@@ -168,10 +175,10 @@ export function snapWallDraftPointDetailed(args: SnapWallDraftArgs): WallDraftSn
   }
 
   // Non-magnetic modes (grid / off / angles): connectivity still sticks so a
-  // room can close, but only within a tight radius — placement elsewhere is left
-  // to the mode (grid quantise / angle lock / free). Snap from the already
-  // positioned `basePoint` so the mode's placement is respected right up to the
-  // wall, then the last few cm stick onto it (and the beacon shows).
+  // room can close. Multi-wall intersections are captured from the raw cursor
+  // above so a grid or angle constraint cannot route a draft through both sides
+  // of a nearby junction and create a micro room. Ordinary endpoints, midpoints,
+  // and wall bodies keep the tight radius below, preserving the mode's placement.
   const connectRadii: WallSnapRadii = {
     endpoint: WALL_CONNECT_SNAP_RADIUS,
     midpoint: WALL_CONNECT_SNAP_RADIUS,

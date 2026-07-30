@@ -3,6 +3,7 @@
 import {
   applySceneSnapshot,
   createDefaultSceneSnapshot,
+  emitter,
   nodeRegistry,
   resolveLevelId,
   type SceneSnapshot,
@@ -16,6 +17,7 @@ import useEditor, {
   type PersistedEditorUiState,
 } from '../store/use-editor'
 import { editorHostPanelRegistry } from './plugin-panels'
+import { computeSceneBoundsXZ } from './scene-bounds'
 
 export type SceneGraph = {
   nodes: Record<string, unknown>
@@ -384,7 +386,10 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
+export function applySceneGraphToEditor(
+  sceneGraph?: SceneGraph | null,
+  options: { fitCamera?: boolean } = {},
+) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   const hasSceneGraph = hasUsableSceneGraph(sceneGraph)
   const snapshot: SceneSnapshot = hasSceneGraph
@@ -403,6 +408,11 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   })
 
   syncEditorSelectionFromCurrentScene()
+
+  if (options.fitCamera) {
+    const bounds = hasSceneGraph ? computeSceneBoundsXZ(snapshot.nodes) : null
+    emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+  }
 }
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'

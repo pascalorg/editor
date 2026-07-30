@@ -1,11 +1,9 @@
 /**
  * Scene bounds in the X/Z plane.
  *
- * Used by the auto-frame hook to fit the camera onto a freshly loaded scene
- * (see `../hooks/use-auto-frame`). The hook subscribes to the core scene
- * store and, when `nodes` transitions from empty → non-empty, fires a
- * `camera-controls:fit-scene` event on the core event bus carrying the
- * computed bounds.
+ * Used by initial scene loading to fit the camera onto freshly loaded geometry.
+ * The loader emits `camera-controls:fit-scene` on the core event bus carrying
+ * the computed bounds.
  *
  * This module contains no rendering code: it only walks the flat-dict node
  * tree and derives an axis-aligned bounding box on the XZ (plan) plane.

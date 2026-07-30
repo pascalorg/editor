@@ -219,6 +219,28 @@ describe('createWallOnCurrentLevel', () => {
     expect(levelWalls()).toHaveLength(2)
   })
 
+  test('grid mode: a nearby multi-wall junction does not produce a micro room', () => {
+    useEditor.getState().setSnappingMode('wall', 'grid')
+    const junction: WallPlanPoint = [-1.409_952_606_635_071_6, 1.350_710_900_473_934]
+    seedLevel([
+      makeWall([-4.829_297_820_823_244, 3.503_631_961_259_08], junction, 'wall_upper'),
+      makeWall(junction, [2.002_421_307_506_052_6, -0.797_820_823_244_551_4], 'wall_lower'),
+    ])
+    const snapResult = snapWallDraftPointDetailed({
+      point: [-1.5, 1.5],
+      walls: levelWalls(),
+      magnetic: false,
+      step: 0.5,
+    })
+
+    const created = createWallOnCurrentLevel([-1.5, -3], snapResult.point)
+    const { roomPolygons } = detectSpacesForLevel(String(LEVEL_ID), levelWalls())
+
+    expect(created?.end).toEqual(junction)
+    expect(levelWalls()).toHaveLength(3)
+    expect(roomPolygons).toHaveLength(0)
+  })
+
   test('mid-span split migrates the host attachments to the covering half', () => {
     const door = DoorSchema.parse({
       position: [1, 1.05, 0],
@@ -708,6 +730,42 @@ describe('snapWallDraftPointDetailed', () => {
     })
 
     expect(result.point).toEqual([3.99, 0.03])
+    expect(result.snap).toBeNull()
+  })
+
+  test('grid snapping prefers a nearby multi-wall junction over creating a micro room', () => {
+    const junction: WallPlanPoint = [-1.409_952_606_635_071_6, 1.350_710_900_473_934]
+    const walls = [
+      makeWall([-4.829_297_820_823_244, 3.503_631_961_259_08], junction, 'wall_upper'),
+      makeWall(junction, [2.002_421_307_506_052_6, -0.797_820_823_244_551_4], 'wall_lower'),
+    ]
+
+    const result = snapWallDraftPointDetailed({
+      point: [-1.5, 1.5],
+      walls,
+      magnetic: false,
+      step: 0.5,
+    })
+
+    expect(result.point).toEqual(junction)
+    expect(result.snap).toBe('intersection')
+  })
+
+  test('grid snapping does not widen capture for an ordinary wall endpoint', () => {
+    const result = snapWallDraftPointDetailed({
+      point: [-1.5, 1.5],
+      walls: [
+        makeWall(
+          [-4, 1.350_710_900_473_934],
+          [-1.409_952_606_635_071_6, 1.350_710_900_473_934],
+          'wall_a',
+        ),
+      ],
+      magnetic: false,
+      step: 0.5,
+    })
+
+    expect(result.point).toEqual([-1.5, 1.5])
     expect(result.snap).toBeNull()
   })
 

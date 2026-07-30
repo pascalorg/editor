@@ -1201,13 +1201,13 @@ export default function Editor({
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
-          applySceneGraphToEditor(sceneGraph)
+          applySceneGraphToEditor(sceneGraph, { fitCamera: true })
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
       } catch {
         if (!cancelled) {
-          applySceneGraphToEditor(null)
+          applySceneGraphToEditor(null, { fitCamera: true })
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
