@@ -15,6 +15,7 @@
     "clean:cache": "rm -rf apps/*/.next apps/*/.swc apps/*/.turbo packages/*/.turbo tooling/*/.turbo .turbo node_modules/.cache",
     "restart": "bun kill && bun clean:cache && bun dev",
     "release": "gh workflow run release.yml -f package=all -f bump=patch",
+    "release:beta": "gh workflow run release.yml -f package=all -f bump=beta",
     "release:viewer": "gh workflow run release.yml -f package=viewer -f bump=patch",
     "release:core": "gh workflow run release.yml -f package=core -f bump=patch",
     "release:editor": "gh workflow run release.yml -f package=editor -f bump=patch",

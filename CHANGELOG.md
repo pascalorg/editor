@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.0.0-beta.1 (2026-07-30)
+
+The first Pascal Editor 1.0 beta. Relative to
+[v0.9.1](https://github.com/pascalorg/editor/releases/tag/v0.9.1), this release
+focuses the editor around a stable extensible scene model and production-grade
+architectural workflows.
+
+### Highlights
+
+- **Terrain sculpting** — raise, lower, flatten, and smooth a compact height field with a persistent brush, live grid feedback, subtle continuous sound, undo-safe strokes, terrain raycasting, and first-person collision.
+- **Terrain-aware construction** — walls, slabs, stairs, fences, columns, items, and other floor-placed nodes resolve stacked support and update live while terrain is sculpted. Wall and slab foundations can fill down to terrain without changing authored height or thickness.
+- **Vertical modeling** — stored storey heights, raised-support drafting, explicit elevation anchors and guides, slab/deck stacking, auto-room surface elevation, wall/ceiling clamps, and support-aware placement above or below slabs.
+- **Plugin and node architecture** — public node definitions, the built-in nodes package, plugin management, host integration primitives, and first-party Nature and MEP workflows.
+- **Floor-plan and export workflows** — faster navigation, contextual dimensions and modes, more reliable placement and selection, textured GLB plus STL/OBJ export, capture framing, and hardened bake/walkthrough paths.
+- **Rendering and interaction quality** — grounded lighting, safer WebGPU/WebGL fallbacks, deterministic snapping, group manipulation, improved camera/compass synchronization, and resilient legacy-scene migration.
+
+### Packages
+
+All public packages are published as `1.0.0-beta.1` under the npm `beta`
+dist-tag. Stable `latest` installations remain on the 0.x line during the beta.
+
+### Contributors
+
+Thank you to [@wass08](https://github.com/wass08),
+[@sudhir9297](https://github.com/sudhir9297),
+[@anton-pascal](https://github.com/anton-pascal),
+[@konevenkatesh](https://github.com/konevenkatesh),
+[@MateoSaettone](https://github.com/MateoSaettone),
+[@ruok-dev](https://github.com/ruok-dev),
+[@mvanhorn](https://github.com/mvanhorn), and
+[@kuishou68](https://github.com/kuishou68) for their work across the editor,
+viewer, node library, MCP integration, documentation, and stability fixes.
+
+**Full changelog**:
+https://github.com/pascalorg/editor/compare/v0.9.1...v1.0.0-beta.1
+
 ## 0.6.0 (2026-04-21)
 
 ### Features

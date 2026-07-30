@@ -13,6 +13,7 @@ import {
   WALL_SKIRTING_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WallFaceBandConfig,
+  WallNode,
   type WallNode as WallNodeType,
   WallTrimConfig,
 } from './wall'
