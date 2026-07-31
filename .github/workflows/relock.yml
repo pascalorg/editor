@@ -40,4 +40,4 @@ jobs:
           git commit -m 'chore: regenerate bun.lock on a real runner'
           git push
 
-# relock: types for qrcode + nodemailer
+# relock: declare mysql2 where it is imported
