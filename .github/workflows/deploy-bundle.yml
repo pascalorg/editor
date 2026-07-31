@@ -41,13 +41,16 @@ jobs:
         with:
           bun-version: 1.3.0
 
-      # The plugin is pinned over ssh; rewrite it to an authenticated https
-      # URL so the runner can fetch it whether or not the repo is public.
-      - name: Allow git dependencies over https
+      # The plugins are pinned over ssh and the runner has no key. Both
+      # repositories are public, so https needs no credentials — keeping this
+      # unauthenticated means the build does not depend on DEPLOY_TOKEN, which
+      # is only needed for the push at the end.
+      - name: Fetch git dependencies over https
         run: |
-          git config --global \
-            url."https://x-access-token:${{ secrets.DEPLOY_TOKEN }}@github.com/".insteadOf \
-            "ssh://git@github.com/"
+          git config --global --add \
+            url."https://github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add \
+            url."https://github.com/".insteadOf "git@github.com:"
 
       # The hoisted linker keeps the standalone output free of symlinks, which
       # break once the host moves the deployed directory.

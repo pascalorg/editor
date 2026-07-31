@@ -33,6 +33,14 @@ jobs:
         with:
           bun-version: 1.3.0
 
+      # See ci.yml: the ssh-pinned plugins are public, so https needs no key.
+      - name: Fetch git dependencies over https
+        run: |
+          git config --global --add \
+            url."https://github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add \
+            url."https://github.com/".insteadOf "git@github.com:"
+
       - name: Install
         run: bun install --frozen-lockfile
 

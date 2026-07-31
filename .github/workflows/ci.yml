@@ -18,6 +18,17 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      # A plugin is pinned over ssh and the runner has no key. Both plugin
+      # repositories are public, so fetching the same commits over https needs
+      # no credentials. This rewrites the transport only — the lockfile still
+      # records the ssh URL, so --frozen-lockfile stays satisfied.
+      - name: Fetch git dependencies over https
+        run: |
+          git config --global --add \
+            url."https://github.com/".insteadOf "ssh://git@github.com/"
+          git config --global --add \
+            url."https://github.com/".insteadOf "git@github.com:"
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
