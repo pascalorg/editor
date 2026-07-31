@@ -10,6 +10,7 @@
 // idempotent under HMR.
 import '../lib/bootstrap'
 import { type ReactNode, useEffect } from 'react'
+import { SessionProvider } from '@/components/auth/session-provider'
 
 export function ClientBootstrap({
   children,
@@ -22,5 +23,5 @@ export function ClientBootstrap({
     if (!enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [enableDevDiagnostics])
-  return children
+  return <SessionProvider>{children}</SessionProvider>
 }

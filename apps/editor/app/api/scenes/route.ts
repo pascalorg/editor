@@ -1,5 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { authAvailable } from '@/lib/auth/db'
+import { getSessionUser } from '@/lib/auth/session'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import { guardSceneApiRequest, sceneApiJson, sceneApiPreflight } from '@/lib/scene-api-security'
 import { getSceneOperations } from '@/lib/scene-store-server'
@@ -40,9 +42,19 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // With auth on, a signed-in user sees only their own scenes and a signed-out
+  // caller sees none. Without auth (SQLite dev), the list stays unfiltered.
+  let ownerId: string | undefined
+  if (authAvailable()) {
+    const user = await getSessionUser()
+    if (!user) return sceneApiJson(request, { scenes: [] })
+    ownerId = user.id
+  }
+
   const operations = await getSceneOperations()
   const scenes = await operations.listScenes({
     projectId: parsed.data.projectId,
+    ownerId,
     limit: parsed.data.limit,
   })
   return sceneApiJson(request, { scenes })
@@ -51,6 +63,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const guard = guardSceneApiRequest(request)
   if (guard) return guard
+
+  // With auth on, creating a scene requires being signed in and stamps the
+  // owner. Without auth (SQLite dev), creation stays open and unowned.
+  let ownerId: string | undefined
+  if (authAvailable()) {
+    const user = await getSessionUser()
+    if (!user) return sceneApiJson(request, { error: 'auth_required' }, { status: 401 })
+    ownerId = user.id
+  }
 
   let body: unknown
   try {
@@ -78,6 +99,7 @@ export async function POST(request: NextRequest) {
       id: parsed.data.id,
       name: parsed.data.name,
       projectId: parsed.data.projectId ?? null,
+      ownerId,
       graph: parsed.data.graph as never,
       thumbnailUrl: parsed.data.thumbnailUrl ?? null,
     })

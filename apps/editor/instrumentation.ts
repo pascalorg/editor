@@ -18,4 +18,17 @@ export async function register() {
       process.exit(1)
     }
   }
+
+  const { authAvailable, migrateAuth } = await import('./lib/auth/db')
+  if (authAvailable()) {
+    try {
+      await migrateAuth()
+      console.log('[digitaltwin:boot] auth tables ready')
+    } catch (err) {
+      console.error('[digitaltwin:boot] auth unavailable:', err)
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1)
+      }
+    }
+  }
 }

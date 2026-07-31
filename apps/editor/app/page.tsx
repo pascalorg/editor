@@ -4,6 +4,7 @@ import { Editor, ItemsPanel } from '@pascal-app/editor'
 import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { AuthMenu } from '@/components/auth/auth-menu'
 import { BuildTab } from '@/components/build-tab'
 import {
   CommunityViewerToolbarLeft,
@@ -105,6 +106,11 @@ export default function Home() {
           </div>
         </div>
       )}
+      <div className="pointer-events-none absolute top-3 right-3 z-40">
+        <div className="pointer-events-auto">
+          <AuthMenu />
+        </div>
+      </div>
       <Editor
         layoutVersion="v2"
         projectId={PROJECT_ID}

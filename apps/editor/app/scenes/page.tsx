@@ -1,13 +1,24 @@
 import Link from 'next/link'
+import { AuthMenu } from '@/components/auth/auth-menu'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
+import { authAvailable } from '@/lib/auth/db'
+import { getSessionUser } from '@/lib/auth/session'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
 async function fetchScenes(): Promise<SceneMeta[]> {
+  // With auth on, list only the signed-in user's scenes; signed-out shows
+  // none. Without auth (SQLite dev), list everything.
+  let ownerId: string | undefined
+  if (authAvailable()) {
+    const user = await getSessionUser()
+    if (!user) return []
+    ownerId = user.id
+  }
   const operations = await getSceneOperations()
-  return (await operations.listScenes({ limit: 50 })) as SceneMeta[]
+  return (await operations.listScenes({ ownerId, limit: 50 })) as SceneMeta[]
 }
 
 function formatDate(iso: string): string {
@@ -35,7 +46,10 @@ export default async function ScenesPage() {
             <span className="text-muted-foreground">/</span>
             <span className="font-medium text-foreground">Scenes</span>
           </nav>
-          <CreateSceneButton />
+          <div className="flex items-center gap-3">
+            <AuthMenu />
+            <CreateSceneButton />
+          </div>
         </div>
       </header>
 

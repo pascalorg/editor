@@ -1,3 +1,4 @@
+import { authAvailable } from '@/lib/auth/db'
 import { getSceneStore } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,7 @@ export async function GET() {
       app: 'digitaltwin',
       backend: store.backend,
       db: 'ok',
+      auth: authAvailable() ? 'ok' : 'disabled',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

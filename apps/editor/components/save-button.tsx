@@ -3,6 +3,7 @@
 import type { SceneGraph } from '@pascal-app/editor'
 import { useRouter } from 'next/navigation'
 import { useCallback, useState } from 'react'
+import { useSession } from '@/components/auth/session-provider'
 
 const EMPTY_GRAPH: SceneGraph = {
   nodes: {},
@@ -21,10 +22,15 @@ interface SaveButtonProps {
  */
 export function CreateSceneButton({ label = 'Create new scene' }: { label?: string } = {}) {
   const router = useRouter()
+  const { user, openAuth } = useSession()
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleCreate = useCallback(async () => {
+    if (!user) {
+      openAuth()
+      return
+    }
     setIsCreating(true)
     setError(null)
     try {
@@ -33,6 +39,10 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Untitled scene', graph: EMPTY_GRAPH }),
       })
+      if (response.status === 401) {
+        openAuth()
+        return
+      }
       if (!response.ok) {
         setError(`Failed to create scene (${response.status})`)
         return
@@ -44,7 +54,7 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
     } finally {
       setIsCreating(false)
     }
-  }, [router])
+  }, [router, user, openAuth])
 
   return (
     <div className="flex items-center gap-3">
@@ -68,10 +78,15 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
  */
 export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps) {
   const router = useRouter()
+  const { user, openAuth } = useSession()
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
 
   const handleSave = useCallback(async () => {
+    if (!user) {
+      openAuth()
+      return
+    }
     const graph = getGraph()
     if (!graph) {
       setStatus('No scene to save')
@@ -88,6 +103,10 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
         },
         body: JSON.stringify({ name, graph }),
       })
+      if (response.status === 401) {
+        openAuth()
+        return
+      }
       if (response.status === 409) {
         setStatus('Conflict — reload to continue')
         return
@@ -102,9 +121,13 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     } finally {
       setIsSaving(false)
     }
-  }, [getGraph, name, sceneId, version])
+  }, [getGraph, name, sceneId, version, user, openAuth])
 
   const handleSaveAs = useCallback(async () => {
+    if (!user) {
+      openAuth()
+      return
+    }
     const graph = getGraph()
     if (!graph) {
       setStatus('No scene to save')
@@ -120,6 +143,10 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName, graph }),
       })
+      if (response.status === 401) {
+        openAuth()
+        return
+      }
       if (!response.ok) {
         setStatus(`Save-as failed (${response.status})`)
         return
@@ -131,7 +158,7 @@ export function SaveButton({ sceneId, name, version, getGraph }: SaveButtonProps
     } finally {
       setIsSaving(false)
     }
-  }, [getGraph, name, router])
+  }, [getGraph, name, router, user, openAuth])
 
   return (
     <div className="flex items-center gap-2">

@@ -14,6 +14,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSession } from '@/components/auth/session-provider'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -99,6 +100,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const { openAuth } = useSession()
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
@@ -133,6 +135,12 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           return
         }
 
+        if (response.status === 401) {
+          setSaveError('Sign in to save your changes.')
+          openAuth()
+          return
+        }
+
         if (!response.ok) {
           setSaveError(`Save failed (${response.status})`)
           return
@@ -145,7 +153,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name],
+    [meta.id, meta.name, openAuth],
   )
 
   useEffect(() => {

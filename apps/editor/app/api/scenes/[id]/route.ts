@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { authorizeSceneMutation } from '@/lib/auth/guard'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
   guardSceneApiRequest,
@@ -83,6 +84,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    const auth = await authorizeSceneMutation(existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
@@ -110,6 +113,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const operations = await getSceneOperations()
   try {
+    const existing = await operations.loadStoredScene(id)
+    if (!existing) {
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+    }
+    const auth = await authorizeSceneMutation(existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const removed = await operations.deleteStoredScene(id, { expectedVersion: ifMatch })
     if (!removed) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
@@ -151,6 +160,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const operations = await getSceneOperations()
   try {
+    const existing = await operations.loadStoredScene(id)
+    if (!existing) {
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+    }
+    const auth = await authorizeSceneMutation(existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const meta = await operations.renameStoredScene(id, parsed.data.name, { expectedVersion })
     return sceneApiJson(request, meta, {
       headers: { ETag: `"${meta.version}"` },
