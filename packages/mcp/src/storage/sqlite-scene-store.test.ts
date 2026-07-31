@@ -52,12 +52,12 @@ function createStore(rootDir: string, opts: Partial<SqliteSceneStoreOptions> = {
 }
 
 describe('resolveDefaultDatabasePath', () => {
-  test('respects PASCAL_DB_PATH when set', () => {
-    expect(resolveDefaultDatabasePath({ PASCAL_DB_PATH: '/tmp/custom.db' })).toBe('/tmp/custom.db')
+  test('respects DIGITALTWIN_DB_PATH when set', () => {
+    expect(resolveDefaultDatabasePath({ DIGITALTWIN_DB_PATH: '/tmp/custom.db' })).toBe('/tmp/custom.db')
   })
 
-  test('resolves PASCAL_DATA_DIR to pascal.db', () => {
-    expect(resolveDefaultDatabasePath({ PASCAL_DATA_DIR: '/tmp/pascal-data' })).toBe(
+  test('resolves DIGITALTWIN_DATA_DIR to pascal.db', () => {
+    expect(resolveDefaultDatabasePath({ DIGITALTWIN_DATA_DIR: '/tmp/pascal-data' })).toBe(
       path.join('/tmp/pascal-data', 'pascal.db'),
     )
   })

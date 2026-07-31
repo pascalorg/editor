@@ -16,6 +16,11 @@
       "import": "./dist/server.js",
       "default": "./dist/server.js"
     },
+    "./env": {
+      "types": "./dist/lib/env.d.ts",
+      "import": "./dist/lib/env.js",
+      "default": "./dist/lib/env.js"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js",

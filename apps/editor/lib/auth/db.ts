@@ -31,7 +31,7 @@ export async function getAuthPool(): Promise<MysqlPool> {
     poolPromise = (async () => {
       const url = resolveMysqlUrl(process.env)
       if (!url) {
-        throw new Error('Auth requires a MySQL connection (PASCAL_MYSQL_URL or the trio).')
+        throw new Error('Auth requires a MySQL connection (DIGITALTWIN_MYSQL_URL or the trio).')
       }
       const mod = (await import('mysql2/promise')) as unknown as {
         createPool: (config: { uri: string; connectionLimit: number }) => MysqlPool

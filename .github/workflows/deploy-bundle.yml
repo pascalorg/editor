@@ -97,7 +97,7 @@ jobs:
 
       - name: Smoke test — serve against MySQL
         env:
-          PASCAL_MYSQL_URL: mysql://root@127.0.0.1:3306/digitaltwin
+          DIGITALTWIN_MYSQL_URL: mysql://root@127.0.0.1:3306/digitaltwin
         run: |
           cd bundle
           node server.js &

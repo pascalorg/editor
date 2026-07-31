@@ -11,8 +11,8 @@ import {
 import { hashToken } from './session'
 
 // Runs only when a MySQL target is configured, mirroring the scene-store
-// integration approach. In CI/dev: PASCAL_MYSQL_URL=mysql://root@127.0.0.1:3306/dt_test
-const hasDb = Boolean(process.env.PASCAL_MYSQL_URL || process.env.PASCAL_MYSQL_HOST)
+// integration approach. In CI/dev: DIGITALTWIN_MYSQL_URL=mysql://root@127.0.0.1:3306/dt_test
+const hasDb = Boolean(process.env.DIGITALTWIN_MYSQL_URL || process.env.DIGITALTWIN_MYSQL_HOST)
 
 describe.skipIf(!hasDb)('auth service (integration)', () => {
   beforeAll(async () => {

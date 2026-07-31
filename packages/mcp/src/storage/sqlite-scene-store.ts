@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { readEnv } from '../lib/env'
 import {
   assertValidName,
   DEFAULT_LIST_LIMIT,
@@ -72,22 +73,22 @@ interface ProjectPlaceholder {
 }
 
 /**
- * Resolves Pascal's local SQLite database path.
+ * Resolves the local SQLite database path. Only the two configuration
+ * variables are renamed; the default locations keep their historical names so
+ * an existing local database is still found.
  *
  * Precedence:
- * 1. `PASCAL_DB_PATH`
- * 2. `PASCAL_DATA_DIR/pascal.db`
+ * 1. `DIGITALTWIN_DB_PATH`
+ * 2. `DIGITALTWIN_DATA_DIR/pascal.db`
  * 3. On Windows: `%APPDATA%/Pascal/data/pascal.db`
  * 4. `$XDG_DATA_HOME/pascal/data/pascal.db`
  * 5. `$HOME/.pascal/data/pascal.db`
  */
 export function resolveDefaultDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.PASCAL_DB_PATH && env.PASCAL_DB_PATH.length > 0) {
-    return env.PASCAL_DB_PATH
-  }
-  if (env.PASCAL_DATA_DIR && env.PASCAL_DATA_DIR.length > 0) {
-    return path.join(env.PASCAL_DATA_DIR, 'pascal.db')
-  }
+  const dbPath = readEnv(env, 'DB_PATH')
+  if (dbPath) return dbPath
+  const dataDir = readEnv(env, 'DATA_DIR')
+  if (dataDir) return path.join(dataDir, 'pascal.db')
   if (process.platform === 'win32') {
     const appData = env.APPDATA
     if (appData && appData.length > 0) {

@@ -1,4 +1,5 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
+import { readEnv } from '../lib/env'
 import {
   assertValidName,
   DEFAULT_LIST_LIMIT,
@@ -94,43 +95,41 @@ const SCENE_COLUMNS =
   'id, name, project_id, owner_id, thumbnail_url, version, created_at, updated_at, size_bytes, node_count, graph_hash'
 
 /**
- * Reads the connection target from `PASCAL_MYSQL_URL`, or assembles one from
- * `PASCAL_MYSQL_HOST`/`_USER`/`_PASSWORD`/`_DATABASE`/`_PORT`. The separate
- * variables exist because control panels hand out those fields individually,
- * and some mangle a value containing `://` and `@`.
+ * Reads the connection target from `DIGITALTWIN_MYSQL_URL`, or assembles one
+ * from `DIGITALTWIN_MYSQL_HOST`/`_USER`/`_PASSWORD`/`_DATABASE`/`_PORT`. The
+ * separate variables exist because control panels hand out those fields
+ * individually, and some mangle a value containing `://` and `@`.
  *
  * A partially configured trio throws instead of returning undefined: someone
  * clearly meant to point at MySQL, and silently falling back to SQLite loses
  * their data on the next release.
  */
 export function resolveMysqlUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const read = (name: string): string | undefined => {
-    const value = env[name]?.trim()
-    return value && value.length > 0 ? value : undefined
-  }
+  const read = (name: string) => readEnv(env, name)
 
-  const raw = read('PASCAL_MYSQL_URL')
+  const raw = read('MYSQL_URL')
   if (raw) return raw
 
-  const host = read('PASCAL_MYSQL_HOST')
-  const user = read('PASCAL_MYSQL_USER')
-  const database = read('PASCAL_MYSQL_DATABASE')
+  const host = read('MYSQL_HOST')
+  const user = read('MYSQL_USER')
+  const database = read('MYSQL_DATABASE')
   if (!host && !user && !database) return undefined
   if (!host || !user || !database) {
     const missing = [
-      !host && 'PASCAL_MYSQL_HOST',
-      !user && 'PASCAL_MYSQL_USER',
-      !database && 'PASCAL_MYSQL_DATABASE',
+      !host && 'DIGITALTWIN_MYSQL_HOST',
+      !user && 'DIGITALTWIN_MYSQL_USER',
+      !database && 'DIGITALTWIN_MYSQL_DATABASE',
     ].filter(Boolean)
     throw new SceneInvalidError(
       `Incomplete MySQL configuration: missing ${missing.join(', ')}. ` +
-        'Set all of PASCAL_MYSQL_HOST, PASCAL_MYSQL_USER and PASCAL_MYSQL_DATABASE ' +
-        '(plus PASCAL_MYSQL_PASSWORD/_PORT as needed), or a single PASCAL_MYSQL_URL.',
+        'Set all of DIGITALTWIN_MYSQL_HOST, DIGITALTWIN_MYSQL_USER and ' +
+        'DIGITALTWIN_MYSQL_DATABASE (plus DIGITALTWIN_MYSQL_PASSWORD/_PORT as ' +
+        'needed), or a single DIGITALTWIN_MYSQL_URL.',
     )
   }
 
-  const password = read('PASCAL_MYSQL_PASSWORD') ?? ''
-  const port = read('PASCAL_MYSQL_PORT') ?? '3306'
+  const password = read('MYSQL_PASSWORD') ?? ''
+  const port = read('MYSQL_PORT') ?? '3306'
   return `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}`
 }
 
@@ -244,7 +243,9 @@ export class MysqlSceneStore implements SceneStore {
     const env = opts.env ?? process.env
     const url = opts.url ?? resolveMysqlUrl(env)
     if (!url) {
-      throw new SceneInvalidError('MySQL scene store requires a connection URL (PASCAL_MYSQL_URL)')
+      throw new SceneInvalidError(
+        'MySQL scene store requires a connection URL (DIGITALTWIN_MYSQL_URL)',
+      )
     }
     this.url = url
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)

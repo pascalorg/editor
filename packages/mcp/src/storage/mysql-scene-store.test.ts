@@ -9,43 +9,65 @@ describe('resolveMysqlUrl', () => {
   })
 
   it('treats an empty or whitespace URL as unset', () => {
-    expect(resolveMysqlUrl({ PASCAL_MYSQL_URL: '' })).toBeUndefined()
-    expect(resolveMysqlUrl({ PASCAL_MYSQL_URL: '   ' })).toBeUndefined()
+    expect(resolveMysqlUrl({ DIGITALTWIN_MYSQL_URL: '' })).toBeUndefined()
+    expect(resolveMysqlUrl({ DIGITALTWIN_MYSQL_URL: '   ' })).toBeUndefined()
   })
 
   it('passes a URL through', () => {
-    expect(resolveMysqlUrl({ PASCAL_MYSQL_URL: 'mysql://u:p@h:3306/d' })).toBe(
+    expect(resolveMysqlUrl({ DIGITALTWIN_MYSQL_URL: 'mysql://u:p@h:3306/d' })).toBe(
       'mysql://u:p@h:3306/d',
     )
   })
 
+  it('still accepts the older PASCAL_ names', () => {
+    expect(resolveMysqlUrl({ PASCAL_MYSQL_URL: 'mysql://u:p@h:3306/d' })).toBe(
+      'mysql://u:p@h:3306/d',
+    )
+    expect(
+      resolveMysqlUrl({
+        PASCAL_MYSQL_HOST: 'h',
+        PASCAL_MYSQL_USER: 'u',
+        PASCAL_MYSQL_DATABASE: 'd',
+      }),
+    ).toBe('mysql://u:@h:3306/d')
+  })
+
+  it('prefers the DIGITALTWIN_ name when both are set', () => {
+    expect(
+      resolveMysqlUrl({
+        DIGITALTWIN_MYSQL_URL: 'mysql://new:p@h:3306/d',
+        PASCAL_MYSQL_URL: 'mysql://old:p@h:3306/d',
+      }),
+    ).toBe('mysql://new:p@h:3306/d')
+  })
+
   it('composes the discrete fields, percent-encoding credentials', () => {
     const url = resolveMysqlUrl({
-      PASCAL_MYSQL_HOST: 'db.example',
-      PASCAL_MYSQL_USER: 'user',
-      PASCAL_MYSQL_PASSWORD: 'p@ss:w/rd',
-      PASCAL_MYSQL_DATABASE: 'scenes',
+      DIGITALTWIN_MYSQL_HOST: 'db.example',
+      DIGITALTWIN_MYSQL_USER: 'user',
+      DIGITALTWIN_MYSQL_PASSWORD: 'p@ss:w/rd',
+      DIGITALTWIN_MYSQL_DATABASE: 'scenes',
     })
     expect(url).toBe('mysql://user:p%40ss%3Aw%2Frd@db.example:3306/scenes')
   })
 
   it('defaults the port to 3306', () => {
     const url = resolveMysqlUrl({
-      PASCAL_MYSQL_HOST: 'h',
-      PASCAL_MYSQL_USER: 'u',
-      PASCAL_MYSQL_DATABASE: 'd',
+      DIGITALTWIN_MYSQL_HOST: 'h',
+      DIGITALTWIN_MYSQL_USER: 'u',
+      DIGITALTWIN_MYSQL_DATABASE: 'd',
     })
     expect(url).toContain('@h:3306/d')
   })
 
   it('throws, rather than silently falling back, on a partial trio', () => {
     expect(() =>
-      resolveMysqlUrl({ PASCAL_MYSQL_HOST: 'h', PASCAL_MYSQL_USER: 'u' }),
+      resolveMysqlUrl({ DIGITALTWIN_MYSQL_HOST: 'h', DIGITALTWIN_MYSQL_USER: 'u' }),
     ).toThrow(SceneInvalidError)
     try {
-      resolveMysqlUrl({ PASCAL_MYSQL_HOST: 'h', PASCAL_MYSQL_USER: 'u' })
+      resolveMysqlUrl({ DIGITALTWIN_MYSQL_HOST: 'h', DIGITALTWIN_MYSQL_USER: 'u' })
     } catch (err) {
-      expect((err as Error).message).toContain('PASCAL_MYSQL_DATABASE')
+      expect((err as Error).message).toContain('DIGITALTWIN_MYSQL_DATABASE')
     }
   })
 })
@@ -60,7 +82,7 @@ describe('createSceneStore production gate', () => {
   it('allows SQLite in production with the explicit escape hatch', async () => {
     const store = await createSceneStore({
       NODE_ENV: 'production',
-      PASCAL_ALLOW_SQLITE: '1',
+      DIGITALTWIN_ALLOW_SQLITE: '1',
       HOME: '/tmp/dt-gate-test',
     })
     expect(store.backend).toBe('sqlite')

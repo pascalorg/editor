@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
+import { readEnv } from '../lib/env'
 import { SceneInvalidError } from './types'
 
 export const DEFAULT_MAX_SCENE_BYTES = 10 * 1024 * 1024
@@ -25,11 +26,11 @@ export function resolveMaxSceneBytes(
     return explicit
   }
 
-  const raw = env?.PASCAL_MAX_SCENE_BYTES
-  if (raw === undefined || raw === '') return DEFAULT_MAX_SCENE_BYTES
+  const raw = env ? readEnv(env, 'MAX_SCENE_BYTES') : undefined
+  if (raw === undefined) return DEFAULT_MAX_SCENE_BYTES
   const parsed = Number.parseInt(raw, 10)
   if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new SceneInvalidError('PASCAL_MAX_SCENE_BYTES must be a positive integer')
+    throw new SceneInvalidError('DIGITALTWIN_MAX_SCENE_BYTES must be a positive integer')
   }
   return parsed
 }

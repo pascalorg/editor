@@ -4,9 +4,9 @@ import { guardSceneApiRequest, sceneApiPreflight } from './scene-api-security'
 const OLD_ENV = { ...process.env }
 
 afterEach(() => {
-  restoreEnv('PASCAL_SCENE_API_TOKEN')
-  restoreEnv('PASCAL_SCENE_API_ORIGINS')
-  restoreEnv('PASCAL_SCENE_API_RATE_LIMIT')
+  restoreEnv('DIGITALTWIN_SCENE_API_TOKEN')
+  restoreEnv('DIGITALTWIN_SCENE_API_ORIGINS')
+  restoreEnv('DIGITALTWIN_SCENE_API_RATE_LIMIT')
 })
 
 function restoreEnv(key: keyof NodeJS.ProcessEnv): void {
@@ -15,7 +15,7 @@ function restoreEnv(key: keyof NodeJS.ProcessEnv): void {
 }
 
 test('allows loopback scene API requests without a token', () => {
-  delete process.env.PASCAL_SCENE_API_TOKEN
+  delete process.env.DIGITALTWIN_SCENE_API_TOKEN
   const request = new Request('http://127.0.0.1:3000/api/scenes', {
     headers: { host: '127.0.0.1:3000' },
   })
@@ -24,7 +24,7 @@ test('allows loopback scene API requests without a token', () => {
 })
 
 test('requires a token for non-loopback scene API requests', async () => {
-  delete process.env.PASCAL_SCENE_API_TOKEN
+  delete process.env.DIGITALTWIN_SCENE_API_TOKEN
   const request = new Request('https://editor.example/api/scenes', {
     headers: { host: 'editor.example' },
   })
@@ -36,7 +36,7 @@ test('requires a token for non-loopback scene API requests', async () => {
 })
 
 test('accepts bearer token auth when configured', () => {
-  process.env.PASCAL_SCENE_API_TOKEN = 'secret'
+  process.env.DIGITALTWIN_SCENE_API_TOKEN = 'secret'
   const request = new Request('https://editor.example/api/scenes', {
     headers: {
       authorization: 'Bearer secret',
@@ -48,7 +48,7 @@ test('accepts bearer token auth when configured', () => {
 })
 
 test('applies configured CORS origins for preflight', () => {
-  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  process.env.DIGITALTWIN_SCENE_API_ORIGINS = 'https://app.example'
   const request = new Request('https://editor.example/api/scenes', {
     method: 'OPTIONS',
     headers: {
