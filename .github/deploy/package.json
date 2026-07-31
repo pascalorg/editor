@@ -1,6 +1,6 @@
 {
   "name": "digitaltwin",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "Pascal Editor, compiled and ready to run. Nothing is built at deploy time.",
@@ -12,11 +12,16 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@node-rs/argon2": "2.0.2",
     "@opentelemetry/api": "1.9.1",
     "mysql2": "3.23.2",
     "next": "16.2.9",
+    "nodemailer": "9.0.3",
+    "otpauth": "9.5.1",
+    "qrcode": "1.5.4",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "sharp": "0.34.5"
+    "sharp": "0.34.5",
+    "ulid": "3.0.2"
   }
 }

@@ -31,6 +31,8 @@ export async function register() {
   const { authAvailable, migrateAuth } = await import('./lib/auth/db')
   if (authAvailable()) {
     try {
+      const { ensureConsoleSchema } = await import('./lib/auth/live-migrate')
+      await ensureConsoleSchema()
       await migrateAuth()
       console.log('[digitaltwin:boot] auth tables ready')
     } catch (err) {
