@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer'
+import { renderMail } from './mail-template'
 
 /**
  * Delivery for the three transactional messages the auth flows send.
@@ -18,10 +19,21 @@ export function appUrl(path: string): string {
   return new URL(path, base).toString()
 }
 
+/**
+ * Signature under every message, mirroring the sign-in screen's notice. Read per
+ * send rather than at import: the deploy bundle loads its .env in the boot hook,
+ * which can run after this module is first evaluated.
+ */
+function footer(): string {
+  return `DigitalTwin — internal system, authorised personnel only\n${appUrl('/')}`
+}
+
 interface Envelope {
   to: string
   subject: string
+  /** text/plain part. Always sent — it is what the console transport prints. */
   body: string
+  html?: string
 }
 
 let transporter: Transporter | null = null
@@ -88,6 +100,7 @@ async function send(envelope: Envelope): Promise<void> {
       to: envelope.to,
       subject: envelope.subject,
       text: envelope.body,
+      html: envelope.html,
     })
   } catch (err) {
     // The address is logged, the body is not — it carries a single-use token.
@@ -102,15 +115,24 @@ export async function deliverResetLink(opts: {
   expiresAt: Date
 }): Promise<void> {
   const minutes = Math.max(1, Math.round((opts.expiresAt.getTime() - Date.now()) / 60_000))
+  const url = appUrl(`/reset/${opts.token}`)
+  const note =
+    `The link is single-use and expires in ${minutes} minutes. If you did not ask for it, ` +
+    `ignore this message — an administrator has been notified of the request.`
+
   await send({
     to: opts.email,
     subject: 'DigitalTwin — password reset',
-    body:
-      `${opts.fullName},\n\n` +
-      `Open this single-use link to set a new password:\n` +
-      `${appUrl(`/reset/${opts.token}`)}\n\n` +
-      `It expires in ${minutes} minutes. If you did not ask for it, ignore this message — ` +
-      `an administrator has been notified of the request.`,
+    body: `${opts.fullName},\n\nOpen this single-use link to set a new password:\n${url}\n\n${note}`,
+    html: renderMail({
+      label: 'Password reset',
+      heading: 'Set a new password',
+      intro: `${opts.fullName}, use the button below to choose a new password for your DigitalTwin account.`,
+      action: { label: 'Set a new password', url },
+      note,
+      preheader: `Your reset link is valid for ${minutes} minutes.`,
+      footer: footer(),
+    }),
   })
 }
 
@@ -125,16 +147,30 @@ export async function deliverInvite(opts: {
     1,
     Math.ceil((new Date(opts.expiresAt).getTime() - Date.now()) / 86_400_000),
   )
+  const url = appUrl(`/welcome?token=${opts.token}`)
+  const note = `The link is valid for ${days} day(s). You will be asked to set your own password on first sign-in.`
+
   await send({
     to: opts.email,
     subject: 'DigitalTwin — your account is ready',
     body:
       `${opts.fullName},\n\n` +
       `An administrator created a DigitalTwin account for you. Open this link to set ` +
-      `your password and enrol two-factor authentication:\n` +
-      `${appUrl(`/welcome?token=${opts.token}`)}\n\n` +
+      `your password and enrol two-factor authentication:\n${url}\n\n` +
       (opts.temporaryPassword ? `Temporary password: ${opts.temporaryPassword}\n\n` : '') +
-      `The link is valid for ${days} day(s).`,
+      note,
+    html: renderMail({
+      label: 'Account created',
+      heading: 'Your account is ready',
+      intro: `${opts.fullName}, an administrator created a DigitalTwin account for you. Set your password and enrol two-factor authentication to get started.`,
+      callout: opts.temporaryPassword
+        ? { label: 'Temporary password', value: opts.temporaryPassword }
+        : undefined,
+      action: { label: 'Activate my account', url },
+      note,
+      preheader: 'Set your password and enrol two-factor authentication.',
+      footer: footer(),
+    }),
   })
 }
 
@@ -142,12 +178,19 @@ export async function deliverRequestReceipt(opts: {
   email: string
   fullName: string
 }): Promise<void> {
+  const intro =
+    'Your access request is with the administrators. You will get another message with a sign-in link once it is approved.'
+
   await send({
     to: opts.email,
     subject: 'DigitalTwin — account request received',
-    body:
-      `${opts.fullName},\n\n` +
-      `Your access request is with the administrators. You will get another message ` +
-      `with a sign-in link once it is approved.`,
+    body: `${opts.fullName},\n\n${intro}`,
+    html: renderMail({
+      label: 'Request received',
+      heading: 'Your request is under review',
+      intro: `${opts.fullName}, ${intro}`,
+      preheader: 'An administrator will review your access request.',
+      footer: footer(),
+    }),
   })
 }
