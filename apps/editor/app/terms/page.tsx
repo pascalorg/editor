@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: 'Terms of Service for Pascal Editor and the Pascal platform.',
+  description: 'Terms of Service for the DigitalTwin editor and platform.',
 }
 
 export default function TermsPage() {
@@ -39,8 +39,8 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">1. Introduction</h2>
             <p className="text-foreground/90 leading-relaxed">
-              Welcome to Pascal Editor (&quot;Editor&quot;) and the Pascal platform at pascal.app
-              (&quot;Platform&quot;), operated by Pascal Group Inc. (&quot;we,&quot; &quot;us,&quot;
+              Welcome to the DigitalTwin editor (&quot;Editor&quot;) and the DigitalTwin platform
+              (&quot;Platform&quot;), operated by DigitalTwin (&quot;we,&quot; &quot;us,&quot;
               or &quot;our&quot;). By accessing or using our services, you agree to these Terms of
               Service.
             </p>
@@ -49,14 +49,14 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">2. The Editor and Platform</h2>
             <p className="text-foreground/90 leading-relaxed">
-              The Pascal Editor is open-source software released under the MIT License. You may use,
+              The DigitalTwin editor is open-source software released under the MIT License. You may use,
               copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Editor
               software in accordance with the MIT License terms.
             </p>
             <p className="text-foreground/90 leading-relaxed">
-              The Pascal platform (pascal.app) and its associated services, including user accounts,
+              The DigitalTwin platform and its associated services, including user accounts,
               cloud storage, and project hosting, are proprietary services owned and operated by
-              Pascal Group Inc. These Terms govern your use of the Platform.
+              DigitalTwin. These Terms govern your use of the Platform.
             </p>
           </section>
 
@@ -105,8 +105,8 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">6. Platform Ownership</h2>
             <p className="text-foreground/90 leading-relaxed">
-              The Platform, including its design, features, and proprietary code, is owned by Pascal
-              Group Inc. and protected by intellectual property laws. While the Editor source code
+              The Platform, including its design, features, and proprietary code, is owned by
+              DigitalTwin. and protected by intellectual property laws. While the Editor source code
               is open-source under the MIT License, the Platform services, branding, and
               infrastructure remain our proprietary property.
             </p>
@@ -120,9 +120,9 @@ export default function TermsPage() {
               may also delete your account at any time by contacting us at{' '}
               <a
                 className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
+                href="mailto:support@example.com"
               >
-                support@pascal.app
+                support@example.com
               </a>
               .
             </p>
@@ -145,7 +145,7 @@ export default function TermsPage() {
           <section className="mb-8 space-y-4">
             <h2 className="font-semibold text-xl">9. Limitation of Liability</h2>
             <p className="text-foreground/90 leading-relaxed">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, PASCAL GROUP INC. SHALL NOT BE LIABLE FOR ANY
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, DIGITALTWIN SHALL NOT BE LIABLE FOR ANY
               INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF
               DATA, PROFITS, OR GOODWILL, ARISING FROM YOUR USE OF THE PLATFORM.
             </p>
@@ -166,9 +166,9 @@ export default function TermsPage() {
               If you have questions about these Terms, please contact us at{' '}
               <a
                 className="text-foreground underline hover:text-foreground/80"
-                href="mailto:support@pascal.app"
+                href="mailto:support@example.com"
               >
-                support@pascal.app
+                support@example.com
               </a>
               .
             </p>

@@ -151,7 +151,7 @@ export function PluginsPanel() {
             rel="noreferrer"
             target="_blank"
           >
-            Create a Pascal plugin
+            Create a DigitalTwin plugin
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>
@@ -209,7 +209,7 @@ export function PluginsPanel() {
           rel="noreferrer"
           target="_blank"
         >
-          Create a Pascal plugin
+          Create a DigitalTwin plugin
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
       </div>

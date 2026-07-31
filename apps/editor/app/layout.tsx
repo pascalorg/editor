@@ -1,9 +1,18 @@
 import { Agentation } from 'agentation'
 import { GeistPixelSquare } from 'geist/font/pixel'
+import type { Metadata } from 'next'
 import { Barlow } from 'next/font/google'
 import localFont from 'next/font/local'
 import { ClientBootstrap } from './client-bootstrap'
 import './globals.css'
+
+export const metadata: Metadata = {
+  title: {
+    default: 'DigitalTwin Editor',
+    template: '%s | DigitalTwin',
+  },
+  description: '3D building editor',
+}
 
 const geistSans = localFont({
   src: './fonts/GeistVF.woff',

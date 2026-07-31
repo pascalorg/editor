@@ -50,7 +50,7 @@ function loadBuiltinsSync(): void {
     const kinds = Array.from(nodeRegistry.entries(), ([k]) => k)
     if (typeof console !== 'undefined') {
       console.info(
-        `[pascal:registry] loaded ${builtinPlugin.id} v${builtinPlugin.apiVersion} (${kinds.length} kinds: ${kinds.join(', ') || '∅'})`,
+        `[digitaltwin:registry] loaded ${builtinPlugin.id} v${builtinPlugin.apiVersion} (${kinds.length} kinds: ${kinds.join(', ') || '∅'})`,
       )
     }
     // Expose the registry on globalThis for ad-hoc dev inspection. In
@@ -77,7 +77,7 @@ export async function loadExternalPlugins(): Promise<void> {
     await loadPlugin(plugin)
   }
   if (isDev() && externals.length > 0 && typeof console !== 'undefined') {
-    console.info(`[pascal:registry] + ${externals.length} discovered plugin(s)`)
+    console.info(`[digitaltwin:registry] + ${externals.length} discovered plugin(s)`)
   }
 }
 

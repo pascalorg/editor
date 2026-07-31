@@ -111,7 +111,7 @@ function UnsupportedGpuViewerFallback() {
       <div className="max-w-md rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="font-semibold text-lg">3D viewer unavailable</h2>
         <p className="mt-2 text-neutral-600 text-sm">
-          This browser or environment does not expose WebGPU or WebGL, so Pascal cannot render the
+          This browser or environment does not expose WebGPU or WebGL, so DigitalTwin cannot render the
           3D scene here. Try opening the editor in a browser with hardware acceleration enabled.
         </p>
       </div>

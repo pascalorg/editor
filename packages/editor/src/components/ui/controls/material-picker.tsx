@@ -30,7 +30,7 @@ export type MaterialPickerProps = {
 
 const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'pascal', label: 'Pascal' },
+  { id: 'pascal', label: 'DigitalTwin' },
   { id: 'mine', label: 'Mine' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'community', label: 'Community' },
