@@ -111,17 +111,26 @@ jobs:
           echo "$body" | grep -q '"db":"ok"' || { echo "expected db=ok"; exit 1; }
           curl -sf -o /dev/null http://127.0.0.1:3000/ || { echo "home page failed"; exit 1; }
 
+      # The bundle is a fresh tree force-pushed over the deployment repository,
+      # which would drop a `.env` committed there to survive a panel that
+      # forgets its variables. Carry the published one across.
       - name: Publish
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         run: |
           cd bundle
           rm -rf node_modules
+          remote="https://x-access-token:${DEPLOY_TOKEN}@github.com/ovurrsl/digitaltwin.git"
           git init -q
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git remote add origin "$remote"
+          if git fetch -q --depth=1 origin main 2>/dev/null; then
+            if git cat-file -e FETCH_HEAD:.env 2>/dev/null; then
+              git show FETCH_HEAD:.env > .env
+              echo "carried the existing .env across (contents not logged)"
+            fi
+          fi
           git add -A
           git commit -q -m "Build from ${GITHUB_SHA::7}"
-          git push -q --force \
-            "https://x-access-token:${DEPLOY_TOKEN}@github.com/ovurrsl/digitaltwin.git" \
-            HEAD:main
+          git push -q --force "$remote" HEAD:main

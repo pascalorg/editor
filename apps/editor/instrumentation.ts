@@ -7,6 +7,15 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
+
+  // Before anything reads configuration: a panel that forgets its variables on
+  // redeploy would otherwise take the database down with it.
+  const { loadEnvFiles } = await import('./lib/env-file')
+  const files = loadEnvFiles()
+  if (files.length > 0) {
+    console.log(`[digitaltwin:boot] loaded env files: ${files.join(', ')}`)
+  }
+
   const { getSceneStore } = await import('./lib/scene-store-server')
   try {
     const store = await getSceneStore()
