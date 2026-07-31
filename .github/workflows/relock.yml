@@ -4,7 +4,13 @@ name: Relock
 # branch it was dispatched on. The lockfile records the sha512 of each GitHub
 # tarball, and only a machine that can reach the real api.github.com can
 # compute those — a sandboxed environment cannot, so it delegates to this.
-on: workflow_dispatch
+# Dispatch needs the file on the default branch, which this branch is not —
+# so it fires on edits to itself instead. Its own bun.lock push cannot loop:
+# it does not match the path filter, and GITHUB_TOKEN pushes start no runs.
+on:
+  push:
+    branches: [claude/incele-nq4heb]
+    paths: ['.github/workflows/relock.yml']
 
 permissions:
   contents: write
