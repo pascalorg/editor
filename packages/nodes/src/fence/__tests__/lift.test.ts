@@ -18,12 +18,17 @@ function makeDeck(elevation: number, parentId: string | null = LEVEL_ID): SlabNo
   })
 }
 
-function makeRailing(supportSlabId: string | undefined, parentId: string | null = LEVEL_ID) {
+function makeRailing(
+  supportSlabId: string | undefined,
+  parentId: string | null = LEVEL_ID,
+  supportOffset?: number,
+) {
   return FenceNode.parse({
     parentId,
     start: [0, 0],
     end: [4, 0],
     supportSlabId,
+    supportOffset,
   })
 }
 
@@ -42,6 +47,17 @@ describe('resolveFenceLiftElevation', () => {
   test('unhosted fence stays on the level floor', () => {
     const railing = makeRailing(undefined)
     expect(resolveFenceLiftElevation(railing, resolverFor())).toBe(0)
+  })
+
+  test('adds a manual support offset without changing the support source', () => {
+    const deck = makeDeck(1.25)
+
+    expect(resolveFenceLiftElevation(makeRailing(deck.id, LEVEL_ID, 0.4), resolverFor(deck))).toBe(
+      1.65,
+    )
+    expect(resolveFenceLiftElevation(makeRailing(undefined, LEVEL_ID, -0.3), resolverFor())).toBe(
+      -0.3,
+    )
   })
 
   test('stale host (slab gone) falls back to the floor', () => {

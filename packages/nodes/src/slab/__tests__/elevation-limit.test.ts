@@ -1,160 +1,162 @@
 import { describe, expect, test } from 'bun:test'
-import { SlabNode } from '@pascal-app/core'
+import { MIN_SLAB_THICKNESS, SlabNode } from '@pascal-app/core'
 import {
+  applySlabAnchorElevationChange,
+  applySlabBaseElevationChange,
   applySlabElevationPreset,
+  applySlabRecessDepthChange,
+  applySlabThicknessChange,
   applySlabTopChange,
-  SLAB_UNSTICK_THRESHOLD,
+  getSlabAnchorElevation,
+  getSlabBaseElevation,
+  getSlabRecessDepth,
 } from '../elevation-limit'
 
 function slab(overrides: Partial<SlabNode> = {}): SlabNode {
   return SlabNode.parse({ polygon: [], ...overrides })
 }
 
-const drag = (node: SlabNode, newTop: number) => applySlabTopChange(node, newTop, { mode: 'drag' })
-const panel = (node: SlabNode, newTop: number) =>
-  applySlabTopChange(node, newTop, { mode: 'panel' })
-
-describe('applySlabTopChange — drag (viewport arrow)', () => {
-  test('stretches a grounded slab up to the unstick threshold', () => {
+describe('solid slab vertical interval', () => {
+  test('changes thickness upward from a grounded underside', () => {
     const grounded = slab({ elevation: 0.1, thickness: 0.1 })
 
-    expect(drag(grounded, 0.25)).toEqual({
+    expect(applySlabThicknessChange(grounded, 0.25)).toEqual({
       elevation: 0.25,
       thickness: 0.25,
       recessed: false,
     })
-    expect(drag(grounded, 0.04)).toEqual({
-      elevation: 0.04,
-      thickness: 0.04,
-      recessed: false,
-    })
-    // The threshold itself still stretches — unstick starts strictly past it.
-    expect(drag(grounded, SLAB_UNSTICK_THRESHOLD)).toEqual({
-      elevation: SLAB_UNSTICK_THRESHOLD,
-      thickness: SLAB_UNSTICK_THRESHOLD,
+    expect(getSlabBaseElevation(grounded)).toBe(0)
+  })
+
+  test('changes thickness upward from a floating underside', () => {
+    const floating = slab({ elevation: 0.5, thickness: 0.2 })
+
+    expect(applySlabThicknessChange(floating, 0.4)).toEqual({
+      elevation: 0.7,
+      thickness: 0.4,
       recessed: false,
     })
   })
 
-  test('unsticks past the threshold: pops to the default deck thickness', () => {
-    const grounded = slab({ elevation: 0.1, thickness: 0.1 })
+  test('clamps thickness without moving the authored underside', () => {
+    const floating = slab({ elevation: 0.5, thickness: 0.2 })
 
-    expect(drag(grounded, 0.55)).toEqual({
-      elevation: 0.55,
-      thickness: 0.05,
+    expect(applySlabThicknessChange(floating, 0)).toEqual({
+      elevation: 0.3 + MIN_SLAB_THICKNESS,
+      thickness: MIN_SLAB_THICKNESS,
       recessed: false,
     })
   })
 
-  test('crosses a grounded slab into a pool and back out', () => {
+  test('moves the underside anchor without changing thickness', () => {
+    const floating = slab({ elevation: 0.5, thickness: 0.2 })
+
+    expect(applySlabBaseElevationChange(floating, 0.8)).toEqual({
+      elevation: 1,
+    })
+  })
+})
+
+describe('applySlabTopChange', () => {
+  test('moves a solid slab while preserving thickness', () => {
+    const floating = slab({ elevation: 0.5, thickness: 0.2 })
+
+    expect(applySlabTopChange(floating, 0.7)).toEqual({
+      elevation: 0.7,
+      recessed: false,
+    })
+    expect(applySlabTopChange(floating, 0.1)).toEqual({
+      elevation: 0.1,
+      recessed: false,
+    })
+    expect(getSlabBaseElevation({ ...floating, ...applySlabTopChange(floating, 0.1) })).toBeCloseTo(
+      -0.1,
+    )
+  })
+
+  test('keeps the grounded pool cross-zero gesture', () => {
     const grounded = slab({ elevation: 0.1, thickness: 0.1 })
-    const intoPool = drag(grounded, -0.15)
+    const intoPool = applySlabTopChange(grounded, -0.15)
 
     expect(intoPool).toEqual({ elevation: -0.15, recessed: true })
 
     const pool = { ...grounded, ...intoPool }
-    expect(drag(pool, 0.08)).toEqual({
-      elevation: 0.08,
-      recessed: false,
-    })
-  })
-
-  test('moves a floating deck and clamps its underside to ground', () => {
-    const floating = slab({ elevation: 0.5, thickness: 0.2 })
-
-    expect(drag(floating, 0.4)).toEqual({
-      elevation: 0.4,
-      recessed: false,
-    })
-
-    const landedChange = drag(floating, 0.1)
-    expect(landedChange).toEqual({ elevation: 0.2, recessed: false })
-
-    // Landed (underside 0) → grounded again: below the threshold the way
-    // back up stretches, past it the slab unsticks to the default deck.
-    const landed = { ...floating, ...landedChange }
-    expect(drag(landed, 0.3)).toEqual({
-      elevation: 0.3,
-      thickness: 0.3,
-      recessed: false,
-    })
-    expect(drag(landed, 0.5)).toEqual({
-      elevation: 0.5,
-      thickness: 0.05,
-      recessed: false,
-    })
-  })
-
-  test('keeps a recessed pool thickness unchanged', () => {
-    const pool = slab({ elevation: -0.15, thickness: 0.08, recessed: true })
-
-    expect(drag(pool, -0.3)).toEqual({
+    expect(applySlabTopChange(pool, -0.3)).toEqual({
       elevation: -0.3,
       recessed: true,
     })
-  })
-
-  test('allows a grounded stretch below the edit-time minimum thickness', () => {
-    const grounded = slab({ elevation: 0.01, thickness: 0.01 })
-
-    expect(drag(grounded, 0.015)).toEqual({
-      elevation: 0.015,
-      thickness: 0.015,
+    expect(applySlabTopChange(pool, 0.08)).toEqual({
+      elevation: 0.08,
+      thickness: 0.08,
       recessed: false,
+      recessedRimElevation: undefined,
     })
   })
 })
 
-describe('applySlabTopChange — panel (pure placement)', () => {
-  test('moves a grounded slab without coupling thickness', () => {
-    // The panel never stretches: raising a grounded slab lifts the body
-    // (thickness preserved by omission) instead of thickening it.
-    const grounded = slab({ elevation: 0.1, thickness: 0.1 })
+describe('anchor-relative slab presets', () => {
+  test('keeps a raised solid slab on its underside anchor', () => {
+    const raised = slab({ elevation: 0.8, thickness: 0.2 })
 
-    expect(panel(grounded, 0.3)).toEqual({ elevation: 0.3, recessed: false })
-    expect(panel(grounded, 0.55)).toEqual({ elevation: 0.55, recessed: false })
+    expect(getSlabAnchorElevation(raised)).toBeCloseTo(0.6)
+    const standard = applySlabElevationPreset(raised, 0.05)
+    expect(standard).toEqual({
+      elevation: expect.any(Number),
+      thickness: 0.05,
+      recessed: false,
+      recessedRimElevation: undefined,
+    })
+    expect(standard.elevation).toBeCloseTo(0.65)
+
+    const thick = applySlabElevationPreset(raised, 0.15)
+    expect(thick).toEqual({
+      elevation: expect.any(Number),
+      thickness: 0.15,
+      recessed: false,
+      recessedRimElevation: undefined,
+    })
+    expect(thick.elevation).toBeCloseTo(0.75)
   })
 
-  test('clamps a grounded slab at underside 0 instead of shrinking it', () => {
-    const grounded = slab({ elevation: 0.2, thickness: 0.2 })
+  test('sinks below the current anchor and returns to a solid without losing it', () => {
+    const raised = slab({ elevation: 0.8, thickness: 0.2, fillToTerrain: true })
+    const recessedPatch = applySlabElevationPreset(raised, -0.15)
 
-    expect(panel(grounded, 0.1)).toEqual({ elevation: 0.2, recessed: false })
+    expect(recessedPatch).toEqual({
+      elevation: expect.any(Number),
+      recessed: true,
+      recessedRimElevation: expect.any(Number),
+      fillToTerrain: undefined,
+    })
+    expect(recessedPatch.elevation).toBeCloseTo(0.45)
+    expect(recessedPatch.recessedRimElevation).toBeCloseTo(0.6)
+
+    const recessed = { ...raised, ...recessedPatch } as SlabNode
+    expect(getSlabAnchorElevation(recessed)).toBeCloseTo(0.6)
+    expect(getSlabRecessDepth(recessed)).toBeCloseTo(0.15)
+    const restored = applySlabElevationPreset(recessed, 0.05)
+    expect(restored).toEqual({
+      elevation: expect.any(Number),
+      thickness: 0.05,
+      recessed: false,
+      recessedRimElevation: undefined,
+    })
+    expect(restored.elevation).toBeCloseTo(0.65)
   })
 
-  test('moves a floating deck preserving thickness and clamps its underside', () => {
-    const floating = slab({ elevation: 0.5, thickness: 0.2 })
+  test('moves a recessed rim and resizes its depth independently', () => {
+    const recessed = slab({
+      elevation: 0.45,
+      recessed: true,
+      recessedRimElevation: 0.6,
+    })
 
-    expect(panel(floating, 0.4)).toEqual({ elevation: 0.4, recessed: false })
-    expect(panel(floating, 0.1)).toEqual({ elevation: 0.2, recessed: false })
-  })
-
-  test('keeps the pool cross-zero gesture', () => {
-    const grounded = slab({ elevation: 0.1, thickness: 0.1 })
-    const intoPool = panel(grounded, -0.15)
-
-    expect(intoPool).toEqual({ elevation: -0.15, recessed: true })
-
-    const pool = { ...grounded, ...intoPool }
-    expect(panel(pool, -0.3)).toEqual({ elevation: -0.3, recessed: true })
-    expect(panel(pool, 0.08)).toEqual({ elevation: 0.08, recessed: false })
-  })
-})
-
-test('slab elevation presets keep their explicit writes', () => {
-  expect(applySlabElevationPreset(-0.15)).toEqual({ elevation: -0.15, recessed: true })
-  expect(applySlabElevationPreset(0)).toEqual({
-    elevation: 0,
-    thickness: 0,
-    recessed: false,
-  })
-  expect(applySlabElevationPreset(0.05)).toEqual({
-    elevation: 0.05,
-    thickness: 0.05,
-    recessed: false,
-  })
-  expect(applySlabElevationPreset(0.15)).toEqual({
-    elevation: 0.15,
-    thickness: 0.15,
-    recessed: false,
+    const moved = applySlabAnchorElevationChange(recessed, 0.8)
+    expect(moved).toEqual({
+      elevation: expect.any(Number),
+      recessedRimElevation: 0.8,
+    })
+    expect(moved.elevation).toBeCloseTo(0.65)
+    expect(applySlabRecessDepthChange(recessed, 0.25)).toEqual({ elevation: 0.35 })
   })
 })

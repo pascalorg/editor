@@ -31,6 +31,7 @@ import {
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
+import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
 import {
@@ -698,11 +699,11 @@ export const CustomCameraControls = () => {
 
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
-  //                        falls back to NONE while the user is actively
-  //                        placing/moving something OR in box-select mode,
-  //                        so the editor's pointer handlers (place tool,
-  //                        drag-to-move endpoint, marquee selection drag)
-  //                        keep priority over the camera.
+  //                        falls back to NONE while the editor owns the drag —
+  //                        placing/moving something, box-select, or a brush mode
+  //                        — so the editor's pointer handlers (place tool,
+  //                        drag-to-move endpoint, marquee selection drag, paint
+  //                        and sculpt strokes) keep priority over the camera.
   //                        In preview mode it's TOUCH_TRUCK (pan), matching
   //                        preview's left = SCREEN_PAN.
   // - Two finger pinch   → zoom + pan together (TOUCH_DOLLY_TRUCK for
@@ -717,9 +718,16 @@ export const CustomCameraControls = () => {
   const endpointReshape = useEndpointReshape()
   const activeHandleDrag = useActiveHandleDrag()
   const isBoxSelectActive = mode === 'select' && selectionTool === 'marquee'
-  const isInteracting = Boolean(
-    tool || movingNode || endpointReshape || activeHandleDrag || isBoxSelectActive,
-  )
+  // The mode term lives in `editorOwnsOneFingerDrag` rather than in this OR: a
+  // brush mode owns the drag the way an armed tool does, but none of the
+  // transient terms notice it (entering paint or sculpt *clears* `tool`, and its
+  // scope is `painting`/`sculpting`, not `handle-drag`).
+  const isInteracting = editorOwnsOneFingerDrag({
+    mode,
+    activeGesture: Boolean(
+      tool || movingNode || endpointReshape || activeHandleDrag || isBoxSelectActive,
+    ),
+  })
   const touches = useMemo(() => {
     const twoFingerAction =
       cameraMode === 'orthographic'

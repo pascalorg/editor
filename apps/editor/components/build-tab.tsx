@@ -6,6 +6,7 @@ import {
   getFloorplanNodeExtension,
   isFloorplanToolAvailableInMode,
   MaterialPaintPanel,
+  TerrainSculptPanel,
   triggerSFX,
   useEditor,
   useFloorplanMode,
@@ -46,7 +47,7 @@ type BuildType = {
   kind?: string
   paletteOrder?: number
   /** Non-placement special mode. */
-  mode?: 'material-paint'
+  mode?: 'material-paint' | 'terrain-sculpt'
 }
 
 type MepItem = {
@@ -74,6 +75,7 @@ const BASE_BUILD_TYPES: BuildType[] = [
   // Group tile — no tool of its own; opens the MEP sub-grid below (like Roof).
   { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
   { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
+  { id: 'terrain', label: 'Terrain', iconSrc: '/icons/mesh.webp', mode: 'terrain-sculpt' },
 ]
 
 function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
@@ -154,6 +156,14 @@ function activatePaintMode(): void {
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
   ed.setMode('material-paint')
+}
+
+/**
+ * Enter terrain-sculpt mode — the Build tab's "Terrain" category. No `setPhase`:
+ * `setMode` moves to the site phase itself, since sculpting is a site-phase mode.
+ */
+function activateTerrainSculptMode(): void {
+  useEditor.getState().setMode('terrain-sculpt')
 }
 
 type RoofFeature = { kind: string; label: string; iconSrc: string }
@@ -251,7 +261,7 @@ export function BuildTab() {
   const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
 
   const isTypeActive = (type: BuildType) => {
-    if (type.mode === 'material-paint') return mode === 'material-paint'
+    if (type.mode) return mode === type.mode
     if (type.id === 'mep') return isMepActive
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
@@ -261,6 +271,8 @@ export function BuildTab() {
   const handleTypeClick = useCallback((type: BuildType) => {
     if (type.mode === 'material-paint') {
       activatePaintMode()
+    } else if (type.mode === 'terrain-sculpt') {
+      activateTerrainSculptMode()
     } else if (type.id === 'mep') {
       // MEP is a group tile: arm its first tool so a usable tool is active
       // (and we leave any prior paint mode), then reveal the MEP sub-grid.
@@ -331,6 +343,10 @@ export function BuildTab() {
       {mode === 'material-paint' ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <MaterialPaintPanel />
+        </div>
+      ) : mode === 'terrain-sculpt' ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <TerrainSculptPanel />
         </div>
       ) : mode === 'build' &&
         (activeTool === 'roof' || isRoofFeatureActive) &&

@@ -159,6 +159,12 @@ export type LinearResizeHandle<N> = {
    */
   onDrag?: (node: N, sceneApi: SceneApi) => void
   /**
+   * Cleanup companion to {@link onDrag}. Called for commit, cancellation, and
+   * unmount so a descriptor can release transient feedback it owns without the
+   * generic renderer knowing which guide store produced it.
+   */
+  onDragEnd?: (node: N, sceneApi: SceneApi) => void
+  /**
    * Cross-node redirect. By default the drag's live override + the
    * committed write both land on the SELECTED node. When this returns
    * another node's id, the editor publishes the override to / commits on

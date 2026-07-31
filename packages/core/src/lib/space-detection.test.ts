@@ -70,6 +70,25 @@ describe('planAutoCeilingsForLevel', () => {
     expect(plan.delete).toHaveLength(0)
   })
 
+  test('creates and reconciles an auto ceiling at the enclosing wall top', () => {
+    const context = {
+      heightForRoom: () => 3.09,
+    }
+    const created = planAutoCeilingsForLevel([roomPolygon()], [], context).create[0]
+
+    expect(created?.height).toBeCloseTo(3.09)
+
+    const existing = CeilingNode.parse({
+      polygon: square,
+      height: 2.49,
+      autoFromWalls: true,
+    })
+    const update = planAutoCeilingsForLevel([roomPolygon()], [existing], context).update[0]
+
+    expect(update?.id).toBe(existing.id)
+    expect(update?.data.height).toBeCloseTo(3.09)
+  })
+
   test('a leftover explicit height on a matched auto ceiling is not rewritten', () => {
     const ceiling = CeilingNode.parse({
       polygon: square,
@@ -391,6 +410,87 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
   })
 })
 
+describe('raised auto-room surfaces', () => {
+  test('inherits the enclosing walls construction plane when the room closes', () => {
+    const wallData = [
+      { id: 'wall_bottom', start: [0, 0], end: [4, 0] },
+      { id: 'wall_right', start: [4, 0], end: [4, 3] },
+      { id: 'wall_top', start: [4, 3], end: [0, 3] },
+      { id: 'wall_left', start: [0, 3], end: [0, 0] },
+    ] as const
+    const walls = wallData.map((wall) =>
+      WallNode.parse({
+        ...wall,
+        parentId: 'level_0',
+        height: 2.5,
+        supportOffset: 0.6,
+      }),
+    )
+    const initialWalls = walls.slice(0, 3)
+    const initialNodes = Object.fromEntries(
+      [
+        BuildingNode.parse({ id: 'building_a', children: ['level_0'] }),
+        LevelNode.parse({
+          id: 'level_0',
+          level: 0,
+          height: 2.5,
+          parentId: 'building_a',
+          children: initialWalls.map((wall) => wall.id),
+        }),
+        ...initialWalls,
+      ].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const sceneStore = createSceneStoreStub(initialNodes)
+    const editorStore = createEditorStoreStub()
+    const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
+
+    try {
+      const current = sceneStore.getState().nodes
+      const level = current.level_0 as LevelNode
+      const closingWall = walls[3]!
+      sceneStore.setNodes({
+        ...current,
+        [closingWall.id]: closingWall,
+        level_0: {
+          ...level,
+          children: [...level.children, closingWall.id],
+        } as LevelNode,
+      })
+
+      const generated = Object.values(sceneStore.getState().nodes)
+      const autoSlab = generated.find(
+        (node): node is SlabNode => node.type === 'slab' && node.autoFromWalls,
+      )
+      const autoCeiling = generated.find(
+        (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
+      )
+
+      expect(autoSlab?.elevation).toBeCloseTo(0.65)
+      expect(autoSlab?.thickness).toBeCloseTo(0.05)
+      expect(autoCeiling?.height).toBeCloseTo(3.09)
+
+      const raisedAgain = { ...sceneStore.getState().nodes }
+      for (const wall of walls) {
+        raisedAgain[wall.id] = { ...raisedAgain[wall.id], supportOffset: 0.8 } as AnyNode
+      }
+      sceneStore.setNodes(raisedAgain)
+
+      const reconciled = Object.values(sceneStore.getState().nodes)
+      const reconciledSlab = reconciled.find(
+        (node): node is SlabNode => node.type === 'slab' && node.autoFromWalls,
+      )
+      const reconciledCeiling = reconciled.find(
+        (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
+      )
+      expect(reconciledSlab?.elevation).toBeCloseTo(0.85)
+      expect(reconciledCeiling?.height).toBeCloseTo(3.29)
+    } finally {
+      unsubscribe()
+    }
+  })
+})
+
 describe('detectSpacesForLevel', () => {
   const areaOf = (polygon: Array<{ x: number; y: number }>) => {
     let area = 0
@@ -556,6 +656,21 @@ describe('wallClosesRoom', () => {
 })
 
 describe('planAutoSlabsForLevel', () => {
+  test('creates and reconciles an auto slab on the enclosing wall plane', () => {
+    const context = {
+      elevationForRoom: () => 0.65,
+    }
+    const created = planAutoSlabsForLevel([roomPolygon()], [], context).create[0]
+
+    expect(created?.elevation).toBeCloseTo(0.65)
+
+    const existing = slab(0.05)
+    const update = planAutoSlabsForLevel([roomPolygon()], [existing], context).update[0]
+
+    expect(update?.id).toBe(existing.id)
+    expect(update?.data.elevation).toBeCloseTo(0.65)
+  })
+
   test('matches two identical rooms to their own existing auto-slabs without churn', () => {
     // Two rooms with identical polygon signatures previously collided in a
     // signature-keyed Map, so one detected room never matched an existing slab

@@ -4,10 +4,7 @@ import { type CameraPose, emitter } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { subscribeCameraPose } from '../../store/camera-pose-store'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
-import useEditor, {
-  type NavigationSyncPose,
-  type NavigationSyncPoseInput,
-} from '../../store/use-editor'
+import type { NavigationSyncPose, NavigationSyncPoseInput } from '../../store/use-editor'
 
 const POSITION_EPSILON = 0.001
 const AZIMUTH_EPSILON = 1e-4
@@ -198,18 +195,17 @@ export function createFloorplanCameraSyncBridge({
 }
 
 export function useFloorplanCameraSyncBridge() {
-  const active = useEditor((state) => state.viewMode !== '3d')
+  // The compass is portalled into the always-visible viewer area, so its
+  // orientation-only 2D pose must still reach the camera while the floorplan
+  // itself is hidden in 3D view.
   const bridgeRef = useRef<FloorplanCameraSyncBridge | null>(null)
   if (!bridgeRef.current) {
     bridgeRef.current = createFloorplanCameraSyncBridge({
-      active,
       applyCameraPose: (pose) => emitter.emit('camera-controls:apply-pose', pose),
       publishNavigationPose: (pose) => liveCameraNavigation.publish(pose),
     })
   }
   const bridge = bridgeRef.current
-
-  useEffect(() => bridge.setActive(active), [active, bridge])
 
   useEffect(() => subscribeCameraPose(bridge.receiveCameraPose), [bridge])
 

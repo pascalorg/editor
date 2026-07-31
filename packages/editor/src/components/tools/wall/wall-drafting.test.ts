@@ -2,8 +2,14 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  applyHeightPatch,
+  createTerrainField,
   DoorNode as DoorSchema,
+  encodeTerrainField,
+  flattenPatch,
+  GROUND_SUPPORT_ID,
   runAsSingleSceneHistoryStep,
+  spatialGridManager,
   useScene,
   type WallNode,
   WallNode as WallSchema,
@@ -14,6 +20,7 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   createWallOnCurrentLevel,
   resolveEndpointWallSplit,
+  resolveTerrainWallConstructionOptions,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -100,6 +107,83 @@ describe('createWallOnCurrentLevel', () => {
     expect(hostWall?.start).toEqual([0, 0])
     expect(hostWall?.end).toEqual([4, 0])
     expect(levelWalls()).toHaveLength(2)
+  })
+
+  test('committed wall preserves the ghost construction elevation on ground', () => {
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 1.75,
+      preferredSupportSlabId: GROUND_SUPPORT_ID,
+      constructionElevation: 1.75,
+      constructionHeight: 2.5,
+    })
+
+    expect(created?.supportSlabId).toBe(GROUND_SUPPORT_ID)
+    expect(created?.supportOffset).toBe(1.75)
+    expect(created?.height).toBe(2.5)
+    const support = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      created?.start ?? [0, 0],
+      created?.end ?? [0, 0],
+      created?.curveOffset,
+      created?.thickness,
+      created?.supportSlabId,
+      undefined,
+      created?.supportOffset,
+    )
+    expect(support.elevation).toBe(1.75)
+  })
+
+  test('2D terrain construction options freeze the first-point elevation and wall height', () => {
+    const field = createTerrainField({ cols: 5, rows: 5, spacing: 1, origin: [-2, -2] })
+    const patch = flattenPatch(field, { minX: -2, minZ: -2, maxX: 2, maxZ: 2 }, 1.5)
+    if (!patch) throw new Error('Expected terrain patch')
+    const terrain = applyHeightPatch(field, patch)
+    const site = {
+      id: 'site_test',
+      type: 'site',
+      object: 'node',
+      parentId: null,
+      visible: true,
+      metadata: {},
+      children: ['building_test'],
+      terrain: encodeTerrainField(terrain),
+    } as unknown as AnyNode
+    const building = {
+      id: 'building_test',
+      type: 'building',
+      object: 'node',
+      parentId: site.id,
+      visible: true,
+      metadata: {},
+      children: [LEVEL_ID],
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+    } as AnyNode
+    const level = {
+      id: LEVEL_ID,
+      type: 'level',
+      object: 'node',
+      parentId: building.id,
+      visible: true,
+      metadata: {},
+      children: [],
+      level: 0,
+      height: 3,
+    } as AnyNode
+    const nodes = Object.fromEntries([site, building, level].map((node) => [node.id, node]))
+
+    expect(resolveTerrainWallConstructionOptions(nodes, LEVEL_ID, [0, 0])).toEqual({
+      constructionElevation: 1.5,
+      constructionHeight: 3,
+      supportCap: 1.5,
+    })
+    expect(
+      resolveTerrainWallConstructionOptions(nodes, LEVEL_ID, [0, 0], { height: 2.25 }),
+    ).toEqual({
+      constructionElevation: 1.5,
+      constructionHeight: 2.25,
+      supportCap: 1.5,
+    })
   })
 
   test('endpoint near the host start corner snaps there without splitting', () => {
@@ -326,6 +410,7 @@ describe('snapWallDraftPointDetailed', () => {
 
     expect(result.point).toEqual([3.99, 0.03])
     expect(result.snap).toBeNull()
+    expect(result.targetWallIds).toEqual([])
   })
 
   // Endpoint-move regression: walls attached to the moving corner keep their
@@ -347,6 +432,7 @@ describe('snapWallDraftPointDetailed', () => {
     })
     expect(captured.point).toEqual([2, 0.03])
     expect(captured.snap).toBe('endpoint')
+    expect(captured.targetWallIds).toEqual(['wall_d'])
 
     const freed = snapWallDraftPointDetailed({
       point: [2, 0],

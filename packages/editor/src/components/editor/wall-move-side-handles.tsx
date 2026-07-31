@@ -1,8 +1,10 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type FenceNode,
+  getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallEffectiveHeightForNodes,
   getWallThickness,
@@ -33,19 +35,27 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearStructuralElevationGuide,
+  publishStructuralElevationGuide,
+  resolveStructuralElevationSnap,
+} from '../../lib/elevation-guides'
 import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { resolveResizeSnapValue } from './handles/resize-snap'
+import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 import {
   createArrowHitAreaGeometry,
   createEndpointHitAreaGeometry,
+  HandleArrow,
   InvisibleHandleHitArea,
   NO_RAYCAST,
   useInvisibleHitAreaMaterial,
@@ -154,6 +164,7 @@ export function WallMoveSideHandles() {
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
+  const nodes = useScene((state) => state.nodes)
   // Merge the in-flight drag override so every handle (side-move arrows,
   // height arrow, corner leaders) tracks the live height in real time
   // during a height drag — the scene store stays at the pre-drag value
@@ -197,24 +208,34 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
     }
   }, [wall.parentId])
 
-  const handles = useMemo(() => getWallMoveHandles(effectiveWall), [effectiveWall])
+  const baseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
+  const handles = useMemo(() => getWallMoveHandles(effectiveWall, nodes), [effectiveWall, nodes])
 
   if (!levelObject || handles.length === 0) return null
 
   return createPortal(
-    <group>
-      {handles.map((handle) => (
-        <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
-      ))}
-      <WallHeightArrowHandle wall={effectiveWall} />
-      <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
-      <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
-    </group>,
+    <>
+      <group position={[0, baseElevation, 0]}>
+        {handles.map((handle) => (
+          <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
+        ))}
+        <WallHeightArrowHandle wall={effectiveWall} />
+        <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
+        <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
+      </group>
+      <WallBaseElevationHandle
+        baseElevation={baseElevation}
+        levelObject={levelObject}
+        wall={effectiveWall}
+      />
+    </>,
     levelObject,
   )
 }
 
 function buildDashedVerticalGeometry(height: number) {
+  if (!(Number.isFinite(height) && height > 0)) return new BufferGeometry()
+
   // Build each dash as a thin cylinder section so thickness is
   // controllable — native `lineSegments` lock to 1px on WebGL/WebGPU.
   const dashes: BufferGeometry[] = []
@@ -227,7 +248,10 @@ function buildDashedVerticalGeometry(height: number) {
     dashes.push(cylinder)
     y = end + CORNER_GAP_SIZE
   }
-  const merged = mergeGeometries(dashes, false) ?? new BufferGeometry()
+  const merged =
+    dashes.length > 0
+      ? (mergeGeometries(dashes, false) ?? new BufferGeometry())
+      : new BufferGeometry()
   for (const dash of dashes) dash.dispose()
   return merged
 }
@@ -377,6 +401,155 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
           </mesh>
         </group>
       </group>
+    </>
+  )
+}
+
+function WallBaseElevationHandle({
+  wall,
+  baseElevation,
+  levelObject,
+}: {
+  wall: WallNode
+  baseElevation: number
+  levelObject: Object3D
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const midpoint: [number, number] = curveFrame
+    ? [curveFrame.point.x, curveFrame.point.y]
+    : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
+  const elevationGuideSource = {
+    nodeId: wall.id,
+    levelId: wall.parentId,
+    anchor: midpoint,
+  }
+  const leaderBottom = Math.min(0, baseElevation)
+  const leaderHeight = Math.abs(baseElevation)
+  const dashedGeometry = useMemo(
+    () => (leaderHeight > 0.0001 ? buildDashedVerticalGeometry(leaderHeight) : null),
+    [leaderHeight],
+  )
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+
+  const isActive = isHovered || isDragging
+  useEffect(() => {
+    dashMaterial.color.set(isActive ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [dashMaterial, isActive])
+  useEffect(() => () => dashedGeometry?.dispose(), [dashedGeometry])
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  const dragControls = useMemo<HandleDragControls>(
+    () => ({
+      onStart: () => {},
+      onEnd: () => {},
+    }),
+    [],
+  )
+
+  const activateElevationMove = useHandleDrag({
+    kind: 'drag',
+    cursor: 'ns-resize',
+    dragControls,
+    handleIndex: 0,
+    node: wall,
+    rideObject: levelObject,
+    setIsDragging,
+    onStart: ({ event, initialNode, intersectPlane, nodeId, sceneApi }) => {
+      if (initialNode.type !== 'wall') return null
+
+      levelObject.updateWorldMatrix(true, false)
+      const initialBase = getWallBaseElevationForNodes(initialNode, sceneApi.nodes())
+      const supportBase = initialBase - (initialNode.supportOffset ?? 0)
+      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes())
+      const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
+        levelObject.matrixWorld,
+      )
+      const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+      if (planeNormal.lengthSq() === 0) return null
+      planeNormal.normalize()
+      const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
+      const initialHit = new Vector3()
+      if (
+        !intersectPlane(event.nativeEvent.clientX, event.nativeEvent.clientY, plane, initialHit)
+      ) {
+        return null
+      }
+      const initialPointerY = levelObject.worldToLocal(initialHit).y
+
+      return {
+        onBegin: () => {
+          useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId, handle: 'elevation' })
+        },
+        onEnd: () => {
+          useInteractionScope.getState().endIf((scope) => scope.kind === 'handle-drag')
+          clearStructuralElevationGuide(initialNode.id)
+        },
+        move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
+          const hit = new Vector3()
+          if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
+          const pointerY = levelObject.worldToLocal(hit).y
+          const nextBase = resolveResizeSnapValue({
+            rawValue: initialBase + pointerY - initialPointerY,
+            gridSnapEnabled: true,
+            gridSnapActive: isGridSnapActive(),
+            gridSnapStep: useEditor.getState().gridSnapStep,
+            magneticSnapActive: isMagneticSnapActive(),
+            magneticSnap: (value) =>
+              resolveStructuralElevationSnap(elevationGuideSource, value, sceneApi.nodes()),
+          })
+          publishStructuralElevationGuide(elevationGuideSource, nextBase, sceneApi.nodes())
+          if (Math.abs(nextBase - initialBase) < 1e-6) {
+            return {
+              supportOffset: initialNode.supportOffset,
+              height: initialNode.height,
+            }
+          }
+          const nextOffset = nextBase - supportBase
+          return {
+            supportOffset: Math.abs(nextOffset) < 1e-6 ? undefined : nextOffset,
+            height: initialHeight,
+          }
+        },
+      }
+    },
+  })
+
+  return (
+    <>
+      {dashedGeometry ? (
+        <mesh
+          frustumCulled={false}
+          geometry={dashedGeometry}
+          material={dashMaterial}
+          position={[midpoint[0], leaderBottom, midpoint[1]]}
+          renderOrder={1001}
+        />
+      ) : null}
+      <HandleArrow
+        cursor="ns-resize"
+        hover={isActive}
+        hoverScale={1.25}
+        onHoverChange={setIsHovered}
+        onPointerDown={activateElevationMove}
+        placement={{
+          position: [midpoint[0], baseElevation, midpoint[1]],
+          baseScale: zoom,
+        }}
+        shape="tracker"
+      />
     </>
   )
 }
@@ -760,7 +933,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   )
 }
 
-function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
+function getWallMoveHandles(wall: WallNode, nodes: Record<string, AnyNode>): WallMoveHandle[] {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dz)
@@ -776,7 +949,7 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
   const midpoint: [number, number] = frame
     ? [frame.point.x, frame.point.y]
     : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
 

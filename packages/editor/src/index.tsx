@@ -136,6 +136,13 @@ export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
+export {
+  type HorizontalConstructionPlane,
+  publishHorizontalConstructionPlane,
+  resampleTerrainConstructionPlane,
+  resolveEventConstructionPlane,
+  resolveLevelConstructionPlane,
+} from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
@@ -225,6 +232,7 @@ export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
+export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
@@ -310,6 +318,17 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export {
+  clearStructuralElevationGuide,
+  collectElevationSnapTargets,
+  ELEVATION_ALIGNMENT_THRESHOLD_M,
+  type ElevationGuideSource,
+  type ElevationSnapMatch,
+  type ElevationSnapTarget,
+  publishStructuralElevationGuide,
+  resolveElevationSnapMatch,
+  resolveStructuralElevationSnap,
+} from './lib/elevation-guides'
 export {
   resolveCurrentBuildingId,
   resolveElevatorNodeSupportY,
@@ -480,6 +499,13 @@ export {
   type SurfacePlanSnapInput,
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
+export {
+  fieldExtentForSite,
+  flattenSite,
+  resetSiteTerrain,
+  resolveFlattenTarget,
+  sculptFieldForSite,
+} from './lib/terrain-sculpt'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.

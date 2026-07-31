@@ -1,5 +1,14 @@
+import type { TerrainVerb } from '@pascal-app/core'
 import mitt from 'mitt'
-import { disposeSFX, playSFX } from './sfx-player'
+import useAudio from '../store/use-audio'
+import {
+  disposeSFX,
+  type LoopSFXName,
+  playSFX,
+  startLoopSFX,
+  stopLoopSFX,
+  updateSFXVolumes,
+} from './sfx-player'
 
 /**
  * SFX-specific events that tools can trigger
@@ -18,7 +27,13 @@ type SFXEvents = {
   'sfx:menu-hover': undefined
   'sfx:menu-click': undefined
   'sfx:paint-apply': undefined
+  'sfx:terrain-sculpt-start': TerrainVerb
+  'sfx:terrain-sculpt-stop': undefined
 }
+
+type TriggerSFXEvent = {
+  [Event in keyof SFXEvents]: SFXEvents[Event] extends undefined ? Event : never
+}[keyof SFXEvents]
 
 /**
  * Dedicated event emitter for SFX
@@ -41,6 +56,15 @@ const handleSnapshotCapture = () => playSFX('snapshotCapture')
 const handleMenuHover = () => playSFX('menuHover')
 const handleMenuClick = () => playSFX('menuClick')
 const handlePaintApply = () => playSFX('paintApply')
+const TERRAIN_LOOP_BY_VERB = {
+  raise: 'terrainRaise',
+  lower: 'terrainLower',
+  flatten: 'terrainFlatten',
+  smooth: 'terrainSmooth',
+} as const satisfies Record<TerrainVerb, LoopSFXName>
+const handleTerrainSculptStart = (verb: TerrainVerb) => startLoopSFX(TERRAIN_LOOP_BY_VERB[verb])
+const handleTerrainSculptStop = () => stopLoopSFX()
+let unsubscribeAudio: (() => void) | null = null
 
 /**
  * Initialize SFX Bus - connects SFX events to actual sound playback.
@@ -62,6 +86,9 @@ export function initSFXBus() {
   sfxEmitter.on('sfx:menu-hover', handleMenuHover)
   sfxEmitter.on('sfx:menu-click', handleMenuClick)
   sfxEmitter.on('sfx:paint-apply', handlePaintApply)
+  sfxEmitter.on('sfx:terrain-sculpt-start', handleTerrainSculptStart)
+  sfxEmitter.on('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
+  unsubscribeAudio = useAudio.subscribe(updateSFXVolumes)
 }
 
 export function disposeSFXBus() {
@@ -79,6 +106,10 @@ export function disposeSFXBus() {
     sfxEmitter.off('sfx:menu-hover', handleMenuHover)
     sfxEmitter.off('sfx:menu-click', handleMenuClick)
     sfxEmitter.off('sfx:paint-apply', handlePaintApply)
+    sfxEmitter.off('sfx:terrain-sculpt-start', handleTerrainSculptStart)
+    sfxEmitter.off('sfx:terrain-sculpt-stop', handleTerrainSculptStop)
+    unsubscribeAudio?.()
+    unsubscribeAudio = null
     sfxBusInitialized = false
   }
   disposeSFX()
@@ -89,7 +120,7 @@ export function disposeSFXBus() {
  * @example
  * triggerSFX('sfx:item-place')
  */
-export function triggerSFX(event: keyof SFXEvents) {
+export function triggerSFX(event: TriggerSFXEvent) {
   sfxEmitter.emit(event)
 }
 

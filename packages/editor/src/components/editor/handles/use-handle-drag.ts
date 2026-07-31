@@ -247,7 +247,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       onCancel()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = onCancel
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

@@ -1,4 +1,5 @@
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import { terrainSupportLift } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
@@ -16,6 +17,7 @@ import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
 import { resolveWallEffectiveHeight } from '../../systems/wall/wall-top'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
+import { GROUND_SUPPORT_ID } from './support-host-id'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
 export {
@@ -372,6 +374,8 @@ export class SpatialGridManager {
       wall.curveOffset ?? 0,
       wall.thickness,
       wall.supportSlabId ?? null,
+      undefined,
+      wall.supportOffset,
     )
     return resolveWallEffectiveHeight(
       wall,
@@ -1051,24 +1055,48 @@ export class SpatialGridManager {
     thickness = DEFAULT_WALL_THICKNESS,
     preferredSlabId?: string | null,
     maxElevation?: number | null,
+    supportOffset = 0,
   ): WallSlabSupport {
-    const slabMap = this.slabsByLevel.get(levelId)
-    if (!slabMap) {
+    if (preferredSlabId === GROUND_SUPPORT_ID) {
+      const nodes = useScene.getState().nodes
+      const elevation =
+        (terrainSupportLift(nodes, levelId, start[0], start[1]) ?? 0) + supportOffset
       return {
-        elevation: 0,
+        elevation,
         electedSlabId: null,
-        baseElevation: 0,
-        baseSegments: [{ start: 0, end: 1, elevation: 0 }],
+        baseElevation: elevation,
+        baseSegments: [{ start: 0, end: 1, elevation }],
       }
     }
 
-    return computeWallSlabSupport(
+    const slabMap = this.slabsByLevel.get(levelId)
+    if (!slabMap) {
+      const elevation = supportOffset
+      return {
+        elevation,
+        electedSlabId: null,
+        baseElevation: elevation,
+        baseSegments: [{ start: 0, end: 1, elevation }],
+      }
+    }
+
+    const support = computeWallSlabSupport(
       { start, end, curveOffset, thickness },
       [...slabMap.values()].map((slab) => this.effectiveSlabRecord(slab)),
       this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
       preferredSlabId,
       maxElevation,
     )
+    if (supportOffset === 0) return support
+    return {
+      ...support,
+      elevation: support.elevation + supportOffset,
+      baseElevation: support.baseElevation + supportOffset,
+      baseSegments: support.baseSegments.map((segment) => ({
+        ...segment,
+        elevation: segment.elevation + supportOffset,
+      })),
+    }
   }
 
   /**
@@ -1197,6 +1225,24 @@ export class SpatialGridManager {
 // Singleton instance
 export const spatialGridManager = new SpatialGridManager()
 
+/** Level-local Y where the rendered wall mesh begins. */
+export function getWallBaseElevationForNodes(
+  wall: WallNode,
+  nodes: Record<string, AnyNode>,
+): number {
+  const levelId = resolveNodeLevelId(wall, nodes)
+  return spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+    wall.supportSlabId ?? null,
+    undefined,
+    wall.supportOffset,
+  ).elevation
+}
+
 /**
  * Effective (extruded) height of a wall resolved from a nodes record:
  * {@link resolveWallEffectiveHeight} over the covering-clamped plane top
@@ -1210,13 +1256,6 @@ export function getWallEffectiveHeightForNodes(
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  const support = spatialGridManager.getSlabSupportForWall(
-    levelId,
-    wall.start,
-    wall.end,
-    wall.curveOffset ?? 0,
-    wall.thickness,
-    wall.supportSlabId ?? null,
-  )
-  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), support.elevation)
+  const baseElevation = getWallBaseElevationForNodes(wall, nodes)
+  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), baseElevation)
 }

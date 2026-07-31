@@ -3,7 +3,10 @@
 import {
   type AnyNodeId,
   type SiteNode,
+  type TerrainField,
+  terrainFieldOf,
   useLiveNodeOverrides,
+  useLiveTerrain,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -18,17 +21,18 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import {
-  BufferGeometry,
-  Float32BufferAttribute,
-  type Group,
-  Path,
-  Shape,
-  ShapeGeometry,
-} from 'three'
+import { BufferAttribute, BufferGeometry, type Group, Path, Shape, ShapeGeometry } from 'three'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
+import {
+  buildDrapedPolyline,
+  type DrapedPolyline,
+  terrainGridKey,
+  updateDrapedHeights,
+} from './terrain-drape'
+import { HORIZON_PLANE_Y, terrainFootprint } from './terrain-geometry'
+import { TerrainRenderer } from './terrain-renderer'
 
 const Y_OFFSET = 0.01
 
@@ -37,30 +41,47 @@ const Y_OFFSET = 0.01
 const noopRaycast = () => {}
 
 /**
- * Creates simple line geometry for site boundary
- * Single horizontal line at ground level
+ * The site boundary line, laid on the ground rather than across it.
+ *
+ * On flat ground this is the ring it always was: the polygon's own vertices at
+ * `Y_OFFSET`, closed. On sculpted ground `buildDrapedPolyline` subdivides each
+ * edge at the mesh's creases so the line lies *on* the rendered surface — the lot
+ * line is on screen in every frame, and a flat ring slicing through a hill is the
+ * most conspicuous way sculpted ground reads as broken.
+ *
+ * UVs keep their `(u, 0)` layout, now measured as normalized XZ arc length rather
+ * than vertex index, so a dashed or gradient material spaces evenly along the
+ * perimeter instead of bunching on short edges.
  */
-const createBoundaryLineGeometry = (points: Array<[number, number]>): BufferGeometry => {
+const createBoundaryLineGeometry = (
+  points: Array<[number, number]>,
+  field: TerrainField | null,
+): { geometry: BufferGeometry; ring: DrapedPolyline } => {
   const geometry = new BufferGeometry()
+  const ring = buildDrapedPolyline({ points, field, lift: Y_OFFSET, closed: true })
+  const uvs = new Float32Array(ring.uvs.length * 2)
+  for (let index = 0; index < ring.uvs.length; index++) {
+    uvs[index * 2] = ring.uvs[index] ?? 0
+  }
+  // `BufferAttribute`, not `Float32BufferAttribute`: the latter copies its input
+  // into a fresh array, which would leave `ring.positions` a detached CPU copy and
+  // silently break the in-place dab rewrite below. This shares the buffer.
+  geometry.setAttribute('position', new BufferAttribute(ring.positions, 3))
+  geometry.setAttribute('uv', new BufferAttribute(uvs, 2))
+  return { geometry, ring }
+}
 
-  if (points.length < 2) return geometry
-
-  const positions: number[] = []
-  const uvs: number[] = []
-
-  // Create a simple line loop at ground level
-  points.forEach(([x, z], index) => {
-    positions.push(x ?? 0, Y_OFFSET, z ?? 0)
-    uvs.push(points.length > 1 ? index / (points.length - 1) : 0, 0)
-  })
-  // Close the loop
-  positions.push(points[0]?.[0] ?? 0, Y_OFFSET, points[0]?.[1] ?? 0)
-  uvs.push(1, 0)
-
-  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
-
-  return geometry
+/**
+ * Re-upload a draped ring's positions after an in-place height rewrite.
+ *
+ * No `addUpdateRange`: a dab can move any subset of the ring's vertices (the brush
+ * is a disc, the ring is a loop, and the two intersect in up to four arcs), so a
+ * range would either be the whole buffer or a list. The whole buffer is a few KB.
+ */
+function markPositionsDirty(geometry: BufferGeometry): void {
+  const attribute = geometry.getAttribute('position') as BufferAttribute
+  attribute.needsUpdate = true
+  geometry.computeBoundingSphere()
 }
 
 type S = ReturnType<typeof useScene.getState>
@@ -123,6 +144,23 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     (state) => (state.overrides.get(node.id)?.polygon as SiteNode['polygon'] | undefined) ?? null,
   )
   const polygonPoints = livePolygon?.points ?? node.polygon?.points
+
+  // Persisted terrain only. A stroke is applied imperatively further down, for the
+  // same reason `TerrainRenderer` does it: a dab must not re-render this subtree.
+  const persistedField = useMemo(
+    () => terrainFieldOf({ id: node.id, terrain: node.terrain }),
+    [node.id, node.terrain],
+  )
+
+  // The terrain *grid* — mounting, resizing, or re-origining it. `hasTerrain`
+  // catches the first dab on a site that had no terrain at all, which is the one
+  // case where a stroke legitimately changes the grid and everything keyed on it
+  // (the horizon punch, the boundary subdivision) has to rebuild.
+  const hasTerrain = useLiveTerrain((state) => state.strokes.has(node.id))
+  const terrainGrid = hasTerrain
+    ? (useLiveTerrain.getState().fieldOf(node.id) ?? persistedField)
+    : persistedField
+  const terrainKey = terrainGridKey(terrainGrid)
 
   // Centroid + radius of the lot polygon, for the presentation fade below.
   const fadeBounds = useMemo(() => {
@@ -228,6 +266,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     return shape
   }, [polygonPoints, slabPolygons])
 
+  // The terrain footprint is punched out alongside the recessed slabs, and for the
+  // same reason: the disc must not cap ground that is modelled below it.
+  //
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `terrainKey` is the grid signature the footprint is a function of; depending on the field itself would rebuild an 800 m disc every dab.
   const horizonGeometry = useMemo(() => {
     if (!fadeBounds) return null
     const radius = Math.max(fadeBounds.radius * 8, 400)
@@ -239,17 +281,64 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       shape.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius)
     }
     shape.closePath()
-    addSlabHoles(shape, slabPolygons, fadeBounds.cx, fadeBounds.cz)
+    const holes = terrainGrid ? [...slabPolygons, terrainFootprint(terrainGrid)] : slabPolygons
+    addSlabHoles(shape, holes, fadeBounds.cx, fadeBounds.cz)
     return new ShapeGeometry(shape)
-  }, [fadeBounds, slabPolygons])
+  }, [fadeBounds, slabPolygons, terrainKey])
   useEffect(() => () => horizonGeometry?.dispose(), [horizonGeometry])
 
-  // Create boundary line geometry
-  const lineGeometry = useMemo(() => {
+  // Boundary line geometry, subdivided against the terrain grid when there is one.
+  //
+  // Keyed on `terrainKey`, not on the field: the crease set depends on the grid
+  // (origin/spacing/extent) and not on the heights, so a sculpt stroke — which
+  // produces a new field object every dab — must not rebuild this. Heights are
+  // rewritten in place by the subscription below.
+  //
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid, not the field — see above.
+  const boundary = useMemo(() => {
     if (!polygonPoints || polygonPoints.length < 2) return null
-    return createBoundaryLineGeometry(polygonPoints)
-  }, [polygonPoints])
-  useEffect(() => () => lineGeometry?.dispose(), [lineGeometry])
+    // The live field, not the persisted one: mounting mid-stroke (the very first
+    // dab on a terrain-free site remounts this subtree) must drape against the
+    // ground actually on screen.
+    const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
+    return createBoundaryLineGeometry(polygonPoints, field)
+  }, [polygonPoints, terrainKey, node.id])
+  useEffect(() => () => boundary?.geometry.dispose(), [boundary])
+  const lineGeometry = boundary?.geometry ?? null
+
+  // Per-dab height rewrite, imperative for the same reason `TerrainRenderer`'s
+  // upload is: a stroke pushes dozens of patches a second, and routing each through
+  // a React render would rebuild the ring's buffers at pointer rate. The XZ of every
+  // vertex is a function of the grid alone, so a dab only ever moves Y.
+  //
+  // A ref, not the memo value in a dependency, so the subscription outlives a
+  // polygon edit without resubscribing.
+  const boundaryRef = useRef<{ geometry: BufferGeometry; ring: DrapedPolyline } | null>(null)
+  boundaryRef.current = boundary
+  useEffect(() => {
+    let lastPatch = useLiveTerrain.getState().strokeOf(node.id)?.lastPatch ?? null
+    return useLiveTerrain.subscribe((state) => {
+      const current = boundaryRef.current
+      if (!current) return
+      const stroke = state.strokes.get(node.id)
+      if (!stroke) {
+        // The stroke ended. Its heights are now the node's, and the commit
+        // re-rendered this subtree with them — but a *cancelled* stroke (Escape)
+        // commits nothing, so the ring has to be put back explicitly.
+        if (lastPatch) {
+          lastPatch = null
+          const field = terrainFieldOf({ id: node.id, terrain: node.terrain })
+          updateDrapedHeights(current.ring, field, Y_OFFSET)
+          markPositionsDirty(current.geometry)
+        }
+        return
+      }
+      if (!stroke.lastPatch || stroke.lastPatch === lastPatch) return
+      lastPatch = stroke.lastPatch
+      updateDrapedHeights(current.ring, stroke.field, Y_OFFSET)
+      markPositionsDirty(current.geometry)
+    })
+  }, [node.id, node.terrain])
 
   const groundGeometry = useMemo(() => {
     if (!groundShape) return null
@@ -258,6 +347,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useEffect(() => () => groundGeometry?.dispose(), [groundGeometry])
 
   const handlers = useNodeEvents(node, 'site')
+
+  // Terrain replaces the flat ground fill rather than sitting on top of it: two
+  // coplanar ground surfaces z-fight, and the flat one would poke through any
+  // excavation. `hasTerrain` (above) is subscribed at the site level rather than
+  // inside TerrainRenderer so a stroke that starts on a site with no persisted
+  // terrain still mounts the mesh.
+  const showTerrain = terrainGrid !== null
 
   if (!(node && lineGeometry)) {
     return null
@@ -270,8 +366,11 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
       ))}
 
+      {/* Sculpted ground, when the site has terrain */}
+      {showTerrain && <TerrainRenderer material={groundMaterial} site={node} />}
+
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {groundGeometry && (
+      {groundGeometry && !showTerrain && (
         <mesh
           geometry={groundGeometry}
           material={groundMaterial}
@@ -286,7 +385,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <mesh
           geometry={horizonGeometry}
           material={horizonMaterial}
-          position={[fadeBounds.cx, -0.07, fadeBounds.cz]}
+          position={[fadeBounds.cx, HORIZON_PLANE_Y, fadeBounds.cz]}
           raycast={noopRaycast}
           receiveShadow
           rotation={[-Math.PI / 2, 0, 0]}

@@ -15,6 +15,8 @@ export type SupportSlabPatchOptions = {
    * ground is elected while capped-out slabs still overlap the footprint.
    */
   maxElevation?: number | null
+  /** Pointer- or snap-decided host. Ground is a first-class support source. */
+  preferredSlabId?: string | null
 }
 
 export function resolveSupportSlabPatch(
@@ -79,6 +81,9 @@ export function resolveWallSupportSlabPatch(
 ): SupportSlabPatch {
   const parent = wall.parentId ? nodes[wall.parentId] : null
   if (parent?.type !== 'level') return { supportSlabId: undefined }
+  if (options?.preferredSlabId === GROUND_SUPPORT_ID) {
+    return { supportSlabId: GROUND_SUPPORT_ID }
+  }
 
   // Winner under the pointer cap (when given): a deck hanging above the
   // aimed-at surface can't capture the elected base, so a wall drawn at the
@@ -89,7 +94,7 @@ export function resolveWallSupportSlabPatch(
     wall.end,
     wall.curveOffset,
     wall.thickness,
-    null,
+    options?.preferredSlabId,
     options?.maxElevation,
   )
   const candidateElevations = new Set<number>()
@@ -109,9 +114,36 @@ export function resolveWallSupportSlabPatch(
     }
   }
 
+  if (support.electedSlabId === options?.preferredSlabId) {
+    return { supportSlabId: support.electedSlabId ?? undefined }
+  }
+  if (
+    options?.maxElevation != null &&
+    support.electedSlabId === null &&
+    candidateElevations.size > 0
+  ) {
+    return { supportSlabId: GROUND_SUPPORT_ID }
+  }
   return {
     supportSlabId: candidateElevations.size >= 2 ? (support.electedSlabId ?? undefined) : undefined,
   }
+}
+
+/**
+ * Re-elect a moved wall without discarding an explicit construction source.
+ *
+ * Move tools change only the wall's plan geometry. A persisted host therefore
+ * remains preferred when it still supports the new footprint; the normal
+ * resolver falls back when a slab no longer overlaps. Ground is also an
+ * explicit source, so preserving it keeps terrain-hosted walls on terrain.
+ */
+export function resolveMovedWallSupportSlabPatch(
+  wall: WallNode,
+  nodes: Record<string, AnyNode>,
+): SupportSlabPatch {
+  return resolveWallSupportSlabPatch(wall, nodes, {
+    preferredSlabId: wall.supportSlabId ?? null,
+  })
 }
 
 /** Fence-like shape the fence host election needs — plain segment, arc, or spline. */
