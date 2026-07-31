@@ -68,6 +68,10 @@ jobs:
           cp -a apps/editor/.next/standalone/apps/editor/server.js bundle/server.js
           cp .github/deploy/package.json bundle/package.json
           cp .github/deploy/README.md bundle/README.md
+          cp .github/deploy/setup-native.mjs bundle/setup-native.mjs
+          # The boot hook runs these against the live database; they are read
+          # from disk at runtime, so they must travel with the bundle.
+          cp -a apps/editor/panel/migrations bundle/panel-migrations
           printf 'node_modules/\n' > bundle/.gitignore
 
       # MySQL is required in production: with no database configured the

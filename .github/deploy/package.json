@@ -1,6 +1,6 @@
 {
   "name": "digitaltwin",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "description": "Pascal Editor, compiled and ready to run. Nothing is built at deploy time.",
@@ -8,7 +8,7 @@
     "node": ">=20.9"
   },
   "scripts": {
-    "build": "echo 'Prebuilt bundle - nothing to compile.'",
+    "build": "node setup-native.mjs",
     "start": "node server.js"
   },
   "dependencies": {

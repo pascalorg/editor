@@ -16,14 +16,51 @@ function env(...names: string[]): string | undefined {
   return undefined
 }
 
+/**
+ * The scene store accepts a single connection URL as well as the discrete
+ * variables, so this side has to read it too — otherwise a deployment
+ * configured that way would point its scenes at one database and its accounts
+ * at the built-in defaults, and the mismatch would only surface as a confusing
+ * "access denied" at boot.
+ */
+function fromUrl(): Partial<Record<'host' | 'port' | 'user' | 'password' | 'database', string>> {
+  const raw = env('DIGITALTWIN_MYSQL_URL', 'PASCAL_MYSQL_URL', 'DATABASE_URL')
+  if (!raw) return {}
+  try {
+    const url = new URL(raw)
+    return {
+      host: url.hostname || undefined,
+      port: url.port || undefined,
+      user: decodeURIComponent(url.username) || undefined,
+      password: decodeURIComponent(url.password) || undefined,
+      database: url.pathname.replace(/^\//, '') || undefined,
+    }
+  } catch {
+    // A malformed URL falls through to the discrete variables, which then
+    // report their own missing pieces.
+    return {}
+  }
+}
+
 export function dbConfig() {
+  const url = fromUrl()
   return {
-    host: env('DIGITALTWIN_MYSQL_HOST', 'PASCAL_MYSQL_HOST', 'DATABASE_HOST') ?? '127.0.0.1',
-    port: Number(env('DIGITALTWIN_MYSQL_PORT', 'PASCAL_MYSQL_PORT', 'DATABASE_PORT') ?? 3306),
-    user: env('DIGITALTWIN_MYSQL_USER', 'PASCAL_MYSQL_USER', 'DATABASE_USER') ?? 'root',
-    password: env('DIGITALTWIN_MYSQL_PASSWORD', 'PASCAL_MYSQL_PASSWORD', 'DATABASE_PASSWORD') ?? '',
+    host:
+      env('DIGITALTWIN_MYSQL_HOST', 'PASCAL_MYSQL_HOST', 'DATABASE_HOST') ??
+      url.host ??
+      '127.0.0.1',
+    port: Number(
+      env('DIGITALTWIN_MYSQL_PORT', 'PASCAL_MYSQL_PORT', 'DATABASE_PORT') ?? url.port ?? 3306,
+    ),
+    user: env('DIGITALTWIN_MYSQL_USER', 'PASCAL_MYSQL_USER', 'DATABASE_USER') ?? url.user ?? 'root',
+    password:
+      env('DIGITALTWIN_MYSQL_PASSWORD', 'PASCAL_MYSQL_PASSWORD', 'DATABASE_PASSWORD') ??
+      url.password ??
+      '',
     database:
-      env('DIGITALTWIN_MYSQL_DATABASE', 'PASCAL_MYSQL_DATABASE', 'DATABASE_NAME') ?? 'digitaltwin',
+      env('DIGITALTWIN_MYSQL_DATABASE', 'PASCAL_MYSQL_DATABASE', 'DATABASE_NAME') ??
+      url.database ??
+      'digitaltwin',
     charset: 'utf8mb4_unicode_ci',
     timezone: 'Z',
     dateStrings: false,
