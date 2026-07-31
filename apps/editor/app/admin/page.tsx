@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { AdminPanel, type AdminScene } from '@/components/admin/admin-panel'
 import { listUsers, ownerEmails, requireAdmin } from '@/lib/auth/admin'
-import { listMcpGrants } from '@/lib/mcp/tokens'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
@@ -13,12 +12,7 @@ export default async function AdminPage() {
   const admin = await requireAdmin()
   if (!admin) notFound()
 
-  const [users, operations, grants] = await Promise.all([
-    listUsers(),
-    getSceneOperations(),
-    listMcpGrants(),
-  ])
-  const withMcp = new Set(grants.map((g) => g.userId))
+  const [users, operations] = await Promise.all([listUsers(), getSceneOperations()])
   const scenes = await operations.listScenes({ limit: 500 })
   const emails = await ownerEmails(scenes.map((s) => s.ownerId).filter((x): x is string => !!x))
 
@@ -46,11 +40,7 @@ export default async function AdminPage() {
         </div>
       </header>
       <main className="container mx-auto max-w-5xl px-6 py-10">
-        <AdminPanel
-          currentAdminId={admin.id}
-          scenes={adminScenes}
-          users={users.map((u) => ({ ...u, mcpEnabled: withMcp.has(u.id) }))}
-        />
+        <AdminPanel users={users} scenes={adminScenes} currentAdminId={admin.id} />
       </main>
     </div>
   )
