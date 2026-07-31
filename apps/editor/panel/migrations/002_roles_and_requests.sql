@@ -40,7 +40,11 @@ CREATE TABLE access_requests (
   CONSTRAINT fk_req_decider FOREIGN KEY (decided_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- One pending request per address; a rejected/approved row must not block a retry.
-CREATE UNIQUE INDEX uq_req_pending_email ON access_requests ((
-  CASE WHEN status = 'pending' THEN email END
-));
+-- One pending request per address; a rejected/approved row must not block a
+-- retry. Written as a generated column + unique prefix key rather than a
+-- functional index: MariaDB (what shared hosting runs) has no expression
+-- indexes, and the 191 prefix keeps the key under the 767-byte row cap.
+ALTER TABLE access_requests
+  ADD COLUMN pending_email VARCHAR(320)
+    GENERATED ALWAYS AS (CASE WHEN status = 'pending' THEN email ELSE NULL END) STORED,
+  ADD UNIQUE KEY uq_req_pending_email (pending_email(191));

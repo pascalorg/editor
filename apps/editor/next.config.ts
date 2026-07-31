@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
       '@react-three/drei': './node_modules/@react-three/drei',
     },
   },
+  // The console's db driver and argon2 are native/dynamic-require packages the
+  // bundler must not inline; both ship as real node_modules in the deploy
+  // bundle. Neither is in transpilePackages, so no conflict.
+  serverExternalPackages: ['mysql2', '@node-rs/argon2'],
   experimental: {
     serverActions: {
       bodySizeLimit: '100mb',

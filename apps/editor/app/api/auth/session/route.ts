@@ -1,24 +1,41 @@
-import type { NextRequest } from 'next/server'
-import { authAvailable } from '@/lib/auth/db'
-import { getSessionUser } from '@/lib/auth/session'
-import { guardSceneApiRequest, sceneApiJson } from '@/lib/scene-api-security'
+import { handler, ok } from '@panel/lib/api';
+import type { SessionResponse } from '@panel/lib/api-contract';
+import { getSession } from '@panel/lib/auth/session';
+import { getSettings } from '@panel/lib/settings';
 
-export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /**
- * Returns the current user, or null when signed out or auth is unavailable
- * (SQLite dev). Always 200 so the client hook stays simple.
+ * GET /api/auth/session
+ *
+ * The single source of truth for the idle countdown. The client polls it; the
+ * server owns `expiresInSeconds`, so a tampered clock or a stale tab cannot
+ * stretch a session past settings.session_minutes.
+ *
+ * Reading the session slides the idle window — which is correct here, because a
+ * poll from a visible tab is activity. The client stops polling when the tab is
+ * hidden so a background tab does not keep a session alive forever.
  */
-export async function GET(request: NextRequest) {
-  const guard = guardSceneApiRequest(request, { skipAuth: true })
-  if (guard) return guard
-  if (!authAvailable()) {
-    return sceneApiJson(request, { user: null }, { headers: { 'Cache-Control': 'no-store' } })
+export const GET = handler(async () => {
+  const settings = await getSettings();
+  const session = await getSession();
+
+  if (!session) {
+    const body: SessionResponse = {
+      state: 'anonymous',
+      user: null,
+      expiresInSeconds: 0,
+      sessionMinutes: settings.sessionMinutes,
+    };
+    return ok(body);
   }
-  try {
-    const user = await getSessionUser()
-    return sceneApiJson(request, { user }, { headers: { 'Cache-Control': 'no-store' } })
-  } catch {
-    return sceneApiJson(request, { user: null }, { headers: { 'Cache-Control': 'no-store' } })
-  }
-}
+
+  const body: SessionResponse = {
+    state: session.state,
+    user: session.user,
+    expiresInSeconds: Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000)),
+    sessionMinutes: settings.sessionMinutes,
+  };
+  return ok(body);
+});

@@ -1,7 +1,6 @@
 'use client'
 
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react'
-import { AuthDialog } from './auth-dialog'
 
 export interface SessionUser {
   id: string
@@ -14,22 +13,42 @@ interface SessionValue {
   loading: boolean
   refresh: () => Promise<void>
   signOut: () => Promise<void>
-  /** Opens the sign-in dialog; used by gated actions when signed out or on 401. */
+  /** Sends the visitor to the console's sign-in; used by gated actions on 401. */
   openAuth: () => void
 }
 
 const SessionContext = createContext<SessionValue | null>(null)
 
+/** The console's /api/auth/session response, reduced to what the editor uses. */
+interface ConsoleSessionResponse {
+  state: 'anonymous' | 'signedIn' | 'mfaRequired' | 'firstSignIn'
+  user: { id: string; email: string; permissions?: string[] } | null
+}
+
+/**
+ * Sign-in itself now lives in the console (/signin): it owns passwords, 2FA
+ * and lockout, so the editor no longer renders its own dialog — gated actions
+ * navigate to the console and come back signed in. Only a fully signed-in
+ * session counts; a half-open one (2FA pending, forced password change) is
+ * treated as signed out.
+ */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/session', { cache: 'no-store' })
-      const body = (await res.json()) as { user: SessionUser | null }
-      setUser(body.user ?? null)
+      const body = (await res.json()) as ConsoleSessionResponse
+      if (body.state === 'signedIn' && body.user) {
+        setUser({
+          id: body.user.id,
+          email: body.user.email,
+          role: body.user.permissions?.includes('admin_access') ? 'admin' : 'user',
+        })
+      } else {
+        setUser(null)
+      }
     } catch {
       setUser(null)
     } finally {
@@ -38,11 +57,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    await fetch('/api/auth/signout', { method: 'POST' }).catch(() => {})
     setUser(null)
   }, [])
 
-  const openAuth = useCallback(() => setDialogOpen(true), [])
+  const openAuth = useCallback(() => {
+    window.location.href = '/signin'
+  }, [])
 
   useEffect(() => {
     void refresh()
@@ -51,15 +72,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return (
     <SessionContext.Provider value={{ user, loading, refresh, signOut, openAuth }}>
       {children}
-      {dialogOpen && (
-        <AuthDialog
-          onClose={() => setDialogOpen(false)}
-          onSuccess={() => {
-            setDialogOpen(false)
-            void refresh()
-          }}
-        />
-      )}
     </SessionContext.Provider>
   )
 }

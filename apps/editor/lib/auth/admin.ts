@@ -18,25 +18,31 @@ export async function requireAdmin(): Promise<SessionUser | null> {
 interface UserRow {
   id: string
   email: string
-  role: 'user' | 'admin'
+  global_role: string
   created_at: string
   scene_count: number | string
 }
 
-/** All users, each with how many scenes they own, newest first. */
+/**
+ * All users, each with how many scenes they own, newest first. Reads the
+ * console's users table: ids are the console's public ULIDs (which is what
+ * scenes.owner_id now stores) and the editor's two-role view is derived from
+ * the console's global role.
+ */
 export async function listUsers(): Promise<AdminUser[]> {
   const pool = await getAuthPool()
   const [rows] = await pool.query(`
-    SELECT u.id, u.email, u.role, u.created_at,
-           (SELECT COUNT(*) FROM scenes s WHERE s.owner_id = u.id) AS scene_count
+    SELECT u.public_id AS id, u.email, u.global_role, u.created_at,
+           (SELECT COUNT(*) FROM scenes s
+            WHERE CONVERT(s.owner_id USING utf8mb4) = CONVERT(u.public_id USING utf8mb4)) AS scene_count
       FROM users u
      ORDER BY u.created_at DESC
   `)
   return (Array.isArray(rows) ? (rows as UserRow[]) : []).map((r) => ({
     id: r.id,
     email: r.email,
-    role: r.role,
-    createdAt: r.created_at,
+    role: r.global_role === 'Admin' ? 'admin' : 'user',
+    createdAt: String(r.created_at),
     sceneCount: Number(r.scene_count),
   }))
 }
@@ -48,7 +54,7 @@ export async function ownerEmails(ownerIds: string[]): Promise<Map<string, strin
   const pool = await getAuthPool()
   const placeholders = unique.map(() => '?').join(',')
   const [rows] = await pool.query(
-    `SELECT id, email FROM users WHERE id IN (${placeholders})`,
+    `SELECT public_id AS id, email FROM users WHERE public_id IN (${placeholders})`,
     unique,
   )
   const map = new Map<string, string>()
@@ -59,17 +65,18 @@ export async function ownerEmails(ownerIds: string[]): Promise<Map<string, strin
 }
 
 export async function setUserRole(userId: string, role: 'user' | 'admin'): Promise<void> {
+  // Console roles are richer than the editor's pair; promoting maps to the
+  // console's Admin, demoting to Viewer. Finer grades belong to the console UI.
   const pool = await getAuthPool()
-  await pool.execute('UPDATE users SET role = ?, updated_at = ? WHERE id = ?', [
-    role,
-    new Date().toISOString(),
+  await pool.execute('UPDATE users SET global_role = ? WHERE public_id = ?', [
+    role === 'admin' ? 'Admin' : 'Viewer',
     userId,
   ])
 }
 
 export async function userExists(userId: string): Promise<boolean> {
   const pool = await getAuthPool()
-  const [rows] = await pool.execute('SELECT 1 FROM users WHERE id = ?', [userId])
+  const [rows] = await pool.execute('SELECT 1 FROM users WHERE public_id = ?', [userId])
   return Array.isArray(rows) && rows.length > 0
 }
 

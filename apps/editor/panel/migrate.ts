@@ -8,10 +8,10 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import mysql from 'mysql2/promise';
-import { loadEnv } from './env.ts';
+import { loadEnv } from './env';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const MIGRATIONS_DIR = join(HERE, '..', 'db', 'migrations');
+const MIGRATIONS_DIR = join(HERE, 'migrations');
 
 /**
  * Splits a migration into statements on semicolons that sit outside string
@@ -105,7 +105,7 @@ async function main() {
 
   const bootstrap = await mysql.createConnection({ host, port, user, password, multipleStatements: false });
   await bootstrap.query(
-    `CREATE DATABASE IF NOT EXISTS \`${database.replace(/`/g, '')}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci`,
+    `CREATE DATABASE IF NOT EXISTS \`${database.replace(/`/g, '')}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
   );
   await bootstrap.end();
 

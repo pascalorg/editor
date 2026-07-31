@@ -3,14 +3,27 @@ import type { Pool, PoolConnection, RowDataPacket, ResultSetHeader } from 'mysql
 
 let pool: Pool | undefined;
 
+/**
+ * Integration shim: inside the editor the database is configured through the
+ * DIGITALTWIN_MYSQL_* variables, so those are honoured first and the panel's
+ * own DATABASE_* names stay as the fallback for standalone runs.
+ */
+function env(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name]?.trim()
+    if (value) return value
+  }
+  return undefined
+}
+
 export function dbConfig() {
   return {
-    host: process.env.DATABASE_HOST ?? '127.0.0.1',
-    port: Number(process.env.DATABASE_PORT ?? 3306),
-    user: process.env.DATABASE_USER ?? 'root',
-    password: process.env.DATABASE_PASSWORD ?? '',
-    database: process.env.DATABASE_NAME ?? 'digitaltwin',
-    charset: 'utf8mb4_0900_ai_ci',
+    host: env('DIGITALTWIN_MYSQL_HOST', 'PASCAL_MYSQL_HOST', 'DATABASE_HOST') ?? '127.0.0.1',
+    port: Number(env('DIGITALTWIN_MYSQL_PORT', 'PASCAL_MYSQL_PORT', 'DATABASE_PORT') ?? 3306),
+    user: env('DIGITALTWIN_MYSQL_USER', 'PASCAL_MYSQL_USER', 'DATABASE_USER') ?? 'root',
+    password: env('DIGITALTWIN_MYSQL_PASSWORD', 'PASCAL_MYSQL_PASSWORD', 'DATABASE_PASSWORD') ?? '',
+    database: env('DIGITALTWIN_MYSQL_DATABASE', 'PASCAL_MYSQL_DATABASE', 'DATABASE_NAME') ?? 'digitaltwin',
+    charset: 'utf8mb4_unicode_ci',
     timezone: 'Z',
     dateStrings: false,
     supportBigNumbers: true,

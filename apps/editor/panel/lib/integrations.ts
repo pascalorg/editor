@@ -136,7 +136,7 @@ export async function createWebhook(url: string, events: string[]): Promise<Webh
   // HMAC of the body so a receiver can tell a real event from a replayed one.
   const secret = encryptSecret(`whsec_${randomBytes(24).toString('base64url')}`);
 
-  await exec('INSERT INTO webhooks (public_id, url, events, secret) VALUES (?, ?, CAST(? AS JSON), ?)', [
+  await exec('INSERT INTO webhooks (public_id, url, events, secret) VALUES (?, ?, ?, ?)', [
     publicId,
     url,
     JSON.stringify(events),

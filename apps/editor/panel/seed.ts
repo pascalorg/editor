@@ -11,7 +11,7 @@
 import mysql from 'mysql2/promise';
 import { ulid } from 'ulid';
 import { hash as argon2Hash } from '@node-rs/argon2';
-import { loadEnv } from './env.ts';
+import { loadEnv } from './env';
 
 const ARGON2ID = 2;
 const ARGON2_OPTS = { algorithm: ARGON2ID, memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
@@ -60,13 +60,13 @@ async function main() {
     user: process.env.DATABASE_USER ?? 'root',
     password: process.env.DATABASE_PASSWORD ?? '',
     database: process.env.DATABASE_NAME ?? 'digitaltwin',
-    charset: 'utf8mb4_0900_ai_ci',
+    charset: 'utf8mb4_unicode_ci',
     timezone: 'Z',
   });
 
   for (const role of SYSTEM_ROLES) {
     await cx.execute(
-      `INSERT INTO roles (name, permissions, is_system) VALUES (?, CAST(? AS JSON), 1)
+      `INSERT INTO roles (name, permissions, is_system) VALUES (?, ?, 1)
        ON DUPLICATE KEY UPDATE permissions = VALUES(permissions), is_system = 1`,
       [role.name, JSON.stringify(role.permissions)],
     );
@@ -113,7 +113,7 @@ async function main() {
   // password sign-in off for the whole organisation before anyone can sign in.
   await cx.execute(
     `INSERT INTO settings (id, sso_enforced_domains, updated_by)
-     VALUES (1, CAST('[]' AS JSON), ?)
+     VALUES (1, '[]', ?)
      ON DUPLICATE KEY UPDATE id = id`,
     [adminId],
   );

@@ -59,32 +59,17 @@ export async function migrateAuth(): Promise<void> {
 }
 
 async function migrate(p: MysqlPool): Promise<void> {
-  await p.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id VARCHAR(64) NOT NULL PRIMARY KEY,
-      email VARCHAR(320) NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
-      role ENUM('user','admin') NOT NULL DEFAULT 'user',
-      created_at VARCHAR(32) NOT NULL,
-      updated_at VARCHAR(32) NOT NULL,
-      -- email is normalized to lowercase in app code before every insert and
-      -- lookup, so a plain unique prefix index enforces case-insensitive
-      -- uniqueness. 191 keeps the key under the 767-byte COMPACT-row cap.
-      UNIQUE KEY users_email_uidx (email(191))
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `)
-
-  await p.query(`
-    CREATE TABLE IF NOT EXISTS user_sessions (
-      id VARCHAR(64) NOT NULL PRIMARY KEY,
-      token_hash CHAR(64) NOT NULL,
-      user_id VARCHAR(64) NOT NULL,
-      created_at VARCHAR(32) NOT NULL,
-      expires_at VARCHAR(32) NOT NULL,
-      UNIQUE KEY user_sessions_token_uidx (token_hash),
-      INDEX user_sessions_user_idx (user_id),
-      CONSTRAINT user_sessions_user_fk FOREIGN KEY (user_id)
-        REFERENCES users(id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `)
+  // The console owns the identity schema now (users, sessions, roles, ... —
+  // see panel/migrations). Creating the editor's old users/user_sessions here
+  // would race the console's migrations for the `users` name, so this only
+  // verifies the console schema is reachable and reports plainly when the
+  // migrations have not been run yet.
+  try {
+    await p.query('SELECT 1 FROM users LIMIT 1')
+  } catch {
+    throw new Error(
+      "The console's database schema is missing. Run the panel migrations " +
+        '(panel/migrate.ts) against this database first.',
+    )
+  }
 }

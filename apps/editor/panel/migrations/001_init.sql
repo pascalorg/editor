@@ -2,7 +2,7 @@
 -- Contract: "DigitalTwin Rebuild Plan" section 10 (MySQL 8, InnoDB, utf8mb4).
 -- Two-layer identity: internal BIGINT UNSIGNED PK never leaves the process;
 -- CHAR(26) ULID public_id is the only id that appears in URLs, APIs and logs.
--- Collation utf8mb4_0900_ai_ci; Turkish name ordering is done in the app layer
+-- Collation utf8mb4_unicode_ci; Turkish name ordering is done in the app layer
 -- with Intl.Collator('tr') so the I/ı trap never reaches the database.
 -- All timestamps are stored UTC and formatted per locale on display.
 
