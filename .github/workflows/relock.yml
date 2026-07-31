@@ -1,0 +1,35 @@
+name: Relock
+
+# Regenerates bun.lock on a real runner and pushes the result back to the
+# branch it was dispatched on. The lockfile records the sha512 of each GitHub
+# tarball, and only a machine that can reach the real api.github.com can
+# compute those — a sandboxed environment cannot, so it delegates to this.
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  relock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+
+      - name: Regenerate the lockfile
+        run: bun install
+
+      - name: Push it back
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add bun.lock
+          if git diff --cached --quiet; then
+            echo 'lockfile already in sync'
+            exit 0
+          fi
+          git commit -m 'chore: regenerate bun.lock on a real runner'
+          git push

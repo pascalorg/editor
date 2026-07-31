@@ -49,22 +49,6 @@ jobs:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
 
-      # plugin-warehouse is a private repository, so the runner needs a key to
-      # clone it. bun shells out to `git clone` for a git+ssh dependency, which
-      # is why this is an ssh key rather than a token: bun has no documented way
-      # to authenticate the api.github.com tarball a `github:` spec would use.
-      - name: Authorize the private plugin repository
-        env:
-          PLUGIN_SSH_KEY: ${{ secrets.PLUGIN_SSH_KEY }}
-        run: |
-          if [ -z "$PLUGIN_SSH_KEY" ]; then
-            echo "PLUGIN_SSH_KEY is not set — the private plugin will fail to resolve."
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          printf '%s\n' "$PLUGIN_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
