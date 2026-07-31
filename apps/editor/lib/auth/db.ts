@@ -87,4 +87,22 @@ async function migrate(p: MysqlPool): Promise<void> {
         REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
+
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS mcp_tokens (
+      id VARCHAR(64) NOT NULL PRIMARY KEY,
+      -- Only the sha256 of the token is stored, as for sessions: a leaked
+      -- database row must not hand out working agent access.
+      token_hash CHAR(64) NOT NULL,
+      user_id VARCHAR(64) NOT NULL,
+      created_at VARCHAR(32) NOT NULL,
+      last_used_at VARCHAR(32) NULL,
+      UNIQUE KEY mcp_tokens_token_uidx (token_hash),
+      -- One live token per user: granting again replaces the old one, so a
+      -- revoked laptop cannot keep editing.
+      UNIQUE KEY mcp_tokens_user_uidx (user_id),
+      CONSTRAINT mcp_tokens_user_fk FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
 }

@@ -9,6 +9,7 @@ interface AdminUser {
   role: 'user' | 'admin'
   createdAt: string
   sceneCount: number
+  mcpEnabled: boolean
 }
 
 export interface AdminScene {
@@ -32,8 +33,11 @@ export function AdminPanel({
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // An issued agent token is readable exactly once; hold it here so the admin
+  // can copy it before it becomes a hash and nothing else.
+  const [issued, setIssued] = useState<{ email: string; token: string } | null>(null)
 
-  async function call(url: string, body: unknown, key: string) {
+  async function call(url: string, body: unknown, key: string): Promise<Record<string, unknown>> {
     setBusy(key)
     setError(null)
     try {
@@ -42,17 +46,28 @@ export function AdminPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
+      const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>
       if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { error?: string }
-        setError(b.error ?? `Request failed (${res.status})`)
-        return
+        setError((parsed.error as string) ?? `Request failed (${res.status})`)
+        return {}
       }
       router.refresh()
+      return parsed
     } catch {
       setError('Something went wrong.')
+      return {}
     } finally {
       setBusy(null)
     }
+  }
+
+  async function toggleMcp(user: AdminUser) {
+    const result = await call(
+      `/api/admin/users/${user.id}/mcp`,
+      { enabled: !user.mcpEnabled },
+      `mcp-${user.id}`,
+    )
+    if (typeof result.token === 'string') setIssued({ email: user.email, token: result.token })
   }
 
   const unownedCount = scenes.filter((s) => !s.ownerId).length
@@ -75,6 +90,7 @@ export function AdminPanel({
                 <th className="px-4 py-2 font-medium">Role</th>
                 <th className="px-4 py-2 font-medium">Scenes</th>
                 <th className="px-4 py-2 font-medium">Joined</th>
+                <th className="px-4 py-2 font-medium">AI access</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -88,6 +104,17 @@ export function AdminPanel({
                   <td className="px-4 py-2">{u.sceneCount}</td>
                   <td className="px-4 py-2 text-muted-foreground">
                     {new Date(u.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-2">
+                    <button
+                      className="rounded-md border border-border px-2 py-1 text-xs"
+                      disabled={busy !== null}
+                      onClick={() => void toggleMcp(u)}
+                      type="button"
+                    >
+                      {u.mcpEnabled ? 'Revoke' : 'Grant'}
+                    </button>
+                    {u.mcpEnabled && <span className="ml-2 text-muted-foreground text-xs">on</span>}
                   </td>
                   <td className="px-4 py-2 text-right">
                     {u.id === currentAdminId ? (
