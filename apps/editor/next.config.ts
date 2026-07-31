@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/mcp',
+    '@pascal-app/ifc-converter',
     '@pascal-app/plugin-trees',
     '@ovurrsl/plugin-warehouse',
     '@dgreenheck/ez-tree',
@@ -40,6 +41,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '100mb',
     },
+  },
+  // web-ifc parses IFC in a WASM module. It is fetched from the app's own
+  // origin (scripts/copy-web-ifc-wasm.mjs puts the blobs in public/), which
+  // keeps `WebAssembly.instantiateStreaming` happy about the MIME type.
+  webpack: (config) => {
+    config.experiments = { ...config.experiments, asyncWebAssembly: true }
+    return config
   },
   images: {
     unoptimized: process.env.NEXT_PUBLIC_ASSETS_CDN_URL?.startsWith('http://localhost') ?? false,

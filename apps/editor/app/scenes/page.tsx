@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { AuthMenu } from '@/components/auth/auth-menu'
+import { IfcImportButton } from '@/components/ifc-import-button'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
 import { authAvailable } from '@/lib/auth/db'
@@ -48,6 +49,7 @@ export default async function ScenesPage() {
           </nav>
           <div className="flex items-center gap-3">
             <AuthMenu />
+            <IfcImportButton />
             <CreateSceneButton />
           </div>
         </div>
@@ -63,9 +65,13 @@ export default async function ScenesPage() {
 
         {scenes.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
-            <p className="text-muted-foreground text-sm">You haven&apos;t saved any scenes yet.</p>
-            <div className="mt-4 flex justify-center">
+            <p className="text-muted-foreground text-sm">
+              You haven&apos;t saved any scenes yet. Start from scratch, or import an IFC model
+              exported from Revit, ArchiCAD or similar.
+            </p>
+            <div className="mt-4 flex items-start justify-center gap-3">
               <CreateSceneButton />
+              <IfcImportButton />
             </div>
           </div>
         ) : (
